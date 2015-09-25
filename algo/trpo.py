@@ -124,6 +124,7 @@ class TRPO(object):
         action_vars = [T.vector('action_%d' % i, dtype='uint8') for i in range(len(mdp.action_dims))] # (N) * Na
         lambda_var = T.scalar('lambda')
 
+        tgt_policies = [gen_policy(mdp.observation_shape, mdp.action_dims, input_var) for _ in xrange(self.n_parallel)]
         # this is for the optimization
         policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
         surrogate_obj, mean_kl = self.new_surrogate_obj(policy, input_var, Q_est_var, pi_old_vars, action_vars, lambda_var)
@@ -150,8 +151,8 @@ class TRPO(object):
                 tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions = combine_samples(
                         parallel(
                             delayed(collect_samples)(
-                                policy, mdp, self.samples_per_itr / self.n_parallel, self.discount
-                            ) for _ in range(self.n_parallel)))
+                                tgt_policy, mdp, self.samples_per_itr / self.n_parallel, self.discount
+                            ) for tgt_policy in tgt_policies))#_ in range(self.n_parallel)))
 
                 all_input_values = [all_obs, Q_est] + all_pi_old + all_actions
 
@@ -204,3 +205,6 @@ class TRPO(object):
 
                 itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
                 sys.stdout.flush()
+
+                for tgt_policy in tgt_policies:
+                    tgt_policy.set_param_values(result_x)

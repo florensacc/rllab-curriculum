@@ -12,7 +12,7 @@ class DiscreteNNPolicy(DiscretePolicy):
         super(DiscreteNNPolicy, self).__init__(state_shape, action_dims, input_var)
         self._network_outputs = self.new_network_outputs(state_shape, action_dims, self.input_var)
         self._probs_vars = map(L.get_output, self._network_outputs)
-        self._probs_func = theano.function([self.input_var], T.concatenate(self.probs_vars, axis=1))
+        self._probs_func = theano.function([self.input_var], T.concatenate(self.probs_vars, axis=1), allow_input_downcast=True)
         self._params = L.get_all_params(L.concat(self._network_outputs), trainable=True)
         self._param_shapes = map(lambda x: x.get_value(borrow=True).shape, self._params)
         self._param_dtypes = map(lambda x: x.get_value(borrow=True).dtype, self._params)
