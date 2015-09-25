@@ -15,6 +15,7 @@ class DiscreteNNPolicy(DiscretePolicy):
         self._probs_func = theano.function([self.input_var], T.concatenate(self.probs_vars, axis=1))
         self._params = L.get_all_params(L.concat(self._network_outputs), trainable=True)
         self._param_shapes = map(lambda x: x.get_value(borrow=True).shape, self._params)
+        self._param_dtypes = map(lambda x: x.get_value(borrow=True).dtype, self._params)
 
     def compute_action_probs(self, states):
         action_probs = self._probs_func(states)
@@ -26,8 +27,8 @@ class DiscreteNNPolicy(DiscretePolicy):
 
     def set_param_values(self, flattened_params):
         param_values = unflatten_tensors(flattened_params, self._param_shapes)
-        for param, value in zip(self._params, param_values):
-            param.set_value(value)
+        for param, dtype, value in zip(self._params, self._param_dtypes, param_values):
+            param.set_value(value.astype(dtype))
 
     @property
     def params(self):

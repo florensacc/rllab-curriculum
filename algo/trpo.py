@@ -90,10 +90,13 @@ class TRPO(object):
 
             itr_log = prefix_log('itr #%d | ' % (itr + 1))
 
+            per_scales = [0] * mdp.action_dims[-1]
+
             for sample_itr in xrange(self.samples_per_itr):
                 if (sample_itr + 1) % 1000 == 0:
                     itr_log('%d / %d samples' % (sample_itr + 1, self.samples_per_itr))
                 actions, action_probs = tgt_policy.get_actions_single(obs)
+                per_scales[actions[-1]] += 1
                 next_state, next_obs, reward, done = mdp.step_single(state, actions)
                 traj.append((obs, actions, next_obs, reward))
                 samples.append((obs, actions, action_probs))
@@ -109,6 +112,7 @@ class TRPO(object):
                         action_visits[action_pair] += 1
                     traj = []
                 state, obs = next_state, next_obs
+            print per_scales
             N = len(samples)
             all_obs = np.zeros((N,) + mdp.observation_shape)
             Q_est = np.zeros(N)
@@ -130,14 +134,14 @@ class TRPO(object):
                 def evaluate(params):
                     opt_policy.set_param_values(params)
                     val = compute_opt_surrogate_obj(*(all_input_values + [lambda_]))
-                    return val
+                    return val.astype(np.float64)
                 return evaluate
             
             def evaluate_grad(lambda_):
                 def evaluate(params):
                     opt_policy.set_param_values(params)
                     grad = compute_opt_grads(*(all_input_values + [lambda_]))
-                    return flatten_tensors(map(np.asarray, grad))
+                    return flatten_tensors(map(np.asarray, grad)).astype(np.float64)
                 return evaluate
 
             cur_params = tgt_policy.get_param_values()
