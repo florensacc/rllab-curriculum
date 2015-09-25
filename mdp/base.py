@@ -9,7 +9,7 @@ class States(object):
 
 
 class MDP(object):
-    def step(self, states, actions, repeat=1):
+    def step(self, states, actions):
         """        
         s,a -> s', o, r, d
 
@@ -24,8 +24,8 @@ class MDP(object):
         """
         raise NotImplementedError
 
-    def step_single(self, state, action, repeat=1):
-        next_states, obs, rewards, dones = self.step([state], [action], repeat)
+    def step_single(self, state, action):
+        next_states, obs, rewards, dones = self.step([state], map(lambda x: [x], action))
         return next_states[0], obs[0], rewards[0], dones[0]
 
     def sample_initial_state(self):

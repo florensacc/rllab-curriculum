@@ -27,12 +27,13 @@ def temp_restore_state(ale, state):
 
 class AtariMDP(MDP):
 
-    def __init__(self, rom_path, obs_type=OBS_RAM):
+    def __init__(self, rom_path, obs_type=OBS_RAM, early_stop=False):
         self._rom_path = rom_path
         self._obs_type = obs_type
         ale = self._new_ale()
         self._action_set = [ale.getMinimalActionSet()]
         self._obs_shape = self.to_obs(ale).shape
+        self._early_stop = early_stop
         self._ales = []
         self._states = []
 
@@ -64,6 +65,10 @@ class AtariMDP(MDP):
         else:
             return None
 
+    def step_single(self, state, action, repeat=1):
+        next_states, obs, rewards, dones = self.step([state], map(lambda x: [x], action), repeat)
+        return next_states[0], obs[0], rewards[0], dones[0]
+
     def step(self, states, action_indices, repeat=1):
         # if the current states do not match the given argument, we need to
         # reset ale to these states
@@ -76,9 +81,10 @@ class AtariMDP(MDP):
             reward = 0
             for _ in xrange(repeat):
                 reward += ale.act(self.action_set[0][action_idx])
-            done = ale.game_over()
-            if done:
-                ale.reset_game()
+                done = ale.game_over() or (self._early_stop and reward != 0)
+                if done:
+                    ale.reset_game()
+                    break
             next_state = ale.cloneState()
             next_states.append(next_state)
             obs.append(self.to_obs(ale))

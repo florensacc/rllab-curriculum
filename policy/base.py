@@ -31,13 +31,13 @@ class DiscretePolicy(object):
     # The second item is a list of matrices, same as the result of compute_action_probs
     def get_actions(self, states):
         action_probs = self.compute_action_probs(states)
-        action_indices = []
-        for per_action_probs in action_probs:
-            per_state_indices = []
+        action_indices = [[] for _ in range(len(action_probs))]
+        for idx, per_action_probs in enumerate(action_probs):
+            #per_state_indices = []
             for per_state_probs in per_action_probs:
                 a = np.random.choice(range(len(per_state_probs)), p=per_state_probs)
-                per_state_indices.append(a)
-            action_indices.append(per_state_indices)
+                action_indices[idx].append(a)#per_state_indices.append(a)
+            #action_indices.append(per_state_indices)
         return action_indices, action_probs
 
     def get_actions_single(self, state):

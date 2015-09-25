@@ -5,7 +5,7 @@ import scipy.optimize
 import lasagne.layers as L
 import operator
 import sys
-from misc.logging import Message
+from misc.logging import Message, log, prefix_log
 from misc.tensor_utils import flatten_tensors, unflatten_tensors
 from collections import defaultdict
 
@@ -77,6 +77,8 @@ class TRPO(object):
 
         state, obs = mdp.sample_initial_state()
 
+        lambda_ = self.initial_lambda
+
         for itr in xrange(self.n_itr):
             total_q_vals = defaultdict(int)
             action_visits = defaultdict(int)
@@ -86,7 +88,7 @@ class TRPO(object):
             tot_rewards = 0
             n_traj = 0
 
-            itr_log = prefix_log('itr #%d | ' % itr)
+            itr_log = prefix_log('itr #%d | ' % (itr + 1))
 
             for sample_itr in xrange(self.samples_per_itr):
                 if (sample_itr + 1) % 1000 == 0:
@@ -140,32 +142,34 @@ class TRPO(object):
 
             cur_params = tgt_policy.get_param_values()
             itr_log('avg reward: %.3f over %d trajectories' % (tot_rewards * 1.0 / n_traj, n_traj))
-            lambda_ = self.initial_lambda
-            result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=100)
+            if not self.reuse_lambda:
+                lambda_ = self.initial_lambda
+            result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=self.max_opt_itr)
             mean_kl = compute_opt_mean_kl(*(all_input_values + [lambda_]))
             itr_log('trying lambda=%.3f ... mean kl %.3f' % (lambda_, mean_kl))
             # do line search on lambda
-            if mean_kl > self.stepsize:
-                for _ in xrange(4):
-                    lambda_ = lambda_ * 2
-                    result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=100)
-                    mean_kl = compute_opt_mean_kl(*(all_input_values + [lambda_]))
-                    if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
-                    itr_log('trying lambda=%.3f ... mean kl %.3f' % (lambda_, mean_kl))
-                    if mean_kl <= self.stepsize:
-                        break
-            else:
-                for _ in xrange(4):
-                    try_lambda_ = lambda_ * 0.5
-                    try_result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(try_lambda_), x0=cur_params, fprime=evaluate_grad(try_lambda_), maxiter=100)
-                    try_mean_kl = compute_opt_mean_kl(*(all_input_values + [try_lambda_]))
-                    itr_log('trying lambda=%.3f ... mean kl %.3f' % (try_lambda_, try_mean_kl))
-                    if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
-                    if try_mean_kl > self.stepsize:
-                        break
-                    result = try_result
-                    lambda_ = try_lambda_
-                    mean_kl = try_mean_kl
+            if self.adapt_lambda:
+                if mean_kl > self.stepsize:
+                    for _ in xrange(4):
+                        lambda_ = lambda_ * 2
+                        result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=self.max_opt_itr)
+                        mean_kl = compute_opt_mean_kl(*(all_input_values + [lambda_]))
+                        if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
+                        itr_log('trying lambda=%.3f ... mean kl %.3f' % (lambda_, mean_kl))
+                        if mean_kl <= self.stepsize:
+                            break
+                else:
+                    for _ in xrange(4):
+                        try_lambda_ = lambda_ * 0.5
+                        try_result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(try_lambda_), x0=cur_params, fprime=evaluate_grad(try_lambda_), maxiter=self.max_opt_itr)
+                        try_mean_kl = compute_opt_mean_kl(*(all_input_values + [try_lambda_]))
+                        itr_log('trying lambda=%.3f ... mean kl %.3f' % (try_lambda_, try_mean_kl))
+                        if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
+                        if try_mean_kl > self.stepsize:
+                            break
+                        result = try_result
+                        lambda_ = try_lambda_
+                        mean_kl = try_mean_kl
                     
             result_x, result_f, result_d = result
 
