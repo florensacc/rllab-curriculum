@@ -1,0 +1,6 @@
+data
+*.pyc
+*-checkpoint.ipynb
+.DS_Store
+*.h5
+*.log
