@@ -10,6 +10,8 @@ from misc.tensor_utils import flatten_tensors, unflatten_tensors
 from collections import defaultdict
 import multiprocessing
 from joblib import Parallel, delayed
+from multiprocessing import Process
+from joblib.pool import MemmapingPool
 
 def reduce_add(a, b):
     if a is None:
@@ -25,7 +27,12 @@ def reduce_mul(a, b):
         return a
     return a * b
 
-def collect_samples(policy, mdp, n_samples, discount):
+def collect_samples(args):
+    n_samples, discount = args
+    global policy
+    global mdp
+    global state
+    global obs
     total_q_vals = defaultdict(int)
     action_visits = defaultdict(int)
     traj = []
@@ -33,7 +40,6 @@ def collect_samples(policy, mdp, n_samples, discount):
     tot_rewards = 0
     n_traj = 0
 
-    state, obs = mdp.sample_initial_state()
 
     log('starting...')
 
@@ -86,6 +92,24 @@ def combine_samples(results):
     all_actions = [np.concatenate(map(lambda x: x[i], all_actions_list)) for i in range(na)]
     return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions
 
+def collector_process(gen_policy, mdp):
+    pass
+
+def mk_collector_initializer(gen_policy, gen_mdp):
+    def collector_initializer():
+        global policy
+        global mdp
+        global state
+        global obs
+        import os
+        os.environ['THEANO_FLAGS'] = 'device=cpu'
+        import theano
+        mdp = gen_mdp()
+        input_var = T.matrix('input') # N*Ds
+        policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
+        state, obs = mdp.sample_initial_state()
+    return collector_initializer
+
 class TRPO(object):
 
     def __init__(self, n_itr=500, samples_per_itr=100000, discount=0.99,
@@ -117,14 +141,19 @@ class TRPO(object):
         return surrogate_obj, mean_kl
 
 
-    def train(self, gen_policy, mdp):
+    def train(self, gen_policy, gen_mdp):
+        mdp = gen_mdp()
         input_var = T.matrix('input') # N*Ds
         Q_est_var = T.vector('Q_est') # N
         pi_old_vars = [T.matrix('pi_old_%d' % i) for i in range(len(mdp.action_dims))] # (N*Da) * Na
         action_vars = [T.vector('action_%d' % i, dtype='uint8') for i in range(len(mdp.action_dims))] # (N) * Na
         lambda_var = T.scalar('lambda')
 
-        tgt_policies = [gen_policy(mdp.observation_shape, mdp.action_dims, input_var) for _ in xrange(self.n_parallel)]
+        pool = MemmapingPool(self.n_parallel, initializer=mk_collector_initializer(gen_policy, gen_mdp))
+        #tgt_p = Process(target=collector_process, args=(gen_policy, mdp))
+        #tgt_p.start()
+
+        #tgt_policies = [gen_policy(mdp.observation_shape, mdp.action_dims, input_var) for _ in xrange(self.n_parallel)]
         # this is for the optimization
         policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
         surrogate_obj, mean_kl = self.new_surrogate_obj(policy, input_var, Q_est_var, pi_old_vars, action_vars, lambda_var)
@@ -140,71 +169,78 @@ class TRPO(object):
 
         lambda_ = self.initial_lambda
 
-        with Parallel(n_jobs=self.n_parallel) as parallel:
+        #with Parallel(n_jobs=self.n_parallel) as parallel:
 
-            for itr in xrange(self.n_itr):
-                total_q_vals = defaultdict(int)
-                action_visits = defaultdict(int)
+        for itr in xrange(self.n_itr):
+            total_q_vals = defaultdict(int)
+            action_visits = defaultdict(int)
 
-                itr_log = prefix_log('itr #%d | ' % (itr + 1))
+            itr_log = prefix_log('itr #%d | ' % (itr + 1))
 
-                tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions = combine_samples(
-                        parallel(
-                            delayed(collect_samples)(
-                                tgt_policy, mdp, self.samples_per_itr / self.n_parallel, self.discount
-                            ) for tgt_policy in tgt_policies))#_ in range(self.n_parallel)))
+            args = (self.samples_per_itr / self.n_parallel, self.discount)
+            result_list = pool.map(collect_samples, [args] * self.n_parallel)
+            tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions = \
+                    combine_samples(result_list)
+                            
+            #tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions = combine_samples(
+            #        parallel(
+            #            delayed(collect_samples)(
+            #                tgt_policy, mdp, 
+            #            ) for tgt_policy in tgt_policies))#_ in range(self.n_parallel)))
 
-                all_input_values = [all_obs, Q_est] + all_pi_old + all_actions
+            all_input_values = [all_obs, Q_est] + all_pi_old + all_actions
 
-                def evaluate_cost(lambda_):
-                    def evaluate(params):
-                        policy.set_param_values(params)
-                        val = compute_surrogate_obj(*(all_input_values + [lambda_]))
-                        return val.astype(np.float64)
-                    return evaluate
-                
-                def evaluate_grad(lambda_):
-                    def evaluate(params):
-                        policy.set_param_values(params)
-                        grad = compute_grads(*(all_input_values + [lambda_]))
-                        return flatten_tensors(map(np.asarray, grad)).astype(np.float64)
-                    return evaluate
+            def evaluate_cost(lambda_):
+                def evaluate(params):
+                    policy.set_param_values(params)
+                    val = compute_surrogate_obj(*(all_input_values + [lambda_]))
+                    return val.astype(np.float64)
+                return evaluate
+            
+            def evaluate_grad(lambda_):
+                def evaluate(params):
+                    policy.set_param_values(params)
+                    grad = compute_grads(*(all_input_values + [lambda_]))
+                    return flatten_tensors(map(np.asarray, grad)).astype(np.float64)
+                return evaluate
 
-                cur_params = policy.get_param_values()
-                itr_log('avg reward: %.3f over %d trajectories' % (tot_rewards * 1.0 / n_traj, n_traj))
-                if not self.reuse_lambda:
-                    lambda_ = self.initial_lambda
-                result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=self.max_itr)
-                mean_kl = compute_mean_kl(*(all_input_values + [lambda_]))
-                itr_log('trying lambda=%.3f ... mean kl %.3f' % (lambda_, mean_kl))
-                # do line search on lambda
-                if self.adapt_lambda:
-                    if mean_kl > self.stepsize:
-                        for _ in xrange(4):
-                            lambda_ = lambda_ * 2
-                            result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=self.max_itr)
-                            mean_kl = compute_mean_kl(*(all_input_values + [lambda_]))
-                            if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
-                            itr_log('trying lambda=%.3f ... mean kl %.3f' % (lambda_, mean_kl))
-                            if mean_kl <= self.stepsize:
-                                break
-                    else:
-                        for _ in xrange(4):
-                            try_lambda_ = lambda_ * 0.5
-                            try_result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(try_lambda_), x0=cur_params, fprime=evaluate_grad(try_lambda_), maxiter=self.max_itr)
-                            try_mean_kl = compute_mean_kl(*(all_input_values + [try_lambda_]))
-                            itr_log('trying lambda=%.3f ... mean kl %.3f' % (try_lambda_, try_mean_kl))
-                            if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
-                            if try_mean_kl > self.stepsize:
-                                break
-                            result = try_result
-                            lambda_ = try_lambda_
-                            mean_kl = try_mean_kl
-                        
-                result_x, result_f, result_d = result
+            cur_params = policy.get_param_values()
+            itr_log('avg reward: %.3f over %d trajectories' % (tot_rewards * 1.0 / n_traj, n_traj))
+            if not self.reuse_lambda:
+                lambda_ = self.initial_lambda
+            result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=self.max_itr)
+            mean_kl = compute_mean_kl(*(all_input_values + [lambda_]))
+            itr_log('trying lambda=%.3f ... mean kl %.3f' % (lambda_, mean_kl))
+            # do line search on lambda
+            if self.adapt_lambda:
+                if mean_kl > self.stepsize:
+                    for _ in xrange(4):
+                        lambda_ = lambda_ * 2
+                        result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=self.max_itr)
+                        mean_kl = compute_mean_kl(*(all_input_values + [lambda_]))
+                        if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
+                        itr_log('trying lambda=%.3f ... mean kl %.3f' % (lambda_, mean_kl))
+                        if mean_kl <= self.stepsize:
+                            break
+                else:
+                    for _ in xrange(4):
+                        try_lambda_ = lambda_ * 0.5
+                        try_result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(try_lambda_), x0=cur_params, fprime=evaluate_grad(try_lambda_), maxiter=self.max_itr)
+                        try_mean_kl = compute_mean_kl(*(all_input_values + [try_lambda_]))
+                        itr_log('trying lambda=%.3f ... mean kl %.3f' % (try_lambda_, try_mean_kl))
+                        if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
+                        if try_mean_kl > self.stepsize:
+                            break
+                        result = try_result
+                        lambda_ = try_lambda_
+                        mean_kl = try_mean_kl
+                    
+            result_x, result_f, result_d = result
 
-                itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
-                sys.stdout.flush()
+            itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
+            sys.stdout.flush()
 
-                for tgt_policy in tgt_policies:
-                    tgt_policy.set_param_values(result_x)
+            #for tgt_policy in tgt_policies:
+            #    tgt_policy.set_param_values(result_x)
+
+        tgt_p.join()

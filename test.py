@@ -8,6 +8,7 @@ import lasagne
 import numpy as np
 import inspect
 
+
 class TestPolicy(DiscreteNNPolicy):
 
     def new_network_outputs(self, state_shape, action_dims, input_var):
@@ -91,13 +92,13 @@ MAX_RAM = 255
 def process_obs(ram_vector): # rescale the RAM vector to be between -1 and 1\n
     return (np.array(ram_vector) * 1.0 / MAX_RAM) * 2 - 1
 
-
-mdp = VariableTimeScaleMDP(
-        ObsTransformer(
-            AtariMDP(rom_path="vendor/atari_roms/pong.bin", obs_type=OBS_RAM, early_stop=True),
-            process_obs
-        ), time_scales=[4]
-)
+def gen_mdp():
+    return VariableTimeScaleMDP(
+            ObsTransformer(
+                AtariMDP(rom_path="vendor/atari_roms/pong.bin", obs_type=OBS_RAM, early_stop=True),
+                process_obs
+            ), time_scales=[4]
+    )
 
 trpo = TRPO(samples_per_itr=100000)
-trpo.train(TestPolicy, mdp)
+trpo.train(TestPolicy, gen_mdp)
