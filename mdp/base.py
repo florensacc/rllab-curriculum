@@ -32,6 +32,10 @@ class MDP(object):
         states, obs = self.sample_initial_states(1)
         return states[0], obs[0]
 
+    @property
+    def support_repeat(self):
+        return False
+
     def sample_initial_states(self, n):
         """
         Sample n initial states. Also return initial observations

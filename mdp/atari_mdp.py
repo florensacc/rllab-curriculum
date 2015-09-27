@@ -27,16 +27,18 @@ def temp_restore_state(ale, state):
 
 class AtariMDP(MDP):
 
-    def __init__(self, rom_path, obs_type=OBS_RAM, early_stop=False):
+    def __init__(self, rom_path, obs_type=OBS_RAM, stop_per_life=True, cutoff_frame=18000, default_frame_skip=4):
         self._rom_path = rom_path
         self._obs_type = obs_type
         ale = self._new_ale()
         self._action_set = [ale.getMinimalActionSet()]
         self._obs_shape = self.to_obs(ale).shape
-        self._early_stop = early_stop
+        self._stop_per_life = stop_per_life
         self._ales = []
         self._states = []
-        self._cutoff = 18000
+        self._life_counts = []
+        self._cutoff_frame = cutoff_frame
+        self._default_frame_skip = default_frame_skip
 
     def _new_ale(self):
         ale = ALEInterface()
@@ -49,11 +51,6 @@ class AtariMDP(MDP):
         # only do the reset if we actually need it
         if not sequence_equal(self._states, states):
             self._ales = map(lambda x: x.ale, states)
-            #diff = len(states) - len(self._states)
-            #if diff > 0:
-            #    self._ales = self._ales + [self._new_ale() for _ in xrange(diff)]
-            #elif diff < 0:
-            #    self._ales = self._ales[:diff]
             for ale, state in zip(self._ales, states):
                 ale.restoreState(state)
             self._states = states
@@ -66,39 +63,47 @@ class AtariMDP(MDP):
         else:
             return None
 
-    def step_single(self, state, action, repeat=1):
+    def step_single(self, state, action, repeat=None):
         next_states, obs, rewards, dones, effective_steps = self.step([state], map(lambda x: [x], action), repeat)
         return next_states[0], obs[0], rewards[0], dones[0], effective_steps[0]
 
-    def step(self, states, action_indices, repeat=1):
+    def step(self, states, action_indices, repeat=None):
         # if the current states do not match the given argument, we need to
         # reset ale to these states
+        repeat = repeat or self._default_frame_skip
         self._reset_ales(states)
         next_states = []
         obs = []
         rewards = []
         dones = []
-        effective_steps = []
+        steps = []
         for ale, action_idx in zip(self._ales, action_indices[0]):
             reward = 0
+            prev_lives = ale.lives()
+            per_steps = 0
+            done = False
             for _ in xrange(repeat):
                 reward += ale.act(self.action_set[0][action_idx])
-                done = ale.game_over() or (self._early_stop and reward != 0) or ale.getEpisodeFrameNumber() >= self._cutoff
-                if done:
-                    #import ipdb; ipdb.set_trace()
+                per_steps += 1
+                if ale.game_over() or ale.getEpisodeFrameNumber() >= self._cutoff_frame:
+                    done = True
                     ale.reset_game()
                     break
-            #print ale.getEpisodeFrameNumber()
-            #print ale.getFrameNumber()
-
+                elif self._stop_per_life and ale.lives() != prev_lives:
+                    done = True
+                    break
             next_state = ale.cloneState()
             next_states.append(next_state)
             obs.append(self.to_obs(ale))
             rewards.append(reward)
             dones.append(done)
-            effective_steps.append(repeat)
+            steps.append(per_steps)
         self._states = next_states[:]
-        return next_states, obs, rewards, dones, effective_steps
+        return next_states, obs, rewards, dones, steps
+
+    @property
+    def support_repeat(self):
+        return True
 
     # return: (states, observations)
     def sample_initial_states(self, n):

@@ -1,7 +1,7 @@
 import os
 os.environ['THEANO_FLAGS'] = 'device=gpu0'
 from policy import DiscreteNNPolicy
-from algo.trpo import TRPO
+from algo.utrpo import UTRPO
 from mdp.base import MDP
 from mdp.atari_mdp import AtariMDP, OBS_RAM
 import lasagne.layers as L
@@ -43,22 +43,11 @@ class ProxyMDP(MDP):
     def step(self, states, action_indices):
         return self._base_mdp.step(state, action_indices)
 
-class ObsTransformer(ProxyMDP):
-
-    def __init__(self, base_mdp, obs_transform):
-        super(ObsTransformer, self).__init__(base_mdp)
-        self._obs_transform = obs_transform
-
-    def step(self, states, action_indices):
-        next_states, obs, rewards, dones, effective_steps = self._base_mdp.step(states, action_indices)
-        return next_states, map(self._obs_transform, obs), rewards, dones, effective_steps
-
 class VariableTimeScaleMDP(ProxyMDP):
 
-    def __init__(self, base_mdp, time_scales=[4,16,32]):
+    def __init__(self, base_mdp, time_scales=[4,16,64]):
         super(VariableTimeScaleMDP, self).__init__(base_mdp)
         self._time_scales = time_scales
-        self._has_repeat = 'repeat' in inspect.getargspec(self._base_mdp.step_single)[0]
 
     @property
     def action_set(self):
@@ -73,36 +62,33 @@ class VariableTimeScaleMDP(ProxyMDP):
         obs = []
         rewards = []
         dones = []
-        effective_steps = []
+        steps = []
         for state, base_action, scale_action in zip(states, action_indices[:-1], action_indices[-1]):
             # sometimes, the mdp will support the repeat mechanism which saves the time required to obtain intermediate observations (ram / images)
-            if self._has_repeat:
-                next_state, ob, reward, done, effective_step = self._base_mdp.step_single(state, base_action, repeat=self._time_scales[scale_action])
+            if self._base_mdp.support_repeat:#self._has_repeat:
+                next_state, ob, reward, done, step = self._base_mdp.step_single(state, base_action, repeat=self._time_scales[scale_action])
             else:
                 reward = 0
-                effective_step = 0
+                step = 0
                 next_state = state
                 for _ in xrange(self._time_scales[scale_action]):
-                    next_state, ob, step_reward, done, step_effective_step = self._base_mdp.step_single(next_state, base_action)
+                    next_state, ob, step_reward, done, per_step = self._base_mdp.step_single(next_state, base_action)
                     reward += step_reward
-                    effective_step += step_effective_step
+                    step += per_step
                     if done:
                         break
             # experiment with counter the effect
-            effective_step /= self._time_scales[scale_action]
+            #effective_step /= self._time_scales[scale_action]
             next_states.append(next_state)
             obs.append(ob)
             rewards.append(reward)
             dones.append(done)
             #print effective_step
-            effective_steps.append(effective_step)
-        return next_states, obs, rewards, dones, effective_steps
+            steps.append(step)
+        return next_states, obs, rewards, dones, steps
 
 def gen_mdp():
-    return VariableTimeScaleMDP(
-        AtariMDP(rom_path="vendor/atari_roms/seaquest.bin", obs_type=OBS_RAM),
-        time_scales=[4],#,16,64]
-    )
+    return AtariMDP(rom_path="vendor/atari_roms/seaquest.bin", obs_type=OBS_RAM)
 
-trpo = TRPO(samples_per_itr=100000, n_parallel=8)#, n_parallel=1)
-trpo.train(TestPolicy, gen_mdp)
+trpo = UTRPO(max_samples_per_itr=100000, n_parallel=1)
+trpo.train(gen_mdp=gen_mdp, gen_policy=TestPolicy)
