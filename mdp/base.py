@@ -25,8 +25,8 @@ class MDP(object):
         raise NotImplementedError
 
     def step_single(self, state, action):
-        next_states, obs, rewards, dones = self.step([state], map(lambda x: [x], action))
-        return next_states[0], obs[0], rewards[0], dones[0]
+        next_states, obs, rewards, dones, effective_steps = self.step([state], map(lambda x: [x], action))
+        return next_states[0], obs[0], rewards[0], dones[0], effective_steps[0]
 
     def sample_initial_state(self):
         states, obs = self.sample_initial_states(1)

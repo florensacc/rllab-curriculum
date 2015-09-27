@@ -36,6 +36,7 @@ class AtariMDP(MDP):
         self._early_stop = early_stop
         self._ales = []
         self._states = []
+        self._cutoff = 18000
 
     def _new_ale(self):
         ale = ALEInterface()
@@ -66,8 +67,8 @@ class AtariMDP(MDP):
             return None
 
     def step_single(self, state, action, repeat=1):
-        next_states, obs, rewards, dones = self.step([state], map(lambda x: [x], action), repeat)
-        return next_states[0], obs[0], rewards[0], dones[0]
+        next_states, obs, rewards, dones, effective_steps = self.step([state], map(lambda x: [x], action), repeat)
+        return next_states[0], obs[0], rewards[0], dones[0], effective_steps[0]
 
     def step(self, states, action_indices, repeat=1):
         # if the current states do not match the given argument, we need to
@@ -77,21 +78,27 @@ class AtariMDP(MDP):
         obs = []
         rewards = []
         dones = []
+        effective_steps = []
         for ale, action_idx in zip(self._ales, action_indices[0]):
             reward = 0
             for _ in xrange(repeat):
                 reward += ale.act(self.action_set[0][action_idx])
-                done = ale.game_over() or (self._early_stop and reward != 0)
+                done = ale.game_over() or (self._early_stop and reward != 0) or ale.getEpisodeFrameNumber() >= self._cutoff
                 if done:
+                    #import ipdb; ipdb.set_trace()
                     ale.reset_game()
                     break
+            #print ale.getEpisodeFrameNumber()
+            #print ale.getFrameNumber()
+
             next_state = ale.cloneState()
             next_states.append(next_state)
             obs.append(self.to_obs(ale))
             rewards.append(reward)
             dones.append(done)
+            effective_steps.append(repeat)
         self._states = next_states[:]
-        return next_states, obs, rewards, dones
+        return next_states, obs, rewards, dones, effective_steps
 
     # return: (states, observations)
     def sample_initial_states(self, n):
@@ -145,4 +152,6 @@ class AtariMDP(MDP):
             ram_size = ale.getRAMSize()
             ram = np.zeros((ram_size),dtype=np.uint8)
             ale.getRAM(ram)
+            MAX_RAM = 255
+            ram = (np.array(ram) * 1.0 / MAX_RAM) * 2 - 1
             return ram

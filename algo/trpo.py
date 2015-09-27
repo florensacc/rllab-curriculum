@@ -1,5 +1,4 @@
-import theano
-import theano.tensor as T
+import os
 import numpy as np
 import scipy.optimize
 import lasagne.layers as L
@@ -9,9 +8,12 @@ from misc.logging import Message, log, prefix_log
 from misc.tensor_utils import flatten_tensors, unflatten_tensors
 from collections import defaultdict
 import multiprocessing
-from joblib import Parallel, delayed
-from multiprocessing import Process
 from joblib.pool import MemmapingPool
+from joblib.parallel import SafeFunction
+import theano
+import theano.tensor as T
+import theano.sandbox.cuda
+
 
 def reduce_add(a, b):
     if a is None:
@@ -28,58 +30,68 @@ def reduce_mul(a, b):
     return a * b
 
 def collect_samples(args):
-    n_samples, discount = args
-    global policy
-    global mdp
-    global state
-    global obs
-    total_q_vals = defaultdict(int)
-    action_visits = defaultdict(int)
-    traj = []
-    samples = []
-    tot_rewards = 0
-    n_traj = 0
+    try:
+        param_values, n_samples, discount = args
+        global policy
+        global mdp
+        total_q_vals = defaultdict(int)
+        action_visits = defaultdict(int)
+        traj = []
+        samples = []
+        tot_rewards = 0
+        n_traj = 0
 
+        log('starting...')
+        policy.set_param_values(param_values)
 
-    log('starting...')
+        effective_steps = 0
+        last_displayed = 0
 
-    for sample_itr in xrange(n_samples):
-        if (sample_itr + 1) % 1000 == 0:
-            log('%d / %d samples' % (sample_itr + 1, n_samples))
-        actions, action_probs = policy.get_actions_single(obs)
-        next_state, next_obs, reward, done = mdp.step_single(state, actions)
-        traj.append((obs, actions, next_obs, reward))
-        samples.append((obs, actions, action_probs))
-        tot_rewards += reward
-        if done or sample_itr == n_samples - 1:
-            n_traj += 1
-            # update all Q-values along this trajectory
-            cum_reward = 0
-            for obs, actions, next_obs, reward in traj[::-1]:
-                cum_reward = discount * cum_reward + reward
-                action_pair = (tuple(obs), tuple(actions))
-                total_q_vals[action_pair] += cum_reward
-                action_visits[action_pair] += 1
-            traj = []
-        state, obs = next_state, next_obs
+        state, obs = mdp.sample_initial_state()
 
-    N = len(samples)
+        while effective_steps < n_samples:
+            if effective_steps / 1000 > last_displayed:
+                log('%d / %d steps (%d samples; %d traj)' % (effective_steps, n_samples, len(samples), n_traj))
+                last_displayed += 1
+            actions, action_probs = policy.get_actions_single(obs)
+            next_state, next_obs, reward, done, effective_step = mdp.step_single(state, actions)
+            effective_steps += effective_step
+            traj.append((obs, actions, next_obs, reward))
+            samples.append((obs, actions, action_probs))
+            tot_rewards += reward
+            if done or effective_steps >= n_samples:
+                n_traj += 1
+                # update all Q-values along this trajectory
+                cum_reward = 0
+                for obs, actions, next_obs, reward in traj[::-1]:
+                    cum_reward = discount * cum_reward + reward
+                    action_pair = (tuple(obs), tuple(actions))
+                    total_q_vals[action_pair] += cum_reward
+                    action_visits[action_pair] += 1
+                traj = []
+            state, obs = next_state, next_obs
 
-    all_obs = np.zeros((N,) + mdp.observation_shape)
-    Q_est = np.zeros(N)
-    all_pi_old = [np.zeros((N, Da)) for Da in mdp.action_dims]
-    all_actions = [np.zeros(N, dtype='uint8') for _ in mdp.action_dims]
-    for idx, tpl in enumerate(samples):
-        obs, actions, action_probs = tpl
-        for ia, action in enumerate(actions):
-            all_actions[ia][idx] = action
-        for ia, probs in enumerate(action_probs):
-            all_pi_old[ia][idx,:] = probs
-        action_pair = (tuple(obs), tuple(actions))
-        Q_est[idx] = total_q_vals[action_pair] / action_visits[action_pair]
-        all_obs[idx] = obs
+        N = len(samples)
 
-    return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions
+        all_obs = np.zeros((N,) + mdp.observation_shape)
+        Q_est = np.zeros(N)
+        all_pi_old = [np.zeros((N, Da)) for Da in mdp.action_dims]
+        all_actions = [np.zeros(N, dtype='uint8') for _ in mdp.action_dims]
+        for idx, tpl in enumerate(samples):
+            obs, actions, action_probs = tpl
+            for ia, action in enumerate(actions):
+                all_actions[ia][idx] = action
+            for ia, probs in enumerate(action_probs):
+                all_pi_old[ia][idx,:] = probs
+            action_pair = (tuple(obs), tuple(actions))
+            Q_est[idx] = total_q_vals[action_pair] / action_visits[action_pair]
+            all_obs[idx] = obs
+
+        return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions
+    except Exception as e:
+        import traceback
+        traceback.print_exc(e)
+        raise e
 
 def combine_samples(results):
     rewards_list, n_traj_list, all_obs_list, Q_est_list, all_pi_old_list, all_actions_list = map(list, zip(*results))
@@ -92,23 +104,18 @@ def combine_samples(results):
     all_actions = [np.concatenate(map(lambda x: x[i], all_actions_list)) for i in range(na)]
     return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions
 
-def collector_process(gen_policy, mdp):
-    pass
+def initialize_collector_state(gen_policy, gen_mdp):
+    global policy
+    global mdp
+    global state
+    global obs
 
-def mk_collector_initializer(gen_policy, gen_mdp):
-    def collector_initializer():
-        global policy
-        global mdp
-        global state
-        global obs
-        import os
-        os.environ['THEANO_FLAGS'] = 'device=cpu'
-        import theano
-        mdp = gen_mdp()
-        input_var = T.matrix('input') # N*Ds
-        policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
-        state, obs = mdp.sample_initial_state()
-    return collector_initializer
+    np.random.seed(os.getpid())
+
+    mdp = gen_mdp()
+    input_var = T.matrix('input') # N*Ds
+    policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
+    pid = np.random.rand()
 
 class TRPO(object):
 
@@ -142,6 +149,7 @@ class TRPO(object):
 
 
     def train(self, gen_policy, gen_mdp):
+
         mdp = gen_mdp()
         input_var = T.matrix('input') # N*Ds
         Q_est_var = T.vector('Q_est') # N
@@ -149,11 +157,6 @@ class TRPO(object):
         action_vars = [T.vector('action_%d' % i, dtype='uint8') for i in range(len(mdp.action_dims))] # (N) * Na
         lambda_var = T.scalar('lambda')
 
-        pool = MemmapingPool(self.n_parallel, initializer=mk_collector_initializer(gen_policy, gen_mdp))
-        #tgt_p = Process(target=collector_process, args=(gen_policy, mdp))
-        #tgt_p.start()
-
-        #tgt_policies = [gen_policy(mdp.observation_shape, mdp.action_dims, input_var) for _ in xrange(self.n_parallel)]
         # this is for the optimization
         policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
         surrogate_obj, mean_kl = self.new_surrogate_obj(policy, input_var, Q_est_var, pi_old_vars, action_vars, lambda_var)
@@ -169,25 +172,24 @@ class TRPO(object):
 
         lambda_ = self.initial_lambda
 
-        #with Parallel(n_jobs=self.n_parallel) as parallel:
+        theano.sandbox.cuda.unuse()
 
+        pool = MemmapingPool(self.n_parallel, initializer=initialize_collector_state, initargs=(gen_policy, gen_mdp))
+
+        #initialize_collector_state(gen_policy, gen_mdp)
         for itr in xrange(self.n_itr):
             total_q_vals = defaultdict(int)
             action_visits = defaultdict(int)
 
             itr_log = prefix_log('itr #%d | ' % (itr + 1))
 
-            args = (self.samples_per_itr / self.n_parallel, self.discount)
-            result_list = pool.map(collect_samples, [args] * self.n_parallel)
+            args = (policy.get_param_values(), self.samples_per_itr / self.n_parallel, self.discount)
+            #collect_samples(args)
+            result_list = pool.map(SafeFunction(collect_samples), [args] * self.n_parallel)
             tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions = \
                     combine_samples(result_list)
                             
-            #tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions = combine_samples(
-            #        parallel(
-            #            delayed(collect_samples)(
-            #                tgt_policy, mdp, 
-            #            ) for tgt_policy in tgt_policies))#_ in range(self.n_parallel)))
-
+            theano.sandbox.cuda.use('gpu0', force=True)
             all_input_values = [all_obs, Q_est] + all_pi_old + all_actions
 
             def evaluate_cost(lambda_):
@@ -204,6 +206,9 @@ class TRPO(object):
                     return flatten_tensors(map(np.asarray, grad)).astype(np.float64)
                 return evaluate
 
+            # what if we reset the policy parameters every iteration?
+            #reset_policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
+            #policy.set_param_values(reset_policy.get_param_values())
             cur_params = policy.get_param_values()
             itr_log('avg reward: %.3f over %d trajectories' % (tot_rewards * 1.0 / n_traj, n_traj))
             if not self.reuse_lambda:
@@ -213,8 +218,11 @@ class TRPO(object):
             itr_log('trying lambda=%.3f ... mean kl %.3f' % (lambda_, mean_kl))
             # do line search on lambda
             if self.adapt_lambda:
+                max_search = 4
+                if itr < 2:
+                    max_search = 10
                 if mean_kl > self.stepsize:
-                    for _ in xrange(4):
+                    for _ in xrange(max_search):
                         lambda_ = lambda_ * 2
                         result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=self.max_itr)
                         mean_kl = compute_mean_kl(*(all_input_values + [lambda_]))
@@ -223,7 +231,7 @@ class TRPO(object):
                         if mean_kl <= self.stepsize:
                             break
                 else:
-                    for _ in xrange(4):
+                    for _ in xrange(max_search):
                         try_lambda_ = lambda_ * 0.5
                         try_result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(try_lambda_), x0=cur_params, fprime=evaluate_grad(try_lambda_), maxiter=self.max_itr)
                         try_mean_kl = compute_mean_kl(*(all_input_values + [try_lambda_]))
@@ -240,7 +248,4 @@ class TRPO(object):
             itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
             sys.stdout.flush()
 
-            #for tgt_policy in tgt_policies:
-            #    tgt_policy.set_param_values(result_x)
-
-        tgt_p.join()
+            theano.sandbox.cuda.unuse()
