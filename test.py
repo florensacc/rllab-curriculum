@@ -90,5 +90,5 @@ class VariableTimeScaleMDP(ProxyMDP):
 def gen_mdp():
     return AtariMDP(rom_path="vendor/atari_roms/seaquest.bin", obs_type=OBS_RAM)
 
-trpo = UTRPO(max_samples_per_itr=100000, n_parallel=1)
+trpo = UTRPO(max_samples_per_itr=100000, n_parallel=2)
 trpo.train(gen_mdp=gen_mdp, gen_policy=TestPolicy)

@@ -6,8 +6,10 @@ import os
 import theano
 import theano.tensor as T
 import theano.sandbox.cuda
+import pyprind
 from collections import defaultdict
 from misc.logging import Message, log, prefix_log
+from multiprocessing import Manager
 from joblib import Parallel, delayed
 
 @contextmanager
@@ -19,7 +21,8 @@ def ensure_cpu():
     if default_device is not None:
         theano.sandbox.cuda.use('gpu%d' % default_device, force=True)
 
-def _init_subprocess(gen_mdp, gen_policy):
+def _init_subprocess(args):
+    gen_mdp, gen_policy = args
     global mdp
     global policy
     np.random.seed(os.getpid())
@@ -31,7 +34,13 @@ def _init_mdp_policy(gen_mdp, gen_policy):
     policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
     return mdp, policy
 
-def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, discount):#, args):
+def _subprocess_collect_samples(args):
+    itr, param_values, max_samples, max_steps, discount, queue = args
+    global mdp
+    global policy
+    return _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, discount, queue)
+
+def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, discount, queue=None):
     total_q_vals = defaultdict(int)
     action_visits = defaultdict(int)
     traj = []
@@ -43,6 +52,8 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
     policy.set_param_values(param_values)
 
     last_displayed = 0
+    last_n_steps = 0
+    last_n_samples = 0
     n_samples = 0
     n_steps = 0
 
@@ -50,12 +61,17 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
 
     while n_samples < max_samples and n_steps < max_steps:
         if not np.isinf(max_steps) and n_steps / 1000 > last_displayed:
-            log('%d / %d steps (%d samples; %d traj)' % (n_steps, max_steps, n_samples, n_traj))
+            #log('%d / %d steps (%d samples; %d traj)' % (n_steps, max_steps, n_samples, n_traj))
             last_displayed += 1
+            if queue is not None:
+                queue.put(('steps', n_steps - last_n_steps))
+                last_n_steps = n_steps
         elif not np.isinf(max_samples) and n_samples / 1000 > last_displayed:
-            log('%d / %d samples (%d steps; %d traj)' % (n_samples, max_samples, n_steps, n_traj))
+            #log('%d / %d samples (%d steps; %d traj)' % (n_samples, max_samples, n_steps, n_traj))
             last_displayed += 1
-
+            if queue is not None:
+                queue.put(('samples', n_samples - last_n_samples))
+                last_n_samples = n_samples
         actions, action_probs = policy.get_actions_single(obs)
         next_state, next_obs, reward, done, steps = mdp.step_single(state, actions)
         n_steps += steps
@@ -63,7 +79,7 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
         traj.append((obs, actions, next_obs, reward))
         samples.append((obs, actions, action_probs))
         tot_rewards += reward
-        if done or n_samples >= max_samples or n_steps >= max_steps:#effective_steps >= n_samples:
+        if done or n_samples >= max_samples or n_steps >= max_steps:
             n_traj += 1
             # update all Q-values along this trajectory
             cum_reward = 0
@@ -93,11 +109,6 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
 
     return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions
 
-def _subprocess_collect_samples(itr, param_values, max_samples, max_steps, discount):
-    global mdp
-    global policy
-    return _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, discount)
-
 def _combine_samples(results):
     rewards_list, n_traj_list, all_obs_list, Q_est_list, all_pi_old_list, all_actions_list = map(list, zip(*results))
     tot_rewards = sum(rewards_list)
@@ -116,15 +127,16 @@ class RolloutSampler(object):
         self._setup_called = False
         self._gen_mdp = gen_mdp
         self._gen_policy = gen_policy
+        self._pool = None
+        self._mdp = None
+        self._policy = None
 
     def _setup(self):
         if not self._setup_called:
             if self._n_parallel > 1:
                 with ensure_cpu():
-                    self._parallel = Parallel(n_jobs=self._n_parallel)#= pool = MemmapingPool(n_parallel)
-                    self._parallel.__enter__()
-                    self._parallel(delayed(_init_subprocess)(self._gen_mdp, self._gen_policy) \
-                            for _ in range(self._n_parallel))
+                    self._pool = MemmapingPool(self._n_parallel)
+                    self._pool.map(SafeFunction(_init_subprocess), [(self._gen_mdp, self._gen_policy)] * self._n_parallel)
             else:
                 self._mdp, self._policy = _init_mdp_policy(self._gen_mdp, self._gen_policy)
             self._setup_called = True
@@ -135,7 +147,12 @@ class RolloutSampler(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         if self._n_parallel > 1:
-            self._parallel.__exit__(exc_type, exc_value, traceback)
+            self._pool.close()
+            self._pool.terminate()
+            self._pool = None
+        else:
+            self._mdp = None
+            self._policy = None
         self._setup_called = False
 
     def collect_samples(self, itr, param_values, max_samples, max_steps, discount):
@@ -143,9 +160,32 @@ class RolloutSampler(object):
             raise ValueError('Must enclose RolloutSampler in a with clause')
         if self._n_parallel > 1:
             with ensure_cpu():
-                result_list = self._parallel(delayed(_subprocess_collect_samples)(
-                    itr, param_values, max_samples / self._n_parallel, max_steps / self._n_parallel, discount)
-                        for _ in range(self._n_parallel))
+                manager = Manager()
+                queue = manager.Queue()
+                args = itr, param_values, max_samples / self._n_parallel, max_steps / self._n_parallel, discount, queue
+                map_result = self._pool.map_async(_subprocess_collect_samples, [args] * self._n_parallel)
+                n_samples = 0
+                n_steps = 0
+                max_progress = 1000000
+                cur_progress = 0
+                pbar = pyprind.ProgBar(max_progress)
+                while not map_result.ready():
+                    map_result.wait(0.1)
+                    while not queue.empty():
+                        ret = queue.get_nowait()
+                        if ret[0] == 'steps':
+                            n_steps += ret[1]
+                        elif ret[0] == 'samples':
+                            n_samples += ret[1]
+                    new_progress = max(n_samples * max_progress / max_samples, n_steps * max_progress / max_steps)
+                    pbar.update(new_progress - cur_progress)
+                    cur_progress = new_progress
+                pbar.stop()
+                try:
+                    result_list = map_result.get()
+                except Exception as e:
+                    print e
+                    raise
                 return _combine_samples(result_list)
         else:
             return _collect_samples(self._mdp, self._policy, itr, param_values, max_samples, max_steps, discount)
