@@ -4,15 +4,17 @@ import scipy.optimize
 import lasagne.layers as L
 import operator
 import sys
-from misc.logging import Message, log, prefix_log
+from misc.console import Message, log, prefix_log
 from misc.tensor_utils import flatten_tensors, unflatten_tensors
 from collections import defaultdict
 import multiprocessing
 from joblib.pool import MemmapingPool
 from joblib.parallel import SafeFunction
-from .rollout_sampler import RolloutSampler
+import subprocess
 import theano
 import theano.tensor as T
+import zmq
+import cloudpickle
 
 def reduce_add(a, b):
     if a is None:
@@ -33,7 +35,7 @@ class UTRPO(object):
 
     def __init__(self, n_itr=500, max_samples_per_itr=100000, max_steps_per_itr=np.inf, discount=0.99,
             stepsize=0.015, initial_lambda=1, max_opt_itr=100, n_parallel=multiprocessing.cpu_count(),
-            adapt_lambda=True, reuse_lambda=True, gen_sampler=RolloutSampler):
+            adapt_lambda=True, reuse_lambda=True, sampler_module='algo.rollout_sampler'):
         self._n_itr = n_itr
         self._max_samples_per_itr = max_samples_per_itr
         self._max_steps_per_itr = max_steps_per_itr
@@ -45,7 +47,7 @@ class UTRPO(object):
         self._n_parallel = n_parallel
         # whether to start from the currently adapted lambda on the next iteration
         self._reuse_lambda = reuse_lambda
-        self._gen_sampler = gen_sampler
+        self._sampler_module = sampler_module
 
     def _new_surrogate_obj(self, policy, input_var, Q_est_var, pi_old_vars, action_vars, lambda_var):
         probs_vars = policy.probs_vars
@@ -85,73 +87,89 @@ class UTRPO(object):
 
         lambda_ = self._initial_lambda
 
-        with self._gen_sampler(self._n_parallel, gen_mdp, gen_policy) as sampler:
-            for itr in xrange(self._n_itr):
-                total_q_vals = defaultdict(int)
-                action_visits = defaultdict(int)
+        for itr in xrange(self._n_itr):
+            total_q_vals = defaultdict(int)
+            action_visits = defaultdict(int)
 
-                itr_log = prefix_log('itr #%d | ' % (itr + 1))
+            itr_log = prefix_log('itr #%d | ' % (itr + 1))
 
-                cur_params = policy.get_param_values()
+            cur_params = policy.get_param_values()
+            
+            child = subprocess.Popen(['python', '-m', self._sampler_module], env=dict(os.environ, THEANO_FLAGS="device=cpu"))
+            context = zmq.Context()
+            socket = context.socket(zmq.REQ)
+            socket.connect("tcp://localhost:12577")
 
-                ret = sampler.collect_samples(
+            socket.send(cloudpickle.dumps((self._n_parallel, gen_mdp, gen_policy)))
+            socket.recv()
+
+            socket.send(cloudpickle.dumps((
                         itr, cur_params, self._max_samples_per_itr, \
                         self._max_steps_per_itr, self._discount
-                        )
-                tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions = ret
-                                
-                all_input_values = [all_obs, Q_est] + all_pi_old + all_actions
+                        )))
 
-                def evaluate_cost(lambda_):
-                    def evaluate(params):
-                        policy.set_param_values(params)
-                        val = compute_surrogate_obj(*(all_input_values + [lambda_]))
-                        return val.astype(np.float64)
-                    return evaluate
-                
-                def evaluate_grad(lambda_):
-                    def evaluate(params):
-                        policy.set_param_values(params)
-                        grad = compute_grads(*(all_input_values + [lambda_]))
-                        return flatten_tensors(map(np.asarray, grad)).astype(np.float64)
-                    return evaluate
+            ret = pickle.loads(socket.recv())
 
-                itr_log('avg reward: %.3f over %d trajectories' % (tot_rewards * 1.0 / n_traj, n_traj))
+            tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions = ret
+                            
+            all_input_values = [all_obs, Q_est] + all_pi_old + all_actions
 
-                if not self._reuse_lambda:
-                    lambda_ = self._initial_lambda
+            with Message('saving values...'):
+                np.savez('tmp.npz', *all_input_values)
 
+            def evaluate_cost(lambda_):
+                def evaluate(params):
+                    policy.set_param_values(params)
+                    val = compute_surrogate_obj(*(all_input_values + [lambda_]))
+                    return val.astype(np.float64)
+                return evaluate
+            
+            def evaluate_grad(lambda_):
+                def evaluate(params):
+                    policy.set_param_values(params)
+                    grad = compute_grads(*(all_input_values + [lambda_]))
+                    return flatten_tensors(map(np.asarray, grad)).astype(np.float64)
+                return evaluate
+
+            itr_log('avg reward: %.3f over %d trajectories' % (tot_rewards * 1.0 / n_traj, n_traj))
+
+            if not self._reuse_lambda:
+                lambda_ = self._initial_lambda
+
+            with Message('trying lambda=%.3f...' % lambda_):
                 result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=self._max_opt_itr)
                 mean_kl = compute_mean_kl(*(all_input_values + [lambda_]))
-                itr_log('trying lambda=%.3f ... mean kl %.3f' % (lambda_, mean_kl))
-                # do line search on lambda
-                if self._adapt_lambda:
-                    max_search = 4
-                    if itr < 2:
-                        max_search = 10
-                    if mean_kl > self._stepsize:
-                        for _ in xrange(max_search):
-                            lambda_ = lambda_ * 2
+                itr_log('lambda %.3f => mean kl %.3f' % (lambda_, mean_kl))
+            # do line search on lambda
+            if self._adapt_lambda:
+                max_search = 4
+                if itr < 2:
+                    max_search = 10
+                if mean_kl > self._stepsize:
+                    for _ in xrange(max_search):
+                        lambda_ = lambda_ * 2
+                        with Message('trying lambda=%.3f...' % lambda_):
                             result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(lambda_), x0=cur_params, fprime=evaluate_grad(lambda_), maxiter=self._max_opt_itr)
                             mean_kl = compute_mean_kl(*(all_input_values + [lambda_]))
-                            if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
-                            itr_log('trying lambda=%.3f ... mean kl %.3f' % (lambda_, mean_kl))
-                            if mean_kl <= self._stepsize:
-                                break
-                    else:
-                        for _ in xrange(max_search):
-                            try_lambda_ = lambda_ * 0.5
+                            itr_log('lambda %.3f => mean kl %.3f' % (lambda_, mean_kl))
+                        if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
+                        if mean_kl <= self._stepsize:
+                            break
+                else:
+                    for _ in xrange(max_search):
+                        try_lambda_ = lambda_ * 0.5
+                        with Message('trying lambda=%.3f...' % try_lambda_):
                             try_result = scipy.optimize.fmin_l_bfgs_b(func=evaluate_cost(try_lambda_), x0=cur_params, fprime=evaluate_grad(try_lambda_), maxiter=self._max_opt_itr)
                             try_mean_kl = compute_mean_kl(*(all_input_values + [try_lambda_]))
-                            itr_log('trying lambda=%.3f ... mean kl %.3f' % (try_lambda_, try_mean_kl))
-                            if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
-                            if try_mean_kl > self._stepsize:
-                                break
-                            result = try_result
-                            lambda_ = try_lambda_
-                            mean_kl = try_mean_kl
-                        
-                result_x, result_f, result_d = result
+                            itr_log('lambda=%.3f => mean kl %.3f' % (try_lambda_, try_mean_kl))
+                        if np.isnan(mean_kl): import ipdb; ipdb.set_trace()
+                        if try_mean_kl > self._stepsize:
+                            break
+                        result = try_result
+                        lambda_ = try_lambda_
+                        mean_kl = try_mean_kl
+                    
+            result_x, result_f, result_d = result
 
-                itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
-                sys.stdout.flush()
+            itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
+            sys.stdout.flush()

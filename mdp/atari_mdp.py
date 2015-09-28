@@ -7,9 +7,6 @@ import random
 import sys
 from contextlib import contextmanager
 
-OBS_RAM = 0
-OBS_IMAGE = 1
-
 def sequence_equal(s1, s2):
     return len(s1) == len(s2) and all(imap(operator.eq, s1, s2))
 
@@ -27,7 +24,8 @@ def temp_restore_state(ale, state):
 
 class AtariMDP(MDP):
 
-    def __init__(self, rom_path, obs_type=OBS_RAM, stop_per_life=True, cutoff_frame=18000, default_frame_skip=4):
+    @type_hint('rom_path', str)
+    def __init__(self, rom_path, obs_type='ram', stop_per_life=True, cutoff_frame=18000, default_frame_skip=4):
         self._rom_path = rom_path
         self._obs_type = obs_type
         ale = self._new_ale()
@@ -56,9 +54,9 @@ class AtariMDP(MDP):
             self._states = states
 
     def to_obs(self, ale, state=None):
-        if self._obs_type is OBS_IMAGE:
+        if self._obs_type == 'image':
             return self.to_rgb(ale, state)
-        elif self._obs_type is OBS_RAM: 
+        elif self._obs_type == 'ram':
             return self.to_ram(ale, state)
         else:
             return None

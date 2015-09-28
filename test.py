@@ -1,14 +1,15 @@
+#!/usr/bin/python
 import os
-os.environ['THEANO_FLAGS'] = 'device=gpu0'
 from policy import DiscreteNNPolicy
 from algo.utrpo import UTRPO
 from mdp.base import MDP
-from mdp.atari_mdp import AtariMDP, OBS_RAM
+from mdp.atari_mdp import AtariMDP
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne
 import numpy as np
 import inspect
+from misc.console import tweakable
 
 
 class TestPolicy(DiscreteNNPolicy):
@@ -88,7 +89,8 @@ class VariableTimeScaleMDP(ProxyMDP):
         return next_states, obs, rewards, dones, steps
 
 def gen_mdp():
-    return AtariMDP(rom_path="vendor/atari_roms/seaquest.bin", obs_type=OBS_RAM)
+    return tweakable(AtariMDP)(rom_path="vendor/atari_roms/seaquest.bin", obs_type='ram')
 
-trpo = UTRPO(max_samples_per_itr=100000, n_parallel=2)
-trpo.train(gen_mdp=gen_mdp, gen_policy=TestPolicy)
+if __name__ == '__main__':
+    trpo = tweakable(UTRPO)(max_samples_per_itr=100000)
+    trpo.train(gen_mdp=gen_mdp, gen_policy=TestPolicy)

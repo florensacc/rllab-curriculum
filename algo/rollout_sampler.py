@@ -3,26 +3,24 @@ from contextlib import contextmanager
 from joblib.parallel import SafeFunction
 import numpy as np
 import os
+os.environ['THEANO_FLAGS'] = 'device=cpu'
 import theano
 import theano.tensor as T
 import theano.sandbox.cuda
 import pyprind
 from collections import defaultdict
-from misc.logging import Message, log, prefix_log
+from misc.console import Message, log, prefix_log
 from multiprocessing import Manager
 from joblib import Parallel, delayed
+from sampler import launch_sampler
+import cloud
+import pickle
 
-@contextmanager
-def ensure_cpu():
-    default_device = theano.sandbox.cuda.use.device_number
-    if default_device is not None:
-        theano.sandbox.cuda.unuse()
-    yield
-    if default_device is not None:
-        theano.sandbox.cuda.use('gpu%d' % default_device, force=True)
-
-def _init_subprocess(args):
-    gen_mdp, gen_policy = args
+def _init_subprocess(*args):
+    if len(args) == 1:
+        _, gen_mdp, gen_policy = pickle.loads(args[0])#args
+    else:
+        gen_mdp, gen_policy = args
     global mdp
     global policy
     np.random.seed(os.getpid())
@@ -122,7 +120,9 @@ def _combine_samples(results):
 
 class RolloutSampler(object):
 
-    def __init__(self, n_parallel, gen_mdp, gen_policy):
+    def __init__(self, buf=None, n_parallel=None, gen_mdp=None, gen_policy=None):
+        if buf is not None:
+            n_parallel, gen_mdp, gen_policy = pickle.loads(buf)
         self._n_parallel = n_parallel
         self._setup_called = False
         self._gen_mdp = gen_mdp
@@ -130,12 +130,15 @@ class RolloutSampler(object):
         self._pool = None
         self._mdp = None
         self._policy = None
+        self._buf = buf
 
     def _setup(self):
         if not self._setup_called:
             if self._n_parallel > 1:
-                with ensure_cpu():
-                    self._pool = MemmapingPool(self._n_parallel)
+                self._pool = MemmapingPool(self._n_parallel)
+                if self._buf is not None:
+                    self._pool.map(SafeFunction(_init_subprocess), [self._buf] * self._n_parallel)
+                else:
                     self._pool.map(SafeFunction(_init_subprocess), [(self._gen_mdp, self._gen_policy)] * self._n_parallel)
             else:
                 self._mdp, self._policy = _init_mdp_policy(self._gen_mdp, self._gen_policy)
@@ -159,33 +162,36 @@ class RolloutSampler(object):
         if not self._setup_called:
             raise ValueError('Must enclose RolloutSampler in a with clause')
         if self._n_parallel > 1:
-            with ensure_cpu():
-                manager = Manager()
-                queue = manager.Queue()
-                args = itr, param_values, max_samples / self._n_parallel, max_steps / self._n_parallel, discount, queue
-                map_result = self._pool.map_async(_subprocess_collect_samples, [args] * self._n_parallel)
-                n_samples = 0
-                n_steps = 0
-                max_progress = 1000000
-                cur_progress = 0
-                pbar = pyprind.ProgBar(max_progress)
-                while not map_result.ready():
-                    map_result.wait(0.1)
-                    while not queue.empty():
-                        ret = queue.get_nowait()
-                        if ret[0] == 'steps':
-                            n_steps += ret[1]
-                        elif ret[0] == 'samples':
-                            n_samples += ret[1]
-                    new_progress = max(n_samples * max_progress / max_samples, n_steps * max_progress / max_steps)
-                    pbar.update(new_progress - cur_progress)
-                    cur_progress = new_progress
-                pbar.stop()
-                try:
-                    result_list = map_result.get()
-                except Exception as e:
-                    print e
-                    raise
-                return _combine_samples(result_list)
+            manager = Manager()
+            queue = manager.Queue()
+            args = itr, param_values, max_samples / self._n_parallel, max_steps / self._n_parallel, discount, queue
+            map_result = self._pool.map_async(_subprocess_collect_samples, [args] * self._n_parallel)
+            n_samples = 0
+            n_steps = 0
+            max_progress = 1000000
+            cur_progress = 0
+            pbar = pyprind.ProgBar(max_progress)
+            while not map_result.ready():
+                map_result.wait(0.1)
+                while not queue.empty():
+                    ret = queue.get_nowait()
+                    if ret[0] == 'steps':
+                        n_steps += ret[1]
+                    elif ret[0] == 'samples':
+                        n_samples += ret[1]
+                new_progress = max(n_samples * max_progress / max_samples, n_steps * max_progress / max_steps)
+                pbar.update(new_progress - cur_progress)
+                cur_progress = new_progress
+            pbar.stop()
+            try:
+                result_list = map_result.get()
+            except Exception as e:
+                print e
+                raise
+            return _combine_samples(result_list)
         else:
             return _collect_samples(self._mdp, self._policy, itr, param_values, max_samples, max_steps, discount)
+
+if __name__ == '__main__':
+    os.environ['THEANO_FLAGS'] = 'device=cpu'
+    launch_sampler(RolloutSampler)
