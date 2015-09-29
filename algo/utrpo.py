@@ -7,6 +7,7 @@ import theano
 import theano.tensor as T
 import pydoc
 from remote_sampler import RemoteSampler
+import time
 
 
 def reduce_add(a, b):
@@ -31,7 +32,7 @@ class UTRPO(object):
     def __init__(
             self, n_itr=500, max_samples_per_itr=100000,
             max_steps_per_itr=np.inf, discount=0.99, stepsize=0.015,
-            initial_lambda=1, max_opt_itr=10,
+            initial_lambda=1, max_opt_itr=10, exp_name='utrpo',
             n_parallel=multiprocessing.cpu_count(), adapt_lambda=True,
             reuse_lambda=True, sampler_module='algo.rollout_sampler',
             optimizer_module='scipy.optimize.fmin_l_bfgs_b'):
@@ -44,6 +45,7 @@ class UTRPO(object):
         self._max_opt_itr = max_opt_itr
         self._adapt_lambda = adapt_lambda
         self._n_parallel = n_parallel
+        self._exp_name = exp_name
         # whether to start from the currently adapted lambda on the next
         # iteration
         self._reuse_lambda = reuse_lambda
@@ -206,6 +208,16 @@ class UTRPO(object):
                             lambda_ = try_lambda_
                             mean_kl = try_mean_kl
 
+                timestamp = time.strftime("%Y%m%d%H%M%S")
                 result_x, result_f, result_d = result
                 itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
+                itr_log('saving result...')
+                np.savez('data/%s_itr_%d_%s.npz' % (exp_name, itr, timestamp), {
+                    'cur_policy_params': cur_params,
+                    'opt_policy_params': policy.get_param_values(),
+                    'all_obs': all_obs,
+                    'Q_est': Q_est,
+                    'all_pi_old': all_pi_old,
+                    'all_actions': all_actions,
+                })
                 sys.stdout.flush()
