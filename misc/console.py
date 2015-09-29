@@ -93,6 +93,10 @@ def tweakval(val, identifier):
 def tweakfun(fun, alt=None):
     """Make the arguments (or the function itself) tweakable from command line.
     See tests/test_misc_console.py for examples.
+
+    NOTE: this only works for the initial launched process, since other processes
+    will get different argv. What this means is that tweak() calls wrapped in a function
+    to be invoked in a child process might not behave properly.
     """
     cls = getattr(fun, 'im_class', None)
     method_name = fun.__name__
