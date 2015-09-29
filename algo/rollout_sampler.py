@@ -37,70 +37,75 @@ def _subprocess_collect_samples(args):
 
 
 def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, discount, queue=None):
-    total_q_vals = defaultdict(int)
-    action_visits = defaultdict(int)
-    traj = []
-    samples = []
-    tot_rewards = 0
-    n_traj = 0
+    try:
+        total_q_vals = defaultdict(int)
+        action_visits = defaultdict(int)
+        traj = []
+        samples = []
+        tot_rewards = 0
+        n_traj = 0
 
-    policy.set_param_values(param_values)
+        policy.set_param_values(param_values)
 
-    last_displayed = 0
-    last_n_steps = 0
-    last_n_samples = 0
-    n_samples = 0
-    n_steps = 0
+        last_displayed = 0
+        last_n_steps = 0
+        last_n_samples = 0
+        n_samples = 0
+        n_steps = 0
 
-    state, obs = mdp.sample_initial_state()
+        state, obs = mdp.sample_initial_state()
 
-    while n_samples < max_samples and n_steps < max_steps:
-        if not np.isinf(max_steps) and n_steps / 1000 > last_displayed:
-            last_displayed += 1
-            if queue is not None:
-                queue.put(('steps', n_steps - last_n_steps))
-                last_n_steps = n_steps
-        elif not np.isinf(max_samples) and n_samples / 1000 > last_displayed:
-            last_displayed += 1
-            if queue is not None:
-                queue.put(('samples', n_samples - last_n_samples))
-                last_n_samples = n_samples
-        actions, action_probs = policy.get_actions_single(obs)
-        next_state, next_obs, reward, done, steps = mdp.step_single(state, actions)
-        n_steps += steps
-        n_samples += 1
-        traj.append((obs, actions, next_obs, reward))
-        samples.append((obs, actions, action_probs))
-        tot_rewards += reward
-        if done or n_samples >= max_samples or n_steps >= max_steps:
-            n_traj += 1
-            # update all Q-values along this trajectory
-            cum_reward = 0
-            for obs, actions, next_obs, reward in traj[::-1]:
-                cum_reward = discount * cum_reward + reward
-                action_pair = (tuple(obs), tuple(actions))
-                total_q_vals[action_pair] += cum_reward
-                action_visits[action_pair] += 1
-            traj = []
-        state, obs = next_state, next_obs
+        while n_samples < max_samples and n_steps < max_steps:
+            if not np.isinf(max_steps) and n_steps / 100 > last_displayed:
+                last_displayed += 1
+                if queue is not None:
+                    queue.put(('steps', n_steps - last_n_steps))
+                    last_n_steps = n_steps
+            elif not np.isinf(max_samples) and n_samples / 100 > last_displayed:
+                last_displayed += 1
+                if queue is not None:
+                    queue.put(('samples', n_samples - last_n_samples))
+                    last_n_samples = n_samples
+            actions, action_probs = policy.get_actions_single(obs)
+            next_state, next_obs, reward, done, steps = mdp.step_single(state, actions)
+            n_steps += steps
+            n_samples += 1
+            traj.append((obs, actions, next_obs, reward))
+            samples.append((obs, actions, action_probs))
+            tot_rewards += reward
+            if done or n_samples >= max_samples or n_steps >= max_steps:
+                n_traj += 1
+                # update all Q-values along this trajectory
+                cum_reward = 0
+                for obs, actions, next_obs, reward in traj[::-1]:
+                    cum_reward = discount * cum_reward + reward
+                    action_pair = (tuple(obs), tuple(actions))
+                    total_q_vals[action_pair] += cum_reward
+                    action_visits[action_pair] += 1
+                traj = []
+            state, obs = next_state, next_obs
 
-    N = len(samples)
+        N = len(samples)
 
-    all_obs = np.zeros((N,) + mdp.observation_shape)
-    Q_est = np.zeros(N)
-    all_pi_old = [np.zeros((N, Da)) for Da in mdp.action_dims]
-    all_actions = [np.zeros(N, dtype='uint8') for _ in mdp.action_dims]
-    for idx, tpl in enumerate(samples):
-        obs, actions, action_probs = tpl
-        for ia, action in enumerate(actions):
-            all_actions[ia][idx] = action
-        for ia, probs in enumerate(action_probs):
-            all_pi_old[ia][idx,:] = probs
-        action_pair = (tuple(obs), tuple(actions))
-        Q_est[idx] = total_q_vals[action_pair] / action_visits[action_pair]
-        all_obs[idx] = obs
+        all_obs = np.zeros((N,) + mdp.observation_shape)
+        Q_est = np.zeros(N)
+        all_pi_old = [np.zeros((N, Da)) for Da in mdp.action_dims]
+        all_actions = [np.zeros(N, dtype='uint8') for _ in mdp.action_dims]
+        for idx, tpl in enumerate(samples):
+            obs, actions, action_probs = tpl
+            for ia, action in enumerate(actions):
+                all_actions[ia][idx] = action
+            for ia, probs in enumerate(action_probs):
+                all_pi_old[ia][idx,:] = probs
+            action_pair = (tuple(obs), tuple(actions))
+            Q_est[idx] = total_q_vals[action_pair] / action_visits[action_pair]
+            all_obs[idx] = obs
 
-    return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions
+        return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise
 
 def _combine_samples(results):
     rewards_list, n_traj_list, all_obs_list, Q_est_list, all_pi_old_list, all_actions_list = map(list, zip(*results))
@@ -181,7 +186,8 @@ class RolloutSampler(object):
             try:
                 result_list = map_result.get()
             except Exception as e:
-                print e
+                import traceback
+                traceback.print_exc()
                 raise
             return _combine_samples(result_list)
         else:

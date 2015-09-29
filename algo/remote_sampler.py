@@ -40,7 +40,6 @@ class RemoteSampler(object):
         self._socket.send(cloudpickle.dumps((
             itr, cur_params, max_samples_per_itr, max_steps_per_itr, discount
         )))
-        self._socket.recv()
         return pickle.loads(self._socket.recv())
 
     def __exit__(self, exc_type, exc_value, traceback):

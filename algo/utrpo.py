@@ -1,6 +1,6 @@
 import numpy as np
 import sys
-from misc.console import Message, prefix_log
+from misc.console import SimpleMessage, prefix_log
 from misc.tensor_utils import flatten_tensors
 import multiprocessing
 import theano
@@ -31,7 +31,7 @@ class UTRPO(object):
     def __init__(
             self, n_itr=500, max_samples_per_itr=100000,
             max_steps_per_itr=np.inf, discount=0.99, stepsize=0.015,
-            initial_lambda=1, max_opt_itr=100,
+            initial_lambda=1, max_opt_itr=10,
             n_parallel=multiprocessing.cpu_count(), adapt_lambda=True,
             reuse_lambda=True, sampler_module='algo.rollout_sampler',
             optimizer_module='scipy.optimize.fmin_l_bfgs_b'):
@@ -96,7 +96,7 @@ class UTRPO(object):
         all_inputs = [input_var, Q_est_var] + pi_old_vars + action_vars + \
             [lambda_var]
 
-        with Message("Compiling functions..."):
+        with SimpleMessage("Compiling functions..."):
             compute_surrogate_obj = theano.function(
                 all_inputs, surrogate_obj, on_unused_input='ignore',
                 allow_input_downcast=True
@@ -157,7 +157,7 @@ class UTRPO(object):
                 if not self._reuse_lambda:
                     lambda_ = self._initial_lambda
 
-                with Message('trying lambda=%.3f...' % lambda_):
+                with SimpleMessage('trying lambda=%.3f...' % lambda_):
                     result = optimizer(
                         func=evaluate_cost(lambda_), x0=cur_params,
                         fprime=evaluate_grad(lambda_),
@@ -173,7 +173,7 @@ class UTRPO(object):
                     if mean_kl > self._stepsize:
                         for _ in xrange(max_search):
                             lambda_ = lambda_ * 2
-                            with Message('trying lambda=%.3f...' % lambda_):
+                            with SimpleMessage('trying lambda=%.3f...' % lambda_):
                                 result = optimizer(
                                     func=evaluate_cost(lambda_), x0=cur_params,
                                     fprime=evaluate_grad(lambda_),
@@ -189,7 +189,7 @@ class UTRPO(object):
                     else:
                         for _ in xrange(max_search):
                             try_lambda_ = lambda_ * 0.5
-                            with Message('trying lambda=%.3f...' % try_lambda_):
+                            with SimpleMessage('trying lambda=%.3f...' % try_lambda_):
                                 try_result = optimizer(
                                     func=evaluate_cost(try_lambda_), x0=cur_params,
                                     fprime=evaluate_grad(try_lambda_),

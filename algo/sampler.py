@@ -16,6 +16,7 @@ def launch_sampler(gen_sampler):
     message = socket.recv()
     socket.send('ack')
     with gen_sampler(message) as sampler:
-        message = pickle.loads(socket.recv())
-        ret = sampler.collect_samples(*message)
-        socket.send(cloudpickle.dumps(ret))
+        while True:
+            message = pickle.loads(socket.recv())
+            ret = sampler.collect_samples(*message)
+            socket.send(cloudpickle.dumps(ret))

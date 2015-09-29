@@ -88,9 +88,8 @@ class VariableTimeScaleMDP(ProxyMDP):
             steps.append(step)
         return next_states, obs, rewards, dones, steps
 
-def gen_mdp():
-    return tweak(AtariMDP)(rom_path="vendor/atari_roms/seaquest.bin", obs_type='ram')
-
 if __name__ == '__main__':
+    mdp = tweak(AtariMDP)
+    gen_mdp = lambda: mdp(rom_path="vendor/atari_roms/pong.bin", obs_type='ram')
     trpo = tweak(UTRPO)(max_samples_per_itr=100000)
     trpo.train(gen_mdp=gen_mdp, gen_policy=TestPolicy)

@@ -26,6 +26,18 @@ def colorize(string, color, bold=False, highlight = False):
     if bold: attr.append('1')
     return '\x1b[%sm%s\x1b[0m' % (';'.join(attr), string)
 
+
+class SimpleMessage(object):
+    def __init__(self, msg):
+        self.msg = msg
+    def __enter__(self):
+        print self.msg
+        self.tstart = time.time()
+    def __exit__(self, etype, *args):
+        maybe_exc = "" if etype is None else " (with exception)"
+        print "done%s in %.3f seconds" % (maybe_exc, time.time() - self.tstart)
+
+
 MESSAGE_DEPTH = 0
 class Message(object):
     def __init__(self, msg):
@@ -74,6 +86,7 @@ def tweakval(val, identifier):
     for k, v in args.iteritems():
         stripped = k.replace('-', '_')
         if stripped == identifier:
+            log('replacing %s in %s with %s' % (stripped, str(val), str(v)))
             return type(val)(v)
     return val
 
@@ -89,6 +102,7 @@ def tweakfun(fun, alt=None):
         cmd_prefix = cls + '.' + method_name
     else:
         cmd_prefix = method_name
+    cmd_prefix = cmd_prefix.lower()
     args = collect_args()
     if cmd_prefix in args:
         fun = pydoc.locate(args[cmd_prefix])
@@ -99,12 +113,16 @@ def tweakfun(fun, alt=None):
     # TODO handle list arguments
     defaults = dict(zip(argspec.args[-len(argspec.defaults or []):], argspec.defaults or []))
     replaced_kwargs = {}
-    cmd_prefix += '.'
-    meta = getattr(fun, '__tweak_type_hint_meta__', {})
+    cmd_prefix += '-'
+    if type(fun) == type:
+        meta = getattr(fun.__init__, '__tweak_type_hint_meta__', {})
+    else:
+        meta = getattr(fun, '__tweak_type_hint_meta__', {})
     for k, v in args.iteritems():
         if k.startswith(cmd_prefix):
             stripped = k[len(cmd_prefix):].replace('-', '_')
             if stripped in meta:
+                log('replacing %s in %s with %s' % (stripped, str(fun), str(v)))
                 replaced_kwargs[stripped] = meta[stripped](v)
             elif stripped not in argspec.args:
                 raise ValueError('%s is not an explicit parameter of %s' % (stripped, str(fun)))
@@ -113,6 +131,7 @@ def tweakfun(fun, alt=None):
             elif defaults[stripped] is None:
                 raise ValueError('Cannot infer type of %s in method %s from None value' % (stripped, str(fun)))
             else:
+                log('replacing %s in %s with %s' % (stripped, str(fun), str(v)))
                 # TODO more proper conversions
                 replaced_kwargs[stripped] = type(defaults[stripped])(v)
     def tweaked(*args, **kwargs):
