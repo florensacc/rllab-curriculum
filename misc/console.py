@@ -62,7 +62,22 @@ def type_hint(arg_name, arg_type):
         return f
     return wrap
 
-def tweak(fun, alt=None):
+def tweak(fun_or_val, identifier=None):
+    if callable(fun_or_val):
+        return tweakfun(fun_or_val, identifier)
+    return tweakval(fun_or_val, identifier)
+
+def tweakval(val, identifier):
+    if not identifier:
+        raise ValueError('Must provide an identifier for tweakval to work')
+    args = collect_args()
+    for k, v in args.iteritems():
+        stripped = k.replace('-', '_')
+        if stripped == identifier:
+            return type(val)(v)
+    return val
+
+def tweakfun(fun, alt=None):
     """Make the arguments (or the function itself) tweakable from command line.
     See tests/test_misc_console.py for examples.
     """
@@ -85,12 +100,13 @@ def tweak(fun, alt=None):
     defaults = dict(zip(argspec.args[-len(argspec.defaults or []):], argspec.defaults or []))
     replaced_kwargs = {}
     cmd_prefix += '.'
-    print args
-    print cmd_prefix
+    meta = getattr(fun, '__tweak_type_hint_meta__', {})
     for k, v in args.iteritems():
         if k.startswith(cmd_prefix):
             stripped = k[len(cmd_prefix):].replace('-', '_')
-            if stripped not in argspec.args:
+            if stripped in meta:
+                replaced_kwargs[stripped] = meta[stripped](v)
+            elif stripped not in argspec.args:
                 raise ValueError('%s is not an explicit parameter of %s' % (stripped, str(fun)))
             elif stripped not in defaults:
                 raise ValueError('%s does not have a default value in method %s' % (stripped, str(fun)))
@@ -100,5 +116,6 @@ def tweak(fun, alt=None):
                 # TODO more proper conversions
                 replaced_kwargs[stripped] = type(defaults[stripped])(v)
     def tweaked(*args, **kwargs):
-        return fun(*args, **dict(kwargs.items() + replaced_kwargs.items()))
+        all_kw = dict(zip(inspect.getargspec(fun)[0], args) + kwargs.items() + replaced_kwargs.items())
+        return fun(**all_kw)
     return tweaked

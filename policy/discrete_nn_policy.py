@@ -38,7 +38,6 @@ class DiscreteNNPolicy(DiscretePolicy):
     def probs_vars(self):
         return self._probs_vars
 
-
     # new_network_outputs should return a list of Lasagne layers, each of which
     # outputs a tensor of normalized action probabilities
     def new_network_outputs(self, state_shape, action_dims, input_var):

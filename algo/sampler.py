@@ -33,7 +33,6 @@ def launch_sampler(gen_sampler):
     context = zmq.Context()
     socket = context.socket(zmq.REP)
     socket.bind("tcp://*:12577")
-    print 'waiting for message...'
     message = socket.recv()
     socket.send('ack')
     with gen_sampler(message) as sampler:
