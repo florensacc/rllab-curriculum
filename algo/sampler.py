@@ -1,38 +1,18 @@
 import zmq
-import zlib, pickle
-import os
-from policy import DiscreteNNPolicy
-from algo.utrpo import UTRPO
-from mdp.base import MDP
-from mdp.atari_mdp import AtariMDP, OBS_RAM
-import lasagne.layers as L
-import lasagne.nonlinearities as NL
-import lasagne
-import numpy as np
-import inspect
-import os
-import numpy as np
-import scipy.optimize
-import lasagne.layers as L
-import operator
-import sys
-from misc.console import Message, log, prefix_log
-from misc.tensor_utils import flatten_tensors, unflatten_tensors
-from collections import defaultdict
-import multiprocessing
-from joblib.pool import MemmapingPool
-from joblib.parallel import SafeFunction
-import subprocess
-import theano
-import theano.tensor as T
+import pickle
 import cloudpickle
-import zmq
+from optparse import OptionParser
 
 
 def launch_sampler(gen_sampler):
     context = zmq.Context()
-    socket = context.socket(zmq.REP)
-    socket.bind("tcp://*:12577")
+    socket = context.socket(zmq.REQ)
+    parser = OptionParser()
+    parser.add_option("-p", "--port", dest="port",
+                      help="Port to bind the socket on")
+    (options, args) = parser.parse_args()
+    socket.connect("tcp://localhost:%s" % options.port)
+    socket.send('ack')
     message = socket.recv()
     socket.send('ack')
     with gen_sampler(message) as sampler:

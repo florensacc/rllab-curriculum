@@ -1,9 +1,10 @@
 import numpy as np
-import theano.tensor as T
 from misc.tensor_utils import high_res_normalize
+
 
 def head(x):
     return x[0]
+
 
 class DiscretePolicy(object):
 
@@ -29,16 +30,16 @@ class DiscretePolicy(object):
     # vectors, each corresponding to the action index for a single action,
     # stacked for all states. i.e. [a1_indices, a2_indices, ..., an_indices]
     # where each ai_indices is of the form [ai_s1_idx, ai_s2_idx, ...]
-    # The second item is a list of matrices, same as the result of compute_action_probs
+    # The second item is a list of matrices, same as the result of
+    # compute_action_probs
     def get_actions(self, states):
         action_probs = self.compute_action_probs(states)
         action_indices = [[] for _ in range(len(action_probs))]
         for idx, per_action_probs in enumerate(action_probs):
-            #per_state_indices = []
             for per_state_probs in per_action_probs:
-                a = np.random.choice(range(len(per_state_probs)), p=high_res_normalize(per_state_probs))
-                action_indices[idx].append(a)#per_state_indices.append(a)
-            #action_indices.append(per_state_indices)
+                a = np.random.choice(range(len(per_state_probs)),
+                                     p=high_res_normalize(per_state_probs))
+                action_indices[idx].append(a)
         return action_indices, action_probs
 
     def get_actions_single(self, state):

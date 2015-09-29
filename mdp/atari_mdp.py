@@ -1,14 +1,16 @@
 from .base import MDP
-from ale_python_interface import ALEInterface, ALEState
+from ale_python_interface import ale_lib, ALEInterface, ALEState
 from itertools import imap
 import numpy as np
 import operator
-import random
 import sys
+from misc.console import type_hint
 from contextlib import contextmanager
+
 
 def sequence_equal(s1, s2):
     return len(s1) == len(s2) and all(imap(operator.eq, s1, s2))
+
 
 @contextmanager
 def temp_restore_state(ale, state):
@@ -22,10 +24,14 @@ def temp_restore_state(ale, state):
         if bk != state:
             ale.restoreState(bk)
 
+
 class AtariMDP(MDP):
 
     @type_hint('rom_path', str)
-    def __init__(self, rom_path, obs_type='ram', stop_per_life=True, cutoff_frame=18000, default_frame_skip=4):
+    def __init__(
+            self, rom_path, obs_type='ram', stop_per_life=True,
+            cutoff_frame=18000, default_frame_skip=4):
+        ale_lib.setLoggerLevelError()
         self._rom_path = rom_path
         self._obs_type = obs_type
         ale = self._new_ale()
@@ -62,7 +68,8 @@ class AtariMDP(MDP):
             return None
 
     def step_single(self, state, action, repeat=None):
-        next_states, obs, rewards, dones, effective_steps = self.step([state], map(lambda x: [x], action), repeat)
+        next_states, obs, rewards, dones, effective_steps = \
+            self.step([state], map(lambda x: [x], action), repeat)
         return next_states[0], obs[0], rewards[0], dones[0], effective_steps[0]
 
     def step(self, states, action_indices, repeat=None):
@@ -83,7 +90,8 @@ class AtariMDP(MDP):
             for _ in xrange(repeat):
                 reward += ale.act(self.action_set[0][action_idx])
                 per_steps += 1
-                if ale.game_over() or ale.getEpisodeFrameNumber() >= self._cutoff_frame:
+                if ale.game_over() or ale.getEpisodeFrameNumber() >= \
+                        self._cutoff_frame:
                     done = True
                     ale.reset_game()
                     break
@@ -128,21 +136,20 @@ class AtariMDP(MDP):
         elif isinstance(ale_or_state, ALEInterface):
             ale, state = ale_or_state, state
         else:
-            raise ValueError('Invalid first argument: must be either ALEState or ALEInstance')
+            raise ValueError('Invalid first argument: must be either ALEState or ALEInstance')  # NOQA
         with temp_restore_state(ale, state):
-            (screen_width,screen_height) = ale.getScreenDims()
+            (screen_width, screen_height) = ale.getScreenDims()
             arr = np.zeros((screen_height, screen_width, 4), dtype=np.uint8)
             ale.getScreenRGB(arr)
             # The returned values are in 32-bit chunks. How to unpack them into
             # 8-bit values depend on the endianness of the system
-            if sys.byteorder == 'little': # the layout is BGRA
-                arr = arr[:,:,2::-1] # (0, 1, 2) <- (2, 1, 0)
-            else: # the layout is ARGB (I actually did not test this.
-                  # Need to verify on a big-endian machine)
-                arr = arr[:,:,1:]
-            #img = arr / 255.0
-            return arr#img
-
+            if sys.byteorder == 'little':  # the layout is BGRA
+                arr = arr[:, :, 2::-1]  # (0, 1, 2) <- (2, 1, 0)
+            # the layout is ARGB (I actually did not test this.
+            # Need to verify on a big-endian machine)
+            else:
+                arr = arr[:, :, 1:]
+            return arr
 
     def to_ram(self, ale_or_state, state=None):
         if isinstance(ale_or_state, ALEState):
@@ -150,10 +157,10 @@ class AtariMDP(MDP):
         elif isinstance(ale_or_state, ALEInterface):
             ale, state = ale_or_state, state
         else:
-            raise ValueError('Invalid first argument: must be either ALEState or ALEInstance')
+            raise ValueError('Invalid first argument: must be either ALEState or ALEInstance')  # NOQA
         with temp_restore_state(ale, state):
             ram_size = ale.getRAMSize()
-            ram = np.zeros((ram_size),dtype=np.uint8)
+            ram = np.zeros((ram_size), dtype=np.uint8)
             ale.getRAM(ram)
             MAX_RAM = 255
             ram = (np.array(ram) * 1.0 / MAX_RAM) * 2 - 1

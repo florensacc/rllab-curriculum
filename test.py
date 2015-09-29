@@ -9,7 +9,7 @@ import lasagne.nonlinearities as NL
 import lasagne
 import numpy as np
 import inspect
-from misc.console import tweakable
+from misc.console import tweak
 
 
 class TestPolicy(DiscreteNNPolicy):
@@ -89,8 +89,8 @@ class VariableTimeScaleMDP(ProxyMDP):
         return next_states, obs, rewards, dones, steps
 
 def gen_mdp():
-    return tweakable(AtariMDP)(rom_path="vendor/atari_roms/seaquest.bin", obs_type='ram')
+    return tweak(AtariMDP)(rom_path="vendor/atari_roms/seaquest.bin", obs_type='ram')
 
 if __name__ == '__main__':
-    trpo = tweakable(UTRPO)(max_samples_per_itr=100000)
+    trpo = tweak(UTRPO)(max_samples_per_itr=100000)
     trpo.train(gen_mdp=gen_mdp, gen_policy=TestPolicy)

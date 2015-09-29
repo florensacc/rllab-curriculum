@@ -116,6 +116,6 @@ def tweakfun(fun, alt=None):
                 # TODO more proper conversions
                 replaced_kwargs[stripped] = type(defaults[stripped])(v)
     def tweaked(*args, **kwargs):
-        all_kw = dict(zip(inspect.getargspec(fun)[0], args) + kwargs.items() + replaced_kwargs.items())
+        all_kw = dict(zip(argspec[0], args) + kwargs.items() + replaced_kwargs.items())
         return fun(**all_kw)
     return tweaked

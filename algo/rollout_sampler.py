@@ -1,24 +1,19 @@
 from joblib.pool import MemmapingPool
-from contextlib import contextmanager
 from joblib.parallel import SafeFunction
 import numpy as np
 import os
-os.environ['THEANO_FLAGS'] = 'device=cpu'
-import theano
 import theano.tensor as T
-import theano.sandbox.cuda
 import pyprind
 from collections import defaultdict
-from misc.console import Message, log, prefix_log
+from misc.console import log
 from multiprocessing import Manager
-from joblib import Parallel, delayed
 from sampler import launch_sampler
-import cloud
 import pickle
+
 
 def _init_subprocess(*args):
     if len(args) == 1:
-        _, gen_mdp, gen_policy = pickle.loads(args[0])#args
+        _, gen_mdp, gen_policy = pickle.loads(args[0])
     else:
         gen_mdp, gen_policy = args
     global mdp
@@ -26,17 +21,20 @@ def _init_subprocess(*args):
     np.random.seed(os.getpid())
     mdp, policy = _init_mdp_policy(gen_mdp, gen_policy)
 
+
 def _init_mdp_policy(gen_mdp, gen_policy):
     mdp = gen_mdp()
-    input_var = T.matrix('input') # N*Ds
+    input_var = T.matrix('input')  # N*Ds
     policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
     return mdp, policy
+
 
 def _subprocess_collect_samples(args):
     itr, param_values, max_samples, max_steps, discount, queue = args
     global mdp
     global policy
     return _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, discount, queue)
+
 
 def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, discount, queue=None):
     total_q_vals = defaultdict(int)
@@ -46,7 +44,6 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
     tot_rewards = 0
     n_traj = 0
 
-    log('starting...')
     policy.set_param_values(param_values)
 
     last_displayed = 0
@@ -59,13 +56,11 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
 
     while n_samples < max_samples and n_steps < max_steps:
         if not np.isinf(max_steps) and n_steps / 1000 > last_displayed:
-            #log('%d / %d steps (%d samples; %d traj)' % (n_steps, max_steps, n_samples, n_traj))
             last_displayed += 1
             if queue is not None:
                 queue.put(('steps', n_steps - last_n_steps))
                 last_n_steps = n_steps
         elif not np.isinf(max_samples) and n_samples / 1000 > last_displayed:
-            #log('%d / %d samples (%d steps; %d traj)' % (n_samples, max_samples, n_steps, n_traj))
             last_displayed += 1
             if queue is not None:
                 queue.put(('samples', n_samples - last_n_samples))
