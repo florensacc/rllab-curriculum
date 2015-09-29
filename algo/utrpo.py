@@ -212,7 +212,7 @@ class UTRPO(object):
                 result_x, result_f, result_d = result
                 itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
                 itr_log('saving result...')
-                np.savez('data/%s_itr_%d_%s.npz' % (exp_name, itr, timestamp), {
+                np.savez_compressed('data/%s_itr_%d_%s.npz' % (self._exp_name, itr, timestamp), **{
                     'cur_policy_params': cur_params,
                     'opt_policy_params': policy.get_param_values(),
                     'all_obs': all_obs,
