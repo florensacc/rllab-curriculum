@@ -1,6 +1,6 @@
 import numpy as np
 import sys
-from misc.console import SimpleMessage, prefix_log
+from misc.console import SimpleMessage, prefix_log, tee_log
 from misc.tensor_utils import flatten_tensors
 import multiprocessing
 import theano
@@ -8,6 +8,7 @@ import theano.tensor as T
 import pydoc
 from remote_sampler import RemoteSampler
 import time
+import itertools
 
 
 def reduce_add(a, b):
@@ -126,13 +127,15 @@ class UTRPO(object):
 
         optimizer = pydoc.locate(self._optimizer_module)
 
+        logger = tee_log(self._exp_name + '.log')
+
         with RemoteSampler(
                 self._sampler_module, self._n_parallel, gen_mdp,
                 gen_policy) as sampler:
 
             for itr in xrange(self._n_itr):
 
-                itr_log = prefix_log('itr #%d | ' % (itr + 1))
+                itr_log = prefix_log('itr #%d | ' % (itr + 1), logger=logger)
 
                 cur_params = policy.get_param_values()
 
@@ -169,7 +172,7 @@ class UTRPO(object):
                 if not self._reuse_lambda:
                     lambda_ = self._initial_lambda
 
-                with SimpleMessage('trying lambda=%.3f...' % lambda_):
+                with SimpleMessage('trying lambda=%.3f...' % lambda_, itr_log):
                     result = optimizer(
                         func=evaluate_cost(lambda_), x0=cur_params,
                         fprime=evaluate_grad(lambda_),
@@ -185,7 +188,7 @@ class UTRPO(object):
                     if mean_kl > self._stepsize:
                         for _ in xrange(max_search):
                             lambda_ = lambda_ * 2
-                            with SimpleMessage('trying lambda=%.3f...' % lambda_):
+                            with SimpleMessage('trying lambda=%.3f...' % lambda_, itr_log):
                                 result = optimizer(
                                     func=evaluate_cost(lambda_), x0=cur_params,
                                     fprime=evaluate_grad(lambda_),
@@ -201,7 +204,7 @@ class UTRPO(object):
                     else:
                         for _ in xrange(max_search):
                             try_lambda_ = lambda_ * 0.5
-                            with SimpleMessage('trying lambda=%.3f...' % try_lambda_):
+                            with SimpleMessage('trying lambda=%.3f...' % try_lambda_, itr_log):
                                 try_result = optimizer(
                                     func=evaluate_cost(try_lambda_), x0=cur_params,
                                     fprime=evaluate_grad(try_lambda_),
@@ -222,12 +225,14 @@ class UTRPO(object):
                 result_x, result_f, result_d = result
                 itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
                 itr_log('saving result...')
-                np.savez_compressed('data/%s_itr_%d_%s.npz' % (self._exp_name, itr, timestamp), **{
+                to_save = {
                     'cur_policy_params': cur_params,
                     'opt_policy_params': policy.get_param_values(),
                     'all_obs': all_obs,
                     'Q_est': Q_est,
-                    'all_pi_old': all_pi_old,
-                    'all_actions': all_actions,
-                })
+                }
+                for idx, pi_old, actions in zip(itertools.count(), all_pi_old, all_actions):
+                    to_save['pi_old_%d' % idx] = pi_old
+                    to_save['actions_%d' % idx] = actions
+                np.savez_compressed('data/%s_itr_%d_%s.npz' % (self._exp_name, itr, timestamp), **to_save)
                 sys.stdout.flush()

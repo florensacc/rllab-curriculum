@@ -90,10 +90,9 @@ class UTRPO_VTS(UTRPO):
             ))
 
         for tid in range(len(self._time_scales)):
-            for probs_var, pi_old_var, action_var in zip(
+            for probs_var, pi_old_var in zip(
                     probs_vars[tid*Na:(tid+1)*Na],
-                    pi_old_vars[tid*Na:(tid+1)*Na],
-                    action_vars[tid*Na:(tid+1)*Na]):
+                    pi_old_vars[tid*Na:(tid+1)*Na]):
 
                 mean_kl = mean_kl + T.mean(
                     t_pi_old_var[:,tid] * T.sum(
@@ -104,8 +103,9 @@ class UTRPO_VTS(UTRPO):
                     ))
 
         # This is the p(t|s) / p_old(t|s) term
-        lr = t_pi_old_var[T.arange(N_var), t_action_var] / (t_probs_var[T.arange(N_var), t_action_var] + 1e-6)
+        lr_t = t_probs_var[T.arange(N_var), t_action_var] / (t_pi_old_var[T.arange(N_var), t_action_var] + 1e-6)
         # The variables are laid out like a1|t=1, a2|t=1, ..., a1|t=2, a2|t=2, ..., an|t=1, ..., an|t=k
+        lr_a = 0
         for idx, probs_var, pi_old_var, action_var in zip(
                 itertools.count(), probs_vars[:-1], pi_old_vars[:-1], action_vars[:-1]):
             tid = idx / Na
@@ -113,9 +113,8 @@ class UTRPO_VTS(UTRPO):
             pi_old_selected = pi_old_var[T.arange(N_var), action_var]
             pi_selected = probs_var[T.arange(N_var), action_var]
             teq = T.eq(t_action_var, tid)
-            lr_contrib = (1 - teq) * 1 + teq * pi_selected / (pi_old_selected + 1e-6)
-            lr = lr * lr_contrib 
+            lr_a += teq * pi_selected / (pi_old_selected + 1e-6)
         # formulate as a minimization problem
-        surrogate_loss = - T.mean(lr * Q_est_var)
+        surrogate_loss = - T.mean(lr_t * lr_a * Q_est_var)
         surrogate_obj = surrogate_loss + lambda_var * mean_kl
         return surrogate_obj, surrogate_loss, mean_kl

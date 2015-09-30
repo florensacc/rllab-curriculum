@@ -87,10 +87,10 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
 
         N = len(samples)
 
-        all_obs = np.zeros((N,) + mdp.observation_shape)
+        all_obs = np.zeros((N,) + policy.observation_shape)
         Q_est = np.zeros(N)
-        all_pi_old = [np.zeros((N, Da)) for Da in mdp.action_dims]
-        all_actions = [np.zeros(N, dtype='uint8') for _ in mdp.action_dims]
+        all_pi_old = [np.zeros((N, Da)) for Da in policy.action_dims]
+        all_actions = [np.zeros(N, dtype='uint8') for _ in policy.action_dims]
         for idx, tpl in enumerate(samples):
             obs, actions, action_probs = tpl
             for ia, action in enumerate(actions):

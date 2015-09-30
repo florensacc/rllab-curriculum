@@ -8,12 +8,12 @@ def head(x):
 
 class DiscretePolicy(object):
 
-    # state_shape: Shape of state
+    # observation_shape: Shape of observation
     # action_dims: A list of action dimensions. The actions are assumed to be
     # conditionally independent given the state (i.e. they're factored)
-    def __init__(self, state_shape, action_dims, input_var):
+    def __init__(self, observation_shape, action_dims, input_var):
         self.input_var = input_var
-        self.state_shape = state_shape
+        self.observation_shape = observation_shape
         self.action_dims = action_dims
 
     # The return value is a list of matrices, each corresponding to the action

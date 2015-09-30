@@ -27,15 +27,21 @@ def colorize(string, color, bold=False, highlight = False):
     return '\x1b[%sm%s\x1b[0m' % (';'.join(attr), string)
 
 
+def log(s):
+    print s
+    sys.stdout.flush()
+
+
 class SimpleMessage(object):
-    def __init__(self, msg):
+    def __init__(self, msg, logger=log):
         self.msg = msg
+        self.logger = logger
     def __enter__(self):
         print self.msg
         self.tstart = time.time()
     def __exit__(self, etype, *args):
         maybe_exc = "" if etype is None else " (with exception)"
-        print "done%s in %.3f seconds" % (maybe_exc, time.time() - self.tstart)
+        self.logger("done%s in %.3f seconds" % (maybe_exc, time.time() - self.tstart))
 
 
 MESSAGE_DEPTH = 0
@@ -53,12 +59,20 @@ class Message(object):
         maybe_exc = "" if etype is None else " (with exception)"
         print colorize('\t'*MESSAGE_DEPTH + "done%s in %.3f seconds"%(maybe_exc, time.time() - self.tstart), 'magenta')
 
-def log(s):
-    print s
-    sys.stdout.flush()
 
-def prefix_log(prefix):
-    return lambda s: log(prefix + s)
+def prefix_log(prefix, logger=log):
+    return lambda s: logger(prefix + s)
+
+
+def tee_log(file_name):
+    f = open(file_name, 'w+')
+    def logger(s):
+        log(s)
+        f.write(s)
+        f.write('\n')
+        f.flush()
+    return logger
+
 
 def collect_args():
     splitted = shlex.split(' '.join(sys.argv[1:]))

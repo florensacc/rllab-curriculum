@@ -8,13 +8,13 @@ from .base import DiscretePolicy
 
 class DiscreteNNPolicy(DiscretePolicy):
 
-    def __init__(self, state_shape, action_dims, input_var):
+    def __init__(self, observation_shape, action_dims, input_var):
         super(DiscreteNNPolicy, self).__init__(
-            state_shape, action_dims,
+            observation_shape, action_dims,
             input_var
             )
         self._network_outputs = self.new_network_outputs(
-            state_shape,
+            observation_shape,
             action_dims,
             self.input_var
             )
@@ -66,5 +66,5 @@ class DiscreteNNPolicy(DiscretePolicy):
 
     # new_network_outputs should return a list of Lasagne layers, each of which
     # outputs a tensor of normalized action probabilities
-    def new_network_outputs(self, state_shape, action_dims, input_var):
+    def new_network_outputs(self, observation_shape, action_dims, input_var):
         raise NotImplementedError
