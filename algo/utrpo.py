@@ -52,7 +52,7 @@ class UTRPO(object):
         self._sampler_module = sampler_module
         self._optimizer_module = optimizer_module
 
-    def _new_surrogate_obj(
+    def new_surrogate_obj(
             self, policy, input_var, Q_est_var, pi_old_vars, action_vars,
             lambda_var):
         probs_vars = policy.probs_vars
@@ -66,8 +66,8 @@ class UTRPO(object):
                     pi_old_var * (
                         T.log(pi_old_var + 1e-6) - T.log(probs_var + 1e-6)
                     ),
-                    axis=1)
-                ))
+                    axis=1
+                )))
             pi_old_selected = pi_old_var[T.arange(N_var), action_var]
             pi_selected = probs_var[T.arange(N_var), action_var]
             lr = reduce_mul(lr, pi_selected / (pi_old_selected + 1e-6))
@@ -76,20 +76,30 @@ class UTRPO(object):
         surrogate_obj = surrogate_loss + lambda_var * mean_kl
         return surrogate_obj, surrogate_loss, mean_kl
 
+    def transform_gen_mdp(self, gen_mdp):
+        return gen_mdp
+
+    def transform_gen_policy(self, gen_policy):
+        return gen_policy
+
     def train(self, gen_mdp, gen_policy):
+
+        gen_mdp = self.transform_gen_mdp(gen_mdp)
+        gen_policy = self.transform_gen_policy(gen_policy)
 
         mdp = gen_mdp()
         input_var = T.matrix('input')  # N*Ds
+        policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
+
         Q_est_var = T.vector('Q_est')  # N
-        action_range = range(len(mdp.action_dims))
+        action_range = range(len(policy.action_dims))
         pi_old_vars = [T.matrix('pi_old_%d' % i) for i in action_range]
         action_vars = [T.vector('action_%d' % i, dtype='uint8')
                        for i in action_range]
         lambda_var = T.scalar('lambda')
 
-        policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
         surrogate_obj, surrogate_loss, mean_kl = \
-            self._new_surrogate_obj(
+            self.new_surrogate_obj(
                 policy, input_var, Q_est_var, pi_old_vars, action_vars,
                 lambda_var)
 
