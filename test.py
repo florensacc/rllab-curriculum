@@ -23,8 +23,8 @@ class RAMPolicy(DiscreteNNPolicy):
 
 if __name__ == '__main__':
     mdp = tweak(AtariMDP, 'mdp')
-    gen_mdp = lambda: mdp(rom_path="vendor/atari_roms/seaquest.bin", obs_type='ram')
-    trpo = tweak(UTRPO_VTS, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_vts_seaquest_4_16_64', time_scales=[4,16,64])
+    gen_mdp = lambda: mdp(rom_path="vendor/atari_roms/seaquest.bin", obs_type='ram', default_frame_skip=64)
+    trpo = tweak(UTRPO, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_seaquest_64')#, time_scales=[64])
     #trpo = tweak(UTRPO_VTS, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_vts_seaquest_4_16_64', time_scales=[4,16,64])
     #trpo = tweak(UTRPO_VTS, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_vts_seaquest_64', time_scales=[64])
     trpo.train(gen_mdp=gen_mdp, gen_policy=RAMPolicy)

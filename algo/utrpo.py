@@ -33,7 +33,7 @@ class UTRPO(object):
     def __init__(
             self, n_itr=500, max_samples_per_itr=100000,
             max_steps_per_itr=np.inf, discount=0.99, stepsize=0.015,
-            initial_lambda=1, max_opt_itr=10, exp_name='utrpo',
+            initial_lambda=1, max_opt_itr=100, exp_name='utrpo',
             n_parallel=multiprocessing.cpu_count(), adapt_lambda=True,
             reuse_lambda=True, sampler_module='algo.rollout_sampler',
             optimizer_module='scipy.optimize.fmin_l_bfgs_b'):
@@ -109,7 +109,9 @@ class UTRPO(object):
         all_inputs = [input_var, Q_est_var] + pi_old_vars + action_vars + \
             [lambda_var]
 
-        with SimpleMessage("Compiling functions..."):
+        exp_logger = prefix_log('[%s] | ' % (self._exp_name))
+
+        with SimpleMessage("Compiling functions...", exp_logger):
             compute_surrogate_obj = theano.function(
                 all_inputs, surrogate_obj, on_unused_input='ignore',
                 allow_input_downcast=True
@@ -135,7 +137,7 @@ class UTRPO(object):
 
             for itr in xrange(self._n_itr):
 
-                itr_log = prefix_log('itr #%d | ' % (itr + 1), logger=logger)
+                itr_log = prefix_log('[%s] itr #%d | ' % (self._exp_name, itr + 1), logger=logger)
 
                 cur_params = policy.get_param_values()
 

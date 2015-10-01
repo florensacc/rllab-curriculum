@@ -5,6 +5,8 @@ import os
 import shlex
 import pydoc
 import inspect
+import secrets
+from twx.botapi import TelegramBot
 
 color2num = dict(
     gray=30,
@@ -26,9 +28,11 @@ def colorize(string, color, bold=False, highlight = False):
     if bold: attr.append('1')
     return '\x1b[%sm%s\x1b[0m' % (';'.join(attr), string)
 
+telegram_bot = TelegramBot(secrets.telegram_token)
 
 def log(s):
     print s
+    telegram_bot.send_message(secrets.telegram_user_id, s)
     sys.stdout.flush()
 
 
