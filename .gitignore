@@ -5,3 +5,4 @@ data
 *.h5
 *.log
 *.npz
+secrets.py
