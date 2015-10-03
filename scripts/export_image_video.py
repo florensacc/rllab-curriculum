@@ -1,12 +1,30 @@
-from scripts.export_image_data import extract_images
+#!/usr/bin/python
+
+from mdp import AtariMDP
+from ale_python_interface import ALEInterface, ale_lib
 import argparse
 import sys
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import numpy as np
 import pyprind
 import itertools
+
+def extract_images(states, rom_path, as_np=False):
+    ale_lib.setLoggerLevelError()
+    ale = ALEInterface()
+    ale.loadROM(rom_path)
+    print 'Recovering images...'
+    N = states.shape[0]
+    if as_np:
+        image_data = np.zeros((N,) + AtariMDP.to_rgb(ale).shape)
+    else:
+        image_data = [None] * N
+    for i in pyprind.prog_bar(range(N)):
+        ale.load_serialized(states[i,:])
+        ale.act(0)
+        img = AtariMDP.to_rgb(ale)
+        image_data[i] = img[:,:,2::-1]
+    return image_data
+
 
 
 if __name__ == '__main__':
@@ -23,12 +41,10 @@ if __name__ == '__main__':
     else:
         print 'Invalid data format: must either have all_states or image_data'
         sys.exit(1)
-    fig = plt.figure()
-    print 'Generating matplotlib image object...'
-    for i in pyprind.prog_bar(range(len(image_data))):
-        imgs.append([[i])])
-    print 'Saving animation'
-    Writer = animation.writers['ffmpeg']
-    writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
-    ani = animation.ArtistAnimation(fig, imgs, interval=66)
-    ani.save(args.output, writer=writer)
+    import cv2
+    import cv2.cv as cv
+    height, width, _ = image_data[0].shape
+    writer = cv2.VideoWriter(args.output, cv.CV_FOURCC('D', 'I', 'V', 'X'), 15, (width, height))
+    print 'Exporting video...'
+    for idx, image in enumerate(image_data):
+        writer.write(image.astype(np.uint8))

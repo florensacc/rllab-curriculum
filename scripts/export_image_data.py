@@ -20,7 +20,8 @@ def extract_images(states, rom_path, as_np=False):
     for i in pyprind.prog_bar(range(N)):
         ale.load_serialized(states[i,:])
         ale.act(0)
-        image_data[i] = AtariMDP.to_rgb(ale)
+        img = AtariMDP.to_rgb(ale)
+        image_data[i] = np.roll(img, 1, axis=2)
     return image_data
 
 if __name__ == '__main__':

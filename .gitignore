@@ -6,3 +6,5 @@ data
 *.log
 *.npz
 secrets.py
+*.avi
+*.mp4
