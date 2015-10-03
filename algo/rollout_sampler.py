@@ -70,14 +70,14 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
             next_state, next_obs, reward, done, steps = mdp.step_single(state, actions)
             n_steps += steps
             n_samples += 1
-            traj.append((obs, actions, next_obs, reward))
-            samples.append((obs, actions, action_probs))
+            traj.append((state, obs, actions, next_obs, reward))
+            samples.append((state, obs, actions, action_probs))
             tot_rewards += reward
             if done or n_samples >= max_samples or n_steps >= max_steps:
                 n_traj += 1
                 # update all Q-values along this trajectory
                 cum_reward = 0
-                for obs, actions, next_obs, reward in traj[::-1]:
+                for state, obs, actions, next_obs, reward in traj[::-1]:
                     cum_reward = discount * cum_reward + reward
                     action_pair = (tuple(obs), tuple(actions))
                     total_q_vals[action_pair] += cum_reward
@@ -88,11 +88,12 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
         N = len(samples)
 
         all_obs = np.zeros((N,) + policy.observation_shape)
+        all_states = np.zeros((N,) + samples[0][0].shape)
         Q_est = np.zeros(N)
         all_pi_old = [np.zeros((N, Da)) for Da in policy.action_dims]
         all_actions = [np.zeros(N, dtype='uint8') for _ in policy.action_dims]
         for idx, tpl in enumerate(samples):
-            obs, actions, action_probs = tpl
+            state, obs, actions, action_probs = tpl
             for ia, action in enumerate(actions):
                 all_actions[ia][idx] = action
             for ia, probs in enumerate(action_probs):
@@ -100,15 +101,16 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
             action_pair = (tuple(obs), tuple(actions))
             Q_est[idx] = total_q_vals[action_pair] / action_visits[action_pair]
             all_obs[idx] = obs
+            all_states[idx] = state
 
-        return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions
+        return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions, all_states
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise
 
 def _combine_samples(results):
-    rewards_list, n_traj_list, all_obs_list, Q_est_list, all_pi_old_list, all_actions_list = map(list, zip(*results))
+    rewards_list, n_traj_list, all_obs_list, Q_est_list, all_pi_old_list, all_actions_list, all_states_list = map(list, zip(*results))
     tot_rewards = sum(rewards_list)
     n_traj = sum(n_traj_list)
     all_obs = np.concatenate(all_obs_list)
@@ -116,7 +118,8 @@ def _combine_samples(results):
     na = len(all_pi_old_list[0])
     all_pi_old = [np.concatenate(map(lambda x: x[i], all_pi_old_list)) for i in range(na)]
     all_actions = [np.concatenate(map(lambda x: x[i], all_actions_list)) for i in range(na)]
-    return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions
+    all_states = np.concatenate(all_states_list)
+    return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions, all_states
 
 class RolloutSampler(object):
 

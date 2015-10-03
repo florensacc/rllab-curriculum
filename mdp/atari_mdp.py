@@ -117,7 +117,8 @@ class AtariMDP(MDP):
     def observation_shape(self):
         return self._obs_shape
 
-    def to_rgb(self, ale):
+    @classmethod
+    def to_rgb(cls, ale):
         (screen_width, screen_height) = ale.getScreenDims()
         arr = np.zeros((screen_height, screen_width, 4), dtype=np.uint8)
         ale.getScreenRGB(arr)
@@ -131,7 +132,8 @@ class AtariMDP(MDP):
             arr = arr[:, :, 1:]
         return arr
 
-    def to_ram(self, ale):
+    @classmethod
+    def to_ram(cls, ale):
         ram_size = ale.getRAMSize()
         ram = np.zeros((ram_size), dtype=np.uint8)
         ale.getRAM(ram)

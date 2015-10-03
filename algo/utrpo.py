@@ -124,7 +124,7 @@ class UTRPO(object):
 
                 itr_log('collecting samples...')
 
-                tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions = \
+                tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions, all_states = \
                     sampler.request_samples(
                         itr, cur_params, self._max_samples_per_itr,
                         self._max_steps_per_itr, self._discount)
@@ -212,6 +212,7 @@ class UTRPO(object):
                     'cur_policy_params': cur_params,
                     'opt_policy_params': policy.get_param_values(),
                     'all_obs': all_obs,
+                    'all_states': all_states,
                     'Q_est': Q_est,
                 }
                 for idx, pi_old, actions in zip(itertools.count(), all_pi_old, all_actions):
