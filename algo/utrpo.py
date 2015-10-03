@@ -209,18 +209,18 @@ class UTRPO(object):
                 timestamp = time.strftime("%Y%m%d%H%M%S")
                 result_x, result_f, result_d = result
                 itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
-                itr_log('saving result...')
-                to_save = {
-                    'cur_policy_params': cur_params,
-                    'opt_policy_params': policy.get_param_values(),
-                    'all_obs': all_obs,
-                    'all_states': all_states,
-                    'Q_est': Q_est,
-                }
-                for idx, pi_old, actions in zip(itertools.count(), all_pi_old, all_actions):
-                    to_save['pi_old_%d' % idx] = pi_old
-                    to_save['actions_%d' % idx] = actions
-                savedir = 'data/%s' % (self._exp_name)
-                mkdir_p(savedir)
-                np.savez_compressed('data/%s/itr_%d_%s.npz' % (self._exp_name, itr, timestamp), **to_save)
+                with SimpleMessage("saving result...", exp_logger):
+                    to_save = {
+                        'cur_policy_params': cur_params,
+                        'opt_policy_params': policy.get_param_values(),
+                        'all_obs': all_obs,
+                        'all_states': all_states,
+                        'Q_est': Q_est,
+                    }
+                    for idx, pi_old, actions in zip(itertools.count(), all_pi_old, all_actions):
+                        to_save['pi_old_%d' % idx] = pi_old
+                        to_save['actions_%d' % idx] = actions
+                    savedir = 'data/%s' % (self._exp_name)
+                    mkdir_p(savedir)
+                    np.savez_compressed('data/%s/itr_%d_%s.npz' % (self._exp_name, itr, timestamp), **to_save)
                 sys.stdout.flush()
