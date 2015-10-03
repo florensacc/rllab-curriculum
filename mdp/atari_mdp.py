@@ -9,20 +9,7 @@ from contextlib import contextmanager
 
 
 def sequence_equal(s1, s2):
-    return len(s1) == len(s2) and all(imap(operator.eq, s1, s2))
-
-
-@contextmanager
-def temp_restore_state(ale, state):
-    bk = None
-    if state:
-        bk = ale.cloneState()
-        if bk != state:
-            ale.restoreState(state)
-    yield
-    if state:
-        if bk != state:
-            ale.restoreState(bk)
+    return len(s1) == len(s2) and all(imap(np.array_equal, s1, s2))
 
 
 class AtariMDP(MDP):
@@ -54,16 +41,16 @@ class AtariMDP(MDP):
     def _reset_ales(self, states):
         # only do the reset if we actually need it
         if not sequence_equal(self._states, states):
-            self._ales = map(lambda x: x.ale, states)
+            self._ales = [self._new_ale() for _ in range(len(states))]
             for ale, state in zip(self._ales, states):
-                ale.restoreState(state)
+                ale.load_serialized(state)
             self._states = states
 
-    def to_obs(self, ale, state=None):
+    def to_obs(self, ale):
         if self._obs_type == 'image':
-            return self.to_rgb(ale, state)
+            return self.to_rgb(ale)
         elif self._obs_type == 'ram':
-            return self.to_ram(ale, state)
+            return self.to_ram(ale)
         else:
             return None
 
@@ -98,7 +85,7 @@ class AtariMDP(MDP):
                 elif self._stop_per_life and ale.lives() != prev_lives:
                     done = True
                     break
-            next_state = ale.cloneState()
+            next_state = ale.get_serialized()
             next_states.append(next_state)
             obs.append(self.to_obs(ale))
             rewards.append(reward)
@@ -114,7 +101,7 @@ class AtariMDP(MDP):
     # return: (states, observations)
     def sample_initial_states(self, n):
         self._ales = [self._new_ale() for _ in xrange(n)]
-        self._states = map(lambda x: x.cloneState(), self._ales)
+        self._states = map(lambda x: x.get_serialized(), self._ales)
         obs = map(self.to_obs, self._ales)
         return self._states[:], obs
 
@@ -130,38 +117,24 @@ class AtariMDP(MDP):
     def observation_shape(self):
         return self._obs_shape
 
-    def to_rgb(self, ale_or_state, state=None):
-        if isinstance(ale_or_state, ALEState):
-            ale, state = ale_or_state.ale, ale_or_state
-        elif isinstance(ale_or_state, ALEInterface):
-            ale, state = ale_or_state, state
+    def to_rgb(self, ale):
+        (screen_width, screen_height) = ale.getScreenDims()
+        arr = np.zeros((screen_height, screen_width, 4), dtype=np.uint8)
+        ale.getScreenRGB(arr)
+        # The returned values are in 32-bit chunks. How to unpack them into
+        # 8-bit values depend on the endianness of the system
+        if sys.byteorder == 'little':  # the layout is BGRA
+            arr = arr[:, :, 2::-1]  # (0, 1, 2) <- (2, 1, 0)
+        # the layout is ARGB (I actually did not test this.
+        # Need to verify on a big-endian machine)
         else:
-            raise ValueError('Invalid first argument: must be either ALEState or ALEInstance')  # NOQA
-        with temp_restore_state(ale, state):
-            (screen_width, screen_height) = ale.getScreenDims()
-            arr = np.zeros((screen_height, screen_width, 4), dtype=np.uint8)
-            ale.getScreenRGB(arr)
-            # The returned values are in 32-bit chunks. How to unpack them into
-            # 8-bit values depend on the endianness of the system
-            if sys.byteorder == 'little':  # the layout is BGRA
-                arr = arr[:, :, 2::-1]  # (0, 1, 2) <- (2, 1, 0)
-            # the layout is ARGB (I actually did not test this.
-            # Need to verify on a big-endian machine)
-            else:
-                arr = arr[:, :, 1:]
-            return arr
+            arr = arr[:, :, 1:]
+        return arr
 
-    def to_ram(self, ale_or_state, state=None):
-        if isinstance(ale_or_state, ALEState):
-            ale, state = ale_or_state.ale, ale_or_state
-        elif isinstance(ale_or_state, ALEInterface):
-            ale, state = ale_or_state, state
-        else:
-            raise ValueError('Invalid first argument: must be either ALEState or ALEInstance')  # NOQA
-        with temp_restore_state(ale, state):
-            ram_size = ale.getRAMSize()
-            ram = np.zeros((ram_size), dtype=np.uint8)
-            ale.getRAM(ram)
-            MAX_RAM = 255
-            ram = (np.array(ram) * 1.0 / MAX_RAM) * 2 - 1
-            return ram
+    def to_ram(self, ale):
+        ram_size = ale.getRAMSize()
+        ram = np.zeros((ram_size), dtype=np.uint8)
+        ale.getRAM(ram)
+        MAX_RAM = 255
+        ram = (np.array(ram) * 1.0 / MAX_RAM) * 2 - 1
+        return ram

@@ -64,6 +64,16 @@ class DiscreteNNPolicy(DiscretePolicy):
     def probs_vars(self):
         return self._probs_vars
 
+    def fisher_vector_product(self, probs_old, probs_new, eval_at):
+        # For KL(p_old||p_new)
+        return eval_at / (probs_old / (T.square(probs_new)))
+        # For KL(p_new||p_old)
+        # return eval_at / (probs_old / (probs_new))
+
+    @property
+    def param_shapes(self):
+        return self._param_shapes
+
     # new_network_outputs should return a list of Lasagne layers, each of which
     # outputs a tensor of normalized action probabilities
     def new_network_outputs(self, observation_shape, action_dims, input_var):

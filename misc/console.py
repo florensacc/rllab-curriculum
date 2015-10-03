@@ -2,6 +2,7 @@ import sys
 import subprocess
 import time
 import os
+import errno
 import shlex
 import pydoc
 import inspect
@@ -25,6 +26,15 @@ def colorize(string, color, bold=False, highlight = False):
     attr.append(str(num))
     if bold: attr.append('1')
     return '\x1b[%sm%s\x1b[0m' % (';'.join(attr), string)
+
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc: # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else: raise
 
 
 def log(s):

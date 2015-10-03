@@ -18,5 +18,9 @@ class DiscreteProxyPolicy(DiscretePolicy):
         self._base_policy.set_param_values(flattened_parameters)
 
     @property
+    def param_shapes(self):
+        return self._base_policy.param_shapes
+
+    @property
     def params(self):
         return self._base_policy.params
