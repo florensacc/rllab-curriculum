@@ -24,7 +24,9 @@ class RAMPolicy(DiscreteNNPolicy):
 if __name__ == '__main__':
     mdp = tweak(AtariMDP, 'mdp')
     gen_mdp = lambda: mdp(rom_path="vendor/atari_roms/seaquest.bin", obs_type='ram', default_frame_skip=4)
-    trpo = tweak(UTRPO, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_seaquest_4')#, time_scales=[4,16,64])
-    #trpo = tweak(UTRPO_VTS, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_vts_seaquest_4_16_64', time_scales=[4,16,64])
+    trpo = tweak(UTRPO, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_seaquest_4', resume_file='data/utrpo_seaquest_4/itr_90_20151003190432.npz')
+    #trpo = tweak(UTRPO, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_seaquest_4', resume_file='data/utrpo_seaquest_4/itr_22_20151003154204.npz')
+    #, time_scales=[4,16,64])
+    #trpo = tweak(UTRPO_VTS, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_vts_seaquest_4_16_64', time_scales=[4,16,64], resume_file='data/utrpo_vts_seaquest_4_16_64/itr_48_20151003164144.npz')
     #trpo = tweak(UTRPO_VTS, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_vts_seaquest_64', time_scales=[64])
     trpo.train(gen_mdp=gen_mdp, gen_policy=RAMPolicy)

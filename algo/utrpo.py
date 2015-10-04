@@ -9,6 +9,7 @@ import pydoc
 from remote_sampler import RemoteSampler
 import time
 import itertools
+import re
 
 # Unconstrained TRPO
 class UTRPO(object):
@@ -19,7 +20,7 @@ class UTRPO(object):
             initial_lambda=1, max_opt_itr=100, exp_name='utrpo',
             n_parallel=multiprocessing.cpu_count(), adapt_lambda=True,
             reuse_lambda=True, sampler_module='algo.rollout_sampler',
-            optimizer_module='scipy.optimize.fmin_l_bfgs_b'):
+            resume_file=None, optimizer_module='scipy.optimize.fmin_l_bfgs_b'):
         self._n_itr = n_itr
         self._max_samples_per_itr = max_samples_per_itr
         self._max_steps_per_itr = max_steps_per_itr
@@ -35,6 +36,7 @@ class UTRPO(object):
         self._reuse_lambda = reuse_lambda
         self._sampler_module = sampler_module
         self._optimizer_module = optimizer_module
+        self._resume_file = resume_file
 
     def new_surrogate_obj(
             self, policy, input_var, Q_est_var, pi_old_vars, action_vars,
@@ -118,9 +120,17 @@ class UTRPO(object):
                 self._sampler_module, self._n_parallel, gen_mdp,
                 gen_policy) as sampler:
 
-            for itr in xrange(self._n_itr):
+            if self._resume_file is not None:
+                print 'Resuming from snapshot %s...' % self._resume_file
+                resume_data = np.load(self._resume_file)
+                start_itr = int(re.search('itr_(\d+)', self._resume_file).group(1)) + 1
+                policy.set_param_values(resume_data['opt_policy_params'])
+            else:
+                start_itr = 0
 
-                itr_log = prefix_log('[%s] itr #%d | ' % (self._exp_name, itr + 1), logger=logger)
+            for itr in xrange(start_itr, self._n_itr):
+
+                itr_log = prefix_log('[%s] itr #%d | ' % (self._exp_name, itr), logger=logger)
 
                 cur_params = policy.get_param_values()
 
@@ -168,7 +178,7 @@ class UTRPO(object):
                 # do line search on lambda
                 if self._adapt_lambda:
                     max_search = 4
-                    if itr < 2:
+                    if itr - start_itr < 2:
                         max_search = 10
                     if mean_kl > self._stepsize:
                         for _ in xrange(max_search):
@@ -216,6 +226,10 @@ class UTRPO(object):
                         'all_obs': all_obs,
                         'all_states': all_states,
                         'Q_est': Q_est,
+                        'itr': itr,
+                        'lambda': lambda_,
+                        'loss': result_f,
+                        'mean_kl': mean_kl,
                     }
                     for idx, pi_old, actions in zip(itertools.count(), all_pi_old, all_actions):
                         to_save['pi_old_%d' % idx] = pi_old
