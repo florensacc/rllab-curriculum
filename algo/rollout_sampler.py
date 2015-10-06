@@ -13,7 +13,7 @@ import pickle
 
 def _init_subprocess(*args):
     if len(args) == 1:
-        _, gen_mdp, gen_policy = pickle.loads(args[0])
+        _, gen_mdp, gen_policy, _ = pickle.loads(args[0])
     else:
         gen_mdp, gen_policy = args
     global mdp
@@ -68,6 +68,8 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
                     last_n_samples = n_samples
             actions, action_probs = policy.get_actions_single(obs)
             next_state, next_obs, reward, done, steps = mdp.step_single(state, actions)
+            if reward != 0:
+                print reward
             n_steps += steps
             n_samples += 1
             traj.append((state, obs, actions, next_obs, reward))
@@ -125,7 +127,7 @@ class RolloutSampler(object):
 
     def __init__(self, buf=None, n_parallel=None, gen_mdp=None, gen_policy=None):
         if buf is not None:
-            n_parallel, gen_mdp, gen_policy = pickle.loads(buf)
+            n_parallel, gen_mdp, gen_policy, _ = pickle.loads(buf)
         self._n_parallel = n_parallel
         self._setup_called = False
         self._gen_mdp = gen_mdp

@@ -2,7 +2,8 @@ import zmq
 import pickle
 import cloudpickle
 from optparse import OptionParser
-
+from misc.console import mkdir_p
+import numpy as np
 
 def launch_sampler(gen_sampler):
     context = zmq.Context()
@@ -15,14 +16,27 @@ def launch_sampler(gen_sampler):
     socket.send('ack')
     message = socket.recv()
     socket.send('ack')
+    savedir = pickle.loads(message)[-1]
     with gen_sampler(message) as sampler:
         while True:
             message = pickle.loads(socket.recv())
-            ret = sampler.collect_samples(*message)
+            itr = message[0]
+            tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions, all_states = \
+                sampler.collect_samples(*message)
+            to_send = (tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions)
             while True:
                 try:
-                    socket.send(cloudpickle.dumps(ret))
+                    print "sending data..."
+                    socket.send(cloudpickle.dumps(to_send))
                     break
                 except MemoryError:
                     print 'Memory error. Retrying...'
                     next
+            print "saving states..."
+            import time
+            timestamp = time.strftime("%Y%m%d%H%M%S")
+            mkdir_p(savedir)
+            to_save = {
+                'all_states': all_states
+            }
+            np.savez_compressed('%s/itr_%d_%s.states' % (savedir, itr, timestamp), **to_save)

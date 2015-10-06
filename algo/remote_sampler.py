@@ -7,13 +7,14 @@ import pickle
 
 class RemoteSampler(object):
 
-    def __init__(self, sampler_module, n_parallel, gen_mdp, gen_policy):
+    def __init__(self, sampler_module, n_parallel, gen_mdp, gen_policy, savedir):
         self._sampler_module = sampler_module
         self._n_parallel = n_parallel
         self._gen_mdp = gen_mdp
         self._gen_policy = gen_policy
         self._socket = None
         self._sampler_process = None
+        self._savedir = savedir
 
     def __enter__(self):
         context = zmq.Context()
@@ -25,7 +26,7 @@ class RemoteSampler(object):
         )
         socket.recv()
         socket.send(cloudpickle.dumps((
-            self._n_parallel, self._gen_mdp, self._gen_policy)))
+            self._n_parallel, self._gen_mdp, self._gen_policy, self._savedir)))
         socket.recv()
 
         self._context = context

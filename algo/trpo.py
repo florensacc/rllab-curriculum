@@ -172,8 +172,6 @@ class TRPO(object):
                 # solving the equation Ax = -g, where A is the Fisher information
                 # matrix
                  
-
-
                 with SimpleMessage('trying lambda=%.3f...' % lambda_, itr_log):
                     result = optimizer(
                         func=evaluate_cost(lambda_), x0=cur_params,
