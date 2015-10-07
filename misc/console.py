@@ -40,9 +40,10 @@ def mkdir_p(path):
         else: raise
 
 
-def log(s):
+def log(s):#, send_telegram=False):
     print s
-    telegram_bot.send_message(secrets.telegram_user_id, s)
+    if secrets.telegram_user_id is not None:
+        telegram_bot.send_message(secrets.telegram_user_id, s)
     sys.stdout.flush()
 
 

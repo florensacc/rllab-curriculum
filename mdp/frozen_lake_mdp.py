@@ -40,7 +40,7 @@ class FrozenLakeMDP(MDP):
         actions = (actions + np.random.randint(-1,2,len(actions))) % 4
         increments = np.array([[0,-1],[1,0],[0,1],[-1,0]])
         nextstates = np.clip(states + increments[actions], [0,0], self.maxxy)
-        rewards = np.zeros((n, 1))
+        rewards = np.zeros((n,))# 1))
         dones = np.zeros((n,),bool)
         statetype = self.desc[nextstates[:,0],nextstates[:,1]]
 
