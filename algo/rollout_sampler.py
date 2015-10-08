@@ -38,8 +38,8 @@ def _subprocess_collect_samples(args):
 
 def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, discount, queue=None):
     try:
-        total_q_vals = defaultdict(int)
-        action_visits = defaultdict(int)
+        #total_q_vals = defaultdict(int)
+        #action_visits = defaultdict(int)
         traj = []
         samples = []
         tot_rewards = 0
@@ -68,42 +68,53 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
                     last_n_samples = n_samples
             actions, action_probs = policy.get_actions_single(obs)
             next_state, next_obs, reward, done, steps = mdp.step_single(state, actions)
-            if reward != 0:
-                print reward
             n_steps += steps
             n_samples += 1
-            traj.append((state, obs, actions, next_obs, reward))
-            samples.append((state, obs, actions, action_probs))
+            traj.append({
+                'state': state,
+                'obs': obs,
+                'actions': actions,
+                #'next_obs': next_obs,
+                'reward': reward,
+                'action_probs': action_probs
+            })
             tot_rewards += reward
-            if done or n_samples >= max_samples or n_steps >= max_steps:
+            if done or n_samples >= max_samples or n_steps >= max_steps or len(traj) > 100:
                 n_traj += 1
                 # update all Q-values along this trajectory
                 cum_reward = 0
-                for state, obs, actions, next_obs, reward in traj[::-1]:
-                    cum_reward = discount * cum_reward + reward
-                    action_pair = (tuple(obs), tuple(actions))
-                    total_q_vals[action_pair] += cum_reward
-                    action_visits[action_pair] += 1
+                for traj_point in reversed(traj):#[::-1]:#idx in range(len(traj)-1, -1, -1):
+                    #state, obs, actions, next_obs, reward = traj[idx]#in traj[::-1]:
+                    cum_reward = discount * cum_reward + traj_point["reward"]
+                    traj_point["return"] = cum_reward
+                    #traj[idx] = (state, obs, actions, next_obs, reward, 
+                    #action_pair = (tuple(obs), tuple(actions))
+                    #total_q_vals[action_pair] += cum_reward
+                    #action_visits[action_pair] += 1
+                samples.extend(traj)
                 traj = []
-            state, obs = next_state, next_obs
+                #if not done:
+                state, obs = mdp.sample_initial_state()
+            else:
+                state, obs = next_state, next_obs
 
         N = len(samples)
 
         all_obs = np.zeros((N,) + policy.observation_shape)
-        all_states = np.zeros((N,) + samples[0][0].shape)
+        all_states = np.zeros((N,) + samples[0]["state"].shape)
         Q_est = np.zeros(N)
         all_pi_old = [np.zeros((N, Da)) for Da in policy.action_dims]
         all_actions = [np.zeros(N, dtype='uint8') for _ in policy.action_dims]
-        for idx, tpl in enumerate(samples):
-            state, obs, actions, action_probs = tpl
-            for ia, action in enumerate(actions):
+        for idx, sample in enumerate(samples):
+            #state, obs, actions, action_probs = tpl
+            for ia, action in enumerate(sample["actions"]):
                 all_actions[ia][idx] = action
-            for ia, probs in enumerate(action_probs):
+            for ia, probs in enumerate(sample["action_probs"]):
                 all_pi_old[ia][idx,:] = probs
-            action_pair = (tuple(obs), tuple(actions))
-            Q_est[idx] = total_q_vals[action_pair] / action_visits[action_pair]
-            all_obs[idx] = obs
-            all_states[idx] = state
+            #action_pair = (tuple(sample["obs"]), tuple(dwtpl["actions"]))
+            Q_est[idx] = sample["return"]#total_q_vals[action_pair] / action_visits[action_pair]
+            all_obs[idx] = sample["obs"]
+            all_states[idx] = sample["state"]
 
         return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions, all_states
     except Exception as e:
@@ -165,7 +176,10 @@ class RolloutSampler(object):
 
     def collect_samples(self, itr, param_values, max_samples, max_steps, discount):
         if not self._setup_called:
-            raise ValueError('Must enclose RolloutSampler in a with clause')
+            if self._n_parallel > 1:
+                raise ValueError('Must enclose RolloutSampler in a with clause')
+            else:
+                self._setup()
         if self._n_parallel > 1:
             manager = Manager()
             queue = manager.Queue()
@@ -196,7 +210,9 @@ class RolloutSampler(object):
                 raise
             return _combine_samples(result_list)
         else:
-            return _collect_samples(self._mdp, self._policy, itr, param_values, max_samples, max_steps, discount)
+            return _collect_samples(self._mdp, self._policy, itr, param_values, max_samples, max_steps, discount)[:-1]
+
+sampler = RolloutSampler
 
 if __name__ == '__main__':
     os.environ['THEANO_FLAGS'] = 'device=cpu'

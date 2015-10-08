@@ -10,6 +10,7 @@ from remote_sampler import RemoteSampler
 import time
 import itertools
 import re
+from lbfgs import lbfgs
 
 # Unconstrained TRPO
 class UTRPO(object):
@@ -21,43 +22,41 @@ class UTRPO(object):
             n_parallel=multiprocessing.cpu_count(), adapt_lambda=True,
             reuse_lambda=True, sampler_module='algo.rollout_sampler',
             resume_file=None, optimizer_module='scipy.optimize.fmin_l_bfgs_b'):
-        self._n_itr = n_itr
-        self._max_samples_per_itr = max_samples_per_itr
-        self._max_steps_per_itr = max_steps_per_itr
-        self._discount = discount
-        self._stepsize = stepsize
-        self._initial_lambda = initial_lambda
-        self._max_opt_itr = max_opt_itr
-        self._adapt_lambda = adapt_lambda
-        self._n_parallel = n_parallel
-        self._exp_name = exp_name
+        self.n_itr = n_itr
+        self.max_samples_per_itr = max_samples_per_itr
+        self.max_steps_per_itr = max_steps_per_itr
+        self.discount = discount
+        self.stepsize = stepsize
+        self.initial_lambda = initial_lambda
+        self.max_opt_itr = max_opt_itr
+        self.adapt_lambda = adapt_lambda
+        self.n_parallel = n_parallel
+        self.exp_name = exp_name
         # whether to start from the currently adapted lambda on the next
         # iteration
-        self._reuse_lambda = reuse_lambda
-        self._sampler_module = sampler_module
-        self._optimizer_module = optimizer_module
-        self._resume_file = resume_file
+        self.reuse_lambda = reuse_lambda
+        self.sampler_module = sampler_module
+        self.optimizer_module = optimizer_module
+        self.resume_file = None
 
     def new_surrogate_obj(
             self, policy, input_var, Q_est_var, pi_old_vars, action_vars,
             lambda_var):
         probs_vars = policy.probs_vars
         N_var = input_var.shape[0]
-        mean_kl = 0
-        max_kl = None
         kl = 0
         lr = 1
         for probs_var, pi_old_var, action_var in zip(
                 probs_vars, pi_old_vars, action_vars):
             kl += T.sum(
                     pi_old_var * (
-                        T.log(pi_old_var + 1e-6) - T.log(probs_var + 1e-6)
+                        T.log(pi_old_var) - T.log(probs_var)
                     ),
                     axis=1
                 )
             pi_old_selected = pi_old_var[T.arange(N_var), action_var]
             pi_selected = probs_var[T.arange(N_var), action_var]
-            lr *= pi_selected / (pi_old_selected + 1e-6)
+            lr *= pi_selected / (pi_old_selected)
         mean_kl = T.mean(kl)
         max_kl = T.max(kl)
         # formulate as a minimization problem
@@ -98,11 +97,11 @@ class UTRPO(object):
         all_inputs = [input_var, Q_est_var] + pi_old_vars + action_vars + \
             [lambda_var]
 
-        exp_logger = prefix_log('[%s] | ' % (self._exp_name))
+        exp_logger = prefix_log('[%s] | ' % (self.exp_name))
 
         with SimpleMessage("Compiling functions...", exp_logger):
-            compute_surrogate_obj = theano.function(
-                all_inputs, surrogate_obj, on_unused_input='ignore',
+            compute_surrogate_kl = theano.function(
+                all_inputs, [surrogate_obj, mean_kl], on_unused_input='ignore',
                 allow_input_downcast=True
                 )
             compute_mean_kl = theano.function(
@@ -119,30 +118,31 @@ class UTRPO(object):
                 allow_input_downcast=True
                 )
 
-        lambda_ = self._initial_lambda
+        optimizer = pydoc.locate(self.optimizer_module)
 
-        optimizer = pydoc.locate(self._optimizer_module)
+        logger = tee_log(self.exp_name + '_' + exp_timestamp + '.log')
 
-        logger = tee_log(self._exp_name + '_' + exp_timestamp + '.log')
-
-        savedir = 'data/%s_%s' % (self._exp_name, exp_timestamp)
+        savedir = 'data/%s_%s' % (self.exp_name, exp_timestamp)
         mkdir_p(savedir)
 
+        lambda_ = self.initial_lambda
+
         with RemoteSampler(
-                self._sampler_module, self._n_parallel, gen_mdp,
+                self.sampler_module, self.n_parallel, gen_mdp,
                 gen_policy, savedir) as sampler:
 
-            if self._resume_file is not None:
-                print 'Resuming from snapshot %s...' % self._resume_file
-                resume_data = np.load(self._resume_file)
-                start_itr = int(re.search('itr_(\d+)', self._resume_file).group(1)) + 1
+            if self.resume_file is not None:
+                print 'Resuming from snapshot %s...' % self.resume_file
+                resume_data = np.load(self.resume_file)
+                start_itr = int(re.search('itr_(\d+)', self.resume_file).group(1)) + 1
                 policy.set_param_values(resume_data['opt_policy_params'])
             else:
                 start_itr = 0
 
-            for itr in xrange(start_itr, self._n_itr):
 
-                itr_log = prefix_log('[%s] itr #%d | ' % (self._exp_name, itr), logger=logger)
+            for itr in xrange(start_itr, self.n_itr):
+
+                itr_log = prefix_log('[%s] itr #%d | ' % (self.exp_name, itr), logger=logger)
 
                 cur_params = policy.get_param_values()
 
@@ -150,8 +150,11 @@ class UTRPO(object):
 
                 tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions = \
                     sampler.request_samples(
-                        itr, cur_params, self._max_samples_per_itr,
-                        self._max_steps_per_itr, self._discount)
+                        itr, cur_params, self.max_samples_per_itr,
+                        self.max_steps_per_itr, self.discount)
+
+                Q_est = Q_est - np.mean(Q_est)
+                Q_est = Q_est / (Q_est.std() + 1e-8)
 
                 all_input_values = [all_obs, Q_est] + all_pi_old + all_actions
 
@@ -159,8 +162,12 @@ class UTRPO(object):
                     def evaluate(params):
                         policy.set_param_values(params)
                         inputs_with_lambda = all_input_values + [lambda_]
-                        val = compute_surrogate_obj(*inputs_with_lambda)
-                        return val.astype(np.float64)
+                        val, mean_kl = compute_surrogate_kl(*inputs_with_lambda)
+                        if mean_kl > self.stepsize:
+                            return np.inf
+                        else:
+                            return val.astype(np.float64)
+                        #return val.astype(np.float64)
                     return evaluate
 
                 def evaluate_grad(lambda_):
@@ -168,73 +175,91 @@ class UTRPO(object):
                         policy.set_param_values(params)
                         grad = compute_grads(*(all_input_values + [lambda_]))
                         flattened_grad = flatten_tensors(map(np.asarray, grad))
+                        #print 'grad norm: ', np.linalg.norm(flattened_grad)
                         return flattened_grad.astype(np.float64)
                     return evaluate
 
                 avg_reward = tot_rewards * 1.0 / n_traj
 
-                itr_log('avg reward: %.3f over %d trajectories' %
+                ent = 0
+                for pi_old in all_pi_old:
+                    ent += np.mean(np.sum(-pi_old * np.log(pi_old), axis=1))
+                itr_log('entropy: %f' % ent)
+                itr_log('perplexity: %f' % np.exp(ent))
+
+
+                itr_log('avg reward: %f over %d trajectories' %
                         (avg_reward, n_traj))
 
+                loss_before = evaluate_cost(0)(cur_params)
+                itr_log('loss before: %f' % loss_before)
 
-                plain_loss = evaluate_cost(0)
-
-                if not self._reuse_lambda:
-                    lambda_ = self._initial_lambda
+                if not self.reuse_lambda:
+                    lambda_ = self.initial_lambda
+                else:
+                    lambda_ = min(10000, max(0.01, lambda_))
 
                 with SimpleMessage('trying lambda=%.3f...' % lambda_, itr_log):
+                    #opt_val = None
+                    
+                    #for n_itr, opt_val in enumerate(lbfgs(f=evaluate_cost(lambda_), fgrad=evaluate_grad(lambda_), x0=cur_params, maxiter=20)):
+                    #    pass
+                    ##itr_log('took %d itr' % n_itr)
+                    #policy.set_param_values(opt_val)
                     result = optimizer(
                         func=evaluate_cost(lambda_), x0=cur_params,
                         fprime=evaluate_grad(lambda_),
-                        maxiter=self._max_opt_itr
+                        maxiter=self.max_opt_itr
                         )
                     
-                    max_kl = compute_max_kl(*(all_input_values + [lambda_]))
-                    itr_log('lambda %.3f => max kl %.3f' % (lambda_, max_kl))
+                    mean_kl = compute_mean_kl(*(all_input_values + [lambda_]))
+                    itr_log('lambda %f => mean kl %f' % (lambda_, mean_kl))
                 # do line search on lambda
-                if self._adapt_lambda:
-                    max_search = 4
+                if self.adapt_lambda:
+                    max_search = 10
                     if itr - start_itr < 2:
                         max_search = 10
-                    if max_kl > self._stepsize:
+                    if mean_kl > self.stepsize:
                         for _ in xrange(max_search):
                             lambda_ = lambda_ * 2
-                            with SimpleMessage('trying lambda=%.3f...' % lambda_, itr_log):
+                            with SimpleMessage('trying lambda=%f...' % lambda_, itr_log):
                                 result = optimizer(
                                     func=evaluate_cost(lambda_), x0=cur_params,
                                     fprime=evaluate_grad(lambda_),
-                                    maxiter=self._max_opt_itr)
+                                    maxiter=self.max_opt_itr)
                                 inputs_with_lambda = all_input_values + [lambda_]
-                                max_kl = compute_max_kl(*inputs_with_lambda)
-                                itr_log('lambda %.3f => max kl %.3f' % (lambda_, max_kl))
-                            if np.isnan(max_kl):
+                                mean_kl = compute_mean_kl(*inputs_with_lambda)
+                                itr_log('lambda %f => mean kl %f' % (lambda_, mean_kl))
+                            if np.isnan(mean_kl):
                                 import ipdb
                                 ipdb.set_trace()
-                            if max_kl <= self._stepsize:
+                            if mean_kl <= self.stepsize:
                                 break
                     else:
                         for _ in xrange(max_search):
                             try_lambda_ = lambda_ * 0.5
-                            with SimpleMessage('trying lambda=%.3f...' % try_lambda_, itr_log):
+                            with SimpleMessage('trying lambda=%f...' % try_lambda_, itr_log):
                                 try_result = optimizer(
                                     func=evaluate_cost(try_lambda_), x0=cur_params,
                                     fprime=evaluate_grad(try_lambda_),
-                                    maxiter=self._max_opt_itr)
+                                    maxiter=self.max_opt_itr)
                                 inputs_with_lambda = all_input_values + [lambda_]
-                                try_max_kl = compute_max_kl(*inputs_with_lambda)
-                                itr_log('lambda=%.3f => max kl %.3f' % (try_lambda_, try_max_kl))
-                            if np.isnan(max_kl):
+                                try_mean_kl = compute_mean_kl(*inputs_with_lambda)
+                                itr_log('lambda=%f => mean kl %f' % (try_lambda_, try_mean_kl))
+                            if np.isnan(mean_kl):
                                 import ipdb
                                 ipdb.set_trace()
-                            if try_max_kl > self._stepsize:
+                            if try_mean_kl > self.stepsize:
                                 break
                             result = try_result
                             lambda_ = try_lambda_
-                            max_kl = try_max_kl
+                            mean_kl = try_mean_kl
 
+                loss_after = evaluate_cost(0)(policy.get_param_values())
+                itr_log('optimization finished. loss after: %f. mean kl: %f. dloss: %f' % (loss_after, mean_kl, loss_before - loss_after))
                 timestamp = time.strftime("%Y%m%d%H%M%S")
-                result_x, result_f, result_d = result
-                itr_log('optimization finished. new loss value: %.3f. max kl: %.3f' % (result_f, max_kl))
+                #result_x, result_f, result_d = result
+                #itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
                 with SimpleMessage("saving result...", exp_logger):
                     to_save = {
                         'cur_policy_params': cur_params,
@@ -243,8 +268,8 @@ class UTRPO(object):
                         'Q_est': Q_est,
                         'itr': itr,
                         'lambda': lambda_,
-                        'loss': result_f,
-                        'max_kl': max_kl,
+                        'loss': loss_after,
+                        'mean_kl': mean_kl,
                     }
                     for idx, pi_old, actions in zip(itertools.count(), all_pi_old, all_actions):
                         to_save['pi_old_%d' % idx] = pi_old
