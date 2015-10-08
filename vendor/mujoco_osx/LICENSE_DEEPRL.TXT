@@ -1,0 +1,20 @@
+--------------- START LICENSE ---------------
+
+MuJoCo Pro
+
+Copyright (C) 2015 Roboti LLC
+
+Roboti LLC grants you license to use MuJoCo Pro in the class
+CS 294-112 Deep Reinforcement Learning (Fall 2015) at UC Berkeley,
+subject to the following terms and conditions:
+
+1. You may not modify, disassemble or reverse-engineer any of
+   the binary files included with the software.
+
+2. If you are an instructor, you may distribute the software
+   only to participants in the course. If you are a participant,
+   you may not distribute the software to anyone.
+
+Do not modify this file, it is used by the built-in license manager.
+
+--------------- END LICENSE ---------------
