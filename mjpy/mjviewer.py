@@ -52,7 +52,7 @@ class MjViewer(object):
         self.cam.lookat[0] = self.model.stat.center[0]
         self.cam.lookat[1] = self.model.stat.center[1]
         self.cam.lookat[2] = self.model.stat.center[2]
-        self.cam.distance = 1.5 * self.model.stat.extent
+        self.cam.distance = 1.0 * self.model.stat.extent
         self.cam.camid = -1
         self.cam.trackbodyid = -1
         if self.window:
@@ -95,14 +95,14 @@ class MjViewer(object):
         _, _, refresh_rate = glfw.get_video_mode(glfw.get_primary_monitor())
         if refresh_rate >= 100:
             glfw.window_hint(glfw.STEREO, 1)
-            window = glfw.create_window(1200, 900, "Simulate", None, None)
+            window = glfw.create_window(500, 500, "Simulate", None, None)
             if window:
                 stereo_available = True
 
         # no stereo: try mono
         if not window:
             glfw.window_hint(glfw.STEREO, 0)
-            window = glfw.create_window(1200, 900, "Simulate", None, None)
+            window = glfw.create_window(500, 500, "Simulate", None, None)
 
         if not window:
             glfw.terminate()

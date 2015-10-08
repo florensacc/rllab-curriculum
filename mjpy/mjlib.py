@@ -3,9 +3,18 @@ import os
 from util import *
 from mjtypes import *
 
+osp = os.path
+if sys.platform.startswith("darwin"):
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../vendor/mujoco_osx/libmujoco.dylib"))
+elif sys.platform.startswith("linux"):
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../vendor/mujoco_linux/libmujoco.so"))
+elif sys.platform.startswith("win"):
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../vendor/mujoco_win/mujoco.lib"))
+else:
+    raise RuntimeError("unrecognized platform %s"%sys.platform)
 
-mjlib = cdll.LoadLibrary(os.path.join(os.path.dirname(__file__),
-                                        '../vendor/mujoco_osx/libmujoco.dylib'))
+
+mjlib = cdll.LoadLibrary(libfile)
 
 
 mjlib.mj_loadXML.argtypes = [c_char_p, c_char_p]
