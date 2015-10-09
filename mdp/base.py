@@ -1,12 +1,3 @@
-class States(object):
-    """
-    Stores a collection of MDP states
-    """
-    def copy(self):
-        "optional -- copy the state"
-        raise NotImplementedError
-
-
 class MDP(object):
     def step(self, states, actions):
         """        

@@ -1,14 +1,17 @@
 #!/usr/bin/python
 import os
-from policy import DiscreteNNPolicy
+from policy import DiscreteNNPolicy, ContinuousNNPolicy
 from algo import UTRPO, UTRPO_VTS
-from mdp import MDP, AtariMDP
+from mdp import MDP, AtariMDP, HopperMDP, CartpoleMDP
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne
 import numpy as np
 import inspect
 from misc.console import tweak
+from functools import partial
+import theano.tensor as T
+from algo import CEM
 
 
 class RAMPolicy(DiscreteNNPolicy):
@@ -20,11 +23,52 @@ class RAMPolicy(DiscreteNNPolicy):
         output_layers = [L.DenseLayer(l_hidden_2, num_units=Da, nonlinearity=NL.softmax, name="output_%d" % idx) for idx, Da in enumerate(action_dims)]
         return output_layers
 
+class ParamLayer(L.Layer):
+    def __init__(self, incoming, num_units, param=lasagne.init.Constant(0.), **kwargs):
+        super(ParamLayer, self).__init__(incoming, **kwargs)
+        self.num_units = num_units
+        num_inputs = int(np.prod(self.input_shape[1:]))
+        self.param = self.add_param(param, (1, num_units), name="param")
+
+    def get_output_shape_for(self, input_shape):
+        return (input_shape[0], self.num_units)
+
+    def get_output_for(self, input, **kwargs):
+        if input.ndim > 2:
+            # if the input has more than two dimensions, flatten it into a
+            # batch of feature vectors.
+            input = input.flatten(2)
+        return T.fill(input, self.param)
+
+class OpLayer(L.Layer):
+    def __init__(self, incoming, op, **kwargs):
+        super(OpLayer, self).__init__(incoming, **kwargs)
+        self.op = op
+
+    def get_output_shape_for(self, input_shape):
+        return input_shape
+
+    def get_output_for(self, input, **kwargs):
+        return self.op(input)
+
+class SimpleNNPolicy(ContinuousNNPolicy):
+
+    def __init__(self, input_var, mdp, hidden_sizes=[32,32], nonlinearity=NL.tanh):
+        self.hidden_sizes = hidden_sizes
+        self.nonlinearity = nonlinearity
+        super(SimpleNNPolicy, self).__init__(input_var, mdp)
+    
+    def new_network_outputs(self, observation_shape, n_actions, input_var):#, hidden_sizes=[32,32], nonlinearity=NL.tanh):#, hidden_units=[256,128]):
+        l_input = L.InputLayer(shape=(None, observation_shape[0]), input_var=input_var)
+        l_hidden = l_input
+        for idx, hidden_size in enumerate(self.hidden_sizes):
+            l_hidden = L.DenseLayer(l_hidden, num_units=hidden_size, nonlinearity=self.nonlinearity, W=lasagne.init.Normal(0.01), name="h%d" % idx)
+        mean_layer = L.DenseLayer(l_hidden, num_units=n_actions, nonlinearity=None, name="output_mean")
+        std_layer = OpLayer(ParamLayer(l_input, num_units=n_actions), op=T.exp, name="output_std")
+        return mean_layer, std_layer
 
 if __name__ == '__main__':
-    mdp = tweak(AtariMDP, 'mdp')
-    gen_mdp = lambda: mdp(rom_path="vendor/atari_roms/montezuma_revenge.bin", obs_type='ram', default_frame_skip=64)
-    trpo = tweak(UTRPO, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_montezuma_64', stepsize=0.015)#, resume_file='data/utrpo_freeway_64_20151004182457/itr_378_20151004235409.npz')#, time_scales=[4,16,64])
-    #trpo = tweak(UTRPO_VTS, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_vts_seaquest_4_16_64', time_scales=[4,16,64])
-    #trpo = tweak(UTRPO_VTS, 'algo')(max_samples_per_itr=100000, exp_name='utrpo_vts_seaquest_64', time_scales=[64])
-    trpo.train(gen_mdp=gen_mdp, gen_policy=RAMPolicy)
+    gen_mdp = partial(CartpoleMDP)
+    gen_policy = partial(SimpleNNPolicy, hidden_sizes=[])#, nonlinearity=None)
+    algo = CEM()
+    algo.train(gen_mdp=gen_mdp, gen_policy=gen_policy)

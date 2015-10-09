@@ -1,4 +1,4 @@
-from rl import MDP
+from base import MDP#, Serializable
 import os
 from mjpy import MjModel, MjViewer
 import numpy as np
@@ -9,109 +9,135 @@ class MjcMDP(MDP):
         self.model = MjModel(self.model_path())
         self.data = self.model.data
         self.viewer = None
-        self.x0 = self.get_state()
-        self.x0.setflags(write=False)
+        self.init_qpos = self.model.data.qpos
+        self.init_qvel = self.model.data.qvel
+        self.ctrl_dim = self.model.data.ctrl.size
 
-    def get_state(self):
-        return self.encode_state(self.model.data.qpos, self.model.data.qvel)
+        o,r,_ = self.step(np.zeros(self.ctrl_dim))
+        self.obs_dim = o.size
+        self.rew_dim = r.size
 
-    def encode_state(self, pos, vel):
-        return np.concatenate([pos, vel])
+    def model_path(self):
+        raise NotImplementedError
 
-    def decode_state(self, state):
-        pos = state[0:self.model.nq]
-        vel = state[self.model.nq:self.model.nq+self.model.nv]
-        return pos, vel
+    def step(self, s, a):
+        raise NotImplementedError
 
-    def start_viewer(self):
+    def get_viewer(self):
         if self.viewer is None:
             self.viewer = MjViewer()
-        self.viewer.start()
-        self.viewer.set_model(self.model)
+            self.viewer.start()
+            self.viewer.set_model(self.model)
         return self.viewer
 
-    @property
-    def frame_skip(self):
-        return 1
+    def action_spec(self):
+        return (np.float64,(self.model.nu,))
 
-    def step(self, states, actions):
-        next_states = []
-        obs = []
-        rewards = []
-        dones = []
-        for state, action in zip(states, actions):
-            pos, vel = self.decode_state(state)
-            self.model.data.qpos = pos
-            self.model.data.qvel = vel
+    def observation_spec(self):
+        return (np.float64, (self.obs_dim,))
 
-            self.model.data.ctrl = action
+    def plot(self):
+        viewer = self.get_viewer()
+        viewer.loop_once()
 
-            for _ in range(self.frame_skip):
-                self.model.step()
-            next_state = self.get_state()
-            ob = next_state
-            reward = 0
-            done = False
 
-            next_states.append(next_state)
-            obs.append(ob)
-            rewards.append(reward)
-            dones.append(done)
+class HopperMDP(MjcMDP):#, Serializable):
+    def __init__(self):
+        self.frame_skip = 5
+        self.ctrl_scaling = 100.0
+        self.timestep = .02
+        MjcMDP.__init__(self)
+        #Serializable.__init__(self)
 
-        return next_states, obs, rewards, dones
-
-    def sample_initial_states(self, n):
-        return [self.x0 for _ in range(n)], [self.x0 for _ in range(n)]
-
-    @property
-    def action_shape(self):
-        return self.model.data.ctrl.shape
-
-class WalkerMDP(MjcMDP):
+    def model_path(self):
+        return os.path.join(os.path.dirname(__file__),'../vendor/mujoco_models/hopper.xml')
     
-    def __init__(self):
-        super(WalkerMDP, self).__init__()
+    def reset(self):
+        self.x0 = np.concatenate([self.model.data.qpos, self.model.data.qvel])
+        self.model.data.qpos = self.init_qpos
+        self.model.data.qvel = self.init_qvel
+        # self.model.data.qvel = np.random.randn(len(self.model.data.qvel))*.2
+        # self.model.data.qfrc_constraint[:] = 0
+        self.model.forward()
+        return self._get_obs()
 
-    def model_path(self):
-        return os.path.join(os.path.dirname(__file__),
-                              'vendor/mujoco_models/walker2d.xml')
+    def _get_obs(self):
+        qpos = self.model.data.qpos
+        return np.concatenate([qpos[0:1], qpos[2:], np.clip(self.model.data.qvel,-10,10), np.clip(self.model.data.qfrc_constraint,-10,10)]).reshape(1,-1)
 
     @property
-    def frame_skip(self):
-        return 5
+    def observation_shape(self):
+        return self._get_obs().shape
+
+    @property
+    def n_actions(self):
+        return len(self.model.data.ctrl)
+
+    def step(self, a):
+
+        posbefore = self.model.data.qpos[1]
+        self.model.data.ctrl = a * self.ctrl_scaling
+
+        for _ in range(self.frame_skip):
+            self.model.step()
+
+        posafter = self.model.data.qpos[1]
+        reward = (posafter - posbefore) / self.timestep + 3.0
+
+        s = np.concatenate([self.model.data.qpos, self.model.data.qvel])
+        notdone = np.isfinite(s).all() and (np.abs(s[3:])<100).all() and (s[0] > .7) and (abs(s[2]) < .2)
+        done = not notdone
+
+        ob = self._get_obs()
+
+        return ob, reward, done
+
+    def reward_names(self):
+        return ["vel"]
+
+class WalkerMDP(MjcMDP):#,Serializable):
+    def __init__(self):
+        self.frame_skip = 4
+        self.ctrl_scaling = 20.0
+        self.timestep = .02
+        MjcMDP.__init__(self)
+        #Serializable.__init__(self)
+
+
+    def model_path(self):
+        return os.path.join(os.path.dirname(__file__),'vendor/mujoco_models/walker2d.xml')
     
-class CartpoleMDP(MjcMDP):
-    def __init__(self):
-        super(CartpoleMDP, self).__init__()
+    def reset(self):
+        self.x0 = np.concatenate([self.model.data.qpos, self.model.data.qvel])
+        self.model.data.qpos = self.init_qpos
+        self.model.data.qvel = self.init_qvel
+        # self.model.data.qvel = np.random.randn(len(self.model.data.qvel))*.2
+        # self.model.data.qfrc_constraint[:] = 0
+        self.model.forward()
+        return self._get_obs()
 
-    def model_path(self):
-        return os.path.join(os.path.dirname(__file__),
-                              'vendor/mujoco_models/cartpole.xml')
+    def _get_obs(self):
+        return np.concatenate([self.model.data.qpos, np.sign(self.model.data.qvel), np.sign(self.model.data.qfrc_constraint)]).reshape(1,-1)
 
-    @property
-    def frame_skip(self):
-        return 1
 
-class HopperMDP(MjcMDP):
-    def __init__(self):
-        super(HopperMDP, self).__init__()
+    def step(self, a):
 
-    def model_path(self):
-        return os.path.join(os.path.dirname(__file__),
-                              'vendor/mujoco_models/hopper.xml')
+        posbefore = self.model.data.xpos[:,0].min()
+        self.model.data.ctrl = a * self.ctrl_scaling
 
-    @property
-    def frame_skip(self):
-        return 5
+        for _ in range(self.frame_skip):
+            self.model.step()
 
-class HumanoidMDP(MjcMDP):
-    def __init__(self):
-        super(HumanoidMDP, self).__init__()
+        posafter = self.model.data.xpos[:,0].min()
+        reward = (posafter - posbefore) / self.timestep + 1.0
 
-    def model_path(self):
-        return os.path.join(os.path.dirname(__file__),
-                              'vendor/mujoco_models/humanoid.xml')
+        s = np.concatenate([self.model.data.qpos, self.model.data.qvel])
+        notdone = np.isfinite(s).all() and (np.abs(s[3:])<100).all() and (s[0] > 0.7) and (abs(s[2]) < .5)
+        done = not notdone
 
-    @property
-    def frame_skip(self):
-        return 8
+        ob = self._get_obs()
+
+        return ob, reward, done
+
+    def reward_names(self):
+        return ["vel"]

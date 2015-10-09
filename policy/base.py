@@ -1,20 +1,24 @@
 import numpy as np
 from misc.tensor_utils import high_res_normalize
+import scipy.stats
 
 
 def head(x):
     return x[0]
-
 
 class DiscretePolicy(object):
 
     # observation_shape: Shape of observation
     # action_dims: A list of action dimensions. The actions are assumed to be
     # conditionally independent given the state (i.e. they're factored)
-    def __init__(self, observation_shape, action_dims, input_var):
+    def __init__(self, input_var, mdp=None, observation_shape=None, action_dims=None):
         self.input_var = input_var
-        self.observation_shape = observation_shape
-        self.action_dims = action_dims
+        if mdp:
+            self.observation_shape = mdp.observation_shape
+            self.action_dims = mdp.action_dims
+        else:
+            self.observation_shape = observation_shape
+            self.action_dims = action_dims
 
     # The return value is a list of matrices, each corresponding to the action
     # distributions of a single action, stacked horizontally for all states
@@ -52,6 +56,52 @@ class DiscretePolicy(object):
     def set_param_values(self, flattened_parameters):
         raise NotImplementedError
 
-    @property
-    def params(self):
+class ContinuousPolicy(object):
+
+    # observation_shape: Shape of observation
+    # n_actions: Number of actions. They are expected to roughly lie in the range -3~3, and they are assumed
+    # to be conditionally independent given the state
+    def __init__(self, input_var, mdp=None, observation_shape=None, n_actions=None):
+        self.input_var = input_var
+        if mdp:
+            self.observation_shape = mdp.observation_shape
+            self.n_actions = mdp.n_actions
+        else:
+            self.observation_shape = observation_shape
+            self.n_actions = n_actions
+
+    def compute_action_mean_std(self, states):
+        raise NotImplementedError
+
+    def compute_action_probs(self, states, actions):
+        raise NotImplementedError
+
+    def compute_action_mean_std_single(self, state):
+        return map(head, self.compute_action_mean_std([state]))
+
+    def compute_action_probs_single(self, state):
+        return map(head, self.compute_action_probs([state]))
+
+    # The return value is a pair. The first item is a matrix (N, A), where each
+    # entry corresponds to the action value taken. The second item is a vector
+    # of length N, where each entry is the density value for that action, under
+    # the current policy
+    def get_actions(self, states):
+        means, stds = self.compute_action_mean_std(states)
+        # first get standard normal samples
+        rnd = np.random.randn(*means.shape)#size=means.shape)
+        # we can compute their probability density right away
+        action_probs = scipy.stats.norm.pdf(rnd)
+        # transform back to the true distribution
+        actions = rnd * stds + means
+        return actions, action_probs
+
+    def get_actions_single(self, state):
+        actions, probs = self.get_actions([state])
+        return head(actions), head(probs)
+
+    def get_param_values(self):
+        raise NotImplementedError
+
+    def set_param_values(self, flattened_parameters):
         raise NotImplementedError

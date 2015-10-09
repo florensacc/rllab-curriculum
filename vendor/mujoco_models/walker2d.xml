@@ -42,7 +42,7 @@
 
           <joint  name="foot_left_joint" type="hinge" pos="0 0 0.1" axis="0 -1 0" range="-45 45"/>
 
-          <geom name="foot_left_geom" type="capsule" fromto="-0.0 0 0.1 0.2 0 0.1" size="0.06" friction="0.9" rgba=".7 .3 .6 1"/>
+          <geom name="foot_left_geom" type="capsule" fromto="-0.0 0 0.1 0.2 0 0.1" size="0.06" friction="1.9" rgba=".7 .3 .6 1"/>
         </body>
       </body>          
     </body>

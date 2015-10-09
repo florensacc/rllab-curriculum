@@ -40,9 +40,12 @@ class UTRPO(object):
         self.resume_file = None
 
     def new_surrogate_obj(
-            self, policy, input_var, Q_est_var, pi_old_vars, action_vars,
+            self, policy, input_var, Q_est_var, pi_old_var, action_var,
             lambda_var):
-        probs_vars = policy.probs_vars
+        probs_var = policy.probs_var
+        # to compute KL, we actually need the mean and std of the old distribution...
+        # what would be a good way to generalize that?
+        kl = policy.kl(pi_old_var, probs_var)
         N_var = input_var.shape[0]
         kl = 0
         lr = 1
@@ -78,13 +81,13 @@ class UTRPO(object):
         exp_timestamp = time.strftime("%Y%m%d%H%M%S")
         mdp = gen_mdp()
         input_var = T.matrix('input')  # N*Ds
-        policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
+        policy = gen_policy(input_var, mdp)#mdp.observation_shape, mdp.action_dims, input_var)
 
         Q_est_var = T.vector('Q_est')  # N
-        action_range = range(len(policy.action_dims))
-        pi_old_vars = [T.matrix('pi_old_%d' % i) for i in action_range]
-        action_vars = [T.vector('action_%d' % i, dtype='uint8')
-                       for i in action_range]
+        #action_range = range(len(policy.action_dims))
+        pi_old_vars = T.matrix('pi_old')#_%d' % i) for i in action_range]
+        action_vars = T.vector('action')#_%d' % i, dtype='uint8')
+                       #for i in action_range]
         lambda_var = T.scalar('lambda')
 
         surrogate_obj, surrogate_loss, mean_kl, max_kl = \
