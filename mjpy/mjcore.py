@@ -47,6 +47,7 @@ class MjModel(MjModelWrapper):
         self.data = data
         self.forward()
 
+    # This is like updating the state of mujoco. I'm not really sure what it's updating though
     def forward(self):
         mjlib.mj_forward(self.ptr, self.data.ptr)
 

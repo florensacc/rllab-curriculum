@@ -24,11 +24,11 @@ class RAMPolicy(DiscreteNNPolicy):
         return output_layers
 
 class ParamLayer(L.Layer):
-    def __init__(self, incoming, num_units, param=lasagne.init.Constant(0.), **kwargs):
+    def __init__(self, incoming, num_units, param=lasagne.init.Constant(0.), trainable=True, **kwargs):
         super(ParamLayer, self).__init__(incoming, **kwargs)
         self.num_units = num_units
         num_inputs = int(np.prod(self.input_shape[1:]))
-        self.param = self.add_param(param, (1, num_units), name="param")
+        self.param = self.add_param(param, (1, num_units), name="param", trainable=trainable)
 
     def get_output_shape_for(self, input_shape):
         return (input_shape[0], self.num_units)
@@ -53,22 +53,26 @@ class OpLayer(L.Layer):
 
 class SimpleNNPolicy(ContinuousNNPolicy):
 
-    def __init__(self, input_var, mdp, hidden_sizes=[32,32], nonlinearity=NL.tanh):
+    def __init__(self, input_var, mdp, hidden_sizes=[32,32], nonlinearity=NL.tanh, deterministic=False):
         self.hidden_sizes = hidden_sizes
         self.nonlinearity = nonlinearity
+        self.deterministic = deterministic
         super(SimpleNNPolicy, self).__init__(input_var, mdp)
     
-    def new_network_outputs(self, observation_shape, n_actions, input_var):#, hidden_sizes=[32,32], nonlinearity=NL.tanh):#, hidden_units=[256,128]):
+    def new_network_outputs(self, observation_shape, n_actions, input_var):
         l_input = L.InputLayer(shape=(None, observation_shape[0]), input_var=input_var)
         l_hidden = l_input
         for idx, hidden_size in enumerate(self.hidden_sizes):
-            l_hidden = L.DenseLayer(l_hidden, num_units=hidden_size, nonlinearity=self.nonlinearity, W=lasagne.init.Normal(0.01), name="h%d" % idx)
-        mean_layer = L.DenseLayer(l_hidden, num_units=n_actions, nonlinearity=None, name="output_mean")
-        std_layer = OpLayer(ParamLayer(l_input, num_units=n_actions), op=T.exp, name="output_std")
+            l_hidden = L.DenseLayer(l_hidden, num_units=hidden_size, nonlinearity=self.nonlinearity, W=lasagne.init.Normal(0.1), name="h%d" % idx)
+        mean_layer = L.DenseLayer(l_hidden, num_units=n_actions, nonlinearity=None, W=lasagne.init.Normal(0.01), name="output_mean")
+        if self.deterministic:
+            std_layer = ParamLayer(l_input, num_units=n_actions, param=lasagne.init.Constant(0.), trainable=False, name="output_std")
+        else:
+            std_layer = OpLayer(ParamLayer(l_input, num_units=n_actions), op=T.exp, name="output_std")
         return mean_layer, std_layer
 
 if __name__ == '__main__':
-    gen_mdp = partial(CartpoleMDP)
-    gen_policy = partial(SimpleNNPolicy, hidden_sizes=[])#, nonlinearity=None)
+    gen_mdp = partial(HopperMDP)
+    gen_policy = partial(SimpleNNPolicy, hidden_sizes=[32, 32], deterministic=True)
     algo = CEM()
     algo.train(gen_mdp=gen_mdp, gen_policy=gen_policy)

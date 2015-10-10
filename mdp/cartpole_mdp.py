@@ -3,10 +3,10 @@ import theano.tensor as T
 import numpy as np
 from .base import MDP
 
+# code adapted from John's control repo
 class CartpoleMDP(MDP):
     def __init__(self):
         self.max_pole_angle = .2
-
         self.max_cart_pos = 2.4
         self.max_cart_speed = 4.
         self.max_pole_speed = 4.
@@ -68,7 +68,7 @@ class CartpoleMDP(MDP):
         newthdot = thdot + dt*thddot
         newth = th + dt*newthdot
 
-        done = (z > self.max_cart_pos) | (z < -self.max_cart_pos) | (th > self.max_pole_angle) | (th < -self.max_pole_angle) 
+        done = (newz > self.max_cart_pos) | (newz < -self.max_cart_pos) | (newth > self.max_pole_angle) | (newth < -self.max_pole_angle) 
 
         ucost = 1e-5 * (u0**2)
         xcost = 1 - np.cos(th)
@@ -79,3 +79,9 @@ class CartpoleMDP(MDP):
         rewards = notdone*10 - notdone*xcost - notdone*ucost
 
         return next_states, next_obs, rewards, done, np.ones_like(done)
+
+    @property
+    def lqr_Q(self):
+        return np.array([
+
+        ])
