@@ -65,7 +65,7 @@ class UTRPOCont(object):
         # formulate as a minimization problem
         surrogate_loss = - T.mean(lr * Q_est_var)
         surrogate_obj = surrogate_loss + lambda_var * mean_kl
-        return surrogate_obj, surrogate_loss, mean_kl#, max_kl
+        return surrogate_obj, surrogate_loss, mean_kl
 
     def transform_gen_mdp(self, gen_mdp):
         return gen_mdp
@@ -165,13 +165,8 @@ class UTRPOCont(object):
                     def evaluate(params):
                         policy.set_param_values(params)
                         inputs_with_lambda = all_input_values + [lambda_]
-                        #import ipdb; ipdb.set_trace()
                         val, mean_kl = compute_surrogate_kl(*inputs_with_lambda)
-                        if mean_kl > self.stepsize:
-                            return np.inf
-                        else:
-                            return val.astype(np.float64)
-                        #return val.astype(np.float64)
+                        return val.astype(np.float64)
                     return evaluate
 
                 def evaluate_grad(lambda_):
@@ -179,15 +174,13 @@ class UTRPOCont(object):
                         policy.set_param_values(params)
                         grad = compute_grads(*(all_input_values + [lambda_]))
                         flattened_grad = flatten_tensors(map(np.asarray, grad))
-                        #print 'grad norm: ', np.linalg.norm(flattened_grad)
                         return flattened_grad.astype(np.float64)
                     return evaluate
 
                 avg_reward = tot_rewards * 1.0 / n_traj
 
-                ent = policy.compute_entropy(all_pdeps)#0
-                #for pdepd in all_pdeps:
-                #    ent += np.mean(np.sum(-pi_old * np.log(pi_old), axis=1))
+                ent = policy.compute_entropy(all_pdeps)
+
                 itr_log('entropy: %f' % ent)
                 itr_log('perplexity: %f' % np.exp(ent))
 
@@ -232,8 +225,8 @@ class UTRPOCont(object):
                                     fprime=evaluate_grad(lambda_),
                                     maxiter=self.max_opt_itr)
                                 inputs_with_lambda = all_input_values + [lambda_]
-                                mean_kl = compute_mean_kl(*inputs_with_lambda)
-                                itr_log('lambda %f => mean kl %f' % (lambda_, mean_kl))
+                                val, mean_kl = compute_surrogate_kl(*inputs_with_lambda)
+                                itr_log('lambda %f => loss %f, mean kl %f' % (lambda_, val, mean_kl))
                             if np.isnan(mean_kl):
                                 import ipdb
                                 ipdb.set_trace()
@@ -247,9 +240,9 @@ class UTRPOCont(object):
                                     func=evaluate_cost(try_lambda_), x0=cur_params,
                                     fprime=evaluate_grad(try_lambda_),
                                     maxiter=self.max_opt_itr)
-                                inputs_with_lambda = all_input_values + [lambda_]
-                                try_mean_kl = compute_mean_kl(*inputs_with_lambda)
-                                itr_log('lambda=%f => mean kl %f' % (try_lambda_, try_mean_kl))
+                                inputs_with_lambda = all_input_values + [try_lambda_]
+                                try_val, try_mean_kl = compute_surrogate_kl(*inputs_with_lambda)
+                                itr_log('lambda %f => loss %f, mean kl %f' % (try_lambda_, try_val, try_mean_kl))
                             if np.isnan(mean_kl):
                                 import ipdb
                                 ipdb.set_trace()
@@ -262,8 +255,6 @@ class UTRPOCont(object):
                 loss_after = evaluate_cost(0)(policy.get_param_values())
                 itr_log('optimization finished. loss after: %f. mean kl: %f. dloss: %f' % (loss_after, mean_kl, loss_before - loss_after))
                 timestamp = time.strftime("%Y%m%d%H%M%S")
-                #result_x, result_f, result_d = result
-                #itr_log('optimization finished. new loss value: %.3f. mean kl: %.3f' % (result_f, mean_kl))
                 with SimpleMessage("saving result...", exp_logger):
                     to_save = {
                         'cur_policy_params': cur_params,
@@ -276,8 +267,7 @@ class UTRPOCont(object):
                         'mean_kl': mean_kl,
                         'actions': all_actions,
                     }
-                    for idx, pdep in enumerate(all_pdeps):#, actions in zip(itertools.count(), all_pi_old, all_actions):
+                    for idx, pdep in enumerate(all_pdeps):
                         to_save['pdep_%d' % idx] = pdep
-                        #to_save['actions_%d' % idx] = actions
                     np.savez_compressed('%s/itr_%d_%s.npz' % (savedir, itr, timestamp), **to_save)
                 sys.stdout.flush()
