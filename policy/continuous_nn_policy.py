@@ -1,5 +1,5 @@
 import theano
-import theano.tensor as T
+import cgtcompat.tensor as T#theano.tensor as T
 import lasagne.layers as L
 import numpy as np
 from misc.tensor_utils import flatten_tensors, unflatten_tensors
@@ -20,9 +20,9 @@ class ContinuousNNPolicy(ContinuousPolicy):
         action_var = T.matrix("actions")
         mean_var = L.get_output(mean_layer)
         std_var = L.get_output(std_layer)
-        self.probs_var = normal_pdf(action_var, mean_var, std_var)
+        self.pdep_vars = [mean_var, std_var]#
         self.mean_std_func = theano.function([self.input_var], [mean_var, std_var])
-        self.probs_func = theano.function([self.input_var, action_var], self.probs_var)
+        #self.prob_func = theano.function([self.input_var, action_var], normal_pdf(action_var, mean_var, std_var))#self.prob_vars)
         self.params = L.get_all_params(
             L.concat([mean_layer, std_layer]),
             trainable=True

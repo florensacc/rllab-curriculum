@@ -7,6 +7,7 @@ import os
 import numpy as np
 from threading import Lock
 from mjconstants import *
+import mjextra
 
 mjCAT_ALL = 7
 
@@ -25,13 +26,14 @@ class MjViewer(object):
         self.model = None
         self.gui_lock = Lock()
 
-        self._last_button = 0
-        self._last_click_time = 0
-        self._button_left_pressed = False
-        self._button_middle_pressed = False
-        self._button_right_pressed = False
-        self._last_mouse_x = 0
-        self._last_mouse_y = 0
+        self.last_button = 0
+        self.last_click_time = 0
+        self.button_left_pressed = False
+        self.button_middle_pressed = False
+        self.button_right_pressed = False
+        self.last_mouse_x = 0
+        self.last_mouse_y = 0
+        self.frames = []
 
     def set_model(self, model):
         self.model = model
@@ -64,6 +66,12 @@ class MjViewer(object):
         rect.width, rect.height = glfw.get_framebuffer_size(self.window)
         return rect
 
+    def record_frame(self, **kwargs):
+        self.frames.append({ 'pos': self.model.data.qpos, 'extra': kwargs })
+
+    def clear_frames(self):
+        self.frames = []
+
     def render(self):
         if not self.data:
             return
@@ -71,10 +79,43 @@ class MjViewer(object):
         rect = self.get_rect()
         arr = (ctypes.c_double*3)(0, 0, 0)
 
+        #mjlib.mjr_freeContext(byref(self.con))
+        #mjlib.mjv_freeObjects(byref(self.objects))
+
+
         mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(self.objects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
         mjlib.mjv_makeLights(self.model.ptr, self.data.ptr, byref(self.objects))
 
         mjlib.mjv_setCamera(self.model.ptr, self.data.ptr, byref(self.cam))
+
+        prev_pos = self.model.data.qpos
+        prev_alpha = self.model.vis.map_.alpha
+
+        self.model.vis.map_.alpha = 0.01
+        tmpobjects = mjcore.MJVOBJECTS()
+        mjlib.mjv_makeObjects(byref(tmpobjects), 1000)
+        for idx, frame in enumerate(self.frames):
+            #print 'painting fixed'
+            self.model.data.qpos = frame['pos']
+            self.model.forward()
+            #if idx == 0:
+            #    mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(self.objects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
+            #else:
+            mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(tmpobjects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
+            for i in range(tmpobjects.ngeom):
+                alpha = frame['extra'].get('alpha', None)
+                emission = frame['extra'].get('emission', None)
+                #= frame['extra'].get('emission', None)
+                geom = tmpobjects.geoms[i]
+                if alpha is not None:
+                    geom.rgba[3] = alpha
+                if emission is not None:
+                    geom.emission = emission
+            mjextra.append_objects(self.objects, tmpobjects)
+
+        self.model.vis.map_.alpha = prev_alpha
+        self.model.data.qpos = prev_pos
+        self.model.forward()
 
         mjlib.mjv_updateCameraPose(byref(self.cam), rect.width*1.0/rect.height)
 
@@ -115,7 +156,7 @@ class MjViewer(object):
 
         width, height = glfw.get_framebuffer_size(window)
         width1, height = glfw.get_window_size(window)
-        self._scale = width * 1.0 / width1
+        self.scale = width * 1.0 / width1
 
         self.window = window
 
@@ -140,16 +181,16 @@ class MjViewer(object):
     def handle_mouse_move(self, window, xpos, ypos):
 
         # no buttons down: nothing to do
-        if not self._button_left_pressed \
-                and not self._button_middle_pressed \
-                and not self._button_right_pressed:
+        if not self.button_left_pressed \
+                and not self.button_middle_pressed \
+                and not self.button_right_pressed:
             return
 
         # compute mouse displacement, save
-        dx = int(self._scale * xpos) - self._last_mouse_x
-        dy = int(self._scale * ypos) - self._last_mouse_y
-        self._last_mouse_x = int(self._scale * xpos)
-        self._last_mouse_y = int(self._scale * ypos)
+        dx = int(self.scale * xpos) - self.last_mouse_x
+        dy = int(self.scale * ypos) - self.last_mouse_y
+        self.last_mouse_x = int(self.scale * xpos)
+        self.last_mouse_y = int(self.scale * ypos)
 
         # require model
         if not self.model:
@@ -164,9 +205,9 @@ class MjViewer(object):
 
         # determine action based on mouse button
         action = None
-        if self._button_right_pressed:
+        if self.button_right_pressed:
             action = MOUSE_MOVE_H if mod_shift else MOUSE_MOVE_V
-        elif self._button_left_pressed:
+        elif self.button_left_pressed:
             action = MOUSE_ROTATE_H if mod_shift else MOUSE_ROTATE_V
         else:
             action = MOUSE_ZOOM
@@ -180,17 +221,17 @@ class MjViewer(object):
 
     def handle_mouse_button(self, window, button, act, mods):
         # update button state
-        self._button_left_pressed = \
+        self.button_left_pressed = \
                 glfw.get_mouse_button(window, glfw.MOUSE_BUTTON_LEFT) == glfw.PRESS
-        self._button_middle_pressed = \
+        self.button_middle_pressed = \
                 glfw.get_mouse_button(window, glfw.MOUSE_BUTTON_MIDDLE) == glfw.PRESS
-        self._button_right_pressed = \
+        self.button_right_pressed = \
                 glfw.get_mouse_button(window, glfw.MOUSE_BUTTON_RIGHT) == glfw.PRESS
 
         # update mouse position
         x, y = glfw.get_cursor_pos(window)
-        self._last_mouse_x = int(self._scale * x)
-        self._last_mouse_y = int(self._scale * y)
+        self.last_mouse_x = int(self.scale * x)
+        self.last_mouse_y = int(self.scale * y)
 
         if not self.model:
             return
@@ -199,8 +240,8 @@ class MjViewer(object):
 
         # save info
         if act == glfw.PRESS:
-            self._last_button = button
-            self._last_click_time = glfw.get_time()
+            self.last_button = button
+            self.last_click_time = glfw.get_time()
 
         self.gui_lock.release()
 

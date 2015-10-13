@@ -42,15 +42,14 @@ class RemoteSampler(object):
         return self
 
     def request_samples(
-            self, itr, cur_params, max_samples_per_itr,
-            max_steps_per_itr, discount):
+            self, itr, cur_params, max_samples_per_itr, discount):
         if self.n_parallel > 1:
             self.socket.send(cloudpickle.dumps((
-                itr, cur_params, max_samples_per_itr, max_steps_per_itr, discount
+                itr, cur_params, max_samples_per_itr, discount
             )))
             return pickle.loads(self.socket.recv())
         else:
-            return self.sampler.collect_samples(itr, cur_params, max_samples_per_itr, max_steps_per_itr, discount)
+            return self.sampler.collect_samples(itr, cur_params, max_samples_per_itr, discount)
 
 
     def __exit__(self, exc_type, exc_value, traceback):

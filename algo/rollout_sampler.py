@@ -24,19 +24,18 @@ def _init_subprocess(*args):
 
 def _init_mdp_policy(gen_mdp, gen_policy):
     mdp = gen_mdp()
-    input_var = T.matrix('input')  # N*Ds
-    policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
+    policy = gen_policy(mdp)#mdp.observation_shape, mdp.n_actions, input_var)
     return mdp, policy
 
 
 def _subprocess_collect_samples(args):
-    itr, param_values, max_samples, max_steps, discount, queue = args
+    itr, param_values, max_samples, discount, queue = args
     global mdp
     global policy
-    return _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, discount, queue)
+    return _collect_samples(mdp, policy, itr, param_values, max_samples, discount, queue)
 
 
-def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, discount, queue=None):
+def _collect_samples(mdp, policy, itr, param_values, max_samples, discount, queue=None):
     try:
         #total_q_vals = defaultdict(int)
         #action_visits = defaultdict(int)
@@ -48,38 +47,30 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
         policy.set_param_values(param_values)
 
         last_displayed = 0
-        last_n_steps = 0
         last_n_samples = 0
         n_samples = 0
-        n_steps = 0
 
-        state, obs = mdp.sample_initial_state()
+        state, obs = mdp.reset()
 
-        while n_samples < max_samples and n_steps < max_steps:
-            if not np.isinf(max_steps) and n_steps / 100 > last_displayed:
-                last_displayed += 1
-                if queue is not None:
-                    queue.put(('steps', n_steps - last_n_steps))
-                    last_n_steps = n_steps
-            elif not np.isinf(max_samples) and n_samples / 100 > last_displayed:
+        while n_samples < max_samples:
+            if not np.isinf(max_samples) and n_samples / 100 > last_displayed:
                 last_displayed += 1
                 if queue is not None:
                     queue.put(('samples', n_samples - last_n_samples))
                     last_n_samples = n_samples
-            actions, action_probs = policy.get_actions_single(obs)
-            next_state, next_obs, reward, done, steps = mdp.step_single(state, actions)
-            n_steps += steps
+            action, pdep = policy.get_action(obs)
+            next_state, next_obs, reward, done = mdp.step(state, action)
             n_samples += 1
             traj.append({
                 'state': state,
                 'obs': obs,
-                'actions': actions,
+                'action': action,
                 #'next_obs': next_obs,
                 'reward': reward,
-                'action_probs': action_probs
+                'pdep': pdep
             })
             tot_rewards += reward
-            if done or n_samples >= max_samples or n_steps >= max_steps or len(traj) > 100:
+            if done or n_samples >= max_samples:# or len(traj) > 100:
                 n_traj += 1
                 # update all Q-values along this trajectory
                 cum_reward = 0
@@ -94,7 +85,7 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
                 samples.extend(traj)
                 traj = []
                 #if not done:
-                state, obs = mdp.sample_initial_state()
+                state, obs = mdp.reset()
             else:
                 state, obs = next_state, next_obs
 
@@ -103,36 +94,43 @@ def _collect_samples(mdp, policy, itr, param_values, max_samples, max_steps, dis
         all_obs = np.zeros((N,) + policy.observation_shape)
         all_states = np.zeros((N,) + samples[0]["state"].shape)
         Q_est = np.zeros(N)
-        all_pi_old = [np.zeros((N, Da)) for Da in policy.action_dims]
-        all_actions = [np.zeros(N, dtype='uint8') for _ in policy.action_dims]
+        #old_prob_deps 
+        #prob_deps = [
+        pdep_shapes = map(lambda x: x.shape, samples[0]["pdep"])
+        all_pdeps = [np.zeros((N,) + shape) for shape in pdep_shapes]
+        all_actions = np.zeros((N,) + samples[0]["action"].shape, dtype=samples[0]["action"].dtype)# policy.n_actions)#dtype='uint8') for _ in policy.action_dims]
         for idx, sample in enumerate(samples):
+            all_actions[idx] = sample["action"]
+            for iddep, dep in enumerate(sample["pdep"]):
+                all_pdeps[iddep][idx] = dep
             #state, obs, actions, action_probs = tpl
-            for ia, action in enumerate(sample["actions"]):
-                all_actions[ia][idx] = action
-            for ia, probs in enumerate(sample["action_probs"]):
-                all_pi_old[ia][idx,:] = probs
+            #for ia, action in enumerate(sample["actions"]):
+            #    all_actions[ia][idx] = action
+            #for ia, pdep in enumerate(sample["pdep"]):
+            #    all_pdeps[ia][idx,:] = pdep
             #action_pair = (tuple(sample["obs"]), tuple(dwtpl["actions"]))
             Q_est[idx] = sample["return"]#total_q_vals[action_pair] / action_visits[action_pair]
             all_obs[idx] = sample["obs"]
             all_states[idx] = sample["state"]
 
-        return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions, all_states
+        return tot_rewards, n_traj, all_obs, Q_est, all_pdeps, all_actions, all_states
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise
 
 def _combine_samples(results):
-    rewards_list, n_traj_list, all_obs_list, Q_est_list, all_pi_old_list, all_actions_list, all_states_list = map(list, zip(*results))
+    rewards_list, n_traj_list, all_obs_list, Q_est_list, all_pdeps_list, all_actions_list, all_states_list = map(list, zip(*results))
     tot_rewards = sum(rewards_list)
     n_traj = sum(n_traj_list)
     all_obs = np.concatenate(all_obs_list)
     Q_est = np.concatenate(Q_est_list)
-    na = len(all_pi_old_list[0])
-    all_pi_old = [np.concatenate(map(lambda x: x[i], all_pi_old_list)) for i in range(na)]
-    all_actions = [np.concatenate(map(lambda x: x[i], all_actions_list)) for i in range(na)]
+    ndeps = len(all_pdeps_list[0])#
+    #na = len(all_pi_old_list[0])
+    all_pdeps = [np.concatenate(map(lambda x: x[i], all_pdeps_list)) for i in range(ndeps)]
+    all_actions = np.concatenate(all_actions_list)#[np.concatenate(map(lambda x: x[i], all_actions_list)) for i in range(na)]
     all_states = np.concatenate(all_states_list)
-    return tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions, all_states
+    return tot_rewards, n_traj, all_obs, Q_est, all_pdeps, all_actions, all_states
 
 class RolloutSampler(object):
 
@@ -174,7 +172,7 @@ class RolloutSampler(object):
             self._policy = None
         self._setup_called = False
 
-    def collect_samples(self, itr, param_values, max_samples, max_steps, discount):
+    def collect_samples(self, itr, param_values, max_samples, discount):
         if not self._setup_called:
             if self._n_parallel > 1:
                 raise ValueError('Must enclose RolloutSampler in a with clause')
@@ -183,10 +181,9 @@ class RolloutSampler(object):
         if self._n_parallel > 1:
             manager = Manager()
             queue = manager.Queue()
-            args = itr, param_values, max_samples / self._n_parallel, max_steps / self._n_parallel, discount, queue
+            args = itr, param_values, max_samples / self._n_parallel, discount, queue
             map_result = self._pool.map_async(_subprocess_collect_samples, [args] * self._n_parallel)
             n_samples = 0
-            n_steps = 0
             max_progress = 1000000
             cur_progress = 0
             pbar = pyprind.ProgBar(max_progress)
@@ -194,11 +191,9 @@ class RolloutSampler(object):
                 map_result.wait(0.1)
                 while not queue.empty():
                     ret = queue.get_nowait()
-                    if ret[0] == 'steps':
-                        n_steps += ret[1]
-                    elif ret[0] == 'samples':
+                    if ret[0] == 'samples':
                         n_samples += ret[1]
-                new_progress = max(n_samples * max_progress / max_samples, n_steps * max_progress / max_steps)
+                new_progress = n_samples * max_progress / max_samples
                 pbar.update(new_progress - cur_progress)
                 cur_progress = new_progress
             pbar.stop()
@@ -210,7 +205,7 @@ class RolloutSampler(object):
                 raise
             return _combine_samples(result_list)
         else:
-            return _collect_samples(self._mdp, self._policy, itr, param_values, max_samples, max_steps, discount)[:-1]
+            return _collect_samples(self._mdp, self._policy, itr, param_values, max_samples, discount)[:-1]
 
 sampler = RolloutSampler
 

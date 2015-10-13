@@ -28,14 +28,15 @@ def cem(f, x0, init_std, n_samples=100, n_iter=200, best_frac=0.05, extra_std=1.
 def rollout(policy, param_val, mdp, discount):
     prev_x = policy.get_param_values()
     policy.set_param_values(param_val)
-    state, obs = mdp.sample_initial_state()
+    state, obs = mdp.reset()
     timestep = 5.0 / 1000
     rewards = []
     for _ in range(1000):
-        action, action_prob = policy.get_actions_single(obs)
-        next_state, next_obs, reward, done, steps = mdp.step_single(state, action)
+        action, action_prob = policy.get_action(obs)
+        next_state, next_obs, reward, done = mdp.step(state, action)
         rewards.append(reward)
         if done:
+            state, obs = mdp.reset()#next_state, next_obs
             break
         state, obs = next_state, next_obs
         mdp.plot()
@@ -53,14 +54,12 @@ def mk_eval_policy(policy, mdp, max_steps_per_traj, discount):
     def f(x):
         prev_x = policy.get_param_values()
         policy.set_param_values(x)
-        state, obs = mdp.sample_initial_state()
+        state, obs = mdp.reset()
         ret = 0
         rewards = []
-        n_steps = 0
-        while n_steps < max_steps_per_traj:
-            action, action_prob = policy.get_actions_single(obs)
-            next_state, next_obs, reward, done, steps = mdp.step_single(state, action)
-            n_steps += steps
+        for _ in range(max_steps_per_traj):
+            action, action_prob = policy.get_action(obs)
+            next_state, next_obs, reward, done = mdp.step(state, action)
             rewards.append(reward)
             if done:
                 break

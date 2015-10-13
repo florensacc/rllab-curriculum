@@ -1,0 +1,150 @@
+Sun Oct 11 14:07:08 2015
+WARNING: Pre-allocated visual geom buffer is full. Disable some visual elements. Time = 0.0000.
+
+Mon Oct 12 16:14:09 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:09 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:10 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:11 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:11 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:11 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:11 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:12 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:12 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:12 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:12 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:13 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:13 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:13 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:13 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:13 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:14 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
+Mon Oct 12 16:14:19 2015
+WARNING: Nan, Inf or huge value in QACC. The simulation is unstable. Time = 0.0000.
+
