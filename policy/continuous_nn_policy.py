@@ -5,28 +5,30 @@ import numpy as np
 from misc.tensor_utils import flatten_tensors, unflatten_tensors
 from .base import ContinuousPolicy
 
-def normal_pdf(x, mean, std):
+def normal_pdf(x, mean, log_std):
     return T.exp(-T.square((x - mean) / std) / 2) / ((2*np.pi)**0.5 * std)
 
 class ContinuousNNPolicy(ContinuousPolicy):
 
     def __init__(self, *args, **kwargs):
         super(ContinuousNNPolicy, self).__init__(*args, **kwargs)
-        mean_layer, std_layer = self.new_network_outputs(
+        mean_layer = self.new_network_outputs(
             self.observation_shape,
             self.n_actions,
             self.input_var
             )
         action_var = T.matrix("actions")
         mean_var = L.get_output(mean_layer)
-        std_var = L.get_output(std_layer)
-        self.pdep_vars = [mean_var, std_var]#
-        self.mean_std_func = theano.function([self.input_var], [mean_var, std_var])
+        log_std_var = theano.shared(np.zeros((1, self.n_actions)), broadcastable=[True, False])
+        self.log_std_var = log_std_var
+        #log_std_var = L.get_output(log_std_layer)
+        self.pdep_vars = [mean_var, log_std_var]#
+        self.mean_log_std_func = theano.function([self.input_var], [mean_var, log_std_var], allow_input_downcast=True)
         #self.prob_func = theano.function([self.input_var, action_var], normal_pdf(action_var, mean_var, std_var))#self.prob_vars)
         self.params = L.get_all_params(
-            L.concat([mean_layer, std_layer]),
+            L.concat([mean_layer]),#, log_std_layer]),
             trainable=True
-        )
+        ) + [log_std_var]
         self.param_shapes = map(
             lambda x: x.get_value(borrow=True).shape,
             self.params
@@ -36,8 +38,8 @@ class ContinuousNNPolicy(ContinuousPolicy):
             self.params
         )
 
-    def compute_action_mean_std(self, states):
-        return self.mean_std_func(states)
+    def compute_action_mean_log_std(self, states):
+        return self.mean_log_std_func(states)
 
     def compute_action_probs(self, states, actions):
         return self.probs_func(states, actions)

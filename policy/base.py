@@ -70,14 +70,14 @@ class ContinuousPolicy(object):
             self.observation_shape = observation_shape
             self.n_actions = n_actions
 
-    def compute_action_mean_std(self, states):
+    def compute_action_mean_log_std(self, states):
         raise NotImplementedError
 
     def compute_action_probs(self, states, actions):
         raise NotImplementedError
 
-    def compute_action_mean_std_single(self, state):
-        return map(head, self.compute_action_mean_std([state]))
+    def compute_action_mean_log_std_single(self, state):
+        return map(head, self.compute_action_mean_log_std([state]))
 
     def compute_action_probs_single(self, state):
         return map(head, self.compute_action_probs([state]))
@@ -87,12 +87,12 @@ class ContinuousPolicy(object):
     # of length N, where each entry is the density value for that action, under
     # the current policy
     def get_actions(self, states):
-        means, stds = self.compute_action_mean_std(states)
+        means, log_stds = self.compute_action_mean_log_std(states)
         # first get standard normal samples
         rnd = np.random.randn(*means.shape)#size=means.shape)
-        pdeps = [means, stds]#scipy.stats.norm.pdf(rnd)
+        pdeps = [means, log_stds]#scipy.stats.norm.pdf(rnd)
         # transform back to the true distribution
-        actions = rnd * stds + means
+        actions = rnd * np.exp(log_stds) + means
         return actions, pdeps
 
     def get_action(self, state):

@@ -37,3 +37,7 @@ def exp(a):
 def prod(*args, **kwargs):
     if is_theano():
         return T.prod(*args, **kwargs)
+
+def sum(*args, **kwargs):
+    if is_theano():
+        return T.sum(*args, **kwargs)

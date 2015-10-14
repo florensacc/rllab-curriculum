@@ -16,9 +16,9 @@ from lbfgs import lbfgs
 class UTRPOCont(object):
 
     def __init__(
-            self, n_itr=500, max_samples_per_itr=100000,
-            discount=0.99, stepsize=0.015,
-            initial_lambda=1, max_opt_itr=100, exp_name='utrpo',
+            self, n_itr=500, max_samples_per_itr=50000,
+            discount=0.98, stepsize=0.015,#1,#015,
+            initial_lambda=0.5, max_opt_itr=20, exp_name='utrpo',
             n_parallel=multiprocessing.cpu_count(), adapt_lambda=True,
             reuse_lambda=True, sampler_module='algo.rollout_sampler',
             resume_file=None, optimizer_module='scipy.optimize.fmin_l_bfgs_b'):
@@ -45,7 +45,7 @@ class UTRPOCont(object):
         # to compute KL, we actually need the mean and std of the old distribution...
         # what would be a good way to generalize that?
         kl = policy.kl(old_pdep_vars, pdep_vars)
-        lr = policy.likelihood(pdep_vars, action_var) / policy.likelihood(old_pdep_vars, action_var)
+        lr = policy.likelihood_ratio(old_pdep_vars, pdep_vars, action_var)# / (policy.likelihood(old_pdep_vars, action_var) + 1e-8)
         #N_var = input_var.shape[0]
         #kl = 0
         #lr = 1
@@ -166,6 +166,9 @@ class UTRPOCont(object):
                         policy.set_param_values(params)
                         inputs_with_lambda = all_input_values + [lambda_]
                         val, mean_kl = compute_surrogate_kl(*inputs_with_lambda)
+                        #print mean_kl
+                        #if mean_kl > self.stepsize or not np.isfinite(val):
+                        #    return 1e2#8#4#10
                         return val.astype(np.float64)
                     return evaluate
 
@@ -174,6 +177,7 @@ class UTRPOCont(object):
                         policy.set_param_values(params)
                         grad = compute_grads(*(all_input_values + [lambda_]))
                         flattened_grad = flatten_tensors(map(np.asarray, grad))
+                        #import ipdb; ipdb.set_trace()
                         return flattened_grad.astype(np.float64)
                     return evaluate
 
@@ -197,7 +201,7 @@ class UTRPOCont(object):
                     lambda_ = min(10000, max(0.01, lambda_))
 
                 with SimpleMessage('trying lambda=%.3f...' % lambda_, itr_log):
-                    #opt_val = None
+                    opt_val = None
                     
                     #for n_itr, opt_val in enumerate(lbfgs(f=evaluate_cost(lambda_), fgrad=evaluate_grad(lambda_), x0=cur_params, maxiter=20)):
                     #    pass
@@ -251,6 +255,8 @@ class UTRPOCont(object):
                             result = try_result
                             lambda_ = try_lambda_
                             mean_kl = try_mean_kl
+
+                print 'new log std values: ', policy.log_std_var.get_value()
 
                 loss_after = evaluate_cost(0)(policy.get_param_values())
                 itr_log('optimization finished. loss after: %f. mean kl: %f. dloss: %f' % (loss_after, mean_kl, loss_before - loss_after))

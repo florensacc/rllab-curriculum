@@ -13,8 +13,8 @@ import random
 # 6: z-vel (up = +),
 # 7: xvel (forward = +)
 class HopperMDP(MujocoMDP):
-    def __init__(self, horizon=50, timestep=0.02):
-        frame_skip = 10#15#5#1#5#25#10##5
+    def __init__(self, horizon=1000, timestep=0.02):
+        frame_skip = 5#10#15#5#1#5#25#10##5
         ctrl_scaling = 100.0
         self.timestep = timestep
         path = osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/hopper.xml'))
