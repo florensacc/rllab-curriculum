@@ -161,6 +161,20 @@ class UTRPOCont(object):
 
                 all_input_values = [all_obs, Q_est] + all_pdeps + [all_actions]
 
+                to_save = {
+                    'all_obs': all_obs,
+                    'Q_est': Q_est,
+                    'actions': all_actions,
+                    'cur_policy_params': cur_params,
+                }
+                for idx, pdep in enumerate(all_pdeps):
+                    to_save['pdep_%d' % idx] = pdep
+                np.savez_compressed('check.npz', **to_save)
+
+                import sys
+                sys.exit()
+
+
                 def evaluate_cost(lambda_):
                     def evaluate(params):
                         policy.set_param_values(params)
@@ -256,7 +270,8 @@ class UTRPOCont(object):
                             lambda_ = try_lambda_
                             mean_kl = try_mean_kl
 
-                print 'new log std values: ', policy.log_std_var.get_value()
+                #print 'new log std values: ', policy.log_std_var.get_value()
+                policy.print_debug()
 
                 loss_after = evaluate_cost(0)(policy.get_param_values())
                 itr_log('optimization finished. loss after: %f. mean kl: %f. dloss: %f' % (loss_after, mean_kl, loss_before - loss_after))

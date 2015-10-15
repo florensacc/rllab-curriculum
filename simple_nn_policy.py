@@ -11,7 +11,7 @@ import numpy as np
 import inspect
 from misc.console import tweak
 from functools import partial
-#import cgtcompat as theano
+import cgtcompat as cgt
 import cgtcompat.tensor as T
 from algo import CEM
 
@@ -19,7 +19,8 @@ def normal_pdf(x, mean, log_std):
     return T.exp(-T.square((x - mean) / T.exp(log_std)) / 2) / ((2*np.pi)**0.5 * T.exp(log_std))
 
 def log_normal_pdf(x, mean, log_std):
-    return -0.5*T.square((x - mean) / T.exp(log_std)) - np.log((2*np.pi)**0.5) - log_std
+    normalized = (x - mean) / T.exp(log_std)
+    return -0.5*T.square(normalized) - np.log((2*np.pi)**0.5) - log_std
 
 class ParamLayer(L.Layer):
     def __init__(self, incoming, num_units, param=lasagne.init.Constant(0.), trainable=True, **kwargs):
@@ -48,9 +49,6 @@ class OpLayer(L.Layer):
 
     def get_output_for(self, input, **kwargs):
         return self.op(input)
-
-
-
 
 class SimpleNNPolicy(ContinuousNNPolicy):
 
@@ -92,5 +90,9 @@ class SimpleNNPolicy(ContinuousNNPolicy):
         for idx, hidden_size in enumerate(self.hidden_sizes):
             l_hidden = L.DenseLayer(l_hidden, num_units=hidden_size, nonlinearity=self.nonlinearity, W=lasagne.init.Normal(0.1), name="h%d" % idx)
         mean_layer = L.DenseLayer(l_hidden, num_units=n_actions, nonlinearity=None, W=lasagne.init.Normal(0.01), name="output_mean")
-        #log_std_layer = ParamLayer(l_input, num_units=n_actions, param=lasagne.init.Constant(0.), name="output_log_std")
-        return mean_layer#, log_std_layer
+        log_std_layer = ParamLayer(l_input, num_units=n_actions, param=lasagne.init.Constant(0.), name="output_log_std")
+        self.log_std_var = L.get_all_params(log_std_layer, trainable=True)[0]
+        return mean_layer, log_std_layer
+
+    def print_debug(self):
+        print 'log std values: ', cgt.compat.get_value(self.log_std_var)
