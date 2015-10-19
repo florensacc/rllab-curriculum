@@ -25,7 +25,6 @@ def launch_sampler(gen_sampler):
             to_send = (tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions)
             while True:
                 try:
-                    print "sending data..."
                     socket.send(cloudpickle.dumps(to_send))
                     break
                 except MemoryError:

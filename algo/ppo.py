@@ -53,10 +53,9 @@ class PPO(object):
 
     def __init__(
             self, n_itr=500, start_itr=0, max_samples_per_itr=50000,
-            discount=0.98, stepsize=0.015,
-            initial_penalty=1, max_opt_itr=20, max_penalty_itr=10, exp_name='ppo',
-            n_parallel=multiprocessing.cpu_count(), adapt_penalty=True,
-            save_snapshot=True,
+            discount=0.98, stepsize=0.015, initial_penalty=1, max_opt_itr=20,
+            max_penalty_itr=10, exp_name='ppo', adapt_penalty=True,
+            n_parallel=multiprocessing.cpu_count(), save_snapshot=True,
             optimizer=scipy.optimize.fmin_l_bfgs_b):
         self.n_itr = n_itr
         self.start_itr = start_itr
@@ -66,10 +65,10 @@ class PPO(object):
         self.initial_penalty = initial_penalty
         self.max_opt_itr = max_opt_itr
         self.max_penalty_itr = max_penalty_itr
-        self.adapt_penalty = adapt_penalty
-        self.save_snapshot = save_snapshot
-        self.n_parallel = n_parallel
         self.exp_name = exp_name
+        self.adapt_penalty = adapt_penalty
+        self.n_parallel = n_parallel
+        self.save_snapshot = save_snapshot
         self.optimizer = optimizer
 
     def start_worker(self, gen_mdp, gen_policy):
@@ -80,7 +79,7 @@ class PPO(object):
         self.sampler.__exit__()
 
     # Main optimization loop
-    def train(self, gen_mdp, gen_policy):
+    def train(self, gen_mdp, gen_policy, vf):
         logger.push_prefix('[%s] | ' % (self.exp_name))
         mdp = gen_mdp()
         policy = gen_policy(mdp)
@@ -88,9 +87,10 @@ class PPO(object):
         self.start_worker(gen_mdp, gen_policy)
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
-            samples_data = self.obtain_samples(itr, mdp, policy)
+            samples_data = self.obtain_samples(itr, mdp, policy, vf)
             opt_info = self.optimize_policy(itr, policy, samples_data, opt_info)
             self.perform_save_snapshot(itr, samples_data, opt_info)
+            logger.dump_tabular()
             logger.pop_prefix()
         self.shutdown_worker()
         logger.pop_prefix()
@@ -100,7 +100,6 @@ class PPO(object):
         surr_obj, surr_loss, mean_kl = new_surrogate_obj(policy, **train_vars)
         grads = theano.gradient.grad(surr_obj, policy.params)
         input_list = to_input_var_list(**train_vars)
-        logger.log("Compiling functions...")
         f_surr_kl = theano.function(
             input_list, [surr_obj, surr_loss, mean_kl], on_unused_input='ignore',
             allow_input_downcast=True
@@ -117,7 +116,6 @@ class PPO(object):
         )
 
     def obtain_samples(self, itr, mdp, policy):
-        logger.log('collecting samples...')
         cur_params = policy.get_param_values()
         tot_rewards, n_traj, all_obs, Q_est, all_pdeps, all_actions = \
             self.sampler.request_samples(
@@ -130,9 +128,10 @@ class PPO(object):
 
         ent = policy.compute_entropy(all_pdeps)
 
-        logger.log('entropy: %f' % ent)
-        logger.log('perplexity: %f' % np.exp(ent))
-        logger.log('avg reward: %f over %d trajectories' % (avg_reward, n_traj))
+        logger.record_tabular('Entropy', ent)
+        logger.record_tabular('Perplexity', np.exp(ent))
+        logger.record_tabular('AvgReturn', avg_reward)
+        logger.record_tabular('NumTrajs', n_traj)
 
         return dict(
             all_input_values=all_input_values,
@@ -166,7 +165,7 @@ class PPO(object):
             return evaluate
 
         loss_before = evaluate_cost(0)(cur_params)
-        logger.log('loss before: %f' % loss_before)
+        logger.record_tabular('LossBefore', loss_before)
 
         penalty = np.clip(penalty, 1e-2, 1e6)
 
@@ -210,7 +209,9 @@ class PPO(object):
             final_penalty = penalty
 
         loss_after = evaluate_cost(0)(opt_params)
-        logger.log('optimization finished. loss after: %f. mean kl: %f. dloss: %f' % (loss_after, mean_kl, loss_before - loss_after))
+        logger.record_tabular('LossAfter', loss_after)
+        logger.record_tabular('MeanKL', mean_kl)
+        logger.record_tabular('dLoss', loss_before - loss_after)
         policy.set_param_values(opt_params)
 
         return merge_dict(opt_info, dict(
