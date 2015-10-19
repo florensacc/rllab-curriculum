@@ -12,6 +12,21 @@ import itertools
 import re
 from lbfgs import lbfgs
 
+def new_surrogate_obj(
+        policy, input_var, Q_est_var, old_pdep_vars, action_var,
+        lambda_var):
+    pdep_vars = policy.pdep_vars
+    # to compute KL, we actually need the mean and std of the old distribution...
+    # what would be a good way to generalize that?
+    kl = policy.kl(old_pdep_vars, pdep_vars)
+    lr = policy.likelihood_ratio(old_pdep_vars, pdep_vars, action_var)
+    mean_kl = T.mean(kl)
+    # formulate as a minimization problem
+    surrogate_loss = - T.mean(lr * Q_est_var)
+    surrogate_obj = surrogate_loss + lambda_var * mean_kl
+    return surrogate_obj, surrogate_loss, mean_kl
+
+
 # Unconstrained TRPO
 class UTRPOCont(object):
 
@@ -38,61 +53,21 @@ class UTRPOCont(object):
         self.optimizer_module = optimizer_module
         self.resume_file = None
 
-    def new_surrogate_obj(
-            self, policy, input_var, Q_est_var, old_pdep_vars, action_var,
-            lambda_var):
-        pdep_vars = policy.pdep_vars
-        # to compute KL, we actually need the mean and std of the old distribution...
-        # what would be a good way to generalize that?
-        kl = policy.kl(old_pdep_vars, pdep_vars)
-        lr = policy.likelihood_ratio(old_pdep_vars, pdep_vars, action_var)# / (policy.likelihood(old_pdep_vars, action_var) + 1e-8)
-        #N_var = input_var.shape[0]
-        #kl = 0
-        #lr = 1
-        #for probs_var, pi_old_var, action_var in zip(
-        #        probs_vars, pi_old_vars, action_vars):
-        #    kl += T.sum(
-        #            pi_old_var * (
-        #                T.log(pi_old_var) - T.log(probs_var)
-        #            ),
-        #            axis=1
-        #        )
-        #    pi_old_selected = pi_old_var[T.arange(N_var), action_var]
-        #    pi_selected = probs_var[T.arange(N_var), action_var]
-        #    lr *= pi_selected / (pi_old_selected)
-        mean_kl = T.mean(kl)
-        #max_kl = T.max(kl)
-        # formulate as a minimization problem
-        surrogate_loss = - T.mean(lr * Q_est_var)
-        surrogate_obj = surrogate_loss + lambda_var * mean_kl
-        return surrogate_obj, surrogate_loss, mean_kl
-
-    def transform_gen_mdp(self, gen_mdp):
-        return gen_mdp
-
-    def transform_gen_policy(self, gen_policy):
-        return gen_policy
-
     def train(self, gen_mdp, gen_policy):
-
-        gen_mdp = self.transform_gen_mdp(gen_mdp)
-        gen_policy = self.transform_gen_policy(gen_policy)
 
         exp_timestamp = time.strftime("%Y%m%d%H%M%S")
         mdp = gen_mdp()
-        policy = gen_policy(mdp)#mdp.observation_shape, mdp.action_dims, input_var)
+        policy = gen_policy(mdp)
 
         input_var = policy.input_var
-        #input_var = T.matrix('input')  # N*Ds
 
         Q_est_var = T.vector('Q_est')  # N
         old_pdep_vars = [T.matrix('old_pdep_%d' % i) for i in range(len(policy.pdep_vars))]
-        #print len(old_pdep_vars)
         action_var = T.matrix('action')
         lambda_var = T.scalar('lambda')
 
         surrogate_obj, surrogate_loss, mean_kl = \
-            self.new_surrogate_obj(
+            new_surrogate_obj(
                 policy, input_var, Q_est_var, old_pdep_vars, action_var,
                 lambda_var)
 
@@ -111,11 +86,6 @@ class UTRPOCont(object):
                 all_inputs, mean_kl, on_unused_input='ignore',
                 allow_input_downcast=True
                 )
-            #compute_max_kl = theano.function(
-            #    all_inputs, max_kl, on_unused_input='ignore',
-            #    allow_input_downcast=True
-            #    )
-
             compute_grads = theano.function(
                 all_inputs, grads, on_unused_input='ignore',
                 allow_input_downcast=True
@@ -201,20 +171,14 @@ class UTRPOCont(object):
                     lambda_ = min(10000, max(0.01, lambda_))
 
                 with SimpleMessage('trying lambda=%.3f...' % lambda_, itr_log):
-                    opt_val = None
-                    
-                    #for n_itr, opt_val in enumerate(lbfgs(f=evaluate_cost(lambda_), fgrad=evaluate_grad(lambda_), x0=cur_params, maxiter=20)):
-                    #    pass
-                    ##itr_log('took %d itr' % n_itr)
-                    #policy.set_param_values(opt_val)
                     result = optimizer(
                         func=evaluate_cost(lambda_), x0=cur_params,
                         fprime=evaluate_grad(lambda_),
                         maxiter=self.max_opt_itr
                         )
-                    
-                    mean_kl = compute_mean_kl(*(all_input_values + [lambda_]))
-                    itr_log('lambda %f => mean kl %f' % (lambda_, mean_kl))
+                    loss, mean_kl = compute_surrogate_kl(*(all_input_values + [lambda_]))
+                    itr_log('lambda %f => loss %f, mean kl %f' % (lambda_, loss, mean_kl))
+                    opt_params = policy.get_param_values()
                 # do line search on lambda
                 if self.adapt_lambda:
                     max_search = 10
@@ -234,6 +198,7 @@ class UTRPOCont(object):
                             if np.isnan(mean_kl):
                                 import ipdb
                                 ipdb.set_trace()
+                            opt_params = policy.get_param_values()
                             if mean_kl <= self.stepsize:
                                 break
                     else:
@@ -255,9 +220,11 @@ class UTRPOCont(object):
                             result = try_result
                             lambda_ = try_lambda_
                             mean_kl = try_mean_kl
+                            opt_params = policy.get_param_values()
 
                 print 'new log std values: ', policy.log_std_var.get_value()
 
+                policy.set_param_values(opt_params)
                 loss_after = evaluate_cost(0)(policy.get_param_values())
                 itr_log('optimization finished. loss after: %f. mean kl: %f. dloss: %f' % (loss_after, mean_kl, loss_before - loss_after))
                 timestamp = time.strftime("%Y%m%d%H%M%S")

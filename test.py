@@ -32,5 +32,5 @@ def gen_policy(mdp):
 if __name__ == '__main__':
     gen_mdp = HopperMDP
     #gen_policy = genSimpleNNPolicy#lambda mdp: 
-    algo = UTRPOCont(max_samples_per_itr=100000, discount=0.98)#max_samples_per_itr=10, n_parallel=1)
+    algo = UTRPOCont(exp_name='hopper', max_samples_per_itr=100000, discount=0.98)#max_samples_per_itr=10, n_parallel=1)
     algo.train(gen_mdp=gen_mdp, gen_policy=gen_policy)
