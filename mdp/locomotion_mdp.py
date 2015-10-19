@@ -6,19 +6,28 @@ import os.path as osp
 import sys
 import random
 
-# states: [
-# 0: z-coord,
-# 1: x-coord (forward distance),
-# 2: forward pitch along y-axis,
-# 6: z-vel (up = +),
-# 7: xvel (forward = +)
-class HopperMDP(MujocoMDP):
+# DOFs:
+# 0: forward (y-axis) distance
+# 1: z-axis height
+# 2: rotation around x-axis (rotation)
+# 3: rotation around z-axis (turn)
+# 4: rotation around y-axis (shake)
+# 5: x-axis distance
+# 6: right thigh rotation around x axis (up is positive)
+# 7: right thigh rotation around y axis (left is positive)
+# 8: right calf rotation around x axis (up is positive)
+# 9: right foot rotation around x axis (up is positive)
+# 10: left thigh rotation around x axis (up is positive)
+# 11: left thigh rotation around y axis (left is positive)
+# 12: left calf rotation around x axis (up is positive)
+# 13: left foot rotation around x axis (up is positive)
+class LocomotionMDP(MujocoMDP):
     def __init__(self, horizon=1000, timestep=0.02):
         frame_skip = 5#10#15#5#1#5#25#10##5
         ctrl_scaling = 100.0
         self.timestep = timestep
-        path = osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/hopper.xml'))
-        super(HopperMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
+        path = osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/humanoid.xml'))
+        super(HumanoidMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
 
     def get_current_obs(self):
         return np.concatenate([
@@ -87,24 +96,7 @@ class HopperMDP(MujocoMDP):
         #print self.model.data.qpos
         #print self.model.data.xpos
         #import ipdb; ipdb.set_trace()
-    
-    def demo_policy(self, policy):
-        self.start_viewer()
-        self.viewer.clear_frames()
-        s, o = self.reset()
-        while True:
-            a,_ = policy.get_action(o)
-            s, o, r, d = self.step(s, a)#, autoreset=False)
-            if d:
-                s, o = self.reset()
-            #if idx % 10 == 0:
-            #self.viewer.record_frame(alpha=0.5)
-            self.viewer.loop_once()
-            import time
-            time.sleep(0.02)
-        while True:
-            #self.model.step()
-            self.viewer.loop_once()
+
     def demo(self, actions):
 
         self.start_viewer()

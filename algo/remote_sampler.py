@@ -8,7 +8,7 @@ import pydoc
 
 class RemoteSampler(object):
 
-    def __init__(self, sampler_module, n_parallel, gen_mdp, gen_policy, savedir):
+    def __init__(self, sampler_module, n_parallel, gen_mdp, gen_policy):
         self.sampler_module = sampler_module
         self.n_parallel = n_parallel
         self.gen_mdp = gen_mdp
@@ -18,7 +18,6 @@ class RemoteSampler(object):
         self.context = None
         self.socket = None
         self.sampler = None
-        self.savedir = savedir
 
     def __enter__(self):
         if self.n_parallel > 1:
@@ -31,7 +30,7 @@ class RemoteSampler(object):
             )
             socket.recv()
             socket.send(cloudpickle.dumps((
-                self.n_parallel, self.gen_mdp, self.gen_policy, self.savedir)))
+                self.n_parallel, self.gen_mdp, self.gen_policy)))
             socket.recv()
 
             self.context = context

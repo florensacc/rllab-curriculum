@@ -2,7 +2,6 @@
 
 import os
 from policy import DiscreteNNPolicy, ContinuousNNPolicy
-from algo import UTRPO, UTRPO_VTS, UTRPOCont
 from mdp import MDP, AtariMDP, HopperMDP, CartpoleMDP
 import lasagne.layers as L
 import lasagne.nonlinearities as NL

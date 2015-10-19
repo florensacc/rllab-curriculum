@@ -16,7 +16,6 @@ def launch_sampler(gen_sampler):
     socket.send('ack')
     message = socket.recv()
     socket.send('ack')
-    savedir = pickle.loads(message)[-1]
     with gen_sampler(message) as sampler:
         while True:
             message = pickle.loads(socket.recv())
@@ -32,11 +31,3 @@ def launch_sampler(gen_sampler):
                 except MemoryError:
                     print 'Memory error. Retrying...'
                     next
-            print "saving states..."
-            import time
-            timestamp = time.strftime("%Y%m%d%H%M%S")
-            mkdir_p(savedir)
-            to_save = {
-                'all_states': all_states
-            }
-            np.savez_compressed('%s/itr_%d_%s.states' % (savedir, itr, timestamp), **to_save)
