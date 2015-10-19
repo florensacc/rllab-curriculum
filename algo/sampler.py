@@ -20,12 +20,10 @@ def launch_sampler(gen_sampler):
         while True:
             message = pickle.loads(socket.recv())
             itr = message[0]
-            tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions, all_states = \
-                sampler.collect_samples(*message)
-            to_send = (tot_rewards, n_traj, all_obs, Q_est, all_pi_old, all_actions)
+            result = sampler.collect_samples(*message)
             while True:
                 try:
-                    socket.send(cloudpickle.dumps(to_send))
+                    socket.send(cloudpickle.dumps(result))
                     break
                 except MemoryError:
                     print 'Memory error. Retrying...'

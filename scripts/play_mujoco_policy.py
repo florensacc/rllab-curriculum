@@ -1,13 +1,13 @@
 import os
-os.environ['CGT_COMPAT_MODE'] = 'theano'
+os.environ['CGT_COMPAT_MODE'] = 'cgt'
 import numpy as np
 from simple_nn_policy import SimpleNNPolicy
 from mdp import MDP, AtariMDP, HopperMDP, CartpoleMDP
+
 def gen_policy(mdp):
-    return SimpleNNPolicy(mdp, hidden_sizes=[32, 32])#, deterministic=True)
+    return SimpleNNPolicy(mdp, hidden_sizes=[32, 32])
 
-
-data = np.load('itr_141_20151018173655.npz')
+data = np.load('data/hopper/itr_190.npz')
 
 params = data['opt_policy_params']
 mdp = HopperMDP()

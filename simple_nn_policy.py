@@ -57,9 +57,9 @@ class SimpleNNPolicy(ContinuousNNPolicy):
         self.nonlinearity = nonlinearity
         super(SimpleNNPolicy, self).__init__(self.input_var, mdp)
 
-    def kl(self, old_pdep_vars, new_pdep_vars):
-        old_mean, old_log_std = old_pdep_vars
-        new_mean, new_log_std = new_pdep_vars
+    def kl(self, old_pdist_var, new_pdist_var):
+        old_mean, old_log_std = self.split_pdist(old_pdist_var)
+        new_mean, new_log_std = self.split_pdist(new_pdist_var)
         old_std = T.exp(old_log_std)
         new_std = T.exp(new_log_std)
         # mean: (N*A)
@@ -68,19 +68,19 @@ class SimpleNNPolicy(ContinuousNNPolicy):
         # { (μ₁ - μ₂)² + σ₁² - σ₂² } / (2σ₂²) + ln(σ₂/σ₁)
         return T.sum((T.square(old_mean - new_mean) + T.square(old_std) - T.square(new_std)) / (2*T.square(new_std) + 1e-8) + new_log_std - old_log_std, axis=1)
 
-    def likelihood_ratio(self, old_pdep_vars, new_pdep_vars, action_var):
-        old_mean, old_log_std = old_pdep_vars
-        new_mean, new_log_std = new_pdep_vars
+    def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var):
+        old_mean, old_log_std = self.split_pdist(old_pdist_var)
+        new_mean, new_log_std = self.split_pdist(new_pdist_var)
         logli_new = log_normal_pdf(action_var, new_mean, new_log_std)
         logli_old = log_normal_pdf(action_var, old_mean, old_log_std)
         return T.exp(T.sum(logli_new - logli_old, axis=1))
 
-    def compute_entropy(self, pdep):
-        mean, log_std = pdep
+    def compute_entropy(self, pdist):
+        mean, log_std = self.split_pdist(pdist)
         return np.mean(np.sum(log_std + np.log(np.sqrt(2*np.pi*np.e)), axis=1))
 
-    def likelihood(self, pdep_vars, action_var):
-        mean, log_std = pdep_vars
+    def likelihood(self, pdist_var, action_var):
+        mean, log_std = self.split_pdist(pdist_var)
         return T.prod(normal_pdf(action_var, mean, log_std), axis=1)
     
     def new_network_outputs(self, observation_shape, n_actions, input_var):

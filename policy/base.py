@@ -89,15 +89,15 @@ class ContinuousPolicy(object):
     def get_actions(self, states):
         means, log_stds = self.compute_action_mean_log_std(states)
         # first get standard normal samples
-        rnd = np.random.randn(*means.shape)#size=means.shape)
-        pdeps = [means, log_stds]#scipy.stats.norm.pdf(rnd)
+        rnd = np.random.randn(*means.shape)
+        pdists = np.concatenate([means, log_stds], axis=1)
         # transform back to the true distribution
         actions = rnd * np.exp(log_stds) + means
-        return actions, pdeps
+        return actions, pdists
 
     def get_action(self, state):
-        actions, pdeps = self.get_actions([state])
-        return head(actions), map(head, pdeps)
+        actions, pdists = self.get_actions([state])
+        return head(actions), head(pdists)
 
     def get_param_values(self):
         raise NotImplementedError

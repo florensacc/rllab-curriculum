@@ -29,8 +29,7 @@ class RemoteSampler(object):
                 env=dict(os.environ, THEANO_FLAGS="device=cpu")
             )
             socket.recv()
-            socket.send(cloudpickle.dumps((
-                self.n_parallel, self.gen_mdp, self.gen_policy)))
+            socket.send(cloudpickle.dumps((self.n_parallel, self.gen_mdp, self.gen_policy)))
             socket.recv()
 
             self.context = context
@@ -40,16 +39,12 @@ class RemoteSampler(object):
             self.sampler = pydoc.locate(self.sampler_module).sampler(buf=None, gen_mdp=self.gen_mdp, gen_policy=self.gen_policy, n_parallel=self.n_parallel)
         return self
 
-    def request_samples(
-            self, itr, cur_params, max_samples_per_itr, discount):
+    def request_samples(self, itr, cur_params, max_samples_per_itr):
         if self.n_parallel > 1:
-            self.socket.send(cloudpickle.dumps((
-                itr, cur_params, max_samples_per_itr, discount
-            )))
+            self.socket.send(cloudpickle.dumps((itr, cur_params, max_samples_per_itr)))
             return pickle.loads(self.socket.recv())
         else:
-            return self.sampler.collect_samples(itr, cur_params, max_samples_per_itr, discount)
-
+            return self.sampler.collect_samples(itr, cur_params, max_samples_per_itr)
 
     def __exit__(self, exc_type, exc_value, traceback):
         if self.sampler_process:
