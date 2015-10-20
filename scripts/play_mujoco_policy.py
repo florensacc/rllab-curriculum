@@ -12,7 +12,8 @@ data = np.load('data/hopper/itr_190.npz')
 params = data['opt_policy_params']
 mdp = HopperMDP()
 policy = gen_policy(mdp)
-policy.set_param_values(params)
-cur_params = policy.get_param_values()
-import ipdb; ipdb.set_trace()
-mdp.demo_policy(policy)
+print policy.param_shapes
+#policy.set_param_values(params)
+#cur_params = policy.get_param_values()
+#import ipdb; ipdb.set_trace()
+#mdp.demo_policy(policy)

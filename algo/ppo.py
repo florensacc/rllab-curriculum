@@ -92,6 +92,8 @@ class PPO(object):
 
     # Main optimization loop
     def train(self, gen_mdp, gen_policy, gen_vf):
+        savedir = 'data/%s' % (self.exp_name)
+        logger.add_file_output(savedir + '/log.txt')
         logger.push_prefix('[%s] | ' % (self.exp_name))
         mdp = gen_mdp()
         policy = gen_policy(mdp)
@@ -103,9 +105,10 @@ class PPO(object):
             samples_data = self.obtain_samples(itr, mdp, policy, vf)
             opt_info = self.optimize_policy(itr, policy, samples_data, opt_info)
             self.perform_save_snapshot(itr, samples_data, opt_info)
-            logger.dump_tabular()
+            logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
         self.shutdown_worker()
+        logger.remove_file_output(savedir + '/log.txt')
         logger.pop_prefix()
 
     def init_opt(self, mdp, policy, vf):
@@ -165,6 +168,7 @@ class PPO(object):
         # Update vf
         vf.fit(paths)
 
+        logger.record_tabular('Iteration', itr)
         logger.record_tabular('Entropy', ent)
         logger.record_tabular('Perplexity', np.exp(ent))
         logger.record_tabular('AvgReturn', avg_return)
@@ -206,46 +210,45 @@ class PPO(object):
         loss_before = evaluate_cost(0)(cur_params)
         logger.record_tabular('LossBefore', loss_before)
 
-        penalty = np.clip(penalty, 1e-2, 1e6)
+        try_penalty = np.clip(penalty, 1e-2, 1e6)
 
         # search for the best penalty parameter
         penalty_scale_factor = None
         opt_params = None
         max_penalty_itr = self.max_penalty_itr
+        mean_kl = None
         for penalty_itr in range(max_penalty_itr):
-            logger.log('trying penalty=%.3f...' % penalty)
+            logger.log('trying penalty=%.3f...' % try_penalty)
             result = self.optimizer(
-                func=evaluate_cost(penalty), x0=cur_params,
-                fprime=evaluate_grad(penalty),
+                func=evaluate_cost(try_penalty), x0=cur_params,
+                fprime=evaluate_grad(try_penalty),
                 maxiter=self.max_opt_itr
                 )
-            _, loss, mean_kl = f_surr_kl(*(all_input_values + [penalty]))
-            logger.log('penalty %f => loss %f, mean kl %f' % (penalty, loss, mean_kl))
-            if mean_kl < self.stepsize:
+            _, try_loss, try_mean_kl = f_surr_kl(*(all_input_values + [try_penalty]))
+            logger.log('penalty %f => loss %f, mean kl %f' % (try_penalty, try_loss, try_mean_kl))
+            if try_mean_kl < self.stepsize or (penalty_itr == max_penalty_itr - 1 and opt_params is None):
                 opt_params = policy.get_param_values()
-                final_penalty = penalty
+                penalty = try_penalty
+                mean_kl = try_mean_kl
 
             if not self.adapt_penalty:
                 break
 
             # decide scale factor on the first iteration
             if penalty_scale_factor is None:
-                if mean_kl > self.stepsize:
+                if try_mean_kl > self.stepsize:
                     # need to increase penalty
                     penalty_scale_factor = 2
                 else:
                     # can shrink penalty
                     penalty_scale_factor = 0.5
             else:
-                if penalty_scale_factor > 1 and mean_kl <= self.stepsize:
+                if penalty_scale_factor > 1 and try_mean_kl <= self.stepsize:
                     break
-                elif penalty_scale_factor < 1 and mean_kl >= self.stepsize:
+                elif penalty_scale_factor < 1 and try_mean_kl >= self.stepsize:
                     break
-            penalty *= penalty_scale_factor
+            try_penalty *= penalty_scale_factor
 
-        if opt_params is None:
-            opt_params = policy.get_param_values()
-            final_penalty = penalty
 
         loss_after = evaluate_cost(0)(opt_params)
         logger.record_tabular('LossAfter', loss_after)
@@ -256,7 +259,7 @@ class PPO(object):
         return merge_dict(opt_info, dict(
             cur_params=cur_params,
             opt_params=opt_params,
-            penalty=final_penalty,
+            penalty=penalty,
         ))
 
     def perform_save_snapshot(self, itr, samples_data, opt_info):

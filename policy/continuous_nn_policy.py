@@ -24,10 +24,10 @@ class ContinuousNNPolicy(ContinuousPolicy):
         log_std_var = L.get_output(log_std_layer)
         self.pdist_var = T.concatenate([mean_var, log_std_var], axis=1)
         self.mean_log_std_func = theano.function([self.input_var], [mean_var, log_std_var], allow_input_downcast=True)
-        self.params = L.get_all_params(
+        self.params = sorted(L.get_all_params(
             L.concat([mean_layer, log_std_layer]),
             trainable=True
-        )
+        ), key=lambda x: x.name)
         self.param_shapes = map(
             lambda x: theano.compat.get_value(x, borrow=True).shape,
             self.params
