@@ -1,5 +1,8 @@
 import os
 os.environ['CGT_COMPAT_MODE'] = 'theano'
+from sampler import parallel_sampler
+parallel_sampler.init_pool(1)
+
 from policy import DiscreteNNPolicy, ContinuousNNPolicy
 from algo import PPO
 from mdp import MDP, AtariMDP, HopperMDP, CartpoleMDP

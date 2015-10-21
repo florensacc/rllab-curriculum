@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import os.path as osp
 import sys
 import random
+from core.serializable import Serializable
 
 # states: [
 # 0: z-coord,
@@ -12,7 +13,7 @@ import random
 # 2: forward pitch along y-axis,
 # 6: z-vel (up = +),
 # 7: xvel (forward = +)
-class HopperMDP(MujocoMDP):
+class HopperMDP(MujocoMDP, Serializable):
     def __init__(self, horizon=1000, timestep=0.02):
         frame_skip = 5#10#15#5#1#5#25#10##5
         ctrl_scaling = 100.0

@@ -7,11 +7,12 @@ import multiprocessing
 import cgtcompat as theano
 import cgtcompat.tensor as T
 import pydoc
-from remote_sampler import RemoteSampler
+#from remote_sampler import RemoteSampler
 import time
 import itertools
 import re
 import scipy.optimize
+from sampler import parallel_sampler
 
 def new_surrogate_obj(policy, input_var, Q_est_var, old_pdist_var, action_var, penalty_var):
     pdist_var = policy.pdist_var
@@ -83,12 +84,14 @@ class PPO(object):
         self.optimizer = optimizer
         self.gae_lambda = gae_lambda
 
-    def start_worker(self, gen_mdp, gen_policy, gen_vf):
-        self.sampler = RemoteSampler('algo.rollout_sampler', self.n_parallel, gen_mdp, gen_policy)
-        self.sampler.__enter__()
+    def start_worker(self, mdp, policy, vf):#gen_mdp, gen_policy, gen_vf):
+        self.sampler = parallel_sampler#ParallelSampler.acquire()#'algo.rollout_sampler', self.n_parallel, gen_mdp, gen_policy)
+        self.sampler.populate_task(mdp, policy)#, vf)#gen_mdp, gen_policy)
+        #self.sampler.__enter__()
 
     def shutdown_worker(self):
-        self.sampler.__exit__()
+        pass
+        #self.sampler.__exit__()
 
     # Main optimization loop
     def train(self, gen_mdp, gen_policy, gen_vf):
@@ -99,7 +102,7 @@ class PPO(object):
         policy = gen_policy(mdp)
         vf = gen_vf()
         opt_info = self.init_opt(mdp, policy, vf)
-        self.start_worker(gen_mdp, gen_policy, gen_vf)
+        self.start_worker(mdp, policy, vf)#gen_mdp, gen_policy, gen_vf)
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
             samples_data = self.obtain_samples(itr, mdp, policy, vf)
@@ -133,7 +136,7 @@ class PPO(object):
 
     def obtain_samples(self, itr, mdp, policy, vf):
         cur_params = policy.get_param_values()
-        paths = self.sampler.request_samples(itr, cur_params, self.max_samples_per_itr)
+        paths = self.sampler.request_samples(cur_params, self.max_samples_per_itr)
 
         all_baselines = []
         all_returns = []
@@ -156,11 +159,8 @@ class PPO(object):
 
         avg_return = np.mean([sum(path["rewards"]) for path in paths])
 
-        n_traj = len(paths)
+        Q_est = center_qval(all_advantages)
 
-        Q_est = all_advantages
-
-        Q_est = center_qval(Q_est)
         all_input_values = [all_obs, Q_est, all_pdists, all_actions]
 
         ent = policy.compute_entropy(all_pdists)
@@ -172,7 +172,7 @@ class PPO(object):
         logger.record_tabular('Entropy', ent)
         logger.record_tabular('Perplexity', np.exp(ent))
         logger.record_tabular('AvgReturn', avg_return)
-        logger.record_tabular('NumTrajs', n_traj)
+        logger.record_tabular('NumTrajs', len(paths))
         logger.record_tabular('ExplainedVariance', ev)
 
         return dict(

@@ -13,6 +13,7 @@ from functools import partial
 import cgtcompat as cgt
 import cgtcompat.tensor as T
 from algo import CEM
+from core.serializable import Serializable
 
 def normal_pdf(x, mean, log_std):
     return T.exp(-T.square((x - mean) / T.exp(log_std)) / 2) / ((2*np.pi)**0.5 * T.exp(log_std))
@@ -49,13 +50,14 @@ class OpLayer(L.Layer):
     def get_output_for(self, input, **kwargs):
         return self.op(input)
 
-class SimpleNNPolicy(ContinuousNNPolicy):
+class SimpleNNPolicy(ContinuousNNPolicy, Serializable):
 
     def __init__(self, mdp, hidden_sizes=[32,32], nonlinearity=NL.tanh):
         self.input_var = T.matrix('input')
         self.hidden_sizes = hidden_sizes
         self.nonlinearity = nonlinearity
         super(SimpleNNPolicy, self).__init__(self.input_var, mdp)
+        Serializable.__init__(self, mdp, hidden_sizes, nonlinearity)
 
     def kl(self, old_pdist_var, new_pdist_var):
         old_mean, old_log_std = self.split_pdist(old_pdist_var)

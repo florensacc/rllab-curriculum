@@ -1,7 +1,6 @@
 import numpy as np
 from misc.tensor_utils import high_res_normalize
 import scipy.stats
-from core.serializable import Serializable
 
 
 def head(x):
@@ -57,7 +56,7 @@ class DiscretePolicy(object):
     def set_param_values(self, flattened_parameters):
         raise NotImplementedError
 
-class ContinuousPolicy(Serializable):
+class ContinuousPolicy(object):
 
     # observation_shape: Shape of observation
     # n_actions: Number of actions. They are expected to roughly lie in the range -3~3, and they are assumed
@@ -70,6 +69,7 @@ class ContinuousPolicy(Serializable):
         else:
             self.observation_shape = observation_shape
             self.n_actions = n_actions
+        super(ContinuousPolicy, self).__init__()
 
     def compute_action_mean_log_std(self, states):
         raise NotImplementedError
