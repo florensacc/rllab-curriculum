@@ -18,7 +18,7 @@
       <geom name="body1" type="capsule" fromto="0 0 -0.1 0 0 0.3" size="0.001"/>
       
       <joint name="lower_body_slide_fb" type="slide" pos="0 0 0" axis="0 1 0" limited="false"/>
-      <joint name="lower_body_slide_ud" type="slide" pos="0 0 0" axis="0 0 1" limited="false"/>
+      <joint name="lower_body_slide_ud" type="slide" pos="0 0 0" axis="0 0 1" limited="false" />
       <joint name="lower_body_rotation" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.1 0.1"/>
 
       <joint name="lower_body_turn" type="hinge" pos="0 0 0" axis="0 0 1" range="-6.3 6.3"/>
@@ -31,14 +31,14 @@
         <body name="r_thigh_link" pos="0.07 0 0">
           <geom name="rt" type="capsule" fromto="0 0 -0.5 0 0 0" size="0.06" contype="0" conaffinity="0"/>
         
-          <joint name="r_thigh_joint_fb" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.5236 1.3963"/>
+          <joint name="r_thigh_joint_fb" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.1 1.3963"/>
           <joint name="r_thigh_joint_lr" type="hinge" pos="0 0 0" axis="0 1 0" range="-1.0 1.0"/>
 
           <body name="r_calf_frame" pos="0 0 -0.5">
             <body name="r_calf_link" pos="0 0 0">
               <geom name="rc" type="capsule" fromto="0 0 -0.5 0 0 0" size="0.06"/>
             
-              <joint name="r_calf_joint" type="hinge" pos="0 0 0" axis="1 0 0" range="-1.3963 0"/>
+              <joint name="r_calf_joint" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.2 0"/>
               
               <body name="r_foot_link" pos="0 0 -0.5">
                 <geom name="rf" type="capsule" fromto="0 0 0 0 0.2 0" size="0.06"/>
@@ -52,7 +52,7 @@
         <body name="l_thigh_link" pos="-0.07 0 0">
           <geom name="lt" type="capsule" fromto="0 0 -0.5 0 0 0" size="0.06" contype="0" conaffinity="0"/>
           
-          <joint name="l_thigh_joint_fb" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.5236 1.3963"/>
+          <joint name="l_thigh_joint_fb" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.1 1.3963"/>
           <joint name="l_thigh_joint_lr" type="hinge" pos="0 0 0" axis="0 1 0" range="-1.0 1.0"/>
 
           <body name="l_carf_frame" pos="0 0 -0.5">
@@ -60,7 +60,7 @@
             <body name="l_calf_link" pos="0 0 0">
               <geom name="lc" type="capsule" fromto="0 0 -0.5 0 0 0" size="0.06"/>
               
-              <joint name="l_calf_joint" type="hinge" pos="0 0 0" axis="1 0 0" range="-1.3963 0"/>
+              <joint name="l_calf_joint" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.2 0"/>
 
               <body name="l_foot_link" pos="0 0 -0.5">
                 <geom name="lf" type="capsule" fromto="0 0 0 0 0.2 0" size="0.06"/>
@@ -75,6 +75,9 @@
 
   </worldbody>
   <actuator>
+    <!--<motor joint="lower_body_slide_fb" ctrlrange="-50 50" ctrllimited="true"/>
+    <motor joint="lower_body_slide_ud" ctrlrange="-50 50" ctrllimited="true"/>-->
+    <motor joint="r_thigh_joint_fb" ctrlrange="-25.0 25.0" ctrllimited="true"/>
     <motor joint="r_thigh_joint_fb" ctrlrange="-25.0 25.0" ctrllimited="true"/>
     <motor joint="r_calf_joint" ctrlrange="-20.0 20.0" ctrllimited="true"/>
     <motor joint="r_foot_joint" ctrlrange="-20.0 20.0" ctrllimited="true"/>

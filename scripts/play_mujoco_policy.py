@@ -3,6 +3,11 @@ os.environ['CGT_COMPAT_MODE'] = 'theano'
 import numpy as np
 from simple_nn_policy import SimpleNNPolicy, ParamLayer, OpLayer
 from mdp import MDP, AtariMDP, HopperMDP, CartpoleMDP
+import lasagne.layers as L
+import lasagne.nonlinearities as NL
+import lasagne
+import cgtcompat as cgt
+import cgtcompat.tensor as T
 
 class ModifiedNNPolicy(SimpleNNPolicy):
     def new_network_outputs(self, observation_shape, n_actions, input_var):
@@ -19,23 +24,26 @@ class ModifiedNNPolicy(SimpleNNPolicy):
         #addn_std_layer = ParamLayer(l_input, num_units=n_actions, param=lasagne.init.Constant(1.))#, name="output_log_std")
         #std_layer = L.ElemwiseSumLayer([l_base_std, l_addn_std])
         log_std_layer = OpLayer(std_layer, T.log)
-        self.log_std_var = L.get_all_params(log_std_layer, trainable=True)[0]
+        self.log_std_vars = L.get_all_params(log_std_layer, trainable=True)
         return mean_layer, log_std_layer
 
 
 
 def gen_policy(mdp):
-    return ModifiedNNPolicy(mdp, hidden_sizes=[32, 32])
+    return SimpleNNPolicy(mdp, hidden_sizes=[32, 32])
 
 print 'reading data'
-data = np.load('data/hopper_per_state_std_30k/itr_48.npz')
+data = np.load('itr_452.npz')
 print 'read data'
 
 params = data['cur_policy_params']
+print params.shape
 mdp = HopperMDP()
 policy = gen_policy(mdp)
-print policy.param_shapes
-#policy.set_param_values(params)
+print policy.get_param_values().shape
+#print policy.param_shapes
+policy.set_param_values(params)
+# zero out the variance
+policy.log_std_vars[0].set_value(np.ones_like(policy.log_std_vars[0].get_value()) * -100)
 #cur_params = policy.get_param_values()
-#import ipdb; ipdb.set_trace()
-#mdp.demo_policy(policy)
+mdp.demo_policy(policy)

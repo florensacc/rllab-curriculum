@@ -2,10 +2,10 @@ import theano.tensor as T
 import numpy as np
 from misc.console import log
 import time
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Pool
 from Queue import Empty
 
-def cem(f, x0, init_std, n_samples=100, n_iter=200, best_frac=0.05, extra_std=1.0, extra_decay_time=100):
+def cem(f, x0, init_std, n_samples=100, n_iter=100, best_frac=0.05, extra_std=1.0, extra_decay_time=100):
 
     cur_std = init_std
     cur_mean = x0
@@ -57,9 +57,11 @@ def mk_eval_policy(policy, mdp, max_steps_per_traj, discount):
         state, obs = mdp.reset()
         ret = 0
         rewards = []
+        #mdp.start_viewer()
         for _ in range(max_steps_per_traj):
             action, action_prob = policy.get_action(obs)
             next_state, next_obs, reward, done = mdp.step(state, action)
+            #mdp.viewer.loop_once()
             rewards.append(reward)
             if done:
                 break
@@ -68,6 +70,7 @@ def mk_eval_policy(policy, mdp, max_steps_per_traj, discount):
         for reward in rewards[::-1]:
             ret = ret*discount + reward
         policy.set_param_values(prev_x)
+        #mdp.stop_viewer()
         return ret
     return f
 
@@ -77,12 +80,12 @@ class CEM(object):
 
     def __init__(
             self,
-            max_steps_per_traj=1000,
-            samples_per_itr=100,
+            max_steps_per_traj=100,
+            samples_per_itr=10,
             n_itr=100,
             best_frac=0.1,
             extra_std=1.0,
-            extra_decay_time=50,
+            extra_decay_time=400,
             exp_name='cem',
             discount=0.99):
         self.max_steps_per_traj = max_steps_per_traj
@@ -96,8 +99,7 @@ class CEM(object):
 
     def train(self, gen_mdp, gen_policy):
         mdp = gen_mdp()
-        input_var = T.matrix('input')  # N*Ds
-        policy = gen_policy(input_var, mdp)
+        policy = gen_policy(mdp)
 
         x0 = policy.get_param_values()
         init_std = np.ones(x0.shape) * 10
@@ -106,9 +108,9 @@ class CEM(object):
 
         can_demo = getattr(mdp, 'start_viewer', None) is not None
 
-        def start_mdp_viewer(_mdp, queue):
-            global mdp
+        def start_mdp_viewer(_mdp, gen_policy, queue):
             mdp = _mdp
+            policy = gen_policy(mdp)
             mdp.start_viewer()
             try:
                 while True:
@@ -122,11 +124,11 @@ class CEM(object):
                         if msg[0] == 'stop':
                             break
                         elif msg[0] == 'demo':
-                            itr, policy, cur_mean = msg[1:]
+                            itr, cur_mean = msg[1:]
                             print('demoing itr %d' % itr)
                             rollout(policy, cur_mean, mdp, self.discount)
                         elif msg[0] == 'loop':
-                            itr, policy, cur_mean = msg[1:]
+                            itr, cur_mean = msg[1:]
                             print('demoing itr %d' % itr)
                             while True:
                                 rollout(policy, cur_mean, mdp, self.discount)
@@ -137,14 +139,14 @@ class CEM(object):
 
         if can_demo:
             q = Queue()
-            p = Process(target=start_mdp_viewer, args=(mdp, q))
+            p = Process(target=start_mdp_viewer, args=(mdp, gen_policy, q))
             p.start()
 
         for itr, data in enumerate(cem(f, x0, init_std)):
             cur_mean, cur_std, avg_reward, best_x, max_reward = data
             log('itr %d: avg performance %f; best performance %f; median std: %f' % (itr, avg_reward, max_reward, np.median(cur_std)))
             if can_demo:
-                q.put(['demo', itr, policy, best_x])
+                q.put(['demo', itr, best_x])
 
         if can_demo:
             q.put(['loop', itr, policy, best_x])

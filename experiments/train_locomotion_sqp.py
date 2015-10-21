@@ -1,11 +1,11 @@
-from mdp import PendulumMDP, HopperMDP, GripperMDP
+from mdp.locomotion_mdp import LocomotionMDP
 import numpy as np
 import scipy as sp
 from gurobipy import *
 
 def run_test():
 
-    mdp = HopperMDP()#GripperMDP()#GripperMDP()#HopperMDP()#PendulumMDP()
+    mdp = LocomotionMDP()
     x0, _ = mdp.reset()
 
     from algo.optim.ilqg import jacobian, grad, linearize, forward_pass
@@ -33,7 +33,9 @@ def run_test():
     Du = mdp.n_actions
     Dx = len(x0)
     #print Du
-    uinit = (np.zeros((N, Du)))#random.rand(N, Du)-0.5)*0.1#0
+    uinit = (np.random.rand(N, Du)-0.5)*0.1#0
+    #uinit[:, 0] = 1
+    #uinit[:, 1] = 1
     #uinit = (np.random.rand(N, Du)-0.5)*2#0.1#0
 
     #u = uinit
@@ -48,13 +50,13 @@ def run_test():
     improve_ratio_threshold = 0.25#0.25
     trust_shrink_ratio = 0.6
     trust_expand_ratio = 1.5
-    max_merit_itr = 5
+    max_merit_itr = 1#5
     merit_increase_ratio = 10
     min_trust_box_size = 1e-4
     min_model_improve = 1e-4
 
     # adaptive scaling config
-    min_scaling = 1#1e-2
+    min_scaling = 5#1e-2
     max_scaling = 1e6
     decay_rate = 0.9
 
@@ -74,7 +76,7 @@ def run_test():
 
     sco_itr = 0
 
-    merit = 100#00#0.0
+    merit = 1#00#00#0.0
     # try shooting first
     for merit_itr in range(max_merit_itr):
         trust_box_size = 0.1
@@ -96,7 +98,7 @@ def run_test():
                 dx[t][k] = model.addVar(lb=xlb[k]-x[t][k], ub=xub[k]-x[t][k], name='dx_%d_%d' % (t, k))
         for t in range(N):
             for k in range(Du):
-                du[t][k] = model.addVar(lb=-2-u[t][k], ub=2-u[t][k], name='du_%d_%d' % (t, k))
+                du[t][k] = model.addVar(lb=-GRB.INFINITY, ub=GRB.INFINITY, name='du_%d_%d' % (t, k))
         norm_aux = [[None] * Dx for _ in range(N)]
         for t in range(N):
             for k in range(Dx):
@@ -108,15 +110,18 @@ def run_test():
 
         while True:
             # W/ this line: shooting; w/o: collocation
-            x, _, _ = forward_pass(x[0], u, sysdyn, cost_func, final_cost_func)
+            # x, _, _ = forward_pass(x[0], u, sysdyn, cost_func, final_cost_func)
 
+            mdp.demo(u, True)
             scale_t += 1
             x_scale = np.clip((decay_rate * x_scale + (1 - decay_rate) * x), min_scaling, max_scaling)
             u_scale = np.clip((decay_rate * u_scale + (1 - decay_rate) * u), min_scaling, max_scaling)
 
             xref = [None] + [sysdyn(x[t], u[t]) for t in range(N)]
 
+            print 'linearizing'
             fx, fu, cx, cu, cxx, cxu, cuu = linearize(x, u, sysdyn, cost_func, final_cost_func)
+            print 'linearized'
             
             loss = ip(cx[N], dx[N]) + quad_form(dx[N], cxx[N]) + final_cost_func(x[N])
 

@@ -1,6 +1,7 @@
 import numpy as np
 from misc.tensor_utils import high_res_normalize
 import scipy.stats
+from core.serializable import Serializable
 
 
 def head(x):
@@ -56,7 +57,7 @@ class DiscretePolicy(object):
     def set_param_values(self, flattened_parameters):
         raise NotImplementedError
 
-class ContinuousPolicy(object):
+class ContinuousPolicy(Serializable):
 
     # observation_shape: Shape of observation
     # n_actions: Number of actions. They are expected to roughly lie in the range -3~3, and they are assumed

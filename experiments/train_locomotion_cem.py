@@ -1,8 +1,8 @@
 # encoding=utf-8
-
 import os
 from policy import DiscreteNNPolicy, ContinuousNNPolicy
 from mdp import MDP, AtariMDP, HopperMDP, CartpoleMDP
+
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne
@@ -13,6 +13,9 @@ from functools import partial
 import cgtcompat as cgt
 import cgtcompat.tensor as T
 from algo import CEM
+
+from algo import CEM
+from mdp.locomotion_mdp import LocomotionMDP
 
 def normal_pdf(x, mean, log_std):
     return T.exp(-T.square((x - mean) / T.exp(log_std)) / 2) / ((2*np.pi)**0.5 * T.exp(log_std))
@@ -51,7 +54,7 @@ class OpLayer(L.Layer):
 
 class SimpleNNPolicy(ContinuousNNPolicy):
 
-    def __init__(self, mdp, hidden_sizes=[32,32], nonlinearity=NL.tanh):
+    def __init__(self, mdp, hidden_sizes=[], nonlinearity=NL.tanh):
         self.input_var = T.matrix('input')
         self.hidden_sizes = hidden_sizes
         self.nonlinearity = nonlinearity
@@ -73,7 +76,6 @@ class SimpleNNPolicy(ContinuousNNPolicy):
         new_mean, new_log_std = self.split_pdist(new_pdist_var)
         logli_new = log_normal_pdf(action_var, new_mean, new_log_std)
         logli_old = log_normal_pdf(action_var, old_mean, old_log_std)
-        #return T.sum(T.exp(logli_new - logli_old), axis=1)
         return T.exp(T.sum(logli_new - logli_old, axis=1))
 
     def compute_entropy(self, pdist):
@@ -90,9 +92,11 @@ class SimpleNNPolicy(ContinuousNNPolicy):
         for idx, hidden_size in enumerate(self.hidden_sizes):
             l_hidden = L.DenseLayer(l_hidden, num_units=hidden_size, nonlinearity=self.nonlinearity, W=lasagne.init.Normal(0.1), name="h%d" % idx)
         mean_layer = L.DenseLayer(l_hidden, num_units=n_actions, nonlinearity=None, W=lasagne.init.Normal(0.01), name="output_mean")
-        log_std_layer = ParamLayer(l_input, num_units=n_actions, param=lasagne.init.Constant(0.), name="output_log_std")
-        self.log_std_vars = L.get_all_params(log_std_layer, trainable=True)
+        log_std_layer = ParamLayer(l_input, num_units=n_actions, param=lasagne.init.Constant(-99999), name="output_log_std", trainable=False)
+        #self.log_std_var = L.get_all_params(log_std_layer, trainable=True)[0]
         return mean_layer, log_std_layer
 
-    #def print_debug(self):
-    #    print 'log std values: ', cgt.compat.get_value(self.log_std_var)
+    def print_debug(self):
+        print 'log std values: ', cgt.compat.get_value(self.log_std_var)
+algo = CEM()
+algo.train(LocomotionMDP, SimpleNNPolicy)

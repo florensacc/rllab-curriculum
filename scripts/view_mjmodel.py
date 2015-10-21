@@ -13,12 +13,12 @@ viewer.start()
 
 
 
-#one_hot = np.zeros_like(model.data.qpos)
-#one_hot[10,0] += 1
-#model.data.qpos = one_hot
+one_hot = np.zeros_like(model.data.qpos)
+#one_hot[1,0] += 1
+model.data.qpos = one_hot
 #print "state:", model.data.qpos
 model.forward()
-for _ in range(1000):#1000):
+for _ in range(0):#1000):#1000):
     for __ in range(30):
         model.step()
     viewer.loop_once()

@@ -1,4 +1,5 @@
-class MDP(object):
+from core.serializable import Serializable
+class MDP(Serializable):
     def step(self, action):
         raise NotImplementedError
 
