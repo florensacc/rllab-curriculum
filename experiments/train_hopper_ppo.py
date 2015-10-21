@@ -19,7 +19,6 @@ from simple_nn_policy import SimpleNNPolicy, ParamLayer, OpLayer
 
 np.random.seed(0)
 
-
 class ModifiedNNPolicy(SimpleNNPolicy):
     def new_network_outputs(self, observation_shape, n_actions, input_var):
         l_input = L.InputLayer(shape=(None, observation_shape[0]), input_var=input_var)
@@ -56,7 +55,6 @@ class HopperValueFunction(object):
         return np.concatenate([o, o**2, al, al**2, al**3, np.ones((l,1))], axis=1)
 
     def fit(self, paths):
-        #return
         featmat = np.concatenate([self._features(path) for path in paths])
         returns = np.concatenate([path["returns"] for path in paths])
         self.coeffs = np.linalg.lstsq(featmat, returns)[0]
@@ -64,23 +62,11 @@ class HopperValueFunction(object):
     def predict(self, path):
         if self.coeffs is None:
             return np.zeros(len(path["rewards"]))
-        #import ipdb; ipdb.set_trace()
         return self._features(path).dot(self.coeffs)
 
-def gen_policy(mdp):
-    policy = SimpleNNPolicy(mdp, hidden_sizes=[32, 32])
-    #data = np.load('data/hopper/itr_190.npz')
-    #data = np.load('itr_184_20151018174527.npz')
-    #policy.set_param_values(data['opt_policy_params'])
-    return policy
-
-def gen_vf():
-    vf = HopperValueFunction()
-    #data = np.load('data/hopper/itr_190.npz')
-    #vf.set_param_values(data['vf_params'])
-    return vf
-
 if __name__ == '__main__':
-    gen_mdp = HopperMDP
+    mdp = HopperMDP()
+    policy = SimpleNNPolicy(mdp, hidden_sizes=[32, 32])
+    vf = HopperValueFunction()
     algo = PPO(exp_name='hopper_10k', max_samples_per_itr=10000, discount=0.98, n_parallel=4, stepsize=0.0016)
-    algo.train(gen_mdp=gen_mdp, gen_policy=gen_policy, gen_vf=gen_vf)
+    algo.train(mdp, policy, vf)

@@ -7,7 +7,6 @@ import multiprocessing
 import cgtcompat as theano
 import cgtcompat.tensor as T
 import pydoc
-#from remote_sampler import RemoteSampler
 import time
 import itertools
 import re
@@ -84,25 +83,19 @@ class PPO(object):
         self.optimizer = optimizer
         self.gae_lambda = gae_lambda
 
-    def start_worker(self, mdp, policy, vf):#gen_mdp, gen_policy, gen_vf):
-        self.sampler = parallel_sampler#ParallelSampler.acquire()#'algo.rollout_sampler', self.n_parallel, gen_mdp, gen_policy)
-        self.sampler.populate_task(mdp, policy)#, vf)#gen_mdp, gen_policy)
-        #self.sampler.__enter__()
+    def start_worker(self, mdp, policy, vf):
+        parallel_sampler.populate_task(mdp, policy)
 
     def shutdown_worker(self):
         pass
-        #self.sampler.__exit__()
 
     # Main optimization loop
-    def train(self, gen_mdp, gen_policy, gen_vf):
+    def train(self, mdp, policy, vf):
         savedir = 'data/%s' % (self.exp_name)
         logger.add_file_output(savedir + '/log.txt')
         logger.push_prefix('[%s] | ' % (self.exp_name))
-        mdp = gen_mdp()
-        policy = gen_policy(mdp)
-        vf = gen_vf()
         opt_info = self.init_opt(mdp, policy, vf)
-        self.start_worker(mdp, policy, vf)#gen_mdp, gen_policy, gen_vf)
+        self.start_worker(mdp, policy, vf)
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
             samples_data = self.obtain_samples(itr, mdp, policy, vf)
@@ -136,7 +129,7 @@ class PPO(object):
 
     def obtain_samples(self, itr, mdp, policy, vf):
         cur_params = policy.get_param_values()
-        paths = self.sampler.request_samples(cur_params, self.max_samples_per_itr)
+        paths = parallel_sampler.request_samples(cur_params, self.max_samples_per_itr)
 
         all_baselines = []
         all_returns = []
