@@ -236,8 +236,8 @@ class PPO(object):
                 break
 
             # decide scale factor on the first iteration
-            if penalty_scale_factor is None:
-                if try_mean_kl > self.stepsize:
+            if penalty_scale_factor is None or np.isnan(try_mean_kl):
+                if try_mean_kl > self.stepsize or np.isnan(try_mean_kl):
                     # need to increase penalty
                     penalty_scale_factor = 2
                 else:

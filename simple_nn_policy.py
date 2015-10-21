@@ -75,6 +75,7 @@ class SimpleNNPolicy(ContinuousNNPolicy):
         logli_old = log_normal_pdf(action_var, old_mean, old_log_std)
         #return T.sum(T.exp(logli_new - logli_old), axis=1)
         return T.exp(T.sum(logli_new - logli_old, axis=1))
+        #return T.sum(logli_new, axis=1)
 
     def compute_entropy(self, pdist):
         mean, log_std = self.split_pdist(pdist)
