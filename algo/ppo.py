@@ -181,6 +181,7 @@ class PPO(object):
             Q_est=Q_est,
             all_actions=all_actions,
             all_pdists=all_pdists,
+            paths=paths,
             vf_params=vf.get_param_values(),
         )
 
@@ -250,11 +251,11 @@ class PPO(object):
             try_penalty *= penalty_scale_factor
 
 
+        policy.set_param_values(opt_params)
         loss_after = evaluate_cost(0)(opt_params)
         logger.record_tabular('LossAfter', loss_after)
         logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('dLoss', loss_before - loss_after)
-        policy.set_param_values(opt_params)
 
         return merge_dict(opt_info, dict(
             cur_params=cur_params,
@@ -275,6 +276,7 @@ class PPO(object):
                 'all_obs': samples_data['all_obs'],
                 'Q_est': samples_data['Q_est'],
                 'penalty': opt_info['penalty'],
+                #'paths': samples_data['paths'],
                 'actions': samples_data['all_actions'],
                 'pdists': samples_data['all_pdists'],
             }

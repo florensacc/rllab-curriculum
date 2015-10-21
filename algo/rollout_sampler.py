@@ -32,7 +32,10 @@ def _subprocess_collect_samples(args):
     itr, param_values, max_samples, queue = args
     global mdp
     global policy
-    return _collect_samples(mdp, policy, itr, param_values, max_samples, queue)
+    try:
+        return _collect_samples(mdp, policy, itr, param_values, max_samples, queue)
+    except Exception as e:
+        import ipdb; ipdb.set_trace()
 
 def rollout(mdp, policy, max_length=np.inf):
     states = []
