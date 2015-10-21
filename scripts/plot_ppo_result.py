@@ -41,10 +41,14 @@ def plot_and_compare(*exps):
     plt.show()
 
 plot_and_compare(
-    ('data/hopper_vf_100k/log.txt', 'hopper_vf_100k'),
-    ('data/hopper_vf_100k_log/log.txt', 'hopper_vf_100k_log'),
-    ('data/hopper_vf_100k_sum/log.txt', 'hopper_vf_100k_sum'),
-    ('data/hopper_no_vf_100k/log.txt', 'hopper_no_vf_100k'),
-    ('data/hopper_vf/log.txt', 'hopper_vf'),
-    ('data/hopper_no_vf/log.txt', 'hopper_no_vf'),
+    ('data/hopper_30k/log.txt', 'hopper_30k'),
+    ('data/hopper_30k_log/log.txt', 'hopper_30k_log'),
+    ('data/hopper_30k_sum/log.txt', 'hopper_30k_sum'),
+    ('data/hopper_per_state_std_30k/log.txt', 'hopper_per_state_std_30k'),
+    #('data/hopper_vf_100k/log.txt', 'hopper_vf_100k'),
+    #('data/hopper_vf_100k_log/log.txt', 'hopper_vf_100k_log'),
+    #('data/hopper_vf_100k_sum/log.txt', 'hopper_vf_100k_sum'),
+    #('data/hopper_no_vf_100k/log.txt', 'hopper_no_vf_100k'),
+    #('data/hopper_vf/log.txt', 'hopper_vf'),
+    #('data/hopper_no_vf/log.txt', 'hopper_no_vf'),
 )

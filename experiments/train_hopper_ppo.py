@@ -79,5 +79,5 @@ def gen_vf():
 
 if __name__ == '__main__':
     gen_mdp = HopperMDP
-    algo = PPO(exp_name='hopper_per_state_std_30k', max_samples_per_itr=30000, discount=0.99, n_parallel=4, stepsize=0.005)
+    algo = PPO(exp_name='hopper_10k', max_samples_per_itr=10000, discount=0.98, n_parallel=4, stepsize=0.0016)
     algo.train(gen_mdp=gen_mdp, gen_policy=gen_policy, gen_vf=gen_vf)
