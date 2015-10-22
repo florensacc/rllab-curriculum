@@ -1,4 +1,3 @@
-from .trpo import TRPO
 from .ppo import PPO
 from .dqn import DQN
 from .cem import CEM
