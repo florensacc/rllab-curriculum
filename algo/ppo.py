@@ -1,15 +1,10 @@
 import numpy as np
-import sys
-from misc.console import SimpleMessage, prefix_log, tee_log, mkdir_p
+from misc.console import mkdir_p
 from misc.tensor_utils import flatten_tensors
 import misc.logger as logger
 import multiprocessing
 import cgtcompat as theano
 import cgtcompat.tensor as T
-import pydoc
-import time
-import itertools
-import re
 import scipy.optimize
 from sampler import parallel_sampler
 
