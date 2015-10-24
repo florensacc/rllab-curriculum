@@ -16,6 +16,11 @@ class MDP(object):
     def observation_shape(self):
         raise NotImplementedError
 
+    @property
+    def action_dtype(self):
+        raise NotImplementedError
+
+
 class ControlMDP(MDP):
     
     def __init__(self, horizon):

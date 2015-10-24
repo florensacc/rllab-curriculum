@@ -52,6 +52,10 @@ class MujocoPolicy(LasagnePolicy, Serializable):
         return self._input_var
 
     @overrides
+    def new_action_var(self, name):
+        return T.matrix(name)
+
+    @overrides
     def kl(self, old_pdist_var, new_pdist_var):
         old_mean, old_log_std = self._split_pdist(old_pdist_var)
         new_mean, new_log_std = self._split_pdist(new_pdist_var)

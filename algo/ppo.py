@@ -22,7 +22,7 @@ def get_train_vars(policy):
     input_var = policy.input_var
     Q_est_var = T.vector('Q_est') # N
     old_pdist_var = T.matrix('old_pdist')
-    action_var = T.matrix('action')
+    action_var = policy.new_action_var('action')
     penalty_var = T.scalar('penalty')
     return dict(
         input_var=input_var,

@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import os.path as osp
 import sys
 import random
+from misc.overrides import overrides
 
 class MujocoMDP(ControlMDP):
 
@@ -26,13 +27,21 @@ class MujocoMDP(ControlMDP):
         super(MujocoMDP, self).__init__(horizon)
 
     @property
+    @overrides
     def observation_shape(self):
         return self.get_current_obs().shape
 
     @property
+    @overrides
     def n_actions(self):
         return len(self.model.data.ctrl)
 
+    @property
+    @overrides
+    def action_dtype(self):
+        return theano.config.floatX
+
+    @overrides
     def reset(self):
         self.model.data.qpos = self.init_qpos
         self.model.data.qvel = self.init_qvel

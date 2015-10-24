@@ -20,6 +20,9 @@ class Policy(object):
     def input_var(self):
         raise NotImplementedError
 
+    def new_action_var(self):
+        raise NotImplementedError
+
     # Only needed for stochastic policies
 
     def kl(self, old_pdist_var, new_pdist_var):
