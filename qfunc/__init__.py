@@ -1,1 +1,3 @@
-from .discrete_nn_q_func import DiscreteNNQFunc
+from .lasagne_q_function import LasagneQFunction
+from .atari_ram_q_function import AtariRAMQFunction
+from .tabular_q_function import TabularQFunction

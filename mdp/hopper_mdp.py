@@ -34,7 +34,7 @@ class HopperMDP(MujocoMDP, Serializable):
         next_obs = self.get_obs(next_state)
         posbefore = state[1]
         posafter = next_state[1]
-        reward = (posafter - posbefore) / self.timestep + 3.0
+        reward = (posafter - posbefore) / self.timestep# + 3.0
         notdone = np.isfinite(state).all() and (np.abs(state[3:])<100).all() and (state[0] > .7) and (abs(state[2]) < .2)
         done = not notdone
         #if done:

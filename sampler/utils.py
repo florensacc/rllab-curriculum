@@ -21,6 +21,8 @@ def rollout(mdp, policy, max_length=np.inf):
         if d:
             break
         s, o = next_s, next_o
+    states.append(next_s)
+    observations.append(next_o)
     return dict(
         states=np.vstack(states),
         observations=np.vstack(observations),

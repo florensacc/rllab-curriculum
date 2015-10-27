@@ -6,7 +6,8 @@ class Policy(object):
         raise NotImplementedError
 
     def get_action(self, observation):
-        raise NotImplementedError
+        actions, pdists = self.get_actions([observation])
+        return actions[0], pdists[0]
 
     # Only needed for parameterized policies
 

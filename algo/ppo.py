@@ -38,11 +38,6 @@ def discount_cumsum(x, discount):
     # or rev(y)[t] - discount*rev(y)[t-1] = rev(x)[t]
     return scipy.signal.lfilter([1], [1, -discount], x[::-1], axis=0)[::-1]
 
-def merge_dict(x, y):
-    z = x.copy()
-    z.update(y)
-    return z
-
 def to_input_var_list(input_var, Q_est_var, old_pdist_var, action_var, penalty_var):
     return [input_var, Q_est_var, old_pdist_var, action_var, penalty_var]
 
@@ -139,8 +134,8 @@ class PPO(object):
 
         ev = explained_variance_1d(np.concatenate(all_baselines), np.concatenate(all_returns))
 
-        all_obs = np.vstack([path["observations"] for path in paths])
-        all_states = np.vstack([path["states"] for path in paths])
+        all_obs = np.vstack([path["observations"][:-1] for path in paths])
+        all_states = np.vstack([path["states"][:-1] for path in paths])
         all_pdists = np.vstack([path["pdists"] for path in paths])
         all_actions = np.vstack([path["actions"] for path in paths])
         all_advantages = np.concatenate([path["advantage"] for path in paths])
