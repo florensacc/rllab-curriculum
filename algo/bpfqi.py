@@ -2,7 +2,7 @@ import misc.logger as logger
 from misc.ext import merge_dict
 import numpy as np
 from sampler import parallel_sampler
-from policy import EpsilonGreedyPolicy
+from policy import BoltzmannPolicy
 import scipy
 from misc.tensor_utils import flatten_tensors
 import misc.logger as logger
@@ -13,14 +13,14 @@ import cgtcompat.tensor as T
 def request_samples(boltz_policy, n_samples, max_path_length):
     return parallel_sampler.request_samples(boltz_policy.get_param_values(), n_samples, max_path_length)
 
-def new_train_vars(qfunc):
+def new_train_vars(qfunc, boltz_policy):
     obs = qfunc.input_var
     actions = T.ivector("actions")
     rewards = T.vector("rewards")
     terminate = T.vector("terminate")
     penalty = T.scalar("penalty")
     prev_qval = T.matrix("prev_qval")
-    temperature = T.shared(0., name="temperature")
+    temperature = theano.shared(np.cast['float32'](0.), name="temperature")
     return dict(
         obs=obs,
         actions=actions,
@@ -28,13 +28,12 @@ def new_train_vars(qfunc):
         terminate=terminate,
         prev_qval=prev_qval,
         penalty=penalty,
-        temperature=temperature,
     )
 
 def to_train_var_list(obs, actions, rewards, terminate, prev_qval, penalty):
     return [obs, actions, rewards, terminate, prev_qval, penalty]
 
-def new_loss(qfunc, discount, obs, actions, rewards, terminate, prev_qval, penalty):
+def new_loss(qfunc, boltz_policy, discount, obs, actions, rewards, terminate, prev_qval, penalty):
     qval = qfunc.qval_var
     N = obs.shape[0]
     qsa = qval[T.arange(N), actions]
@@ -85,8 +84,9 @@ class BPFQI(object):
         self.temperature_samples = temperature_samples
 
     def train(self, mdp, qfunc):
-        opt_info = self.init_opt(mdp, qfunc)
-        self.start_worker(mdp, qfunc)
+        boltz_policy = BoltzmannPolicy(qfunc, temperature=self.initial_temperature)
+        opt_info = self.init_opt(mdp, qfunc, boltz_policy)
+        self.start_worker(mdp, qfunc, boltz_policy)
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
             samples_data = self.obtain_samples(itr, mdp, qfunc, opt_info)
@@ -96,13 +96,12 @@ class BPFQI(object):
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
 
-    def start_worker(self, mdp, qfunc):
-        self.boltz_policy = BoltzmannPolicy(qfunc, temperature=self.initial_temperature)
-        parallel_sampler.populate_task(mdp, self.boltz_policy)
+    def start_worker(self, mdp, qfunc, boltz_policy):
+        parallel_sampler.populate_task(mdp, boltz_policy)
 
-    def init_opt(self, mdp, qfunc):
-        train_vars = new_train_vars(qfunc)
-        result_vars = new_loss(qfunc, self.discount, **train_vars)
+    def init_opt(self, mdp, qfunc, boltz_policy):
+        train_vars = new_train_vars(qfunc, boltz_policy)
+        result_vars = new_loss(qfunc, boltz_policy, self.discount, **train_vars)
         reg_loss_var = result_vars["reg_loss"]
         loss_var = result_vars["loss"]
         reg_var = result_vars["reg"]
@@ -115,6 +114,7 @@ class BPFQI(object):
             paths = request_samples(self.boltz_policy, self.temperature_samples, self.max_path_length)
             observations = np.vstack([path["observations"][:-1] for path in paths])
             qval = qfunc.compute_qval(observations)
+            import ipdb; ipdb.set_trace()
             
 
         logger.log("compiling functions...")
