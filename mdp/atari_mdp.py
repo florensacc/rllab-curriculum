@@ -10,6 +10,8 @@ from core.serializable import Serializable
 from contextlib import contextmanager
 
 
+EYE_256 = np.eye(256)
+
 def sequence_equal(s1, s2):
     return len(s1) == len(s2) and all(imap(np.array_equal, s1, s2))
 
@@ -101,4 +103,5 @@ class AtariMDP(MDP, Serializable):
         ram_size = self._ale.getRAMSize()
         ram = np.zeros(ram_size, dtype=np.uint8)
         self._ale.getRAM(ram)
-        return (ram - 128.0) / 128.0
+        indices = [3*16 + 3, 3*16 + 12, 3*16 + 1, 3*16 + 6, 0+12, 3*16 + 8,3*16 + 2, 1*16 + 5]
+        return np.concatenate(map(EYE_256.__getitem__, ram[indices]))

@@ -43,6 +43,8 @@ def log(s, with_prefix=True, with_timestamp=True):
     sys.stdout.flush()
 
 def record_tabular(key, val):
+    #global tabular
+    #tabular = filter(lambda x: x[0] != key, tabular)
     tabular.append((str(key), str(val)))
 
 def dump_tabular(*args, **kwargs):

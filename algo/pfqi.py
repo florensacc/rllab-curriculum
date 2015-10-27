@@ -58,38 +58,51 @@ class PFQI(object):
     def __init__(self,
             samples_per_itr=10000, max_epsilon=1, min_epsilon=0.1,
             epsilon_decay_range=100, discount=0.99, start_itr=0, n_itr=500,
-            initial_penalty=1, max_opt_itr=50, test_samples_per_itr=10000,
-            stepsize=0.1, adapt_penalty=True, max_penalty_itr=10,
+            initial_penalty=1, max_opt_itr=20, test_samples_per_itr=10000,
+            stepsize=0.1, adapt_penalty=True, max_penalty_itr=3,
             penalty_expand_factor=2, penalty_shrink_factor=0.5,
-            max_path_length=np.inf):
+            sample_opt_itr=10, max_path_length=np.inf, exp_name='pfqi'):
         self.samples_per_itr = samples_per_itr
         self.max_epsilon = max_epsilon
         self.min_epsilon = min_epsilon
+        # The number of iterations that epsilon will decrease from max_epsilon to min_epsilon
         self.epsilon_decay_range = epsilon_decay_range
         self.discount = discount
         self.start_itr = start_itr
         self.n_itr = n_itr
         self.initial_penalty = initial_penalty
         self.max_opt_itr = max_opt_itr
+        # Number of samples for evaluating the current Q function
         self.test_samples_per_itr = test_samples_per_itr
         self.stepsize = stepsize
         self.adapt_penalty = adapt_penalty
         self.max_penalty_itr = max_penalty_itr
         self.penalty_expand_factor = penalty_expand_factor
         self.penalty_shrink_factor = penalty_shrink_factor
+        # Maximum path length of a single rollout
         self.max_path_length = max_path_length
+        # Number of q iterations per batch of samples
+        self.sample_opt_itr = sample_opt_itr
+        self.exp_name = exp_name
 
     def train(self, mdp, qfunc):
+        savedir = 'data/%s' % (self.exp_name)
+        logger.add_file_output(savedir + '/log.txt')
+        logger.push_prefix('[%s] | ' % (self.exp_name))
         opt_info = self.init_opt(mdp, qfunc)
         self.start_worker(mdp, qfunc)
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
             samples_data = self.obtain_samples(itr, mdp, qfunc, opt_info)
-            #for _ in range(10):
-            opt_info = self.optimize_qfunc(itr, qfunc, samples_data, opt_info)
+            for opt_itr in range(10):
+                logger.push_prefix('q itr #%d | ' % opt_itr)
+                opt_info = self.optimize_qfunc(itr, qfunc, samples_data, opt_info)
+                logger.pop_prefix()
             self.test_performance(itr, qfunc)
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
+        logger.remove_file_output(savedir + '/log.txt')
+        logger.pop_prefix()
 
     def start_worker(self, mdp, qfunc):
         self.eps_policy = EpsilonGreedyPolicy(qfunc, epsilon=self.max_epsilon)
@@ -120,26 +133,24 @@ class PFQI(object):
         actions = np.concatenate([path["actions"].reshape(-1) for path in paths])
         rewards = np.concatenate([path["rewards"].reshape(-1) for path in paths])
         terminate = np.concatenate([np.append(np.zeros(len(path["rewards"]) - 1), 1) for path in paths]).astype(int)
-        prev_qval = qfunc.compute_qval(observations)
-        train_vals = [observations, actions, rewards, terminate, prev_qval]
 
-        logger.record_tabular('MaxQAbs', np.max(np.abs(prev_qval.reshape(-1))))
         logger.record_tabular('SampleRewMean', np.mean([sum(path["rewards"]) for path in paths]))
         return dict(
-            train_vals=train_vals,
             observations=observations,
             actions=actions,
             rewards=rewards,
             terminate=terminate,
             paths=paths,
-            prev_qval=prev_qval,
         )
 
     def optimize_qfunc(self, itr, qfunc, samples_data, opt_info):
-        train_vals = samples_data['train_vals']
         f_loss = opt_info['f_loss']
         f_grads = opt_info['f_grads']
         penalty = opt_info['penalty']
+
+        prev_qval = qfunc.compute_qval(samples_data['observations'])
+        train_vals = [samples_data['observations'], samples_data['actions'], samples_data['rewards'], samples_data['terminate'], prev_qval]
+        logger.record_tabular('MaxQAbs', np.max(np.abs(prev_qval.reshape(-1))))
 
         def evaluate_loss(train_vals):
             def evaluate(params):
@@ -160,14 +171,15 @@ class PFQI(object):
 
         cur_params = qfunc.get_param_values()
 
-        try_penalty = np.clip(penalty, 1e-2, 1e6)
+        try_penalty = penalty
+        if self.adapt_penalty and itr > self.start_itr:
+            try_penalty = np.clip(penalty, 1e-2, 1e6)
 
         opt_params = None
         reg = None
         penalty_scale_factor = None
 
-        argmax_indices = samples_data['prev_qval'].argmax(axis=1)
-
+        argmax_indices = prev_qval.argmax(axis=1)
         logger.record_tabular('LossBefore', loss_before)
 
         for penalty_itr in range(self.max_penalty_itr):

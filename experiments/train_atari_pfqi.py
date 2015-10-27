@@ -22,6 +22,8 @@ if __name__ == '__main__':
         test_samples_per_itr=50000,
         stepsize=0.5,
         penalty_expand_factor=1.3,
-        penalty_shrink_factor=0.75
+        penalty_shrink_factor=0.75,
+        max_epsilon=0.1,
+        min_epsilon=0.1,
     )
     algo.train(mdp, qfunc)
