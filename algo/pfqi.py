@@ -129,7 +129,7 @@ class PFQI(object):
         epsilon = max(self.min_epsilon, self.max_epsilon - (self.max_epsilon - self.min_epsilon) * itr / self.epsilon_decay_range)
         logger.record_tabular("Epsilon", epsilon)
         paths = request_samples(self.eps_policy, epsilon, self.samples_per_itr, self.max_path_length)
-        observations = np.vstack([path["observations"][:-1] for path in paths])
+        observations = np.vstack([path["observations"] for path in paths])
         actions = np.concatenate([path["actions"].reshape(-1) for path in paths])
         rewards = np.concatenate([path["rewards"].reshape(-1) for path in paths])
         terminate = np.concatenate([np.append(np.zeros(len(path["rewards"]) - 1), 1) for path in paths]).astype(int)

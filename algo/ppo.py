@@ -7,6 +7,8 @@ import cgtcompat as theano
 import cgtcompat.tensor as T
 import scipy.optimize
 from sampler import parallel_sampler
+from misc.ext import merge_dict
+import plotter
 
 def new_surrogate_obj(policy, input_var, Q_est_var, old_pdist_var, action_var, penalty_var):
     pdist_var = policy.pdist_var
@@ -57,7 +59,7 @@ class PPO(object):
             discount=0.98, gae_lambda=1, stepsize=0.015, initial_penalty=1, max_opt_itr=20,
             max_penalty_itr=10, exp_name='ppo', adapt_penalty=True,
             n_parallel=multiprocessing.cpu_count(), save_snapshot=True,
-            optimizer=scipy.optimize.fmin_l_bfgs_b):
+            optimizer=scipy.optimize.fmin_l_bfgs_b, plot=False):
         self.n_itr = n_itr
         self.start_itr = start_itr
         self.max_samples_per_itr = max_samples_per_itr
@@ -72,12 +74,19 @@ class PPO(object):
         self.save_snapshot = save_snapshot
         self.optimizer = optimizer
         self.gae_lambda = gae_lambda
+        self.plot = plot
 
     def start_worker(self, mdp, policy, vf):
         parallel_sampler.populate_task(mdp, policy)
+        if self.plot:
+            plotter.init_plot(mdp, policy)
 
     def shutdown_worker(self):
         pass
+
+    def update_plot(self, policy):
+        if self.plot:
+            plotter.update_plot(policy)
 
     # Main optimization loop
     def train(self, mdp, policy, vf):
@@ -93,6 +102,8 @@ class PPO(object):
             self.perform_save_snapshot(itr, samples_data, opt_info)
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
+            if self.plot:
+                self.update_plot(policy)
         self.shutdown_worker()
         logger.remove_file_output(savedir + '/log.txt')
         logger.pop_prefix()
@@ -134,7 +145,7 @@ class PPO(object):
 
         ev = explained_variance_1d(np.concatenate(all_baselines), np.concatenate(all_returns))
 
-        all_obs = np.vstack([path["observations"][:-1] for path in paths])
+        all_obs = np.vstack([path["observations"] for path in paths])
         all_states = np.vstack([path["states"][:-1] for path in paths])
         all_pdists = np.vstack([path["pdists"] for path in paths])
         all_actions = np.vstack([path["actions"] for path in paths])
