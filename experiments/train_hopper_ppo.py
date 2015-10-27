@@ -1,6 +1,10 @@
 import os
 os.environ['CGT_COMPAT_MODE'] = 'cgt'
 from sampler import parallel_sampler
+# Technically, we need to add these initializations below to make sure that the
+# processes are created before theano is initialized, so that these processes
+# can use the cpu mode while the main process is using the gpu. This can
+# probably be avoided when using cgt
 parallel_sampler.init_pool(1)
 import plotter
 plotter.init_worker()
