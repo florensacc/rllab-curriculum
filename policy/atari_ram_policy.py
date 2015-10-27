@@ -9,13 +9,7 @@ import cgtcompat as theano
 import cgtcompat.tensor as T
 from core.serializable import Serializable
 from misc.overrides import overrides
-
-def weighted_sample(weights, objects):
-    """Return a random item from objects, with the weighting defined by weights 
-    (which must sum to 1)."""
-    cs = np.cumsum(weights) #An array of the weights, cumulatively summed.
-    idx = sum(cs < np.random.rand()) #Find the index of the first weight over a random value.
-    return objects[idx]
+from misc.special import weighted_sample
 
 class AtariRAMPolicy(LasagnePolicy, Serializable):
 
@@ -34,7 +28,7 @@ class AtariRAMPolicy(LasagnePolicy, Serializable):
         self._n_actions = mdp.n_actions
         self._input_var = input_var
         self._pdist_var = prob_var
-        self._compute_action_params = theano.function([input_var], prob_var, allow_input_downcast=True)
+        self._compute_probs = theano.function([input_var], prob_var, allow_input_downcast=True)
 
         super(AtariRAMPolicy, self).__init__([prob_layer])
         Serializable.__init__(self, mdp, hidden_sizes, nonlinearity)
@@ -72,7 +66,7 @@ class AtariRAMPolicy(LasagnePolicy, Serializable):
     # the current policy
     @overrides
     def get_actions(self, states):
-        probs = self._compute_action_params(states)
+        probs = self._compute_probs(states)
         actions = [weighted_sample(prob, range(len(prob))) for prob in probs]
         return actions, probs
 

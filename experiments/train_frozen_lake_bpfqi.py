@@ -3,8 +3,8 @@ import os
 os.environ['CGT_COMPAT_MODE'] = 'theano'
 import multiprocessing
 from sampler import parallel_sampler
-#parallel_sampler.init_pool(multiprocessing.cpu_count())
-parallel_sampler.init_pool(1)
+parallel_sampler.init_pool(multiprocessing.cpu_count())
+#parallel_sampler.init_pool(1)
 
 from misc.overrides import overrides
 from qfunc import LasagneQFunction
@@ -27,16 +27,29 @@ if __name__ == '__main__':
         "FFFH",
         "HFFG"
     ]
-    mdp = FrozenLakeMDP(desc)
+
+    map8x8 = [
+        "SFFFFFFF",
+        "FFFFFFFF",
+        "FFFHFFFF",
+        "FFFFFHFF",
+        "FFFHFFFF",
+        "FHHFFFHF",
+        "FHFFHFHF",
+        "FFFHFFFG"
+    ]
+
+    mdp = FrozenLakeMDP(map8x8)
     qfunc = TabularQFunction(mdp)
     algo = BPFQI(
-        samples_per_itr=10000,
+        samples_per_itr=20000,
         max_path_length=100,
-        test_samples_per_itr=10000,
-        stepsize=0.5,
-        penalty_expand_factor=1.3,
-        penalty_shrink_factor=0.75,
+        test_samples_per_itr=20000,
+        stepsize=0.01,
+        penalty_expand_factor=2,
+        penalty_shrink_factor=0.5,
         adapt_penalty=True,
         initial_penalty=1,
+        max_penalty_itr=3,
     )
     algo.train(mdp, qfunc)

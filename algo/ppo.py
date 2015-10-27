@@ -1,6 +1,7 @@
 import numpy as np
 from misc.console import mkdir_p
 from misc.tensor_utils import flatten_tensors
+from misc.special import discount_cumsum
 import misc.logger as logger
 import multiprocessing
 import cgtcompat as theano
@@ -33,12 +34,6 @@ def get_train_vars(policy):
         action_var=action_var,
         penalty_var=penalty_var,
     )
-
-def discount_cumsum(x, discount):
-    # See https://docs.scipy.org/doc/scipy/reference/tutorial/signal.html#difference-equation-filtering
-    # Here, we have y[t] - discount*y[t+1] = x[t]
-    # or rev(y)[t] - discount*rev(y)[t-1] = rev(x)[t]
-    return scipy.signal.lfilter([1], [1, -discount], x[::-1], axis=0)[::-1]
 
 def to_input_var_list(input_var, Q_est_var, old_pdist_var, action_var, penalty_var):
     return [input_var, Q_est_var, old_pdist_var, action_var, penalty_var]

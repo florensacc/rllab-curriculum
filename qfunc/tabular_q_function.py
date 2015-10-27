@@ -16,8 +16,13 @@ class TabularQFunction(LasagneQFunction, Serializable):
         self._qval_var = qval_var
         self._compute_qval = theano.function([input_var], qval_var, allow_input_downcast=True)
         self._input_var = input_var
+        self._n_actions = mdp.n_actions
         super(TabularQFunction, self).__init__([l_output])
         Serializable.__init__(self, mdp)
+
+    @property
+    def n_actions(self):
+        return self._n_actions
 
     @property
     def input_var(self):
