@@ -1,7 +1,9 @@
 import os
-os.environ['CGT_COMPAT_MODE'] = 'theano'
+os.environ['CGT_COMPAT_MODE'] = 'cgt'
 from sampler import parallel_sampler
-parallel_sampler.init_pool(4)
+parallel_sampler.init_pool(1)
+import plotter
+plotter.init_worker()
 
 from policy import MujocoPolicy
 from algo import PPO
@@ -42,5 +44,11 @@ if __name__ == '__main__':
     mdp = HopperMDP()
     policy = MujocoPolicy(mdp, hidden_sizes=[32, 32])
     vf = HopperValueFunction()
-    algo = PPO(exp_name='hopper_10k_new', max_samples_per_itr=10000, discount=0.99, stepsize=0.005)
+    algo = PPO(
+        exp_name='hopper_10k_new',
+        max_samples_per_itr=1000,
+        discount=0.99,
+        stepsize=0.005,
+        plot=True
+    )
     algo.train(mdp, policy, vf)

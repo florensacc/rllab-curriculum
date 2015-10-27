@@ -1,7 +1,7 @@
 import numpy as np
 import pyprind
 
-def rollout(mdp, policy, max_length=np.inf):
+def rollout(mdp, policy, max_length=np.inf, animated=False):
     states = []
     observations = []
     actions = []
@@ -21,8 +21,8 @@ def rollout(mdp, policy, max_length=np.inf):
         if d:
             break
         s, o = next_s, next_o
-    states.append(next_s)
-    observations.append(next_o)
+        if animated:
+            mdp.plot()
     return dict(
         states=np.vstack(states),
         observations=np.vstack(observations),
