@@ -1,8 +1,8 @@
 from __future__ import print_function
 from pylearn2.training_algorithms.learning_rule import RMSProp
 import numpy as np
-import theano
-import theano.tensor as T
+import cgtcompat as theano 
+import cgtcompat.tensor as T
 import itertools
 import time
 import sys
@@ -11,7 +11,7 @@ import sys
 def Adam(cost, params, lr=0.0002, b1=0.1, b2=0.001, e=1e-8):
     updates = []
     grads = T.grad(cost, params)
-    i = theano.shared(float(0.))#theano.config.floatX(0.))
+    i = theano.shared(np.cast['float32'](0.))
     i_t = i + 1.
     fix1 = 1. - (1. - b1)**i_t
     fix2 = 1. - (1. - b2)**i_t
@@ -33,8 +33,8 @@ class DQN(object):
 
     def __init__(
             self,
-            replay_pool_size=100000,
-            min_pool_size=5000,
+            replay_pool_size=1000000,
+            min_pool_size=50000,
             exploration_decay_range=100000,
             learning_rate=1e-4,
             max_epsilon=1,
@@ -64,7 +64,7 @@ class DQN(object):
         mdp = gen_mdp()
         #states, obs = mdp.sample_initial_state()
         Ds = mdp.observation_shape[0]
-        Da = mdp.action_dims[0]
+        Da = mdp.n_actions
         # initialize memory
         # A single experience is a tuple (s, s', a, r, done), concatenated to be a
         # single row vector of dimension Ds+Ds+1+1
@@ -80,8 +80,8 @@ class DQN(object):
 
         log("Compiling q functions...")
 
-        Q = gen_q_func(mdp.observation_shape, mdp.action_dims, input_var)
-        Q_tgt = gen_q_func(mdp.observation_shape, mdp.action_dims, input_var)
+        Q = gen_q_func(mdp.observation_shape, mdp.n_actions, input_var)
+        Q_tgt = gen_q_func(mdp.observation_shape, mdp.n_actions, input_var)
 
         N_var = input_var.shape[0]
 
@@ -105,7 +105,7 @@ class DQN(object):
         log("compiling update function...")
         do_update = theano.function([input_var, fit_var, action_var], [], updates=updates)
 
-        state, obs = mdp.sample_initial_state()
+        state, obs = mdp.reset()
 
         n_episodes = 0
         cur_total_reward = 0
@@ -190,7 +190,7 @@ class DQN(object):
                     avg_rs = []
                     max_q_val = -np.inf
                     for _ in range(100):
-                        policy_state, policy_obs = mdp.sample_initial_state()
+                        policy_state, policy_obs = mdp.reset()
                         policy_r = 0
                         t = 0
                         while True:

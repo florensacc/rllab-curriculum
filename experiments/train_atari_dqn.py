@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import os
+os.environ['CGT_COMPAT_MODE'] = 'theano'
 from qfunc import DiscreteNNQFunc
 from algo import DQN
 from mdp import MDP, AtariMDP, FrozenLakeMDP, ObsTransformer
@@ -14,19 +15,19 @@ from functools import partial
 
 class TableQFunc(DiscreteNNQFunc):
 
-    def new_network_outputs(self, observation_shape, action_dims, input_var):
+    def new_network_outputs(self, observation_shape, n_actions, input_var):
         l_input = L.InputLayer(shape=(None, observation_shape[0]), input_var=input_var)
-        output_layers = [L.DenseLayer(l_input, num_units=action_dims[0], nonlinearity=None, name="output")]
+        output_layers = [L.DenseLayer(l_input, num_units=n_actions, nonlinearity=None, name="output")]
         return output_layers
 
 class RAMQFunc(DiscreteNNQFunc):
 
-    def new_network_outputs(self, observation_shape, action_dims, input_var):#, hidden_units=[256,128]):
+    def new_network_output(self, observation_shape, n_actions, input_var):#, hidden_units=[256,128]):
         l_input = L.InputLayer(shape=(None, observation_shape[0]), input_var=input_var)
         l_hidden_1 = L.DenseLayer(l_input, num_units=256, nonlinearity=NL.tanh, W=lasagne.init.Normal(0.01), name="h1")
         l_hidden_2 = L.DenseLayer(l_hidden_1, num_units=128, nonlinearity=NL.tanh, W=lasagne.init.Normal(0.01), name="h2")
-        output_layers = [L.DenseLayer(l_hidden_2, num_units=Da, nonlinearity=None, name="output_%d" % idx) for idx, Da in enumerate(action_dims)]
-        return output_layers
+        output_layer = L.DenseLayer(l_hidden_2, num_units=n_actions, nonlinearity=None, name="output")
+        return output_layer
 
 def process_state(state):
     Dx = 4

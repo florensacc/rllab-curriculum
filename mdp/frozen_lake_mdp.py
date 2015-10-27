@@ -1,12 +1,15 @@
 import numpy as np
 from .base import MDP
 
+from misc.overrides import overrides
+from core.serializable import Serializable
+
 UP = 0
 RIGHT = 1
 DOWN = 2
 LEFT = 3
 
-class FrozenLakeMDP(MDP):
+class FrozenLakeMDP(MDP, Serializable):
     """
     (Mostly copied from John's code)
     Winter is here. You and your friends were tossing around a frisbee at the park
@@ -27,42 +30,44 @@ class FrozenLakeMDP(MDP):
     """
 
     def __init__(self, desc):
-        self.desc = np.asarray(desc,dtype='c1')
+        self.desc = np.array(map(lambda x: map(lambda c: c, x), desc))
         nrow, ncol = self.desc.shape
         self.maxxy = np.array([nrow-1, ncol-1])
         (startx,), (starty,) = np.nonzero(self.desc=='S')
         self.startstate = np.array([startx,starty])
+        Serializable.__init__(self, desc)
 
-    def step(self, states, actions):
-        n = len(states)
-        actions = actions[0]
-        assert len(actions)==n
-        actions = (actions + np.random.randint(-1,2,len(actions))) % 4
+    def step(self, state, action):
+
+        action = (action + np.random.randint(-1, 2)) % 4
         increments = np.array([[0,-1],[1,0],[0,1],[-1,0]])
-        nextstates = np.clip(states + increments[actions], [0,0], self.maxxy)
-        rewards = np.zeros((n,))# 1))
-        dones = np.zeros((n,),bool)
-        statetype = self.desc[nextstates[:,0],nextstates[:,1]]
+        nextstate = np.clip(state + increments[action], [0,0], self.maxxy)
+        statetype = self.desc[nextstate[0],nextstate[1]]
 
         holemask = statetype == 'H'
         goalmask = statetype == 'G'
-        nextstates[goalmask | holemask] = self.startstate
-        dones[goalmask | holemask] = True
-        rewards[goalmask] = 1
-        return nextstates, nextstates, rewards, dones, [1] * n
+        if goalmask or holemask:
+            nextstate = self.startstate
+            done = True
+        else:
+            done = False
+        reward = 1 if goalmask else 0
+        return nextstate, self._get_observation(nextstate), reward, done
 
     @property
-    def action_set(self):
-        return [[0, 1, 2, 3]]
-
-    @property
-    def action_dims(self):
-        return [4]
+    @overrides
+    def n_actions(self):
+        return 4
 
     @property
     def observation_shape(self):
-        return (2,)
+        nrow, ncol = self.desc.shape
+        return (nrow*ncol,)
 
-    def sample_initial_states(self, n):
-        s = np.zeros((n,2),'i')+self.startstate[None,:]
-        return s,s
+    def reset(self):
+        state = np.copy(self.startstate)
+        return state, self._get_observation(state)
+
+    def _get_observation(self, state):
+        nrow, ncol = self.desc.shape
+        return np.eye(nrow*ncol)[state[0]*ncol+state[1]]
