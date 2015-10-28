@@ -1,47 +1,42 @@
-import os
-import lasagne.layers as L
-import lasagne.nonlinearities as NL
-import lasagne
-from lasagne_layers import ParamLayer, OpLayer
-from lasagne_policy import LasagnePolicy
+from .lasagne_policy import LasagnePolicy
+from core.serializable import Serializable
+from misc.special import weighted_sample
+from misc.overrides import overrides
 import numpy as np
 import cgtcompat as theano
 import cgtcompat.tensor as T
-from core.serializable import Serializable
-from misc.overrides import overrides
-from misc.special import weighted_sample
+import lasagne.layers as L
+import lasagne.nonlinearities as NL
+import lasagne
 
-class AtariRAMPolicy(LasagnePolicy, Serializable):
+class TabularPolicy(LasagnePolicy, Serializable):
 
-    def __init__(self, mdp, hidden_sizes=[64], nonlinearity=NL.tanh):
-
-        # create network
+    def __init__(self, mdp):
         input_var = T.matrix('input')
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]), input_var=input_var)
-        l_hidden = l_input
-        for idx, hidden_size in enumerate(hidden_sizes):
-            l_hidden = L.DenseLayer(l_hidden, num_units=hidden_size, nonlinearity=nonlinearity, W=lasagne.init.Normal(0.1), name="h%d" % idx)
-        prob_layer = L.DenseLayer(l_hidden, num_units=mdp.n_actions, nonlinearity=NL.softmax, W=lasagne.init.Normal(0.01), name="output_prob")
+        l_output = L.DenseLayer(l_input, num_units=mdp.n_actions, nonlinearity=NL.softmax)
+        prob_var = L.get_output(l_output)
 
-        prob_var = L.get_output(prob_layer)
-
-        self._n_actions = mdp.n_actions
-        self._input_var = input_var
         self._pdist_var = prob_var
         self._compute_probs = theano.function([input_var], prob_var, allow_input_downcast=True)
-
-        super(AtariRAMPolicy, self).__init__([prob_layer])
-        Serializable.__init__(self, mdp, hidden_sizes, nonlinearity)
+        self._input_var = input_var
+        self._n_actions = mdp.n_actions
+        super(TabularPolicy, self).__init__([l_output])
+        Serializable.__init__(self, mdp)
 
     @property
-    @overrides
-    def pdist_var(self):
-        return self._pdist_var
+    def n_actions(self):
+        return self._n_actions
 
     @property
     @overrides
     def input_var(self):
         return self._input_var
+
+    @property
+    @overrides
+    def pdist_var(self):
+        return self._pdist_var
 
     @overrides
     def new_action_var(self, name):
@@ -54,7 +49,7 @@ class AtariRAMPolicy(LasagnePolicy, Serializable):
     @overrides
     def likelihood_ratio(self, old_prob_var, new_prob_var, action_var):
         N = old_prob_var.shape[0]
-        return new_prob_var[T.arange(N), action_var.reshape((-1,))] / old_prob_var[T.arange(N), action_var.reshape((-1,))]
+        return new_prob_var[T.arange(N), T.reshape(action_var, (-1,))] / old_prob_var[T.arange(N), T.reshape(action_var, (-1,))]
 
     @overrides
     def compute_entropy(self, prob):

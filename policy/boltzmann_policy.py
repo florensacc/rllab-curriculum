@@ -62,6 +62,10 @@ class BoltzmannPolicy(Policy, Serializable):
         return self._qfunc.params + [self._temp_var]
 
     @property
+    def self_params(self):
+        return [self._temp_var]
+
+    @property
     def n_actions(self):
         return self._n_actions
 
@@ -93,3 +97,9 @@ class BoltzmannPolicy(Policy, Serializable):
     def set_param_values(self, flattened_params):
         self.temperature = flattened_params[-1]
         self._qfunc.set_param_values(flattened_params[:-1])
+
+    def get_self_param_values(self):
+        return np.array([self.temperature])
+
+    def set_self_param_values(self, flattened_params):
+        self.temperature = flattened_params[0]

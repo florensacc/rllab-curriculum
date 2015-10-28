@@ -9,9 +9,9 @@ parallel_sampler.init_pool(1)
 import plotter
 plotter.init_worker()
 
-from policy import MujocoPolicy
-from algo import PPO
-from mdp import HopperMDP
+from policy.mujoco_policy import MujocoPolicy
+from algo.ppo import PPO
+from mdp.hopper_mdp import HopperMDP
 import numpy as np
 import cgtcompat.tensor as T
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     vf = HopperValueFunction()
     algo = PPO(
         exp_name='hopper_10k_new',
-        max_samples_per_itr=1000,
+        max_samples_per_itr=10000,
         discount=0.99,
         stepsize=0.005,
         plot=True
