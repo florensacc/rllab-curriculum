@@ -6,7 +6,6 @@ import errno
 import shlex
 import pydoc
 import inspect
-from twx.botapi import TelegramBot
 
 color2num = dict(
     gray=30,
