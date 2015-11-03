@@ -1,7 +1,7 @@
 import numpy as np
 import pyprind
 
-def rollout(mdp, policy, max_length=np.inf, animated=False):
+def rollout(mdp, policy, max_length=np.inf, animated=False, use_state=False):
     states = []
     observations = []
     actions = []
@@ -10,19 +10,24 @@ def rollout(mdp, policy, max_length=np.inf, animated=False):
     s, o = mdp.reset()
     path_length = 0
     while path_length < max_length:
-        path_length += 1
-        a, pdist = policy.get_action(o)
+        if use_state:
+            a, pdist = policy.get_action(s, path_length)
+        else:
+            a, pdist = policy.get_action(o)
         next_s, next_o, r, d = mdp.step(s, a)
         states.append(s)
         observations.append(o)
         rewards.append(r)
         actions.append(a)
         pdists.append(pdist)
+        path_length += 1
         if d:
             break
         s, o = next_s, next_o
         if animated:
             mdp.plot()
+            #import time
+            #time.sleep(1)
     return dict(
         states=np.vstack(states),
         observations=np.vstack(observations),

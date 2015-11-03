@@ -35,6 +35,10 @@ class Policy(object):
     def compute_entropy(self, pdist):
         raise NotImplementedError
 
+    # Only needed for guided policy search
+    def get_action_log_prob(self, observation, action):
+        raise NotImplementedError
+
     @property
     def pdist_var(self):
         raise NotImplementedError

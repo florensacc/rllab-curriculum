@@ -26,6 +26,9 @@ class MujocoMDP(ControlMDP):
         self.reset()
         super(MujocoMDP, self).__init__(horizon)
 
+    def model_path(self, file_name):
+        return osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/%s' % file_name))
+
     @property
     @overrides
     def observation_shape(self):

@@ -11,6 +11,7 @@ class GripperMDP(MujocoMDP):
         frame_skip = 10#10#40
         ctrl_scaling = 100#100.0
         path = osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/gripper.xml'))
+        self.noise_level = 0.01
         super(GripperMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
 
     def get_current_obs(self):
@@ -25,7 +26,7 @@ class GripperMDP(MujocoMDP):
         #posbefore = state[1]
         #posafter = next_state[1]
         reward = 0#(posafter - posbefore) / self.timestep + 3.0
-        notdone = False#np.isfinite(state).all() and (np.abs(state[3:])<100).all() and (state[0] > .7) and (abs(state[2]) < .2)
+        notdone = True#np.isfinite(state).all() and (np.abs(state[3:])<100).all() and (state[0] > .7) and (abs(state[2]) < .2)
         done = not notdone
         self.state = next_state
         return next_state, next_obs, reward, done

@@ -82,7 +82,7 @@ class PPO(object):
 
     def update_plot(self, policy):
         if self.plot:
-            plotter.update_plot(policy)
+            plotter.update_plot(policy, self.max_path_length)
 
     # Main optimization loop
     def train(self, mdp, policy, vf):

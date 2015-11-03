@@ -2,6 +2,7 @@ import atexit
 from Queue import Empty
 from multiprocessing import Process, Queue
 from sampler.utils import rollout
+import numpy as np
 
 __all__ = [
     'init_worker',
@@ -29,7 +30,7 @@ def _worker_start(queue):
                 mdp.start_viewer()
             if 'demo' in msgs:
                 policy.set_param_values(msgs['demo'][0])
-                rollout(mdp, policy, animated=True)
+                rollout(mdp, policy, max_length=msgs['demo'][1], animated=True)
     except KeyboardInterrupt:
         pass
     if mdp:
@@ -53,6 +54,6 @@ def init_plot(mdp, policy):
     global queue
     queue.put(['update', mdp, policy])
 
-def update_plot(policy):
+def update_plot(policy, max_length=np.inf):
     global queue
-    queue.put(['demo', policy.get_param_values()])
+    queue.put(['demo', policy.get_param_values(), max_length])

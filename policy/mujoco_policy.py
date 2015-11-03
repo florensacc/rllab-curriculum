@@ -28,7 +28,7 @@ class MujocoPolicy(LasagnePolicy, Serializable):
         for idx, hidden_size in enumerate(hidden_sizes):
             l_hidden = L.DenseLayer(l_hidden, num_units=hidden_size, nonlinearity=nonlinearity, W=lasagne.init.Normal(0.1), name="h%d" % idx)
         mean_layer = L.DenseLayer(l_hidden, num_units=mdp.n_actions, nonlinearity=None, W=lasagne.init.Normal(0.01), name="output_mean")
-        log_std_layer = ParamLayer(l_input, num_units=mdp.n_actions, param=lasagne.init.Constant(0.), name="output_log_std")
+        log_std_layer = ParamLayer(l_input, num_units=mdp.n_actions, param=lasagne.init.Constant(0), name="output_log_std")
 
         mean_var = L.get_output(mean_layer)
         log_std_var = L.get_output(log_std_layer)
@@ -55,6 +55,7 @@ class MujocoPolicy(LasagnePolicy, Serializable):
     def new_action_var(self, name):
         return T.matrix(name)
 
+    # Computes D_KL(p_old || p_new)
     @overrides
     def kl(self, old_pdist_var, new_pdist_var):
         old_mean, old_log_std = self._split_pdist(old_pdist_var)
@@ -90,8 +91,8 @@ class MujocoPolicy(LasagnePolicy, Serializable):
     # of length N, where each entry is the density value for that action, under
     # the current policy
     @overrides
-    def get_actions(self, states):
-        means, log_stds = self._compute_action_params(states)
+    def get_actions(self, observations):
+        means, log_stds = self._compute_action_params(observations)
         # first get standard normal samples
         rnd = np.random.randn(*means.shape)
         pdists = np.concatenate([means, log_stds], axis=1)
@@ -100,6 +101,11 @@ class MujocoPolicy(LasagnePolicy, Serializable):
         return actions, pdists
 
     @overrides
-    def get_action(self, state):
-        actions, pdists = self.get_actions([state])
+    def get_action(self, observation):
+        actions, pdists = self.get_actions([observation])
         return actions[0], pdists[0]
+
+    def get_action_log_prob(self, observation, action):
+        means, log_stds = self._compute_action_params([observation])
+        mean, log_std = means[0], log_stds[0]
+        return -np.sum(log_std) - 0.5*np.sum(np.square(action - mean) / np.exp(2*log_std)) - 0.5*len(mean)*np.log(2*np.pi)

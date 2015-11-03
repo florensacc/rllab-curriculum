@@ -29,9 +29,9 @@ def rollout(policy, param_val, mdp, discount):
     prev_x = policy.get_param_values()
     policy.set_param_values(param_val)
     state, obs = mdp.reset()
-    timestep = 5.0 / 1000
+    #timestep = 5.0 / 1000
     rewards = []
-    for _ in range(1000):
+    for _ in range(mdp.horizon):
         action, action_prob = policy.get_action(obs)
         next_state, next_obs, reward, done = mdp.step(state, action)
         rewards.append(reward)
@@ -81,11 +81,11 @@ class CEM(object):
     def __init__(
             self,
             max_steps_per_traj=100,
-            samples_per_itr=10,
+            samples_per_itr=100,
             n_itr=100,
             best_frac=0.1,
             extra_std=1.0,
-            extra_decay_time=400,
+            extra_decay_time=100,
             exp_name='cem',
             discount=0.99):
         self.max_steps_per_traj = max_steps_per_traj
@@ -97,9 +97,7 @@ class CEM(object):
         self.exp_name = exp_name
         self.discount = discount
 
-    def train(self, gen_mdp, gen_policy):
-        mdp = gen_mdp()
-        policy = gen_policy(mdp)
+    def train(self, mdp, policy):
 
         x0 = policy.get_param_values()
         init_std = np.ones(x0.shape) * 10
@@ -108,9 +106,9 @@ class CEM(object):
 
         can_demo = getattr(mdp, 'start_viewer', None) is not None
 
-        def start_mdp_viewer(_mdp, gen_policy, queue):
+        def start_mdp_viewer(_mdp, _policy, queue):
             mdp = _mdp
-            policy = gen_policy(mdp)
+            policy = _policy
             mdp.start_viewer()
             try:
                 while True:
@@ -139,7 +137,7 @@ class CEM(object):
 
         if can_demo:
             q = Queue()
-            p = Process(target=start_mdp_viewer, args=(mdp, gen_policy, q))
+            p = Process(target=start_mdp_viewer, args=(mdp, policy, q))
             p.start()
 
         for itr, data in enumerate(cem(f, x0, init_std)):
@@ -150,8 +148,3 @@ class CEM(object):
 
         if can_demo:
             q.put(['loop', itr, policy, best_x])
-            #if can_demo:
-            #    self.demo(policy, cur_mean, mdp)
-
-        #if can_demo:
-        #    q.put(['stop'])
