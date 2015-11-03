@@ -32,9 +32,9 @@ def jacobian(x, f, eps=1e-3):
     J = np.zeros((Nf, Nx))
     eyex = np.eye(Nx)
     for dx in range(Nx):
-        xp = x + eyex[dx] * eps#scaled_eps#eps
-        xn = x - eyex[dx] * eps#scaled_eps#eps
-        J[:, dx] = (f(xp) - f(xn)) / (2*eps)#scaled_eps)#eps)
+        xp = x + eyex[dx] * eps
+        xn = x - eyex[dx] * eps
+        J[:, dx] = (f(xp) - f(xn)) / (2*eps)
     return J
 
 def grad(x, f, eps=1e-3):
@@ -78,7 +78,7 @@ def backward_pass(x, u, sysdyn, cost_func, final_cost_func, reg):
         linearize(x, u, sysdyn, cost_func, final_cost_func),
         "fx", "fu", "cx", "cu", "cxx", "cxu", "cuu"
     )
-    
+
     Vx = np.zeros((N+1, Dx))
     Vxx = np.zeros((N+1, Dx, Dx))
     Vx[N] = cx[N]
@@ -105,7 +105,7 @@ def backward_pass(x, u, sysdyn, cost_func, final_cost_func, reg):
             k[t] = -sp.linalg.solve_triangular(U_Quu, sp.linalg.solve_triangular(L_Quu, Qu, lower=True))
             K[t] = -sp.linalg.solve_triangular(U_Quu, sp.linalg.solve_triangular(L_Quu, Qux, lower=True))
         except LinAlgError as e:#Exception as e:
-            #print 'error in %d' % t
+            print 'error in %d' % t
             raise 
         
         Vx[t] = Qx + Qux.T.dot(k[t])
@@ -141,21 +141,21 @@ def solve(x0, uinit, sysdyn, cost_func, final_cost_func,
             forward_pass(x0, u, sysdyn, cost_func, final_cost_func),
             "x", "cost"
         )
-        #print 'cost:', cost
+        print 'cost:', cost
 
         bwd_succeeded = False
         while not bwd_succeeded:
             try:
-                #print 'backward pass...'
+                print 'backward pass...'
                 Vx, Vxx, k, K, dVx, dVxx, Quu = extract(
                     backward_pass(x, u, sysdyn, cost_func, final_cost_func, reg=lambda_),
                     "Vx", "Vxx", "k", "K", "dVx", "dVxx", "Quu"
                 )
                 bwd_succeeded = True
             except LinAlgError as e:#NonPositiveDefiniteError:
-                #print e
+                print e
                 lambda_ = max(lambda_ * lambda_scale_factor, lambda_min)
-                #print 'increasing lambda to %f' % lambda_
+                print 'increasing lambda to %f' % lambda_
                 if lambda_ > lambda_max:
                     break
 
@@ -186,7 +186,7 @@ def solve(x0, uinit, sysdyn, cost_func, final_cost_func,
                 lambda_ = 0
             u = unew
             if abs(cost - cnew) / abs(cost) < 1e-6:
-                #print 'no cost improvement'
+                print 'no cost improvement'
                 break
             cost = cnew
         else:
@@ -194,5 +194,5 @@ def solve(x0, uinit, sysdyn, cost_func, final_cost_func,
             if lambda_ > lambda_max:
                 print("Cannot improve objective even with large regularization")
                 break
-        #print 'lambda:', lambda_
+        print 'lambda:', lambda_
     return dict(u=u, K=K, k=k, x=x, Quu=Quu)

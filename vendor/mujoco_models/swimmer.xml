@@ -21,7 +21,7 @@
 
       <body name="mid" pos="-1 0 0">
         <geom type="capsule" fromto="0 0 0 -1 0 0" size="0.1"/>
-        <joint name="rot2" type="hinge" pos="0 0 0" axis="0 0 1" range="-100 100" limited="true" ref="50"/>
+        <joint name="rot2" type="hinge" pos="0 0 0" axis="0 0 1" range="-100 100" limited="true" />
         <body name="back" pos="-1 0 0">
           <geom type="capsule" fromto="0 0 0 -1 0 0" size="0.1"/>
           <joint name="rot3" type="hinge" pos="0 0 0" axis="0 0 1" range="-100 100" limited="true"/>

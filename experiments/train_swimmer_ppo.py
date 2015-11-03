@@ -1,5 +1,5 @@
 import os
-os.environ['CGT_COMPAT_MODE'] = 'theano'
+os.environ['CGT_COMPAT_MODE'] = 'cgt'
 os.environ['THEANO_FLAGS'] = 'device=cpu'
 from sampler import parallel_sampler
 # Technically, we need to add these initializations below to make sure that the
@@ -7,8 +7,8 @@ from sampler import parallel_sampler
 # can use the cpu mode while the main process is using the gpu. This can
 # probably be avoided when using cgt
 parallel_sampler.init_pool(4)
-import plotter
-plotter.init_worker()
+#import plotter
+#plotter.init_worker()
 
 from policy.mujoco_policy import MujocoPolicy
 from algo.ppo import PPO
@@ -56,6 +56,6 @@ if __name__ == '__main__':
         max_path_length=1000,
         discount=0.99,
         stepsize=0.01,
-        plot=True
+        plot=False#True
     )
     algo.train(mdp, policy, vf)

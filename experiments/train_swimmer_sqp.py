@@ -111,7 +111,7 @@ def run_test():
 
         while True:
             # W/ this line: shooting; w/o: collocation
-            x = forward_pass(x[0], u, sysdyn, cost_func, final_cost_func)["x"]
+            # x = forward_pass(x[0], u, sysdyn, cost_func, final_cost_func)["x"]
 
             mdp.demo(u, True)
             scale_t += 1

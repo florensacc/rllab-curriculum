@@ -24,7 +24,7 @@ class ILQG(object):
     def train(self, mdp):
         # plan directly on the states
         x0, _ = mdp.reset()
-        uinit = np.zeros((mdp.horizon, mdp.n_actions))
+        uinit = (np.random.rand(mdp.horizon, mdp.n_actions) - 0.5) * 0.1
         #du = K*dx
         u, K, k, x, Quu = ilqg.solve(
                 x0,
