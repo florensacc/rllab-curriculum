@@ -1,4 +1,6 @@
-from algo import ILQG
+from algo.ilqg import ILQG
 from mdp.swimmer_mdp import SwimmerMDP
 
-ILQG().train(SwimmerMDP())
+mdp = SwimmerMDP()
+mdp.horizon = 50
+ILQG().train(mdp)#SwimmerMDP())

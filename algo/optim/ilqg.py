@@ -16,7 +16,7 @@ def forward_pass(x0, uref, sysdyn, cost_func, final_cost_func, K=None, xref=None
     cost = 0
     x[0] = x0
     for t in range(N):
-        if K is not None and xref is not None:
+        if K and xref:
             u = uref[t] + K[t].dot(x[t] - xref[t])
         else:
             u = uref[t]
@@ -74,10 +74,12 @@ def linearize(x, u, sysdyn, cost_func, final_cost_func):
 def backward_pass(x, u, sysdyn, cost_func, final_cost_func, reg):
     Dx = x.shape[1]
     N, Du = u.shape
+    print 'linearizing...'
     fx, fu, cx, cu, cxx, cxu, cuu = extract(
         linearize(x, u, sysdyn, cost_func, final_cost_func),
         "fx", "fu", "cx", "cu", "cxx", "cxu", "cuu"
     )
+    print 'linearized'
 
     Vx = np.zeros((N+1, Dx))
     Vxx = np.zeros((N+1, Dx, Dx))
@@ -163,14 +165,18 @@ def solve(x0, uinit, sysdyn, cost_func, final_cost_func,
             print("Cannot find positive definition solution even with very large regularization")
             break
 
+        #import ipdb; ipdb.set_trace()
+
         alpha = 1
         fwd_succeeded = False
         for _ in range(max_line_search_iter):
+            print 'alpha: ', alpha
             # unew is different from u+alpha*k because of the feedback control term
             xnew, cnew, unew = extract(
-                forward_pass(x0, u+alpha*k, sysdyn, cost_func, final_cost_func, K, x),
+                forward_pass(x0, u+alpha*k, sysdyn, cost_func, final_cost_func, K=K, xref=x),
                 "x", "cost", "u"
             )
+            print 'cnew:', cnew#u+alpha*k
             dcost = cost - cnew
             expected = -alpha*(dVx+alpha*dVxx)
             if expected < 0:

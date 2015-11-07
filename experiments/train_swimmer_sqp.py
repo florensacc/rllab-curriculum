@@ -1,9 +1,12 @@
+
+print 'here'
 from mdp.swimmer_mdp import SwimmerMDP
 import numpy as np
 import scipy as sp
 from misc.ext import extract
 from gurobipy import *
 
+print 'here'
 def run_test():
 
     mdp = SwimmerMDP()
@@ -18,7 +21,6 @@ def run_test():
         for t in range(N):
             loss += cost_func(x[t], u[t])
             loss += merit * np.sum(np.abs(x[t+1] - xref[t+1]))
-        #import ipdb; ipdb.set_trace()
         return loss
 
     def compute_violation(x, xref):
@@ -51,7 +53,7 @@ def run_test():
     improve_ratio_threshold = 0.25#0.25
     trust_shrink_ratio = 0.6
     trust_expand_ratio = 1.5
-    max_merit_itr = 1#5
+    max_merit_itr = 5
     merit_increase_ratio = 10
     min_trust_box_size = 1e-4
     min_model_improve = 1e-4
@@ -78,9 +80,9 @@ def run_test():
     sco_itr = 0
 
     merit = 1#00#00#0.0
-    # try shooting first
     for merit_itr in range(max_merit_itr):
         trust_box_size = 0.1
+        
         xref = [None] + [sysdyn(x[t], u[t]) for t in range(N)]
         before_cost = compute_cost(x, xref, u, merit, cost_func, final_cost_func)
 
@@ -91,6 +93,8 @@ def run_test():
         model.setParam(GRB.param.OutputFlag, 0)
 
         xlb, xub = mdp.state_bounds
+
+        within_merit_itr = 0
 
         # xlb <= x + dx <= xub
         for t in range(N+1):
@@ -120,11 +124,18 @@ def run_test():
 
             xref = [None] + [sysdyn(x[t], u[t]) for t in range(N)]
 
+            within_merit_itr += 1
+            if within_merit_itr > 10:
+                print 'within merit itr exceeded'
+                break
+
             print 'linearizing'
             fx, fu, cx, cu, cxx, cxu, cuu = extract(
                 linearize(x, u, sysdyn, cost_func, final_cost_func),
                 "fx", "fu", "cx", "cu", "cxx", "cxu", "cuu"
             )
+
+
             print 'linearized'
             
             loss = ip(cx[N], dx[N]) + quad_form(dx[N], cxx[N]) + final_cost_func(x[N])
@@ -251,7 +262,7 @@ def run_test():
 
         merit *= merit_increase_ratio
 
-    import ipdb; ipdb.set_trace()
+    #import ipdb; ipdb.set_trace()
     mdp.demo(u)
 
 run_test()

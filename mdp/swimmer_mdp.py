@@ -5,7 +5,7 @@ from misc.special import rk4
 from matplotlib import colors
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from .base import MDP
+from .base import ControlMDP
 
 plt.ion()
 
@@ -17,7 +17,7 @@ __license__ = "BSD 3-Clause"
 __author__ = "Christoph Dann"
 
 
-class SwimmerMDP(MDP):
+class SwimmerMDP(ControlMDP):
 
     """
     A swimmer consisting of a chain of d links connected by rotational joints.
@@ -42,11 +42,11 @@ class SwimmerMDP(MDP):
         *Receding Horizon Differential Dynamic Programming.*
         In Advances in Neural Information Processing Systems.
     """
-    dt = 0.03
+    dt = 0.05
     episodeCap = 1000
     discount_factor = 0.98
 
-    def __init__(self, d=3, k1=7.5, k2=0.3):
+    def __init__(self, d=3, k1=7.5, k2=0.3, horizon=400):
         """
         d:
             number of joints
@@ -91,6 +91,15 @@ class SwimmerMDP(MDP):
         self.statespace_limits = np.array(self.statespace_limits)
         self.continuous_dims = range(self.statespace_limits.shape[0])
 
+        super(SwimmerMDP, self).__init__(horizon=horizon)
+
+    @property
+    def state_bounds(self):
+        d = self.d
+        lb = np.ones((2*d+4,)) * -np.inf#-1000#-np.inf
+        ub = np.ones((2*d+4,)) * np.inf#1000#np.inf
+        return lb, ub
+
     @property
     def n_actions(self):
         return self._n_actions
@@ -105,10 +114,20 @@ class SwimmerMDP(MDP):
         self.v_cm = np.zeros(2)
         self.dtheta = np.zeros(self.d)
         state = np.hstack((self.pos_cm, self.theta, self.v_cm, self.dtheta))
-        return state, self.get_current_obs()
+        return state, self.get_obs(state)
 
-    def get_current_obs(self):
-        return np.hstack(self._body_coord())
+    def demo(self, actions, exit_when_done=False):
+        state, _ = self.reset()
+        self.plot()
+        for action in actions:
+            state = self.step(state, action)[0]
+            self.plot()
+            import time
+            time.sleep(0.05)
+        pass
+
+    def get_obs(self, state):
+        return np.hstack(self._body_coord(state))
 
     def plot(self):
         self.showDomain()
@@ -137,7 +156,7 @@ class SwimmerMDP(MDP):
         plt.draw()
         #plt.show()
 
-    def _body_coord(self):
+    def _body_coord(self, state):
         """
         transforms the current state into coordinates that are more
         reasonable for learning
@@ -146,13 +165,19 @@ class SwimmerMDP(MDP):
 
         The nose position and nose velocities are referenced to the nose rotation.
         """
-        cth = np.cos(self.theta)
-        sth = np.sin(self.theta)
+        d = self.d
+        pos_cm = state[:2]
+        theta = state[2:2+d]
+        v_cm = state[2+d:4+d]
+        dtheta = state[4+d:]
+
+        cth = np.cos(theta)
+        sth = np.sin(theta)
         M = self.P - 0.5 * np.diag(self.lengths)
         #  stores the vector from the center of mass to the nose
         c2n = np.array([np.dot(M[self.nose], cth), np.dot(M[self.nose], sth)])
         #  absolute position of nose
-        T = -self.pos_cm - c2n - self.goal
+        T = -pos_cm - c2n - self.goal
         #  rotating coordinate such that nose is axis-aligned (nose frame)
         #  (no effect when  \theta_{nose} = 0)
         c2n_x = np.array([cth[self.nose], sth[self.nose]])
@@ -160,27 +185,27 @@ class SwimmerMDP(MDP):
         Tcn = np.array([np.sum(T * c2n_x), np.sum(T * c2n_y)])
 
         #  velocity at each joint relative to center of mass velocity
-        vx = -np.dot(M, sth * self.dtheta)
-        vy = np.dot(M, cth * self.dtheta)
+        vx = -np.dot(M, sth * dtheta)
+        vy = np.dot(M, cth * dtheta)
         #  velocity at nose (world frame) relative to center of mass velocity
         v2n = np.array([vx[self.nose], vy[self.nose]])
         #  rotating nose velocity to be in nose frame
-        Vcn = np.array([np.sum((self.v_cm + v2n) * c2n_x),
-                        np.sum((self.v_cm + v2n) * c2n_y)])
+        Vcn = np.array([np.sum((v_cm + v2n) * c2n_x),
+                        np.sum((v_cm + v2n) * c2n_y)])
         #  angles should be in [-pi, pi]
         ang = np.mod(
-            self.theta[1:] - self.theta[:-1] + np.pi,
+            theta[1:] - theta[:-1] + np.pi,
             2 * np.pi) - np.pi
-        return Tcn, ang, Vcn, self.dtheta
+        return Tcn, ang, Vcn, dtheta
 
     def step(self, state, action):
         d = self.d
         action = np.clip(action*2, -2, 2)
         #a = self.actions[a]
-        self.pos_cm = state[:2]
-        self.theta = state[2:2+d]
-        self.v_cm = state[2+d:4+d]
-        self.dtheta = state[4+d:]
+        #self.pos_cm = state[:2]
+        #self.theta = state[2:2+d]
+        #self.v_cm = state[2+d:4+d]
+        #self.dtheta = state[4+d:]
 
         #s = np.hstack((self.pos_cm, self.theta, self.v_cm, self.dtheta))
         ns = rk4( dsdt, state, [0, self.dt], action, self.P, self.inertia, self.G, self.U, self.lengths, self.masses, self.k1, self.k2)[-1] 
@@ -188,7 +213,10 @@ class SwimmerMDP(MDP):
         self.v_cm = ns[2 + d:4 + d]
         self.dtheta = ns[4 + d:]
         self.pos_cm = ns[:2]
-        return ns, self.get_current_obs(), self._reward(action), False
+        return ns, self.get_obs(ns), self._reward(state, action), False
+
+    def forward_dynamics(self, state, action):
+        return rk4( dsdt, state, [0, self.dt], action, self.P, self.inertia, self.G, self.U, self.lengths, self.masses, self.k1, self.k2)[-1] 
 
     def _dsdt(self, s, a):
         """ just a convenience function for testing and debugging, not really used"""
@@ -196,16 +224,22 @@ class SwimmerMDP(MDP):
             s, 0., a, self.P, self.inertia, self.G, self.U, self.lengths,
             self.masses, self.k1, self.k2)
 
-    def _reward(self, a):
+    def cost(self, state, action):
+        return -self._reward(state, action)
+
+    def final_cost(self, state):
+        return 0
+
+    def _reward(self, state, action):
         """
         penalizes the l2 distance to the goal (almost linearly) and
         a small penalty for torques coming from actions
         """
 
-        xrel = self._body_coord()[0] - self.goal
+        xrel = self._body_coord(state)[0] - self.goal
         dist = np.sum(xrel ** 2)
         return (
-            - self.cx * dist / (np.sqrt(dist) + 1) - self.cu * np.sum(a ** 2)
+            - self.cx * dist / (np.sqrt(dist) + 1) - self.cu * np.sum(action ** 2)
         )
 
 def dsdt(s, t, a, P, I, G, U, lengths, masses, k1, k2):
