@@ -1,5 +1,5 @@
 import os
-os.environ['CGT_COMPAT_MODE'] = 'cgt'
+os.environ['CGT_COMPAT_MODE'] = 'theano'
 os.environ['THEANO_FLAGS'] = 'device=cpu'
 from sampler import parallel_sampler
 # Technically, we need to add these initializations below to make sure that the

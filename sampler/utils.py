@@ -14,7 +14,6 @@ def rollout(mdp, policy, max_length=np.inf, animated=False, use_state=False):
             a, pdist = policy.get_action(s, path_length)
         else:
             a, pdist = policy.get_action(o)
-        print a
         next_s, next_o, r, d = mdp.step(s, a)
         states.append(s)
         observations.append(o)
@@ -27,8 +26,6 @@ def rollout(mdp, policy, max_length=np.inf, animated=False, use_state=False):
         s, o = next_s, next_o
         if animated:
             mdp.plot()
-            #import time
-            #time.sleep(1)
     return dict(
         states=np.vstack(states),
         observations=np.vstack(observations),

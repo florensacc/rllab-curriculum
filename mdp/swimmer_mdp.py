@@ -1,13 +1,13 @@
 """multi-link swimmer moving in a fluid."""
 
 import numpy as np
-from misc.special import rk4
-from matplotlib import colors
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from .base import ControlMDP
-
-plt.ion()
+from .base import SymbolicMDP
+import cgtcompat as theano
+import cgtcompat.tensor as TT
+from theano.tensor.slinalg import solve
+from misc.overrides import overrides
+from misc.viewer2d import Viewer2D, Colors
+from misc.ext import extract
 
 
 __copyright__ = "Copyright 2013, RLPy http://acl.mit.edu/RLPy"
@@ -16,8 +16,78 @@ __credits__ = ["Alborz Geramifard", "Robert H. Klein", "Christoph Dann",
 __license__ = "BSD 3-Clause"
 __author__ = "Christoph Dann"
 
+cnt = 0
 
-class SwimmerMDP(ControlMDP):
+
+def rk4(derivs, y0, t, *args, **kwargs):
+    """
+    Integrate 1D or ND system of ODEs using 4-th order Runge-Kutta.
+    This is a toy implementation which may be useful if you find
+    yourself stranded on a system w/o scipy.  Otherwise use
+    :func:`scipy.integrate`.
+
+    *y0*
+        initial state vector
+
+    *t*
+        sample times
+
+    *derivs*
+        returns the derivative of the system and has the
+        signature ``dy = derivs(yi, ti)``
+
+    *args*
+        additional arguments passed to the derivative function
+
+    *kwargs*
+        additional keyword arguments passed to the derivative function
+
+    Example 1 ::
+
+        ## 2D system
+
+        def derivs6(x,t):
+            d1 =  x[0] + 2*x[1]
+            d2 =  -3*x[0] + 4*x[1]
+            return (d1, d2)
+        dt = 0.0005
+        t = arange(0.0, 2.0, dt)
+        y0 = (1,2)
+        yout = rk4(derivs6, y0, t)
+
+    Example 2::
+
+        ## 1D system
+        alpha = 2
+        def derivs(x,t):
+            return -alpha*x + exp(-t)
+
+        y0 = 1
+        yout = rk4(derivs, y0, t)
+
+
+    If you have access to scipy, you should probably be using the
+    scipy.integrate tools rather than this function.
+    """
+
+    yout = [None] * len(t)
+    yout[0] = y0
+    i = 0
+    for i in np.arange(len(t) - 1):
+        thist = t[i]
+        dt = t[i + 1] - thist
+        dt2 = dt / 2.0
+        y0 = yout[i]
+
+        k1 = derivs(y0, thist, *args, **kwargs)
+        k2 = derivs(y0 + dt2 * k1, thist + dt2, *args, **kwargs)
+        k3 = derivs(y0 + dt2 * k2, thist + dt2, *args, **kwargs)
+        k4 = derivs(y0 + dt * k3, thist + dt, *args, **kwargs)
+        yout[i + 1] = y0 + dt / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4)
+    return yout
+
+
+class SwimmerMDP(SymbolicMDP):
 
     """
     A swimmer consisting of a chain of d links connected by rotational joints.
@@ -55,49 +125,47 @@ class SwimmerMDP(ControlMDP):
         self.k1 = k1
         self.k2 = k2
         self.nose = 0
-        self.masses = np.ones(d)
-        self.lengths = np.ones(d)
-        self.inertia = self.masses * self.lengths * self.lengths / 12.
-        self.goal = np.zeros(2)
+        masses = np.ones(d)
+        lengths = np.ones(d)
+        inertia = masses * lengths * lengths / 12.
+        goal = np.zeros(2)
 
         # reward function parameters
         self.cu = 0.04
         self.cx = 2.
 
         Q = np.eye(self.d, k=1) - np.eye(self.d)
-        Q[-1, :] = self.masses
+        Q[-1, :] = masses
         A = np.eye(self.d, k=1) + np.eye(self.d)
         A[-1, -1] = 0.
-        self.P = np.dot(np.linalg.inv(Q), A * self.lengths[None, :]) / 2.
+        P = np.dot(np.linalg.inv(Q), A * lengths[None, :]) / 2.
 
-        self.U = np.eye(self.d) - np.eye(self.d, k=-1)
-        self.U = self.U[:, :-1]
-        self.G = np.dot(self.P.T * self.masses[None, :], self.P)
+        U = np.eye(self.d) - np.eye(self.d, k=-1)
+        U = U[:, :-1]
 
-        # incidator variables for angles in a state representation
-        self.angles = np.zeros(2 + self.d * 2 + 1, dtype=np.bool)
-        self.angles[2:2 + self.d - 1] = True
-        self.angles[-self.d - 2:] = True
+        G = np.dot(P.T * masses[None, :], P)
+
+        self.masses = masses
+        self.lengths = lengths
+        self.inertia = inertia
+        self.goal = goal
+        self.P = P
+        self.U = U
+        self.G = G
 
         self._n_actions = d - 1
         self._observation_shape = (2*(d+1)+1,)
 
+        self._viewer = None
 
-        #self.actions = cartesian((d - 1) * [[-2., 0., 2]])
-        #self.actions_num = len(self.actions)
+        super(SwimmerMDP, self).__init__(horizon)
 
-        self.statespace_limits = [[-15, 15]] * 2 + [[-np.pi, np.pi]] * (d - 1) \
-            + [[-2, 2]] * 2 + [[-np.pi * 2, np.pi * 2]] * d
-        self.statespace_limits = np.array(self.statespace_limits)
-        self.continuous_dims = range(self.statespace_limits.shape[0])
-
-        super(SwimmerMDP, self).__init__(horizon=horizon)
 
     @property
     def state_bounds(self):
         d = self.d
-        lb = np.ones((2*d+4,)) * -np.inf#-1000#-np.inf
-        ub = np.ones((2*d+4,)) * np.inf#1000#np.inf
+        lb = np.ones((2*d+4,)) * -np.inf
+        ub = np.ones((2*d+4,)) * np.inf
         return lb, ub
 
     @property
@@ -108,55 +176,96 @@ class SwimmerMDP(ControlMDP):
     def observation_shape(self):
         return self._observation_shape
 
-    def reset(self):
-        self.theta = np.zeros(self.d)
-        self.pos_cm = np.array([10, 0])
-        self.v_cm = np.zeros(2)
-        self.dtheta = np.zeros(self.d)
-        state = np.hstack((self.pos_cm, self.theta, self.v_cm, self.dtheta))
-        return state, self.get_obs(state)
+    def reset_sym(self):
+        theta = TT.zeros(self.d)
+        pos_cm = TT.constant([10, 0])
+        v_cm = TT.zeros(2)
+        dtheta = TT.zeros(self.d)
+        state = TT.concatenate([pos_cm, theta, v_cm, dtheta]) 
+        obs = self.observation_sym(state)
+        return state, obs
 
-    def demo(self, actions, exit_when_done=False):
-        state, _ = self.reset()
-        self.plot()
-        for action in actions:
-            state = self.step(state, action)[0]
-            self.plot()
-            import time
-            time.sleep(0.05)
-        pass
+    @overrides
+    def observation_sym(self, state):
+        return TT.concatenate(self.body_coord_symbolic(state))
 
-    def get_obs(self, state):
-        return np.hstack(self._body_coord(state))
+    @overrides
+    def forward_sym(self, state, action):
+        d = self.d
+        action = TT.clip(action*2, -2, 2)
+        ns = rk4( dsdt, state, [0, self.dt], action, self.P, self.inertia, self.G, self.U, self.lengths, self.masses, self.k1, self.k2, d)[-1] 
+        return ns
 
-    def plot(self):
-        self.showDomain()
+    @overrides
+    def reward_sym(self, state, action):
+        xrel = self.body_coord_symbolic(state)[0] - self.goal
+        dist = TT.sum(xrel ** 2)
+        return (
+            - self.cx * dist / (TT.sqrt(dist) + 1) - self.cu * TT.sum(action ** 2)
+        )
 
-    def showDomain(self, a=None):
-        if a is not None:
-            a = self.actions[a]
+    @overrides
+    def done_sym(self, state):
+        return TT.constant(False)
+
+    def get_joint_coords(self, state):
+        theta, pos_cm = extract(
+            decode_state(state, self.d),
+            "theta", "pos_cm"
+        )
         T = np.empty((self.d, 2))
-        T[:, 0] = np.cos(self.theta)
-        T[:, 1] = np.sin(self.theta)
+        T[:, 0] = np.cos(theta)
+        T[:, 1] = np.sin(theta)
         R = np.dot(self.P, T)
         R1 = R - .5 * self.lengths[:, None] * T
         R2 = R + .5 * self.lengths[:, None] * T
-        Rx = np.hstack([R1[:, 0], R2[:, 0]]) + self.pos_cm[0]
-        Ry = np.hstack([R1[:, 1], R2[:, 1]]) + self.pos_cm[1]
-        #print Rx
-        #print Ry
-        #f = plt.figure("Swimmer Domain")
-        if not hasattr(self, "swimmer_lines"):
-            plt.plot(0., 0., "ro")
-            self.swimmer_lines = plt.plot(Rx, Ry)[0]
-            plt.xlim(-5, 15)
-            plt.ylim(-10, 10)
-        else:
-            self.swimmer_lines.set_data(Rx, Ry)
-        plt.draw()
-        #plt.show()
+        Rx = np.hstack([R1[:, 0], [R2[-1, 0]]]) + pos_cm[0]
+        Ry = np.hstack([R1[:, 1], [R2[-1, 1]]]) + pos_cm[1]
+        return zip(Rx, Ry)
 
-    def _body_coord(self, state):
+    # calculate the center of mass for the given state
+    #def calc_com(self, state):
+    #    points = np.array(self.get_joint_coords(state))
+    #    weight_sum = np.zeros_like(points[0])
+    #    total_mass = 0
+    #    for idx, pts in enumerate(zip(points, points[1:])):
+    #        p1, p2 = pts
+    #        weight_sum += self.masses[idx] * (p1 + p2) / 2
+    #        total_mass += self.masses[idx]
+    #    return weight_sum / total_mass
+
+    def plot(self, states=None, actions=None):
+        global cnt
+        cnt += 1
+        if self._viewer is None:
+            self._viewer = Viewer2D(xlim=[5, 15], ylim=[-5, 5])
+
+        if states is None:
+            states = [self.state]
+        if actions is None and self.action is not None:
+            actions = [self.action]
+
+        # center the viewer around the center of mass of the last state
+        #if cnt > 50:
+        #    import ipdb; ipdb.set_trace()
+        center = decode_state(states[-1], self.d)["pos_cm"][:2]
+
+        viewer = self._viewer
+        viewer.reset()
+        viewer.xlim = (center[0] - 2.5, center[0] + 2.5)
+        viewer.ylim = (center[1] - 2.5, center[1] + 2.5)
+        viewer.checker(offset=center)
+
+        d = self.d
+        for state in states:
+            points = self.get_joint_coords(state)
+            for p1, p2 in zip(points, points[1:]):
+                viewer.line(p1, p2, Colors.blue, width=0.1)
+            for p in points:
+                viewer.circle(p, radius=0.07, color=Colors.red)
+        viewer.loop_once()
+
+    def body_coord_symbolic(self, state):
         """
         transforms the current state into coordinates that are more
         reasonable for learning
@@ -166,119 +275,81 @@ class SwimmerMDP(ControlMDP):
         The nose position and nose velocities are referenced to the nose rotation.
         """
         d = self.d
-        pos_cm = state[:2]
-        theta = state[2:2+d]
-        v_cm = state[2+d:4+d]
-        dtheta = state[4+d:]
+        pos_cm, theta, v_cm, dtheta = extract(
+            decode_state(state, self.d),
+            "pos_cm", "theta", "v_cm", "dtheta"
+        )
 
-        cth = np.cos(theta)
-        sth = np.sin(theta)
-        M = self.P - 0.5 * np.diag(self.lengths)
+        cth = TT.cos(theta)
+        sth = TT.sin(theta)
+        M = self.P - 0.5 * TT.diag(self.lengths)
         #  stores the vector from the center of mass to the nose
-        c2n = np.array([np.dot(M[self.nose], cth), np.dot(M[self.nose], sth)])
+        c2n = TT.stack([TT.dot(M[self.nose], cth), TT.dot(M[self.nose], sth)])
         #  absolute position of nose
         T = -pos_cm - c2n - self.goal
         #  rotating coordinate such that nose is axis-aligned (nose frame)
         #  (no effect when  \theta_{nose} = 0)
-        c2n_x = np.array([cth[self.nose], sth[self.nose]])
-        c2n_y = np.array([-sth[self.nose], cth[self.nose]])
-        Tcn = np.array([np.sum(T * c2n_x), np.sum(T * c2n_y)])
+        c2n_x = TT.stack([cth[self.nose], sth[self.nose]])
+        c2n_y = TT.stack([-sth[self.nose], cth[self.nose]])
+        Tcn = TT.stack([TT.sum(T * c2n_x), TT.sum(T * c2n_y)])
 
         #  velocity at each joint relative to center of mass velocity
-        vx = -np.dot(M, sth * dtheta)
-        vy = np.dot(M, cth * dtheta)
+        vx = -TT.dot(M, sth * dtheta)
+        vy = TT.dot(M, cth * dtheta)
         #  velocity at nose (world frame) relative to center of mass velocity
-        v2n = np.array([vx[self.nose], vy[self.nose]])
+        v2n = TT.stack([vx[self.nose], vy[self.nose]])
         #  rotating nose velocity to be in nose frame
-        Vcn = np.array([np.sum((v_cm + v2n) * c2n_x),
-                        np.sum((v_cm + v2n) * c2n_y)])
+        Vcn = TT.stack([TT.sum((v_cm + v2n) * c2n_x),
+                        TT.sum((v_cm + v2n) * c2n_y)])
         #  angles should be in [-pi, pi]
-        ang = np.mod(
+        ang = TT.mod(
             theta[1:] - theta[:-1] + np.pi,
             2 * np.pi) - np.pi
         return Tcn, ang, Vcn, dtheta
 
-    def step(self, state, action):
-        d = self.d
-        action = np.clip(action*2, -2, 2)
-        #a = self.actions[a]
-        #self.pos_cm = state[:2]
-        #self.theta = state[2:2+d]
-        #self.v_cm = state[2+d:4+d]
-        #self.dtheta = state[4+d:]
 
-        #s = np.hstack((self.pos_cm, self.theta, self.v_cm, self.dtheta))
-        ns = rk4( dsdt, state, [0, self.dt], action, self.P, self.inertia, self.G, self.U, self.lengths, self.masses, self.k1, self.k2)[-1] 
-        self.theta = ns[2:2 + d]
-        self.v_cm = ns[2 + d:4 + d]
-        self.dtheta = ns[4 + d:]
-        self.pos_cm = ns[:2]
-        return ns, self.get_obs(ns), self._reward(state, action), False
+def decode_state(state, d):
+    pos_cm = state[:2]
+    theta = state[2:2+d]
+    v_cm = state[2+d:4+d]
+    dtheta = state[4+d:]
+    return dict(pos_cm=pos_cm, theta=theta, v_cm=v_cm, dtheta=dtheta)
 
-    def forward_dynamics(self, state, action):
-        return rk4( dsdt, state, [0, self.dt], action, self.P, self.inertia, self.G, self.U, self.lengths, self.masses, self.k1, self.k2)[-1] 
-
-    def _dsdt(self, s, a):
-        """ just a convenience function for testing and debugging, not really used"""
-        return dsdt(
-            s, 0., a, self.P, self.inertia, self.G, self.U, self.lengths,
-            self.masses, self.k1, self.k2)
-
-    def cost(self, state, action):
-        return -self._reward(state, action)
-
-    def final_cost(self, state):
-        return 0
-
-    def _reward(self, state, action):
-        """
-        penalizes the l2 distance to the goal (almost linearly) and
-        a small penalty for torques coming from actions
-        """
-
-        xrel = self._body_coord(state)[0] - self.goal
-        dist = np.sum(xrel ** 2)
-        return (
-            - self.cx * dist / (np.sqrt(dist) + 1) - self.cu * np.sum(action ** 2)
-        )
-
-def dsdt(s, t, a, P, I, G, U, lengths, masses, k1, k2):
+def dsdt(s, t, a, P, I, G, U, lengths, masses, k1, k2, d):
     """
     time derivative of system dynamics
     """
-    d = len(a) + 1
-    theta = s[2:2 + d]
-    vcm = s[2 + d:4 + d]
-    dtheta = s[4 + d:]
 
-    cth = np.cos(theta)
-    sth = np.sin(theta)
-    rVx = np.dot(P, -sth * dtheta)
-    rVy = np.dot(P, cth * dtheta)
-    Vx = rVx + vcm[0]
-    Vy = rVy + vcm[1]
+    theta, v_cm, dtheta = extract(
+        decode_state(s, d),
+        "theta", "v_cm", "dtheta"
+    )
+
+    cth = TT.cos(theta)
+    sth = TT.sin(theta)
+    rVx = TT.dot(P, -sth * dtheta)
+    rVy = TT.dot(P, cth * dtheta)
+    Vx = rVx + v_cm[0]
+    Vy = rVy + v_cm[1]
 
     Vn = -sth * Vx + cth * Vy
     Vt = cth * Vx + sth * Vy
 
-    EL1 = np.dot((v1Mv2(-sth, G, cth) + v1Mv2(cth, G, sth)) * dtheta[None, :]
+    EL1 = TT.dot((v1Mv2(-sth, G, cth) + v1Mv2(cth, G, sth)) * dtheta[None, :]
                  + (v1Mv2(cth, G, -sth) + v1Mv2(sth, G, cth)) * dtheta[:, None], dtheta)
-    EL3 = np.diag(I) + v1Mv2(sth, G, sth) + v1Mv2(cth, G, cth)
-    EL2 = - k1 * np.dot((v1Mv2(-sth, P.T, -sth) + v1Mv2(cth, P.T, cth)) * lengths[None, :], Vn) \
-          - k1 * np.power(lengths, 3) * dtheta / 12. \
+    EL3 = TT.diag(I) + v1Mv2(sth, G, sth) + v1Mv2(cth, G, cth)
+    EL2 = - k1 * TT.dot((v1Mv2(-sth, P.T, -sth) + v1Mv2(cth, P.T, cth)) * lengths[None, :], Vn) \
+          - k1 * TT.power(lengths, 3) * dtheta / 12. \
           - k2 * \
-        np.dot((v1Mv2(-sth, P.T, cth) + v1Mv2(cth, P.T, sth))
+        TT.dot((v1Mv2(-sth, P.T, cth) + v1Mv2(cth, P.T, sth))
                * lengths[None, :], Vt)
-    ds = np.zeros_like(s)
-    ds[:2] = vcm
-    ds[2:2 + d] = dtheta
-    ds[2 + d] = - \
-        (k1 * np.sum(-sth * Vn) + k2 * np.sum(cth * Vt)) / np.sum(masses)
-    ds[3 + d] = - \
-        (k1 * np.sum(cth * Vn) + k2 * np.sum(sth * Vt)) / np.sum(masses)
-    ds[4 + d:] = np.linalg.solve(EL3, EL1 + EL2 + np.dot(U, a))
-    return ds
-
+    return TT.concatenate([
+        v_cm,
+        dtheta,
+        [-(k1 * TT.sum(-sth * Vn) + k2 * TT.sum(cth * Vt)) / TT.sum(masses)],
+        [-(k1 * TT.sum(cth * Vn) + k2 * TT.sum(sth * Vt)) / TT.sum(masses)],
+        solve(EL3, EL1 + EL2 + TT.dot(U, a))
+    ])
 
 def v1Mv2(v1, M, v2):
     """
