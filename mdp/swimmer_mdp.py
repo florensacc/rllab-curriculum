@@ -4,7 +4,7 @@ import numpy as np
 from .base import SymbolicMDP
 import cgtcompat as theano
 import cgtcompat.tensor as TT
-from theano.tensor.slinalg import solve
+#from theano.tensor.slinalg import solve
 from misc.overrides import overrides
 from misc.viewer2d import Viewer2D, Colors
 from misc.ext import extract
@@ -145,16 +145,19 @@ class SwimmerMDP(SymbolicMDP):
 
         G = np.dot(P.T * masses[None, :], P)
 
-        self.masses = masses
-        self.lengths = lengths
-        self.inertia = inertia
-        self.goal = goal
-        self.P = P
-        self.U = U
-        self.G = G
+        floatX =theano.config.floatX
+
+        self.masses = masses.astype(floatX)
+        self.lengths = lengths.astype(floatX)
+        self.inertia = inertia.astype(floatX)
+        self.goal = goal.astype(floatX)
+        self.P = P.astype(floatX)
+        self.U = U.astype(floatX)
+        self.G = G.astype(floatX)
 
         self._n_actions = d - 1
-        self._observation_shape = (2*(d+1)+1,)
+        self._state_shape = (2*d+4,)
+        self._observation_shape = (2*d+3,)
 
         self._viewer = None
 
@@ -176,9 +179,13 @@ class SwimmerMDP(SymbolicMDP):
     def observation_shape(self):
         return self._observation_shape
 
+    @property
+    def state_shape(self):
+        return self._state_shape
+
     def reset_sym(self):
         theta = TT.zeros(self.d)
-        pos_cm = TT.constant([10, 0])
+        pos_cm = TT.constant([10., 0.])
         v_cm = TT.zeros(2)
         dtheta = TT.zeros(self.d)
         state = TT.concatenate([pos_cm, theta, v_cm, dtheta]) 
@@ -192,7 +199,7 @@ class SwimmerMDP(SymbolicMDP):
     @overrides
     def forward_sym(self, state, action):
         d = self.d
-        action = TT.clip(action*2, -2, 2)
+        action = TT.clip(action*2, -2., 2.)
         ns = rk4( dsdt, state, [0, self.dt], action, self.P, self.inertia, self.G, self.U, self.lengths, self.masses, self.k1, self.k2, d)[-1] 
         return ns
 
@@ -343,12 +350,13 @@ def dsdt(s, t, a, P, I, G, U, lengths, masses, k1, k2, d):
           - k2 * \
         TT.dot((v1Mv2(-sth, P.T, cth) + v1Mv2(cth, P.T, sth))
                * lengths[None, :], Vt)
+
     return TT.concatenate([
         v_cm,
         dtheta,
-        [-(k1 * TT.sum(-sth * Vn) + k2 * TT.sum(cth * Vt)) / TT.sum(masses)],
-        [-(k1 * TT.sum(cth * Vn) + k2 * TT.sum(sth * Vt)) / TT.sum(masses)],
-        solve(EL3, EL1 + EL2 + TT.dot(U, a))
+        TT.reshape(-(k1 * TT.sum(-sth * Vn) + k2 * TT.sum(cth * Vt)) / TT.sum(masses), (1,)),
+        TT.reshape(-(k1 * TT.sum(cth * Vn) + k2 * TT.sum(sth * Vt)) / TT.sum(masses), (1,)),
+        TT.slinalg.solve(EL3, EL1 + EL2 + TT.dot(U, a))
     ])
 
 def v1Mv2(v1, M, v2):

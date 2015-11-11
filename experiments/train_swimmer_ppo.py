@@ -56,6 +56,6 @@ if __name__ == '__main__':
         max_path_length=500,
         discount=0.99,
         stepsize=0.01,
-        plot=False#True
+        plot=False#True#False#True
     )
     algo.train(mdp, policy, vf)

@@ -16,7 +16,7 @@ class ParamLayer(L.Layer):
             # if the input has more than two dimensions, flatten it into a
             # batch of feature vectors.
             input = input.flatten(2)
-        return T.tile(self.param, (input.shape[0], 1))#input, self.param)
+        return T.tile(self.param, (input.shape[0], 1))
 
 
 class OpLayer(L.Layer):

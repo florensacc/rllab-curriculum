@@ -41,13 +41,17 @@ class ControlMDP(MDP):
     def forward_dynamics(self, state, action):
         raise NotImplementedError
 
+    @property
+    def state_shape(self):
+        raise NotImplementedError
+
 class SymbolicMDP(ControlMDP):
 
     def __init__(self, horizon):
         super(SymbolicMDP, self).__init__(horizon)
-        s = T.vector('state')
-        a = T.vector('action')
-        ns = T.vector('next_state')
+        s = T.vector('state', fixed_shape=self.state_shape)
+        a = T.vector('action', fixed_shape=(self.n_actions,))
+        ns = T.vector('next_state', fixed_shape=self.state_shape)
         self._f_obs = cached_function([s, a], self.observation_sym(s))
         self._f_forward = cached_function([s, a], self.forward_sym(s, a))
         self._f_reward = cached_function([s, a], self.reward_sym(s, a))
@@ -85,13 +89,14 @@ class SymbolicMDP(ControlMDP):
 
     def step_sym(self, state, action):
         ns = self.forward_sym(state, action)
-        obs = self.observation_sym(state)
+        obs = self.observation_sym(ns)
         reward = self.reward_sym(state, action)
         done = self.done_sym(ns)
         return ns, obs, reward, done
 
     def reset(self):
-        return self._f_reset()
+        res = self._f_reset()
+        return res
 
     def step(self, state, action):
         ns, obs, reward, done = self._f_step(state, action)

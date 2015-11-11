@@ -34,6 +34,10 @@ class CartpoleMDP(SymbolicMDP):
         return (4,)
 
     @property
+    def state_shape(self):
+        return (4,)
+
+    @property
     def n_actions(self):
         return 1
 
@@ -46,7 +50,7 @@ class CartpoleMDP(SymbolicMDP):
         ucost = 1e-5*(u**2).sum(axis=u.ndim-1)
         xcost = 1-TT.cos(th)
         done = self.done_sym(state)
-        notdone = 1-done
+        notdone = 1.-TT.cast(done, 'float32')
         reward = notdone*10 - notdone*xcost - notdone*ucost
         return reward
 
@@ -87,7 +91,7 @@ class CartpoleMDP(SymbolicMDP):
         l = 1. # length of pole
 
         def sign(x):
-            return TT.switch(x>0, 1, -1)
+            return TT.switch(x>0, 1., -1.)
 
         thddot = -(-g*TT.sin(th1)
          + TT.cos(th1) * (-u0 - mp * l *thdot**2 * TT.sin(th1) + muc*sign(zdot))/(mc+mp)

@@ -40,4 +40,4 @@ def cached_function(inputs, outputs):
             pickle.dump(fun, f, protocol=pickle.HIGHEST_PROTOCOL)
         return fun
     else:
-        return cgt.function(inputs, outputs)
+        return cgtcompat.function(inputs, outputs)

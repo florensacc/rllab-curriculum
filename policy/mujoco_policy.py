@@ -22,7 +22,7 @@ class MujocoPolicy(LasagnePolicy, Serializable):
     def __init__(self, mdp, hidden_sizes=[32,32], nonlinearity=NL.tanh):
 
         # create network
-        input_var = T.matrix('input')
+        input_var = T.matrix('input', fixed_shape=(None, mdp.observation_shape[0]))
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]), input_var=input_var)
         l_hidden = l_input
         for idx, hidden_size in enumerate(hidden_sizes):
@@ -35,6 +35,7 @@ class MujocoPolicy(LasagnePolicy, Serializable):
 
         self._n_actions = mdp.n_actions
         self._input_var = input_var
+        import ipdb; ipdb.set_trace()
         self._pdist_var = T.concatenate([mean_var, log_std_var], axis=1)
         self._compute_action_params = theano.function([input_var], [mean_var, log_std_var], allow_input_downcast=True)
 
