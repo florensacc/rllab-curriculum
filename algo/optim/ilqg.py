@@ -8,7 +8,7 @@ from misc.ext import extract
 #class NonPositiveDefiniteError(Exception):
 #    pass
 
-def forward_pass(x0, uref, sysdyn, cost_func, final_cost_func, K=None, xref=None):
+def forward_pass(x0, uref, f_forward, f_cost, f_final_cost, K=None, xref=None):
     Dx = len(x0)
     N, Du = uref.shape
     x = np.zeros((N+1, Dx))
@@ -16,14 +16,14 @@ def forward_pass(x0, uref, sysdyn, cost_func, final_cost_func, K=None, xref=None
     cost = 0
     x[0] = x0
     for t in range(N):
-        if K and xref:
+        if K is not None and xref is not None:
             u = uref[t] + K[t].dot(x[t] - xref[t])
         else:
             u = uref[t]
-        x[t+1] = sysdyn(x[t], u)
-        cost += cost_func(x[t], u)
+        x[t+1] = f_forward(x[t], u)
+        cost += f_cost(x[t], u)
         uout[t] = u
-    cost += final_cost_func(x[N])
+    cost += f_final_cost(x[N])
     return dict(x=x, cost=cost, u=uout)
 
 def jacobian(x, f, eps=1e-2):
@@ -47,7 +47,7 @@ def grad(x, f, eps=1e-2):
         g[dx] = (f(xp) - f(xn)) / (2*eps)#scaled_eps)
     return g
 
-def linearize(x, u, sysdyn, cost_func, final_cost_func):
+def linearize(x, u, f_forward, f_cost, f_final_cost, grad_hints=None):
     
     Dx = x.shape[1]
     N, Du = u.shape
@@ -59,24 +59,38 @@ def linearize(x, u, sysdyn, cost_func, final_cost_func):
     cuu = np.zeros((N, Du, Du))
     cxu = np.zeros((N, Dx, Du))
 
+    if grad_hints is None:
+        grad_hints = {}
+
+    df_dx = grad_hints.get('df_dx', lambda x0, u0: jacobian(x0, lambda x: f_forward(x, u0)))
+    df_du = grad_hints.get('df_du', lambda x0, u0: jacobian(u0, lambda u: f_forward(x0, u)))
+    dc_dx = grad_hints.get('dc_dx', lambda x0, u0: grad(x0, lambda x: f_cost(x, u0)))
+    dc_du = grad_hints.get('dc_du', lambda x0, u0: grad(u0, lambda u: f_cost(x0, u)))
+    dc_dxx = grad_hints.get('dc_dxx', lambda x0, u0: jacobian(x0, lambda x: grad(x, lambda x: f_cost(x, u0))))
+    dc_dxu = grad_hints.get('dc_dxu', lambda x0, u0: jacobian(u0, lambda u: grad(x0, lambda x: f_cost(x, u))))
+    dc_duu = grad_hints.get('dc_duu', lambda x0, u0: jacobian(u0, lambda u: grad(u0, lambda u: f_cost(x0, u))))
+    dcf_dx = grad_hints.get('dcf_dx', lambda x0: grad(x0, f_final_cost))
+    dcf_dxx = grad_hints.get('dcf_dxx', lambda x0: jacobian(x0, lambda x: grad(x, f_final_cost)))
+
     for k in range(N):
-        fx[k] = jacobian(x[k], lambda x: sysdyn(x, u[k]))
-        fu[k] = jacobian(u[k], lambda u: sysdyn(x[k], u))
-        cx[k] = grad(x[k], lambda x: cost_func(x, u[k]))
-        cu[k] = grad(u[k], lambda u: cost_func(x[k], u))
-        cxu[k] = jacobian(u[k], lambda u: grad(x[k], lambda x: cost_func(x, u)))
-        cuu[k] = jacobian(u[k], lambda u: grad(u, lambda u: cost_func(x[k], u)))
+        fx[k] = df_dx(x[k], u[k])
+        fu[k] = df_du(x[k], u[k])
+        cx[k] = dc_dx(x[k], u[k])
+        cu[k] = dc_du(x[k], u[k])
+        cxx[k] = dc_dxx(x[k], u[k])
+        cxu[k] = dc_dxu(x[k], u[k])
+        cuu[k] = dc_duu(x[k], u[k])
         
-    cx[N] = grad(x[N], final_cost_func)
-    cxx[N] = jacobian(x[N], lambda x: grad(x, final_cost_func))
+    cx[N] = dcf_dx(x[N])
+    cxx[N] = dcf_dxx(x[N])
     return dict(fx=fx, fu=fu, cx=cx, cu=cu, cxx=cxx, cxu=cxu, cuu=cuu)
 
-def backward_pass(x, u, sysdyn, cost_func, final_cost_func, reg):
+def backward_pass(x, u, f_forward, f_cost, f_final_cost, grad_hints, reg):
     Dx = x.shape[1]
     N, Du = u.shape
     print 'linearizing...'
     fx, fu, cx, cu, cxx, cxu, cuu = extract(
-        linearize(x, u, sysdyn, cost_func, final_cost_func),
+        linearize(x, u, f_forward, f_cost, f_final_cost),
         "fx", "fu", "cx", "cu", "cxx", "cxu", "cuu"
     )
     print 'linearized'
@@ -120,7 +134,13 @@ def backward_pass(x, u, sysdyn, cost_func, final_cost_func, reg):
         dVxx += 0.5*k[t].T.dot(Quu[t]).dot(k[t])
     return dict(Vx=Vx, Vxx=Vxx, k=k, K=K, dVx=dVx, dVxx=dVxx, Quu=Quu)
 
-def solve(x0, uinit, sysdyn, cost_func, final_cost_func,
+def solve(
+        x0,
+        uinit,
+        f_forward,
+        f_cost,
+        f_final_cost,
+        grad_hints=None,
         max_iter=100,
         min_reduction=0,
         max_line_search_iter=8,
@@ -128,6 +148,8 @@ def solve(x0, uinit, sysdyn, cost_func, final_cost_func,
         lambda_scale_factor=10.0,
         lambda_max=1e6,
         lambda_min=1e-3,
+        rel_tol=1e-3,
+        abs_tol=1e-4,
         ):
     
     Dx = len(x0)
@@ -140,43 +162,40 @@ def solve(x0, uinit, sysdyn, cost_func, final_cost_func,
     
     for itr in range(max_iter):
         x, cost = extract(
-            forward_pass(x0, u, sysdyn, cost_func, final_cost_func),
-            "x", "cost"
+                forward_pass(x0, u, f_forward, f_cost, f_final_cost),
+                "x", "cost"
         )
-        print 'cost:', cost
 
         bwd_succeeded = False
         while not bwd_succeeded:
             try:
                 print 'backward pass...'
                 Vx, Vxx, k, K, dVx, dVxx, Quu = extract(
-                    backward_pass(x, u, sysdyn, cost_func, final_cost_func, reg=lambda_),
+                    backward_pass(x, u, f_forward, f_cost, f_final_cost, grad_hints, reg=lambda_),
                     "Vx", "Vxx", "k", "K", "dVx", "dVxx", "Quu"
                 )
                 bwd_succeeded = True
             except LinAlgError as e:#NonPositiveDefiniteError:
-                print e
+                #print e
                 lambda_ = max(lambda_ * lambda_scale_factor, lambda_min)
-                print 'increasing lambda to %f' % lambda_
+                #print 'increasing lambda to %f' % lambda_
+                #import ipdb; ipdb.set_trace()
                 if lambda_ > lambda_max:
                     break
 
         if not bwd_succeeded:
-            print("Cannot find positive definition solution even with very large regularization")
-            break
-
-        #import ipdb; ipdb.set_trace()
+            raise ValueError("Cannot find positive definition solution even with very large regularization")
 
         alpha = 1
         fwd_succeeded = False
         for _ in range(max_line_search_iter):
-            print 'alpha: ', alpha
+            #print 'alpha: ', alpha
             # unew is different from u+alpha*k because of the feedback control term
             xnew, cnew, unew = extract(
-                forward_pass(x0, u+alpha*k, sysdyn, cost_func, final_cost_func, K=K, xref=x),
+                forward_pass(x0, u+alpha*k, f_forward, f_cost, f_final_cost, K=K, xref=x),
                 "x", "cost", "u"
             )
-            print 'cnew:', cnew#u+alpha*k
+            #print 'cnew:', cnew#u+alpha*k
             dcost = cost - cnew
             expected = -alpha*(dVx+alpha*dVxx)
             if expected < 0:
@@ -186,12 +205,13 @@ def solve(x0, uinit, sysdyn, cost_func, final_cost_func,
                 break
             else:
                 alpha = alpha * 0.5
+                print 'expected decrease is less than min reduction: decreasing alpha to %f' % alpha
         if fwd_succeeded:
             lambda_ = min(lambda_, 1) / lambda_scale_factor#, lambda_min)
             if lambda_ < lambda_min:
-                lambda_ = 0
+                lambda_ = lambda_min#0
             u = unew
-            if abs(cost - cnew) / abs(cost) < 1e-6:
+            if abs(cost - cnew) / abs(cost) < rel_tol or abs(cost - cnew) < abs_tol:
                 print 'no cost improvement'
                 break
             cost = cnew
@@ -200,5 +220,6 @@ def solve(x0, uinit, sysdyn, cost_func, final_cost_func,
             if lambda_ > lambda_max:
                 print("Cannot improve objective even with large regularization")
                 break
+        yield dict(u=u, K=K, k=k, x=x, Quu=Quu)
         print 'lambda:', lambda_
-    return dict(u=u, K=K, k=k, x=x, Quu=Quu)
+    yield dict(u=u, K=K, k=k, x=x, Quu=Quu)

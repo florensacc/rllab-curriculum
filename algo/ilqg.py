@@ -24,17 +24,18 @@ class ILQG(object):
     def train(self, mdp):
         # plan directly on the states
         x0, _ = mdp.reset()
-        uinit = (np.random.rand(mdp.horizon, mdp.n_actions) - 0.5)# * 0.1
-        mdp.demo(uinit)
-        #du = K*dx
-        u, K, k, x, Quu = ilqg.solve(
+        uinit = (np.random.rand(mdp.horizon, mdp.n_actions) - 0.5)
+        xinit = ilqg.forward_pass(x0, uinit, f_forward=mdp.forward, f_cost=mdp.cost, f_final_cost=mdp.final_cost)["x"]
+        mdp.plot(xinit, uinit, pause=True)
+        for result in ilqg.solve(
                 x0,
                 uinit,
                 f_forward=mdp.forward,
                 f_cost=mdp.cost,
                 f_final_cost=mdp.final_cost,
                 grad_hints=mdp.grad_hints,
-        )
+                ):
+            mdp.plot(result["x"], pause=True)
         mdp.noise_level = 0.01
         print 'rollout...'
         rollout(mdp, LinearGaussianPolicy(u, K, k, x), max_length=mdp.horizon, animated=True, use_state=True)

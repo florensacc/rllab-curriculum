@@ -45,6 +45,9 @@ class ControlMDP(MDP):
     def state_shape(self):
         raise NotImplementedError
 
+    def plot(self, states=None, actions=None, pause=False):
+        raise NotImplementedError
+
 class SymbolicMDP(ControlMDP):
 
     def __init__(self, horizon):

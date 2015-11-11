@@ -4,6 +4,8 @@ import numpy as np
 from .base import SymbolicMDP
 from misc.overrides import overrides
 from misc.ext import extract, merge_dict
+from misc.viewer2d import Viewer2D, Colors
+import pygame
 
 # code adapted from John's control repo
 class CartpoleMDP(SymbolicMDP):
@@ -14,7 +16,7 @@ class CartpoleMDP(SymbolicMDP):
         self.max_pole_speed = 4.
         self.max_force = 10.
         self.dt = .05
-        self.viewer = None
+        self._viewer = None
         super(CartpoleMDP, self).__init__(horizon)
 
     def reset_sym(self):
@@ -128,47 +130,47 @@ class CartpoleMDP(SymbolicMDP):
         th = TT.take(x, 2, axis=x.ndim-1)
         return (z > self.max_cart_pos) | (z < -self.max_cart_pos) | (th > self.max_pole_angle) | (th < -self.max_pole_angle) 
 
-    def plot(self):
-        x = self.state
-        u = self.action
+    def plot(self, states=None, actions=None, pause=False):
 
-        from misc.pygameviewer import PygameViewer, pygame
-        if self.viewer is None:
-            self.viewer = PygameViewer()
-        screen = self.viewer.screen
-        screen.fill((255,255,255))
-        
-        world_width = 10
-        screen_width = screen.get_width()
-        screen_height = screen.get_height()
-        scale = screen_width/world_width
-        
-        cartpos = x[0]*scale+screen_width/2
-        
+        if states is None:
+            states = [self.state]
+        if actions is None:
+            actions = [self.action]
 
-        poleang = x[2]
-        if u:
-            force = u[0]
-        
-        poleheight = 100
-        polewidth=10
-                
-        cartwidth=50
-        cartheight=30
+        if self._viewer is None:
+            self._viewer = Viewer2D(size=(640, 480), xlim=[-5,5], ylim=[-5.0/640*480,5.0/640*480])
 
-        cartleftx = cartpos - cartwidth/2
-        carttopy  = screen_height/2 - cartheight/2
+        viewer = self._viewer
+        viewer.fill(Colors.white)
 
+        def draw_cart(x, alpha=255):
+            pole_width = 10 * 10.0 / 640
+            pole_height = 7.5 * 100.0 / 480
+            cart_width = 10 * 50.0 / 640
+            cart_height = 7.5 * 30.0 / 480
 
-        pygame.draw.rect(screen, (0,0,0), pygame.Rect(cartleftx, carttopy, cartwidth,cartheight))
-        
-        poleorigin = np.array([cartpos, carttopy])
-        polelocalpoints = np.array([[-polewidth/2, 0],[polewidth/2,0],[polewidth/2,-poleheight],[-polewidth/2,-poleheight]])
-        polerotmat = np.array([[np.cos(poleang),np.sin(poleang)],[-np.sin(poleang),np.cos(poleang)]])
-        poleworldpoints = poleorigin[None,:] + polelocalpoints.dot(polerotmat)
-        
-        pygame.draw.polygon(screen, (0,255,0), poleworldpoints)
-        
-        if u:
-            pygame.draw.line(screen, (255,0,0), (cartpos, screen_height/2), (cartpos + force*100, screen_height/2),5)
-        pygame.display.flip()
+            cart_size = np.array([cart_width, cart_height])
+            cart_pos = np.array([x[0], 0])
+
+            poleang = x[2]
+            #if u:
+            #    force = u[0]
+            
+            viewer.rect((0, 0, 0, alpha), cart_pos, cart_size)
+            pole_origin = np.array([x[0], cart_height / 2])
+            pole_local_points = np.array([[-pole_width/2, 0], [pole_width/2, 0], [pole_width/2, pole_height], [-pole_width/2, pole_height]])
+            pole_rotmat = np.array([[np.cos(poleang),-np.sin(poleang)],[np.sin(poleang),np.cos(poleang)]])
+            viewer.polygon((0, 255, 0, alpha), pole_origin[None, :] + pole_local_points.dot(pole_rotmat))
+            
+            #if u:
+            #    viewer.line(Colors.red, cart_pos, (x[0] + force, 0), width=0.1)
+        if len(states) <= 2:
+            map(draw_cart, states)
+        else:
+            draw_cart(states[0])
+            for i in range(1, len(states) - 1):
+                draw_cart(states[i], 30)
+            draw_cart(states[-1])
+        viewer.loop_once()
+        if pause:
+            viewer.pause()

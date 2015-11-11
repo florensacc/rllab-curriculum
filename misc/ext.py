@@ -53,3 +53,9 @@ class lazydict(object):
         if key not in self._dict:
             self._dict[key] = self._lazy_dict[key]()
         return self._dict[key]
+
+    def get(self, key, default=None):
+        if key in self._lazy_dict:
+            return self[key]
+        return default
+

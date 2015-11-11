@@ -249,7 +249,7 @@ class SwimmerMDP(SymbolicMDP):
     #        total_mass += self.masses[idx]
     #    return weight_sum / total_mass
 
-    def plot(self, states=None, actions=None):
+    def plot(self, states=None, actions=None, pause=False):
         global cnt
         cnt += 1
         if self._viewer is None:

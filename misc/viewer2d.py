@@ -14,11 +14,14 @@ class Viewer2D(object):
     def __init__(self, size=(640, 480), xlim=None, ylim=None):
         pygame.init()
         screen = pygame.display.set_mode(size)
+        #surface = pygame.surface(size, pygame.SRCALPHA)
         if xlim is None:
-            xlim = (0, self.size[0])
+            xlim = (0, size[0])
         if ylim is None:
-            ylim = (0, self.size[1])
+            ylim = (0, size[1])
         self._screen = screen
+        #self._surface = surface
+        #self.screen.blit(self.surface, (0, 0))
         self._xlim = xlim
         self._ylim = ylim
 
@@ -63,9 +66,12 @@ class Viewer2D(object):
         return min(self.screen.get_width() / (xmax - xmin), self.screen.get_height() / (ymax - ymin))
 
     def scale_size(self, size):
+        if hasattr(size, '__len__'):
+            x, y = size
+            return (self.scale_x(x + self.xlim[0]), self.screen.get_height() - self.scale_y(y + self.ylim[0]))
         return size * self.scale_factor
 
-    def line(self, p1, p2, color, width=None):
+    def line(self, color, p1, p2, width=None):
         if width is None:
             width = 1
         else:
@@ -74,8 +80,28 @@ class Viewer2D(object):
         x2, y2 = self.scale_point(p2)
         pygame.draw.line(self.screen, color, (x1, y1), (x2, y2), width)
 
-    def circle(self, p, radius, color):
+    def circle(self, color, p, radius):
         pygame.draw.circle(self.screen, color, self.scale_point(p), int(self.scale_size(radius)))
+
+    def rect(self, color, center, size):
+        cx, cy = self.scale_point(center)
+        w, h = self.scale_size(size)
+        if len(color) > 3:
+            s = pygame.Surface((w, h), pygame.SRCALPHA)
+            s.fill(color)
+            self.screen.blit(s, (cx-w/2, cy-h/2))
+            #pygame.draw.rect(self.surface, color, pygame.Rect(cx-w/2, cy-h/2, w, h))
+        else:
+            pygame.draw.rect(self.screen, color, pygame.Rect(cx-w/2, cy-h/2, w, h))
+
+    def polygon(self, color, points):
+        if len(color) > 3:
+            s = pygame.Surface((self.screen.get_width(), self.screen.get_height()), pygame.SRCALPHA)
+            s.fill((0, 0, 0, 0))
+            pygame.draw.polygon(s, color, map(self.scale_point, points))
+            self.screen.blit(s, (0, 0))
+        else:
+            pygame.draw.polygon(self.screen, color, map(self.scale_point, points))
 
     @property
     def screen(self):
@@ -99,3 +125,11 @@ class Viewer2D(object):
             for col in range(-1, int(np.ceil(screen_width * 1.0 / checker_size))+1):
                 the_square = (col*checker_size+offset_x, row*checker_size+offset_y, checker_size, checker_size)
                 self.screen.fill(colors[(start_idx+row+col)%2], the_square)
+
+    def pause(self):
+        print "press any key on the screen to continue..."
+        while True:
+            event = pygame.event.wait()
+            if event.type == pygame.KEYDOWN:
+                break
+        print "continuing"
