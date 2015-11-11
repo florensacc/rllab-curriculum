@@ -54,6 +54,18 @@ class CartpoleMDP(SymbolicMDP):
         reward = notdone*10 - notdone*xcost - notdone*ucost
         return reward
 
+    def cost_sym(self, state, action):
+        u, th = extract(
+            self._decode(state, action),
+            "u", "th"
+        )
+        ucost = 1e-5*(u**2).sum(axis=u.ndim-1)
+        xcost = 1-TT.cos(th)
+        return xcost + ucost
+
+    def final_cost_sym(self, state):
+        return TT.constant(0)
+
     @overrides
     def observation_sym(self, state):
         return state

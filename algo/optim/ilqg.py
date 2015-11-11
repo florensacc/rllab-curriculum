@@ -26,7 +26,7 @@ def forward_pass(x0, uref, sysdyn, cost_func, final_cost_func, K=None, xref=None
     cost += final_cost_func(x[N])
     return dict(x=x, cost=cost, u=uout)
 
-def jacobian(x, f, eps=1e-3):
+def jacobian(x, f, eps=1e-2):
     Nx = len(x)
     Nf = len(f(x))
     J = np.zeros((Nf, Nx))
@@ -37,7 +37,7 @@ def jacobian(x, f, eps=1e-3):
         J[:, dx] = (f(xp) - f(xn)) / (2*eps)
     return J
 
-def grad(x, f, eps=1e-3):
+def grad(x, f, eps=1e-2):
     Nx = len(x)
     g = np.zeros(Nx)
     eyex = np.eye(Nx)

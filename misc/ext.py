@@ -41,3 +41,15 @@ def cached_function(inputs, outputs):
         return fun
     else:
         return tensorfuse.function(inputs, outputs)
+
+# Immutable, lazily evaluated dict
+class lazydict(object):
+    
+    def __init__(self, **kwargs):
+        self._lazy_dict = kwargs
+        self._dict = {}
+
+    def __getitem__(self, key):
+        if key not in self._dict:
+            self._dict[key] = self._lazy_dict[key]()
+        return self._dict[key]

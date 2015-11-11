@@ -30,9 +30,10 @@ class ILQG(object):
         u, K, k, x, Quu = ilqg.solve(
                 x0,
                 uinit,
-                sysdyn=mdp.forward_dynamics,
-                cost_func=mdp.cost,
-                final_cost_func=mdp.final_cost,
+                f_forward=mdp.forward,
+                f_cost=mdp.cost,
+                f_final_cost=mdp.final_cost,
+                grad_hints=mdp.grad_hints,
         )
         mdp.noise_level = 0.01
         print 'rollout...'

@@ -212,6 +212,14 @@ class SwimmerMDP(SymbolicMDP):
         )
 
     @overrides
+    def cost_sym(self, state, action):
+        return - self.reward_sym(state, action)
+
+    @overrides
+    def final_cost_sym(self, state):
+        return TT.constant(0)
+
+    @overrides
     def done_sym(self, state):
         return TT.constant(False)
 
@@ -356,7 +364,7 @@ def dsdt(s, t, a, P, I, G, U, lengths, masses, k1, k2, d):
         dtheta,
         TT.reshape(-(k1 * TT.sum(-sth * Vn) + k2 * TT.sum(cth * Vt)) / TT.sum(masses), (1,)),
         TT.reshape(-(k1 * TT.sum(cth * Vn) + k2 * TT.sum(sth * Vt)) / TT.sum(masses), (1,)),
-        TT.slinalg.solve(EL3, EL1 + EL2 + TT.dot(U, a))
+        TT.dot(TT.nlinalg.matrix_inverse(EL3), EL1 + EL2 + TT.dot(U, a))
     ])
 
 def v1Mv2(v1, M, v2):

@@ -1,5 +1,5 @@
 import os
-os.environ['TENSORFUSE_MODE'] = 'theano'
+os.environ['TENSORFUSE_MODE'] = 'tf'
 from mdp.cartpole_mdp import CartpoleMDP
 from mdp.swimmer_mdp import SwimmerMDP
 
