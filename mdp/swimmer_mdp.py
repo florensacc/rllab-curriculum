@@ -16,9 +16,6 @@ __credits__ = ["Alborz Geramifard", "Robert H. Klein", "Christoph Dann",
 __license__ = "BSD 3-Clause"
 __author__ = "Christoph Dann"
 
-cnt = 0
-
-
 def rk4(derivs, y0, t, *args, **kwargs):
     """
     Integrate 1D or ND system of ODEs using 4-th order Runge-Kutta.
@@ -250,8 +247,6 @@ class SwimmerMDP(SymbolicMDP):
     #    return weight_sum / total_mass
 
     def plot(self, states=None, actions=None, pause=False):
-        global cnt
-        cnt += 1
         if self._viewer is None:
             self._viewer = Viewer2D(xlim=[5, 15], ylim=[-5, 5])
 
@@ -261,24 +256,33 @@ class SwimmerMDP(SymbolicMDP):
             actions = [self.action]
 
         # center the viewer around the center of mass of the last state
-        #if cnt > 50:
-        #    import ipdb; ipdb.set_trace()
         center = decode_state(states[-1], self.d)["pos_cm"][:2]
 
         viewer = self._viewer
         viewer.reset()
         viewer.xlim = (center[0] - 2.5, center[0] + 2.5)
         viewer.ylim = (center[1] - 2.5, center[1] + 2.5)
+
         viewer.checker(offset=center)
 
         d = self.d
-        for state in states:
+
+        def draw_state(state, alpha=255):
             points = self.get_joint_coords(state)
             for p1, p2 in zip(points, points[1:]):
-                viewer.line(p1, p2, Colors.blue, width=0.1)
+                viewer.line((0, 0, 255, alpha), p1, p2, width=0.1)
             for p in points:
-                viewer.circle(p, radius=0.07, color=Colors.red)
+                viewer.circle((255, 0, 0, alpha), p, radius=0.07)
+        if len(states) <= 2:
+            map(draw_state, states)
+        else:
+            draw_state(states[0])
+            for i in range(1, len(states) - 1):
+                draw_state(states[i], 40)
+            draw_state(states[-1])
         viewer.loop_once()
+        if pause:
+            viewer.pause()
 
     def body_coord_symbolic(self, state):
         """

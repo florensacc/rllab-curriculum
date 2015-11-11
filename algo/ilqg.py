@@ -24,7 +24,7 @@ class ILQG(object):
     def train(self, mdp):
         # plan directly on the states
         x0, _ = mdp.reset()
-        uinit = (np.random.rand(mdp.horizon, mdp.n_actions) - 0.5)
+        uinit = (np.random.rand(mdp.horizon, mdp.n_actions) - 0.5)*2
         xinit = ilqg.forward_pass(x0, uinit, f_forward=mdp.forward, f_cost=mdp.cost, f_final_cost=mdp.final_cost)["x"]
         mdp.plot(xinit, uinit, pause=True)
         for result in ilqg.solve(

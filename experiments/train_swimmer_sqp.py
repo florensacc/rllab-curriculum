@@ -1,12 +1,9 @@
-
-print 'here'
 from mdp.swimmer_mdp import SwimmerMDP
 import numpy as np
 import scipy as sp
 from misc.ext import extract
 from gurobipy import *
 
-print 'here'
 def run_test():
 
     mdp = SwimmerMDP()
@@ -14,12 +11,12 @@ def run_test():
 
     from algo.optim.ilqg import jacobian, grad, linearize, forward_pass
 
-    def compute_cost(x, xref, u, merit, cost_func, final_cost_func):
+    def compute_cost(x, xref, u, merit, f_cost, f_final_cost):
         loss = 0
         N = x.shape[0] - 1
-        loss = final_cost_func(x[N])
+        loss = f_final_cost(x[N])
         for t in range(N):
-            loss += cost_func(x[t], u[t])
+            loss += f_cost(x[t], u[t])
             loss += merit * np.sum(np.abs(x[t+1] - xref[t+1]))
         return loss
 
@@ -45,9 +42,10 @@ def run_test():
     #mdp.demo(uinit)#[])#u)
 
 
-    sysdyn = mdp.forward_dynamics
-    cost_func = mdp.cost
-    final_cost_func = mdp.final_cost
+    f_forward = mdp.forward
+    f_cost = mdp.cost
+    f_final_cost = mdp.final_cost
+    grad_hints = mdp.grad_hints
     x = np.array(xinit)
     u = np.array(uinit)
     improve_ratio_threshold = 0.25#0.25
@@ -83,8 +81,8 @@ def run_test():
     for merit_itr in range(max_merit_itr):
         trust_box_size = 0.1
         
-        xref = [None] + [sysdyn(x[t], u[t]) for t in range(N)]
-        before_cost = compute_cost(x, xref, u, merit, cost_func, final_cost_func)
+        xref = [None] + [f_forward(x[t], u[t]) for t in range(N)]
+        before_cost = compute_cost(x, xref, u, merit, f_cost, f_final_cost)
 
         dx = [[None] * Dx for _ in range(N+1)]
         du = [[None] * Du for _ in range(N)]
@@ -115,14 +113,14 @@ def run_test():
 
         while True:
             # W/ this line: shooting; w/o: collocation
-            # x = forward_pass(x[0], u, sysdyn, cost_func, final_cost_func)["x"]
+            # x = forward_pass(x[0], u, f_forward, f_cost, f_final_cost)["x"]
 
             mdp.demo(u, True)
             scale_t += 1
             x_scale = np.clip((decay_rate * x_scale + (1 - decay_rate) * x), min_scaling, max_scaling)
             u_scale = np.clip((decay_rate * u_scale + (1 - decay_rate) * u), min_scaling, max_scaling)
 
-            xref = [None] + [sysdyn(x[t], u[t]) for t in range(N)]
+            xref = [None] + [f_forward(x[t], u[t]) for t in range(N)]
 
             within_merit_itr += 1
             if within_merit_itr > 10:
@@ -131,20 +129,20 @@ def run_test():
 
             print 'linearizing'
             fx, fu, cx, cu, cxx, cxu, cuu = extract(
-                linearize(x, u, sysdyn, cost_func, final_cost_func),
+                linearize(x, u, f_forward, f_cost, f_final_cost, grad_hints),
                 "fx", "fu", "cx", "cu", "cxx", "cxu", "cuu"
             )
 
 
             print 'linearized'
             
-            loss = ip(cx[N], dx[N]) + quad_form(dx[N], cxx[N]) + final_cost_func(x[N])
+            loss = ip(cx[N], dx[N]) + quad_form(dx[N], cxx[N]) + f_final_cost(x[N])
 
             aux_constrs = []
                 
             for t in range(N):
                 cquad = np.vstack([np.hstack([cxx[t], cxu[t]]), np.hstack([cxu[t].T, cuu[t]])])
-                loss += ip(cx[t], dx[t]) + ip(cu[t], du[t]) + quad_form(dx[t] + du[t], cquad) + cost_func(x[t], u[t])
+                loss += ip(cx[t], dx[t]) + ip(cu[t], du[t]) + quad_form(dx[t] + du[t], cquad) + f_cost(x[t], u[t])
                 for k in range(Dx):
                     loss += merit * norm_aux[t][k]
                     rhs = x[t+1,k] + dx[t+1][k] - xref[t+1][k] - ip(fx[t,k], dx[t]) - ip(fu[t,k], du[t])
@@ -157,7 +155,7 @@ def run_test():
             
             no_improve = False
 
-            before_cost = compute_cost(x, xref, u, merit, cost_func, final_cost_func)
+            before_cost = compute_cost(x, xref, u, merit, f_cost, f_final_cost)
 
             try:
                 while trust_box_size > min_trust_box_size:
@@ -205,11 +203,11 @@ def run_test():
                         print "converged because improvement was small (%f < %f)" % (model_improve, min_model_improve)
                         no_improve = True
                         break
-                    xnewref = [None] + [sysdyn(xnew[t], unew[t]) for t in range(N)]
+                    xnewref = [None] + [f_forward(xnew[t], unew[t]) for t in range(N)]
 
 
-                    #xnew_shooting, _, _ = forward_pass(x[0], unew, sysdyn, cost_func, final_cost_func)
-                    true_after_cost = compute_cost(xnew, xnewref, unew, merit, cost_func, final_cost_func)
+                    #xnew_shooting, _, _ = forward_pass(x[0], unew, f_forward, f_cost, f_final_cost)
+                    true_after_cost = compute_cost(xnew, xnewref, unew, merit, f_cost, f_final_cost)
                     print "cost before: ", before_cost, "cost after: ", after_cost, "true cost after: ", true_after_cost
 
                     #x = xnew
@@ -266,4 +264,3 @@ def run_test():
     mdp.demo(u)
 
 run_test()
-
