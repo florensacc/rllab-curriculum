@@ -1,5 +1,5 @@
 import lasagne.layers as L
-import cgtcompat as theano
+import tensorfuse as theano
 from misc.tensor_utils import flatten_tensors, unflatten_tensors
 
 class LasagneQFunction(object):

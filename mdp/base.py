@@ -1,6 +1,6 @@
 from core.serializable import Serializable
-import cgtcompat as theano
-import cgtcompat.tensor as T
+import tensorfuse as theano
+import tensorfuse.tensor as T
 import cPickle as pickle
 from path import Path
 import sys

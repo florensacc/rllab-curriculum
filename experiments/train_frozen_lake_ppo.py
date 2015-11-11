@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import os
-os.environ['CGT_COMPAT_MODE'] = 'cgt'
+os.environ['TENSORFUSE_MODE'] = 'cgt'
 import multiprocessing
 from sampler import parallel_sampler
 parallel_sampler.init_pool(multiprocessing.cpu_count())

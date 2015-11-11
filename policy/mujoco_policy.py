@@ -5,8 +5,8 @@ import lasagne
 from lasagne_layers import ParamLayer, OpLayer
 from lasagne_policy import LasagnePolicy
 import numpy as np
-import cgtcompat as theano
-import cgtcompat.tensor as T
+import tensorfuse as theano
+import tensorfuse.tensor as T
 from core.serializable import Serializable
 from misc.overrides import overrides
 

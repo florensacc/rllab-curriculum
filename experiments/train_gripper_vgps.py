@@ -10,7 +10,7 @@
 # In[1]:
 
 import os
-os.environ['CGT_COMPAT_MODE'] = 'cgt'
+os.environ['TENSORFUSE_MODE'] = 'cgt'
 from mdp.gripper_mdp import GripperMDP
 from algo.optim import ilqg
 from misc.ext import extract
@@ -72,8 +72,8 @@ def compute_marginals(mdp, mu0, Sigma0, Sigmaf, xref, uref, K, k, Quu):
 # In[10]:
 
 from policy.mujoco_policy import MujocoPolicy
-import cgtcompat as theano
-import cgtcompat.tensor as T
+import tensorfuse as theano
+import tensorfuse.tensor as T
 from misc.tensor_utils import flatten_tensors
 from scipy.optimize import fmin_l_bfgs_b
 from policy.linear_gaussian_policy import LinearGaussianPolicy

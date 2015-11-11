@@ -1,5 +1,5 @@
 import os
-os.environ['CGT_COMPAT_MODE'] = 'tensorflow'
+os.environ['TENSORFUSE_MODE'] = 'theano'
 from mdp.cartpole_mdp import CartpoleMDP
 from mdp.swimmer_mdp import SwimmerMDP
 
@@ -13,7 +13,10 @@ state = mdp.reset()[0]
 #mdp.plot()
 #state = mdp.step(state, [0])[0]
 
-for i in range(50):
+import time
+start = time.time()
+for i in range(1000):
     state = mdp.step(state, [2, 0])[0]
+print time.time() - start
     #print state
-    mdp.plot()
+    #mdp.plot()

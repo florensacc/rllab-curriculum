@@ -10,8 +10,8 @@ import numpy as np
 import inspect
 from misc.console import tweak
 from functools import partial
-import cgtcompat as cgt
-import cgtcompat.tensor as T
+import tensorfuse as cgt
+import tensorfuse.tensor as T
 from algo import CEM
 
 from algo import CEM

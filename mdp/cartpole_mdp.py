@@ -1,5 +1,5 @@
-import cgtcompat as theano
-import cgtcompat.tensor as TT
+import tensorfuse as theano
+import tensorfuse.tensor as TT
 import numpy as np
 from .base import SymbolicMDP
 from misc.overrides import overrides

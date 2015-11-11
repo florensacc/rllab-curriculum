@@ -8,8 +8,8 @@ import scipy
 from misc.tensor_utils import flatten_tensors
 import misc.logger as logger
 
-import cgtcompat as theano
-import cgtcompat.tensor as T
+import tensorfuse as theano
+import tensorfuse.tensor as T
 
 def request_samples(boltz_policy, n_samples, max_path_length):
     return parallel_sampler.request_samples(boltz_policy.get_param_values(), n_samples, max_path_length)

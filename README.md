@@ -8,9 +8,9 @@
   pip install joblib pyprind
   ```
 
-- Install cgtcompat:
+- Install tensorfuse:
 
-  Grab `cgtcompat` from https://github.com/dementrock/cgtcompat. The recommended way to install is `python setup.py develop`. You may need to extend this library when certain operations are not supported.
+  Grab `tensorfuse` from https://github.com/dementrock/tensorfuse. The recommended way to install is `python setup.py develop`. You may need to extend this library when certain operations are not supported.
 
 - Install forked Lasagne:
 

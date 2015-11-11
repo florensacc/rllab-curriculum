@@ -4,8 +4,8 @@ from misc.tensor_utils import flatten_tensors
 from misc.special import discount_cumsum
 import misc.logger as logger
 import multiprocessing
-import cgtcompat as theano
-import cgtcompat.tensor as T
+import tensorfuse as theano
+import tensorfuse.tensor as T
 import scipy.optimize
 from sampler import parallel_sampler
 from misc.ext import merge_dict

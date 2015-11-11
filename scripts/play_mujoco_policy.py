@@ -1,5 +1,5 @@
 import os
-os.environ['CGT_COMPAT_MODE'] = 'tf'
+os.environ['TENSORFUSE_MODE'] = 'tf'
 os.environ['THEANO_FLAGS'] = 'device=cpu'
 import numpy as np
 from policy.mujoco_policy import MujocoPolicy

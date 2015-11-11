@@ -1,6 +1,6 @@
 from misc.tensor_utils import flatten_tensors, unflatten_tensors
 import lasagne.layers as L
-import cgtcompat as theano
+import tensorfuse as theano
 from base import Policy
 from misc.overrides import overrides
 

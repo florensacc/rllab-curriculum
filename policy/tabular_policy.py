@@ -3,8 +3,8 @@ from core.serializable import Serializable
 from misc.special import weighted_sample
 from misc.overrides import overrides
 import numpy as np
-import cgtcompat as theano
-import cgtcompat.tensor as T
+import tensorfuse as theano
+import tensorfuse.tensor as T
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne

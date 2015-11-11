@@ -1,5 +1,5 @@
 import os
-os.environ['CGT_COMPAT_MODE'] = 'theano'
+os.environ['TENSORFUSE_MODE'] = 'theano'
 os.environ['THEANO_FLAGS'] = 'device=cpu'
 from sampler import parallel_sampler
 # Technically, we need to add these initializations below to make sure that the
@@ -14,7 +14,7 @@ from policy.mujoco_policy import MujocoPolicy
 from algo.ppo import PPO
 from mdp.swimmer_mdp import SwimmerMDP
 import numpy as np
-import cgtcompat.tensor as T
+import tensorfuse.tensor as T
 from vf.no_value_function import NoValueFunction
 
 #np.random.seed(0)

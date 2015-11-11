@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import os
-os.environ['CGT_COMPAT_MODE'] = 'theano'
+os.environ['TENSORFUSE_MODE'] = 'theano'
 import multiprocessing
 from sampler import parallel_sampler
 parallel_sampler.init_pool(multiprocessing.cpu_count())
@@ -12,8 +12,8 @@ from algo.pfqi import PFQI
 from mdp import FrozenLakeMDP
 import numpy as np
 from core.serializable import Serializable
-import cgtcompat as theano
-import cgtcompat.tensor as T
+import tensorfuse as theano
+import tensorfuse.tensor as T
 import lasagne.layers as L
 from qfunc import TabularQFunction
 

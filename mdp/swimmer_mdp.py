@@ -2,8 +2,8 @@
 
 import numpy as np
 from .base import SymbolicMDP
-import cgtcompat as theano
-import cgtcompat.tensor as TT
+import tensorfuse as theano
+import tensorfuse.tensor as TT
 #from theano.tensor.slinalg import solve
 from misc.overrides import overrides
 from misc.viewer2d import Viewer2D, Colors

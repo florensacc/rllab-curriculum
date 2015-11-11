@@ -1,5 +1,5 @@
 import os
-os.environ['CGT_COMPAT_MODE'] = 'theano'
+os.environ['TENSORFUSE_MODE'] = 'theano'
 os.environ['THEANO_FLAGS'] = 'device=cpu'
 from sampler import parallel_sampler
 parallel_sampler.init_pool(4)

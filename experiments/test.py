@@ -1,5 +1,5 @@
 import os
-os.environ['CGT_COMPAT_MODE'] = 'theano'
+os.environ['TENSORFUSE_MODE'] = 'theano'
 os.environ['THEANO_FLAGS'] = 'device=cpu'
 from mdp.swimmer_mdp import SwimmerMDP
 from mdp.swimmer_mdp_bk import SwimmerMDP as SwimmerMDPBk

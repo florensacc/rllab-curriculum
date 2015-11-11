@@ -1,5 +1,5 @@
 import os
-os.environ['CGT_COMPAT_MODE'] = 'cgt'
+os.environ['TENSORFUSE_MODE'] = 'cgt'
 from sampler import parallel_sampler
 # Technically, we need to add these initializations below to make sure that the
 # processes are created before theano is initialized, so that these processes
@@ -13,7 +13,7 @@ from policy.mujoco_policy import MujocoPolicy
 from algo.ppo import PPO
 from mdp.hopper_mdp import HopperMDP
 import numpy as np
-import cgtcompat.tensor as T
+import tensorfuse.tensor as T
 
 np.random.seed(0)
 

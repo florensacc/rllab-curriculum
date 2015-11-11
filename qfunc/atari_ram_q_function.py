@@ -1,8 +1,8 @@
 import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
-import cgtcompat as theano
-import cgtcompat.tensor as T
+import tensorfuse as theano
+import tensorfuse.tensor as T
 from .lasagne_q_function import LasagneQFunction
 from core.serializable import Serializable
 

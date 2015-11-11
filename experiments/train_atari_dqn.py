@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import os
-os.environ['CGT_COMPAT_MODE'] = 'theano'
+os.environ['TENSORFUSE_MODE'] = 'theano'
 from qfunc import DiscreteNNQFunc
 from algo import DQN
 from mdp import MDP, AtariMDP, FrozenLakeMDP, ObsTransformer

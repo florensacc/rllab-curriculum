@@ -1,11 +1,11 @@
 from path import Path
 import sys
-import cgtcompat
+import tensorfuse
 import cPickle as pickle
 import marshal
 sys.setrecursionlimit(50000)
 
-if cgtcompat.is_theano():
+if tensorfuse.is_theano():
     import theano
 else:
     import cgt
@@ -19,7 +19,7 @@ def extract(x, *keys):
     return tuple(x[k] for k in keys)
 
 def cached_function(inputs, outputs):
-    if cgtcompat.is_theano():
+    if tensorfuse.is_theano():
         if hasattr(outputs, '__len__'):
             hash_content = tuple(map(theano.pp, outputs))
         else:
@@ -40,4 +40,4 @@ def cached_function(inputs, outputs):
             pickle.dump(fun, f, protocol=pickle.HIGHEST_PROTOCOL)
         return fun
     else:
-        return cgtcompat.function(inputs, outputs)
+        return tensorfuse.function(inputs, outputs)

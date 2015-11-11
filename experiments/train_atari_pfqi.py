@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import os
-os.environ['CGT_COMPAT_MODE'] = 'theano'
+os.environ['TENSORFUSE_MODE'] = 'theano'
 import multiprocessing
 from sampler import parallel_sampler
 parallel_sampler.init_pool(multiprocessing.cpu_count())

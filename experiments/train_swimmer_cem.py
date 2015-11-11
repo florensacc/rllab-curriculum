@@ -1,6 +1,6 @@
 import os
 
-os.environ['CGT_COMPAT_MODE'] = 'theano'
+os.environ['TENSORFUSE_MODE'] = 'theano'
 os.environ['THEANO_FLAGS'] = 'device=cpu'
 
 from algo.cem import CEM
