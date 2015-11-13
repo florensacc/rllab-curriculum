@@ -30,7 +30,7 @@ def run_test():
     N = mdp.horizon
     x0, _ = mdp.reset()
     xinit = np.tile(x0.reshape(1, -1), (N+1, 1))#mdp.xinit
-    Du = mdp.n_actions
+    Du = mdp.action_dim
     Dx = len(x0)
     #print Du
     uinit = (np.random.rand(N, Du)-0.5)*0.1#0

@@ -76,7 +76,7 @@ class AtariMDP(MDP, Serializable):
 
     @property
     @overrides
-    def n_actions(self):
+    def action_dim(self):
         return len(self._action_set)
 
     @property

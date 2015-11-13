@@ -27,13 +27,13 @@ class MujocoPolicy(LasagnePolicy, Serializable):
         l_hidden = l_input
         for idx, hidden_size in enumerate(hidden_sizes):
             l_hidden = L.DenseLayer(l_hidden, num_units=hidden_size, nonlinearity=nonlinearity, W=lasagne.init.Normal(0.1), name="h%d" % idx)
-        mean_layer = L.DenseLayer(l_hidden, num_units=mdp.n_actions, nonlinearity=None, W=lasagne.init.Normal(0.01), name="output_mean")
-        log_std_layer = ParamLayer(l_input, num_units=mdp.n_actions, param=lasagne.init.Constant(0), name="output_log_std")
+        mean_layer = L.DenseLayer(l_hidden, num_units=mdp.action_dim, nonlinearity=None, W=lasagne.init.Normal(0.01), name="output_mean")
+        log_std_layer = ParamLayer(l_input, num_units=mdp.action_dim, param=lasagne.init.Constant(0), name="output_log_std")
 
         mean_var = L.get_output(mean_layer)
         log_std_var = L.get_output(log_std_layer)
 
-        self._n_actions = mdp.n_actions
+        self._action_dim = mdp.n_actions
         self._input_var = input_var
         import ipdb; ipdb.set_trace()
         self._pdist_var = T.concatenate([mean_var, log_std_var], axis=1)
@@ -78,8 +78,8 @@ class MujocoPolicy(LasagnePolicy, Serializable):
         return T.exp(T.sum(logli_new - logli_old, axis=1))
 
     def _split_pdist(self, pdist):
-        mean = pdist[:, :self._n_actions]
-        log_std = pdist[:, self._n_actions:]
+        mean = pdist[:, :self._action_dim]
+        log_std = pdist[:, self._action_dim:]
         return mean, log_std
 
     @overrides

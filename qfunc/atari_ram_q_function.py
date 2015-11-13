@@ -24,7 +24,7 @@ class AtariRAMQFunction(LasagneQFunction, Serializable):
             )
         qval_layer = L.DenseLayer(
             l_hidden,
-            num_units=mdp.n_actions,
+            num_units=mdp.action_dim,
             nonlinearity=None,
             W=lasagne.init.HeUniform(),
             b=lasagne.init.Constant(.1),
@@ -33,7 +33,7 @@ class AtariRAMQFunction(LasagneQFunction, Serializable):
 
         qval_var = L.get_output(qval_layer)
 
-        self._n_actions = mdp.n_actions
+        self._action_dim = mdp.n_actions
         self._input_var = input_var
         self._qval_var = qval_var
         self._compute_qval = theano.function([input_var], qval_var, allow_input_downcast=True)

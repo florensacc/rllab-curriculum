@@ -11,12 +11,12 @@ class EpsilonGreedyPolicy(Policy):
     @overrides
     def get_actions(self, observations):
         qval = self._qfunc.compute_qval(observations)
-        n_actions = qval.shape[1]
+        action_dim = qval.shape[1]
         N = len(observations)
         rnd = np.random.rand(N)
         use_greedy = rnd > self.epsilon
         actions = use_greedy * np.argmax(qval, axis=1) + \
-                (1 - use_greedy) * np.random.choice(n_actions, size=N)
+                (1 - use_greedy) * np.random.choice(action_dim, size=N)
         pdists = np.zeros((N, 0))
         return actions, pdists
 

@@ -125,7 +125,7 @@ def train_policy(nn_policy, trajopt_policy, qx_mu, qx_Sigma, n_samples=10):
 mdp = GripperMDP()
 x0, _ = mdp.reset()
 Dx = len(x0)
-uinit = np.zeros((mdp.horizon, mdp.n_actions))
+uinit = np.zeros((mdp.horizon, mdp.action_dim))
 Sigma0 = np.eye(Dx) * 0.01
 Sigmaf = np.eye(Dx) * 0.01
 policy = MujocoPolicy(mdp, hidden_sizes=[10])

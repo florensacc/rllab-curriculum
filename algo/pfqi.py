@@ -192,8 +192,8 @@ class PFQI(object):
             try_loss, try_reg, _ = f_loss(*(train_vals + [try_penalty]))
 
             new_argmax_indices = qfunc.compute_qval(samples_data['observations']).argmax(axis=1)
-            n_actions_changed = np.sum(argmax_indices != new_argmax_indices)
-            logger.log('penalty %f => loss %f, reg %f, #actions changed %d' % (try_penalty, try_loss, try_reg, n_actions_changed))
+            action_dim_changed = np.sum(argmax_indices != new_argmax_indices)
+            logger.log('penalty %f => loss %f, reg %f, #actions changed %d' % (try_penalty, try_loss, try_reg, action_dim_changed))
 
             if try_reg < self.stepsize or \
                     (penalty_itr == self.max_penalty_itr - 1 and opt_params is None) or \

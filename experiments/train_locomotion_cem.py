@@ -86,13 +86,13 @@ class SimpleNNPolicy(ContinuousNNPolicy):
         mean, log_std = self.split_pdist(pdist_var)
         return T.prod(normal_pdf(action_var, mean, log_std), axis=1)
     
-    def new_network_outputs(self, observation_shape, n_actions, input_var):
+    def new_network_outputs(self, observation_shape, action_dim, input_var):
         l_input = L.InputLayer(shape=(None, observation_shape[0]), input_var=input_var)
         l_hidden = l_input
         for idx, hidden_size in enumerate(self.hidden_sizes):
             l_hidden = L.DenseLayer(l_hidden, num_units=hidden_size, nonlinearity=self.nonlinearity, W=lasagne.init.Normal(0.1), name="h%d" % idx)
-        mean_layer = L.DenseLayer(l_hidden, num_units=n_actions, nonlinearity=None, W=lasagne.init.Normal(0.01), name="output_mean")
-        log_std_layer = ParamLayer(l_input, num_units=n_actions, param=lasagne.init.Constant(-99999), name="output_log_std", trainable=False)
+        mean_layer = L.DenseLayer(l_hidden, num_units=action_dim, nonlinearity=None, W=lasagne.init.Normal(0.01), name="output_mean")
+        log_std_layer = ParamLayer(l_input, num_units=action_dim, param=lasagne.init.Constant(-99999), name="output_log_std", trainable=False)
         #self.log_std_var = L.get_all_params(log_std_layer, trainable=True)[0]
         return mean_layer, log_std_layer
 

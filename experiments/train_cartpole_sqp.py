@@ -1,6 +1,6 @@
-from algo.ilqg import ILQG
+from algo.sqp import SQP
 from mdp.cartpole_mdp import CartpoleMDP
 
 mdp = CartpoleMDP()
-mdp.horizon = 70
-ILQG().train(mdp)
+mdp.horizon = 50
+SQP().train(mdp)

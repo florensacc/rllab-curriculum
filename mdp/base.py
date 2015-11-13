@@ -15,7 +15,7 @@ class MDP(object):
         raise NotImplementedError
 
     @property
-    def n_actions(self):
+    def action_dim(self):
         raise NotImplementedError
 
     @property
@@ -48,12 +48,20 @@ class ControlMDP(MDP):
     def plot(self, states=None, actions=None, pause=False):
         raise NotImplementedError
 
+    @property
+    def state_bounds(self):
+        raise NotImplementedError
+
+    @property
+    def action_bounds(self):
+        raise NotImplementedError
+
 class SymbolicMDP(ControlMDP):
 
     def __init__(self, horizon):
         super(SymbolicMDP, self).__init__(horizon)
         self._state_sym = T.vector('state', fixed_shape=self.state_shape)
-        self._action_sym = T.vector('action', fixed_shape=(self.n_actions,))
+        self._action_sym = T.vector('action', fixed_shape=(self.action_dim,))
 
         # placeholder for cached compiled functions
         self._f_obs = None

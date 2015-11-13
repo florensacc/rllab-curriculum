@@ -21,11 +21,11 @@ class AtariRAMPolicy(LasagnePolicy, Serializable):
         l_hidden = l_input
         for idx, hidden_size in enumerate(hidden_sizes):
             l_hidden = L.DenseLayer(l_hidden, num_units=hidden_size, nonlinearity=nonlinearity, W=lasagne.init.Normal(0.1), name="h%d" % idx)
-        prob_layer = L.DenseLayer(l_hidden, num_units=mdp.n_actions, nonlinearity=NL.softmax, W=lasagne.init.Normal(0.01), name="output_prob")
+        prob_layer = L.DenseLayer(l_hidden, num_units=mdp.action_dim, nonlinearity=NL.softmax, W=lasagne.init.Normal(0.01), name="output_prob")
 
         prob_var = L.get_output(prob_layer)
 
-        self._n_actions = mdp.n_actions
+        self._action_dim = mdp.n_actions
         self._input_var = input_var
         self._pdist_var = prob_var
         self._compute_probs = theano.function([input_var], prob_var, allow_input_downcast=True)

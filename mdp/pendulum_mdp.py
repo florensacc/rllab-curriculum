@@ -52,5 +52,5 @@ class PendulumMDP(ControlMDP):
         return np.array([newth, newthdot])
 
     @property
-    def n_actions(self):
+    def action_dim(self):
         return 1

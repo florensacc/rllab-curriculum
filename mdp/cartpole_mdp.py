@@ -21,15 +21,32 @@ class CartpoleMDP(SymbolicMDP):
 
     def reset_sym(self):
         bounds = np.array([
+            self.max_cart_pos,
             self.max_cart_speed,
-            self.max_cart_speed,
-            self.max_pole_speed,
+            self.max_pole_angle,
             self.max_pole_speed
         ])
         low, high = -0.05*bounds, 0.05*bounds
         state = theano.random.uniform(size=(4,), low=low, high=high, ndim=1)
         obs = state
         return state, obs
+
+    @property
+    @overrides
+    def state_bounds(self):
+        bounds = np.array([
+            self.max_cart_pos,
+            self.max_cart_speed,
+            self.max_pole_angle,
+            self.max_pole_speed
+        ])
+        return -bounds, bounds
+
+    @property
+    @overrides
+    def action_bounds(self):
+        bounds = np.array([self.max_force]) 
+        return -bounds, bounds
 
     @property
     def observation_shape(self):
@@ -40,7 +57,7 @@ class CartpoleMDP(SymbolicMDP):
         return (4,)
 
     @property
-    def n_actions(self):
+    def action_dim(self):
         return 1
 
     @overrides

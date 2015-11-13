@@ -56,7 +56,7 @@ class FrozenLakeMDP(MDP, Serializable):
 
     @property
     @overrides
-    def n_actions(self):
+    def action_dim(self):
         return 4
 
     @property

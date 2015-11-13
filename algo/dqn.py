@@ -64,7 +64,7 @@ class DQN(object):
         mdp = gen_mdp()
         #states, obs = mdp.sample_initial_state()
         Ds = mdp.observation_shape[0]
-        Da = mdp.n_actions
+        Da = mdp.action_dim
         # initialize memory
         # A single experience is a tuple (s, s', a, r, done), concatenated to be a
         # single row vector of dimension Ds+Ds+1+1
@@ -80,8 +80,8 @@ class DQN(object):
 
         log("Compiling q functions...")
 
-        Q = gen_q_func(mdp.observation_shape, mdp.n_actions, input_var)
-        Q_tgt = gen_q_func(mdp.observation_shape, mdp.n_actions, input_var)
+        Q = gen_q_func(mdp.observation_shape, mdp.action_dim, input_var)
+        Q_tgt = gen_q_func(mdp.observation_shape, mdp.action_dim, input_var)
 
         N_var = input_var.shape[0]
 

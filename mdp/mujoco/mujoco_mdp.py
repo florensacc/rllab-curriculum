@@ -36,7 +36,7 @@ class MujocoMDP(ControlMDP):
 
     @property
     @overrides
-    def n_actions(self):
+    def action_dim(self):
         return len(self.model.data.ctrl)
 
     @property

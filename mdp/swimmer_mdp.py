@@ -152,7 +152,7 @@ class SwimmerMDP(SymbolicMDP):
         self.U = U.astype(floatX)
         self.G = G.astype(floatX)
 
-        self._n_actions = d - 1
+        self._action_dim = d - 1
         self._state_shape = (2*d+4,)
         self._observation_shape = (2*d+3,)
 
@@ -162,6 +162,7 @@ class SwimmerMDP(SymbolicMDP):
 
 
     @property
+    @overrides
     def state_bounds(self):
         d = self.d
         lb = np.ones((2*d+4,)) * -np.inf
@@ -169,8 +170,14 @@ class SwimmerMDP(SymbolicMDP):
         return lb, ub
 
     @property
-    def n_actions(self):
-        return self._n_actions
+    @overrides
+    def action_bounds(self):
+        bounds = np.ones(self.action_dim)
+        return -bounds, bounds
+
+    @property
+    def action_dim(self):
+        return self._action_dim
 
     @property
     def observation_shape(self):
@@ -214,7 +221,7 @@ class SwimmerMDP(SymbolicMDP):
 
     @overrides
     def final_cost_sym(self, state):
-        return TT.constant(0)
+        return TT.constant(0)#TT.sum(TT.square(self.body_coord_symbolic(state)[0] - self.goal))#TT.constant(0)
 
     @overrides
     def done_sym(self, state):

@@ -16,18 +16,18 @@ class BoltzmannPolicy(Policy, Serializable):
 
         self._compute_probs = theano.function([qfunc.input_var], prob_var, allow_input_downcast=True)
         self._qfunc = qfunc
-        self._n_actions = qfunc.n_actions
+        self._action_dim = qfunc.n_actions
         self._temp_var = temp_var
         self._pdist_var = prob_var
         Serializable.__init__(self, qfunc, temperature)
 
     # fit a temperature to the given Q-values so that the overall perplexity
-    # is at most `threshold` less than the maximum perplexity (= n_actions)
+    # is at most `threshold` less than the maximum perplexity (= action_dim)
     def learn_temperature(self, qval, threshold):
         # find an upper bound for the temperature
         def eval_perplexity(temp):
             return np.min(cat_perplexity(softmax(qval / temp)))
-        perplexity_threshold = self._n_actions - threshold
+        perplexity_threshold = self._action_dim - threshold
         max_temp = 0.5
         max_perplexity = 0
         while max_perplexity < perplexity_threshold:
@@ -66,14 +66,14 @@ class BoltzmannPolicy(Policy, Serializable):
         return [self._temp_var]
 
     @property
-    def n_actions(self):
-        return self._n_actions
+    def action_dim(self):
+        return self._action_dim
 
     @overrides
     def get_actions(self, observations):
         probs = self._compute_probs(observations)
-        n_actions = self._n_actions
-        actions = [weighted_sample(prob, range(n_actions)) for prob in probs]
+        action_dim = self._n_actions
+        actions = [weighted_sample(prob, range(action_dim)) for prob in probs]
         return actions, probs
 
     @overrides

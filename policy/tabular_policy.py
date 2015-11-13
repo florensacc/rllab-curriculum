@@ -14,19 +14,19 @@ class TabularPolicy(LasagnePolicy, Serializable):
     def __init__(self, mdp):
         input_var = T.matrix('input')
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]), input_var=input_var)
-        l_output = L.DenseLayer(l_input, num_units=mdp.n_actions, nonlinearity=NL.softmax)
+        l_output = L.DenseLayer(l_input, num_units=mdp.action_dim, nonlinearity=NL.softmax)
         prob_var = L.get_output(l_output)
 
         self._pdist_var = prob_var
         self._compute_probs = theano.function([input_var], prob_var, allow_input_downcast=True)
         self._input_var = input_var
-        self._n_actions = mdp.n_actions
+        self._action_dim = mdp.n_actions
         super(TabularPolicy, self).__init__([l_output])
         Serializable.__init__(self, mdp)
 
     @property
-    def n_actions(self):
-        return self._n_actions
+    def action_dim(self):
+        return self._action_dim
 
     @property
     @overrides
