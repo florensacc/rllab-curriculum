@@ -1,6 +1,6 @@
 from .base import ControlMDP
 import os
-from mjpy import MjModel, MjViewer
+from mjcapi.rockymjc import MjModel, MjViewer
 import numpy as np
 from contextlib import contextmanager
 import os.path as osp

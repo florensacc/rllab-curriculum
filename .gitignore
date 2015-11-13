@@ -8,3 +8,4 @@ data
 secrets.py
 *.avi
 *.mp4
+build
