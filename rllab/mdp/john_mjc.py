@@ -7,8 +7,8 @@ import numpy as np
 
 class WrapperMDP(ControlMDP):
 
-    def __init__(self, base_name):
-        self._mdp = get_mjc_mdp_class(base_name)
+    def __init__(self):
+        self._mdp = get_mjc_mdp_class(self.BASE_NAME)
         self._state = None
         self._action = None
 
@@ -56,3 +56,11 @@ class WrapperMDP(ControlMDP):
         if len(states) > 0:
             states = [np.reshape(state, (1, -1)) for state in states]
             self._mdp.plot({"x": np.vstack(states)})
+
+# Shortcut for declaring subclasses
+SwimmerMDP = type('SwimmerMDP', (WrapperMDP,), dict(BASE_NAME='3swimmer'))
+Hopper4BallMDP = type('Hopper4BallMDP', (WrapperMDP,), dict(BASE_NAME='hopper4ball'))
+Walker2DMDP = type('Walker2DMDP', (WrapperMDP,), dict(BASE_NAME='walker2d'))
+TripodMDP = type('TripodMDP', (WrapperMDP,), dict(BASE_NAME='tripod')) # Broken
+Human3DMDP = type('Human3DMDP', (WrapperMDP,), dict(BASE_NAME='human3d'))
+BvhModelMDP = type('BvhModelMDP', (WrapperMDP,), dict(BASE_NAME='bvhmodel')) # Broken
