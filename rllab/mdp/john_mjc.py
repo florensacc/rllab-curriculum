@@ -61,6 +61,6 @@ class WrapperMDP(ControlMDP):
 SwimmerMDP = type('SwimmerMDP', (WrapperMDP,), dict(BASE_NAME='3swimmer'))
 Hopper4BallMDP = type('Hopper4BallMDP', (WrapperMDP,), dict(BASE_NAME='hopper4ball'))
 Walker2DMDP = type('Walker2DMDP', (WrapperMDP,), dict(BASE_NAME='walker2d'))
-TripodMDP = type('TripodMDP', (WrapperMDP,), dict(BASE_NAME='tripod')) # Broken: Theano error
+TripodMDP = type('TripodMDP', (WrapperMDP,), dict(BASE_NAME='tripod'))
 Human3DMDP = type('Human3DMDP', (WrapperMDP,), dict(BASE_NAME='human3d'))
-BvhModelMDP = type('BvhModelMDP', (WrapperMDP,), dict(BASE_NAME='bvhmodel')) # Broken: Theano error
+BvhModelMDP = type('BvhModelMDP', (WrapperMDP,), dict(BASE_NAME='bvhmodel'))

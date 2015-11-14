@@ -67,6 +67,7 @@ MJC_METADATA = {
         "default_state":np.zeros(28,floatX),
         "hidx":2,
         "state_bounds":arrayf([(-MJC_BIG,MJC_BIG)]*2 + [(.75,1.5)] + [(-1,1)]*3 + [(-MJC_BIG,MJC_BIG)]*22).T,
+        "move_to_origin" : [0,1],
     },
     "human3d":{
         "actuated_joints":  [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
@@ -98,6 +99,7 @@ MJC_METADATA = {
         "hidx":2,
         "timestep":.01,
         "sample_halfrange":0,
+        "move_to_origin" : [0,1],
     },
 }
 

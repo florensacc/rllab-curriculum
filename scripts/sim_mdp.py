@@ -22,6 +22,8 @@ def load_mdp_class(mdp_path):
             mdp_path = "mdp." + mdp_path
         mdp_path = "rllab." + mdp_path
     module_or_class = locate(mdp_path)
+    if module_or_class is None:
+        raise ValueError("Cannot find object under path %s" % mdp_path)
     if type(module_or_class) == types.ModuleType:
         classes = filter(is_mdp_class, classesinmodule(module_or_class))
         if len(classes) == 0:
