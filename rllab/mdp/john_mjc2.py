@@ -57,6 +57,17 @@ class WrapperMDP(ControlMDP):
             states = [np.reshape(state, (-1)) for state in states]
             self._mdp.plot({"x": np.vstack(states)})
 
+    @property
+    @overrides
+    def state_bounds(self):
+        return self._mdp.state_bounds()
+
+    @property
+    @overrides
+    def action_bounds(self):
+        return self._mdp.ctrl_bounds()
+
+
 # Shortcut for declaring subclasses
 PlanarHumanoidMDP = type('PlanaerHumanoidMDP', (WrapperMDP,), dict(BASE_NAME='planar_humanoid'))
 TarsMDP = type('TarsMDP', (WrapperMDP,), dict(BASE_NAME='tars'))

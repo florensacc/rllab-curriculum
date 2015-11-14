@@ -4,6 +4,7 @@ import types
 from pydoc import locate
 from rllab.mdp.base import MDP
 import time
+import numpy as np
 
 def classesinmodule(module):
     md = module.__dict__
@@ -54,18 +55,22 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
         state = mdp.reset()[0]
         mdp.plot()
         for _ in xrange(max_steps):
-            state = mdp.step(state, action)[0]
+            state, _, _, done = mdp.step(state, action)
             mdp.plot()
             time.sleep(delay)
+            if done:
+                state = mdp.reset()[0]
     elif mode == 'random':
         state = mdp.reset()[0]
         lb, ub = mdp.action_bounds
         mdp.plot()
         for _ in xrange(max_steps):
             action = sample_action(lb, ub)
-            state = mdp.step(state, action)[0]
+            state, _, _, done = mdp.step(state, action)
             mdp.plot()
             time.sleep(delay)
+            if done:
+                state = mdp.reset()[0]
     elif mode == 'static':
         mdp.reset()
         while True:
