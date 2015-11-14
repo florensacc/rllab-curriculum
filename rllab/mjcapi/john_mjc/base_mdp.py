@@ -60,7 +60,7 @@ class MDP(object):
         assert "c" in output_info
         arrs= self.initialize_mdp_arrays()
         import numpy as np
-        from control4.config import floatX
+        from .config import floatX
         arrs["u"] = np.zeros((1,self.input_size("u")),self.input_dtype("u"))
         newarrs = self.call(arrs)
         assert newarrs["c"].dtype == floatX and newarrs["c"].shape[0] == 1

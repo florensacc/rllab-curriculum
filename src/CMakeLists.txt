@@ -60,4 +60,6 @@ endif(APPLE)
 
 add_subdirectory(Boost.NumPy)
 add_subdirectory(mjc)
+add_subdirectory(mjc2)
 add_subdirectory(mjcpy)
+add_subdirectory(mjcpy2)

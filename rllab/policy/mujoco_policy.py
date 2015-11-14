@@ -7,8 +7,8 @@ from lasagne_policy import LasagnePolicy
 import numpy as np
 import tensorfuse as theano
 import tensorfuse.tensor as T
-from core.serializable import Serializable
-from misc.overrides import overrides
+from rllab.core.serializable import Serializable
+from rllab.misc.overrides import overrides
 
 def normal_pdf(x, mean, log_std):
     return T.exp(-T.square((x - mean) / T.exp(log_std)) / 2) / ((2*np.pi)**0.5 * T.exp(log_std))

@@ -1,8 +1,8 @@
-from misc.tensor_utils import flatten_tensors, unflatten_tensors
+from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
+from rllab.policy.base import Policy
+from rllab.misc.overrides import overrides
 import lasagne.layers as L
 import tensorfuse as theano
-from base import Policy
-from misc.overrides import overrides
 
 
 class LasagnePolicy(Policy):

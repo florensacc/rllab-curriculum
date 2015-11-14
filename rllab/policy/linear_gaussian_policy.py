@@ -1,5 +1,5 @@
-from .base import Policy
-from misc.overrides import overrides
+from rllab.policy.base import Policy
+from rllab.misc.overrides import overrides
 import numpy as np
 
 class LinearGaussianPolicy(Policy):

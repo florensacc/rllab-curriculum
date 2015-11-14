@@ -1,0 +1,223 @@
+<mujoco model='planar humanoid'>
+    <compiler inertiafromgeom='true' angle='degree' coordinate='local'/>
+    <default>
+        <joint islimited='true' damping='1' armature='0'  compliance='0.001' timeconst='0.01'/>
+        <geom contype='1' conaffinity='0' condim='3' friction='.7 .1 .1' rgba='0.8 0.6 .4 1' density='1000' mindist='0.04' compliance='0.1'  timeconst='0.01'/>
+        <act-motor ctrlrange='-.5 .5' isctrllimited='true'/>
+        <act-general ctrlrange='-.5 .5' dyntype='none' trntype='joint' gaintype='sigmoidFV' isctrllimited='true'/>
+    </default>
+
+    <option timestep='0.005'  remotecontact='true'> <!-- s_armature='.1 10' -->
+        <disable clampvel='true'/>
+    </option>
+
+    <size nuserdata='30' />
+
+    <body>
+        <!-- <geom name='hf' pos='0 0 -1' size='4 4 .5' type='hfield' hfieldfile='my_height_field' hfielddir='true' colmask='1 0'  rgba='0.8 0.9 0.8 1' /> -->
+        <geom name='floor' pos='0 0 0' size='40 40 40' type='plane' conaffinity='1' rgba='0.8 0.9 0.8 1' user='2'/>
+        <body name='torso' pos='0 0 1.3' >
+            <joint name='rootz' type='slide' axis='0 0 1' pos='0 0 0' islimited='false' damping='0' armature='0' stiffness='0' ref="1.3"/>
+            <joint name='rootx' type='slide' axis='1 0 0' pos='0 0 0' islimited='false' damping='0' armature='0' stiffness='0'/>
+            <joint name='rooty' type='hinge' axis='0 1 0' pos='0 0 0' islimited='false' damping='0' armature='0' stiffness='0'/>
+            <geom name='shoulders' type='capsule' fromto='0 -.07 0 0 .07 0'  size='0.07' density='400' contype='0'/>
+            <geom name='shoulders_con' type='sphere' pos='0 0 0'  size='0.07' density='0' contype='1' rgba='0.8 0.6 .4 0'/>
+            <geom name='head' type='sphere' pos='0 0 .19' size='.09' user='258'  density='400'/>
+            <geom name='uwaist' type='capsule' fromto='0 -.06 -.12 0 .06 -.12'  size='0.06' contype='0'/>
+            <geom name='uwaist_con' type='sphere' pos='0 0 -.12'  size='0.06' density='0' contype='1' rgba='0.8 0.6 .4 0'/>
+            <body name='lwaist' pos='0.0 0 -0.260' quat='1.000 0 -0.002 0' >
+                <geom name='lwaist' type='capsule' fromto='0 -.04 0 0 .04 0'  size='0.06' contype='0'/>
+                <geom name='lwaist_con' type='sphere' pos='0 0 0'  size='0.06' density='0' contype='1' rgba='0.8 0.6 .4 0'/>
+                <joint name='uabdomen' type='hinge' pos='0 0 0.065' axis='0 1 0' range='-70 20' damping='5' stiffness='40' armature='0.02' />
+                <body name='pelvis' pos='0 0 -0.165' quat='1.000 0 -0.002 0' >
+                    <joint name='labdomen' type='hinge' pos='0 0 0.1' axis='0 1 0' range='-40 10' damping='5' stiffness='20' armature='0.02' />
+                    <geom name='butt' type='capsule' fromto='-.02 -.02 0 -.02 .02 0'  size='0.09' contype='0'/>
+                    <geom name='butt_con' type='sphere' pos='-.02 0 0'  size='0.09'  density='0' contype='1' rgba='0.8 0.6 .4 0'/>
+                    <body name='thigh' pos='0 0 -0.04' >
+                        <joint name='hip' type='hinge' pos='0 0 0' axis='0 1 0' range='-130 0'  stiffness='10' armature='0.01' />
+                        <geom name='thigh' type='capsule' fromto='0 0 0 0 0 -.34'  size='0.06'/>
+                        <body name='shin' pos='0 0 -0.403' >
+                            <joint name='knee' type='hinge' pos='0 0 .05' axis='0 1 0' range='5 150' armature='0.0060' />
+                            <geom name='shin' type='capsule' fromto='0 0 0 0 0 -.3'   size='0.049' />
+                            <body name='foot' pos='0 0 -.385' >
+                                <joint name='ankle' type='hinge' pos='0 0 0.08' axis='0 1 0'   range='-50 50' stiffness='4' armature='0.0008' />
+                                <geom name='foot' type='capsule' fromto='-.07 0 0 0.14 0 0'  size='0.04' />
+                            </body>
+                        </body>
+                    </body>
+                </body>
+            </body>
+            <body name='upper_arm' pos='0 0 0.06' >
+                <joint name='shoulder' type='hinge' pos='0 .17 0' axis='0 1 0' islimited='false' stiffness='0' damping='3' armature='0.0051' />
+                <geom name='right_uarm' type='capsule' fromto='0 -.17 0 .12 -.2 -.24'  size='0.04 0.16' density='500'  contype='0'/>
+                <geom name='left_uarm' type='capsule' fromto='0 .17 0 .12 .2 -.24'  size='0.04 0.16' density='500'/>
+                <body name='lower_arm' pos='.12 0 -.24' >
+                    <joint name='elbow' type='hinge' pos='0 .2 0' axis='0 1 0' range='-120 0'  armature='0.0028' />
+                    <geom name='right_larm' type='capsule' fromto='0 -.2 -.02 .21 -.2 -.23'  size='0.031' density='500'  contype='0'/>
+                    <geom name='left_larm' type='capsule'  fromto='0 .2 -.02  .21 .2 -.23'  size='0.031' density='500'/>
+                </body>
+            </body>
+
+        </body>
+    </body>
+
+    <actuator>
+
+       <!--  <general gainprm='100 5' target='uabdomen' />
+        <general gainprm='100 5' target='labdomen' />
+        <general gainprm='200 5' target='hip' />
+        <general gainprm='200 5' target='knee' />
+        <general gainprm='50 5' target='ankle' />
+        <general gainprm='50 5' target='shoulder' />
+        <general gainprm='50 5' target='elbow' /> -->
+
+        <motor gear='100' joint='uabdomen' />
+        <motor gear='100' joint='labdomen' />
+        <motor gear='200' joint='hip' />
+        <motor gear='200' joint='knee' />
+        <motor gear='50' joint='ankle' />
+        <motor gear='50' joint='shoulder' />
+        <motor gear='50' joint='elbow' />
+
+
+
+
+    </actuator>
+
+    <features>
+        <feature name='observation'>
+            <op type='add'>
+                <data field='userdata' item='0:19' coef='-1'/>
+                <op type='cat'>
+                    <data field='qpos' item='all'/>
+                    <data field='qvel'  item='all'/>
+                </op>
+            </op>
+        </feature>
+
+        <feature name='magic'>
+            <data field='qfrc_applied' item='0:2' coef='1e-2'/>
+        </feature>
+
+        <feature name='torque'>
+            <data field='qfrc_applied' item='3:9' coef='1e-2'/>
+        </feature>
+
+        <feature name='height'>
+            <op type='sum'>
+                <data field='xipos' item='torso' entry='z' ref='1.35'/>
+                <data field='xipos' item='foot' entry='z' coef='-1'/>
+            </op>
+        </feature>
+
+        <feature name='control'>
+            <data field='ctrl' item='all'/>
+        </feature>
+
+        <feature name='posture'>
+            <data field='qpos' item='uabdomen labdomen hip knee ankle elbow'/>
+        </feature>
+
+        <feature name='com/foot'>
+            <op type='add'>
+                <data field='subcom' item='torso'/>
+                <data field='xipos' item='foot' coef='-1' ref='0 0 -.8'/>
+            </op>
+        </feature>
+
+        <feature name='capture point'>
+            <op type='add'>
+                <data field='subcom' item='torso' entry='x'/>
+                <data field='subcomvel' item='torso' entry='x' coef='0.2'/>
+            </op>
+            <data    field='const' coef='0'/>
+            <data    field='const' coef='1e-2'/>
+        </feature>
+
+        <feature name='foot'>
+            <data field='xipos' item='foot'/>
+        </feature>
+
+        <feature name='is standing'>
+            <op loss='step' params='.2'>
+                <data field='xipos' item='torso' entry='z' ref='.4'/>
+            </op>
+        </feature>
+
+        <feature name='balance'>
+<!--             <op type='prod'>
+                <data field='feature' item='is standing'/> -->
+                <op type='add'>
+                    <data field='feature' item='capture point' entry='0'/>
+                    <data field='feature' item='foot'  entry='0' coef='-1'/>
+                </op>
+            <!-- </op> -->
+        </feature>
+
+        <feature name='ang mom'>
+            <op type='prod'>
+                <data field='feature' item='is standing'/>
+                <data field='momentum' item='torso' entry='wx wy wz' coef='1 1 .2'/>
+            </op>
+        </feature>
+
+        <feature name='upright'>
+            <data field='xmat' item='torso' entry='zz zx' ref='1 0'/>
+            <data field='xmat' item='foot' entry='zz zx' ref='1 0' coef='.3' />
+        </feature>
+
+
+        <feature name='com vel'>
+            <data field='subcomvel' item='torso' entry='x'/>
+        </feature>
+
+        <feature name='move'>
+            <data field='qvel' item='uabdomen labdomen hip knee ankle shoulder elbow'/>
+        </feature>
+
+
+        <feature name ='plot'>
+            <data    field='subcom'      item='torso'/>
+            <data    field='feature'     item='capture point'/>
+            <data    field='feature'     item='foot'/>
+        </feature>
+
+    </features>
+
+
+    <costs plot='plot'>
+
+        <physics_options  timestep='0.015'/>
+
+        <optimization_options
+            logeps='-30'
+            horizon='40'
+            logmurange='-5 3'
+        />
+
+        <cost name='stand' plot='plot'>
+            <!-- <term feature='power'         norm='quadratic'    coef_running='0' /> -->
+			<!-- <term feature='observation'   norm='quadratic'  coef_running='10' /> -->
+            <!-- <term feature='magic'         norm='quadratic'  coef_running='.1' /> -->
+            <!-- <term feature='torque'        norm='quadratic'  coef_running='1e-4' /> -->
+
+            <term feature='control'       norm='quadratic'    coef_running='.1' />
+            <term feature='height'        norm='smooth_abs2'  coef_running='1'    		params='.15 8' />
+            <term feature='balance'       norm='L22'          coef_running='.5'    		params='.05 4' />
+            <term feature='upright'       norm='quadratic'    coef_running='.5'    />
+            <term feature='com/foot'      norm='L2'           coef_running='1'         params='.1' />
+
+            <!-- <term feature='posture'       norm='quadratic'    coef_running='0e-5' /> -->
+            <!-- <term feature='move'          norm='gaussian'     coef_running='0'  params='.03'  />                -->
+            <!-- <term feature='ang mom'       norm='quadratic'    coef_running='.00005'         /> -->
+        </cost>
+
+    </costs>
+
+    <tweaks>
+    	<tweak name='height' field='feature' item='height' entry='ref' range='-.5 .2' guitype='slider'/>
+        <!-- <tweak name='velocity' field='feature' item='walk forward' entry='ref' range='-1 1' guitype='slider'/> -->
+    </tweaks>
+
+
+</mujoco>

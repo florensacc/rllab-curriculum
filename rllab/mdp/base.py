@@ -1,14 +1,14 @@
-from core.serializable import Serializable
+from rllab.core.serializable import Serializable
 import tensorfuse as theano
 import tensorfuse.tensor as T
 import cPickle as pickle
 from path import Path
 import sys
-from misc.ext import cached_function, lazydict
+from rllab.misc.ext import cached_function, lazydict
 
 class MDP(object):
 
-    def step(self, action):
+    def step(self, state, action):
         raise NotImplementedError
 
     def reset(self):

@@ -1,0 +1,81 @@
+<mujoco model="door">
+  <compiler inertiafromgeom="true" angle="degree" coordinate="local"/>
+  <option timestep="0.01" eqsoft="false" remotecontact="false"/>
+  <default>
+    <joint islimited="false" compliance='0.001' timeconst='0.01'/>
+    <geom contype="2" conaffinity="1" condim="3" friction=".9 .5 .5"
+          density="1000" mindist="0.01" compliance="0.02"
+          timeconst="0.01"/>
+  </default>
+
+  <body>
+    <body name="shoulder" pos="0 0 0">
+      <geom name="shoulder_geom" type="capsule" fromto="0 0 0 1 0 0" size="0.05"/>
+      <joint name="shoulder_rot" type="hinge" pos="0 0 0" axis="0 0 -1"/>
+
+      <body name="forearm" pos="1 0 0">
+        <geom name="forearm_geom" type="capsule" fromto="0 0 0 1 0 0" size="0.05"/>
+        <joint name="forearm_rot" type="hinge" pos="0 0 0" axis="0 0 -1"/>
+
+        <body name="wrist" pos="1 0 0">
+            <geom name="wrist_geom" type="capsule" fromto="0 0 0 0.1 0 0" size="0.06"/>
+            <joint name="wrist_rot" type="hinge" pos="0 0 0" axis="0 0 -1"/>
+            
+            <body name="finger1" pos="0.1 0 0">
+                <geom name="finger1_geom1" type="capsule" fromto="0 0 0 0.25 0.25 0" size="0.025"/>
+                <geom name="finger1_geom2" type="capsule" fromto="0.25 0.25 0 0.5 0.25 0" size="0.025"/>
+                <joint name="finger1_rot" type="hinge" pos="0 0 0" axis="0 0 -1" range='-20 20' islimited="true"/>
+            </body>
+            
+            <body name="finger2" pos="0.1 0 0">
+                <geom name="finger2_geom1" type="capsule" fromto="0 0 0 0.25 -0.25 0" size="0.025"/>
+                <geom name="finger2_geom2" type="capsule" fromto="0.25 -0.25 0 0.5 -0.25 0" size="0.025"/>
+                <joint name="finger2_rot" type="hinge" pos="0 0 0" axis="0 0 -1" range='-20 20' islimited="true"/>
+            </body>
+        </body>
+      </body>
+    </body>
+    
+    <body name="door" pos="1.54 -0.50 0" axisangle="0 0 1 90">
+      <joint name="door_rot" type="hinge" pos="1 0 0" axis="0 0 -1" range='-1 1' islimited="true"/>
+      <geom name="door" type="capsule" size="0.04" fromto="0 0 0 1 0 0" contype="1" conaffinity="2"/>
+      <geom name="handle" type="capsule" size="0.1" fromto="0.05 0.14 0 0.09 0.14 0" contype="1" conaffinity="2"/>
+    </body>
+
+    <body name="lower_wall" pos="1.54 0.50 0" axisangle="0 0 1 90">
+      <geom name="wall1" type="capsule" size="0.04" fromto="0 0 0 1 0 0" contype="1" conaffinity="2"/>
+    </body>
+    <body name="upper_wall" pos="1.54 -1.58 0" axisangle="0 0 1 90">
+      <geom name="wall2" type="capsule" size="0.04" fromto="0 0 0 1 0 0" contype="1" conaffinity="2"/>
+    </body>
+
+  </body>
+
+  <actuator>
+    <motor joint="shoulder_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/>
+    <motor joint="forearm_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/>
+    <motor joint="wrist_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/>
+    <motor joint="finger1_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/>
+    <motor joint="finger2_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/>
+  </actuator>
+
+  <features>
+    <feature name='control'>
+      <data field='ctrl' item='all'/>
+    </feature>
+  </features>
+  <costs>
+
+    <physics_options  timestep='0.01'/>
+
+    <optimization_options
+        logeps='-30'
+        horizon='400'
+        logmurange='-5 3'
+        />
+    
+    <cost name='dummy'>
+      <term feature='control'       norm='quadratic'    coef_running='.1' />
+    </cost>
+  </costs>
+</mujoco>

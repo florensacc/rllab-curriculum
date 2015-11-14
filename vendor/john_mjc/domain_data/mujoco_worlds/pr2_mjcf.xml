@@ -1,0 +1,428 @@
+<mujoco model="pr2">
+    <compiler coordinate="local" angle="radian" meshdir="PR2Meshes/" />
+    <size nlmax="56" ncmax="415" njmax="1345" nctotmax="415" nstack="1807309" />
+    <body>
+        <body name="base_footprint" pos="0 0 0">
+            <inertial pos="0 0 0" mass="1" diaginertia="0.01 0.01 0.01" />
+            <geom type="box" contype="0" conaffinity="0" group="1" size="0.005 0.005 0.005" rgba="1 1 1 1" pos="0 0 0" />
+            <geom type="box" size="0.0005 0.0005 0.0005" rgba="1 1 1 1" pos="0 0 0.071" />
+            <body name="base_link" pos="0 0 0.051">
+                <inertial pos="-0.061 0 0.293" quat="0.973598 0.00176355 -0.228065 -0.00944331" mass="116" diaginertia="6.29388 5.66925 3.04177" />
+                <mesh contype="0" conaffinity="0" group="1" rgba="1 1 1 1" pos="-0.0508395 1.28619e-005 0.183504" quat="5.14756e-005 0.851793 0.000102456 0.523878" file="base.stl" align="true" center="true" />
+                <mesh rgba="1 1 1 1" pos="-0.060281 -3.35236e-010 0.193632" quat="0 0.869061 0 0.494705" file="base_L.stl" align="true" center="true" />
+                <body name="base_laser_link" pos="0.275 0 0.252">
+                    <inertial pos="0 0 0" quat="0.707107 0.707107 0 0" mass="0.001" diaginertia="0.0001 0.0001 1e-006" />
+                    <geom type="box" contype="0" conaffinity="0" group="1" size="0.0005 0.0005 0.0005" rgba="0.8 0 0 1" pos="0 0 0" />
+                    <geom type="box" size="0.0005 0.0005 0.0005" rgba="0.8 0 0 1" pos="0 0 0" />
+                </body>
+                <body name="fl_caster_rotation_link" pos="0.2246 0.2246 0.0282">
+                    <inertial pos="0 0 0.07" quat="0.589921 -0.182261 -0.205712 0.759247" mass="3.47308" diaginertia="0.0153925 0.0125446 0.0114568" />
+                    <joint name="fl_caster_rotation_joint" type="hinge" pos="0 0 0" axis="0 0 1" maxvel="100" />
+                    <mesh contype="0" conaffinity="0" group="1" pos="-0.00347006 -4.55128e-006 0.0884433" quat="0.999481 -0.000236789 0.0322262 -0.000263129" file="caster.stl" align="true" center="true" />
+                    <mesh pos="-0.00341641 -3.31469e-010 0.0824997" quat="0.999425 0 0.0339023 0" file="caster_L.stl" align="true" center="true" />
+                    <body name="fl_caster_l_wheel_link" pos="0 0.049 0">
+                        <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568" />
+                        <joint name="fl_caster_l_wheel_joint" type="hinge" pos="0 0 0" axis="0 1 0" maxvel="100" />
+                        <mesh contype="0" conaffinity="0" group="1" pos="3.71823e-006 -0.00201083 -2.78436e-005" quat="0.44363 0.550709 0.550556 0.443622" file="wheel.stl" align="true" center="true" />
+                        <geom type="cylinder" size="0.074792 0.017" pos="0 0 0" quat="0.707107 0.707107 0 0" />
+                    </body>
+                    <body name="fl_caster_r_wheel_link" pos="0 -0.049 0">
+                        <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568" />
+                        <joint name="fl_caster_r_wheel_joint" type="hinge" pos="0 0 0" axis="0 1 0" maxvel="100" />
+                        <mesh contype="0" conaffinity="0" group="1" pos="3.71823e-006 -0.00201083 -2.78436e-005" quat="0.44363 0.550709 0.550556 0.443622" file="wheel.stl" align="true" center="true" />
+                        <geom type="cylinder" size="0.074792 0.017" pos="0 0 0" quat="0.707107 0.707107 0 0" />
+                    </body>
+                </body>
+                <body name="fr_caster_rotation_link" pos="0.2246 -0.2246 0.0282">
+                    <inertial pos="0 0 0.07" quat="0.589921 -0.182261 -0.205712 0.759247" mass="3.47308" diaginertia="0.0153925 0.0125446 0.0114568" />
+                    <joint name="fr_caster_rotation_joint" type="hinge" pos="0 0 0" axis="0 0 1" maxvel="100" />
+                    <mesh contype="0" conaffinity="0" group="1" pos="-0.00347006 -4.55128e-006 0.0884433" quat="0.999481 -0.000236789 0.0322262 -0.000263129" file="caster.stl" align="true" center="true" />
+                    <mesh pos="-0.00341641 -3.31469e-010 0.0824997" quat="0.999425 0 0.0339023 0" file="caster_L.stl" align="true" center="true" />
+                    <body name="fr_caster_l_wheel_link" pos="0 0.049 0">
+                        <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568" />
+                        <joint name="fr_caster_l_wheel_joint" type="hinge" pos="0 0 0" axis="0 1 0" maxvel="100" />
+                        <mesh contype="0" conaffinity="0" group="1" pos="3.71823e-006 -0.00201083 -2.78436e-005" quat="0.44363 0.550709 0.550556 0.443622" file="wheel.stl" align="true" center="true" />
+                        <geom type="cylinder" size="0.074792 0.017" pos="0 0 0" quat="0.707107 0.707107 0 0" />
+                    </body>
+                    <body name="fr_caster_r_wheel_link" pos="0 -0.049 0">
+                        <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568" />
+                        <joint name="fr_caster_r_wheel_joint" type="hinge" pos="0 0 0" axis="0 1 0" maxvel="100" />
+                        <mesh contype="0" conaffinity="0" group="1" pos="3.71823e-006 -0.00201083 -2.78436e-005" quat="0.44363 0.550709 0.550556 0.443622" file="wheel.stl" align="true" center="true" />
+                        <geom type="cylinder" size="0.074792 0.017" pos="0 0 0" quat="0.707107 0.707107 0 0" />
+                    </body>
+                </body>
+                <body name="bl_caster_rotation_link" pos="-0.2246 0.2246 0.0282">
+                    <inertial pos="0 0 0.07" quat="0.589921 -0.182261 -0.205712 0.759247" mass="3.47308" diaginertia="0.0153925 0.0125446 0.0114568" />
+                    <joint name="bl_caster_rotation_joint" type="hinge" pos="0 0 0" axis="0 0 1" maxvel="100" />
+                    <mesh contype="0" conaffinity="0" group="1" pos="-0.00347006 -4.55128e-006 0.0884433" quat="0.999481 -0.000236789 0.0322262 -0.000263129" file="caster.stl" align="true" center="true" />
+                    <mesh pos="-0.00341641 -3.31469e-010 0.0824997" quat="0.999425 0 0.0339023 0" file="caster_L.stl" align="true" center="true" />
+                    <body name="bl_caster_l_wheel_link" pos="0 0.049 0">
+                        <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568" />
+                        <joint name="bl_caster_l_wheel_joint" type="hinge" pos="0 0 0" axis="0 1 0" maxvel="100" />
+                        <mesh contype="0" conaffinity="0" group="1" pos="3.71823e-006 -0.00201083 -2.78436e-005" quat="0.44363 0.550709 0.550556 0.443622" file="wheel.stl" align="true" center="true" />
+                        <geom type="cylinder" size="0.074792 0.017" pos="0 0 0" quat="0.707107 0.707107 0 0" />
+                    </body>
+                    <body name="bl_caster_r_wheel_link" pos="0 -0.049 0">
+                        <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568" />
+                        <joint name="bl_caster_r_wheel_joint" type="hinge" pos="0 0 0" axis="0 1 0" maxvel="100" />
+                        <mesh contype="0" conaffinity="0" group="1" pos="3.71823e-006 -0.00201083 -2.78436e-005" quat="0.44363 0.550709 0.550556 0.443622" file="wheel.stl" align="true" center="true" />
+                        <geom type="cylinder" size="0.074792 0.017" pos="0 0 0" quat="0.707107 0.707107 0 0" />
+                    </body>
+                </body>
+                <body name="br_caster_rotation_link" pos="-0.2246 -0.2246 0.0282">
+                    <inertial pos="0 0 0.07" quat="0.589921 -0.182261 -0.205712 0.759247" mass="3.47308" diaginertia="0.0153925 0.0125446 0.0114568" />
+                    <joint name="br_caster_rotation_joint" type="hinge" pos="0 0 0" axis="0 0 1" maxvel="100" />
+                    <mesh contype="0" conaffinity="0" group="1" pos="-0.00347006 -4.55128e-006 0.0884433" quat="0.999481 -0.000236789 0.0322262 -0.000263129" file="caster.stl" align="true" center="true" />
+                    <mesh pos="-0.00341641 -3.31469e-010 0.0824997" quat="0.999425 0 0.0339023 0" file="caster_L.stl" align="true" center="true" />
+                    <body name="br_caster_l_wheel_link" pos="0 0.049 0">
+                        <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568" />
+                        <joint name="br_caster_l_wheel_joint" type="hinge" pos="0 0 0" axis="0 1 0" maxvel="100" />
+                        <mesh contype="0" conaffinity="0" group="1" pos="3.71823e-006 -0.00201083 -2.78436e-005" quat="0.44363 0.550709 0.550556 0.443622" file="wheel.stl" align="true" center="true" />
+                        <geom type="cylinder" size="0.074792 0.017" pos="0 0 0" quat="0.707107 0.707107 0 0" />
+                    </body>
+                    <body name="br_caster_r_wheel_link" pos="0 -0.049 0">
+                        <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568" />
+                        <joint name="br_caster_r_wheel_joint" type="hinge" pos="0 0 0" axis="0 1 0" maxvel="100" />
+                        <mesh contype="0" conaffinity="0" group="1" pos="3.71823e-006 -0.00201083 -2.78436e-005" quat="0.44363 0.550709 0.550556 0.443622" file="wheel.stl" align="true" center="true" />
+                        <geom type="cylinder" size="0.074792 0.017" pos="0 0 0" quat="0.707107 0.707107 0 0" />
+                    </body>
+                </body>
+                <body name="torso_lift_link" pos="-0.05 0 0.739675">
+                    <inertial pos="-0.1 0 -0.0885" quat="0.999335 0.00762625 0.0354529 0.00371175" mass="36.248" diaginertia="2.78307 2.51045 0.514581" />
+                    <joint name="torso_lift_joint" type="slide" islimited="true" pos="0 0 0" axis="0 0 1" range="0 0.31" maxvel="0.013" />
+                    <mesh contype="0" conaffinity="0" group="1" rgba="0.9 0.9 0.9 1" pos="-0.114138 0.000104203 0.0360053" quat="0.997469 0.000323728 0.0710909 0.00112996" file="torso_lift.stl" align="true" center="true" />
+                    <mesh rgba="0.9 0.9 0.9 1" pos="-0.115283 3.76351e-010 0.0346525" quat="0.99743 0 0.0716542 0" file="torso_lift_L.stl" align="true" center="true" />
+                    <body name="imu_link" pos="-0.02977 -0.1497 0.164" quat="0 0 1 0">
+                        <inertial pos="0 0 0" quat="0.707107 0.707107 0 0" mass="0.001" diaginertia="0.0001 0.0001 1e-006" />
+                        <geom type="box" contype="0" conaffinity="0" group="1" size="0.0005 0.0005 0.0005" rgba="0.8 0 0 1" pos="0 0 0" />
+                        <geom type="box" size="0.0005 0.0005 0.0005" rgba="0.8 0 0 1" pos="0 0 0" />
+                    </body>
+                    <body name="head_pan_link" pos="-0.01707 0 0.38145">
+                        <inertial pos="-0.005717 0.010312 -0.029649" quat="-0.14527 0.703536 0.0770465 0.691373" mass="1.61112" diaginertia="0.00865153 0.00523378 0.00477857" />
+                        <joint name="head_pan_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 1" range="-3.007 3.007" maxvel="6" />
+                        <mesh contype="0" conaffinity="0" group="1" rgba="0 0 0.8 1" pos="0.0322744 7.41333e-007 -0.00540542" quat="0.441589 0.441589 -0.552264 0.552271" file="head_pan.stl" align="true" center="true" />
+                        <mesh rgba="0 0 0.8 1" pos="0.0325106 0.000181932 -0.00531929" quat="0.439593 0.437691 -0.555857 0.553361" file="head_pan_L.stl" align="true" center="true" />
+                        <body name="head_tilt_link" pos="0.068 0 0">
+                            <inertial pos="0.041935 0.003569 0.028143" quat="0.538183 -0.126356 -0.109825 0.826034" mass="1.74973" diaginertia="0.0120282 0.0111449 0.00482039" />
+                            <joint name="head_tilt_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 1 0" range="-0.471238 1.39626" maxvel="5" />
+                            <mesh contype="0" conaffinity="0" group="1" rgba="0 0.8 0 1" pos="-0.0367199 -2.32396e-005 0.0936419" quat="0.566621 0.566365 -0.423156 0.423213" file="head_tilt.stl" align="true" center="true" />
+                            <mesh rgba="0 0.8 0 1" pos="-0.0483717 -1.73742e-006 0.112663" quat="0.52182 0.521907 -0.477102 0.477169" file="head_tilt_L.stl" align="true" center="true" />
+                            <body name="head_plate_frame" pos="0.0232 0 0.0645">
+                                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                                <geom type="box" contype="0" conaffinity="0" group="1" size="0.005 0.005 0.005" rgba="0 0 0.8 1" pos="0 0 0" />
+                                <geom type="box" size="0.005 0.005 0.005" rgba="0 0 0.8 1" pos="0 0 0" />
+                                <body name="sensor_mount_link" pos="0 0 0">
+                                    <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5" mass="0.05" diaginertia="0.004 0.004 0.004" />
+                                    <geom type="box" contype="0" conaffinity="0" group="1" size="0.005 0.005 0.005" rgba="0 0 0.8 1" pos="0 0 0" />
+                                    <geom type="box" size="0.005 0.005 0.005" rgba="0 0 0.8 1" pos="0 0 0" />
+                                    <body name="high_def_frame" pos="0 -0.109 0.035">
+                                        <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                                        <geom type="box" contype="0" conaffinity="0" group="1" size="0.02 0.02 0.02" rgba="0 0 0.8 1" pos="-0.02 0 0" />
+                                        <geom type="box" size="0.005 0.005 0.005" rgba="0 0 0.8 1" pos="0 0 0" />
+                                        <body name="high_def_optical_frame" pos="0 0 0" quat="0.5 -0.5 0.5 -0.5">
+                                            <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                                            <geom type="cylinder" contype="0" conaffinity="0" group="1" size="0.02 0.025" rgba="0 0 0.8 1" pos="0 0 0" quat="0.707107 0 0 0.707107" />
+                                            <geom type="box" size="0.005 0.005 0.005" rgba="0 0 0.8 1" pos="0 0 0" />
+                                        </body>
+                                    </body>
+                                    <body name="double_stereo_link" pos="0 0 0.003">
+                                        <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5" mass="0.1" diaginertia="0.004 0.004 0.004" />
+                                        <geom type="box" contype="0" conaffinity="0" group="1" size="0.01 0.06 0.025" rgba="0 0 0.8 1" pos="-0.01 0 0.025" />
+                                        <geom type="box" size="0.01 0.06 0.025" rgba="0 0 0.8 1" pos="-0.01 0 0.025" />
+                                        <body name="wide_stereo_link" pos="0 0.03 0.0305">
+                                            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01" />
+                                            <geom type="box" contype="0" conaffinity="0" group="1" size="0.0005 0.0005 0.0005" rgba="0 0 0.8 1" pos="0 0 0" />
+                                            <geom type="box" size="0.0005 0.0005 0.0005" rgba="0 0 0.8 1" pos="0 0 0" />
+                                            <body name="wide_stereo_optical_frame" pos="0 0 0" quat="0.5 -0.5 0.5 -0.5">
+                                                <inertial pos="0 0 0" quat="0.5 -0.5 0.5 -0.5" mass="0" diaginertia="0 0 0" />
+                                            </body>
+                                            <body name="wide_stereo_gazebo_l_stereo_camera_frame" pos="0 0 0">
+                                                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                                                <geom type="box" contype="0" conaffinity="0" group="1" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                <geom type="box" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                <body name="wide_stereo_gazebo_l_stereo_camera_optical_frame" pos="0 0 0" quat="0.5 -0.5 0.5 -0.5">
+                                                    <inertial pos="0 0 0" quat="0.5 -0.5 0.5 -0.5" mass="0" diaginertia="0 0 0" />
+                                                </body>
+                                                <body name="wide_stereo_gazebo_r_stereo_camera_frame" pos="0 -0.09 0">
+                                                    <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                                                    <geom type="box" contype="0" conaffinity="0" group="1" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                    <geom type="box" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                    <body name="wide_stereo_gazebo_r_stereo_camera_optical_frame" pos="0 0 0" quat="0.5 -0.5 0.5 -0.5">
+                                                        <inertial pos="0 0 0" quat="0.5 -0.5 0.5 -0.5" mass="0" diaginertia="0 0 0" />
+                                                    </body>
+                                                </body>
+                                            </body>
+                                        </body>
+                                        <body name="narrow_stereo_link" pos="0 0.06 0.0305">
+                                            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01" />
+                                            <geom type="box" contype="0" conaffinity="0" group="1" size="0.0005 0.0005 0.0005" rgba="0 0 0.8 1" pos="0 0 0" />
+                                            <geom type="box" size="0.0005 0.0005 0.0005" rgba="0 0 0.8 1" pos="0 0 0" />
+                                            <body name="narrow_stereo_optical_frame" pos="0 0 0" quat="0.5 -0.5 0.5 -0.5">
+                                                <inertial pos="0 0 0" quat="0.5 -0.5 0.5 -0.5" mass="0" diaginertia="0 0 0" />
+                                            </body>
+                                            <body name="narrow_stereo_gazebo_l_stereo_camera_frame" pos="0 0 0">
+                                                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                                                <geom type="box" contype="0" conaffinity="0" group="1" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                <geom type="box" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                <body name="narrow_stereo_gazebo_l_stereo_camera_optical_frame" pos="0 0 0" quat="0.5 -0.5 0.5 -0.5">
+                                                    <inertial pos="0 0 0" quat="0.5 -0.5 0.5 -0.5" mass="0" diaginertia="0 0 0" />
+                                                </body>
+                                                <body name="narrow_stereo_gazebo_r_stereo_camera_frame" pos="0 -0.09 0">
+                                                    <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                                                    <geom type="box" contype="0" conaffinity="0" group="1" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                    <geom type="box" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                    <body name="narrow_stereo_gazebo_r_stereo_camera_optical_frame" pos="0 0 0" quat="0.5 -0.5 0.5 -0.5">
+                                                        <inertial pos="0 0 0" quat="0.5 -0.5 0.5 -0.5" mass="0" diaginertia="0 0 0" />
+                                                    </body>
+                                                </body>
+                                            </body>
+                                        </body>
+                                    </body>
+                                </body>
+                            </body>
+                        </body>
+                    </body>
+                    <body name="laser_tilt_mount_link" pos="0.09893 0 0.227">
+                        <inertial pos="-0.03 0 -0.03" quat="0.707107 0.707107 0 0" mass="0.05" diaginertia="0.0001 0.0001 1e-005" />
+                        <joint name="laser_tilt_mount_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 1 0" range="-0.7854 1.48353" maxvel="10" />
+                        <mesh contype="0" conaffinity="0" group="1" rgba="0.8 0 0 1" pos="-0.00505059 -2.14804e-005 0.00354777" quat="0.695752 0.695453 -0.126856 0.12721" file="tilting_hokuyo.stl" align="true" center="true" />
+                        <mesh rgba="0.8 0 0 1" pos="-0.00506403 4.97668e-010 0.00491526" quat="0.685964 0.685964 -0.17162 0.17162" file="tilting_hokuyo_L.stl" align="true" center="true" />
+                        <body name="laser_tilt_link" pos="0 0 0.03">
+                            <inertial pos="0 0 0" quat="0.707107 0.707107 0 0" mass="0.001" diaginertia="0.0001 0.0001 1e-006" />
+                            <geom type="box" contype="0" conaffinity="0" group="1" size="0.0005 0.0005 0.0005" rgba="0.8 0 0 1" pos="0 0 0" />
+                            <geom type="box" size="0.0005 0.0005 0.0005" rgba="0.8 0 0 1" pos="0 0 0" />
+                        </body>
+                    </body>
+                    <body name="r_shoulder_pan_link" pos="0 -0.188 0">
+                        <inertial pos="-0.001201 0.024513 -0.098231" quat="0.927482 -0.0876561 0.0740595 -0.355821" mass="25.7993" diaginertia="0.934201 0.837701 0.242033" />
+                        <joint name="r_shoulder_pan_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 1" range="-2.2854 0.714602" maxvel="2.088" />
+                        <mesh contype="0" conaffinity="0" group="1" rgba="0 0 0.8 1" pos="0.00645155 -4.34445e-006 -0.140676" quat="0.692093 0.0507578 0.0488731 0.718361" file="shoulder_pan.stl" align="true" center="true" />
+                        <mesh rgba="0 0 0.8 1" pos="0.00645155 -4.34445e-006 -0.140676" quat="0.692093 0.0507578 0.0488731 0.718361" file="shoulder_pan.stl" align="true" center="true" />
+                        <body name="r_shoulder_lift_link" pos="0.1 0 0">
+                            <inertial pos="0.02195 -0.02664 -0.03127" quat="0.791779 0.478014 0.238985 0.295762" mass="2.74988" diaginertia="0.0261874 0.0207302 0.0151681" />
+                            <joint name="r_shoulder_lift_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 1 0" range="-0.5236 1.3963" maxvel="2.082" />
+                            <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="-0.0101108 0.000641356 0.00148515" quat="0.709908 0.0394999 0.0363673 0.702245" file="shoulder_lift.stl" align="true" center="true" />
+                            <mesh rgba="0.7 0.7 0.7 1" pos="-0.0101108 0.000641356 0.00148515" quat="0.709908 0.0394999 0.0363673 0.702245" file="shoulder_lift.stl" align="true" center="true" />
+                            <body name="r_upper_arm_roll_link" pos="0 0 0">
+                                <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01" />
+                                <joint name="r_upper_arm_roll_joint" type="hinge" islimited="true" pos="0 0 0" axis="1 0 0" range="-3.9 0.8" maxvel="3.27" />
+                                <mesh contype="0" conaffinity="0" group="1" pos="0.125779 0.00380475 0.00014116" quat="0.999818 0.00852125 -0.000774767 0.0170583" file="upper_arm_roll.stl" align="true" center="true" />
+                                <mesh pos="0.126564 -1.63321e-006 -6.24749e-007" quat="1 -1.3404e-005 1.69255e-006 -7.28242e-006" file="upper_arm_roll_L.stl" align="true" center="true" />
+                                <body name="r_upper_arm_link" pos="0 0 0">
+                                    <inertial pos="0.21398 -0.01621 -0.0002" quat="-0.0450196 0.697462 -0.088537 0.709705" mass="6.01769" diaginertia="0.0761385 0.0749307 0.0151327" />
+                                    <mesh contype="0" conaffinity="0" group="1" rgba="0 0.8 0 1" pos="0.283134 -3.47422e-005 -0.00997193" quat="0.50005 0.499455 0.500039 0.500455" file="upper_arm.stl" align="true" center="true" />
+                                    <mesh rgba="0 0.8 0 1" pos="0.283134 -3.47422e-005 -0.00997193" quat="0.50005 0.499455 0.500039 0.500455" file="upper_arm.stl" align="true" center="true" />
+                                    <body name="r_elbow_flex_link" pos="0.4 0 0">
+                                        <inertial pos="0.01014 0.00032 -0.01211" quat="0.308784 0.646797 0.639077 0.279083" mass="1.90327" diaginertia="0.00441852 0.00396477 0.00308977" />
+                                        <joint name="r_elbow_flex_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 1 0" range="-2.3213 0" maxvel="3.3" />
+                                        <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="0.0144133 -0.000209096 -0.00189559" quat="0.463199 0.534284 0.534267 0.463191" file="elbow_flex.stl" align="true" center="true" />
+                                        <mesh rgba="0.7 0.7 0.7 1" pos="0.0144133 -0.000209096 -0.00189559" quat="0.463199 0.534284 0.534267 0.463191" file="elbow_flex.stl" align="true" center="true" />
+                                        <body name="r_forearm_roll_link" pos="0 0 0">
+                                            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01" />
+                                            <joint name="r_forearm_roll_joint" type="hinge" pos="0 0 0" axis="1 0 0" maxvel="3.6" />
+                                            <mesh contype="0" conaffinity="0" group="1" pos="0.0819619 -7.78054e-005 0.00368734" quat="0.00105922 0.668438 -0.000151894 0.743767" file="forearm_roll.stl" align="true" center="true" />
+                                            <mesh pos="0.0797865 4.09272e-006 0.00292727" quat="-0.000430524 0.675888 -0.000287769 0.737004" file="forearm_roll_L.stl" align="true" center="true" />
+                                            <body name="r_forearm_link" pos="0 0 0">
+                                                <inertial pos="0.18791 -0.00017 -0.00912" quat="-0.000586594 0.726286 -0.00396869 0.687381" mass="2.57968" diaginertia="0.0166326 0.0150775 0.00360892" />
+                                                <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="0.205385 1.71716e-005 -0.00373009" quat="0.00011562 0.733643 -9.11036e-005 0.679535" file="forearm.stl" align="true" center="true" />
+                                                <mesh rgba="0.7 0.7 0.7 1" pos="0.205385 1.71716e-005 -0.00373009" quat="0.00011562 0.733643 -9.11036e-005 0.679535" file="forearm.stl" align="true" center="true" />
+                                                <body name="r_wrist_flex_link" pos="0.321 0 0">
+                                                    <inertial pos="-0.00157 0 -0.00075" quat="0.695976 0.696411 -0.12356 0.123942" mass="0.61402" diaginertia="0.000652771 0.000643391 0.000198244" />
+                                                    <joint name="r_wrist_flex_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 1 0" range="-2.094 0" maxvel="3.078" />
+                                                    <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="-0.00174128 1.73133e-006 -0.00124653" quat="0.702474 -0.0813866 -0.0814375 0.702335" file="wrist_flex.stl" align="true" center="true" />
+                                                    <mesh rgba="0.7 0.7 0.7 1" pos="-0.00174128 1.73133e-006 -0.00124653" quat="0.702474 -0.0813866 -0.0814375 0.702335" file="wrist_flex.stl" align="true" center="true" />
+                                                    <body name="r_wrist_roll_link" pos="0 0 0">
+                                                        <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01" />
+                                                        <joint name="r_wrist_roll_joint" type="hinge" pos="0 0 0" axis="1 0 0" maxvel="3.6" />
+                                                        <mesh contype="0" conaffinity="0" group="1" pos="0.0317615 2.35852e-007 8.42538e-006" quat="0.704477 0.709727 6.14587e-005 -9.8782e-005" file="wrist_roll.stl" align="true" center="true" />
+                                                        <mesh pos="0.0317904 -1.28112e-005 6.34869e-009" quat="0.675317 0.737527 -0.000192462 4.82646e-006" file="wrist_roll_L.stl" align="true" center="true" />
+                                                        <body name="r_gripper_palm_link" pos="0 0 0">
+                                                            <inertial pos="0.06623 0.00053 -0.00119" quat="-0.0181842 0.706274 0.0160771 0.707523" mass="0.58007" diaginertia="0.000865637 0.000678178 0.000351471" />
+                                                            <mesh contype="0" conaffinity="0" group="1" rgba="0.8 0 0 1" pos="0.080029 -1.33057e-006 2.11805e-006" quat="0.499818 0.500153 -0.499913 0.500117" file="gripper_palm.stl" align="true" center="true" />
+                                                            <mesh rgba="0.8 0 0 1" pos="0.080029 -1.33057e-006 2.11805e-006" quat="0.499818 0.500153 -0.499913 0.500117" file="gripper_palm.stl" align="true" center="true" />
+                                                            <body name="r_gripper_led_frame" pos="0.0513 0 0.0244">
+                                                                <inertial pos="0.0513 0 0.0244" mass="0" diaginertia="0 0 0" />
+                                                            </body>
+                                                            <body name="r_gripper_motor_accelerometer_link" pos="0 0 0">
+                                                                <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                                                                <geom type="box" contype="0" conaffinity="0" group="1" size="0.0005 0.0005 0.0005" pos="0 0 0" />
+                                                                <geom type="box" size="0.0005 0.0005 0.0005" pos="0 0 0" />
+                                                            </body>
+                                                            <body name="r_gripper_tool_frame" pos="0.18 0 0">
+                                                                <inertial pos="0.18 0 0" mass="0" diaginertia="0 0 0" />
+                                                            </body>
+                                                            <body name="r_gripper_l_finger_link" pos="0.07691 0.01 0">
+                                                                <inertial pos="0.03598 0.0173 -0.00164" quat="0.57444 0.429111 0.518782 0.465562" mass="0.17126" diaginertia="0.00019774 0.000181336 7.66239e-005" />
+                                                                <joint name="r_gripper_l_finger_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 1" range="0 0.548" maxvel="0.5" />
+                                                                <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="0.0316962 0.0175359 2.35653e-006" quat="0.49235 0.492407 0.507462 0.507551" file="l_finger.stl" align="true" center="true" />
+                                                                <mesh rgba="0.7 0.7 0.7 1" pos="0.0316962 0.0175359 2.35653e-006" quat="0.49235 0.492407 0.507462 0.507551" file="l_finger.stl" align="true" center="true" />
+                                                                <body name="r_gripper_l_finger_tip_link" pos="0.09137 0.00495 0">
+                                                                    <inertial pos="0.00423 0.00284 0" quat="0.249588 0.661594 -0.249588 0.661594" mass="0.04419" diaginertia="1.54177e-005 1.50049e-005 3.23624e-006" />
+                                                                    <joint name="r_gripper_l_finger_tip_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 -1" range="0 0.548" maxvel="0.5" />
+                                                                    <mesh contype="0" conaffinity="0" group="1" rgba="0 0.8 0 1" pos="0.00357238 0.00201403 9.97072e-006" quat="0.258504 0.659589 -0.254405 0.658329" file="l_finger_tip.stl" align="true" center="true" />
+                                                                    <mesh rgba="0 0.8 0 1" pos="0.00357238 0.00201403 9.97072e-006" quat="0.258504 0.659589 -0.254405 0.658329" file="l_finger_tip.stl" align="true" center="true" />
+                                                                </body>
+                                                            </body>
+                                                            <body name="r_gripper_r_finger_link" pos="0.07691 -0.01 0">
+                                                                <inertial pos="0.03576 -0.01736 -0.00095" quat="0.474684 0.510909 0.446353 0.560727" mass="0.17389" diaginertia="0.000198903 0.00018134 7.66847e-005" />
+                                                                <joint name="r_gripper_r_finger_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 -1" range="0 0.548" maxvel="0.5" />
+                                                                <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="0.0316962 -0.0175359 -2.35653e-006" quat="-0.492407 0.49235 -0.507551 0.507462" file="l_finger.stl" align="true" center="true" />
+                                                                <mesh rgba="0.7 0.7 0.7 1" pos="0.0316962 -0.0175359 -2.35653e-006" quat="-0.492407 0.49235 -0.507551 0.507462" file="l_finger.stl" align="true" center="true" />
+                                                                <body name="r_gripper_r_finger_tip_link" pos="0.09137 -0.00495 0">
+                                                                    <inertial pos="0.00423 -0.00284 0" quat="-0.249588 0.661594 0.249588 0.661594" mass="0.04419" diaginertia="1.54177e-005 1.50049e-005 3.23624e-006" />
+                                                                    <joint name="r_gripper_r_finger_tip_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 1" range="0 0.548" maxvel="0.5" />
+                                                                    <mesh contype="0" conaffinity="0" group="1" rgba="0 0.8 0 1" pos="0.00357238 -0.00201403 -9.97072e-006" quat="-0.659589 0.258504 -0.658329 -0.254405" file="l_finger_tip.stl" align="true" center="true" />
+                                                                    <mesh rgba="0 0.8 0 1" pos="0.00357238 -0.00201403 -9.97072e-006" quat="-0.659589 0.258504 -0.658329 -0.254405" file="l_finger_tip.stl" align="true" center="true" />
+                                                                    <body name="r_gripper_l_finger_tip_frame" pos="0 0 0">
+                                                                        <inertial pos="0 0 0" mass="0" diaginertia="0 0 0" />
+                                                                        <joint name="r_gripper_joint" type="slide" islimited="true" pos="0 0 0" axis="0 1 0" range="0 0.09" maxvel="0.2" />
+                                                                    </body>
+                                                                </body>
+                                                            </body>
+                                                            <body name="r_gripper_l_parallel_link" pos="0.05891 0.031 0">
+                                                                <inertial pos="0.03598 0.0173 -0.00164" quat="0.57444 0.429111 0.518782 0.465562" mass="0.17126" diaginertia="0.00019774 0.000181336 7.66239e-005" />
+                                                                <joint name="r_gripper_l_parallel_root_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 1" range="0 0.548" maxvel="0.5" />
+                                                                <geom type="box" size="0.0457471 0.0025 0.0025" pos="0.0457471 0 0" quat="0.999634 0 0 0.0270579" />
+                                                            </body>
+                                                            <body name="r_gripper_r_parallel_link" pos="0.05891 -0.031 0">
+                                                                <inertial pos="0.03576 -0.01736 -0.00095" quat="0.474684 0.510909 0.446353 0.560727" mass="0.17389" diaginertia="0.000198903 0.00018134 7.66847e-005" />
+                                                                <joint name="r_gripper_r_parallel_root_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 -1" range="0 0.548" maxvel="0.5" />
+                                                                <geom type="box" size="0.0457471 0.0025 0.0025" pos="0.0457471 0 0" quat="0.999634 0 0 -0.0270579" />
+                                                            </body>
+                                                        </body>
+                                                    </body>
+                                                </body>
+                                            </body>
+                                            <body name="r_forearm_cam_frame" pos="0.135 0 0.044" quat="0.679288 0.679288 -0.196387 0.196387">
+                                                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                                                <geom type="box" contype="0" conaffinity="0" group="1" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                <geom type="box" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                <body name="r_forearm_cam_optical_frame" pos="0 0 0" quat="0.5 -0.5 0.5 -0.5">
+                                                    <inertial pos="0 0 0" quat="0.5 -0.5 0.5 -0.5" mass="0" diaginertia="0 0 0" />
+                                                </body>
+                                            </body>
+                                        </body>
+                                    </body>
+                                </body>
+                            </body>
+                        </body>
+                    </body>
+                    <body name="l_shoulder_pan_link" pos="0 0.188 0">
+                        <inertial pos="-0.001201 0.024513 -0.098231" quat="0.927482 -0.0876561 0.0740595 -0.355821" mass="25.7993" diaginertia="0.934201 0.837701 0.242033" />
+                        <joint name="l_shoulder_pan_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 1" range="-0.714602 2.2854" maxvel="2.088" />
+                        <mesh contype="0" conaffinity="0" group="1" rgba="0 0 0.8 1" pos="0.00645155 -4.34445e-006 -0.140676" quat="0.692093 0.0507578 0.0488731 0.718361" file="shoulder_pan.stl" align="true" center="true" />
+                        <mesh rgba="0 0 0.8 1" pos="0.00645155 -4.34445e-006 -0.140676" quat="0.692093 0.0507578 0.0488731 0.718361" file="shoulder_pan.stl" align="true" center="true" />
+                        <body name="l_shoulder_lift_link" pos="0.1 0 0">
+                            <inertial pos="0.02195 -0.02664 -0.03127" quat="0.791779 0.478014 0.238985 0.295762" mass="2.74988" diaginertia="0.0261874 0.0207302 0.0151681" />
+                            <joint name="l_shoulder_lift_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 1 0" range="-0.5236 1.3963" maxvel="2.082" />
+                            <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="-0.0101108 0.000641356 0.00148515" quat="0.709908 0.0394999 0.0363673 0.702245" file="shoulder_lift.stl" align="true" center="true" />
+                            <mesh rgba="0.7 0.7 0.7 1" pos="-0.0101108 0.000641356 0.00148515" quat="0.709908 0.0394999 0.0363673 0.702245" file="shoulder_lift.stl" align="true" center="true" />
+                            <body name="l_upper_arm_roll_link" pos="0 0 0">
+                                <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01" />
+                                <joint name="l_upper_arm_roll_joint" type="hinge" islimited="true" pos="0 0 0" axis="1 0 0" range="-0.8 3.9" maxvel="3.27" />
+                                <mesh contype="0" conaffinity="0" group="1" pos="0.125779 0.00380475 0.00014116" quat="0.999818 0.00852125 -0.000774767 0.0170583" file="upper_arm_roll.stl" align="true" center="true" />
+                                <mesh pos="0.126564 -1.63321e-006 -6.24749e-007" quat="1 -1.3404e-005 1.69255e-006 -7.28242e-006" file="upper_arm_roll_L.stl" align="true" center="true" />
+                                <body name="l_upper_arm_link" pos="0 0 0">
+                                    <inertial pos="0.21405 0.01658 -0.00057" quat="-0.0909011 0.708675 -0.0516381 0.697746" mass="6.01769" diaginertia="0.0760697 0.0748821 0.0151071" />
+                                    <mesh contype="0" conaffinity="0" group="1" rgba="0 0.8 0 1" pos="0.283134 -3.47422e-005 -0.00997193" quat="0.50005 0.499455 0.500039 0.500455" file="upper_arm.stl" align="true" center="true" />
+                                    <mesh rgba="0 0.8 0 1" pos="0.283134 -3.47422e-005 -0.00997193" quat="0.50005 0.499455 0.500039 0.500455" file="upper_arm.stl" align="true" center="true" />
+                                    <body name="l_elbow_flex_link" pos="0.4 0 0">
+                                        <inertial pos="0.01014 0.00032 -0.01211" quat="0.308784 0.646797 0.639077 0.279083" mass="1.90327" diaginertia="0.00441852 0.00396477 0.00308977" />
+                                        <joint name="l_elbow_flex_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 1 0" range="-2.3213 0" maxvel="3.3" />
+                                        <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="0.0144133 -0.000209096 -0.00189559" quat="0.463199 0.534284 0.534267 0.463191" file="elbow_flex.stl" align="true" center="true" />
+                                        <mesh rgba="0.7 0.7 0.7 1" pos="0.0144133 -0.000209096 -0.00189559" quat="0.463199 0.534284 0.534267 0.463191" file="elbow_flex.stl" align="true" center="true" />
+                                        <body name="l_forearm_roll_link" pos="0 0 0">
+                                            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01" />
+                                            <joint name="l_forearm_roll_joint" type="hinge" pos="0 0 0" axis="1 0 0" maxvel="3.6" />
+                                            <mesh contype="0" conaffinity="0" group="1" pos="0.0819619 -7.78054e-005 0.00368734" quat="0.00105922 0.668438 -0.000151894 0.743767" file="forearm_roll.stl" align="true" center="true" />
+                                            <mesh pos="0.0797865 4.09272e-006 0.00292727" quat="-0.000430524 0.675888 -0.000287769 0.737004" file="forearm_roll_L.stl" align="true" center="true" />
+                                            <body name="l_forearm_link" pos="0 0 0">
+                                                <inertial pos="0.18791 -0.00017 -0.00912" quat="-0.000586594 0.726286 -0.00396869 0.687381" mass="2.57968" diaginertia="0.0166326 0.0150775 0.00360892" />
+                                                <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="0.205385 1.71716e-005 -0.00373009" quat="0.00011562 0.733643 -9.11036e-005 0.679535" file="forearm.stl" align="true" center="true" />
+                                                <mesh rgba="0.7 0.7 0.7 1" pos="0.205385 1.71716e-005 -0.00373009" quat="0.00011562 0.733643 -9.11036e-005 0.679535" file="forearm.stl" align="true" center="true" />
+                                                <body name="l_wrist_flex_link" pos="0.321 0 0">
+                                                    <inertial pos="-0.00157 0 -0.00075" quat="0.695976 0.696411 -0.12356 0.123942" mass="0.61402" diaginertia="0.000652771 0.000643391 0.000198244" />
+                                                    <joint name="l_wrist_flex_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 1 0" range="-2.094 0" maxvel="3.078" />
+                                                    <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="-0.00174128 1.73133e-006 -0.00124653" quat="0.702474 -0.0813866 -0.0814375 0.702335" file="wrist_flex.stl" align="true" center="true" />
+                                                    <mesh rgba="0.7 0.7 0.7 1" pos="-0.00174128 1.73133e-006 -0.00124653" quat="0.702474 -0.0813866 -0.0814375 0.702335" file="wrist_flex.stl" align="true" center="true" />
+                                                    <body name="l_wrist_roll_link" pos="0 0 0">
+                                                        <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01" />
+                                                        <joint name="l_wrist_roll_joint" type="hinge" pos="0 0 0" axis="1 0 0" maxvel="3.6" />
+                                                        <mesh contype="0" conaffinity="0" group="1" pos="0.0317615 2.35852e-007 8.42538e-006" quat="0.704477 0.709727 6.14587e-005 -9.8782e-005" file="wrist_roll.stl" align="true" center="true" />
+                                                        <mesh pos="0.0317904 -1.28112e-005 6.34869e-009" quat="0.675317 0.737527 -0.000192462 4.82646e-006" file="wrist_roll_L.stl" align="true" center="true" />
+                                                        <body name="l_gripper_palm_link" pos="0 0 0">
+                                                            <inertial pos="0.06623 0.00053 -0.00119" quat="-0.0181842 0.706274 0.0160771 0.707523" mass="0.58007" diaginertia="0.000865637 0.000678178 0.000351471" />
+                                                            <mesh contype="0" conaffinity="0" group="1" rgba="0.8 0 0 1" pos="0.080029 -1.33057e-006 2.11805e-006" quat="0.499818 0.500153 -0.499913 0.500117" file="gripper_palm.stl" align="true" center="true" />
+                                                            <mesh rgba="0.8 0 0 1" pos="0.080029 -1.33057e-006 2.11805e-006" quat="0.499818 0.500153 -0.499913 0.500117" file="gripper_palm.stl" align="true" center="true" />
+                                                            <body name="l_gripper_led_frame" pos="0.0513 0 0.0244">
+                                                                <inertial pos="0.0513 0 0.0244" mass="0" diaginertia="0 0 0" />
+                                                            </body>
+                                                            <body name="l_gripper_motor_accelerometer_link" pos="0 0 0">
+                                                                <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                                                                <geom type="box" contype="0" conaffinity="0" group="1" size="0.0005 0.0005 0.0005" pos="0 0 0" />
+                                                                <geom type="box" size="0.0005 0.0005 0.0005" pos="0 0 0" />
+                                                            </body>
+                                                            <body name="l_gripper_tool_frame" pos="0.18 0 0">
+                                                                <inertial pos="0.18 0 0" mass="0" diaginertia="0 0 0" />
+                                                            </body>
+                                                            <body name="l_gripper_l_finger_link" pos="0.07691 0.01 0">
+                                                                <inertial pos="0.03598 0.0173 -0.00164" quat="0.57444 0.429111 0.518782 0.465562" mass="0.17126" diaginertia="0.00019774 0.000181336 7.66239e-005" />
+                                                                <joint name="l_gripper_l_finger_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 1" range="0 0.548" maxvel="0.5" />
+                                                                <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="0.0316962 0.0175359 2.35653e-006" quat="0.49235 0.492407 0.507462 0.507551" file="l_finger.stl" align="true" center="true" />
+                                                                <mesh rgba="0.7 0.7 0.7 1" pos="0.0316962 0.0175359 2.35653e-006" quat="0.49235 0.492407 0.507462 0.507551" file="l_finger.stl" align="true" center="true" />
+                                                                <body name="l_gripper_l_finger_tip_link" pos="0.09137 0.00495 0">
+                                                                    <inertial pos="0.00423 0.00284 0" quat="0.249588 0.661594 -0.249588 0.661594" mass="0.04419" diaginertia="1.54177e-005 1.50049e-005 3.23624e-006" />
+                                                                    <joint name="l_gripper_l_finger_tip_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 -1" range="0 0.548" maxvel="0.5" />
+                                                                    <mesh contype="0" conaffinity="0" group="1" rgba="0 0.8 0 1" pos="0.00357238 0.00201403 9.97072e-006" quat="0.258504 0.659589 -0.254405 0.658329" file="l_finger_tip.stl" align="true" center="true" />
+                                                                    <mesh rgba="0 0.8 0 1" pos="0.00357238 0.00201403 9.97072e-006" quat="0.258504 0.659589 -0.254405 0.658329" file="l_finger_tip.stl" align="true" center="true" />
+                                                                </body>
+                                                            </body>
+                                                            <body name="l_gripper_r_finger_link" pos="0.07691 -0.01 0">
+                                                                <inertial pos="0.03576 -0.01736 -0.00095" quat="0.474684 0.510909 0.446353 0.560727" mass="0.17389" diaginertia="0.000198903 0.00018134 7.66847e-005" />
+                                                                <joint name="l_gripper_r_finger_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 -1" range="0 0.548" maxvel="0.5" />
+                                                                <mesh contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" pos="0.0316962 -0.0175359 -2.35653e-006" quat="-0.492407 0.49235 -0.507551 0.507462" file="l_finger.stl" align="true" center="true" />
+                                                                <mesh rgba="0.7 0.7 0.7 1" pos="0.0316962 -0.0175359 -2.35653e-006" quat="-0.492407 0.49235 -0.507551 0.507462" file="l_finger.stl" align="true" center="true" />
+                                                                <body name="l_gripper_r_finger_tip_link" pos="0.09137 -0.00495 0">
+                                                                    <inertial pos="0.00423 -0.00284 0" quat="-0.249588 0.661594 0.249588 0.661594" mass="0.04419" diaginertia="1.54177e-005 1.50049e-005 3.23624e-006" />
+                                                                    <joint name="l_gripper_r_finger_tip_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 1" range="0 0.548" maxvel="0.5" />
+                                                                    <mesh contype="0" conaffinity="0" group="1" rgba="0 0.8 0 1" pos="0.00357238 -0.00201403 -9.97072e-006" quat="-0.659589 0.258504 -0.658329 -0.254405" file="l_finger_tip.stl" align="true" center="true" />
+                                                                    <mesh rgba="0 0.8 0 1" pos="0.00357238 -0.00201403 -9.97072e-006" quat="-0.659589 0.258504 -0.658329 -0.254405" file="l_finger_tip.stl" align="true" center="true" />
+                                                                    <body name="l_gripper_l_finger_tip_frame" pos="0 0 0">
+                                                                        <inertial pos="0 0 0" mass="0" diaginertia="0 0 0" />
+                                                                        <joint name="l_gripper_joint" type="slide" islimited="true" pos="0 0 0" axis="0 1 0" range="0 0.09" maxvel="0.2" />
+                                                                    </body>
+                                                                </body>
+                                                            </body>
+                                                            <body name="l_gripper_l_parallel_link" pos="0.05891 0.031 0">
+                                                                <inertial pos="0.03598 0.0173 -0.00164" quat="0.57444 0.429111 0.518782 0.465562" mass="0.17126" diaginertia="0.00019774 0.000181336 7.66239e-005" />
+                                                                <joint name="l_gripper_l_parallel_root_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 1" range="0 0.548" maxvel="0.5" />
+                                                                <geom type="box" size="0.0457471 0.0025 0.0025" pos="0.0457471 0 0" quat="0.999634 0 0 0.0270579" />
+                                                            </body>
+                                                            <body name="l_gripper_r_parallel_link" pos="0.05891 -0.031 0">
+                                                                <inertial pos="0.03576 -0.01736 -0.00095" quat="0.474684 0.510909 0.446353 0.560727" mass="0.17389" diaginertia="0.000198903 0.00018134 7.66847e-005" />
+                                                                <joint name="l_gripper_r_parallel_root_joint" type="hinge" islimited="true" pos="0 0 0" axis="0 0 -1" range="0 0.548" maxvel="0.5" />
+                                                                <geom type="box" size="0.0457471 0.0025 0.0025" pos="0.0457471 0 0" quat="0.999634 0 0 -0.0270579" />
+                                                            </body>
+                                                        </body>
+                                                    </body>
+                                                </body>
+                                            </body>
+                                            <body name="l_forearm_cam_frame" pos="0.135 0 0.044" quat="0.679288 -0.679288 -0.196387 -0.196387">
+                                                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                                                <geom type="box" contype="0" conaffinity="0" group="1" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                <geom type="box" size="0.005 0.005 0.005" pos="0 0 0" />
+                                                <body name="l_forearm_cam_optical_frame" pos="0 0 0" quat="0.5 -0.5 0.5 -0.5">
+                                                    <inertial pos="0 0 0" quat="0.5 -0.5 0.5 -0.5" mass="0" diaginertia="0 0 0" />
+                                                </body>
+                                            </body>
+                                        </body>
+                                    </body>
+                                </body>
+                            </body>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </body>
+</mujoco>

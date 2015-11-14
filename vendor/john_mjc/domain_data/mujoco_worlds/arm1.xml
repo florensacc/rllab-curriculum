@@ -1,0 +1,70 @@
+<mujoco model="arm1">
+  <compiler inertiafromgeom="true" angle="degree" coordinate="local"/>
+  <option timestep="0.01" eqsoft="true" remotecontact="true" gravity="0 0 0" iterations='20'/>
+  <!-- s_armature='.1 10' -->
+  <default>
+    <!--<joint islimited="false" damping="10" maxvel="12" armature='0.5' frictionloss='0.1' isfrictional='true' makeactuator="true"/>-->
+    <joint islimited="false" damping="1" makeactuator="true"/>
+    <geom contype="2" conaffinity="1" condim="1" friction=".5 .1 .1"
+          density="1000" mindist="0.002" compliance="0.001"
+          timeconst="0.01"/>
+    <!-- Note for later: what made the insertion easy was changing mindist and compliance to 0.002/0.001 and enabling remotecontact -->
+  </default>
+  
+  <!-- things that seem to help: remote contact, more interations, high mindist -->
+
+  <body>
+    <body name="shoulder" pos="0 0 0">
+      <geom name="shoulder_geom" type="capsule" fromto="0 0 0 1 0 0" size="0.05"/>
+      <joint name="shoulder_rot" type="hinge" pos="0 0 0" axis="0 0 -1"/>
+
+      <body name="forearm" pos="1 0 0">
+        <geom name="forearm_geom" type="capsule" fromto="0 0 0 1 0 0" size="0.05"/>
+        <joint name="forearm_rot" type="hinge" pos="0 0 0" axis="0 0 -1"/>
+        
+        <body name="finger" pos="1 0 0">
+          <geom name="finger_geom" type="capsule" fromto="0 0 0 0.5 0 0" size="0.025"/>
+          <site name="finger_tip" pos="0.5 0 0"/>
+          <joint name="finger_rot" type="hinge" pos="0 0 0" axis="0 0 -1"/>
+        </body>
+      </body>
+    </body>
+    
+    <body name="lower_wall" pos="1.54 0.07 0" axisangle="0 0 1 90">
+      <geom name="wall1" type="capsule" size="0.04" fromto="0 0 0 1 0 0" contype="1"/>
+    </body>
+    <body name="upper_wall" pos="1.54 -1.07 0" axisangle="0 0 1 90">
+      <geom name="wall2" type="capsule" size="0.04" fromto="0 0 0 1 0 0" contype="1"/>
+    </body>
+    <body name="back_wall" pos="2.04 -0.03 0" axisangle="0 0 1 90">
+      <geom name="wall3" type="capsule" size="0.04" fromto="0 0 0 0.06 0 0" contype="1"/>
+    </body>
+    <body name="l_wall" pos="1.54 -0.07 0">
+      <geom name="wall4" type="capsule" size="0.04" fromto="0 0 0 0.5 0 0" contype="1"/>
+    </body>
+    <body name="u_wall" pos="1.54 0.07 0">
+      <geom name="wall5" type="capsule" size="0.04" fromto="0 0 0 0.5 0 0" contype="1"/>
+    </body>
+	
+  </body>
+
+  <features>
+    <feature name='control'>
+      <data field='ctrl' item='all'/>
+    </feature>
+  </features>
+  <costs>
+
+    <physics_options  timestep='0.01'/>
+
+    <optimization_options
+        logeps='-30'
+        horizon='400'
+        logmurange='-5 3'
+        />
+
+    <cost name='dummy'>
+      <term feature='control'       norm='quadratic'    coef_running='.1' />
+    </cost>
+  </costs>
+</mujoco>

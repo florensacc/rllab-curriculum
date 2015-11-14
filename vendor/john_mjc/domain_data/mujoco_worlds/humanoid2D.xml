@@ -1,0 +1,204 @@
+<mujoco model="humanoid2D">
+	<compiler uniquevertex="false" inertiafromgeom="true" coordinate="local"/>
+	<default>
+		<joint islimited="false" damping="1e-3" />
+		<geom contype="0" friction="1 1 1" rgba="0.8 0.6 .4 0.75" />
+		<tendon makeactuator="false" />
+		<act-motor forcerange="-.1 .1"/>
+	</default>
+
+	<option timestep="0.02" gravity="0 0 -9.81" remotecontact="true" expdist="10" >	
+		<disable clampvel="true"/>
+	</option>
+
+	<size nstack="8000"/>
+
+  <body>
+    <geom name="floor" pos="0 0 0" size="1 1 1e-3" type="plane"   rgba="0.85 0.85 0.85 1" conaffinity="1" />
+
+    <body name="torso" pos="0 0 0.85" quat="1 0 0 0" >
+      <joint name="rootx" type="slide" axis="1 0 0" pos="0 0 0" islimited="false" />
+      <joint name="rootz" type="slide" axis="0 0 1" pos="0 0 0" islimited="false" />
+      <joint name="rooty" type="hinge" axis="0 1 0" pos="0 0 0" islimited="false" />
+      <geom name="butt" type="capsule" fromto="0 0 0 0 0 0.35"  size="0.15" />
+        
+      <body name="thigh1" pos="0 -0.10 -0.04" >
+        <joint name="thigh1" type="hinge" pos="0 0 0" axis="0 1 0"   range="-50 50" stiffness="0"/>
+        <geom name="thigh1" type="capsule" fromto="0 0 0 0 0 -0.35"  size="0.06" />
+        <body name="shin1" pos="0 0 -0.35" >
+          <joint name="shin1" type="hinge" pos="0 0 0" axis="0 1 0"   range="-50 50" stiffness="0"/>
+          <geom name="shin1" type="capsule" fromto="0 0 0 0 0 -.35"   size="0.05" />
+          <body name="foot1" pos="0 0 -.40" >
+            <geom name="foot1A" type="sphere" pos="-0.00 0 0"  size="0.035" contype="1" />
+          </body>
+        </body>
+      </body>
+
+      <body name="thigh2" pos="0 +0.10 -0.04" >
+        <joint name="thigh2" type="hinge" pos="0 0 0" axis="0 1 0"   range="-50 50" stiffness="0"/>
+        <geom name="thigh2" type="capsule" fromto="0 0 0 0 0 -0.35"  size="0.06" />
+        <body name="shin2" pos="0 0 -0.35" >
+          <joint name="shin2" type="hinge" pos="0 0 0" axis="0 1 0"   range="-50 50" stiffness="0"/>
+          <geom name="shin2" type="capsule" fromto="0 0 0 0 0 -.35"   size="0.05" />
+          <body name="foot2" pos="0 0 -.40" >
+            <geom name="foot2A" type="sphere" pos="-0.00 0 0"  size="0.035" contype="1" />
+          </body>
+        </body>
+      </body>      
+
+
+    </body>
+
+  </body>    
+    
+    <!--
+	<body>
+		<geom name="floor" pos="0 0 0" size="4 4 4" type="plane"  rgba=".8 .9 .8 1"/>
+		<body name="upper_arm" pos="0 0 1">
+			<joint name="shoulder" type="hinge" pos="0 0 0" axis="1 0 0" mindist="0.01"/>
+			<geom name="upper_arm" type="capsule" fromto="0 0 0 0 0 0.5" size="0.049 0.3" rgba="0 0.7 0.7 1" />
+			<body name="lower_arm" pos="0 0 .5">
+				<joint name="elbow" type="hinge" pos="0 0 0" axis="1 0 0"/>
+				<geom name="lower_arm" type="capsule" fromto="0 0 0 0 1e-6 0.5" size="0.049 0.3" rgba="0 0.7 0.7 1" />
+				<site name="tip" pos="0 0 .5"/>         
+			</body>
+		</body>
+	</body>
+    -->
+
+ 	<actuator>
+        <motor gear="1" joint="rootx" />
+        <motor gear="1" joint="rootz" />
+        <motor gear="1" joint="rooty" />
+
+        <motor gear="500" joint="thigh1" />
+        <motor gear="500" joint="shin1" />
+        <motor gear="500" joint="thigh2" />
+        <motor gear="500" joint="shin2" />
+	</actuator>
+
+	<features>
+		<feature name="control">
+			<data field="ctrl" item="all"/>
+		</feature>
+        
+        <feature name="com">
+            <data field="subcom" item="torso" ref="0.1 0 1"/>
+        </feature>        
+
+        <!--
+		<feature name="pole height">
+			<data field="site_xpos" item="tip" entry="z" ref="2"/>     
+		</feature>        
+
+		<feature name="com over axis">
+			<data field="subcom" item="upper_arm" entry="y"/>
+		</feature>
+
+		<feature name="angles">
+			<data field="qpos" item="all"/>
+		</feature>		
+        -->
+        
+		<feature name ="plan">
+            <data field="subcom" item="torso" ref="0 0 0.5"/>
+		</feature>
+        
+	</features>
+
+	<costs  plot="plan">
+
+		<optimization_options
+			horizon="100"
+			logmurange="-5 3"
+		/>
+
+		<physics_options
+			timestep="0.02" 
+		/>
+
+		<cost name="balance">
+			<term feature="control"	norm="quadratic" coef_running="1e-2" />
+			<term feature="com"	norm="quadratic" coef_running="1" />
+		</cost>    
+	</costs> 
+
+</mujoco>
+
+
+<!--
+
+<mujoco model="humanoid2D">
+  <compiler inertiafromgeom="true" angle="degree" coordinate="local"/>
+  <default>
+    <joint islimited="false" damping="0" armature="0"  compliance="0.01" timeconst="0.01"/>
+    <geom contype="0" conaffinity="0" condim="3" friction="1 1 1" rgba="0.8 0.6 .4 0.75" density="100" mindist="10.0" compliance="0.01"  timeconst="0.01"/>
+  </default>
+
+  <option timestep="0.02"  gravity ="0 0 -10" remotecontact="true" expdist="10" >
+    <disable warmstart="false"/>
+  </option>
+  
+  <size nuserdata="6"/>
+  
+  <body>
+    <geom name="floor" pos="0 0 0" size="1 1 1e-3" type="plane"   rgba="0.85 0.85 0.85 1" conaffinity="1" />
+
+    <body name="torso" pos="0 0 0.85" quat="1 0 0 0" >
+      <joint name="rootx" type="slide" axis="1 0 0" pos="0 0 0" islimited="false" />
+      <joint name="rootz" type="slide" axis="0 0 1" pos="0 0 0" islimited="false" />
+      <joint name="rooty" type="hinge" axis="0 1 0" pos="0 0 0" islimited="false" />
+      <geom name="butt" type="capsule" fromto="0 0 0 0 0 0.35"  size="0.15" />
+
+      <site name="torso" pos="0 0 -0" />
+        
+      <body name="thigh" pos="0 -0.10 -0.04" >
+        <joint name="thigh" type="hinge" pos="0 0 0" axis="0 1 0"   range="-50 50" stiffness="0"/>
+        <geom name="thigh" type="capsule" fromto="0 0 0 0 0 -0.35"  size="0.06" />
+        
+        <body name="shin" pos="0 0 -0.35" >
+          <joint name="shin" type="hinge" pos="0 0 0" axis="0 1 0"   range="-50 50" stiffness="0"/>
+          <geom name="shin" type="capsule" fromto="0 0 0 0 0 -.35"   size="0.05" />
+
+          <body name="foot" pos="0 0 -.40" >
+            <geom name="footA" type="sphere" pos="-0.00 0 0"  size="0.035" contype="1" />
+          </body>
+
+        </body>
+      </body>
+
+      <body name="thigh2" pos="0 +0.10 -0.04" >
+        <joint name="thigh2" type="hinge" pos="0 0 0" axis="0 1 0"   range="-50 50" stiffness="0"/>
+        <geom name="thigh2" type="capsule" fromto="0 0 0 0 0 -0.35"  size="0.06" />
+
+        <body name="shin2" pos="0 0 -0.35" >
+          <joint name="shin2" type="hinge" pos="0 0 0" axis="0 1 0"   range="-50 50" stiffness="0"/>
+          <geom name="shin2" type="capsule" fromto="0 0 0 0 0 -.35"   size="0.05" />
+
+          <body name="foot2" pos="0 0 -.40" >
+            <geom name="foot2A" type="sphere" pos="-0.00 0 0"  size="0.035" contype="1" />
+          </body>
+
+        </body>
+      </body>      
+
+
+    </body>
+
+  </body>
+
+  <actuator>
+    <motor gear="10" joint="rootx" />
+    <motor gear="10" joint="rootz" />
+    <motor gear="10" joint="rooty" />
+
+    <motor gear="100" joint="thigh" />
+    <motor gear="100" joint="shin" />
+    <motor gear="100" joint="thigh2" />
+    <motor gear="100" joint="shin2" />
+
+  </actuator>
+
+</mujoco>
+
+-->

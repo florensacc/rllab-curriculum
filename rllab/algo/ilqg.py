@@ -1,8 +1,8 @@
-from algo.optim import ilqg
-from algo.optim.common import forward_pass, sample_actions
+from rllab.algo.optim import ilqg
+from rllab.algo.optim.common import forward_pass, sample_actions
+from rllab.sampler.utils import rollout
+from rllab.policy.linear_gaussian_policy import LinearGaussianPolicy
 import numpy as np
-from sampler.utils import rollout
-from policy.linear_gaussian_policy import LinearGaussianPolicy
 
 class ILQG(object):
 

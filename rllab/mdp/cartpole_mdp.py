@@ -1,10 +1,10 @@
 import tensorfuse as theano
 import tensorfuse.tensor as TT
 import numpy as np
-from .base import SymbolicMDP
-from misc.overrides import overrides
-from misc.ext import extract, merge_dict
-from misc.viewer2d import Viewer2D, Colors
+from rllab.mdp.base import SymbolicMDP
+from rllab.misc.overrides import overrides
+from rllab.misc.ext import extract, merge_dict
+from rllab.misc.viewer2d import Viewer2D, Colors
 import pygame
 
 # code adapted from John's control repo

@@ -1,0 +1,40 @@
+<mujoco model="swimmer">
+  <compiler inertiafromgeom="true" angle="degree" coordinate="local"/>
+  <option timestep="0.05" collisionmode="pair" viscosity="1"/>
+	<default>
+    <!-- <joint islimited="false" damping="0" stiffness=".2" makeactuator="true"/>  -->
+    <!-- <joint islimited="false" makeactuator="true"/> -->
+    <!-- <act-general ctrlrange='-100.0 100.0' dyntype='none' trntype='joint' isctrllimited='true'/> -->
+</default>
+
+	<body>
+	
+		<!--  ================= SWIMMER ================= /-->
+
+    <body name="front" pos="0 0 0">
+      <geom type="capsule" fromto="0 0 0 -1 0 0" size="0.1"/>
+      <joint pos="0 0 0" type="slide" name="slider1" axis="1 0 0"/>
+      <joint pos="0 0 0" type="slide" name="slider2" axis="0 1 0"/>
+      <joint name="rot" type="hinge" pos="0 0 0" axis="0 0 1"/>
+
+      <body name="mid" pos="-1 0 0">
+        <geom type="capsule" fromto="0 0 0 -1 0 0" size="0.1"/>
+        <joint name="rot2" type="hinge" pos="0 0 0" axis="0 0 1" range="-100 100" islimited="true"/>
+        <body name="back" pos="-1 0 0">
+          <geom type="capsule" fromto="0 0 0 -1 0 0" size="0.1"/>
+          <joint name="rot3" type="hinge" pos="0 0 0" axis="0 0 1" range="-100 100" islimited="true"/>
+        </body>
+      </body>
+    </body>	
+		
+
+	</body>
+
+<actuator>
+  <!-- <motor joint="torso_joint" ctrlrange="-100.0 100.0" isctrllimited="true"/> -->
+  <motor joint="rot2" ctrlrange="-30.0 30.0" isctrllimited="true"/>
+  <motor joint="rot3" ctrlrange="-30.0 30.0" isctrllimited="true"/>
+  <!-- <motor joint="finger2_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/> -->
+</actuator>
+	
+</mujoco>

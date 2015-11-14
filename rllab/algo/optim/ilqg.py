@@ -3,8 +3,8 @@
 import numpy as np
 import scipy as sp
 from numpy.linalg import LinAlgError
-from misc.ext import extract
-from algo.optim.common import forward_pass, convexify
+from rllab.misc.ext import extract
+from rllab.algo.optim.common import forward_pass, convexify
 
 __all__ = [
         "solve"

@@ -1,0 +1,39 @@
+<mujoco model="tars">
+	<compiler inertiafromgeom="true" angle="degree" coordinate="local"/>
+	<size nlmax="50" ncmax="50" njmax="200" nctotmax="50" ngeom_user="1" nstack="82825"/>
+	<option timestep="0.01" remotecontact="true" expdist="50.0" density="10.0"/>
+	<default>
+		<joint islimited='true' damping='.1' armature='0.01'  compliance='0.01' timeconst='0.01'/>
+		<geom contype='1' conaffinity='0' condim='3' friction='.7 .1 .1' rgba='0.8 0.6 .4 1' mindist='0.04' compliance='0.01' timeconst='0.01' density='10'/>
+	</default>
+	<body>
+		<geom name='floor' pos='0 0 0' size='40 40 40' type='plane' conaffinity='1'  rgba='0.8 0.9 0.8 1' condim='3'/>
+		<body name="torso" pos="0 0.0 0.75">
+			<geom name="part_1_geom" type="box" pos="0 0.075 0" size="0.25 0.075 0.75" friction="0.9"/>
+			<joint name="root" type="free" islimited="false" pos="0 0 0" axis="0 0 1" mindist="0.01" armature="0" damping="0" />
+			<body name="base1" pos="0 0.0 0">
+				<geom name="base1_geom" type="sphere" pos="0 0 0" size="0.075"/>
+				<joint name="slide" type="slide" pos="0 0.0 0.0" axis="0 0 1" range="-0.25 0.25"/>
+				<body name="part_3" pos="0 0.0 0">
+					<geom name="part_3_geom" type="box" pos="0 -0.225 0" size="0.25 0.075 0.75" friction="0.9"/>
+					<joint name="turn_3" type="hinge" pos="0 0 0" axis="0 -1 0" range="-180 180"/>
+				</body>
+				<body name="part_4" pos="0 0.0 0">
+					<geom name="part_4_geom" type="box" pos="0 0.225 0" size="0.25 0.075 0.75" friction="0.9"/>
+					<joint name="turn_4" type="hinge" pos="0 0 0" axis="0 -1 0" range="-180 180"/>
+				</body>
+			</body>
+			<body name="part_2" pos="0 0.0 0">
+				<geom name="part_2_geom" type="box" pos="0 -0.075 0" size="0.25 0.075 0.75" friction="0.9"/>
+				<joint name="turn_2" type="hinge" pos="0 0 0.0" axis="0 -1 0" range="-180 180"/>
+			</body>
+		</body>
+	</body>
+	<actuator>
+		<!-- <motor joint="turn_1" ctrlrange="-150.0 150.0" isctrllimited="true"/> -->
+		<motor joint="turn_2" ctrlrange="-150.0 150.0" isctrllimited="true"/>
+		<motor joint="turn_3" ctrlrange="-150.0 150.0" isctrllimited="true"/>
+		<motor joint="turn_4" ctrlrange="-150.0 150.0" isctrllimited="true"/>
+		<motor joint="slide" ctrlrange="-0.5 0.5" isctrllimited="true"/>
+	</actuator>
+</mujoco>
