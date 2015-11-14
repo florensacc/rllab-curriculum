@@ -10,7 +10,7 @@
     <disable warmstart="true" anticipate="false" actuation="false"/>
   </option>
 
-  <size nuserdata="36"/>
+  <size nuserdata="36" nstack="80000"/>
 
   <body>
     <geom name="floor" pos="0 0 0" size="1 1 1e-3" type="plane"   rgba="0.85 0.85 0.85 1" conaffinity="1" />

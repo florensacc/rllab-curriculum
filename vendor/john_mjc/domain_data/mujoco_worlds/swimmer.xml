@@ -1,6 +1,7 @@
 <mujoco model="swimmer">
   <compiler inertiafromgeom="true" angle="degree" coordinate="local"/>
   <option timestep="0.05" collisionmode="pair" viscosity="1"/>
+  <size nstack="1807309" />
 	<default>
     <!-- <joint islimited="false" damping="0" stiffness=".2" makeactuator="true"/>  -->
     <!-- <joint islimited="false" makeactuator="true"/> -->
@@ -25,7 +26,7 @@
           <joint name="rot3" type="hinge" pos="0 0 0" axis="0 0 1" range="-100 100" islimited="true"/>
         </body>
       </body>
-    </body>	
+    </body>
 		
 
 	</body>

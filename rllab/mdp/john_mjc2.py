@@ -64,16 +64,16 @@ AntMDP = type('AntMDP', (WrapperMDP,), dict(BASE_NAME='ant'))
 AtlasMDP = type('AtlasMDP', (WrapperMDP,), dict(BASE_NAME='atlas'))
 IcmlHumanoidMDP = type('IcmlHumanoidMDP', (WrapperMDP,), dict(BASE_NAME='icml_humanoid'))
 IcmlHumanoidTrackingMDP = type('IcmlHumanoidTrackingMDP', (WrapperMDP,), dict(BASE_NAME='icml_humanoid_tracking'))
-Humanoid3DAmputatedMDP = type('Humanoid3DAmputatedMDP', (WrapperMDP,), dict(BASE_NAME='3d_humanoid_amputated')) # Broken
+Humanoid3DAmputatedMDP = type('Humanoid3DAmputatedMDP', (WrapperMDP,), dict(BASE_NAME='3d_humanoid_amputated')) # Broken: dim mismatch
 IcmlHumanoidJumperMDP = type('IcmlHumanoidJumperMDP', (WrapperMDP,), dict(BASE_NAME='icml_humanoid_jumper'))
 Humanoid3DMDP = type('Humanoid3DMDP', (WrapperMDP,), dict(BASE_NAME='3d_humanoid'))
 Humanoid3DSitMDP = type('Humanoid3DSitMDP', (WrapperMDP,), dict(BASE_NAME='3d_humanoid_sit'))
 Humanoid3DStandMDP = type('Humanoid3DStandMDP', (WrapperMDP,), dict(BASE_NAME='3d_humanoid_stand'))
 Humanoid3DStandAndWalkMDP = type('Humanoid3DStandAndWalkMDP', (WrapperMDP,), dict(BASE_NAME='3d_humanoid_stand_and_walk'))
-HumanWalkingMDP = type('HumanWalkingMDP', (WrapperMDP,), dict(BASE_NAME='human_walking')) # Broken
-SwimmerMDP = type('SwimmerMDP', (WrapperMDP,), dict(BASE_NAME='swimmer')) # Broken
-HopperMDP = type('HopperMDP', (WrapperMDP,), dict(BASE_NAME='hopper')) # Broken
+HumanWalkingMDP = type('HumanWalkingMDP', (WrapperMDP,), dict(BASE_NAME='human_walking')) # Broken: missing xml file
+SwimmerMDP = type('SwimmerMDP', (WrapperMDP,), dict(BASE_NAME='swimmer'))
+HopperMDP = type('HopperMDP', (WrapperMDP,), dict(BASE_NAME='hopper'))
 Walker2DMDP = type('Walker2DMDP', (WrapperMDP,), dict(BASE_NAME='walker2d'))
-MuscleWalker2DMDP = type('MuscleWalker2DMDP', (WrapperMDP,), dict(BASE_NAME='musclewalker2d')) # Broken
-IgorWalker2DMDP = type('IgorWalker2DMDP', (WrapperMDP,), dict(BASE_NAME='igorwalker2d')) # Broken
-BallHopperMDP = type('BallHopperMDP', (WrapperMDP,), dict(BASE_NAME='ball_hopper')) # Broken
+MuscleWalker2DMDP = type('MuscleWalker2DMDP', (WrapperMDP,), dict(BASE_NAME='musclewalker2d')) # Broken: muscle unrecognized
+IgorWalker2DMDP = type('IgorWalker2DMDP', (WrapperMDP,), dict(BASE_NAME='igorwalker2d'))
+BallHopperMDP = type('BallHopperMDP', (WrapperMDP,), dict(BASE_NAME='ball_hopper'))

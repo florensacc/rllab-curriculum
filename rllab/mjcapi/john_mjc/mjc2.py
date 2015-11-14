@@ -604,7 +604,8 @@ class MJCMDP(MDP):
         self.properties.update(METADATA[basename])
         self._obs_dim = None
         self.properties.update(kws)
-        print "doing experiment ", self.properties['experiment']
+        if 'experiment' in self.properties:
+            print "doing experiment ", self.properties['experiment']
         self._setup_world(kws)
         if basename == "3d_humanoid":
             body_names = get_body_names(self.model)
@@ -697,6 +698,8 @@ class MJCMDP(MDP):
                 o = np.concatenate([y,feats,combefore.astype(floatX)])
             else:
                 o = np.concatenate([y,feats,(comafter-combefore).astype(floatX)])
+        elif obs_type == "state":
+            o = y
         else:
             raise NotImplementedError
 
@@ -742,7 +745,7 @@ class MJCMDP(MDP):
         x = np.concatenate([self.model["qpos0"].flatten(), np.zeros(self.model["nv"])])
         if self.basename == "ball_hopper":
             x[0] = self.properties["ball_pos"]
-        if not self.properties["initializer"] == None:
+        if "initializer" in self.properties and self.properties["initializer"] is not None:
             self.properties["initializer"](x, self.properties)
         if self.properties["cost_type"] == "locomotion_with_impact_and_ball":
              x[0] = 10 * (np.random.rand() - 0.5)
@@ -752,7 +755,7 @@ class MJCMDP(MDP):
         return {"x": res["x"].astype(floatX), "o": res["o"].astype(floatX)}
 
     def _quad_ctrl_cost(self,u):
-        if self.properties["quad_ctrl_cost"] == None:
+        if self.properties.get("quad_ctrl_cost") is None:
             return (.5*self.properties["quad_ctrl_cost_coeff"])*u.dot(u)
         else:
             Q = np.diag(eval(self.properties["quad_ctrl_cost"].replace(";", ",")))
