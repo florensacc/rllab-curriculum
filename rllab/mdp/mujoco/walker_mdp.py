@@ -14,24 +14,27 @@ class WalkerMDP(MujocoMDP, Serializable):
 
     def get_current_obs(self):
         return np.concatenate([
-            self.model.data.qpos,
+            self.model.data.qpos[:1],
+            self.model.data.qpos[2:],
             np.sign(self.model.data.qvel),
             np.sign(self.model.data.qfrc_constraint),
         ]).reshape(-1)
 
     def step(self, state, action):
-        self.set_state(state)#state = next_state
-        posbefore = self.model.data.xpos[:,0].min()
+        #self.set_state(state)#state = next_state
+        #posbefore = self.model.data.xpos[:,0].min()
         next_state = self.forward_dynamics(state, action, preserve=False)
-        self.current_state = next_state
+        #self.current_state = next_state
         #reward = 
 
         #self.model.data.ctrl = a * self.ctrl_scaling
 
         #for _ in range(self.frame_skip):
         #    self.model.step()
+        posbefore = state[1]
+        posafter = next_state[1]
 
-        posafter = self.model.data.xpos[:,0].min()
+        #posafter = self.model.data.xpos[:,0].min()
         reward = (posafter - posbefore) / self.timestep + 1.0
 
         #s = np.concatenate([self.model.data.qpos, self.model.data.qvel])
