@@ -33,9 +33,8 @@ class MujocoPolicy(LasagnePolicy, Serializable):
         mean_var = L.get_output(mean_layer)
         log_std_var = L.get_output(log_std_layer)
 
-        self._action_dim = mdp.n_actions
+        self._action_dim = mdp.action_dim
         self._input_var = input_var
-        import ipdb; ipdb.set_trace()
         self._pdist_var = T.concatenate([mean_var, log_std_var], axis=1)
         self._compute_action_params = theano.function([input_var], [mean_var, log_std_var], allow_input_downcast=True)
 

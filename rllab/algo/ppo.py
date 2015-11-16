@@ -1,15 +1,15 @@
-import numpy as np
-from misc.console import mkdir_p
-from misc.tensor_utils import flatten_tensors
-from misc.special import discount_cumsum
-import misc.logger as logger
+from rllab.misc.console import mkdir_p
+from rllab.misc.tensor_utils import flatten_tensors
+from rllab.misc.special import discount_cumsum
+from rllab.sampler import parallel_sampler
+from rllab.misc.ext import merge_dict
+import rllab.plotter as plotter
+import rllab.misc.logger as logger
 import multiprocessing
 import tensorfuse as theano
 import tensorfuse.tensor as T
 import scipy.optimize
-from sampler import parallel_sampler
-from misc.ext import merge_dict
-import plotter
+import numpy as np
 
 def new_surrogate_obj(policy, input_var, Q_est_var, old_pdist_var, action_var, penalty_var):
     pdist_var = policy.pdist_var

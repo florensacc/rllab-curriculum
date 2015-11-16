@@ -1,6 +1,6 @@
 import sys
-from misc.tabulate import tabulate
-from misc.console import mkdir_p
+from rllab.misc.tabulate import tabulate
+from rllab.misc.console import mkdir_p
 import os
 import pytz
 import datetime

@@ -2,15 +2,17 @@ from rllab.mjcapi.john_mjc.mjc import get_mjc_mdp_class
 from rllab.mdp.base import ControlMDP
 from rllab.misc.overrides import overrides
 from rllab.mjcapi.john_mjc.config import floatX
+from rllab.core.serializable import Serializable
 import numpy as np
 
 
-class WrapperMDP(ControlMDP):
+class WrapperMDP(ControlMDP, Serializable):
 
     def __init__(self):
         self._mdp = get_mjc_mdp_class(self.BASE_NAME)
         self._state = None
         self._action = None
+        Serializable.__init__(self)
 
     @overrides
     def step(self, state, action):

@@ -9,3 +9,4 @@ secrets.py
 *.avi
 *.mp4
 build
+build_linux

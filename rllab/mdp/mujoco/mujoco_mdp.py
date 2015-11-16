@@ -1,12 +1,12 @@
-from .base import ControlMDP
 import os
-from mjcapi.rockymjc import MjModel, MjViewer
 import numpy as np
 from contextlib import contextmanager
 import os.path as osp
 import sys
 import random
-from misc.overrides import overrides
+from rllab.mdp.base import ControlMDP
+from rllab.mjcapi.rocky_mjc import MjModel, MjViewer
+from rllab.misc.overrides import overrides
 
 class MujocoMDP(ControlMDP):
 
@@ -27,7 +27,7 @@ class MujocoMDP(ControlMDP):
         super(MujocoMDP, self).__init__(horizon)
 
     def model_path(self, file_name):
-        return osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/%s' % file_name))
+        return osp.abspath(osp.join(osp.dirname(__file__), '../../../vendor/mujoco_models/%s' % file_name))
 
     @property
     @overrides
@@ -97,6 +97,13 @@ class MujocoMDP(ControlMDP):
     def stop_viewer(self):
         if self.viewer:
             self.viewer.finish()
+
+    def set_state(self, state):
+        qpos, qvel = self.decode_state(state)
+        self.model.data.qpos = qpos
+        self.model.data.qvel = qvel
+        self.model.forward()
+        self.current_state = state
 
     @contextmanager
     def set_state_tmp(self, state, preserve=True):
