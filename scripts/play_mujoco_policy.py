@@ -7,7 +7,7 @@ from rllab.mdp.mujoco.walker_mdp import WalkerMDP
 from rllab.sampler.utils import rollout
 
 print 'reading data'
-data = np.load('/tmp/itr_240.npz')
+data = np.load('/tmp/itr_116.npz')
 print 'read data'
 
 params = data['cur_policy_params']
