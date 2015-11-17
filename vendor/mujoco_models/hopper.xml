@@ -8,7 +8,7 @@
         <motor ctrlrange='-.4 .4' ctrllimited='true'/>
     </default>
 
-  <option timestep="0.002" />
+  <option timestep="0.02" integrator="RK4"/>
  <worldbody>
   <geom name='floor' pos='0 0 0' size='40 40 40' type='plane' conaffinity='1'  rgba='0.8 0.9 0.8 1' condim='3'/>
 
