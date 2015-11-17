@@ -1,17 +1,17 @@
 import os
-os.environ['TENSORFUSE_MODE'] = 'cgt'
-from sampler import parallel_sampler
+os.environ['TENSORFUSE_MODE'] = 'theano'
+from rllab.sampler import parallel_sampler
 # Technically, we need to add these initializations below to make sure that the
 # processes are created before theano is initialized, so that these processes
 # can use the cpu mode while the main process is using the gpu. This can
 # probably be avoided when using cgt
-parallel_sampler.init_pool(1)
-import plotter
-plotter.init_worker()
+parallel_sampler.init_pool(4)
+#import plotter
+#plotter.init_worker()
 
-from policy.mujoco_policy import MujocoPolicy
-from algo.ppo import PPO
-from mdp.hopper_mdp import HopperMDP
+from rllab.policy.mujoco_policy import MujocoPolicy
+from rllab.algo.ppo import PPO
+from rllab.mdp.mujoco.hopper_mdp import HopperMDP
 import numpy as np
 import tensorfuse.tensor as T
 
@@ -50,9 +50,9 @@ if __name__ == '__main__':
     vf = HopperValueFunction()
     algo = PPO(
         exp_name='hopper_10k_new',
-        max_samples_per_itr=10000,
+        samples_per_itr=10000,
         discount=0.99,
         stepsize=0.005,
-        plot=True
+        plot=False
     )
     algo.train(mdp, policy, vf)

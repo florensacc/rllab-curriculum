@@ -5,7 +5,7 @@ from contextlib import contextmanager
 import os.path as osp
 import sys
 import random
-from core.serializable import Serializable
+from rllab.core.serializable import Serializable
 
 # states: [
 # 0: z-coord,
@@ -18,7 +18,7 @@ class HopperMDP(MujocoMDP, Serializable):
         frame_skip = 1#5#10#15#5#1#5#25#10##5
         ctrl_scaling = 100.0
         self.timestep = timestep
-        path = osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/hopper.xml'))
+        path = self.model_path('hopper.xml')
         super(HopperMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
 
     def get_current_obs(self):
