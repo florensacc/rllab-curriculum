@@ -130,8 +130,8 @@ class MujocoMDP(ControlMDP):
 
 class AcrobotMDP(MujocoMDP, Serializable):
 
-    def __init__(self, ctrl_scaling=100):
-        super(AcrobotMDP, self).__init__("acrobot.xml", ctrl_scaling=ctrl_scaling)
+    def __init__(self, ctrl_scaling=100, frame_skip=25):
+        super(AcrobotMDP, self).__init__("acrobot.xml", ctrl_scaling=ctrl_scaling, frame_skip=frame_skip)
         self.init_qpos = np.array([np.pi, 0])
         Serializable.__init__(self, ctrl_scaling)
 
@@ -144,8 +144,10 @@ class AcrobotMDP(MujocoMDP, Serializable):
     def step(self, state, action):
         next_state = self.forward_dynamics(state, action, preserve=False)
         self.current_state = next_state
-        reward = -np.sum(np.square(state)) - 1e-5*np.sum(np.square(action))## self.state[5] / self.timestep - 1e-5*np.sum(np.square(action))#state[5] / self.timestep#(posafter - posbefore) / self.timestep# + 1.0
-        return next_state, self.get_obs(next_state), reward, False
+        reward = 10.0 -np.sum(np.square(np.clip(state, -np.pi, np.pi))) - 1e-5*np.sum(np.square(action))## self.state[5] / self.timestep - 1e-5*np.sum(np.square(action))#state[5] / self.timestep#(posafter - posbefore) / self.timestep# + 1.0
+        notdone = np.isfinite(next_state).all() and (np.abs(next_state)<100).all() and np.isfinite(self.mujoco.qacc).all() and (np.abs(self.mujoco.qacc)<10000).all()
+        done = not notdone
+        return next_state, self.get_obs(next_state), reward, done
 
 
 if __name__ == "__main__":

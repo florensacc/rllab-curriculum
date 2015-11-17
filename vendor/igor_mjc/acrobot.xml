@@ -7,7 +7,7 @@
 		<site group='0' rgba='1. 0. 0. 1.'/>
 	</default>
 
-    <option timestep="0.05" gravity="0 0 -9.81" />
+    <option timestep="0.002" gravity="0 0 -9.81" />
 
 	<size nstack="8000" nuserdata="3" nkey="1" />
 

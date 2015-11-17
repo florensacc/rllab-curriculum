@@ -1,6 +1,6 @@
 import numpy as np
-from base import ValueFunction
-from misc.overrides import overrides
+from rllab.vf.base import ValueFunction
+from rllab.misc.overrides import overrides
 
 class NoValueFunction(ValueFunction):
 
