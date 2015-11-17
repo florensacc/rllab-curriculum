@@ -2,6 +2,7 @@ import polopt
 import os.path as osp
 from rllab.mdp.base import ControlMDP
 from rllab.misc.overrides import overrides
+from rllab.core.serializable import Serializable
 from contextlib import contextmanager
 import numpy as np
 
@@ -127,11 +128,12 @@ class MujocoMDP(ControlMDP):
     def model_path(self, file_name):
         return osp.abspath(osp.join(osp.dirname(__file__), '../../vendor/igor_mjc/%s' % file_name))
 
-class AcrobotMDP(MujocoMDP):
+class AcrobotMDP(MujocoMDP, Serializable):
 
     def __init__(self, ctrl_scaling=100):
         super(AcrobotMDP, self).__init__("acrobot.xml", ctrl_scaling=ctrl_scaling)
         self.init_qpos = np.array([np.pi, 0])
+        Serializable.__init__(self, ctrl_scaling)
 
     def get_current_obs(self):
         return np.concatenate([
