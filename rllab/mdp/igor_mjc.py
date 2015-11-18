@@ -128,6 +128,7 @@ class MujocoMDP(ControlMDP):
     def model_path(self, file_name):
         return osp.abspath(osp.join(osp.dirname(__file__), '../../vendor/igor_mjc/%s' % file_name))
 
+
 class AcrobotMDP(MujocoMDP, Serializable):
 
     def __init__(self, ctrl_scaling=100, frame_skip=25):
@@ -150,8 +151,35 @@ class AcrobotMDP(MujocoMDP, Serializable):
         return next_state, self.get_obs(next_state), reward, done
 
 
+class HopperMDP(MujocoMDP, Serializable):
+
+    def __init__(self, ctrl_scaling=100, frame_skip=1):
+        self.timestep = 0.02
+        super(HopperMDP, self).__init__("hopper.xml", ctrl_scaling=ctrl_scaling, frame_skip=frame_skip)
+        Serializable.__init__(self, ctrl_scaling, frame_skip)
+
+    def get_current_obs(self):
+        return np.concatenate([
+            self.mujoco.qpos[0:1],
+            self.mujoco.qpos[2:],
+            np.clip(self.mujoco.qvel,-10,10),
+            np.clip(self.mujoco.qfrc_constraint,-10,10)]
+        ).reshape(-1)
+
+    def step(self, state, action, autoreset=True):
+        next_state = self.forward_dynamics(state, action, preserve=False)
+        next_obs = self.get_obs(next_state)
+        posbefore = state[1]
+        posafter = next_state[1]
+        reward = (posafter - posbefore) / self.timestep
+        notdone = np.isfinite(state).all() and (np.abs(state[3:])<100).all() and (state[0] > .7) and (abs(state[2]) < .2)
+        done = not notdone
+        self.state = next_state
+        return next_state, next_obs, reward, done
+
+
 if __name__ == "__main__":
-    mdp = AcrobotMDP()
+    mdp = HopperMDP()
     #mdp.init_qpos = np.array([np.pi, 0])
 
     state = mdp.reset()[0]
@@ -159,14 +187,16 @@ if __name__ == "__main__":
     print "control dim:", mdp.action_dim
 
     states = [state]
-    for _ in range(100):
-        state = mdp.step(state, np.zeros(1))[0]
-        print state
+    qpos = []
+    for _ in range(1000):
+        state = mdp.step(state, np.zeros(mdp.action_dim))[0]
+        qpos.append(mdp.mujoco.qpos)
+        #print state
         states.append(state)
     #np.
     #state = np.array([np.pi/2, np.pi/2])
     #states = np.copy(np.array([np.linspace(0, np.pi, 100),np.linspace(0, np.pi, 100)]).T)
     #polopt.replayTrajectory(mdp.mujoco, np.array([state]), False, False)
     #print "start..."
-    polopt.replayTrajectory(mdp.mujoco, np.array(states), True, False)
+    polopt.replayTrajectory(mdp.mujoco, np.array(qpos), False, False)
     #print mdp.qpos_dim
