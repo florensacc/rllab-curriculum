@@ -3,17 +3,17 @@ os.environ['TENSORFUSE_MODE'] = 'theano'
 os.environ['THEANO_FLAGS'] = 'device=cpu'
 import numpy as np
 from rllab.policy.mujoco_policy import MujocoPolicy
-from rllab.mdp.mujoco.hopper_mdp import HopperMDP
+from rllab.mdp.mujoco.ant_mdp import AntMDP
 #from rllab.mdp.igor_mjc import AcrobotMDP
 from rllab.sampler.utils import rollout
 
 print 'reading data'
-data = np.load('/tmp/itr_219.npz')
+data = np.load('itr_196.npz')
 print 'read data'
 
 params = data['cur_policy_params']
 print params.shape
-mdp = HopperMDP()
+mdp = AntMDP()
 policy = MujocoPolicy(mdp, hidden_sizes=[32, 32])#30,30])
 print policy.get_param_values().shape
 policy.set_param_values(params)
@@ -21,6 +21,6 @@ policy.set_param_values(params)
 #policy.log_std_vars[0].set_value(np.ones_like(policy.log_std_vars[0].get_value()) * -100)
 #cur_params = policy.get_param_values()
 result = rollout(mdp, policy, max_length=1000, animated=True)#mdp.demo_policy(policy)
-#import ipdb; ipdb.set_trace()
+import ipdb; ipdb.set_trace()
 
 

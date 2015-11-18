@@ -44,6 +44,14 @@ class MujocoMDP(ControlMDP):
     def action_dtype(self):
         return theano.config.floatX
 
+    @property
+    @overrides
+    def action_bounds(self):
+        bounds = self.model.actuator_ctrlrange / self.ctrl_scaling
+        lb = bounds[:, 0]
+        ub = bounds[:, 1]
+        return lb, ub
+
     @overrides
     def reset(self):
         self.model.data.qpos = self.init_qpos
