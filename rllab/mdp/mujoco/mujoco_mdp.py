@@ -70,8 +70,8 @@ class MujocoMDP(ControlMDP):
     def get_current_state(self):
         return self.get_state(self.model.data.qpos, self.model.data.qvel)
 
-    def forward_dynamics(self, state, action, preserve=True):
-        with self.set_state_tmp(state, preserve):
+    def forward_dynamics(self, state, action, restore=True):
+        with self.set_state_tmp(state, restore):
             self.model.data.ctrl = action * self.ctrl_scaling
             for _ in range(self.frame_skip):
                 self.model.step()
@@ -106,11 +106,11 @@ class MujocoMDP(ControlMDP):
         self.current_state = state
 
     @contextmanager
-    def set_state_tmp(self, state, preserve=True):
-        if np.array_equal(state, self.current_state) and not preserve:
+    def set_state_tmp(self, state, restore=True):
+        if np.array_equal(state, self.current_state) and not restore:
             yield
         else:
-            if preserve:
+            if restore:
                 prev_pos = self.model.data.qpos
                 prev_qvel = self.model.data.qvel
                 prev_ctrl = self.model.data.ctrl
@@ -120,7 +120,7 @@ class MujocoMDP(ControlMDP):
             self.model.data.qvel = qvel
             self.model.forward()
             yield
-            if preserve:
+            if restore:
                 self.model.data.qpos = prev_pos
                 self.model.data.qvel = prev_qvel
                 self.model.data.ctrl = prev_ctrl
