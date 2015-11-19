@@ -1,10 +1,6 @@
 import argparse
 from rllab.misc.resolve import load_class
 from rllab.misc.console import mkdir_p, colorize
-from rllab.mdp.base import MDP
-from rllab.policy.base import Policy
-from rllab.vf.base import ValueFunction
-from rllab.algo.base import Algorithm
 import cPickle as pickle
 import os.path as osp
 import sys
@@ -36,12 +32,22 @@ if __name__ == "__main__":
     parser.add_argument('--policy', type=str, metavar='POLICY_PATH', help='module path to the policy')
     parser.add_argument('--vf', type=str, default='no_value_function', help='module path to the value function')
     parser.add_argument('--more_help', action='store_true', help='whether to show more help depending on the classes chosen')
+    parser.add_argument('--n_parallel', type=int, default=1, help='number of parallel workers to perform rollouts')
+
 
     args = parser.parse_known_args()[0]
+
 
     if args.interactive:
         run_interactive()
     else:
+        from rllab.sampler import parallel_sampler
+        parallel_sampler.init_pool(args.n_parallel)
+
+        from rllab.mdp.base import MDP
+        from rllab.vf.base import ValueFunction
+        from rllab.policy.base import Policy
+        from rllab.algo.base import Algorithm
         # Save the arguments which might be useful for later use
         with open(cache_file, 'w+b') as f:
             pickle.dump(sys.argv[1:], f)

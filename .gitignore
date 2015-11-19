@@ -10,3 +10,6 @@ secrets.py
 *.mp4
 build
 build_linux
+.idea
+.sublime-project
+run_experiment.sh

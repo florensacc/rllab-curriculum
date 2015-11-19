@@ -3,6 +3,8 @@ from rllab.misc.tensor_utils import flatten_tensors
 from rllab.misc.special import discount_cumsum, explained_variance_1d
 from rllab.sampler import parallel_sampler
 from rllab.misc.ext import merge_dict
+from rllab.misc import autoargs
+from rllab.algo.base import Algorithm
 import rllab.plotter as plotter
 import rllab.misc.logger as logger
 import multiprocessing
@@ -10,6 +12,7 @@ import tensorfuse as theano
 import tensorfuse.tensor as T
 import scipy.optimize
 import numpy as np
+
 
 def new_surrogate_obj(policy, input_var, Q_est_var, old_pdist_var, action_var, penalty_var):
     pdist_var = policy.pdist_var
@@ -20,6 +23,7 @@ def new_surrogate_obj(policy, input_var, Q_est_var, old_pdist_var, action_var, p
     surrogate_loss = - T.mean(lr * Q_est_var)
     surrogate_obj = surrogate_loss + penalty_var * mean_kl
     return surrogate_obj, surrogate_loss, mean_kl
+
 
 def get_train_vars(policy):
     input_var = policy.input_var
@@ -35,21 +39,42 @@ def get_train_vars(policy):
         penalty_var=penalty_var,
     )
 
+
 def to_input_var_list(input_var, Q_est_var, old_pdist_var, action_var, penalty_var):
     return [input_var, Q_est_var, old_pdist_var, action_var, penalty_var]
+
 
 def center_qval(qval):
     return (qval - np.mean(qval)) / (qval.std() + 1e-8)
 
-# Proximal Policy Optimization
-class PPO(object):
 
+# Proximal Policy Optimization
+class PPO(Algorithm):
+
+    @autoargs.arg("n_itr", type=str, help="Number of iterations.")
+    @autoargs.arg("samples_per_itr", type=int, help="Number of samples per iteration.")
+    @autoargs.arg("max_path_length", type=int, help="Maximum length of a single rollout.")
+    @autoargs.arg("discount", type=int, help="Discount.")
+    @autoargs.arg("gae_lambda", type=int, help="Lambda used for generalized advantage estimation.")
+    @autoargs.arg("stepsize", type=int, help="Maximum change in mean KL per iteration.")
     def __init__(
-            self, n_itr=500, start_itr=0, samples_per_itr=50000, max_path_length=np.inf,
-            discount=0.98, gae_lambda=1, stepsize=0.015, initial_penalty=1, max_opt_itr=20,
-            max_penalty_itr=10, exp_name='ppo', adapt_penalty=True,
-            n_parallel=multiprocessing.cpu_count(), save_snapshot=True,
-            optimizer=scipy.optimize.fmin_l_bfgs_b, plot=False):
+            self,
+            n_itr=500,
+            start_itr=0,
+            samples_per_itr=50000,
+            max_path_length=np.inf,
+            discount=0.98,
+            gae_lambda=1,
+            stepsize=0.015,
+            initial_penalty=1,
+            max_opt_itr=20,
+            max_penalty_itr=10,
+            exp_name='ppo',
+            adapt_penalty=True,
+            n_parallel=multiprocessing.cpu_count(),
+            save_snapshot=True,
+            optimizer=scipy.optimize.fmin_l_bfgs_b,
+            plot=False):
         self.n_itr = n_itr
         self.start_itr = start_itr
         self.samples_per_itr = samples_per_itr

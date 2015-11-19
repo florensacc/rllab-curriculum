@@ -41,6 +41,7 @@ def get_all_inputs(samples_data):
         "all_obs", "all_advantages", "all_actions"
     )
 
+
 def parse_update_method(update_method, **kwargs):
     if update_method == 'adam':
         return partial(lasagne.updates.adam, **compact(kwargs))
@@ -49,7 +50,11 @@ def parse_update_method(update_method, **kwargs):
     else:
         raise NotImplementedError
 
+
 class VPG(RLAlgorithm):
+    """
+    Vanilla Policy Gradient.
+    """
 
     @autoargs.arg('max_path_length', type=int, help='Maximum length of a rollout.')
     @autoargs.arg('batch_size', type=int, help='Size for each batch.')
@@ -60,7 +65,8 @@ class VPG(RLAlgorithm):
     @autoargs.arg('gae_lambda', type=float, help='Lambda used for generalized advantage estimation.')
     @autoargs.arg('learning_rate', type=float, help='Learning rate.')
     @autoargs.arg('plot', type=bool, help='Plot a test rollout per iteration.')
-    def __init__(self,
+    def __init__(
+            self,
             max_path_length=np.inf,
             batch_size=5000,
             update_method='adam',
@@ -69,11 +75,14 @@ class VPG(RLAlgorithm):
             exp_name='vpg',
             discount=0.99,
             gae_lambda=1,
-            plot=False,
+            plot=False
             ):
         self.max_path_length = max_path_length
         self.batch_size = batch_size
-        self.update_method = parse_update_method(update_method, learning_rate=learning_rate)
+        self.update_method = parse_update_method(
+            update_method,
+            learning_rate=learning_rate
+        )
         self.n_itr = n_itr
         self.exp_name = exp_name
         self.discount = discount
@@ -117,23 +126,36 @@ class VPG(RLAlgorithm):
         surr_obj = new_surrogate_obj(policy, **train_vars)
         updates = self.update_method(surr_obj, policy.params)
         input_list = to_input_var_list(**train_vars)
-        updater = theano.function(
+        f_update = theano.function(
             inputs=input_list,
             outputs=surr_obj,
             updates=updates,
             on_unused_input='ignore',
             allow_input_downcast=True
         )
+        f_loss = theano.function(
+            inputs=input_list,
+            outputs=surr_obj,
+            on_unused_input='ignore',
+            allow_input_downcast=True
+        )
         return dict(
-            updater=updater,
+            f_update=f_update,
+            f_loss=f_loss
         )
 
     def optimize_policy(self, itr, policy, samples_data, opt_info):
-        updater = opt_info["updater"]
+        logger.log("optimizing policy")
+        f_update = opt_info["f_update"]
+        f_loss = opt_info["f_loss"]
         all_inputs = get_all_inputs(samples_data)
-        before_params = policy.get_param_values()
-        logger.log(str(np.linalg.norm(before_params)))
-        updater(*all_inputs)
-        after_params = policy.get_param_values()
-        logger.log(str(np.linalg.norm(after_params)))
+        logger.log("computing loss before")
+        loss_before = f_loss(*all_inputs)
+        logger.log("loss before computed")
+        f_update(*all_inputs)
+        logger.log("updated")
+        loss_after = f_loss(*all_inputs)
+        logger.log("loss after computed")
+        logger.record_tabular("Loss Before", loss_before)
+        logger.record_tabular("Loss After", loss_after)
         return opt_info

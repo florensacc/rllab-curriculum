@@ -1,14 +1,8 @@
 from path import Path
 import sys
-import tensorfuse
 import cPickle as pickle
 import marshal
 sys.setrecursionlimit(50000)
-
-if tensorfuse.is_theano():
-    import theano
-else:
-    import cgt
 
 
 def merge_dict(x, y):
@@ -34,7 +28,9 @@ def compact(x):
 
 
 def cached_function(inputs, outputs):
+    import tensorfuse
     if tensorfuse.is_theano():
+        import theano
         if hasattr(outputs, '__len__'):
             hash_content = tuple(map(theano.pp, outputs))
         else:

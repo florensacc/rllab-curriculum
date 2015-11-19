@@ -140,6 +140,7 @@ def request_samples_stats(itr, mdp, policy, vf, samples_per_itr, max_path_length
     all_states = np.vstack([path["states"] for path in paths])
     all_pdists = np.vstack([path["pdists"] for path in paths])
     all_actions = np.vstack([path["actions"] for path in paths])
+    all_returns = np.concatenate(all_returns)
     all_advantages = np.concatenate([path["advantage"] for path in paths])
 
     avg_return = np.mean([sum(path["rewards"]) for path in paths])
@@ -155,6 +156,7 @@ def request_samples_stats(itr, mdp, policy, vf, samples_per_itr, max_path_length
 
     return dict(
         all_obs=all_obs,
+        all_returns=all_returns,
         all_advantages=all_advantages,
         all_actions=all_actions,
         all_pdists=all_pdists,
