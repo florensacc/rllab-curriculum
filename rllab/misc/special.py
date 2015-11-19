@@ -22,6 +22,11 @@ def cat_entropy(x):
 def cat_perplexity(x):
     return np.exp(cat_entropy(x))
 
+def explained_variance_1d(ypred, y):
+    assert y.ndim == 1 and ypred.ndim == 1
+    vary = np.var(y)
+    return np.nan if vary == 0 else 1 - np.var(y - ypred) / vary
+
 def discount_cumsum(x, discount):
     # See https://docs.scipy.org/doc/scipy/reference/tutorial/signal.html#difference-equation-filtering
     # Here, we have y[t] - discount*y[t+1] = x[t]

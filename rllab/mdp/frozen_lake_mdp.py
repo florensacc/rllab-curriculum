@@ -1,13 +1,35 @@
 import numpy as np
 from .base import MDP
 
-from misc.overrides import overrides
-from core.serializable import Serializable
+from rllab.misc.overrides import overrides
+from rllab.misc.serializable import Serializable
+from rllab.misc import autoargs
 
 UP = 0
 RIGHT = 1
 DOWN = 2
 LEFT = 3
+
+
+MAPS = {
+    "4x4": [
+        "SFFF",
+        "FHFH",
+        "FFFH",
+        "HFFG"
+    ],
+    "8x8":[
+        "SFFFFFFF",
+        "FFFFFFFF",
+        "FFFHFFFF",
+        "FFFFFHFF",
+        "FFFHFFFF",
+        "FHHFFFHF",
+        "FHFFHFHF",
+        "FFFHFFFG"
+    ],
+}
+
 
 class FrozenLakeMDP(MDP, Serializable):
     """
@@ -29,7 +51,12 @@ class FrozenLakeMDP(MDP, Serializable):
 
     """
 
-    def __init__(self, desc):
+    @autoargs.arg("default_map", type=str, help="Choose from default maps, either 4x4 or 8x8")
+    def __init__(self, desc=None, default_map='4x4', **kwargs):
+        if desc is None and default_map is None:
+            raise ValueError('Must provide either desc or default_map')
+        elif desc is None:
+            desc = MAPS[default_map]
         self.desc = np.array(map(lambda x: map(lambda c: c, x), desc))
         nrow, ncol = self.desc.shape
         self.maxxy = np.array([nrow-1, ncol-1])

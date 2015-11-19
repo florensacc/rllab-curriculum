@@ -1,13 +1,12 @@
 """multi-link swimmer moving in a fluid."""
 
 import numpy as np
-from .base import SymbolicMDP
+from rllab.mdp.base import SymbolicMDP
 import tensorfuse as theano
 import tensorfuse.tensor as TT
-#from theano.tensor.slinalg import solve
-from misc.overrides import overrides
-from misc.viewer2d import Viewer2D, Colors
-from misc.ext import extract
+from rllab.misc.overrides import overrides
+from rllab.misc.viewer2d import Viewer2D, Colors
+from rllab.misc.ext import extract
 
 
 __copyright__ = "Copyright 2013, RLPy http://acl.mit.edu/RLPy"
@@ -15,6 +14,7 @@ __credits__ = ["Alborz Geramifard", "Robert H. Klein", "Christoph Dann",
                "William Dabney", "Jonathan P. How"]
 __license__ = "BSD 3-Clause"
 __author__ = "Christoph Dann"
+
 
 def rk4(derivs, y0, t, *args, **kwargs):
     """
@@ -113,11 +113,12 @@ class SwimmerMDP(SymbolicMDP):
     episodeCap = 1000
     discount_factor = 0.98
 
-    def __init__(self, d=3, k1=7.5, k2=0.3, horizon=400):
+    def __init__(self, n_links=3, k1=7.5, k2=0.3, horizon=400):
         """
         d:
             number of joints
         """
+        d = n_links
         self.d = d
         self.k1 = k1
         self.k2 = k2

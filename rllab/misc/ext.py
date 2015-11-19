@@ -10,13 +10,28 @@ if tensorfuse.is_theano():
 else:
     import cgt
 
+
 def merge_dict(x, y):
     z = x.copy()
     z.update(y)
     return z
 
+
 def extract(x, *keys):
     return tuple(x[k] for k in keys)
+
+
+def compact(x):
+    """
+    For a dictionary this removes all None values, and for a list this removes
+    all None elements; otherwise it returns the input itself.
+    """
+    if isinstance(x, dict):
+        return dict((k,v) for k, v in x.iteritems() if v is not None)
+    elif isinstance(x, list):
+        return filter(lambda elem: elem is not None, x)
+    return x
+
 
 def cached_function(inputs, outputs):
     if tensorfuse.is_theano():
@@ -59,3 +74,28 @@ class lazydict(object):
             return self[key]
         return default
 
+def iscanl(f, l, base=None):
+    started = False
+    for x in l:
+        if base or started:
+            base = f(base, x)
+        else:
+            base = x
+        started = True
+        yield base
+
+def iscanr(f, l, base=None):
+    started = False
+    for x in list(l)[::-1]:
+        if base or started:
+            base = f(x, base)
+        else:
+            base = x
+        started = True
+        yield base
+
+def scanl(f, l, base=None):
+    return list(iscanl(f, l, base))
+
+def scanr(f, l, base=None):
+    return list(iscanr(f, l, base))

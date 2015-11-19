@@ -1,6 +1,6 @@
 from rllab.misc.console import mkdir_p
 from rllab.misc.tensor_utils import flatten_tensors
-from rllab.misc.special import discount_cumsum
+from rllab.misc.special import discount_cumsum, explained_variance_1d
 from rllab.sampler import parallel_sampler
 from rllab.misc.ext import merge_dict
 import rllab.plotter as plotter
@@ -40,11 +40,6 @@ def to_input_var_list(input_var, Q_est_var, old_pdist_var, action_var, penalty_v
 
 def center_qval(qval):
     return (qval - np.mean(qval)) / (qval.std() + 1e-8)
-
-def explained_variance_1d(ypred, y):
-    assert y.ndim == 1 and ypred.ndim == 1
-    vary = np.var(y)
-    return np.nan if vary == 0 else 1 - np.var(y - ypred) / vary
 
 # Proximal Policy Optimization
 class PPO(object):

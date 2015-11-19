@@ -6,23 +6,23 @@ from lasagne_layers import ParamLayer, OpLayer
 from lasagne_policy import LasagnePolicy
 import numpy as np
 import tensorfuse as theano
-import tensorfuse.tensor as T
+import tensorfuse.tensor as TT
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 
 def normal_pdf(x, mean, log_std):
-    return T.exp(-T.square((x - mean) / T.exp(log_std)) / 2) / ((2*np.pi)**0.5 * T.exp(log_std))
+    return TT.exp(-TT.square((x - mean) / TT.exp(log_std)) / 2) / ((2*np.pi)**0.5 * TT.exp(log_std))
 
 def log_normal_pdf(x, mean, log_std):
-    normalized = (x - mean) / T.exp(log_std)
-    return -0.5*T.square(normalized) - np.log((2*np.pi)**0.5) - log_std
+    normalized = (x - mean) / TT.exp(log_std)
+    return -0.5*TT.square(normalized) - np.log((2*np.pi)**0.5) - log_std
 
 class MujocoPolicy(LasagnePolicy, Serializable):
 
     def __init__(self, mdp, hidden_sizes=[32,32], nonlinearity=NL.tanh):
 
         # create network
-        input_var = T.matrix('input', fixed_shape=(None, mdp.observation_shape[0]))
+        input_var = TT.matrix('input', fixed_shape=(None, mdp.observation_shape[0]))
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]), input_var=input_var)
         l_hidden = l_input
         for idx, hidden_size in enumerate(hidden_sizes):
@@ -35,7 +35,9 @@ class MujocoPolicy(LasagnePolicy, Serializable):
 
         self._action_dim = mdp.action_dim
         self._input_var = input_var
-        self._pdist_var = T.concatenate([mean_var, log_std_var], axis=1)
+        self._mean_var = mean_var
+        self._log_std_var = log_std_var
+        self._pdist_var = TT.concatenate([mean_var, log_std_var], axis=1)
         self._compute_action_params = theano.function([input_var], [mean_var, log_std_var], allow_input_downcast=True)
 
         super(MujocoPolicy, self).__init__([mean_layer, log_std_layer])
@@ -53,20 +55,20 @@ class MujocoPolicy(LasagnePolicy, Serializable):
 
     @overrides
     def new_action_var(self, name):
-        return T.matrix(name)
+        return TT.matrix(name)
 
     # Computes D_KL(p_old || p_new)
     @overrides
     def kl(self, old_pdist_var, new_pdist_var):
         old_mean, old_log_std = self._split_pdist(old_pdist_var)
         new_mean, new_log_std = self._split_pdist(new_pdist_var)
-        old_std = T.exp(old_log_std)
-        new_std = T.exp(new_log_std)
+        old_std = TT.exp(old_log_std)
+        new_std = TT.exp(new_log_std)
         # mean: (N*A)
         # std: (N*A)
         # formula:
         # { (\mu_1 - \mu_2)^2 + \sigma_1^2 - \sigma_2^2 } / (2\sigma_262) + ln(\sigma_2/\sigma_1)
-        return T.sum((T.square(old_mean - new_mean) + T.square(old_std) - T.square(new_std)) / (2*T.square(new_std) + 1e-8) + new_log_std - old_log_std, axis=1)
+        return TT.sum((TT.square(old_mean - new_mean) + TT.square(old_std) - TT.square(new_std)) / (2*TT.square(new_std) + 1e-8) + new_log_std - old_log_std, axis=1)
 
     @overrides
     def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var):
@@ -74,7 +76,7 @@ class MujocoPolicy(LasagnePolicy, Serializable):
         new_mean, new_log_std = self._split_pdist(new_pdist_var)
         logli_new = log_normal_pdf(action_var, new_mean, new_log_std)
         logli_old = log_normal_pdf(action_var, old_mean, old_log_std)
-        return T.exp(T.sum(logli_new - logli_old, axis=1))
+        return TT.exp(TT.sum(logli_new - logli_old, axis=1))
 
     def _split_pdist(self, pdist):
         mean = pdist[:, :self._action_dim]
@@ -105,7 +107,9 @@ class MujocoPolicy(LasagnePolicy, Serializable):
         actions, pdists = self.get_actions([observation])
         return actions[0], pdists[0]
 
-    def get_action_log_prob(self, observation, action):
-        means, log_stds = self._compute_action_params([observation])
-        mean, log_std = means[0], log_stds[0]
-        return -np.sum(log_std) - 0.5*np.sum(np.square(action - mean) / np.exp(2*log_std)) - 0.5*len(mean)*np.log(2*np.pi)
+    def get_log_prob_sym(self, action_var):
+        mean_var = self._mean_var
+        log_std_var = self._log_std_var
+        stdn = (action_var - mean_var)
+        stdn /= TT.exp(log_std_var)
+        return - TT.sum(log_std_var, axis=1) - 0.5*TT.sum(TT.square(stdn), axis=1) - 0.5*self._action_dim*np.log(2*np.pi)

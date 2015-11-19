@@ -8,7 +8,7 @@ from rllab.mdp.mujoco.ant_mdp import AntMDP
 from rllab.sampler.utils import rollout
 
 print 'reading data'
-data = np.load('itr_196.npz')
+data = np.load('itr_033.npz')
 print 'read data'
 
 params = data['cur_policy_params']
