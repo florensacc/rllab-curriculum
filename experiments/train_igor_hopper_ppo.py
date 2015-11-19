@@ -15,10 +15,10 @@ if __name__ == '__main__':
     policy = MujocoPolicy(mdp, hidden_sizes=[32, 32])
     vf = MujocoValueFunction()
     algo = PPO(
-            exp_name='igor_hopper_10k',
-            samples_per_itr=10000,
+            exp_name='igor_hopper_100k',
+            samples_per_itr=100000,
             discount=0.99,
-            stepsize=0.001,
+            stepsize=0.01,
             plot=False#True
     )
     algo.train(mdp, policy, vf)

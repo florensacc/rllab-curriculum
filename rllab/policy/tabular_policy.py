@@ -12,19 +12,12 @@ import lasagne
 
 class TabularPolicy(LasagnePolicy, Serializable):
 
-    @autoargs.arg('init_weights', type=str, help='Distribution for initializing the weights. Default to uniform.')
-    def __init__(self, mdp, init_weights='uniform'):
+    @autoargs.arg('init_weights', type=str, help='distribution for initializing the weights which defaults to uniform.')
+    @autoargs.arg('include_bias', type=bool, help='whether to include bias in the formulation. The TabularPolicy is implemented as a single-layer Lasagne network, i.e. y = Wx + b. By default, b is omitted and only W is trained')
+    def __init__(self, mdp):
         input_var = TT.matrix('input')
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]), input_var=input_var)
-
-        if init_weights == 'uniform':
-            init_W = lasagne.init.Constant(0.)
-            init_b = lasagne.init.Constant(0.)
-        else:
-            init_W = lasagne.init.GlorotUniform()
-            init_b = lasagne.init.Constant(0.)
-
-        l_output = L.DenseLayer(l_input, num_units=mdp.action_dim, W=init_W, b=init_b, nonlinearity=NL.softmax)
+        l_output = L.DenseLayer(l_input, num_units=mdp.action_dim, W=lasagne.init.Constant(0), b=None, nonlinearity=NL.softmax)
         prob_var = L.get_output(l_output)
 
         self._pdist_var = prob_var
@@ -79,4 +72,4 @@ class TabularPolicy(LasagnePolicy, Serializable):
     @overrides
     def get_log_prob_sym(self, action_var):
         N = action_var.shape[0]
-        return TT.log(self._prob_var[TT.arange(N), action_var])
+        return TT.log(self._prob_var[TT.arange(N), TT.reshape(action_var, (-1,))])

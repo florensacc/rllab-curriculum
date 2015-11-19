@@ -83,6 +83,7 @@ class VPG(RLAlgorithm):
             update_method,
             learning_rate=learning_rate
         )
+        self.learning_rate = learning_rate
         self.n_itr = n_itr
         self.exp_name = exp_name
         self.discount = discount
@@ -128,19 +129,27 @@ class VPG(RLAlgorithm):
         input_list = to_input_var_list(**train_vars)
         f_update = theano.function(
             inputs=input_list,
-            outputs=surr_obj,
+            outputs=theano.grad(surr_obj, policy.params),
             updates=updates,
             on_unused_input='ignore',
             allow_input_downcast=True
         )
+        #f_grad = theano.function(
+        #    inputs=input_list,
+        #    outputs=theano.grad(surr_obj),#, policy.params[0]),
+        #    on_unused_input='ignore',
+        #    allow_input_downcast=True
+        #)
         f_loss = theano.function(
             inputs=input_list,
             outputs=surr_obj,
             on_unused_input='ignore',
             allow_input_downcast=True
         )
+        #import ipdb; ipdb.set_trace()
         return dict(
             f_update=f_update,
+            #f_grad=f_grad,
             f_loss=f_loss
         )
 
@@ -149,13 +158,5 @@ class VPG(RLAlgorithm):
         f_update = opt_info["f_update"]
         f_loss = opt_info["f_loss"]
         all_inputs = get_all_inputs(samples_data)
-        logger.log("computing loss before")
-        loss_before = f_loss(*all_inputs)
-        logger.log("loss before computed")
         f_update(*all_inputs)
-        logger.log("updated")
-        loss_after = f_loss(*all_inputs)
-        logger.log("loss after computed")
-        logger.record_tabular("Loss Before", loss_before)
-        logger.record_tabular("Loss After", loss_after)
         return opt_info
