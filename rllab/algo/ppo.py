@@ -56,7 +56,8 @@ class PPO(Algorithm):
     @autoargs.arg("max_path_length", type=int, help="Maximum length of a single rollout.")
     @autoargs.arg("discount", type=float, help="Discount.")
     @autoargs.arg("gae_lambda", type=float, help="Lambda used for generalized advantage estimation.")
-    @autoargs.arg("stepsize", type=float, help="Maximum change in mean KL per iteration.")
+    @autoargs.arg("step_size", type=float, help="Maximum change in mean KL per iteration.")
+    @autoargs.arg("exp_name", type=str, help="Name of the experiment.")
     def __init__(
             self,
             n_itr=500,
@@ -65,7 +66,7 @@ class PPO(Algorithm):
             max_path_length=np.inf,
             discount=0.98,
             gae_lambda=1,
-            stepsize=0.015,
+            step_size=0.015,
             initial_penalty=1,
             max_opt_itr=20,
             max_penalty_itr=10,
@@ -80,7 +81,7 @@ class PPO(Algorithm):
         self.samples_per_itr = samples_per_itr
         self.max_path_length = max_path_length
         self.discount = discount
-        self.stepsize = stepsize
+        self.step_size = step_size
         self.initial_penalty = initial_penalty
         self.max_opt_itr = max_opt_itr
         self.max_penalty_itr = max_penalty_itr
@@ -237,7 +238,7 @@ class PPO(Algorithm):
                 )
             _, try_loss, try_mean_kl = f_surr_kl(*(all_input_values + [try_penalty]))
             logger.log('penalty %f => loss %f, mean kl %f' % (try_penalty, try_loss, try_mean_kl))
-            if try_mean_kl < self.stepsize or (penalty_itr == max_penalty_itr - 1 and opt_params is None):
+            if try_mean_kl < self.step_size or (penalty_itr == max_penalty_itr - 1 and opt_params is None):
                 opt_params = policy.get_param_values()
                 penalty = try_penalty
                 mean_kl = try_mean_kl
@@ -247,16 +248,16 @@ class PPO(Algorithm):
 
             # decide scale factor on the first iteration
             if penalty_scale_factor is None or np.isnan(try_mean_kl):
-                if try_mean_kl > self.stepsize or np.isnan(try_mean_kl):
+                if try_mean_kl > self.step_size or np.isnan(try_mean_kl):
                     # need to increase penalty
                     penalty_scale_factor = 2
                 else:
                     # can shrink penalty
                     penalty_scale_factor = 0.5
             else:
-                if penalty_scale_factor > 1 and try_mean_kl <= self.stepsize:
+                if penalty_scale_factor > 1 and try_mean_kl <= self.step_size:
                     break
-                elif penalty_scale_factor < 1 and try_mean_kl >= self.stepsize:
+                elif penalty_scale_factor < 1 and try_mean_kl >= self.step_size:
                     break
             try_penalty *= penalty_scale_factor
 
