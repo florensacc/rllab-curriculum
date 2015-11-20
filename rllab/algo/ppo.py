@@ -51,12 +51,12 @@ def center_qval(qval):
 # Proximal Policy Optimization
 class PPO(Algorithm):
 
-    @autoargs.arg("n_itr", type=str, help="Number of iterations.")
+    @autoargs.arg("n_itr", type=int, help="Number of iterations.")
     @autoargs.arg("samples_per_itr", type=int, help="Number of samples per iteration.")
     @autoargs.arg("max_path_length", type=int, help="Maximum length of a single rollout.")
-    @autoargs.arg("discount", type=int, help="Discount.")
-    @autoargs.arg("gae_lambda", type=int, help="Lambda used for generalized advantage estimation.")
-    @autoargs.arg("stepsize", type=int, help="Maximum change in mean KL per iteration.")
+    @autoargs.arg("discount", type=float, help="Discount.")
+    @autoargs.arg("gae_lambda", type=float, help="Lambda used for generalized advantage estimation.")
+    @autoargs.arg("stepsize", type=float, help="Maximum change in mean KL per iteration.")
     def __init__(
             self,
             n_itr=500,

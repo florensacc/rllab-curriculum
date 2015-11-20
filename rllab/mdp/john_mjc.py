@@ -2,7 +2,7 @@ from rllab.mjcapi.john_mjc.mjc import get_mjc_mdp_class
 from rllab.mdp.base import ControlMDP
 from rllab.misc.overrides import overrides
 from rllab.mjcapi.john_mjc.config import floatX
-from rllab.core.serializable import Serializable
+from rllab.misc.serializable import Serializable
 import numpy as np
 
 
