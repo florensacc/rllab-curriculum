@@ -34,7 +34,7 @@ class AntMDP(MujocoMDP, Serializable):
         #reward = (com_after[0] - com_before[0]) / self.timestep + 1.0
         posbefore = state[0]
         posafter = next_state[0]
-        reward = (posafter - posbefore) / self.timestep + 1.0# - 1e-4*np.sum(np.square(action))
+        reward = (posafter - posbefore) / self.timestep# + 1.0# - 1e-4*np.sum(np.square(action))
         notdone = np.isfinite(next_state).all() and next_state[2] >= 0.2 and next_state[2] <= 1.0
         done = not notdone
         ob = self.get_current_obs()

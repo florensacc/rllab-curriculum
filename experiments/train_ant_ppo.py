@@ -17,6 +17,7 @@ if __name__ == '__main__':
     algo = PPO(
             exp_name='ant',
             samples_per_itr=50000,
+            max_path_length=500,
             discount=0.99,
             stepsize=0.01,
             plot=False#True
