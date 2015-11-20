@@ -17,7 +17,7 @@ class WrapperMDP(ControlMDP, Serializable):
     @overrides
     def step(self, state, action):
         state = np.array(state).astype(floatX).reshape(-1)
-        action = np.array(action).astype(floatX).reshape(-1)
+        action = np.array(action).astype(floatX).reshape(-1) * self.action_bounds.reshape(-1)
         result = self._mdp.call({'x': state, 'u': action})
         next_state = result["x"].reshape(-1)
         next_obs = result["o"].reshape(-1)
