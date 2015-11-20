@@ -7,7 +7,7 @@ from lasagne_policy import LasagnePolicy
 import numpy as np
 import tensorfuse as theano
 import tensorfuse.tensor as TT
-from rllab.core.serializable import Serializable
+from rllab.misc.serializable import Serializable
 from rllab.misc.overrides import overrides
 
 def normal_pdf(x, mean, log_std):
