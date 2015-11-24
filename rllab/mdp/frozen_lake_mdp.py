@@ -52,7 +52,8 @@ class FrozenLakeMDP(MDP, Serializable):
     """
 
     @autoargs.arg("default_map", type=str, help="Choose from default maps, either 4x4 or 8x8")
-    def __init__(self, desc=None, default_map='4x4', **kwargs):
+    @autoargs.arg("deterministic", type=bool, help="Whether to make the mdp deterministic (default to False)")
+    def __init__(self, desc=None, default_map='4x4', deterministic=False, **kwargs):
         if desc is None and default_map is None:
             raise ValueError('Must provide either desc or default_map')
         elif desc is None:
@@ -61,12 +62,13 @@ class FrozenLakeMDP(MDP, Serializable):
         nrow, ncol = self.desc.shape
         self.maxxy = np.array([nrow-1, ncol-1])
         (startx,), (starty,) = np.nonzero(self.desc=='S')
-        self.startstate = np.array([startx,starty])
-        Serializable.__init__(self, desc)
+        self.startstate = np.array([startx, starty])
+        self.deterministic = deterministic
+        Serializable.__init__(self, desc, default_map, deterministic, **kwargs)
 
     def step(self, state, action):
-
-        action = (action + np.random.randint(-1, 2)) % 4
+        if not self.deterministic:
+            action = (action + np.random.randint(-1, 2)) % 4
         increments = np.array([[0,-1],[1,0],[0,1],[-1,0]])
         nextstate = np.clip(state + increments[action], [0,0], self.maxxy)
         statetype = self.desc[nextstate[0],nextstate[1]]

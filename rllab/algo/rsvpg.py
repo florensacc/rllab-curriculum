@@ -2,6 +2,7 @@ import tensorfuse.tensor as TT
 from rllab.misc import logger, autoargs
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import compile_function
+from rllab.algo.util import center_advantages
 from rllab.algo.batch_polopt import BatchPolopt
 from rllab.algo.first_order_method import FirstOrderMethod
 import numpy as np
@@ -91,7 +92,8 @@ class RSVPG(BatchPolopt, FirstOrderMethod):
             advantages.append(np.repeat(ret - baseline, len(path["actions"])))
 
         observations = np.vstack(observations)
-        advantages = np.concatenate(advantages)
+        if self.center_adv:
+            advantages = center_advantages(np.concatenate(advantages))
         actions = np.vstack(actions)
 
         logger.log("optimizing policy")
@@ -115,4 +117,5 @@ class RSVPG(BatchPolopt, FirstOrderMethod):
             observations=samples_data["observations"],
             advantages=samples_data["advantages"],
             actions=samples_data["actions"],
+            paths=samples_data["paths"],
         )

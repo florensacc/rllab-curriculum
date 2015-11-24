@@ -13,3 +13,4 @@ build_linux
 .idea
 .sublime-project
 run_experiment.sh
+notebooks

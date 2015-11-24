@@ -1,11 +1,11 @@
+import numpy as np
 from rllab.algo.base import RLAlgorithm
 from rllab.sampler import parallel_sampler
 from rllab.misc import autoargs
-from rllab.misc.ext import merge_dict
 from rllab.misc.special import explained_variance_1d, discount_cumsum
+from rllab.algo.util import center_advantages
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-import numpy as np
 
 
 class BatchPolopt(RLAlgorithm):
@@ -31,6 +31,8 @@ class BatchPolopt(RLAlgorithm):
                        "mean 0 and standard deviation 1")
     @autoargs.arg("record_states", type=bool,
                   help="Whether to record states when sampling")
+    @autoargs.arg("store_paths", type=bool,
+                  help="Whether to save all paths data to the snapshot")
     def __init__(
             self,
             n_itr=500,
@@ -42,6 +44,7 @@ class BatchPolopt(RLAlgorithm):
             plot=False,
             center_adv=True,
             record_states=False,
+            store_paths=False,
             **kwargs
     ):
         self.n_itr = n_itr
@@ -53,6 +56,7 @@ class BatchPolopt(RLAlgorithm):
         self.plot = plot
         self.center_adv = center_adv
         self.record_states = record_states
+        self.store_paths = store_paths
 
     def start_worker(self, mdp, policy, vf):
         parallel_sampler.populate_task(mdp, policy)
@@ -72,8 +76,11 @@ class BatchPolopt(RLAlgorithm):
             opt_info = self.optimize_policy(
                 itr, policy, samples_data, opt_info)
             logger.log("saving snapshot...")
-            logger.save_itr_params(itr, self.get_itr_snapshot(
-                itr, mdp, policy, vf, samples_data, opt_info))
+            params = self.get_itr_snapshot(
+                itr, mdp, policy, vf, samples_data, opt_info)
+            if self.store_paths:
+                params["paths"] = samples_data["paths"]
+            logger.save_itr_params(itr, params)
             logger.log("saved")
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
@@ -130,8 +137,7 @@ class BatchPolopt(RLAlgorithm):
         advantages = np.concatenate([path["advantage"] for path in paths])
 
         if self.center_adv:
-            advantages = \
-                (advantages - np.mean(advantages)) / (advantages.std() + 1e-8)
+            advantages = center_advantages(advantages)
 
         # Compute various quantities for logging
         ent = policy.compute_entropy(pdists)
