@@ -1,6 +1,7 @@
 from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
 from rllab.policy.base import Policy
 from rllab.misc.overrides import overrides
+from rllab.misc.serializable import Serializable
 import lasagne.layers as L
 import tensorfuse as theano
 
@@ -36,3 +37,12 @@ class LasagnePolicy(Policy):
                 param_values
                 ):
             theano.compat.set_value(param, value.astype(dtype))
+
+    def __getstate__(self):
+        d = Serializable.__getstate__(self)
+        d["params"] = self.get_param_values()
+        return d
+
+    def __setstate__(self, d):
+        Serializable.__setstate__(self, d)
+        self.set_param_values(d["params"])

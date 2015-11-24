@@ -2,7 +2,6 @@ from rllab.policy.lasagne_policy import LasagnePolicy
 from rllab.misc.serializable import Serializable
 from rllab.misc.special import weighted_sample
 from rllab.misc.overrides import overrides
-from rllab.misc import autoargs
 import numpy as np
 import tensorfuse as theano
 import tensorfuse.tensor as TT
@@ -13,10 +12,6 @@ import lasagne
 
 class TabularPolicy(LasagnePolicy, Serializable):
 
-    @autoargs.arg(
-        'init_weights',
-        type=str,
-        help='Distribution for initializing the weights. Default to uniform.')
     def __init__(self, mdp):
         input_var = TT.matrix('input')
         l_input = L.InputLayer(

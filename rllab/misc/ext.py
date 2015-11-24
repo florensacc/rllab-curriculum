@@ -90,8 +90,21 @@ def iscanr(f, l, base=None):
         started = True
         yield base
 
+
 def scanl(f, l, base=None):
     return list(iscanl(f, l, base))
 
+
 def scanr(f, l, base=None):
     return list(iscanr(f, l, base))
+
+
+def compile_function(inputs=None, outputs=None, updates=None):
+    import tensorfuse
+    return tensorfuse.function(
+        inputs=inputs,
+        outputs=outputs,
+        updates=updates,
+        on_unused_input='ignore',
+        allow_input_downcast=True
+    )
