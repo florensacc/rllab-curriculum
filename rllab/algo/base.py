@@ -16,5 +16,5 @@ class Algorithm(object):
 
 class RLAlgorithm(Algorithm):
 
-    def train(self, mdp, policy, vf):
+    def train(self, mdp, **kwargs):
         raise NotImplementedError

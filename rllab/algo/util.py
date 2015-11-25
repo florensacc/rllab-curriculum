@@ -1,20 +1,8 @@
 import numpy as np
-import lasagne.updates
-from functools import partial
-from rllab.misc.ext import compact
 import tensorfuse as theano
 import time
 
 floatX = theano.config.floatX
-
-
-def parse_update_method(update_method, **kwargs):
-    if update_method == 'adam':
-        return partial(lasagne.updates.adam, **compact(kwargs))
-    elif update_method == 'sgd':
-        return partial(lasagne.updates.sgd, **compact(kwargs))
-    else:
-        raise NotImplementedError
 
 
 def center_advantages(advantages):
@@ -81,9 +69,8 @@ class ReplayPool(object):
             state -- current state (or observation)
             action -- action chosen by the agent
             reward -- reward received after taking the action
-            terminal -- boolean indicating whether the episode ended
-            after this time step (note that the very last state /
-            observation is ignored in this formulation, but usually it's ok)
+            terminal -- boolean indicating whether the episode ended after this
+            time step
         """
         self.states[self.top] = state
         self.actions[self.top] = action

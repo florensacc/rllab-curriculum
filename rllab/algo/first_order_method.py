@@ -5,7 +5,7 @@ from rllab.misc import autoargs
 from functools import partial
 
 
-def parse_update_method(update_method, **kwargs):
+def parse_update_method(update_method, config=None, **kwargs):
     if update_method == 'adam':
         return partial(lasagne.updates.adam, **compact(kwargs))
     elif update_method == 'sgd':

@@ -1,11 +1,6 @@
 from .mujoco_mdp import MujocoMDP
-import os
 import numpy as np
-from contextlib import contextmanager
-import os.path as osp
-import sys
-import random
-from rllab.core.serializable import Serializable
+from rllab.misc.serializable import Serializable
 
 # states: [
 # 0: z-coord,
@@ -30,7 +25,7 @@ class HopperMDP(MujocoMDP, Serializable):
         ).reshape(-1)
 
     def step(self, state, action, autoreset=True):
-        next_state = self.forward_dynamics(state, action, preserve=False)
+        next_state = self.forward_dynamics(state, action, restore=False)
         next_obs = self.get_obs(next_state)
         posbefore = state[1]
         posafter = next_state[1]

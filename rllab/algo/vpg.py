@@ -54,8 +54,8 @@ class VPG(BatchPolopt, FirstOrderMethod):
             "observations", "advantages", "actions"
         )
         loss_before = f_loss(*inputs)
-        loss_after = f_loss(*inputs)
         f_update(*inputs)
+        loss_after = f_loss(*inputs)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
         return opt_info

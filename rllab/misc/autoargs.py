@@ -2,12 +2,19 @@ from rllab.misc.console import colorize
 from rllab.misc.ext import merge_dict
 
 
-def arg(name, type, help, mapper=None):
+# pylint: disable=redefined-builtin
+# pylint: disable=protected-access
+def arg(name, type=None, help=None, nargs=None, mapper=None):
     def wrap(fn):
         assert fn.__name__ == '__init__'
         if not hasattr(fn, '_autoargs_info'):
             fn._autoargs_info = dict()
-        fn._autoargs_info[name] = dict(type=type, help=help, mapper=mapper)
+        fn._autoargs_info[name] = dict(
+            type=type,
+            help=help,
+            nargs=nargs,
+            mapper=mapper
+        )
         return fn
     return wrap
 
@@ -59,7 +66,8 @@ def add_args(_):
             parser.add_argument(
                 '--' + prefix_ + arg_name,
                 help=arg_info['help'],
-                type=arg_info['type'])
+                type=arg_info['type'],
+                nargs=arg_info['nargs'])
     return _add_args
 
 
@@ -72,7 +80,7 @@ def new_from_args(_):
             prefixed_arg_name = prefix_ + arg_name
             if hasattr(parsed_args, prefixed_arg_name):
                 val = getattr(parsed_args, prefixed_arg_name)
-                if val:
+                if val is not None:
                     if arg_info['mapper']:
                         params[arg_name] = arg_info['mapper'](val)
                     else:

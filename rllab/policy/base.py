@@ -24,7 +24,7 @@ class Policy(object):
     def input_var(self):
         raise NotImplementedError
 
-    def new_action_var(self):
+    def new_action_var(self, name):
         raise NotImplementedError
 
     # Only needed for stochastic policies

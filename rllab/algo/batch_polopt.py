@@ -22,6 +22,10 @@ class BatchPolopt(RLAlgorithm):
                   help="Number of samples per iteration.")
     @autoargs.arg("max_path_length", type=int,
                   help="Maximum length of a single rollout.")
+    @autoargs.arg("whole_paths", type=bool,
+                  help="Make sure that the samples contain whole "
+                       "trajectories, even if the actual batch size is "
+                       "slightly larger than the specified batch_size.")
     @autoargs.arg("discount", type=float,
                   help="Discount.")
     @autoargs.arg("gae_lambda", type=float,
@@ -42,6 +46,7 @@ class BatchPolopt(RLAlgorithm):
             discount=0.99,
             gae_lambda=1,
             plot=False,
+            whole_paths=True,
             center_adv=True,
             record_states=False,
             store_paths=False,
@@ -54,6 +59,7 @@ class BatchPolopt(RLAlgorithm):
         self.discount = discount
         self.gae_lambda = gae_lambda
         self.plot = plot
+        self.whole_paths = whole_paths
         self.center_adv = center_adv
         self.record_states = record_states
         self.store_paths = store_paths
@@ -66,7 +72,7 @@ class BatchPolopt(RLAlgorithm):
     def shutdown_worker(self):
         pass
 
-    def train(self, mdp, policy, vf):
+    def train(self, mdp, policy, vf, **kwargs):
         opt_info = self.init_opt(mdp, policy, vf)
         self.start_worker(mdp, policy, vf)
         for itr in xrange(self.start_itr, self.n_itr):
@@ -110,9 +116,10 @@ class BatchPolopt(RLAlgorithm):
     def obtain_samples(self, itr, mdp, policy, vf):
         cur_params = policy.get_param_values()
         paths = parallel_sampler.request_samples(
-            cur_params,
-            self.batch_size,
-            self.max_path_length,
+            policy_params=cur_params,
+            max_samples=self.batch_size,
+            max_path_length=self.max_path_length,
+            whole_paths=self.whole_paths,
             record_states=self.record_states
         )
 
@@ -146,12 +153,14 @@ class BatchPolopt(RLAlgorithm):
             np.concatenate(returns)
         )
         average_return = np.mean([path["returns"][0] for path in paths])
-        average_undiscounted_return = np.mean([sum(path["rewards"]) for path in paths])
+        average_undiscounted_return = \
+            np.mean([sum(path["rewards"]) for path in paths])
 
         logger.record_tabular('Iteration', itr)
         logger.record_tabular('Entropy', ent)
         logger.record_tabular('Perplexity', np.exp(ent))
-        logger.record_tabular('AverageUndiscountedReturn', average_undiscounted_return)
+        logger.record_tabular('AverageUndiscountedReturn',
+                              average_undiscounted_return)
         logger.record_tabular('AverageReturn', average_return)
         logger.record_tabular('NumTrajs', len(paths))
         logger.record_tabular('ExplainedVariance', ev)
