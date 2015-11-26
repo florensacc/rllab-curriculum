@@ -1,7 +1,16 @@
 from rllab.misc import autoargs
+from rllab.core.parameterized import Parameterized
+import tensorfuse as theano
+import tensorfuse.tensor as TT
 
 
-class Policy(object):
+class Policy(Parameterized):
+
+    def __init__(self, mdp):
+        self._observation_shape = mdp.observation_shape
+        self._observation_dtype = mdp.observation_dtype
+        self._action_dim = mdp.action_dim
+        self._action_dtype = mdp.action_dtype
 
     # Should be implemented by all policies
 
@@ -12,22 +21,44 @@ class Policy(object):
         actions, pdists = self.get_actions([observation])
         return actions[0], pdists[0]
 
-    # Only needed for parameterized policies
-
-    def get_param_values(self):
-        raise NotImplementedError
-
-    def set_param_values(self, flattened_params):
-        raise NotImplementedError
+    @property
+    def observation_shape(self):
+        return self._observation_shape
 
     @property
-    def input_var(self):
+    def observation_dtype(self):
+        return self._observation_dtype
+
+    @property
+    def action_dim(self):
+        return self._action_dim
+
+    @property
+    def action_dtype(self):
+        return self._action_dtype
+
+    @classmethod
+    @autoargs.add_args
+    def add_args(cls, parser):
+        pass
+
+    @classmethod
+    @autoargs.new_from_args
+    def new_from_args(cls, args, mdp):
+        pass
+
+
+class DeterministicPolicy(Policy):
+
+    def get_actions_sym(self, input_var):
         raise NotImplementedError
 
-    def new_action_var(self, name):
-        raise NotImplementedError
 
-    # Only needed for stochastic policies
+class StochasticPolicy(Policy):
+
+    def __init__(self, mdp):
+        super(StochasticPolicy, self).__init__(mdp)
+        self._f_log_prob = None
 
     def kl(self, old_pdist_var, new_pdist_var):
         raise NotImplementedError
@@ -40,29 +71,23 @@ class Policy(object):
 
     # Only needed for vanilla policy gradient & guided policy search
     def get_log_prob(self, observations, actions):
-        if not hasattr(self, '_f_log_prob'):
-            action_var = self.new_action_var()
+        if self._f_log_prob is None:
+            input_var = TT.tensor(
+                'input',
+                ndim=len(self.observation_shape) + 1,
+                dtype=self.observation_dtype
+            )
+            action_var = TT.matrix('actions', dtype=self.action_dtype)
             self._f_log_prob = theano.function(
-                [self.input_var, action_var],
-                self.get_lob_prob_sym(action_var),
+                [input_var, action_var],
+                self.get_log_prob_sym(input_var, action_var),
                 allow_input_downcast=True,
                 on_unused_input='ignore'
             )
         return self._f_log_prob(observations, actions)
 
-    def get_log_prob_sym(self, action_var):
+    def get_log_prob_sym(self, input_var, action_var):
         raise NotImplementedError
 
-    @property
-    def pdist_var(self):
+    def get_pdist_sym(self, input_var):
         raise NotImplementedError
-
-    @classmethod
-    @autoargs.add_args
-    def add_args(cls, parser):
-        pass
-
-    @classmethod
-    @autoargs.new_from_args
-    def new_from_args(cls, args, mdp):
-        pass

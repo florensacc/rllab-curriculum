@@ -108,3 +108,9 @@ def compile_function(inputs=None, outputs=None, updates=None):
         on_unused_input='ignore',
         allow_input_downcast=True
     )
+
+
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self

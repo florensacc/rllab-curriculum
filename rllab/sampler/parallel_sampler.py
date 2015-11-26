@@ -1,10 +1,8 @@
 from joblib.pool import MemmapingPool
 from rllab.sampler.utils import rollout, ProgBarCounter
 from rllab.misc.ext import extract
-from rllab.misc.special import explained_variance_1d, discount_cumsum
 from multiprocessing import Manager
 import numpy as np
-from rllab.misc import logger
 
 __all__ = [
     'init_pool',
@@ -125,64 +123,3 @@ def request_samples(
             record_states=record_states
         )
         return pool_rollout(args)
-
-
-def request_samples_stats(
-        itr, mdp, policy, vf, samples_per_itr, max_path_length, discount=1,
-        gae_lambda=1, record_states=False):
-    """
-    Perform rollout to obtain samples according to the given parameters. It
-    returns a few quantities that may be useful for the algorithm:
-
-    all_obs: all observations concatenated together
-    """
-
-    cur_params = policy.get_param_values()
-    paths = request_samples(
-        policy_params=cur_params,
-        max_samples=samples_per_itr,
-        max_path_length=max_path_length,
-        record_states=record_states
-    )
-
-    all_baselines = []
-    all_returns = []
-
-    for path in paths:
-        path["returns"] = discount_cumsum(path["rewards"], discount)
-        baselines = np.append(vf.predict(path), 0)
-        deltas = path["rewards"] + discount*baselines[1:] - baselines[:-1]
-        path["advantage"] = discount_cumsum(deltas, discount*gae_lambda)
-        all_baselines.append(baselines[:-1])
-        all_returns.append(path["returns"])
-
-    ev = explained_variance_1d(
-        np.concatenate(all_baselines), np.concatenate(all_returns))
-
-    all_obs = np.vstack([path["observations"] for path in paths])
-    all_states = np.vstack([path["states"] for path in paths])
-    all_pdists = np.vstack([path["pdists"] for path in paths])
-    all_actions = np.vstack([path["actions"] for path in paths])
-    all_returns = np.concatenate(all_returns)
-    all_advantages = np.concatenate([path["advantage"] for path in paths])
-
-    avg_return = np.mean([sum(path["rewards"]) for path in paths])
-
-    ent = policy.compute_entropy(all_pdists)
-
-    logger.record_tabular('Iteration', itr)
-    logger.record_tabular('Entropy', ent)
-    logger.record_tabular('Perplexity', np.exp(ent))
-    logger.record_tabular('AvgReturn', avg_return)
-    logger.record_tabular('NumTrajs', len(paths))
-    logger.record_tabular('ExplainedVariance', ev)
-
-    return dict(
-        all_obs=all_obs,
-        all_returns=all_returns,
-        all_advantages=all_advantages,
-        all_actions=all_actions,
-        all_pdists=all_pdists,
-        all_states=all_states,
-        paths=paths,
-    )

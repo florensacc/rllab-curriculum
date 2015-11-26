@@ -25,6 +25,10 @@ class MDP(object):
     def action_dtype(self):
         raise NotImplementedError
 
+    @property
+    def observation_dtype(self):
+        raise NotImplementedError
+
     def start_viewer(self):
         pass
 

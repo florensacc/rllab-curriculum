@@ -1,6 +1,8 @@
 import numpy as np
 import tensorfuse as theano
 import time
+from rllab.misc.serializable import Serializable
+from rllab.misc.ext import extract
 
 floatX = theano.config.floatX
 
@@ -9,7 +11,7 @@ def center_advantages(advantages):
     return (advantages - np.mean(advantages)) / (advantages.std() + 1e-8)
 
 
-class ReplayPool(object):
+class ReplayPool(Serializable):
     """
     A utility class for experience replay.
     The code is adapted from https://github.com/spragunr/deep_q_rl
@@ -61,6 +63,31 @@ class ReplayPool(object):
         self.bottom = 0
         self.top = 0
         self.size = 0
+        super(ReplayPool, self).__init__(
+            self, state_shape, action_dim, max_steps, state_dtype,
+            action_dtype, concat_states, concat_length, rng
+        )
+
+    def __getstate__(self):
+        d = super(ReplayPool, self).__getstate__()
+        d["bottom"] = self.bottom
+        d["top"] = self.top
+        d["size"] = self.size
+        d["states"] = self.states
+        d["actions"] = self.actions
+        d["rewards"] = self.rewards
+        d["terminal"] = self.terminal
+        d["rng"] = self.rng
+        return d
+
+    def __setstate__(self, d):
+        super(ReplayPool, self).__setstate__(d)
+        self.bottom, self.top, self.size, self.states, self.actions, \
+            self.rewards, self.terminal, self.rng = extract(
+                d,
+                "bottom", "top", "size", "states", "actions", "rewards",
+                "terminal", "rng"
+            )
 
     def add_sample(self, state, action, reward, terminal):
         """Add a time step record.

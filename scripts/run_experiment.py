@@ -51,6 +51,8 @@ def run_experiment(argv):
                         help='module path to the policy')
     parser.add_argument('--vf', type=str, default='no_value_function',
                         help='module path to the value function')
+    parser.add_argument('--es', type=str,
+                        help='module path to the exploration strategy')
     parser.add_argument('--more_help', action='store_true',
                         help='whether to show more help depending on the '
                              'classes chosen')
@@ -88,6 +90,7 @@ def run_experiment(argv):
         from rllab.vf.base import ValueFunction
         from rllab.policy.base import Policy
         from rllab.algo.base import Algorithm
+        from rllab.es.base import ExplorationStrategy
 
         # Save the arguments which might be useful for later use
         # with open(cache_file, 'w+b') as f:
@@ -98,6 +101,9 @@ def run_experiment(argv):
         if args.policy:
             classes['policy'] = load_class(
                 args.policy, Policy, ["rllab", "policy"])
+        if args.es:
+            classes['es'] = load_class(
+                args.es, ExplorationStrategy, ["rllab", "es"])
         classes['vf'] = load_class(args.vf, ValueFunction, ["rllab", "vf"])
         classes['algo'] = load_class(args.algo, Algorithm, ["rllab", "algo"])
 
@@ -115,6 +121,9 @@ def run_experiment(argv):
         if args.policy:
             instances['policy'] = instantiate(
                 more_args, classes['policy'], instances['mdp'])
+        if args.es:
+            instances['es'] = instantiate(
+                more_args, classes['es'], instances['mdp'])
         instances['vf'] = instantiate(
             more_args, classes['vf'], instances['mdp'])
         algo = instantiate(more_args, classes['algo'])

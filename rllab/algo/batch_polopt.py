@@ -152,16 +152,18 @@ class BatchPolopt(RLAlgorithm):
             np.concatenate(baselines),
             np.concatenate(returns)
         )
-        average_return = np.mean([path["returns"][0] for path in paths])
-        average_undiscounted_return = \
+        average_discounted_return = \
+            np.mean([path["returns"][0] for path in paths])
+        average_return = \
             np.mean([sum(path["rewards"]) for path in paths])
 
         logger.record_tabular('Iteration', itr)
         logger.record_tabular('Entropy', ent)
         logger.record_tabular('Perplexity', np.exp(ent))
-        logger.record_tabular('AverageUndiscountedReturn',
-                              average_undiscounted_return)
-        logger.record_tabular('AverageReturn', average_return)
+        logger.record_tabular('AverageReturn',
+                              average_return)
+        logger.record_tabular('AverageDiscountedReturn',
+                              average_discounted_return)
         logger.record_tabular('NumTrajs', len(paths))
         logger.record_tabular('ExplainedVariance', ev)
 

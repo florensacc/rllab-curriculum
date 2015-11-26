@@ -1,16 +1,17 @@
-from rllab.policy.lasagne_policy import LasagnePolicy
-from rllab.misc.serializable import Serializable
+from rllab.policy.base import StochasticPolicy
+from rllab.core.lasagne_powered import LasagnePowered
+from rllab.core.serializable import Serializable
 from rllab.misc.special import weighted_sample
 from rllab.misc.overrides import overrides
+from rllab.misc.ext import compile_function
 import numpy as np
-import tensorfuse as theano
 import tensorfuse.tensor as TT
+import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
-import lasagne
 
 
-class TabularPolicy(LasagnePolicy, Serializable):
+class TabularPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     def __init__(self, mdp):
         input_var = TT.matrix('input')
@@ -26,32 +27,19 @@ class TabularPolicy(LasagnePolicy, Serializable):
 
         prob_var = L.get_output(l_output)
 
-        self._pdist_var = prob_var
-        self._prob_var = prob_var
-        self._compute_probs = theano.function([input_var], prob_var,
-                                              allow_input_downcast=True)
-        self._input_var = input_var
-        self._action_dim = mdp.action_dim
-        super(TabularPolicy, self).__init__([l_output])
+        self._output_layer = l_output
+        self._f_probs = compile_function([input_var], prob_var)
+        super(TabularPolicy, self).__init__(mdp)
+        LasagnePowered.__init__(self, [l_output])
         Serializable.__init__(self, mdp)
 
     @property
     def action_dim(self):
         return self._action_dim
 
-    @property
     @overrides
-    def input_var(self):
-        return self._input_var
-
-    @property
-    @overrides
-    def pdist_var(self):
-        return self._pdist_var
-
-    @overrides
-    def new_action_var(self, name):
-        return TT.imatrix(name)
+    def get_pdist_sym(self, input_var):
+        return L.get_output(self._output_layer, input_var)
 
     @overrides
     def kl(self, old_prob_var, new_prob_var):
@@ -75,56 +63,13 @@ class TabularPolicy(LasagnePolicy, Serializable):
     # the current policy
     @overrides
     def get_actions(self, states):
-        probs = self._compute_probs(states)
+        probs = self._f_probs(states)
         actions = [weighted_sample(prob, range(len(prob))) for prob in probs]
         return actions, probs
 
     @overrides
-    def get_log_prob_sym(self, action_var):
+    def get_log_prob_sym(self, input_var, action_var):
         N = action_var.shape[0]
-        prob = self._prob_var[TT.arange(N), TT.reshape(action_var, (-1,))]
+        prob_var = L.get_output(self._output_layer, input_var)
+        prob = prob_var[TT.arange(N), TT.reshape(action_var, (-1,))]
         return TT.log(prob)
-
-    def get_empirical_fisher_validate(self, action_var):
-        """
-        Compute the symbolic empirical fisher information matrix, i.e.
-        E_x [d_logp/d_theta * d_logp/d_theta.T]
-        This only works for a single sample
-        """
-        dtheta = 0
-        for i in range(self._action_dim):
-            p = self.pdist_var[0, i]
-            g = theano.grad(TT.log(p), self.params[0])
-            dtheta += p * TT.outer(g, g)
-        return dtheta
-
-
-if __name__ == "__main__":
-    from rllab.mdp.frozen_lake_mdp import FrozenLakeMDP
-    mdp = FrozenLakeMDP(default_map='4x4')
-    policy = TabularPolicy(mdp)
-    policy.set_param_values(np.random.random(policy.get_param_values().shape))
-    action_var = policy.new_action_var('action')
-    fisher1 = policy.get_empirical_fisher(action_var)
-    f_fisher1 = theano.function([policy.input_var, action_var], fisher1, on_unused_input='ignore', allow_input_downcast=True)
-    inputs = np.random.choice(mdp.observation_shape[0], size=1000)
-    actions = np.random.choice(mdp.action_dim, size=1000)
-    inputs = np.eye(mdp.observation_shape[0])[inputs]
-
-    emp = 0
-    for idx, action in enumerate(actions):
-        emp += f_fisher1(np.array([inputs[idx]]), np.array([[action]]))
-    emp /= len(actions)
-
-    another_policy = TabularPolicy(mdp)
-    kl = TT.mean(policy.kl(policy.pdist_var, another_policy.pdist_var))
-    fisher2 = theano.gradient.hessian(kl, policy.params)
-    another_policy.set_param_values(policy.get_param_values())
-    print 'compiling f fisher 2'
-    f_fisher2 = theano.function([policy.input_var, action_var, another_policy.input_var], fisher2, on_unused_input='ignore', allow_input_downcast=True)
-    print 'compiled'
-    emp3 = f_fisher2(inputs, np.array([actions]).T, inputs)
-
-    #kl = 
-    #emp2 = 
-    import ipdb; ipdb.set_trace()

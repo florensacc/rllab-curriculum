@@ -27,10 +27,14 @@ class RSVPG(BatchPolopt, FirstOrderMethod):
 
     @overrides
     def init_opt(self, mdp, policy, vf):
-        input_var = policy.input_var
+        input_var = TT.tensor(
+            'input',
+            ndim=len(mdp.observation_shape)+1,
+            dtype=mdp.observation_dtype
+        )
         advantage_var = TT.vector('advantage')
-        action_var = policy.new_action_var('action')
-        log_prob = policy.get_log_prob_sym(action_var)
+        action_var = TT.matrix('action', dtype=mdp.action_dtype)
+        log_prob = policy.get_log_prob_sym(input_var, action_var)
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
         surr_obj = - TT.mean(log_prob * advantage_var)
@@ -61,10 +65,12 @@ class RSVPG(BatchPolopt, FirstOrderMethod):
         [sr ] = sort(r)
         ind = indices of best 20% of r
         q = r_ind(0)
-        grad = 1/(length(ind)) * sum_{i in ind} (  grad_log(x^i_1,...,x^i_t) * (r_i - q) )
+        grad = 1/(length(ind)) * sum_{i in ind} (
+            grad_log(x^i_1,...,x^i_t) * (r_i - q) )
 
         This grad formula is equivalent to the following:
-        grad = 1/(length(ind)) * sum_{i in ind} sum_{t} (  grad_log(a^i_t | x^i_t) * (r_i - q) )
+        grad = 1/(length(ind)) * sum_{i in ind} sum_{t} (
+            grad_log(a^i_t | x^i_t) * (r_i - q) )
         """
 
         returns = np.array([
