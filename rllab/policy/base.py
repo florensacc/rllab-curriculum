@@ -50,7 +50,7 @@ class Policy(Parameterized):
 
 class DeterministicPolicy(Policy):
 
-    def get_actions_sym(self, input_var):
+    def get_action_sym(self, input_var):
         raise NotImplementedError
 
 

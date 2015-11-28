@@ -2,13 +2,14 @@ import tensorfuse as theano
 import tensorfuse.tensor as TT
 import numpy as np
 from rllab.mdp.base import SymbolicMDP
+from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract, merge_dict
 from rllab.misc.viewer2d import Viewer2D, Colors
-import pygame
+
 
 # code adapted from John's control repo
-class CartpoleMDP(SymbolicMDP):
+class CartpoleMDP(SymbolicMDP, Serializable):
     def __init__(self, horizon=100):
         self.max_pole_angle = .2
         self.max_cart_pos = 2.4
@@ -18,6 +19,7 @@ class CartpoleMDP(SymbolicMDP):
         self.dt = .05
         self._viewer = None
         super(CartpoleMDP, self).__init__(horizon)
+        Serializable.__init__(self, horizon)
 
     def reset_sym(self):
         bounds = np.array([
@@ -49,16 +51,29 @@ class CartpoleMDP(SymbolicMDP):
         return -bounds, bounds
 
     @property
+    @overrides
     def observation_shape(self):
         return (4,)
 
     @property
+    @overrides
     def state_shape(self):
         return (4,)
 
     @property
+    @overrides
+    def observation_dtype(self):
+        return 'float32'
+
+    @property
+    @overrides
     def action_dim(self):
         return 1
+
+    @property
+    @overrides
+    def action_dtype(self):
+        return 'float32'
 
     @overrides
     def reward_sym(self, state, action):

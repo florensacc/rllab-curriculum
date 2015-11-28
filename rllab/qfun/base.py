@@ -39,11 +39,11 @@ class QFunction(Parameterized):
 
 class DiscreteQFunction(QFunction):
 
-    def get_qvals_sym(self, input_var):
+    def get_qval_sym(self, input_var):
         raise NotImplementedError
 
 
 class ContinuousQFunction(QFunction):
 
-    def get_qvals_sym(self, input_var, action_var):
+    def get_qval_sym(self, input_var, action_var):
         raise NotImplementedError

@@ -156,7 +156,11 @@ class DPG(RLAlgorithm):
         target_qfun = pickle.loads(pickle.dumps(qfun))
 
         # y need to be computed first
-
+        obs = TT.tensor(
+            'obs',
+            ndim=1+len(mdp.observation_shape),
+            dtype=mdp.observation_dtype
+        )
         rewards = TT.vector('rewards')
         terminals = TT.vector('terminals')
 
@@ -164,26 +168,26 @@ class DPG(RLAlgorithm):
 
         # compute the on-policy y values
         ys = rewards + (1 - terminals) * self.discount * \
-            target_qfun.get_policy_qvals(target_policy.actions_var)
+            target_qfun.get_qval_sym(obs, target_policy.get_action_sym(obs))
         f_y = compile_function(
-            inputs=[target_qfun.input_var, target_policy.input_var, rewards,
-                    terminals],
+            inputs=[obs, rewards, terminals],
             outputs=ys
         )
 
         # The yi values are computed separately as above and then passed to
         # the training functions below
-        actions = TT.matrix('actions', dtype=mdp.action_dtype)
+        action = TT.matrix('action', dtype=mdp.action_dtype)
         yvar = TT.vector('ys')
 
         qfun_weight_decay_term = self.qfun_weight_decay * \
             sum([TT.sum(TT.square(param)) for param in qfun.params])
-        qfun_loss = TT.mean(TT.square(yvar - qfun.get_qvals(actions)))
+        qfun_loss = TT.mean(TT.square(yvar - qfun.get_qval_sym(obs, action)))
         qfun_reg_loss = qfun_loss + qfun_weight_decay_term
 
         policy_weight_decay_term = self.policy_weight_decay * \
             sum([TT.sum(TT.square(param)) for param in policy.params])
-        policy_surr = - TT.mean(qfun.get_policy_qvals(policy.actions_var))
+        policy_surr = - TT.mean(
+            qfun.get_qval_sym(obs, policy.get_action_sym(obs)))
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
         qfun_updates = self.qfun_update_method(
@@ -192,12 +196,12 @@ class DPG(RLAlgorithm):
             policy_reg_surr, policy.params)
 
         f_train_qfun = compile_function(
-            inputs=[yvar, qfun.input_var, actions, rewards],
+            inputs=[yvar, obs, action, rewards],
             outputs=qfun_loss,
             updates=qfun_updates
         )
         f_train_policy = compile_function(
-            inputs=[yvar, qfun.input_var, policy.input_var, actions, rewards],
+            inputs=[yvar, obs, action, rewards],
             outputs=policy_surr,
             updates=policy_updates
         )
@@ -219,9 +223,9 @@ class DPG(RLAlgorithm):
         target_qfun = opt_info["target_qfun"]
         target_policy = opt_info["target_policy"]
 
-        ys = f_y(next_states, next_states, rewards, terminal)
+        ys = f_y(next_states, rewards, terminal)
         qfun_loss = f_train_qfun(ys, states, actions, rewards)
-        policy_surr = f_train_policy(ys, states, states, actions, rewards)
+        policy_surr = f_train_policy(ys, states, actions, rewards)
 
         self.qfun_loss_averages.append(qfun_loss)
         self.policy_surr_averages.append(policy_surr)
