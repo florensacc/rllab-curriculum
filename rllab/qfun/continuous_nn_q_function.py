@@ -58,7 +58,7 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             num_units=1,
             W=lasagne.init.Uniform(-3e-3, 3e-3),
             b=lasagne.init.Uniform(-3e-3, 3e-3),
-            nonlinearity=NL.tanh,
+            nonlinearity=None,
             name="output"
         )
 

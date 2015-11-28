@@ -11,6 +11,7 @@ import rllab.misc.logger as logger
 import tensorfuse.tensor as TT
 import cPickle as pickle
 import numpy as np
+import pyprind
 
 
 class DPG(RLAlgorithm):
@@ -68,7 +69,7 @@ class DPG(RLAlgorithm):
             replay_pool_size=1000000,
             discount=0.99,
             max_path_length=500,
-            qfun_weight_decay=0.01,
+            qfun_weight_decay=0,# 0.01,
             qfun_update_method='adam',
             qfun_learning_rate=1e-4,
             policy_weight_decay=0,
@@ -104,6 +105,8 @@ class DPG(RLAlgorithm):
 
         self.qfun_loss_averages = []
         self.policy_surr_averages = []
+        self.q_averages = []
+        self.action_averages = []
 
     def start_worker(self, mdp, policy):
         parallel_sampler.populate_task(mdp, policy)
@@ -123,7 +126,9 @@ class DPG(RLAlgorithm):
         opt_info = self.init_opt(mdp, policy, qfun, vf)
         itr = 0
         for epoch in xrange(self.n_epochs):
-            for _ in xrange(self.epoch_length):
+            logger.push_prefix('epoch #%d | ' % epoch)
+            logger.log("Training started")
+            for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
                 # Execute policy
                 if terminal:
                     # Note that if the last time step ends an episode, the very
@@ -133,8 +138,13 @@ class DPG(RLAlgorithm):
                     es.episode_reset()
                 action = es.get_action(
                     itr, observation, policy=policy, qfun=qfun)
+
+                self.action_averages.append(action)
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
+
+                reward = reward * 0.1
+
                 pool.add_sample(observation, action, reward, terminal)
                 state, observation = next_state, next_observation
 
@@ -145,10 +155,12 @@ class DPG(RLAlgorithm):
                         itr, batch, qfun, policy, opt_info)
 
                 itr += 1
+            logger.log("Training finished")
             opt_info = self.evaluate(epoch, qfun, policy, opt_info)
             params = self.get_epoch_snapshot(epoch, qfun, policy, es, opt_info)
             logger.save_itr_params(epoch, params)
             logger.dump_tabular(with_prefix=False)
+            logger.pop_prefix()
 
     def init_opt(self, mdp, policy, qfun, vf):
         # First, create "target" policy and Q functions
@@ -161,6 +173,11 @@ class DPG(RLAlgorithm):
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
+        next_obs = TT.tensor(
+            'next_obs',
+            ndim=1+len(mdp.observation_shape),
+            dtype=mdp.observation_dtype
+        )
         rewards = TT.vector('rewards')
         terminals = TT.vector('terminals')
 
@@ -168,9 +185,9 @@ class DPG(RLAlgorithm):
 
         # compute the on-policy y values
         ys = rewards + (1 - terminals) * self.discount * \
-            target_qfun.get_qval_sym(obs, target_policy.get_action_sym(obs))
+            target_qfun.get_qval_sym(next_obs, target_policy.get_action_sym(next_obs))
         f_y = compile_function(
-            inputs=[obs, rewards, terminals],
+            inputs=[next_obs, rewards, terminals],
             outputs=ys
         )
 
@@ -181,7 +198,9 @@ class DPG(RLAlgorithm):
 
         qfun_weight_decay_term = self.qfun_weight_decay * \
             sum([TT.sum(TT.square(param)) for param in qfun.params])
-        qfun_loss = TT.mean(TT.square(yvar - qfun.get_qval_sym(obs, action)))
+
+        qval = qfun.get_qval_sym(obs, action)
+        qfun_loss = TT.mean(TT.square(yvar - qval))
         qfun_reg_loss = qfun_loss + qfun_weight_decay_term
 
         policy_weight_decay_term = self.policy_weight_decay * \
@@ -197,7 +216,7 @@ class DPG(RLAlgorithm):
 
         f_train_qfun = compile_function(
             inputs=[yvar, obs, action, rewards],
-            outputs=qfun_loss,
+            outputs=[qfun_loss, qval],
             updates=qfun_updates
         )
         f_train_policy = compile_function(
@@ -224,11 +243,12 @@ class DPG(RLAlgorithm):
         target_policy = opt_info["target_policy"]
 
         ys = f_y(next_states, rewards, terminal)
-        qfun_loss = f_train_qfun(ys, states, actions, rewards)
+        qfun_loss, qval = f_train_qfun(ys, states, actions, rewards)
         policy_surr = f_train_policy(ys, states, actions, rewards)
 
         self.qfun_loss_averages.append(qfun_loss)
         self.policy_surr_averages.append(policy_surr)
+        self.q_averages.append(qval)
 
         target_qfun.set_param_values(
             self.soft_target_tau * qfun.get_param_values() +
@@ -241,6 +261,7 @@ class DPG(RLAlgorithm):
         return opt_info
 
     def evaluate(self, epoch, qfun, policy, opt_info):
+        logger.log("Collecting samples for evaluation")
         paths = parallel_sampler.request_samples(
             policy_params=policy.get_param_values(),
             max_samples=self.eval_samples,
@@ -255,6 +276,8 @@ class DPG(RLAlgorithm):
         )
         average_q_loss = np.mean(self.qfun_loss_averages)
         average_policy_surr = np.mean(self.policy_surr_averages)
+        average_q = np.mean(np.concatenate(self.q_averages))
+        average_action = np.mean(np.square(np.concatenate(self.action_averages)))
 
         logger.record_tabular('Epoch', epoch)
         logger.record_tabular('AverageReturn', average_return)
@@ -264,9 +287,17 @@ class DPG(RLAlgorithm):
                               average_q_loss)
         logger.record_tabular('AveragePolicySurr',
                               average_policy_surr)
+        logger.record_tabular('AverageQ',
+                              average_q)
+        logger.record_tabular('AverageAction',
+                              average_action)
+
+
 
         self.qfun_loss_averages = []
         self.policy_surr_averages = []
+        self.q_averages = []
+        self.action_averages = []
 
         return opt_info
 

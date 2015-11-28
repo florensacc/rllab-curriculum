@@ -146,12 +146,14 @@ def run_experiment(argv):
         prev_mode = logger.get_snapshot_mode()
         logger.set_snapshot_dir(exp_dir)
         logger.set_snapshot_mode(args.snapshot_mode)
+        logger.push_prefix("[%s] " % args.exp_name)
 
         algo.train(**instances)
         logger.set_snapshot_mode(prev_mode)
         logger.set_snapshot_dir(prev_snapshot_dir)
         logger.remove_tabular_output(tabular_log_file)
         logger.remove_text_output(text_log_file)
+        logger.pop_prefix()
 
 if __name__ == "__main__":
     run_experiment(sys.argv)

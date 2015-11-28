@@ -22,7 +22,7 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
                   help='nonlinearity used for each hidden layer, can be one '
                        'of tanh, sigmoid')
     # pylint: disable=dangerous-default-value
-    def __init__(self, mdp, hidden_sizes=[32, 32], nonlinearity=NL.tanh):
+    def __init__(self, mdp, hidden_sizes=[400, 300], nonlinearity=NL.rectify):
         # pylint: enable=dangerous-default-value
         # create network
         if isinstance(nonlinearity, str):
@@ -37,13 +37,13 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
                 l_hidden,
                 num_units=hidden_size,
                 nonlinearity=nonlinearity,
-                W=lasagne.init.Normal(0.1),
+                W=lasagne.init.HeUniform(),
                 name="h%d" % idx)
         output_layer = L.DenseLayer(
             l_hidden,
             num_units=mdp.action_dim,
-            nonlinearity=None,
-            W=lasagne.init.Normal(0.01),
+            nonlinearity=NL.tanh,
+            W=lasagne.init.Uniform(-3e-3, 3e-3),#Normal(0.01),
             name="output")
 
         actions_var = L.get_output(output_layer)
