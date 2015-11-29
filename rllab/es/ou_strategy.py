@@ -2,7 +2,7 @@ from rllab.es.base import ExplorationStrategy
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import AttrDict
 from rllab.misc import autoargs
-from rllab.misc.serializable import Serializable
+from rllab.core.serializable import Serializable
 import numpy as np
 import numpy.random as nr
 

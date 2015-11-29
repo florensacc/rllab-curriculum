@@ -27,6 +27,7 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
         # create network
         if isinstance(nonlinearity, str):
             nonlinearity = locate('lasagne.nonlinearities.' + nonlinearity)
+        hidden_sizes = [100, 100]
         input_var = TT.matrix('input',
                               fixed_shape=(None, mdp.observation_shape[0]))
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]),

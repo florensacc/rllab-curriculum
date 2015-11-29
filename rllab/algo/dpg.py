@@ -69,7 +69,7 @@ class DPG(RLAlgorithm):
             replay_pool_size=1000000,
             discount=0.99,
             max_path_length=500,
-            qfun_weight_decay=0,# 0.01,
+            qfun_weight_decay=0.01,
             qfun_update_method='adam',
             qfun_learning_rate=1e-4,
             policy_weight_decay=0,

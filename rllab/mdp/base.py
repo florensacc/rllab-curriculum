@@ -1,7 +1,7 @@
 import tensorfuse as theano
 import tensorfuse.tensor as TT
 from rllab.misc.ext import cached_function, lazydict
-from rllab.misc.serializable import Serializable
+from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
 
 

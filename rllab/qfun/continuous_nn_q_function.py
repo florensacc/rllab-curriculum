@@ -10,13 +10,32 @@ from rllab.core.serializable import Serializable
 
 class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
 
-    # @autoargs.arg('hidden_sizes', type=int, nargs='*',
-    #               help='list of sizes for the fully-connected hidden layers')
-    # @autoargs.arg('nonlinearity', type=str,
-    #               help='nonlinearity used for each hidden layer, can be one '
-    #                    'of tanh, sigmoid')
+    @autoargs.arg('hidden_sizes', type=int, nargs='*',
+                  help='list of sizes for the fully-connected hidden layers')
+    @autoargs.arg('hidden_nl', type=str, nargs='*',
+                  help='list of nonlinearities for the hidden layers')
+    @autoargs.arg('hidden_W_init', type=str, nargs='*',
+                  help='list of initializers for W for the hidden layers')
+    @autoargs.arg('hidden_h_init', type=str, nargs='*',
+                  help='list of initializers for h for the hidden layers')
+    @autoargs.arg('output_nl', type=str,
+                  help='nonlinearity for the output layer')
+    @autoargs.arg('output_W_init', type=str,
+                  help='initializer for W for the output layer')
+    @autoargs.arg('output_h_init', type=str,
+                  help='initializer for h for the output layer')
     # pylint: disable=dangerous-default-value
-    def __init__(self, mdp):  # , hidden_sizes=[32, 32], nonlinearity=NL.tanh):
+    def __init__(
+            self,
+            mdp,
+            hidden_sizes=[100, 100],
+            hidden_nl=['lasagne.nonlinearities.rectify'],
+            hidden_W_init=['lasagne.init.HeUniform()'],
+            hidden_h_init=['lasagne.init.Constant(0.)'],
+            output_nl='None',
+            output_W_init='lasagne.init.Uniform(-3e-3, 3e-3)',
+            output_b_init='lasagne.init.Uniform(-3e-3, 3e-3)',
+            ):
         # pylint: enable=dangerous-default-value
         # create network
         # if isinstance(nonlinearity, str):
@@ -36,25 +55,27 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
                                 input_var=action_var)
         l_hidden1 = L.DenseLayer(
             l_obs,
-            num_units=400,
+            num_units=100,
             W=lasagne.init.HeUniform(),
             b=lasagne.init.Constant(0.),
             nonlinearity=NL.rectify,
             name="h1"
         )
+
+        l_with_action = L.ConcatLayer([l_hidden1, l_action])
+
         l_hidden2 = L.DenseLayer(
-            l_hidden1,
-            num_units=300,
+            l_with_action,
+            num_units=100,
             W=lasagne.init.HeUniform(),
             b=lasagne.init.Constant(0.),
             nonlinearity=NL.rectify,
             name="h2"
         )
 
-        l_with_action = L.ConcatLayer([l_hidden2, l_action])
 
         l_output = L.DenseLayer(
-            l_with_action,
+            l_hidden2,
             num_units=1,
             W=lasagne.init.Uniform(-3e-3, 3e-3),
             b=lasagne.init.Uniform(-3e-3, 3e-3),

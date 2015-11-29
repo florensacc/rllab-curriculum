@@ -1,7 +1,7 @@
 import numpy as np
 import tensorfuse as theano
 import time
-from rllab.misc.serializable import Serializable
+from rllab.core.serializable import Serializable
 from rllab.misc.ext import extract
 
 floatX = theano.config.floatX
