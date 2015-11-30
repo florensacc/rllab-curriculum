@@ -31,6 +31,7 @@ def _get_prefix(cls):
     from rllab.mdp.base import MDP
     from rllab.policy.base import Policy
     from rllab.vf.base import ValueFunction
+    from rllab.qf.base import QFunction
     from rllab.algo.base import Algorithm
 
     if hasattr(cls.__init__, '_autoargs_prefix'):
@@ -41,6 +42,8 @@ def _get_prefix(cls):
         return 'algo_'
     elif issubclass(cls, ValueFunction):
         return 'vf_'
+    elif issubclass(cls, QFunction):
+        return 'qf_'
     elif issubclass(cls, Policy):
         return 'policy_'
     else:

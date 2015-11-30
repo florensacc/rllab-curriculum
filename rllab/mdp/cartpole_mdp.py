@@ -47,7 +47,7 @@ class CartpoleMDP(SymbolicMDP, Serializable):
     @property
     @overrides
     def action_bounds(self):
-        bounds = np.array([1.])#self.max_force]) 
+        bounds = np.array([1.])  # self.max_force]) 
         return -bounds, bounds
 
     @property
@@ -112,7 +112,7 @@ class CartpoleMDP(SymbolicMDP, Serializable):
         thdot = TT.take(x,3,axis=x.ndim-1)
         ret = dict(z=z, zdot=zdot, th=th, thdot=thdot)
         if action:
-            u = TT.clip(action, -1., 1.) * self.max_force
+            u = TT.clip(action, -1, 1) * self.max_force
             u0 = TT.take(u,0,axis=u.ndim-1)
             return merge_dict(ret, dict(u=u, u0=u0))
         else:

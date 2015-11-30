@@ -51,7 +51,7 @@ def run_experiment(argv):
                         help='module path to the policy')
     parser.add_argument('--vf', type=str, default='no_value_function',
                         help='module path to the value function')
-    parser.add_argument('--qfun', type=str,
+    parser.add_argument('--qf', type=str,
                         help='module path to the Q function')
     parser.add_argument('--es', type=str,
                         help='module path to the exploration strategy')
@@ -91,7 +91,7 @@ def run_experiment(argv):
         from rllab.mdp.base import MDP
         from rllab.vf.base import ValueFunction
         from rllab.policy.base import Policy
-        from rllab.qfun.base import QFunction
+        from rllab.qf.base import QFunction
         from rllab.algo.base import Algorithm
         from rllab.es.base import ExplorationStrategy
 
@@ -104,9 +104,9 @@ def run_experiment(argv):
         if args.policy:
             classes['policy'] = load_class(
                 args.policy, Policy, ["rllab", "policy"])
-        if args.qfun:
-            classes['qfun'] = load_class(
-                args.qfun, QFunction, ["rllab", "qfun"])
+        if args.qf:
+            classes['qf'] = load_class(
+                args.qf, QFunction, ["rllab", "qf"])
         if args.es:
             classes['es'] = load_class(
                 args.es, ExplorationStrategy, ["rllab", "es"])
@@ -127,9 +127,9 @@ def run_experiment(argv):
         if args.policy:
             instances['policy'] = instantiate(
                 more_args, classes['policy'], instances['mdp'])
-        if args.qfun:
-            instances['qfun'] = instantiate(
-                more_args, classes['qfun'], instances['mdp'])
+        if args.qf:
+            instances['qf'] = instantiate(
+                more_args, classes['qf'], instances['mdp'])
         if args.es:
             instances['es'] = instantiate(
                 more_args, classes['es'], instances['mdp'])

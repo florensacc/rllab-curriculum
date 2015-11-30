@@ -2,6 +2,7 @@ import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne
 import tensorfuse.tensor as TT
+import itertools
 from pydoc import locate
 from rllab.policy.base import DeterministicPolicy
 from rllab.core.lasagne_powered import LasagnePowered
@@ -18,44 +19,82 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
 
     @autoargs.arg('hidden_sizes', type=int, nargs='*',
                   help='list of sizes for the fully-connected hidden layers')
-    @autoargs.arg('nonlinearity', type=str,
-                  help='nonlinearity used for each hidden layer, can be one '
-                       'of tanh, sigmoid')
+    @autoargs.arg('hidden_nl', type=str, nargs='*',
+                  help='list of nonlinearities for the hidden layers')
+    @autoargs.arg('hidden_W_init', type=str, nargs='*',
+                  help='list of initializers for W for the hidden layers')
+    @autoargs.arg('hidden_b_init', type=str, nargs='*',
+                  help='list of initializers for b for the hidden layers')
+    @autoargs.arg('output_nl', type=str,
+                  help='nonlinearity for the output layer')
+    @autoargs.arg('output_W_init', type=str,
+                  help='initializer for W for the output layer')
+    @autoargs.arg('output_b_init', type=str,
+                  help='initializer for b for the output layer')
     # pylint: disable=dangerous-default-value
-    def __init__(self, mdp, hidden_sizes=[400, 300], nonlinearity=NL.rectify):
+    def __init__(
+            self,
+            mdp,
+            hidden_sizes=[100, 100],
+            hidden_nl=['lasagne.nonlinearities.rectify'],
+            hidden_W_init=['lasagne.init.HeUniform()'],
+            hidden_b_init=['lasagne.init.Constant(0.)'],
+            output_nl='None',
+            output_W_init='lasagne.init.Uniform(-3e-3, 3e-3)',
+            output_b_init='lasagne.init.Uniform(-3e-3, 3e-3)'):
         # pylint: enable=dangerous-default-value
         # create network
-        if isinstance(nonlinearity, str):
-            nonlinearity = locate('lasagne.nonlinearities.' + nonlinearity)
-        hidden_sizes = [100, 100]
         input_var = TT.matrix('input',
                               fixed_shape=(None, mdp.observation_shape[0]))
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]),
                                input_var=input_var)
+
+        if len(hidden_nl) == 1:
+            hidden_nl *= len(hidden_sizes)
+        assert len(hidden_nl) == len(hidden_sizes)
+
+        if len(hidden_W_init) == 1:
+            hidden_W_init *= len(hidden_sizes)
+        assert len(hidden_W_init) == len(hidden_sizes)
+
+        if len(hidden_b_init) == 1:
+            hidden_b_init *= len(hidden_sizes)
+        assert len(hidden_b_init) == len(hidden_sizes)
+
         l_hidden = l_input
-        for idx, hidden_size in enumerate(hidden_sizes):
+
+        for idx, size, nl, W_init, b_init in zip(
+                itertools.count(), hidden_sizes, hidden_nl,
+                hidden_W_init, hidden_b_init):
             l_hidden = L.DenseLayer(
                 l_hidden,
-                num_units=hidden_size,
-                nonlinearity=nonlinearity,
-                W=lasagne.init.HeUniform(),
-                name="h%d" % idx)
-        output_layer = L.DenseLayer(
+                num_units=size,
+                W=eval(W_init),
+                b=eval(b_init),
+                nonlinearity=eval(nl),
+                name="h%d" % idx
+            )
+
+        l_output = L.DenseLayer(
             l_hidden,
-            num_units=mdp.action_dim,
-            nonlinearity=NL.tanh,
-            W=lasagne.init.Uniform(-3e-3, 3e-3),#Normal(0.01),
-            name="output")
+            num_units=1,
+            W=eval(output_W_init),
+            b=eval(output_b_init),
+            nonlinearity=eval(output_nl),
+            name="output"
+        )
 
-        actions_var = L.get_output(output_layer)
+        action_var = L.get_output(l_output)
 
-        self._output_layer = output_layer
+        self._output_layer = l_output
 
-        self._f_actions = compile_function([input_var], actions_var)
+        self._f_actions = compile_function([input_var], action_var)
 
         super(MeanNNPolicy, self).__init__(mdp)
-        LasagnePowered.__init__(self, [output_layer])
-        Serializable.__init__(self, mdp, hidden_sizes, nonlinearity)
+        LasagnePowered.__init__(self, [l_output])
+        Serializable.__init__(
+            self, mdp, hidden_sizes, hidden_nl, hidden_W_init, hidden_b_init,
+            output_nl, output_W_init, output_b_init)
 
     @property
     @overrides
