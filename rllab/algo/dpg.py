@@ -156,9 +156,11 @@ class DPG(RLAlgorithm):
 
                 itr += 1
             logger.log("Training finished")
-            opt_info = self.evaluate(epoch, qf, policy, opt_info)
-            params = self.get_epoch_snapshot(epoch, qf, policy, es, opt_info)
-            logger.save_itr_params(epoch, params)
+            if pool.size >= self.min_pool_size:
+                opt_info = self.evaluate(epoch, qf, policy, opt_info)
+                params = self.get_epoch_snapshot(
+                    epoch, qf, policy, es, opt_info)
+                logger.save_itr_params(epoch, params)
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
 

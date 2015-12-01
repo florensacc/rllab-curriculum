@@ -46,6 +46,9 @@ def run_experiment(argv):
                         help='module path to the algorithm')
     parser.add_argument('--mdp', type=str, metavar='MDP_PATH',
                         help='module path to the mdp class')
+    parser.add_argument('--normalize_mdp', action='store_true',
+                        help="Whether to normalize the mdp's actions to take "
+                             "value between -1 and 1")
     # These are optional, depending on the algorithm selected
     parser.add_argument('--policy', type=str, metavar='POLICY_PATH',
                         help='module path to the policy')
@@ -124,6 +127,9 @@ def run_experiment(argv):
 
         instances = dict()
         instances['mdp'] = instantiate(more_args, classes['mdp'])
+        if args.normalize_mdp:
+            from rllab.mdp.normalized_mdp import normalize
+            instances['mdp'] = normalize(instances['mdp'])
         if args.policy:
             instances['policy'] = instantiate(
                 more_args, classes['policy'], instances['mdp'])

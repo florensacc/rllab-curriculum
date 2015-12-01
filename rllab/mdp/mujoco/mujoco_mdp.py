@@ -7,6 +7,7 @@ import random
 from rllab.mdp.base import ControlMDP
 from rllab.mjcapi.rocky_mjc import MjModel, MjViewer
 from rllab.misc.overrides import overrides
+import tensorfuse as theano
 
 class MujocoMDP(ControlMDP):
 
@@ -33,6 +34,11 @@ class MujocoMDP(ControlMDP):
     @overrides
     def observation_shape(self):
         return self.get_current_obs().shape
+
+    @property
+    @overrides
+    def observation_dtype(self):
+        return theano.config.floatX
 
     @property
     @overrides

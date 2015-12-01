@@ -77,7 +77,7 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
 
         l_output = L.DenseLayer(
             l_hidden,
-            num_units=1,
+            num_units=mdp.action_dim,
             W=eval(output_W_init),
             b=eval(output_b_init),
             nonlinearity=eval(output_nl),
