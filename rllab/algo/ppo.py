@@ -68,13 +68,17 @@ class PPO(BatchPolopt):
 
     @overrides
     def init_opt(self, mdp, policy, vf):
-        input_var = policy.input_var
+        input_var = TT.tensor(
+            'input',
+            ndim=1+len(mdp.observation_shape),
+            dtype=mdp.observation_dtype
+        )
         advantage_var = TT.vector('advantage')
         old_pdist_var = TT.matrix('old_pdist')
-        action_var = policy.new_action_var('action')
+        action_var = TT.matrix('action', dtype=mdp.action_dtype)
         penalty_var = TT.scalar('penalty')
 
-        pdist_var = policy.pdist_var
+        pdist_var = policy.get_pdist_sym(input_var)
         kl = policy.kl(old_pdist_var, pdist_var)
         lr = policy.likelihood_ratio(old_pdist_var, pdist_var, action_var)
         mean_kl = TT.mean(kl)

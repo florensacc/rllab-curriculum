@@ -4,9 +4,9 @@ from itertools import imap
 import numpy as np
 import operator
 import sys
-from misc.console import type_hint
-from misc.overrides import overrides
-from core.serializable import Serializable
+from rllab.misc.overrides import overrides
+from rllab.misc import autoargs
+from rllab.core.serializable import Serializable
 from contextlib import contextmanager
 
 
@@ -18,6 +18,8 @@ def sequence_equal(s1, s2):
 
 class AtariMDP(MDP, Serializable):
 
+    @autoargs.arg('rom_path', type=str,
+                  help='path to the atari ROM file')
     def __init__(
             self, rom_path, obs_type='ram', terminate_per_life=False,
             horizon=18000/4, frame_skip=4):
@@ -81,6 +83,16 @@ class AtariMDP(MDP, Serializable):
 
     @property
     @overrides
+    def action_dtype(self):
+        return 'uint8'
+
+    @property
+    @overrides
+    def observation_dtype(self):
+        return 'float32'
+
+    @property
+    @overrides
     def observation_shape(self):
         return self._observation_shape
 
@@ -103,5 +115,6 @@ class AtariMDP(MDP, Serializable):
         ram_size = self._ale.getRAMSize()
         ram = np.zeros(ram_size, dtype=np.uint8)
         self._ale.getRAM(ram)
-        indices = [3*16 + 3, 3*16 + 12, 3*16 + 1, 3*16 + 6, 0+12, 3*16 + 8,3*16 + 2, 1*16 + 5]
-        return np.concatenate(map(EYE_256.__getitem__, ram[indices]))
+        return ram / 255.0 - 0.5
+        # indices = [3*16 + 3, 3*16 + 12, 3*16 + 1, 3*16 + 6, 0+12, 3*16 + 8,3*16 + 2, 1*16 + 5]
+        # return np.concatenate(map(EYE_256.__getitem__, ram[indices]))
