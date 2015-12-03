@@ -3,7 +3,6 @@ from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
 import lasagne.layers as L
-import tensorfuse as theano
 
 
 class LasagnePowered(Parameterized):
@@ -14,10 +13,10 @@ class LasagnePowered(Parameterized):
             trainable=True
         ), key=lambda x: x.name)
         self._param_shapes = \
-            [theano.compat.get_value(param, borrow=True).shape
+            [param.get_value(borrow=True).shape
              for param in self.params]
         self._param_dtypes = \
-            [theano.compat.get_value(param, borrow=True).dtype
+            [param.get_value(borrow=True).dtype
              for param in self.params]
 
     @property
@@ -38,7 +37,7 @@ class LasagnePowered(Parameterized):
     @overrides
     def get_param_values(self):
         return flatten_tensors(
-            [theano.compat.get_value(param, borrow=True)
+            [param.get_value(borrow=True)
              for param in self.params]
         )
 
@@ -49,7 +48,7 @@ class LasagnePowered(Parameterized):
                 self.params,
                 self.param_dtypes,
                 param_values):
-            theano.compat.set_value(param, value.astype(dtype))
+            param.set_value(value.astype(dtype))
 
     def __getstate__(self):
         d = Serializable.__getstate__(self)

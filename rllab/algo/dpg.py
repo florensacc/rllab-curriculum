@@ -4,11 +4,11 @@ from rllab.algo.first_order_method import parse_update_method
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
 from rllab.misc.special import discount_return
-from rllab.misc.ext import compile_function
+from rllab.misc.ext import compile_function, new_tensor
 from rllab.sampler import parallel_sampler
 from rllab.plotter import plotter
 import rllab.misc.logger as logger
-import tensorfuse.tensor as TT
+import theano.tensor as TT
 import cPickle as pickle
 import numpy as np
 import pyprind
@@ -170,20 +170,18 @@ class DPG(RLAlgorithm):
         target_qf = pickle.loads(pickle.dumps(qf))
 
         # y need to be computed first
-        obs = TT.tensor(
+        obs = new_tensor(
             'obs',
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
-        next_obs = TT.tensor(
+        next_obs = new_tensor(
             'next_obs',
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
         rewards = TT.vector('rewards')
         terminals = TT.vector('terminals')
-
-        # obs = TT.tensor('observations', ndim=len(mdp.observation_shape)+1)
 
         # compute the on-policy y values
         ys = rewards + (1 - terminals) * self.discount * \

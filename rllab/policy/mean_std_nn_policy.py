@@ -2,8 +2,8 @@ import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne
 import numpy as np
-import tensorfuse as theano
-import tensorfuse.tensor as TT
+import theano
+import theano.tensor as TT
 from pydoc import locate
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
@@ -31,8 +31,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         # create network
         if isinstance(nonlinearity, str):
             nonlinearity = locate('lasagne.nonlinearities.' + nonlinearity)
-        input_var = TT.matrix('input',
-                              fixed_shape=(None, mdp.observation_shape[0]))
+        input_var = TT.matrix('input')
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]),
                                input_var=input_var)
         l_hidden = l_input

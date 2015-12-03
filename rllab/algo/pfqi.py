@@ -7,8 +7,8 @@ import scipy
 from misc.tensor_utils import flatten_tensors
 import misc.logger as logger
 
-import tensorfuse as theano
-import tensorfuse.tensor as T
+import theano
+import theano.tensor as T
 
 def request_samples(eps_policy, epsilon, n_samples, max_path_length):
     eps_policy.epsilon = epsilon

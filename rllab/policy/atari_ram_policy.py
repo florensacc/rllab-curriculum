@@ -2,8 +2,8 @@ import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne
 import numpy as np
-import tensorfuse as theano
-import tensorfuse.tensor as T
+import theano
+import theano.tensor as T
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides

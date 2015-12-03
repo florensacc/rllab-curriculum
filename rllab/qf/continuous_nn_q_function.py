@@ -3,13 +3,14 @@ import lasagne.layers as L
 import lasagne.nonlinearities
 # Needed for eval to work
 import lasagne.init
-import tensorfuse.tensor as TT
+import theano.tensor as TT
 import itertools
 
 from rllab.qf.base import ContinuousQFunction
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
+from rllab.misc.ext import new_tensor
 
 
 class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
@@ -43,7 +44,7 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             output_W_init='lasagne.init.Uniform(-3e-3, 3e-3)',
             output_b_init='lasagne.init.Uniform(-3e-3, 3e-3)'):
         # pylint: enable=dangerous-default-value
-        obs_var = TT.tensor(
+        obs_var = new_tensor(
             'obs',
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype

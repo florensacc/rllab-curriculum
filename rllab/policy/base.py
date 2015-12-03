@@ -1,7 +1,8 @@
 from rllab.misc import autoargs
+from rllab.misc.ext import new_tensor
 from rllab.core.parameterized import Parameterized
-import tensorfuse as theano
-import tensorfuse.tensor as TT
+import theano
+import theano.tensor as TT
 
 
 class Policy(Parameterized):
@@ -72,7 +73,7 @@ class StochasticPolicy(Policy):
     # Only needed for vanilla policy gradient & guided policy search
     def get_log_prob(self, observations, actions):
         if self._f_log_prob is None:
-            input_var = TT.tensor(
+            input_var = new_tensor(
                 'input',
                 ndim=len(self.observation_shape) + 1,
                 dtype=self.observation_dtype

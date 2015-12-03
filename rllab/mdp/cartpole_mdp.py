@@ -1,5 +1,5 @@
-import tensorfuse as theano
-import tensorfuse.tensor as TT
+import theano
+import theano.tensor as TT
 import numpy as np
 from rllab.mdp.base import SymbolicMDP
 from rllab.core.serializable import Serializable
