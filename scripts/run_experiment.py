@@ -8,6 +8,7 @@ import sys
 import os.path as osp
 import datetime
 import dateutil.tz
+import lasagne
 import ast
 
 
@@ -26,14 +27,6 @@ def run_interactive():
 
 
 def run_experiment(argv):
-    # last_args = None
-    # mkdir_p(osp.expanduser('~/.rllab'))
-    # cache_file = osp.expanduser('~/.rllab/experiment_args_cache.pkl')
-    # try:
-    #     with open(cache_file, 'rb') as f:
-    #         last_args = pickle.load(f)
-    # except Exception:
-    #     pass
 
     default_log_dir = osp.join(config.PROJECT_PATH, 'data')
     now = datetime.datetime.now(dateutil.tz.tzlocal())
@@ -80,8 +73,21 @@ def run_experiment(argv):
                         help='Name of the text log file.')
     parser.add_argument('--plot', type=ast.literal_eval, default=False,
                         help='Whether to plot the iteration results')
+    parser.add_argument('--seed', type=int, default=False,
+                                    help='Random seed for numpy')
 
     args = parser.parse_known_args(argv[1:])[0]
+
+    if args.seed is not None:
+        import numpy as np
+        np.random.seed(args.seed)
+        lasagne.random.set_rng(np.random.RandomState(args.seed))
+        print(
+            colorize(
+                'using seed %s' % (str(args.seed)),
+                'green'
+            )
+        )
 
     if args.interactive:
         run_interactive()
@@ -98,6 +104,7 @@ def run_experiment(argv):
         from rllab.qf.base import QFunction
         from rllab.algo.base import Algorithm
         from rllab.es.base import ExplorationStrategy
+
 
         # Save the arguments which might be useful for later use
         # with open(cache_file, 'w+b') as f:

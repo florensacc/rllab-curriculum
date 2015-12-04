@@ -94,9 +94,22 @@ class PPO(BatchPolopt):
             penalty_var
         ]
 
+        def detect_nan(i, node, fn):
+            for output in fn.outputs:
+                if (not isinstance(output[0], np.random.RandomState) and
+                    np.isnan(output[0]).any()):
+                    print '*** NaN detected ***'
+                    theano.printing.debugprint(node)
+                    print 'Inputs : %s' % [input[0] for input in fn.inputs]
+                    print 'Outputs: %s' % [output[0] for output in fn.outputs]
+                    raise ValueError('lala')
+                    break
+
         grads = theano.gradient.grad(surr_obj, policy.params)
-        f_surr_kl = compile_function(
-            input_list, [surr_obj, surr_loss, mean_kl])
+        # f_surr_kl = theano.function(
+        #     input_list, [surr_obj, surr_loss, mean_kl],mode=theano.compile.MonitorMode(
+        #                                 post_func=detect_nan),allow_input_downcast=True, on_unused_input='ignore')
+        f_surr_kl = compile_function(input_list, [surr_obj, surr_loss, mean_kl])
         f_grads = compile_function(input_list, grads)
         penalty = self.initial_penalty
         return dict(
@@ -114,6 +127,7 @@ class PPO(BatchPolopt):
             samples_data,
             "observations", "advantages", "pdists", "actions"
         ))
+
         cur_params = policy.get_param_values()
 
         def evaluate_cost(penalty):
