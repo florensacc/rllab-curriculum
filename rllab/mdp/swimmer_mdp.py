@@ -2,8 +2,8 @@
 
 import numpy as np
 from rllab.mdp.base import SymbolicMDP
-import tensorfuse as theano
-import tensorfuse.tensor as TT
+import theano
+import theano.tensor as TT
 from rllab.misc.overrides import overrides
 from rllab.misc.viewer2d import Viewer2D, Colors
 from rllab.misc.ext import extract

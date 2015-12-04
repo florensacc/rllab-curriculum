@@ -1,4 +1,4 @@
-import tensorfuse.tensor as TT
+import theano.tensor as TT
 from rllab.misc import logger, autoargs
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract, compile_function

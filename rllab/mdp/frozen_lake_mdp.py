@@ -1,6 +1,6 @@
 import numpy as np
 from .base import MDP
-import tensorfuse as theano
+import theano
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs

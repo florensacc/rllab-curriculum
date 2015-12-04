@@ -5,7 +5,7 @@ from rllab.misc.special import weighted_sample
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import compile_function
 import numpy as np
-import tensorfuse.tensor as TT
+import theano.tensor as TT
 import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL

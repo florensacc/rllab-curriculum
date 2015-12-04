@@ -7,7 +7,7 @@ import random
 from rllab.mdp.base import ControlMDP
 from rllab.mjcapi.rocky_mjc import MjModel, MjViewer
 from rllab.misc.overrides import overrides
-import tensorfuse as theano
+import theano
 
 class MujocoMDP(ControlMDP):
 

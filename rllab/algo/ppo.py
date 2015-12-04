@@ -1,11 +1,11 @@
 from rllab.misc.tensor_utils import flatten_tensors
-from rllab.misc.ext import merge_dict, compile_function, extract
+from rllab.misc.ext import merge_dict, compile_function, extract, new_tensor
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 from rllab.algo.batch_polopt import BatchPolopt
 import rllab.misc.logger as logger
-import tensorfuse as theano
-import tensorfuse.tensor as TT
+import theano
+import theano.tensor as TT
 from pydoc import locate
 import numpy as np
 
@@ -68,7 +68,7 @@ class PPO(BatchPolopt):
 
     @overrides
     def init_opt(self, mdp, policy, vf):
-        input_var = TT.tensor(
+        input_var = new_tensor(
             'input',
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype

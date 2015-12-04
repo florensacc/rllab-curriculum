@@ -1,7 +1,7 @@
 from qfunc import LasagneQFunction
 from core.serializable import Serializable
-import tensorfuse as theano
-import tensorfuse.tensor as T
+import theano
+import theano.tensor as T
 import lasagne.layers as L
 import lasagne
 

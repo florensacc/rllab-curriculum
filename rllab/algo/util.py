@@ -1,5 +1,5 @@
 import numpy as np
-import tensorfuse as theano
+import theano
 import time
 from rllab.core.serializable import Serializable
 from rllab.misc.ext import extract

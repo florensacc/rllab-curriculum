@@ -1,6 +1,6 @@
 import lasagne.layers as L
 import lasagne
-import tensorfuse.tensor as T
+import theano.tensor as T
 
 class ParamLayer(L.Layer):
     def __init__(self, incoming, num_units, param=lasagne.init.Constant(0.), trainable=True, **kwargs):

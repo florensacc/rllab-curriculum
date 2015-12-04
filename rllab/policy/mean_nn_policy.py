@@ -1,7 +1,7 @@
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne
-import tensorfuse.tensor as TT
+import theano.tensor as TT
 import itertools
 from pydoc import locate
 from rllab.policy.base import DeterministicPolicy

@@ -1,7 +1,7 @@
-import tensorfuse.tensor as TT
+import theano.tensor as TT
 from rllab.misc import logger, autoargs
 from rllab.misc.overrides import overrides
-from rllab.misc.ext import compile_function
+from rllab.misc.ext import compile_function, new_tensor
 from rllab.algo.util import center_advantages
 from rllab.algo.batch_polopt import BatchPolopt
 from rllab.algo.first_order_method import FirstOrderMethod
@@ -27,7 +27,7 @@ class RSVPG(BatchPolopt, FirstOrderMethod):
 
     @overrides
     def init_opt(self, mdp, policy, vf):
-        input_var = TT.tensor(
+        input_var = new_tensor(
             'input',
             ndim=len(mdp.observation_shape)+1,
             dtype=mdp.observation_dtype
