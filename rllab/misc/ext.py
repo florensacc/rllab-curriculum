@@ -1,8 +1,6 @@
 from path import Path
 import sys
 import cPickle as pickle
-import theano
-import theano.tensor as TT
 sys.setrecursionlimit(50000)
 
 
@@ -29,6 +27,7 @@ def compact(x):
 
 
 def cached_function(inputs, outputs):
+    import theano
     if hasattr(outputs, '__len__'):
         hash_content = tuple(map(theano.pp, outputs))
     else:
@@ -99,6 +98,7 @@ def scanr(f, l, base=None):
 
 
 def compile_function(inputs=None, outputs=None, updates=None):
+    import theano
     return theano.function(
         inputs=inputs,
         outputs=outputs,
@@ -109,6 +109,7 @@ def compile_function(inputs=None, outputs=None, updates=None):
 
 
 def new_tensor(name, ndim, dtype):
+    import theano.tensor as TT
     return TT.TensorType(dtype, (False,)*ndim)(name)
 
 

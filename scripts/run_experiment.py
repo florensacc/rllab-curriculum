@@ -8,7 +8,6 @@ import sys
 import os.path as osp
 import datetime
 import dateutil.tz
-import lasagne
 import ast
 
 
@@ -78,17 +77,6 @@ def run_experiment(argv):
 
     args = parser.parse_known_args(argv[1:])[0]
 
-    if args.seed is not None:
-        import numpy as np
-        np.random.seed(args.seed)
-        lasagne.random.set_rng(np.random.RandomState(args.seed))
-        print(
-            colorize(
-                'using seed %s' % (str(args.seed)),
-                'green'
-            )
-        )
-
     if args.interactive:
         run_interactive()
     else:
@@ -105,6 +93,17 @@ def run_experiment(argv):
         from rllab.algo.base import Algorithm
         from rllab.es.base import ExplorationStrategy
 
+        if args.seed is not None:
+            import numpy as np
+            import lasagne
+            np.random.seed(args.seed)
+            lasagne.random.set_rng(np.random.RandomState(args.seed))
+            print(
+                colorize(
+                    'using seed %s' % (str(args.seed)),
+                    'green'
+                )
+            )
 
         # Save the arguments which might be useful for later use
         # with open(cache_file, 'w+b') as f:
