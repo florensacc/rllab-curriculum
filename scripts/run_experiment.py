@@ -73,8 +73,8 @@ def run_experiment(argv):
                         help='Name of the text log file.')
     parser.add_argument('--plot', type=ast.literal_eval, default=False,
                         help='Whether to plot the iteration results')
-    parser.add_argument('--seed', type=int, default=False,
-                                    help='Random seed for numpy')
+    parser.add_argument('--seed', type=int,
+                        help='Random seed for numpy')
 
     args = parser.parse_known_args(argv[1:])[0]
 
