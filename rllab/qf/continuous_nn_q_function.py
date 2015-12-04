@@ -108,7 +108,11 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
 
         super(ContinuousNNQFunction, self).__init__(mdp)
         LasagnePowered.__init__(self, [l_output])
-        Serializable.__init__(self, mdp)
+        Serializable.__init__(
+            self, mdp=mdp, hidden_sizes=hidden_sizes, hidden_nl=hidden_nl,
+            hidden_W_init=hidden_W_init, hidden_b_init=hidden_b_init,
+            action_merge_layer=action_merge_layer, output_nl=output_nl,
+            output_W_init=output_W_init, output_b_init=output_b_init)
 
     def get_qval_sym(self, obs_var, action_var):
         qvals = L.get_output(

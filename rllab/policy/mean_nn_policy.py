@@ -93,8 +93,10 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
         super(MeanNNPolicy, self).__init__(mdp)
         LasagnePowered.__init__(self, [l_output])
         Serializable.__init__(
-            self, mdp, hidden_sizes, hidden_nl, hidden_W_init, hidden_b_init,
-            output_nl, output_W_init, output_b_init)
+            self, mdp=mdp, hidden_sizes=hidden_sizes, hidden_nl=hidden_nl,
+            hidden_W_init=hidden_W_init, hidden_b_init=hidden_b_init,
+            output_nl=output_nl, output_W_init=output_W_init,
+            output_b_init=output_b_init)
 
     @property
     @overrides

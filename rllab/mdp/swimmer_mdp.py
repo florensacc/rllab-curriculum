@@ -177,6 +177,16 @@ class SwimmerMDP(SymbolicMDP):
         return -bounds, bounds
 
     @property
+    @overrides
+    def action_dtype(self):
+        return theano.config.floatX
+
+    @property
+    @overrides
+    def observation_dtype(self):
+        return theano.config.floatX
+
+    @property
     def action_dim(self):
         return self._action_dim
 
@@ -214,7 +224,7 @@ class SwimmerMDP(SymbolicMDP):
         dist = TT.sum(xrel ** 2)
         return (
             - self.cx * dist / (TT.sqrt(dist) + 1) - self.cu * TT.sum(action ** 2)
-        )
+        ) / 400.0
 
     @overrides
     def cost_sym(self, state, action):

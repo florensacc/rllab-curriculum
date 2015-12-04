@@ -8,6 +8,7 @@ import sys
 import os.path as osp
 import datetime
 import dateutil.tz
+import ast
 
 
 def instantiate(argvals, cls, *args, **kwargs):
@@ -77,7 +78,7 @@ def run_experiment(argv):
                              '.csv).')
     parser.add_argument('--text_log_file', type=str, default='debug.log',
                         help='Name of the text log file.')
-    parser.add_argument('--plot', type=bool, default=False,
+    parser.add_argument('--plot', type=ast.literal_eval, default=False,
                         help='Whether to plot the iteration results')
 
     args = parser.parse_known_args(argv[1:])[0]
@@ -154,7 +155,8 @@ def run_experiment(argv):
         logger.set_snapshot_mode(args.snapshot_mode)
         logger.push_prefix("[%s] " % args.exp_name)
 
-        algo.train(**instances)
+        for _ in algo.train(**instances):
+            pass
         logger.set_snapshot_mode(prev_mode)
         logger.set_snapshot_dir(prev_snapshot_dir)
         logger.remove_tabular_output(tabular_log_file)

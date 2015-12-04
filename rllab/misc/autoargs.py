@@ -1,5 +1,6 @@
 from rllab.misc.console import colorize
 from rllab.misc.ext import merge_dict
+import ast
 
 
 # pylint: disable=redefined-builtin
@@ -61,15 +62,29 @@ def _get_info(cls_or_fn):
         return {}
 
 
+def _t_or_f(arg):
+    ua = str(arg).upper()
+    if ua == 'TRUE'[:len(ua)]:
+       return True
+    elif ua == 'FALSE'[:len(ua)]:
+       return False
+    else:
+        raise ValueError('Unrecognized boolean value: %s' % arg)
+
+
 def add_args(_):
     def _add_args(cls, parser):
         args_info = _get_info(cls)
         prefix_ = _get_prefix(cls)
         for arg_name, arg_info in args_info.iteritems():
+            type = arg_info['type']
+            # unfortunately boolean type doesn't work 
+            if type == bool:
+                type = _t_or_f
             parser.add_argument(
                 '--' + prefix_ + arg_name,
                 help=arg_info['help'],
-                type=arg_info['type'],
+                type=type,
                 nargs=arg_info['nargs'])
     return _add_args
 

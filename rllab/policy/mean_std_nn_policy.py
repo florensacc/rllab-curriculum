@@ -52,7 +52,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         log_std_layer = ParamLayer(
             l_input,
             num_units=mdp.action_dim,
-            param=lasagne.init.Constant(0),
+            param=lasagne.init.Constant(0.),
             name="output_log_std")
 
         mean_var = L.get_output(mean_layer)
@@ -72,7 +72,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     def get_pdist_sym(self, input_var):
         mean_var = L.get_output(self._mean_layer, input_var)
-        log_std_var = L.get_output(self._mean_layer, input_var)
+        log_std_var = L.get_output(self._log_std_layer, input_var)
         return TT.concatenate([mean_var, log_std_var], axis=1)
 
     # Computes D_KL(p_old || p_new)
@@ -132,7 +132,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     def get_log_prob_sym(self, input_var, action_var):
         mean_var = L.get_output(self._mean_layer, input_var)
-        log_std_var = L.get_output(self._mean_layer, input_var)
+        log_std_var = L.get_output(self._log_std_layer, input_var)
         stdn = (action_var - mean_var)
         stdn /= TT.exp(log_std_var)
         return - TT.sum(log_std_var, axis=1) - \
