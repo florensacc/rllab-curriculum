@@ -111,6 +111,7 @@ def dump_tabular(*args, **kwargs):
             writer.writeheader()
             _tabular_header_written.add(tabular_fd)
         writer.writerow(tabular_dict)
+        tabular_fd.flush()
     del _tabular[:]
 
 
