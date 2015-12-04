@@ -1,6 +1,6 @@
-from .mujoco_mdp import MujocoMDP
+from rllab.mdp.mujoco_mdp import MujocoMDP
 import numpy as np
-from rllab.misc.serializable import Serializable
+from rllab.core.serializable import Serializable
 
 # states: [
 # 0: z-coord,
