@@ -1,11 +1,10 @@
 from rllab.misc.console import colorize
 from rllab.misc.ext import merge_dict
-import ast
 
 
 # pylint: disable=redefined-builtin
 # pylint: disable=protected-access
-def arg(name, type=None, help=None, nargs=None, mapper=None):
+def arg(name, type=None, help=None, nargs=None, mapper=None, choices=None):
     def wrap(fn):
         assert fn.__name__ == '__init__'
         if not hasattr(fn, '_autoargs_info'):
@@ -14,6 +13,7 @@ def arg(name, type=None, help=None, nargs=None, mapper=None):
             type=type,
             help=help,
             nargs=nargs,
+            choices=choices,
             mapper=mapper
         )
         return fn
@@ -62,14 +62,14 @@ def _get_info(cls_or_fn):
         return {}
 
 
-def _t_or_f(arg):
-    ua = str(arg).upper()
+def _t_or_f(s):
+    ua = str(s).upper()
     if ua == 'TRUE'[:len(ua)]:
-       return True
+        return True
     elif ua == 'FALSE'[:len(ua)]:
-       return False
+        return False
     else:
-        raise ValueError('Unrecognized boolean value: %s' % arg)
+        raise ValueError('Unrecognized boolean value: %s' % s)
 
 
 def add_args(_):
@@ -78,12 +78,13 @@ def add_args(_):
         prefix_ = _get_prefix(cls)
         for arg_name, arg_info in args_info.iteritems():
             type = arg_info['type']
-            # unfortunately boolean type doesn't work 
+            # unfortunately boolean type doesn't work
             if type == bool:
                 type = _t_or_f
             parser.add_argument(
                 '--' + prefix_ + arg_name,
                 help=arg_info['help'],
+                choices=arg_info['choices'],
                 type=type,
                 nargs=arg_info['nargs'])
     return _add_args

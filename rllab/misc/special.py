@@ -1,5 +1,6 @@
 import numpy as np
 import scipy
+import theano.tensor.nnet
 
 
 def weighted_sample(weights, objects):
@@ -19,6 +20,10 @@ def softmax(x):
     shifted = x - np.max(x, axis=1, keepdims=True)
     expx = np.exp(shifted)
     return expx / np.sum(expx, axis=1, keepdims=True)
+
+
+def softmax_sym(x):
+    return theano.tensor.nnet.softmax(x)
 
 
 # compute entropy for each row
