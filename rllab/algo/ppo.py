@@ -36,6 +36,11 @@ class PPO(BatchPolopt):
                   help="Maximum number of batch optimization iterations.")
     @autoargs.arg("max_penalty_itr", type=int,
                   help="Maximum number of penalty iterations.")
+    @autoargs.arg("binary_search_penalty", type=bool,
+                  help="Whether to search for more precise penalty after the "
+                       "initial exponentially adjusted value.")
+    @autoargs.arg("max_penalty_bs_itr", type=int,
+                  help="Maximum number of binary search iterations.")
     @autoargs.arg("adapt_penalty", type=bool,
                   help="Whether to adjust penalty for each iteration.")
     @autoargs.arg("optimizer", type=str,
@@ -51,6 +56,9 @@ class PPO(BatchPolopt):
             decrease_penalty_factor=0.5,
             max_opt_itr=20,
             max_penalty_itr=10,
+            binary_search_penalty=True,
+            max_penalty_bs_itr=10,
+            bs_kl_tolerance=1e-4,
             adapt_penalty=True,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
             **kwargs):
@@ -62,6 +70,9 @@ class PPO(BatchPolopt):
         self.decrease_penalty_factor = decrease_penalty_factor
         self.max_opt_itr = max_opt_itr
         self.max_penalty_itr = max_penalty_itr
+        self.binary_search_penalty = binary_search_penalty
+        self.max_penalty_bs_itr = max_penalty_bs_itr
+        self.bs_kl_tolerance = bs_kl_tolerance
         self.adapt_penalty = adapt_penalty
         self.optimizer = locate(optimizer)
         super(PPO, self).__init__(**kwargs)
@@ -94,22 +105,9 @@ class PPO(BatchPolopt):
             penalty_var
         ]
 
-        def detect_nan(i, node, fn):
-            for output in fn.outputs:
-                if (not isinstance(output[0], np.random.RandomState) and
-                    np.isnan(output[0]).any()):
-                    print '*** NaN detected ***'
-                    theano.printing.debugprint(node)
-                    print 'Inputs : %s' % [input[0] for input in fn.inputs]
-                    print 'Outputs: %s' % [output[0] for output in fn.outputs]
-                    raise ValueError('lala')
-                    break
-
         grads = theano.gradient.grad(surr_obj, policy.params)
-        # f_surr_kl = theano.function(
-        #     input_list, [surr_obj, surr_loss, mean_kl],mode=theano.compile.MonitorMode(
-        #                                 post_func=detect_nan),allow_input_downcast=True, on_unused_input='ignore')
-        f_surr_kl = compile_function(input_list, [surr_obj, surr_loss, mean_kl])
+        f_surr_kl = compile_function(
+            input_list, [surr_obj, surr_loss, mean_kl])
         f_grads = compile_function(input_list, grads)
         penalty = self.initial_penalty
         return dict(
@@ -156,6 +154,7 @@ class PPO(BatchPolopt):
         opt_params = None
         max_penalty_itr = self.max_penalty_itr
         mean_kl = None
+        search_succeeded = False
         for penalty_itr in range(max_penalty_itr):
             logger.log('trying penalty=%.3f...' % try_penalty)
             self.optimizer(
@@ -188,11 +187,45 @@ class PPO(BatchPolopt):
             else:
                 if penalty_scale_factor > 1 and \
                         try_mean_kl <= self.step_size:
+                    search_succeeded = True
                     break
                 elif penalty_scale_factor < 1 and \
                         try_mean_kl >= self.step_size:
+                    search_succeeded = True
                     break
             try_penalty *= penalty_scale_factor
+
+        if self.adapt_penalty and self.binary_search_penalty and \
+                search_succeeded:
+            # perform more fine-grained search of penalty parameter
+            logger.log('Perform binary search for fine grained penalty')
+            if penalty_scale_factor > 1:
+                min_bs_penalty = try_penalty / penalty_scale_factor
+                max_bs_penalty = try_penalty
+            else:
+                min_bs_penalty = try_penalty
+                max_bs_penalty = try_penalty / penalty_scale_factor
+            logger.log('Min penalty: %f; max penalty: %f' %
+                       (min_bs_penalty, max_bs_penalty))
+            for _ in range(self.max_penalty_bs_itr):
+                penalty = 0.5 * (min_bs_penalty + max_bs_penalty)
+                self.optimizer(
+                    func=evaluate_cost(penalty), x0=cur_params,
+                    fprime=evaluate_grad(penalty),
+                    maxiter=self.max_opt_itr
+                    )
+                _, loss_after, mean_kl = f_surr_kl(
+                    *(all_input_values + [penalty]))
+                logger.log('penalty %f => loss %f, mean kl %f' %
+                           (penalty, loss_after, mean_kl))
+                if abs(mean_kl - self.step_size) < self.bs_kl_tolerance:
+                    break
+                if mean_kl > self.step_size:
+                    # need to increase penalty
+                    min_bs_penalty = penalty
+                else:
+                    max_bs_penalty = penalty
+            opt_params = policy.get_param_values()
 
         policy.set_param_values(opt_params)
         loss_after = evaluate_cost(0)(opt_params)
