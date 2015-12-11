@@ -1,8 +1,8 @@
 from __future__ import print_function
 from pylearn2.training_algorithms.learning_rule import RMSProp
 import numpy as np
-import tensorfuse as theano 
-import tensorfuse.tensor as T
+import theano 
+import theano.tensor as T
 import itertools
 import time
 import sys

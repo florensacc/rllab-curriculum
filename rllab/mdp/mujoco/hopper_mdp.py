@@ -1,11 +1,6 @@
-from .mujoco_mdp import MujocoMDP
-import os
+from rllab.mdp.mujoco.mujoco_mdp import MujocoMDP
 import numpy as np
-from contextlib import contextmanager
-import os.path as osp
-import sys
-import random
-from core.serializable import Serializable
+from rllab.core.serializable import Serializable
 
 # states: [
 # 0: z-coord,
@@ -15,10 +10,10 @@ from core.serializable import Serializable
 # 7: xvel (forward = +)
 class HopperMDP(MujocoMDP, Serializable):
     def __init__(self, horizon=1000, timestep=0.02):
-        frame_skip = 5#10#15#5#1#5#25#10##5
+        frame_skip = 1#5#10#15#5#1#5#25#10##5
         ctrl_scaling = 100.0
         self.timestep = timestep
-        path = osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/hopper.xml'))
+        path = self.model_path('hopper.xml')
         super(HopperMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
 
     def get_current_obs(self):
@@ -30,7 +25,7 @@ class HopperMDP(MujocoMDP, Serializable):
         ).reshape(-1)
 
     def step(self, state, action, autoreset=True):
-        next_state = self.forward_dynamics(state, action, preserve=False)
+        next_state = self.forward_dynamics(state, action, restore=False)
         next_obs = self.get_obs(next_state)
         posbefore = state[1]
         posafter = next_state[1]

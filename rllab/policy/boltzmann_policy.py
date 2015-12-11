@@ -3,8 +3,8 @@ from misc.overrides import overrides
 from misc.special import softmax, weighted_sample, cat_perplexity
 from core.serializable import Serializable
 import numpy as np
-import tensorfuse as theano
-import tensorfuse.tensor as T
+import theano
+import theano.tensor as T
 
 class BoltzmannPolicy(Policy, Serializable):
     

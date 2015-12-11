@@ -1,4 +1,4 @@
-import tensorfuse as theano
+import theano
 import os.path as osp
 from path import Path
 

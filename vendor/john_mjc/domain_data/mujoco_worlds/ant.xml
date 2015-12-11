@@ -1,5 +1,6 @@
 <mujoco model="ant">
 	<compiler inertiafromgeom="true" angle="degree" coordinate="local"/>
+    <option timestep="0.02" />
 	<size nlmax="50" ncmax="50" njmax="200" nctotmax="50" ngeom_user="1" nstack="82825"/>
     <default>
         <joint islimited="true" armature="0.2" damping="0.1" compliance="0.01" timeconst="0.01" />

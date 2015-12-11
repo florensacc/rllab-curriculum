@@ -2,20 +2,25 @@ from rllab.mjcapi.john_mjc.mjc import get_mjc_mdp_class
 from rllab.mdp.base import ControlMDP
 from rllab.misc.overrides import overrides
 from rllab.mjcapi.john_mjc.config import floatX
+from rllab.misc.serializable import Serializable
 import numpy as np
 
 
-class WrapperMDP(ControlMDP):
+class WrapperMDP(ControlMDP, Serializable):
 
     def __init__(self):
         self._mdp = get_mjc_mdp_class(self.BASE_NAME)
         self._state = None
         self._action = None
+        Serializable.__init__(self)
 
     @overrides
     def step(self, state, action):
         state = np.array(state).astype(floatX).reshape((1, -1))
+        lb, ub = self.action_bounds
         action = np.array(action).astype(floatX).reshape((1, -1))
+        # scale action
+        action = action * (ub - lb) + lb
         result = self._mdp.call({'x': state, 'u': action})
         next_state = result["x"].reshape(-1)
         next_obs = result["o"].reshape(-1)
@@ -65,7 +70,10 @@ class WrapperMDP(ControlMDP):
     @property
     @overrides
     def action_bounds(self):
-        return self._mdp.ctrl_bounds()
+        bounds = self._mdp.ctrl_bounds().reshape(-1)
+        lb = bounds[:self.action_dim]
+        ub = bounds[self.action_dim:]
+        return lb, ub
 
 
 # Shortcut for declaring subclasses

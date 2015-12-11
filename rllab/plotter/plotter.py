@@ -1,7 +1,7 @@
 import atexit
 from Queue import Empty
 from multiprocessing import Process, Queue
-from sampler.utils import rollout
+from rllab.sampler.utils import rollout
 import numpy as np
 
 __all__ = [

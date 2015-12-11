@@ -5,11 +5,11 @@ from mjtypes import *
 
 osp = os.path
 if sys.platform.startswith("darwin"):
-    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../vendor/mujoco_osx/libmujoco.dylib"))
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../vendor/mujoco_osx/libmujoco.dylib"))
 elif sys.platform.startswith("linux"):
-    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../vendor/mujoco_linux/libmujoco.so"))
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../vendor/mujoco_linux/libmujoco.so"))
 elif sys.platform.startswith("win"):
-    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../vendor/mujoco_win/mujoco.lib"))
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../vendor/mujoco_win/mujoco.lib"))
 else:
     raise RuntimeError("unrecognized platform %s"%sys.platform)
 

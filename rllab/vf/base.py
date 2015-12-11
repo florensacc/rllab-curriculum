@@ -11,3 +11,11 @@ class ValueFunction(object):
 
     def predict(self, path):
         raise NotImplementedError
+
+    @classmethod
+    def add_args(cls, parser):
+        pass
+
+    @classmethod
+    def new_from_args(cls, args, mdp):
+        return cls()

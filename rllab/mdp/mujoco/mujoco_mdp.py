@@ -1,12 +1,13 @@
-from .base import ControlMDP
 import os
-from mjcapi.rockymjc import MjModel, MjViewer
 import numpy as np
 from contextlib import contextmanager
 import os.path as osp
 import sys
 import random
-from misc.overrides import overrides
+from rllab.mdp.base import ControlMDP
+from rllab.mjcapi.rocky_mjc import MjModel, MjViewer
+from rllab.misc.overrides import overrides
+import theano
 
 class MujocoMDP(ControlMDP):
 
@@ -27,12 +28,17 @@ class MujocoMDP(ControlMDP):
         super(MujocoMDP, self).__init__(horizon)
 
     def model_path(self, file_name):
-        return osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/%s' % file_name))
+        return osp.abspath(osp.join(osp.dirname(__file__), '../../../vendor/mujoco_models/%s' % file_name))
 
     @property
     @overrides
     def observation_shape(self):
         return self.get_current_obs().shape
+
+    @property
+    @overrides
+    def observation_dtype(self):
+        return theano.config.floatX
 
     @property
     @overrides
@@ -43,6 +49,14 @@ class MujocoMDP(ControlMDP):
     @overrides
     def action_dtype(self):
         return theano.config.floatX
+
+    @property
+    @overrides
+    def action_bounds(self):
+        bounds = self.model.actuator_ctrlrange / self.ctrl_scaling
+        lb = bounds[:, 0]
+        ub = bounds[:, 1]
+        return lb, ub
 
     @overrides
     def reset(self):
@@ -70,8 +84,8 @@ class MujocoMDP(ControlMDP):
     def get_current_state(self):
         return self.get_state(self.model.data.qpos, self.model.data.qvel)
 
-    def forward_dynamics(self, state, action, preserve=True):
-        with self.set_state_tmp(state, preserve):
+    def forward_dynamics(self, state, action, restore=True):
+        with self.set_state_tmp(state, restore):
             self.model.data.ctrl = action * self.ctrl_scaling
             for _ in range(self.frame_skip):
                 self.model.step()
@@ -98,12 +112,19 @@ class MujocoMDP(ControlMDP):
         if self.viewer:
             self.viewer.finish()
 
+    def set_state(self, state):
+        qpos, qvel = self.decode_state(state)
+        self.model.data.qpos = qpos
+        self.model.data.qvel = qvel
+        self.model.forward()
+        self.current_state = state
+
     @contextmanager
-    def set_state_tmp(self, state, preserve=True):
-        if np.array_equal(state, self.current_state) and not preserve:
+    def set_state_tmp(self, state, restore=True):
+        if np.array_equal(state, self.current_state) and not restore:
             yield
         else:
-            if preserve:
+            if restore:
                 prev_pos = self.model.data.qpos
                 prev_qvel = self.model.data.qvel
                 prev_ctrl = self.model.data.ctrl
@@ -113,7 +134,7 @@ class MujocoMDP(ControlMDP):
             self.model.data.qvel = qvel
             self.model.forward()
             yield
-            if preserve:
+            if restore:
                 self.model.data.qpos = prev_pos
                 self.model.data.qvel = prev_qvel
                 self.model.data.ctrl = prev_ctrl

@@ -8,6 +8,7 @@ def rollout(mdp, policy, max_length=np.inf, animated=False, use_state=False):
     rewards = []
     pdists = []
     s, o = mdp.reset()
+    policy.start_episode()
     path_length = 0
     while path_length < max_length:
         if use_state:
@@ -26,6 +27,8 @@ def rollout(mdp, policy, max_length=np.inf, animated=False, use_state=False):
         s, o = next_s, next_o
         if animated:
             mdp.plot()
+            import time
+            time.sleep(0.05)
     return dict(
         states=np.vstack(states),
         observations=np.vstack(observations),

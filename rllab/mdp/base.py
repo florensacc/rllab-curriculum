@@ -1,10 +1,9 @@
-from rllab.core.serializable import Serializable
-import tensorfuse as theano
-import tensorfuse.tensor as T
-import cPickle as pickle
-from path import Path
-import sys
+import theano
+import theano.tensor as TT
 from rllab.misc.ext import cached_function, lazydict
+from rllab.core.serializable import Serializable
+from rllab.misc import autoargs
+
 
 class MDP(object):
 
@@ -25,6 +24,27 @@ class MDP(object):
     @property
     def action_dtype(self):
         raise NotImplementedError
+
+    @property
+    def observation_dtype(self):
+        raise NotImplementedError
+
+    def start_viewer(self):
+        pass
+
+    def stop_viewer(self):
+        pass
+
+    @classmethod
+    @autoargs.add_args
+    def add_args(cls, parser):
+        pass
+
+    @classmethod
+    @autoargs.new_from_args
+    def new_from_args(cls, args):
+        pass
+
 
 class ControlMDP(MDP):
     
@@ -56,12 +76,13 @@ class ControlMDP(MDP):
     def action_bounds(self):
         raise NotImplementedError
 
+
 class SymbolicMDP(ControlMDP):
 
     def __init__(self, horizon):
         super(SymbolicMDP, self).__init__(horizon)
-        self._state_sym = T.vector('state', fixed_shape=self.state_shape)
-        self._action_sym = T.vector('action', fixed_shape=(self.action_dim,))
+        self._state_sym = TT.vector('state', fixed_shape=self.state_shape)
+        self._action_sym = TT.vector('action', fixed_shape=(self.action_dim,))
 
         # placeholder for cached compiled functions
         self._f_obs = None
