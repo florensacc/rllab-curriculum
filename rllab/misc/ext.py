@@ -1,6 +1,7 @@
 from path import Path
 import sys
 import cPickle as pickle
+
 sys.setrecursionlimit(50000)
 
 
@@ -32,7 +33,7 @@ def cached_function(inputs, outputs):
         hash_content = tuple(map(theano.pp, outputs))
     else:
         hash_content = theano.pp(outputs)
-    cache_key = hex(hash(hash_content) & (2**64-1))[:-1]
+    cache_key = hex(hash(hash_content) & (2 ** 64 - 1))[:-1]
     cache_dir = Path('~/.hierctrl_cache')
     cache_dir = cache_dir.expanduser()
     cache_dir.mkdir_p()
@@ -51,7 +52,6 @@ def cached_function(inputs, outputs):
 
 # Immutable, lazily evaluated dict
 class lazydict(object):
-
     def __init__(self, **kwargs):
         self._lazy_dict = kwargs
         self._dict = {}
@@ -110,10 +110,14 @@ def compile_function(inputs=None, outputs=None, updates=None):
 
 def new_tensor(name, ndim, dtype):
     import theano.tensor as TT
-    return TT.TensorType(dtype, (False,)*ndim)(name)
+    return TT.TensorType(dtype, (False,) * ndim)(name)
 
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
         super(AttrDict, self).__init__(*args, **kwargs)
         self.__dict__ = self
+
+
+def is_iterable(obj):
+    return isinstance(obj, basestring) or getattr(obj, '__iter__', False)

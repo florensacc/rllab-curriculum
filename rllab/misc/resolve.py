@@ -15,10 +15,12 @@ def classesinmodule(module):
 def locate_with_hint(class_path, prefix_hints=[]):
     module_or_class = locate(class_path)
     if module_or_class is None:
-        for hint in iscanr(lambda x, y: x + "." + y, prefix_hints):
-            module_or_class = locate(hint + "." + class_path)
-            if module_or_class:
-                break
+        # for hint in iscanr(lambda x, y: x + "." + y, prefix_hints):
+        #     module_or_class = locate(hint + "." + class_path)
+        #     if module_or_class:
+        #         break
+        hint = ".".join(prefix_hints)
+        module_or_class = locate(hint + "." + class_path)
     return module_or_class
    
 
