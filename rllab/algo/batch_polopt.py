@@ -37,6 +37,10 @@ class BatchPolopt(RLAlgorithm):
                   help="Whether to record states when sampling")
     @autoargs.arg("store_paths", type=bool,
                   help="Whether to save all paths data to the snapshot")
+    @autoargs.arg("plot", type=bool,
+                  help="Plot evaluation run after each iteration")
+    @autoargs.arg("pause_for_plot", type=bool,
+                  help="Plot evaluation run after each iteration")
     def __init__(
             self,
             n_itr=500,
@@ -46,6 +50,7 @@ class BatchPolopt(RLAlgorithm):
             discount=0.99,
             gae_lambda=1,
             plot=False,
+            pause_for_plot=False,
             whole_paths=True,
             center_adv=True,
             record_states=False,
@@ -59,6 +64,7 @@ class BatchPolopt(RLAlgorithm):
         self.discount = discount
         self.gae_lambda = gae_lambda
         self.plot = plot
+        self.pause_for_plot = pause_for_plot
         self.whole_paths = whole_paths
         self.center_adv = center_adv
         self.record_states = record_states
@@ -92,6 +98,8 @@ class BatchPolopt(RLAlgorithm):
             logger.pop_prefix()
             if self.plot:
                 self.update_plot(policy)
+                if self.pause_for_plot:
+                    raw_input("Plotting evaluation run: Press Enter to continue...")
         self.shutdown_worker()
 
     def init_opt(self, mdp, policy, vf):

@@ -1,4 +1,6 @@
 from __future__ import print_function
+
+from rllab.misc.ext import is_iterable
 from rllab.misc.resolve import load_class
 from rllab.misc.console import colorize
 from rllab import config
@@ -161,8 +163,11 @@ def run_experiment(argv):
         logger.set_snapshot_mode(args.snapshot_mode)
         logger.push_prefix("[%s] " % args.exp_name)
 
-        for _ in algo.train(**instances):
-            pass
+        maybe_iter = algo.train(**instances)
+        if is_iterable(maybe_iter):
+            for _ in maybe_iter:
+                pass
+
         logger.set_snapshot_mode(prev_mode)
         logger.set_snapshot_dir(prev_snapshot_dir)
         logger.remove_tabular_output(tabular_log_file)
