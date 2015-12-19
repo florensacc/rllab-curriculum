@@ -1,8 +1,8 @@
 cart_width = 4.0 / (12 ** 0.5)
 cart_height = 3.0 / (12 ** 0.5)
 
-pole_width = 0.05
-pole_height = 2.0
+pole_width = 0.1
+pole_height = 1.0
 
 cart_friction = 0.0005
 pole_friction = 0.000002

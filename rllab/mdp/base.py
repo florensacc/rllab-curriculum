@@ -75,8 +75,8 @@ class ControlMDP(MDP):
 
 class SymbolicMDP(ControlMDP):
 
-    def __init__(self, horizon):
-        super(SymbolicMDP, self).__init__(horizon)
+    def __init__(self):
+        super(SymbolicMDP, self).__init__()
         self._state_sym = TT.vector('state')
         self._action_sym = TT.vector('action')
 

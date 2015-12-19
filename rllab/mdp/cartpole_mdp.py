@@ -11,7 +11,7 @@ from rllab.misc.random import uniform
 
 # code adapted from John's control repo
 class CartpoleMDP(SymbolicMDP, Serializable):
-    def __init__(self, horizon=100):
+    def __init__(self):
         self.max_pole_angle = .2
         self.max_cart_pos = 2.4
         self.max_cart_speed = 4.
@@ -19,8 +19,8 @@ class CartpoleMDP(SymbolicMDP, Serializable):
         self.max_force = 10.
         self.dt = .05
         self._viewer = None
-        super(CartpoleMDP, self).__init__(horizon)
-        Serializable.__init__(self, horizon)
+        super(CartpoleMDP, self).__init__()
+        Serializable.__init__(self)
 
     def reset_sym(self):
         bounds = np.array([
