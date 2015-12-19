@@ -17,6 +17,7 @@ def sample_action(lb, ub):
 def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
     # step ahead with all-zero action
     delay = 1.0 / fps
+    mdp.start_viewer()
     if mode == 'noop':
         action = np.zeros(mdp.action_dim)
         state = mdp.reset()[0]
@@ -51,6 +52,7 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
             time.sleep(delay)
     else:
         raise ValueError('Unsupported mode: %s' % mode)
+    mdp.stop_viewer()
             
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

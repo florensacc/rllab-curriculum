@@ -9,7 +9,8 @@ class AntMDP(MujocoMDP, Serializable):
         ctrl_scaling = 100.0
         self.timestep = timestep
         path = self.model_path('ant.xml')
-        super(AntMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
+        self.horizon = horizon
+        super(AntMDP, self).__init__(path, frame_skip, ctrl_scaling)
         Serializable.__init__(self, horizon, timestep)
         self.init_qpos = np.array([0., 0., 0.55, 1., 0., 0., 0., 0., 1.0, 0., -1.0, 0., -1.0, 0., 1.0])
 

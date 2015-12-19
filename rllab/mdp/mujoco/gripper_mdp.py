@@ -12,7 +12,8 @@ class GripperMDP(MujocoMDP):
         ctrl_scaling = 100#100.0
         path = osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/gripper.xml'))
         self.noise_level = 0.01
-        super(GripperMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
+        self.horizon = horizon
+        super(GripperMDP, self).__init__(path, frame_skip, ctrl_scaling)
 
     def get_current_obs(self):
         return np.concatenate([

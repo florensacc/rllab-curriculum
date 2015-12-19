@@ -11,7 +11,7 @@ import theano
 
 class MujocoMDP(ControlMDP):
 
-    def __init__(self, model_path, horizon, frame_skip, ctrl_scaling):
+    def __init__(self, model_path, frame_skip, ctrl_scaling):
         self.model_path = model_path
         self.model = MjModel(model_path)
         self.data = self.model.data
@@ -25,7 +25,7 @@ class MujocoMDP(ControlMDP):
         self.frame_skip = frame_skip
         self.ctrl_scaling = ctrl_scaling
         self.reset()
-        super(MujocoMDP, self).__init__(horizon)
+        super(MujocoMDP, self).__init__()
 
     def model_path(self, file_name):
         return osp.abspath(osp.join(osp.dirname(__file__), '../../../vendor/mujoco_models/%s' % file_name))

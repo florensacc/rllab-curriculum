@@ -52,7 +52,7 @@ class NormalizedControlMDP(NormalizedMDP, ControlMDP, Serializable):
 
     def __init__(self, mdp):
         super(NormalizedControlMDP, self).__init__(mdp)
-        ControlMDP.__init__(self, mdp.horizon)
+        ControlMDP.__init__(self)
         Serializable.__init__(self, mdp)
 
     @property
@@ -71,7 +71,7 @@ class NormalizedSymbolicMDP(NormalizedControlMDP, SymbolicMDP, Serializable):
 
     def __init__(self, mdp):
         super(NormalizedSymbolicMDP, self).__init__(mdp)
-        SymbolicMDP.__init__(self, mdp.horizon)
+        SymbolicMDP.__init__(self)
         Serializable.__init__(self, mdp)
 
     @property
