@@ -1,7 +1,7 @@
 import theano.tensor as TT
 from rllab.misc import logger, autoargs
 from rllab.misc.overrides import overrides
-from rllab.misc.ext import extract, compile_function
+from rllab.misc.ext import extract, compile_function, new_tensor
 from rllab.algo.batch_polopt import BatchPolopt
 from rllab.algo.first_order_method import FirstOrderMethod
 
@@ -21,10 +21,14 @@ class VPG(BatchPolopt, FirstOrderMethod):
 
     @overrides
     def init_opt(self, mdp, policy, vf):
-        input_var = policy.input_var
+        input_var = new_tensor(
+            'input',
+            ndim=1+len(mdp.observation_shape),
+            dtype=mdp.observation_dtype
+        )
         advantage_var = TT.vector('advantage')
-        action_var = policy.new_action_var('action')
-        log_prob = policy.get_log_prob_sym(action_var)
+        action_var = TT.matrix('action', dtype=mdp.action_dtype)
+        log_prob = policy.get_log_prob_sym(input_var, action_var)
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
         surr_obj = - TT.mean(log_prob * advantage_var)

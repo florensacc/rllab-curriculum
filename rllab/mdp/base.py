@@ -81,8 +81,8 @@ class SymbolicMDP(ControlMDP):
 
     def __init__(self, horizon):
         super(SymbolicMDP, self).__init__(horizon)
-        self._state_sym = TT.vector('state', fixed_shape=self.state_shape)
-        self._action_sym = TT.vector('action', fixed_shape=(self.action_dim,))
+        self._state_sym = TT.vector('state')
+        self._action_sym = TT.vector('action')
 
         # placeholder for cached compiled functions
         self._f_obs = None

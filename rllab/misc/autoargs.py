@@ -4,7 +4,7 @@ from rllab.misc.ext import merge_dict
 
 # pylint: disable=redefined-builtin
 # pylint: disable=protected-access
-def arg(name, type=None, help=None, nargs=None, mapper=None, choices=None):
+def arg(name, type=None, help=None, nargs=None, mapper=None, choices=None, prefix=True):
     def wrap(fn):
         assert fn.__name__ == '__init__'
         if not hasattr(fn, '_autoargs_info'):
@@ -122,3 +122,4 @@ def inherit(base_func):
         )
         return func
     return wrap
+

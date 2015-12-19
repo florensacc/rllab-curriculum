@@ -1,6 +1,9 @@
 import numpy as np
 import pyprind
 
+from rllab.misc import logger
+
+
 def rollout(mdp, policy, max_length=np.inf, animated=False, use_state=False):
     states = []
     observations = []

@@ -6,6 +6,7 @@ from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract, merge_dict
 from rllab.misc.viewer2d import Viewer2D, Colors
+from rllab.misc.random import uniform
 
 
 # code adapted from John's control repo
@@ -29,7 +30,7 @@ class CartpoleMDP(SymbolicMDP, Serializable):
             self.max_pole_speed
         ])
         low, high = -0.05*bounds, 0.05*bounds
-        state = theano.random.uniform(size=(4,), low=low, high=high, ndim=1)
+        state = uniform(size=(4,), low=low, high=high, ndim=1)
         obs = state
         return state, obs
 
