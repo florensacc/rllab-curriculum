@@ -47,6 +47,18 @@ class NormalizedMDP(MDP, Serializable):
     def step(self, state, action):
         return self._mdp.step(state, action)
 
+    @overrides
+    def start_viewer(self):
+        return self._mdp.start_viewer()
+
+    @overrides
+    def stop_viewer(self):
+        return self._mdp.stop_viewer()
+
+    @overrides
+    def plot(self, *args, **kwargs):
+        return self._mdp.plot(*args, **kwargs)
+
 
 class NormalizedControlMDP(NormalizedMDP, ControlMDP, Serializable):
 

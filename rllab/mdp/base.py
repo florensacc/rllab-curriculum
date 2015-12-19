@@ -1,7 +1,6 @@
 import theano
 import theano.tensor as TT
 from rllab.misc.ext import cached_function, lazydict
-from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
 
 
@@ -35,6 +34,9 @@ class MDP(object):
     def stop_viewer(self):
         pass
 
+    def plot(self, states=None, actions=None, pause=False):
+        raise NotImplementedError
+
     @classmethod
     @autoargs.add_args
     def add_args(cls, parser):
@@ -59,9 +61,6 @@ class ControlMDP(MDP):
 
     @property
     def state_shape(self):
-        raise NotImplementedError
-
-    def plot(self, states=None, actions=None, pause=False):
         raise NotImplementedError
 
     @property

@@ -15,13 +15,13 @@ class Type(object):
 class Float(Type):
 
     def from_str(self, s):
-        return float(eval(s))
+        return float(s)
 
 
 class Int(Type):
 
     def from_str(self, s):
-        return int(eval(s))
+        return int(s)
 
 
 class Hex(Type):
