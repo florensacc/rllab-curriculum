@@ -43,14 +43,13 @@
         --policy mean_std_nn_policy \
         --vf mujoco_value_function \
         --exp_name vpg_box2d_cartpole \
+        --n_parallel 4 \
+        --snapshot_mode all \
         --algo_binary_search_penalty False \
         --algo_whole_paths True \
         --algo_batch_size 50000 \
-        --n_parallel 4 \
         --algo_max_path_length 100 \
-        --snapshot_mode all \
         --algo_n_itr 500 \
-        --algo_learning_rate 0.1 \
         --seed 1
   ```
 
