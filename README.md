@@ -62,7 +62,7 @@ python scripts/run_experiment.py \
   While running an experiment, all the relevant parameters will be stored in a pickle file under data/EXP_NAME. This file can be used to visualize the policy using the following command:
 
   ```
-  python scripts/sim_policy.py PKL_FILE
+python scripts/sim_policy.py PKL_FILE
   ```
 
 ## Contributing
