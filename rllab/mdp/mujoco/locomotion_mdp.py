@@ -26,8 +26,9 @@ class LocomotionMDP(MujocoMDP):
         frame_skip = 20#10#15#5#1#5#25#10##5
         ctrl_scaling = 20.0
         self.timestep = timestep
+        self.horizon = horizon
         path = osp.abspath(osp.join(osp.dirname(__file__), '../vendor/mujoco_models/locomotion.xml'))
-        super(LocomotionMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
+        super(LocomotionMDP, self).__init__(path, frame_skip, ctrl_scaling)
 
     def get_current_obs(self):
         return np.concatenate([

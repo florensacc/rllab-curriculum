@@ -13,6 +13,7 @@ class HopperMDP(MujocoMDP, Serializable):
         frame_skip = 1#5#10#15#5#1#5#25#10##5
         ctrl_scaling = 100.0
         self.timestep = timestep
+        self.horizon = horizon
         path = self.model_path('hopper.xml')
         super(HopperMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
 

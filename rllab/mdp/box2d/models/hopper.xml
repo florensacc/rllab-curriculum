@@ -1,0 +1,34 @@
+<!-- Auto-generated. Do not edit! -->
+<box2d>
+  <world gravity="0,-9.8">
+    <body name="torso" type="dynamic" position="0,1.25">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.05,0.2;0.05,-0.2;-0.05,-0.2;-0.05,0.2"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0.2" radius="0.05"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,-0.2" radius="0.05"/>
+    </body>
+    <body name="thigh" type="dynamic" position="0,0.825">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.05,0.205;0.05,-0.205;-0.05,-0.205;-0.05,0.205"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0.205" radius="0.05"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,-0.205" radius="0.05"/>
+    </body>
+    <body name="leg" type="dynamic" position="0,0.35">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.04,0.25;0.04,-0.25;-0.04,-0.25;-0.04,0.25"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0.25" radius="0.04"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,-0.25" radius="0.04"/>
+    </body>
+    <body name="foot" type="dynamic" position="0.065,0.1">
+      <fixture friction="2.0" density="1" group="-1" shape="polygon" vertices="-0.195,0.06;0.195,0.06;0.195,-0.06;-0.195,-0.06"/>
+      <fixture friction="2.0" density="1" group="-1" shape="circle" center="-0.195,0" radius="0.06"/>
+      <fixture friction="2.0" density="1" group="-1" shape="circle" center="0.195,0" radius="0.06"/>
+    </body>
+    <body name="ground" type="static" position="0,0">
+      <fixture shape="polygon" box="100,0.05" friction="2.0" density="1" group="-2"/>
+    </body>
+    <joint type="revolute" name="thigh_joint" bodyA="torso" bodyB="thigh" anchor="0,1.05" limit="-150,0"/>
+    <joint type="revolute" name="leg_joint" bodyA="thigh" bodyB="leg" anchor="0,0.6" limit="-150,0"/>
+    <joint type="revolute" name="foot_joint" bodyA="leg" bodyB="foot" anchor="0,0.1" limit="-45,45"/>
+    <control type="torque" joint="thigh_joint" ctrllimit="-2,2"/>
+    <control type="torque" joint="leg_joint" ctrllimit="-2,2"/>
+    <control type="torque" joint="foot_joint" ctrllimit="-2,2"/>
+  </world>
+</box2d>

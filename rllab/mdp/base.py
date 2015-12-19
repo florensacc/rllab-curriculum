@@ -47,18 +47,14 @@ class MDP(object):
 
 
 class ControlMDP(MDP):
-    
-    def __init__(self, horizon):
-        self.horizon = horizon
-        super(MDP, self).__init__()
-    
+
     def cost(self, state, action):
         raise NotImplementedError
 
     def final_cost(self, state):
         raise NotImplementedError
 
-    def forward_dynamics(self, state, action):
+    def forward_dynamics(self, state, action, restore=True):
         raise NotImplementedError
 
     @property
@@ -106,25 +102,25 @@ class SymbolicMDP(ControlMDP):
             s = self._state_sym
             a = self._action_sym
             lookup = lazydict(
-                    f=lambda: self.forward_sym(s, a),
-                    c=lambda: self.cost_sym(s, a),
-                    cf=lambda: self.final_cost_sym(s)
+                f=lambda: self.forward_sym(s, a),
+                c=lambda: self.cost_sym(s, a),
+                cf=lambda: self.final_cost_sym(s)
             )
             # we need first order approximation for the dynamics,
             # and second order approximation for the cost
             self._grad_hints = lazydict(
-                    # gradients for forward dynamics
-                    df_dx=lambda: cached_function([s, a], theano.gradient.jacobian(lookup['f'], s)),
-                    df_du=lambda: cached_function([s, a], theano.gradient.jacobian(lookup['f'], a)),
-                    # gradients for cost
-                    dc_dx=lambda: cached_function([s, a], theano.gradient.grad(lookup['c'], s)),
-                    dc_du=lambda: cached_function([s, a], theano.gradient.grad(lookup['c'], a)),
-                    dc_dxx=lambda: cached_function([s, a], theano.gradient.jacobian(theano.gradient.grad(lookup['c'], s), s)),
-                    dc_duu=lambda: cached_function([s, a], theano.gradient.jacobian(theano.gradient.grad(lookup['c'], a), a)),
-                    dc_dxu=lambda: cached_function([s, a], theano.gradient.jacobian(theano.gradient.grad(lookup['c'], s), a)),
-                    # gradients for final cost
-                    dcf_dx=lambda: cached_function([s], theano.gradient.grad(lookup['cf'], s)),
-                    dcf_dxx=lambda: cached_function([s], theano.gradient.jacobian(theano.gradient.grad(lookup['cf'], s), s)),
+                # gradients for forward dynamics
+                df_dx=lambda: cached_function([s, a], theano.gradient.jacobian(lookup['f'], s)),
+                df_du=lambda: cached_function([s, a], theano.gradient.jacobian(lookup['f'], a)),
+                # gradients for cost
+                dc_dx=lambda: cached_function([s, a], theano.gradient.grad(lookup['c'], s)),
+                dc_du=lambda: cached_function([s, a], theano.gradient.grad(lookup['c'], a)),
+                dc_dxx=lambda: cached_function([s, a], theano.gradient.jacobian(theano.gradient.grad(lookup['c'], s), s)),
+                dc_duu=lambda: cached_function([s, a], theano.gradient.jacobian(theano.gradient.grad(lookup['c'], a), a)),
+                dc_dxu=lambda: cached_function([s, a], theano.gradient.jacobian(theano.gradient.grad(lookup['c'], s), a)),
+                # gradients for final cost
+                dcf_dx=lambda: cached_function([s], theano.gradient.grad(lookup['cf'], s)),
+                dcf_dxx=lambda: cached_function([s], theano.gradient.jacobian(theano.gradient.grad(lookup['cf'], s), s)),
             )
         return self._grad_hints
 

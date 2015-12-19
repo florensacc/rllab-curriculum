@@ -10,7 +10,8 @@ class SwimmerMDP(MujocoMDP, Serializable):
         frame_skip = 25
         path = self.model_path('swimmer.xml')
         ctrl_scaling = 30
-        super(SwimmerMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
+        self.horizon = horizon
+        super(SwimmerMDP, self).__init__(path, frame_skip, ctrl_scaling)
         Serializable.__init__(self, horizon, timestep)
 
     def get_current_obs(self):

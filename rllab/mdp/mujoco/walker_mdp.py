@@ -9,7 +9,8 @@ class WalkerMDP(MujocoMDP, Serializable):
         ctrl_scaling = 20.0
         self.timestep = .02
         path = self.model_path('walker2d.xml')
-        super(WalkerMDP, self).__init__(path, horizon, frame_skip, ctrl_scaling)
+        self.horizon = horizon
+        super(WalkerMDP, self).__init__(path, frame_skip, ctrl_scaling)
         Serializable.__init__(self, horizon, timestep)
 
     def get_current_obs(self):
