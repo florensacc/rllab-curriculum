@@ -35,6 +35,7 @@
 
   The following bash command runs the Proximal Policy Optimization algorithm on cartpole.
 
+  ```
   python scripts/run_experiment.py \
         --algo ppo \
         --mdp box2d.cartpole_mdp \
