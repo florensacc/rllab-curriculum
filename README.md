@@ -21,24 +21,45 @@
 
   Otherwise, follow the official instructions.
 
-- Build from source (required to run mjc / mjc2)
+- Install box2d:
+
+  If using Anaconda, run the following:
+
   ```
-  mkdir build
-  cd build
-  cmake ../src
-  make
+  conda install -c https://conda.anaconda.org/kne pybox2d
   ```
 
-  Make sure that you are linking against the correct Python. If using anaconda, this might give you trouble. The command that worked for me was like the following:
+  Otherwise, follow the official instructions.
+
+## Running Experiments
+
+  The following bash command runs the Proximal Policy Optimization algorithm on cartpole using 4 sampling processes in parallel.
+
   ```
-  CXXFLAGS="-I~/anaconda/include/python2.7" cmake -DPYTHON_PREFIX=~/anaconda -DPYTHON_LIBRARY=~/anaconda/lib/libpython2.7.dylib -DPYTHON_INCLUDE_DIR=~/anaconda/include -I~/anaconda/include/python2.7 ../src
+  python scripts/run_experiment.py \
+        --algo ppo \
+        --mdp box2d.cartpole_mdp \
+        --normalize_mdp \
+        --policy mean_std_nn_policy \
+        --vf mujoco_value_function \
+        --exp_name vpg_box2d_cartpole \
+        --algo_binary_search_penalty False \
+        --algo_whole_paths True \
+        --algo_batch_size 50000 \
+        --n_parallel 4 \
+        --algo_max_path_length 100 \
+        --snapshot_mode all \
+        --algo_n_itr 500 \
+        --algo_learning_rate 0.1 \
+        --seed 1
   ```
 
-  You also need to append `rllab/build/lib` to `PYTHONPATH`. If this succeeds, you should be able to run `python -c "import mjcpy"` and `python -c "import mjcpy2"` successfully.
+  See [Recipies](https://github.com/dementrock/rllab/wiki/Recipies) for more.
 
-  If you see an error `Segmentation fault: 11`, most likely you linked to the wrong Python. You can debug this by running:
-  ```
-  lldb -- python -c "import mjcpy"
-  ```
-  In the opened REPL, type `run`. It will break on the line that segfaults. Then type `bt`, which will give you a backtrace. You can also inspect the dynamically linked libraries by typing `image list`. Inspect in particular which `libpython2.7.dylib` it's using.
+## Visualize a policy
 
+  While running an experiment, all the relevant parameters will be stored in a pickle file under data/EXP_NAME. This file can be used to visualize the policy using the following command:
+
+  ```
+  python scripts/sim_policy.py PKL_FILE
+  ```
