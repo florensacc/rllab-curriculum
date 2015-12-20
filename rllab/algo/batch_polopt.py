@@ -150,8 +150,6 @@ class BatchPolopt(RLAlgorithm):
         else:
             best_paths = paths
 
-        print "number of paths: %d" % len(best_paths)
-
         # however, these statistics should still be computed for all paths
         for path in paths:
             path_baselines = np.append(vf.predict(path), 0)
