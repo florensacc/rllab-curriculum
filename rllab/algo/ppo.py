@@ -110,6 +110,7 @@ class PPO(BatchPolopt):
             input_list, [surr_obj, surr_loss, mean_kl])
         f_grads = compile_function(input_list, grads)
         penalty = self.initial_penalty
+
         return dict(
             f_surr_kl=f_surr_kl,
             f_grads=f_grads,
@@ -194,6 +195,14 @@ class PPO(BatchPolopt):
                     search_succeeded = True
                     break
             try_penalty *= penalty_scale_factor
+            if try_penalty < self.min_penalty or \
+                    try_penalty > self.max_penalty:
+                try_penalty = np.clip(
+                    try_penalty, self.min_penalty, self.max_penalty)
+                opt_params = policy.get_param_values()
+                penalty = try_penalty
+                mean_kl = try_mean_kl
+                break
 
         if self.adapt_penalty and self.binary_search_penalty and \
                 search_succeeded:
