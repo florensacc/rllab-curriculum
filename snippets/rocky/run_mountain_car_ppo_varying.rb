@@ -12,9 +12,9 @@ require_relative './utils'
         _name: "tabular_policy",
         hidden_layers: [],
       },
-      #vf: {
-      #  _name: "mujoco_value_function",
-      #},
+      vf: {
+        _name: "mujoco_value_function",
+      },
       exp_name: "ppo_mountain_car_quantile_#{quantile}_seed_#{seed}",
       algo: {
         _name: "ppo",
