@@ -5,7 +5,7 @@
 - Install pip libraries:
 
   ```
-  pip install joblib pyprind
+  pip install joblib pyprind python-dateutil
   ```
 
 - Install pygame:
