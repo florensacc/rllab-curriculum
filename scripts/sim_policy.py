@@ -13,4 +13,6 @@ if __name__ == "__main__":
     data = joblib.load(args.file)
     policy = data['policy']
     mdp = data['mdp']
+    mdp.start_viewer()
     rollout(mdp, policy, max_length=args.max_length, animated=True)
+    mdp.stop_viewer()
