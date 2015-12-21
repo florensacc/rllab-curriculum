@@ -266,7 +266,7 @@ class Box2DViewer(b2ContactListener):
 
     def loop_once(self):
         self.checkEvents()
-        self.CheckKeys()
+        # self.CheckKeys()
         self.screen.fill((0, 0, 0))
 
         if self.renderer is not None:

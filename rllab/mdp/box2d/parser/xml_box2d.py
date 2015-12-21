@@ -192,15 +192,17 @@ class XmlJoint(XmlElem):
     JOINT_TYPES = {
         "revolute": Box2D.b2RevoluteJoint,
         "friction": Box2D.b2FrictionJoint,
+        "prismatic": Box2D.b2PrismaticJoint,
     }
 
     class Meta:
         bodyA = XmlAttr("bodyA", String(), required=True)
         bodyB = XmlAttr("bodyB", String(), required=True)
         anchor = XmlAttr("anchor", Tuple(Float(), Float()))
+        axis = XmlAttr("axis", Tuple(Float(), Float()))
         limit = XmlAttr("limit", Tuple(Angle(), Angle()))
         ctrllimit = XmlAttr("ctrllimit", Tuple(Angle(), Angle()))
-        typ = XmlAttr("type", Choice("revolute", "friction"), required=True)
+        typ = XmlAttr("type", Choice("revolute", "friction", "prismatic"), required=True)
         name = XmlAttr("name", String())
         motor = XmlAttr("motor", Bool())
 
@@ -213,6 +215,7 @@ class XmlJoint(XmlElem):
         self.motor = False
         self.typ = None
         self.name = None
+        self.axis = None
 
     def to_box2d(self, world, xml_world, extra_data):
         bodyA = find_body(world, self.bodyA)
@@ -228,6 +231,9 @@ class XmlJoint(XmlElem):
         elif self.typ == "friction":
             if self.anchor:
                 args["anchor"] = self.anchor
+        elif self.typ == "prismatic":
+            if self.axis:
+                args["axis"] = self.axis
         else:
             raise NotImplementedError
         userData = dict(

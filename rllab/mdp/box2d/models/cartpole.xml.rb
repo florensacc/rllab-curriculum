@@ -7,16 +7,27 @@ pole_height = 1.0
 cart_friction = 0.0005
 pole_friction = 0.000002
 
+pole_track_group = -1
+
 box2d {
   world(timestep: 0.05) {
     body(name: :cart, type: :dynamic, position: [0, cart_height / 2]) {
-      rect(box: [cart_width / 2, cart_height / 2], density: 1, friction: cart_friction)
+      rect(
+        box: [cart_width / 2, cart_height / 2],
+        density: 1,
+        friction: cart_friction,
+        group: pole_track_group
+      )
     }
     body(name: :pole, type: :dynamic, position: [0, cart_height]) {
       rect(from: [0, 0], to: [0, pole_height], radius: pole_width / 2, density: 1, friction: cart_friction)
     }
     body(name: :track, type: :static, position: [0, -0.1]) {
-      rect(box: [100, 0.1], friction: pole_friction)
+      rect(
+        box: [100, 0.1],
+        friction: pole_friction,
+        group: pole_track_group
+      )
     }
     joint(
       type: :revolute,
@@ -24,6 +35,12 @@ box2d {
       bodyA: :cart,
       bodyB: :pole,
       anchor: [0, cart_height],
+    )
+    joint(
+      type: :prismatic,
+      name: :track_cart,
+      bodyA: :track,
+      bodyB: :cart,
     )
     state type: :xpos, body: :cart
     state type: :xvel, body: :cart

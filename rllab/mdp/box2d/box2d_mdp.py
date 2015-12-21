@@ -164,7 +164,9 @@ class Box2DMDP(ControlMDP):
             elif state.typ == "yvel":
                 obs.append(body.linearVelocity[1])
             elif state.typ == "apos":
-                obs.append(body.angle)
+                # obs.append(body.angle)
+                obs.append(np.cos(body.angle))
+                obs.append(np.sin(body.angle))
             elif state.typ == "avel":
                 obs.append(body.angularVelocity)
             else:
@@ -175,6 +177,7 @@ class Box2DMDP(ControlMDP):
     def start_viewer(self):
         if not self.viewer:
             self.viewer = Box2DViewer(self.world)
+        return self.viewer
 
     @overrides
     def stop_viewer(self):
