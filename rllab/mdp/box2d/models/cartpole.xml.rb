@@ -16,11 +16,16 @@ box2d {
         box: [cart_width / 2, cart_height / 2],
         density: 1,
         friction: cart_friction,
-        group: pole_track_group
       )
     }
     body(name: :pole, type: :dynamic, position: [0, cart_height]) {
-      rect(from: [0, 0], to: [0, pole_height], radius: pole_width / 2, density: 1, friction: cart_friction)
+      rect(
+        from: [0, 0], to: [0, pole_height],
+        radius: pole_width / 2,
+        density: 1,
+        friction: cart_friction,
+        group: pole_track_group
+      )
     }
     body(name: :track, type: :static, position: [0, -0.1]) {
       rect(

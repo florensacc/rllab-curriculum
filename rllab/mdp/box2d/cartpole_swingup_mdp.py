@@ -5,14 +5,21 @@ from rllab.mdp.box2d.box2d_viewer import Box2DViewer
 from rllab.mdp.box2d.parser import find_body
 import numpy as np
 from rllab.core.serializable import Serializable
+from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 
 
 # Tornio, Matti, and Tapani Raiko. "Variational Bayesian approach for nonlinear identification and control." Proc. of the IFAC Workshop on Nonlinear Model Predictive Control for Fast Systems, NMPC FS06. 2006.
 class CartpoleSwingupMDP(Box2DMDP, Serializable):
-    def __init__(self):
-        super(CartpoleSwingupMDP, self).__init__(self.model_path("cartpole.xml"))
-        self.max_cart_pos = 100
+
+    @autoargs.inherit(Box2DMDP.__init__)
+    def __init__(self, **kwargs):
+        super(CartpoleSwingupMDP, self).__init__(
+            self.model_path("cartpole.xml"),
+            **kwargs
+        )
+        self.max_cart_pos = 3
+        self.max_reward_cart_pos = 3
         self.cart = find_body(self.world, "cart")
         self.pole = find_body(self.world, "pole")
         Serializable.__init__(self)
@@ -40,7 +47,7 @@ class CartpoleSwingupMDP(Box2DMDP, Serializable):
         if self.is_current_done():
             return -100
         else:
-            if abs(self.cart.position[0]) > 10:
+            if abs(self.cart.position[0]) > self.max_reward_cart_pos:
                 return -1
             else:
                 return np.cos(self.pole.angle)
