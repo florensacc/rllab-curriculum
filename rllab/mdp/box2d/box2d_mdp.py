@@ -150,15 +150,15 @@ class Box2DMDP(ControlMDP):
 
     @overrides
     def step(self, state, action):
-        reward = self.get_current_reward(action)
         next_state = self.forward_dynamics(state, action,
                                            restore=False)
+        reward = self.get_current_reward(state, action, next_state)
         self.invalidate_state_caches()
         done = self.is_current_done()
         next_obs = self.get_current_obs()
         return next_state, next_obs, reward, done
 
-    def get_current_reward(self, action):
+    def get_current_reward(self, state, action, next_state):
         raise NotImplementedError
 
     def is_current_done(self):
