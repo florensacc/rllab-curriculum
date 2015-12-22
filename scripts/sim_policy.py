@@ -15,3 +15,4 @@ if __name__ == "__main__":
     mdp = data['mdp']
     mdp.start_viewer()
     rollout(mdp, policy, max_length=args.max_length, animated=True)
+    mdp.stop_viewer()
