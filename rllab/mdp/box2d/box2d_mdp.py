@@ -5,12 +5,16 @@ from rllab.mdp.box2d.parser.xml_box2d import world_from_xml, find_body, \
     find_joint
 from rllab.mdp.box2d.box2d_viewer import Box2DViewer
 from rllab.mdp.base import ControlMDP
+from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 
 
 class Box2DMDP(ControlMDP):
 
-    def __init__(self, model_path):
+
+    @autoargs.arg("trig_angle", type=bool,
+                  help="Use cosine and sine representation for angle positions.")
+    def __init__(self, model_path, trig_angle=True):
         with open(model_path, "r") as f:
             s = f.read()
         world, extra_data = world_from_xml(s)
@@ -21,6 +25,7 @@ class Box2DMDP(ControlMDP):
         self.viewer = None
         self._action_bounds = None
         self._observation_shape = None
+        self.trig_angle = trig_angle
 
     def model_path(self, file_name):
         return osp.abspath(osp.join(osp.dirname(__file__),
@@ -164,7 +169,11 @@ class Box2DMDP(ControlMDP):
             elif state.typ == "yvel":
                 obs.append(body.linearVelocity[1])
             elif state.typ == "apos":
-                obs.append(body.angle)
+                if self.trig_angle:
+                    obs.append(np.cos(body.angle))
+                    obs.append(np.sin(body.angle))
+                else:
+                    obs.append(body.angle)
             elif state.typ == "avel":
                 obs.append(body.angularVelocity)
             else:
@@ -175,6 +184,7 @@ class Box2DMDP(ControlMDP):
     def start_viewer(self):
         if not self.viewer:
             self.viewer = Box2DViewer(self.world)
+        return self.viewer
 
     @overrides
     def stop_viewer(self):
