@@ -258,10 +258,14 @@ class XmlState(XmlElem):
             "type", Choice(
                 "xpos", "ypos", "xvel", "yvel", "apos", "avel"))
         body = XmlAttr("body", String())
+        joint = XmlAttr("joint", String())
+        com = XmlAttr("com", List(String()))
 
     def __init__(self):
         self.typ = None
         self.body = None
+        self.joint = None
+        self.com = None
 
     def to_box2d(self, world, xml_world, extra_data):
         extra_data.states.append(self)

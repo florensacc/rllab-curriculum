@@ -3,6 +3,8 @@ from rllab.sampler.utils import rollout, ProgBarCounter
 from rllab.misc.ext import extract
 from multiprocessing import Manager
 import numpy as np
+import traceback
+import sys
 
 __all__ = [
     'init_pool',
@@ -22,38 +24,41 @@ def pool_populate_task(args):
 
 
 def pool_rollout(args):
-    policy_params, max_samples, max_path_length, queue, record_states, whole_paths = \
-        extract(
-            args,
-            "policy_params", "max_samples", "max_path_length", "queue",
-            "record_states", "whole_paths"
-        )
-    _policy.set_param_values(policy_params)
-    n_samples = 0
-    paths = []
-    if queue is None:
-        pbar = ProgBarCounter(max_samples)
-    while n_samples < max_samples:
-        if whole_paths:
-            max_rollout_length = max_path_length
-        else:
-            max_rollout_length = min(max_path_length, max_samples - n_samples)
-        path = rollout(
-            _mdp,
-            _policy,
-            max_rollout_length,
-            record_states
-        )
-        paths.append(path)
-        n_new_samples = len(path["rewards"])
-        n_samples += n_new_samples
-        if queue is not None:
-            queue.put(n_new_samples)
-        else:
-            pbar.inc(n_new_samples)
-    if queue is None:
-        pbar.stop()
-    return paths
+    try:
+        policy_params, max_samples, max_path_length, queue, record_states, whole_paths = \
+            extract(
+                args,
+                "policy_params", "max_samples", "max_path_length", "queue",
+                "record_states", "whole_paths"
+            )
+        _policy.set_param_values(policy_params)
+        n_samples = 0
+        paths = []
+        if queue is None:
+            pbar = ProgBarCounter(max_samples)
+        while n_samples < max_samples:
+            if whole_paths:
+                max_rollout_length = max_path_length
+            else:
+                max_rollout_length = min(max_path_length, max_samples - n_samples)
+            path = rollout(
+                _mdp,
+                _policy,
+                max_rollout_length,
+                record_states
+            )
+            paths.append(path)
+            n_new_samples = len(path["rewards"])
+            n_samples += n_new_samples
+            if queue is not None:
+                queue.put(n_new_samples)
+            else:
+                pbar.inc(n_new_samples)
+        if queue is None:
+            pbar.stop()
+        return paths
+    except Exception:
+        raise Exception("".join(traceback.format_exception(*sys.exc_info())))
 
 
 def pool_init_theano(_):

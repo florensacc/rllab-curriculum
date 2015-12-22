@@ -39,11 +39,8 @@ class CartpoleSwingupMDP(Box2DMDP, Serializable):
         self.pole.angularVelocity = avel
         return self.get_state(), self.get_current_obs()
 
+    @overrides
     def get_current_reward(self, action):
-        # notdone = 1 - int(self.is_current_done())
-        # ucost = 1e-5 * (action ** 2).sum()
-        # xcost = 1 - np.cos(self.pole.angle)
-        # return -notdone * xcost - notdone * ucost
         if self.is_current_done():
             return -100
         else:
@@ -52,10 +49,11 @@ class CartpoleSwingupMDP(Box2DMDP, Serializable):
             else:
                 return np.cos(self.pole.angle)
 
-
+    @overrides
     def is_current_done(self):
         return abs(self.cart.position[0]) > self.max_cart_pos
 
+    @overrides
     def action_from_keys(self, keys):
         if keys[pygame.K_LEFT]:
             return np.asarray([-10])

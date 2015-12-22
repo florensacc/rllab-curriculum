@@ -1,7 +1,7 @@
 common = { friction: 0.9, density: 1, group: -1 }
 
 box2d {
-  world(gravity: [0, -9.8]) {
+  world(timestep: 0.02) {
     body(name: :torso, type: :dynamic, position: [0, 1.25]) {
       capsule(common.merge(from: [0, 0.2], to: [0, -0.2], radius: 0.05))
     }
@@ -41,20 +41,34 @@ box2d {
       anchor: [0, 0.1],
       limit: [-45.deg, 45.deg],
     )
+    state type: :xpos, com: [:torso, :thigh, :leg, :foot]
+    state type: :ypos, com: [:torso, :thigh, :leg, :foot]
+    # state type: :apos, com: [:torso, :thigh, :leg, :foot]
+    state type: :apos, joint: :thigh_joint
+    state type: :apos, joint: :leg_joint
+    state type: :apos, joint: :foot_joint
+    state type: :xvel, com: [:torso, :thigh, :leg, :foot]
+    state type: :yvel, com: [:torso, :thigh, :leg, :foot]
+    # state type: :avel, com: [:torso, :thigh, :leg, :foot]
+    state type: :avel, joint: :thigh_joint
+    state type: :avel, joint: :leg_joint
+    state type: :avel, joint: :foot_joint
+
+    max_torque = (1).Nm
     control(
       type: :torque,
       joint: :thigh_joint,
-      ctrllimit: [-2.Nm, 2.Nm]
+      ctrllimit: [-max_torque, max_torque]
     )
     control(
       type: :torque,
       joint: :leg_joint,
-      ctrllimit: [-2.Nm, 2.Nm]
+      ctrllimit: [-max_torque, max_torque]
     )
     control(
       type: :torque,
       joint: :foot_joint,
-      ctrllimit: [-2.Nm, 2.Nm]
+      ctrllimit: [-max_torque, max_torque]
     )
   }
 }

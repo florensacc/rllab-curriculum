@@ -5,7 +5,7 @@ require 'active_support/all'
 class Array
 
   def _is_1d_vector?
-    self.all?{|x| x.is_a? Numeric}
+    self.all?{|x| (x.is_a? Numeric) || (x.is_a? String) || (x.is_a? Symbol) }
   end
 
   def _is_2d_vector?
@@ -71,7 +71,7 @@ class Nokogiri::XML::Builder
 
 end
 
-class Fixnum
+class Numeric
 
   def deg
     self

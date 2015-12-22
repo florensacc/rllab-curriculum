@@ -1,6 +1,6 @@
 <!-- Auto-generated. Do not edit! -->
 <box2d>
-  <world gravity="0,-9.8">
+  <world timestep="0.02">
     <body name="torso" type="dynamic" position="0,1.25">
       <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.05,0.2;0.05,-0.2;-0.05,-0.2;-0.05,0.2"/>
       <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0.2" radius="0.05"/>
@@ -27,8 +27,18 @@
     <joint type="revolute" name="thigh_joint" bodyA="torso" bodyB="thigh" anchor="0,1.05" limit="-150,0"/>
     <joint type="revolute" name="leg_joint" bodyA="thigh" bodyB="leg" anchor="0,0.6" limit="-150,0"/>
     <joint type="revolute" name="foot_joint" bodyA="leg" bodyB="foot" anchor="0,0.1" limit="-45,45"/>
-    <control type="torque" joint="thigh_joint" ctrllimit="-2,2"/>
-    <control type="torque" joint="leg_joint" ctrllimit="-2,2"/>
-    <control type="torque" joint="foot_joint" ctrllimit="-2,2"/>
+    <state type="xpos" com="torso,thigh,leg,foot"/>
+    <state type="ypos" com="torso,thigh,leg,foot"/>
+    <state type="apos" joint="thigh_joint"/>
+    <state type="apos" joint="leg_joint"/>
+    <state type="apos" joint="foot_joint"/>
+    <state type="xvel" com="torso,thigh,leg,foot"/>
+    <state type="yvel" com="torso,thigh,leg,foot"/>
+    <state type="avel" joint="thigh_joint"/>
+    <state type="avel" joint="leg_joint"/>
+    <state type="avel" joint="foot_joint"/>
+    <control type="torque" joint="thigh_joint" ctrllimit="-1,1"/>
+    <control type="torque" joint="leg_joint" ctrllimit="-1,1"/>
+    <control type="torque" joint="foot_joint" ctrllimit="-1,1"/>
   </world>
 </box2d>

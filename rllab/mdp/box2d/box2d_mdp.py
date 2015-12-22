@@ -11,9 +11,9 @@ from rllab.misc.overrides import overrides
 
 class Box2DMDP(ControlMDP):
 
-
     @autoargs.arg("trig_angle", type=bool,
-                  help="Use cosine and sine representation for angle positions.")
+                  help="Use cosine and sine representation for angle "
+                       "positions.")
     def __init__(self, model_path, trig_angle=True):
         with open(model_path, "r") as f:
             s = f.read()
@@ -23,9 +23,11 @@ class Box2DMDP(ControlMDP):
         self.initial_state = self.get_state()
         self.current_state = self.initial_state
         self.viewer = None
+        self.trig_angle = trig_angle
         self._action_bounds = None
         self._observation_shape = None
-        self.trig_angle = trig_angle
+        self._cached_obs = None
+        self._cached_coms = {}
 
     def model_path(self, file_name):
         return osp.abspath(osp.join(osp.dirname(__file__),
@@ -48,7 +50,12 @@ class Box2DMDP(ControlMDP):
     @overrides
     def reset(self):
         self.set_state(self.initial_state)
+        self.invalidate_state_caches()
         return self.get_state(), self.get_current_obs()
+
+    def invalidate_state_caches(self):
+        self._cached_obs = None
+        self._cached_coms = {}
 
     def get_state(self):
         s = []
@@ -146,6 +153,7 @@ class Box2DMDP(ControlMDP):
         reward = self.get_current_reward(action)
         next_state = self.forward_dynamics(state, action,
                                            restore=False)
+        self.invalidate_state_caches()
         done = self.is_current_done()
         next_obs = self.get_current_obs()
         return next_state, next_obs, reward, done
@@ -157,28 +165,80 @@ class Box2DMDP(ControlMDP):
         raise NotImplementedError
 
     def get_current_obs(self):
+        return self.get_raw_obs()
+
+    def get_raw_obs(self):
+        if self._cached_obs is not None:
+            return self._cached_obs
         obs = []
         for state in self.extra_data.states:
-            body = find_body(self.world, state.body)
-            if state.typ == "xpos":
-                obs.append(body.position[0])
-            elif state.typ == "ypos":
-                obs.append(body.position[1])
-            elif state.typ == "xvel":
-                obs.append(body.linearVelocity[0])
-            elif state.typ == "yvel":
-                obs.append(body.linearVelocity[1])
-            elif state.typ == "apos":
-                if self.trig_angle:
-                    obs.append(np.cos(body.angle))
-                    obs.append(np.sin(body.angle))
+            if state.body:
+                body = find_body(self.world, state.body)
+                if state.typ == "xpos":
+                    obs.append(body.position[0])
+                elif state.typ == "ypos":
+                    obs.append(body.position[1])
+                elif state.typ == "xvel":
+                    obs.append(body.linearVelocity[0])
+                elif state.typ == "yvel":
+                    obs.append(body.linearVelocity[1])
+                elif state.typ == "apos":
+                    if self.trig_angle:
+                        obs.append(np.cos(body.angle))
+                        obs.append(np.sin(body.angle))
+                    else:
+                        obs.append(body.angle)
+                elif state.typ == "avel":
+                    obs.append(body.angularVelocity)
                 else:
-                    obs.append(body.angle)
-            elif state.typ == "avel":
-                obs.append(body.angularVelocity)
+                    raise NotImplementedError
+            elif state.joint:
+                joint = find_joint(self.world, state.joint)
+                if state.typ == "apos":
+                    if self.trig_angle:
+                        obs.append(np.cos(joint.angle))
+                        obs.append(np.sin(joint.angle))
+                    else:
+                        obs.append(joint.angle)
+                elif state.typ == "avel":
+                    obs.append(joint.speed)
+                else:
+                    raise NotImplementedError
+            elif state.com:
+                com_quant = self._compute_com(state.com)
+                xpos, ypos, xvel, yvel = com_quant
+                if state.typ == "xpos":
+                    obs.append(xpos)
+                elif state.typ == "ypos":
+                    obs.append(ypos)
+                elif state.typ == "xvel":
+                    obs.append(xvel)
+                elif state.typ == "yvel":
+                    obs.append(yvel)
+                else:
+                    print state.typ
+                    # orientation and angular velocity of the whole body is not
+                    # supported
+                    raise NotImplementedError
             else:
                 raise NotImplementedError
-        return np.array(obs)
+        self._cached_obs = np.array(obs)
+        return self._cached_obs
+
+    def _compute_com(self, com):
+        com_key = ",".join(sorted(com))
+        if com_key in self._cached_coms:
+            return self._cached_coms[com_key]
+        total_mass_quant = 0
+        total_mass = 0
+        for body_name in com:
+            body = find_body(self.world, body_name)
+            total_mass_quant += body.mass * \
+                np.array(list(body.worldCenter) + list(body.linearVelocity))
+            total_mass += body.mass
+        com_quant = total_mass_quant / total_mass
+        self._cached_coms[com_key] = com_quant
+        return com_quant
 
     @overrides
     def start_viewer(self):
