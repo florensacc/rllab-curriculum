@@ -24,6 +24,7 @@ class Box2DMDP(ControlMDP):
         self.current_state = self.initial_state
         self.viewer = None
         self.trig_angle = trig_angle
+        self.timestep = self.extra_data.timeStep
         self._action_bounds = None
         self._observation_shape = None
         self._cached_obs = None
@@ -150,12 +151,15 @@ class Box2DMDP(ControlMDP):
 
     @overrides
     def step(self, state, action):
+        raw_obs = self.get_raw_obs()
         next_state = self.forward_dynamics(state, action,
                                            restore=False)
-        reward = self.get_current_reward(state, action, next_state)
         self.invalidate_state_caches()
         done = self.is_current_done()
+        next_raw_obs = self.get_raw_obs()
         next_obs = self.get_current_obs()
+        reward = self.get_current_reward(
+            state, raw_obs, action, next_state, next_raw_obs)
         return next_state, next_obs, reward, done
 
     def get_current_reward(self, state, action, next_state):
@@ -206,15 +210,14 @@ class Box2DMDP(ControlMDP):
                     raise NotImplementedError
             elif state.com:
                 com_quant = self._compute_com(state.com)
-                xpos, ypos, xvel, yvel = com_quant
                 if state.typ == "xpos":
-                    obs.append(xpos)
+                    obs.append(com_quant[0])
                 elif state.typ == "ypos":
-                    obs.append(ypos)
+                    obs.append(com_quant[1])
                 elif state.typ == "xvel":
-                    obs.append(xvel)
+                    obs.append(com_quant[2])
                 elif state.typ == "yvel":
-                    obs.append(yvel)
+                    obs.append(com_quant[3])
                 else:
                     print state.typ
                     # orientation and angular velocity of the whole body is not
@@ -233,8 +236,8 @@ class Box2DMDP(ControlMDP):
         total_mass = 0
         for body_name in com:
             body = find_body(self.world, body_name)
-            total_mass_quant += body.mass * \
-                np.array(list(body.worldCenter) + list(body.linearVelocity))
+            total_mass_quant += body.mass * np.array(
+                list(body.worldCenter) + list(body.linearVelocity))
             total_mass += body.mass
         com_quant = total_mass_quant / total_mass
         self._cached_coms[com_key] = com_quant

@@ -40,7 +40,8 @@ class CartpoleSwingupMDP(Box2DMDP, Serializable):
         return self.get_state(), self.get_current_obs()
 
     @overrides
-    def get_current_reward(self, action):
+    def get_current_reward(self, state, raw_obs, action, next_state,
+            next_raw_obs):
         if self.is_current_done():
             return -100
         else:

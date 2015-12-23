@@ -18,6 +18,7 @@ import numpy as np
 
 from rllab.mdp.base import MDP
 from rllab.misc.overrides import overrides
+from rllab.misc import autoargs
 
 
 class MountainCarND(object):
@@ -78,10 +79,9 @@ class MountainCarND(object):
         self.state[:, 0] = self.state[:, 0].clip(
             min=self.state_range[:, 0, 0], max=self.state_range[:, 0, 1])
 
-    def step(self, action):
+    def step(self, action, step_penalty_coeff=1.0, distance_coeff=0.0):
         done = False
-        reward = -1.0
-        # intAction = thisAction.intArray[0]
+        reward = - step_penalty_coeff - distance_coeff * (self.state[:, 0] - self.goalPos) ** 2
 
         self.takeAction(action)
 
@@ -107,8 +107,17 @@ class MountainCar(MountainCarND):
 
 class MountainCarMDP(MDP):
 
-    def __init__(self):
+    @autoargs.arg('step_penalty_coeff', type=float,
+                  help='Coefficient for the step penalty')
+    @autoargs.arg('distance_coeff', type=float,
+                  help='Coefficient for the penalty for being far away from the goal')
+    def __init__(
+            self,
+            step_penalty_coeff=1,
+            distance_coeff=0):
         self._mc = MountainCar(random_start=True)
+        self.step_penalty_coeff = step_penalty_coeff
+        self.distance_coeff = distance_coeff
         self.reset()
 
     @overrides
@@ -138,4 +147,7 @@ class MountainCarMDP(MDP):
 
     @overrides
     def step(self, state, action):
-        return self._mc.step(action)
+        return self._mc.step(
+                action,
+                step_penalty_coeff=self.step_penalty_coeff,
+                distance_coeff=self.distance_coeff)
