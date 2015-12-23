@@ -1,7 +1,7 @@
 require_relative './utils'
 
 log_min_ratio = Math.log(1e-1)
-log_max_ratio = Math.log(1e1)
+log_max_ratio = Math.log(1e0)
 
 n_ratios = 50
 
