@@ -2,6 +2,7 @@ from rllab.mdp.mujoco.mujoco_mdp import MujocoMDP
 import numpy as np
 from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
+from rllab.misc.overrides import overrides
 
 # states: [
 # 0: z-coord,
@@ -32,6 +33,7 @@ class HopperMDP(MujocoMDP, Serializable):
         super(HopperMDP, self).__init__(path, frame_skip, ctrl_scaling)
         Serializable.__init__(self, timestep, alive_coeff, forward_coeff)
 
+    @overrides
     def get_current_obs(self):
         return np.concatenate([
             self.model.data.qpos[0:1],
@@ -40,6 +42,7 @@ class HopperMDP(MujocoMDP, Serializable):
             np.clip(self.model.data.qfrc_constraint, -10, 10)]
         ).reshape(-1)
 
+    @overrides
     def step(self, state, action):
         next_state = self.forward_dynamics(state, action, restore=False)
         next_obs = self.get_obs(next_state)
@@ -53,3 +56,16 @@ class HopperMDP(MujocoMDP, Serializable):
         done = not notdone
         self.state = next_state
         return next_state, next_obs, reward, done
+
+    @overrides
+    def log_extra(self, logger, paths):
+        forward_progress = \
+            [path["states"][-1][1] - path["states"][0][1] for path in paths]
+        logger.record_tabular(
+            'AverageForwardProgress', np.mean(forward_progress))
+        logger.record_tabular(
+            'MaxForwardProgress', np.max(forward_progress))
+        logger.record_tabular(
+            'MinForwardProgress', np.min(forward_progress))
+        logger.record_tabular(
+            'StdForwardProgress', np.std(forward_progress))
