@@ -14,7 +14,9 @@ class Box2DMDP(ControlMDP):
     @autoargs.arg("trig_angle", type=bool,
                   help="Use cosine and sine representation for angle "
                        "positions.")
-    def __init__(self, model_path, trig_angle=True):
+    @autoargs.arg("frame_skip", type=int,
+                  help="Number of frames to skip")
+    def __init__(self, model_path, trig_angle=True, frame_skip=1):
         with open(model_path, "r") as f:
             s = f.read()
         world, extra_data = world_from_xml(s)
@@ -24,6 +26,7 @@ class Box2DMDP(ControlMDP):
         self.current_state = self.initial_state
         self.viewer = None
         self.trig_angle = trig_angle
+        self.frame_skip = frame_skip
         self._action_bounds = None
         self._observation_shape = None
         self._cached_obs = None
@@ -150,8 +153,10 @@ class Box2DMDP(ControlMDP):
 
     @overrides
     def step(self, state, action):
-        next_state = self.forward_dynamics(state, action,
-                                           restore=False)
+        next_state = state
+        for _ in range(self.frame_skip):
+            next_state = self.forward_dynamics(next_state, action,
+                                               restore=False)
         reward = self.get_current_reward(state, action, next_state)
         self.invalidate_state_caches()
         done = self.is_current_done()
