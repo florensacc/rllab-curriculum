@@ -53,6 +53,9 @@ class MDP(object):
         """
         pass
 
+    def action_from_keys(self, keys):
+        raise NotImplementedError
+
 
 class ControlMDP(MDP):
 
