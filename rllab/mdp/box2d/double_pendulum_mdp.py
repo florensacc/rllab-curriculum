@@ -24,7 +24,7 @@ class DoublePendulumMDP(Box2DMDP, Serializable):
 
     @overrides
     def reset(self):
-        self.set_state(self.initial_state)
+        self._set_state(self.initial_state)
         stds = np.array([0.1, 0.1, 0.01, 0.01])
         pos1, pos2, v1, v2 = np.random.randn(*stds.shape) * stds
         self.link1.angle = pos1
@@ -42,7 +42,8 @@ class DoublePendulumMDP(Box2DMDP, Serializable):
         )
         return cur_pos
 
-    def get_current_reward(self, action):
+    def get_current_reward(
+            self, state, raw_obs, action, next_state, next_raw_obs):
         tgt_pos = np.asarray([0, self.link_len * 2])
         cur_pos = self.get_tip_pos()
         dist = np.linalg.norm(cur_pos - tgt_pos)

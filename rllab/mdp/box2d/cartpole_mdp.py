@@ -24,7 +24,7 @@ class CartpoleMDP(Box2DMDP, Serializable):
 
     @overrides
     def reset(self):
-        self.set_state(self.initial_state)
+        self._set_state(self.initial_state)
         bounds = np.array([
             self.max_cart_pos,
             self.max_cart_speed,
@@ -40,7 +40,8 @@ class CartpoleMDP(Box2DMDP, Serializable):
         return self.get_state(), self.get_current_obs()
 
     @overrides
-    def get_current_reward(self, action):
+    def get_current_reward(
+            self, state, raw_obs, action, next_state, next_raw_obs):
         notdone = 1 - int(self.is_current_done())
         ucost = 1e-5*(action**2).sum()
         xcost = 1 - np.cos(self.pole.angle)

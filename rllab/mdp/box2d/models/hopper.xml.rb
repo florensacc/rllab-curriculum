@@ -43,18 +43,15 @@ box2d {
     )
     state type: :xpos, com: [:torso, :thigh, :leg, :foot]
     state type: :ypos, com: [:torso, :thigh, :leg, :foot]
-    # state type: :apos, com: [:torso, :thigh, :leg, :foot]
     state type: :apos, joint: :thigh_joint
     state type: :apos, joint: :leg_joint
     state type: :apos, joint: :foot_joint
     state type: :xvel, com: [:torso, :thigh, :leg, :foot]
     state type: :yvel, com: [:torso, :thigh, :leg, :foot]
-    # state type: :avel, com: [:torso, :thigh, :leg, :foot]
     state type: :avel, joint: :thigh_joint
     state type: :avel, joint: :leg_joint
     state type: :avel, joint: :foot_joint
-
-    max_torque = (1).Nm
+    max_torque = (2).Nm
     control(
       type: :torque,
       joint: :thigh_joint,

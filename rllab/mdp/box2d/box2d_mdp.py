@@ -27,6 +27,7 @@ class Box2DMDP(ControlMDP):
         self.viewer = None
         self.trig_angle = trig_angle
         self.frame_skip = frame_skip
+        self.timestep = self.extra_data.timeStep
         self._action_bounds = None
         self._observation_shape = None
         self._cached_obs = None
@@ -36,7 +37,7 @@ class Box2DMDP(ControlMDP):
         return osp.abspath(osp.join(osp.dirname(__file__),
                                     'models/%s' % file_name))
 
-    def set_state(self, state):
+    def _set_state(self, state):
         splitted = np.array(state).reshape((-1, 6))
         for body, body_state in zip(self.world.bodies, splitted):
             xpos, ypos, apos, xvel, yvel, avel = body_state
@@ -52,11 +53,11 @@ class Box2DMDP(ControlMDP):
 
     @overrides
     def reset(self):
-        self.set_state(self.initial_state)
-        self.invalidate_state_caches()
+        self._set_state(self.initial_state)
+        self._invalidate_state_caches()
         return self.get_state(), self.get_current_obs()
 
-    def invalidate_state_caches(self):
+    def _invalidate_state_caches(self):
         self._cached_obs = None
         self._cached_coms = {}
 
@@ -103,15 +104,15 @@ class Box2DMDP(ControlMDP):
         return self._action_bounds
 
     @contextmanager
-    def set_state_tmp(self, state, restore=True):
+    def _set_state_tmp(self, state, restore=True):
         if np.array_equal(state, self.current_state) and not restore:
             yield
         else:
             prev_state = self.current_state
-            self.set_state(state)
+            self._set_state(state)
             yield
             if restore:
-                self.set_state(prev_state)
+                self._set_state(prev_state)
             else:
                 self.current_state = self.get_state()
 
@@ -120,7 +121,7 @@ class Box2DMDP(ControlMDP):
         if len(action) != self.action_dim:
             raise ValueError('incorrect action dimension: expected %d but got '
                              '%d' % (self.action_dim, len(action)))
-        with self.set_state_tmp(state, restore):
+        with self._set_state_tmp(state, restore):
             lb, ub = self.action_bounds
             action = np.clip(action, lb, ub)
             for ctrl, act in zip(self.extra_data.controls, action):
@@ -153,17 +154,21 @@ class Box2DMDP(ControlMDP):
 
     @overrides
     def step(self, state, action):
+        raw_obs = self.get_raw_obs()
         next_state = state
         for _ in range(self.frame_skip):
             next_state = self.forward_dynamics(next_state, action,
                                                restore=False)
-        reward = self.get_current_reward(state, action, next_state)
-        self.invalidate_state_caches()
+        self._invalidate_state_caches()
         done = self.is_current_done()
+        next_raw_obs = self.get_raw_obs()
         next_obs = self.get_current_obs()
+        reward = self.get_current_reward(
+            state, raw_obs, action, next_state, next_raw_obs)
         return next_state, next_obs, reward, done
 
-    def get_current_reward(self, state, action, next_state):
+    def get_current_reward(
+            self, state, raw_obs, action, next_state, next_raw_obs):
         raise NotImplementedError
 
     def is_current_done(self):
@@ -211,15 +216,14 @@ class Box2DMDP(ControlMDP):
                     raise NotImplementedError
             elif state.com:
                 com_quant = self._compute_com(state.com)
-                xpos, ypos, xvel, yvel = com_quant
                 if state.typ == "xpos":
-                    obs.append(xpos)
+                    obs.append(com_quant[0])
                 elif state.typ == "ypos":
-                    obs.append(ypos)
+                    obs.append(com_quant[1])
                 elif state.typ == "xvel":
-                    obs.append(xvel)
+                    obs.append(com_quant[2])
                 elif state.typ == "yvel":
-                    obs.append(yvel)
+                    obs.append(com_quant[3])
                 else:
                     print state.typ
                     # orientation and angular velocity of the whole body is not
@@ -238,8 +242,8 @@ class Box2DMDP(ControlMDP):
         total_mass = 0
         for body_name in com:
             body = find_body(self.world, body_name)
-            total_mass_quant += body.mass * \
-                np.array(list(body.worldCenter) + list(body.linearVelocity))
+            total_mass_quant += body.mass * np.array(
+                list(body.worldCenter) + list(body.linearVelocity))
             total_mass += body.mass
         com_quant = total_mass_quant / total_mass
         self._cached_coms[com_key] = com_quant
