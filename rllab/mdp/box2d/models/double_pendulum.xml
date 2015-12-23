@@ -1,0 +1,22 @@
+<!-- Auto-generated. Do not edit! -->
+<box2d>
+  <world timestep="0.05">
+    <body name="link1" type="dynamic" position="0,0">
+      <fixture density="5.0" group="-1" shape="polygon" vertices="0.05,0.0;0.05,-1.0;-0.05,-1.0;-0.05,0.0"/>
+    </body>
+    <body name="link2" type="dynamic" position="0,-1">
+      <fixture density="5.0" group="-1" shape="polygon" vertices="0.05,0.0;0.05,-1.0;-0.05,-1.0;-0.05,0.0"/>
+    </body>
+    <body name="track" type="static" position="0,-0.1">
+      <fixture group="-1" shape="polygon" box="100,0.1"/>
+    </body>
+    <joint type="revolute" name="link_joint_1" bodyA="track" bodyB="link1" anchor="0,0"/>
+    <joint type="revolute" name="link_joint_2" bodyA="link1" bodyB="link2" anchor="0,-1"/>
+    <control type="torque" joint="link_joint_1" ctrllimit="-3,3"/>
+    <control type="torque" joint="link_joint_2" ctrllimit="-3,3"/>
+    <state type="apos" body="link1"/>
+    <state type="avel" body="link1"/>
+    <state type="apos" body="link2"/>
+    <state type="avel" body="link2"/>
+  </world>
+</box2d>

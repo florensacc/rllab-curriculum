@@ -42,6 +42,7 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
             mdp.plot()
             time.sleep(delay)
             totrew += rew
+            print rew
             if done:
                 print totrew
                 totret = 0

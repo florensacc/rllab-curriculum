@@ -2,13 +2,18 @@ from rllab.mdp.box2d.box2d_mdp import Box2DMDP
 from rllab.mdp.box2d.parser import find_body
 import numpy as np
 from rllab.core.serializable import Serializable
+from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 
 
 class CartpoleMDP(Box2DMDP, Serializable):
 
-    def __init__(self):
-        super(CartpoleMDP, self).__init__(self.model_path("cartpole.xml"))
+    @autoargs.inherit(Box2DMDP.__init__)
+    def __init__(self, **kwargs):
+        super(CartpoleMDP, self).__init__(
+            self.model_path("cartpole.xml"),
+            **kwargs
+        )
         self.max_pole_angle = .2
         self.max_cart_pos = 2.4
         self.max_cart_speed = 4.
