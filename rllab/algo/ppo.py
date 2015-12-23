@@ -41,6 +41,8 @@ class PPO(BatchPolopt):
                        "initial exponentially adjusted value.")
     @autoargs.arg("max_penalty_bs_itr", type=int,
                   help="Maximum number of binary search iterations.")
+    @autoargs.arg("bs_kl_tolerance", type=float,
+                  help="Tolerance level for binary search.")
     @autoargs.arg("adapt_penalty", type=bool,
                   help="Whether to adjust penalty for each iteration.")
     @autoargs.arg("optimizer", type=str,
