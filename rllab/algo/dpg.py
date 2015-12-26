@@ -286,6 +286,38 @@ class DPG(RLAlgorithm):
         target_qf = opt_info["target_qf"]
         target_policy = opt_info["target_policy"]
 
+        if self.paths_samples_cnt % self.renormalize_interval == 0:
+            qf_scale = opt_info['qf_scale']
+            qf_bias = opt_info['qf_bias']
+            returns = np.concatenate([
+                discount_cumsum(path, self.discount) for path in self.paths
+                ])
+            std_old = qf_scale.get_value()
+            mean_old = qf_bias.get_value()
+            std_new = np.max(returns) - np.min(returns)
+            mean_new = np.mean(returns)
+            W_old = qf.get_output_W()
+            b_old = qf.get_output_b()
+            target_W_old = target_qf.get_output_W()
+            target_b_old = target_qf.get_output_b()
+
+            # Make necessary transformation so that
+            # (W_old * h + b_old) * std_old + mean_old == \
+            #   (W_new * h + b_new) * std_new + mean_new
+            if std_new > 1e-6:
+                W_new = W_old * std_old / std_new
+                b_new = (b_old * std_old + mean_old - mean_new) / std_new
+                target_W_new = target_W_old * std_old / std_new
+                target_b_new = \
+                    (target_b_old * std_old + mean_old - mean_new) / std_new
+                qf.set_output_W(W_new)
+                qf.set_output_b(b_new)
+                target_qf.set_output_W(target_W_new)
+                target_qf.set_output_b(target_b_new)
+
+                qf_scale.set_value(np.cast['float32'](std_new))
+                qf_bias.set_value(np.cast['float32'](mean_new))
+
         ys = f_y(next_states, rewards, terminal)
         qf_loss, qval = f_train_qf(ys, states, actions, rewards)
         policy_surr = f_train_policy(ys, states)
@@ -303,39 +335,6 @@ class DPG(RLAlgorithm):
             (1 - self.soft_target_tau) * target_policy.get_param_values()
         )
 
-        if self.paths_samples_cnt % self.renormalize_interval == 0:
-            qf_scale = opt_info['qf_scale']
-            qf_bias = opt_info['qf_bias']
-            returns = np.concatenate([
-                discount_cumsum(path, self.discount) for path in self.paths
-                ])
-            std_old = qf_scale.get_value()
-            mean_old = qf_bias.get_value()
-            std_new = np.max(returns) - np.min(returns)
-            mean_new = np.mean(returns)
-            W_old = qf.get_output_W()
-            b_old = qf.get_output_b()
-            target_W_old = target_qf.get_output_W()
-            target_b_old = target_qf.get_output_b()
-
-            print "before:", np.mean(f_y(next_states, rewards, terminal))
-            # Make necessary transformation so that
-            # (W_old * h + b_old) * std_old + mean_old == \
-            #   (W_new * h + b_new) * std_new + mean_new
-            if std_new > 1e-6:
-                W_new = W_old * std_old / std_new
-                b_new = (b_old * std_old + mean_old - mean_new) / std_new
-                target_W_new = target_W_old * std_old / std_new
-                target_b_new = \
-                    (target_b_old * std_old + mean_old - mean_new) / std_new
-                qf.set_output_W(W_new)
-                qf.set_output_b(b_new)
-                target_qf.set_output_W(target_W_new)
-                target_qf.set_output_b(target_b_new)
-
-                qf_scale.set_value(np.cast['float32'](std_new))
-                qf_bias.set_value(np.cast['float32'](mean_new))
-            print "after:", np.mean(f_y(next_states, rewards, terminal))
         return opt_info
 
     def evaluate(self, epoch, qf, policy, opt_info):
