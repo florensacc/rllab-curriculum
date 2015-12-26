@@ -65,15 +65,15 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered,
             (action_merge_layer % n_layers + n_layers) % n_layers
 
         if len(hidden_nl) == 1:
-            hidden_nl *= len(hidden_sizes)
+            hidden_nl = hidden_nl * len(hidden_sizes)
         assert len(hidden_nl) == len(hidden_sizes)
 
         if len(hidden_W_init) == 1:
-            hidden_W_init *= len(hidden_sizes)
+            hidden_W_init = hidden_W_init * len(hidden_sizes)
         assert len(hidden_W_init) == len(hidden_sizes)
 
         if len(hidden_b_init) == 1:
-            hidden_b_init *= len(hidden_sizes)
+            hidden_b_init = hidden_b_init * len(hidden_sizes)
         assert len(hidden_b_init) == len(hidden_sizes)
 
         l_hidden = l_obs

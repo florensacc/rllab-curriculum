@@ -318,6 +318,8 @@ class DPG(RLAlgorithm):
                 qf_scale.set_value(np.cast['float32'](std_new))
                 qf_bias.set_value(np.cast['float32'](mean_new))
 
+            self.paths = []
+
         ys = f_y(next_states, rewards, terminal)
         qf_loss, qval = f_train_qf(ys, states, actions, rewards)
         policy_surr = f_train_policy(ys, states)
