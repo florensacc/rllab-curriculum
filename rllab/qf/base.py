@@ -47,3 +47,22 @@ class ContinuousQFunction(QFunction):
 
     def get_qval_sym(self, input_var, action_var):
         raise NotImplementedError
+
+
+class NormalizableQFunction(QFunction):
+
+    @property
+    def output_nl(self):
+        raise NotImplementedError
+
+    def get_output_W(self):
+        raise NotImplementedError
+
+    def set_output_W(self, W_new):
+        raise NotImplementedError
+
+    def get_output_b(self):
+        raise NotImplementedError
+
+    def set_output_b(self, b_new):
+        raise NotImplementedError

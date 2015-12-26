@@ -34,6 +34,7 @@ def _get_prefix(cls):
     from rllab.vf.base import ValueFunction
     from rllab.qf.base import QFunction
     from rllab.algo.base import Algorithm
+    from rllab.es.base import ExplorationStrategy
 
     if hasattr(cls.__init__, '_autoargs_prefix'):
         return cls.__init__._autoargs_prefix
@@ -47,6 +48,8 @@ def _get_prefix(cls):
         return 'qf_'
     elif issubclass(cls, Policy):
         return 'policy_'
+    elif issubclass(cls, ExplorationStrategy):
+        return 'es_'
     else:
         return ""
 

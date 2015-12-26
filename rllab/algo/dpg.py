@@ -1,6 +1,7 @@
 from rllab.algo.base import RLAlgorithm
 from rllab.algo.util import ReplayPool
 from rllab.algo.first_order_method import parse_update_method
+from rllab.qf.base import NormalizableQFunction
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
 from rllab.misc.special import discount_return, discount_cumsum
@@ -8,6 +9,7 @@ from rllab.misc.ext import compile_function, new_tensor, merge_dict
 from rllab.sampler import parallel_sampler
 from rllab.plotter import plotter
 import rllab.misc.logger as logger
+import theano
 import theano.tensor as TT
 import cPickle as pickle
 import numpy as np
@@ -59,10 +61,9 @@ class DPG(RLAlgorithm):
                        'update.')
     @autoargs.arg('normalize_qval', type=bool,
                   help='Whether to normalize the Q values')
-    @autoargs.arg('normalize_qval_learning_rate', type=float,
-                  help='Learning rate for the qf_scale and qf_bias parameters.')
-    @autoargs.arg('normalize_qval_update_method', type=str,
-                  help='Update method for the qf_scale and qf_bias parameters.')
+    @autoargs.arg('renormalize_interval', type=int,
+                  help='How many samples between each re-normalization of Q '
+                       'values')
     @autoargs.arg('plot', type=bool,
                   help='Whether to visualize the policy performance after '
                        'each eval_interval.')
@@ -85,8 +86,7 @@ class DPG(RLAlgorithm):
             eval_whole_paths=True,
             soft_target_tau=0.001,
             normalize_qval=True,
-            normalize_qval_learning_rate=1e-3,
-            normalize_qval_update_method='adam',
+            renormalize_interval=1000,
             plot=False):
         self.batch_size = batch_size
         self.n_epochs = n_epochs
@@ -111,16 +111,14 @@ class DPG(RLAlgorithm):
         self.eval_whole_paths = eval_whole_paths
         self.soft_target_tau = soft_target_tau
         self.normalize_qval = normalize_qval
-        self.normalize_qval_update_method = \
-            parse_update_method(
-                normalize_qval_update_method,
-                learning_rate=normalize_qval_learning_rate
-            )
+        self.renormalize_interval = renormalize_interval
         self.plot = plot
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []
         self.q_averages = []
+        self.paths = []
+        self.paths_samples_cnt = 0
 
     def start_worker(self, mdp, policy):
         parallel_sampler.populate_task(mdp, policy)
@@ -156,9 +154,10 @@ class DPG(RLAlgorithm):
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
 
-                reward = reward * 0.1
+                self.record_step(pool, state, observation, action,
+                                 next_state, next_observation, reward,
+                                 terminal)
 
-                pool.add_sample(observation, action, reward, terminal)
                 state, observation = next_state, next_observation
 
                 if pool.size >= self.min_pool_size:
@@ -179,6 +178,14 @@ class DPG(RLAlgorithm):
             logger.pop_prefix()
 
     def init_opt(self, mdp, policy, qf):
+
+        if self.normalize_qval:
+            if not isinstance(qf, NormalizableQFunction):
+                raise ValueError('Q function must be normalizable')
+            if qf.output_nl:
+                raise ValueError('The last layer of Q function must not have '
+                                 'nonlinearity')
+
         # First, create "target" policy and Q functions
         target_policy = pickle.loads(pickle.dumps(policy))
         target_qf = pickle.loads(pickle.dumps(qf))
@@ -204,8 +211,8 @@ class DPG(RLAlgorithm):
         # compute the on-policy y values
         next_qval = target_qf.get_qval_sym(
             next_obs, target_policy.get_action_sym(next_obs))
-        if self.normalize_qval:
-            next_qval = next_qval * qf_scale + qf_bias
+        next_qval = next_qval * qf_scale + qf_bias
+
         ys = rewards + (1 - terminals) * self.discount * next_qval
         f_y = compile_function(
             inputs=[next_obs, rewards, terminals],
@@ -221,24 +228,18 @@ class DPG(RLAlgorithm):
             sum([TT.sum(TT.square(param)) for param in qf.params])
 
         qval = qf.get_qval_sym(obs, action)
-        if self.normalize_qval:
-            qval = qval * qf_scale + qf_bias
-        qf_loss = TT.mean(TT.square((yvar - qval)))
+        qval = qval * qf_scale + qf_bias
+        qf_loss = TT.mean(TT.square((yvar - qval) / qf_scale))
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
         policy_weight_decay_term = self.policy_weight_decay * \
             sum([TT.sum(TT.square(param)) for param in policy.params])
         policy_qval = qf.get_qval_sym(obs, policy.get_action_sym(obs))
-        # if self.normalize_qval:
-        #     policy_qval = policy_qval * qf_scale + qf_bias
         # The policy gradient is computed with respect to the unscaled Q values
         policy_surr = -TT.mean(policy_qval)
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
-        qf_updates = merge_dict(
-            self.qf_update_method(qf_reg_loss, qf.params),
-            self.normalize_qval_update_method(qf_reg_loss, [qf_scale, qf_bias]),
-        )
+        qf_updates = self.qf_update_method(qf_reg_loss, qf.params)
         policy_updates = self.policy_update_method(
             policy_reg_surr, policy.params)
 
@@ -263,7 +264,20 @@ class DPG(RLAlgorithm):
             qf_bias=qf_bias,
         )
 
+    def record_step(self, pool, state, observation, action,
+                    next_state, next_observation, reward, terminal):
+        pool.add_sample(observation, action, reward, terminal)
+        # record paths in order to renormalize when needed
+        if self.normalize_qval:
+            if len(self.paths) == 0:
+                self.paths.append([])
+            self.paths[-1].append(reward)
+            if terminal:
+                self.paths.append([])
+            self.paths_samples_cnt += 1
+
     def do_training(self, itr, batch, qf, policy, opt_info):
+
         states, actions, rewards, next_states, terminal = batch
 
         f_y = opt_info["f_y"]
@@ -288,13 +302,45 @@ class DPG(RLAlgorithm):
             self.soft_target_tau * policy.get_param_values() +
             (1 - self.soft_target_tau) * target_policy.get_param_values()
         )
+
+        if self.paths_samples_cnt % self.renormalize_interval == 0:
+            qf_scale = opt_info['qf_scale']
+            qf_bias = opt_info['qf_bias']
+            returns = np.concatenate([
+                discount_cumsum(path, self.discount) for path in self.paths
+                ])
+            std_old = qf_scale.get_value()
+            mean_old = qf_bias.get_value()
+            std_new = np.max(returns) - np.min(returns)
+            mean_new = np.mean(returns)
+            W_old = qf.get_output_W()
+            b_old = qf.get_output_b()
+            target_W_old = target_qf.get_output_W()
+            target_b_old = target_qf.get_output_b()
+
+            print "before:", np.mean(f_y(next_states, rewards, terminal))
+            # Make necessary transformation so that
+            # (W_old * h + b_old) * std_old + mean_old == \
+            #   (W_new * h + b_new) * std_new + mean_new
+            if std_new > 1e-6:
+                W_new = W_old * std_old / std_new
+                b_new = (b_old * std_old + mean_old - mean_new) / std_new
+                target_W_new = target_W_old * std_old / std_new
+                target_b_new = \
+                    (target_b_old * std_old + mean_old - mean_new) / std_new
+                qf.set_output_W(W_new)
+                qf.set_output_b(b_new)
+                target_qf.set_output_W(target_W_new)
+                target_qf.set_output_b(target_b_new)
+
+                qf_scale.set_value(np.cast['float32'](std_new))
+                qf_bias.set_value(np.cast['float32'](mean_new))
+            print "after:", np.mean(f_y(next_states, rewards, terminal))
         return opt_info
 
     def evaluate(self, epoch, qf, policy, opt_info):
         logger.log("Collecting samples for evaluation")
 
-        qf_scale = opt_info["qf_scale"]
-        qf_bias = opt_info["qf_bias"]
         paths = parallel_sampler.request_samples(
             policy_params=policy.get_param_values(),
             max_samples=self.eval_samples,
@@ -314,15 +360,6 @@ class DPG(RLAlgorithm):
             [path["actions"] for path in paths]
         )))
 
-        # if self.normalize_qval:
-        #     returns = np.concatenate([
-        #         discount_cumsum(path["rewards"], self.discount) for path in paths
-        #     ])
-        #     new_bias = np.mean(returns)
-        #     new_scale = max(1., np.std(returns - new_bias))
-        #     theano.compat.set_value(qf_bias, np.cast['float32'](new_bias))
-        #     theano.compat.set_value(qf_scale, np.cast['float32'](new_scale))
-
         logger.record_tabular('Epoch', epoch)
         logger.record_tabular('AverageReturn', average_return)
         logger.record_tabular('AverageDiscountedReturn',
@@ -335,8 +372,11 @@ class DPG(RLAlgorithm):
                               np.linalg.norm(policy.get_param_values()))
         logger.record_tabular('QFunParamNorm',
                               np.linalg.norm(qf.get_param_values()))
-        logger.record_tabular('QScale', theano.compat.get_value(qf_scale))
-        logger.record_tabular('QBias', theano.compat.get_value(qf_bias))
+        if self.normalize_qval:
+            qf_scale = opt_info["qf_scale"]
+            qf_bias = opt_info["qf_bias"]
+            logger.record_tabular('QScale', qf_scale.get_value())
+            logger.record_tabular('QBias', qf_bias.get_value())
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []
