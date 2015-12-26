@@ -10,7 +10,7 @@ require_relative './utils'
       normalize_mdp: nil,
       policy: {
         _name: "mean_std_nn_policy",
-        hidden_layers: [],
+        hidden_sizes: [],
       },
       vf: {
         _name: "mujoco_value_function",

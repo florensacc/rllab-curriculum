@@ -1,6 +1,7 @@
 from __future__ import print_function
 from rllab.misc.tabulate import tabulate
 from rllab.misc.console import mkdir_p
+from rllab.misc.autoargs import get_all_parameters
 import os
 import os.path as osp
 import sys
@@ -8,6 +9,7 @@ import datetime
 import dateutil.tz
 import csv
 import joblib
+import json
 
 _prefixes = []
 _prefix_str = ''
@@ -134,3 +136,18 @@ def save_itr_params(itr, params):
             pass
         else:
             raise NotImplementedError
+
+
+def log_parameters(log_file, args, classes):
+    log_params = {}
+    for param_name, param_value in args.__dict__.iteritems():
+        if any([param_name.startswith(x) for x in classes.keys()]):
+            continue
+        log_params[param_name] = param_value
+    for name, cls in classes.iteritems():
+        params = get_all_parameters(cls, args)
+        params["_name"] = getattr(args, name)
+        log_params[name] = params
+    mkdir_p(os.path.dirname(log_file))
+    with open(log_file, "w") as f:
+        json.dump(log_params, f, indent=2, sort_keys=True)

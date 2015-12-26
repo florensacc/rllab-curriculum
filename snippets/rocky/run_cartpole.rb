@@ -7,15 +7,15 @@ params = {
   mdp: {
     _name: "box2d.cartpole_mdp",
   },
-  normalize_mdp: nil,
+  normalize_mdp: true,
   policy: {
     _name: "mean_std_nn_policy",
-    hidden_layers: [],
+    hidden_sizes: [],
   },
   vf: {
     _name: "mujoco_value_function",
   },
-  exp_name: "ppo_box2d_cartpole_quantile_#{quantile}_seed_#{seed}",
+  # exp_name: "ppo_box2d_cartpole_quantile_#{quantile}_seed_#{seed}",
   algo: {
     _name: "ppo",
     binary_search_penalty: false,

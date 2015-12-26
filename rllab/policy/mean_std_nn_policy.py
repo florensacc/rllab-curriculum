@@ -26,11 +26,15 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                   help='nonlinearity used for each hidden layer, can be one '
                        'of tanh, sigmoid')
     # pylint: disable=dangerous-default-value
-    def __init__(self, mdp, hidden_sizes=[32, 32], nonlinearity=NL.tanh):
+    def __init__(
+            self,
+            mdp,
+            hidden_sizes=[32, 32],
+            nonlinearity='lasagne.nonlinearities.tanh'):
         # pylint: enable=dangerous-default-value
         # create network
         if isinstance(nonlinearity, str):
-            nonlinearity = locate('lasagne.nonlinearities.' + nonlinearity)
+            nonlinearity = locate(nonlinearity)
         input_var = TT.matrix('input')
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]),
                                input_var=input_var)
