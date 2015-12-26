@@ -102,19 +102,20 @@ def record_tabular(key, val):
 
 
 def dump_tabular(*args, **kwargs):
-    for line in tabulate(_tabular).split('\n'):
-        log(line, *args, **kwargs)
-    tabular_dict = dict(_tabular)
-    # Also write to the csv files
-    # This assumes that the keys in each iteration won't change!
-    for tabular_fd in _tabular_fds.values():
-        writer = csv.DictWriter(tabular_fd, fieldnames=tabular_dict.keys())
-        if tabular_fd not in _tabular_header_written:
-            writer.writeheader()
-            _tabular_header_written.add(tabular_fd)
-        writer.writerow(tabular_dict)
-        tabular_fd.flush()
-    del _tabular[:]
+    if len(_tabular) > 0:
+        for line in tabulate(_tabular).split('\n'):
+            log(line, *args, **kwargs)
+        tabular_dict = dict(_tabular)
+        # Also write to the csv files
+        # This assumes that the keys in each iteration won't change!
+        for tabular_fd in _tabular_fds.values():
+            writer = csv.DictWriter(tabular_fd, fieldnames=tabular_dict.keys())
+            if tabular_fd not in _tabular_header_written:
+                writer.writeheader()
+                _tabular_header_written.add(tabular_fd)
+            writer.writerow(tabular_dict)
+            tabular_fd.flush()
+        del _tabular[:]
 
 
 def pop_prefix():
