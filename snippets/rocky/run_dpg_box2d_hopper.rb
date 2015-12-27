@@ -7,8 +7,9 @@ qf_weight_decays = [0, 1e-5, 1e-6, 1e-7]
 policy_lrs = [1e-4, 5e-4, 1e-5]
 discounts = [0.99, 0.999, 0.9999, 1]
 batch_sizes = [32, 64, 128]
+epoch_lengths = [5000, 10000, 20000, 40000]
 
-while true
+100.times do
   params = {
     mdp: {
       _name: "box2d.hopper_mdp",
@@ -27,7 +28,7 @@ while true
       _name: "dpg",
       batch_size: batch_sizes.sample,
       n_epochs: 500,
-      epoch_length: 5000,
+      epoch_length: epoch_lengths.sample,
       min_pool_size: 50000,
       replay_pool_size: 500000,
       discount: discounts.sample,
@@ -46,8 +47,8 @@ while true
     snapshot_mode: "last",
     seed: seeds.sample,
   }
-
   command = to_command(params)
-  puts command
-  system(command)
+  create_task_script(to_docker_command(command), launch: false, prefix: "dpg_hopper")
+  # puts command
+  # system(command)
 end
