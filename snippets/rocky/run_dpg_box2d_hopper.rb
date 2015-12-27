@@ -2,15 +2,16 @@ require_relative './utils'
 
 seeds = (1..10).to_a
 
-hiddens = [[], [32], [32, 32]]
-qf_weight_decays = [0, 1e-3, 1e-4, 1e-5]
+hiddens = [[32, 32], [32, 32, 32]]
+qf_weight_decays = [0, 1e-5, 1e-6, 1e-7]
 policy_lrs = [1e-4, 5e-4, 1e-5]
 discounts = [0.99, 0.999, 0.9999, 1]
+batch_sizes = [32, 64, 128]
 
 while true
   params = {
     mdp: {
-      _name: "box2d.cartpole_swingup_mdp",
+      _name: "box2d.hopper_mdp",
     },
     normalize_mdp: true,
     qf: {
@@ -24,24 +25,24 @@ while true
     # exp_name: "dpg_box2d_cartpole_swingup",
     algo: {
       _name: "dpg",
-      batch_size: 32,
+      batch_size: batch_sizes.sample,
       n_epochs: 500,
-      epoch_length: 1000,
-      min_pool_size: 10000,
-      replay_pool_size: 100000,
+      epoch_length: 5000,
+      min_pool_size: 50000,
+      replay_pool_size: 500000,
       discount: discounts.sample,
       qf_weight_decay: qf_weight_decays.sample,
-      max_path_length: 100,
-      eval_samples: 10000,
+      max_path_length: 500,
+      eval_samples: 500,
       eval_whole_paths: true,
-      renormalize_interval: 1000,
+      renormalize_interval: 5000,
       # normalize_qval: false,
       policy_learning_rate: policy_lrs.sample,
     },
     es: {
       _name: "ou_strategy",
     },
-    n_parallel: 4,
+    n_parallel: 1,
     snapshot_mode: "last",
     seed: seeds.sample,
   }

@@ -34,7 +34,7 @@ class DPG(RLAlgorithm):
                   help='Size of the experience replay pool.')
     @autoargs.arg('discount', type=float,
                   help='Discount factor for the cumulative return.')
-    @autoargs.arg('max_path_length', type=float,
+    @autoargs.arg('max_path_length', type=int,
                   help='Discount factor for the cumulative return.')
     @autoargs.arg('qf_weight_decay', type=float,
                   help='Weight decay factor for parameters of the Q function.')
@@ -351,9 +351,9 @@ class DPG(RLAlgorithm):
         average_discounted_return = np.mean(
             [discount_return(path["rewards"], self.discount) for path in paths]
         )
-        average_return = np.mean(
-            [discount_return(path["rewards"], 1) for path in paths]
-        )
+
+        returns = [sum(path["rewards"]) for path in paths]
+
         average_q_loss = np.mean(self.qf_loss_averages)
         average_policy_surr = np.mean(self.policy_surr_averages)
         average_q = np.mean(np.concatenate(self.q_averages))
@@ -362,7 +362,14 @@ class DPG(RLAlgorithm):
         )))
 
         logger.record_tabular('Epoch', epoch)
-        logger.record_tabular('AverageReturn', average_return)
+        logger.record_tabular('AverageReturn',
+                              np.mean(returns))
+        logger.record_tabular('StdReturn',
+                              np.std(returns))
+        logger.record_tabular('MaxReturn',
+                              np.max(returns))
+        logger.record_tabular('MinReturn',
+                              np.min(returns))
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
         logger.record_tabular('AverageQLoss', average_q_loss)
