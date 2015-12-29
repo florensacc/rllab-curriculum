@@ -4,7 +4,7 @@ from rllab.misc.overrides import overrides
 
 class NoValueFunction(ValueFunction):
 
-    def __init__(self):
+    def __init__(self, mdp):
         pass
 
     @overrides
