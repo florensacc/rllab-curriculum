@@ -4,6 +4,9 @@ from rllab.misc.overrides import overrides
 
 class NoValueFunction(ValueFunction):
 
+    def __init__(self, mdp):
+        pass
+
     @overrides
     def get_param_values(self):
         return None

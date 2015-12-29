@@ -15,3 +15,4 @@ build_linux
 run_experiment.sh
 notebooks
 *.ipynb
+launch_scripts

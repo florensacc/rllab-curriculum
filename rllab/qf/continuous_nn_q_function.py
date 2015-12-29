@@ -6,15 +6,16 @@ import lasagne.init
 import theano.tensor as TT
 import itertools
 
-from rllab.qf.base import ContinuousQFunction
+from rllab.qf.base import ContinuousQFunction, NormalizableQFunction
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
 from rllab.misc.ext import new_tensor
+from rllab.misc.overrides import overrides
 
 
-class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
-
+class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered,
+                            NormalizableQFunction, Serializable):
     @autoargs.arg('hidden_sizes', type=int, nargs='*',
                   help='list of sizes for the fully-connected hidden layers')
     @autoargs.arg('hidden_nl', type=str, nargs='*',
@@ -64,15 +65,15 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             (action_merge_layer % n_layers + n_layers) % n_layers
 
         if len(hidden_nl) == 1:
-            hidden_nl *= len(hidden_sizes)
+            hidden_nl = hidden_nl * len(hidden_sizes)
         assert len(hidden_nl) == len(hidden_sizes)
 
         if len(hidden_W_init) == 1:
-            hidden_W_init *= len(hidden_sizes)
+            hidden_W_init = hidden_W_init * len(hidden_sizes)
         assert len(hidden_W_init) == len(hidden_sizes)
 
         if len(hidden_b_init) == 1:
-            hidden_b_init *= len(hidden_sizes)
+            hidden_b_init = hidden_b_init * len(hidden_sizes)
         assert len(hidden_b_init) == len(hidden_sizes)
 
         l_hidden = l_obs
@@ -106,8 +107,9 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
         self._output_layer = l_output
         self._obs_layer = l_obs
         self._action_layer = l_action
+        self._output_nl = eval(output_nl)
 
-        super(ContinuousNNQFunction, self).__init__(mdp)
+        ContinuousQFunction.__init__(self, mdp)
         LasagnePowered.__init__(self, [l_output])
         Serializable.__init__(
             self, mdp=mdp, hidden_sizes=hidden_sizes, hidden_nl=hidden_nl,
@@ -115,9 +117,34 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             action_merge_layer=action_merge_layer, output_nl=output_nl,
             output_W_init=output_W_init, output_b_init=output_b_init)
 
+    @property
+    def normalizable(self):
+        return self._output_nl is None
+
     def get_qval_sym(self, obs_var, action_var):
         qvals = L.get_output(
             self._output_layer,
             {self._obs_layer: obs_var, self._action_layer: action_var}
         )
         return TT.reshape(qvals, (-1,))
+
+    @property
+    @overrides
+    def output_nl(self):
+        return self._output_nl
+
+    @overrides
+    def get_output_W(self):
+        return self._output_layer.W.get_value()
+
+    @overrides
+    def get_output_b(self):
+        return self._output_layer.b.get_value()
+
+    @overrides
+    def set_output_W(self, W_new):
+        self._output_layer.W.set_value(W_new)
+
+    @overrides
+    def set_output_b(self, b_new):
+        self._output_layer.b.set_value(b_new)

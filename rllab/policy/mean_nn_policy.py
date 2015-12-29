@@ -9,7 +9,7 @@ from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
-from rllab.misc.ext import compile_function
+from rllab.misc.ext import compile_function, new_tensor
 
 
 class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
@@ -44,8 +44,8 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
             output_b_init='lasagne.init.Uniform(-3e-3, 3e-3)'):
         # pylint: enable=dangerous-default-value
         # create network
-        input_var = TT.matrix('input',
-                              fixed_shape=(None, mdp.observation_shape[0]))
+        input_var = TT.matrix('input')
+                              
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]),
                                input_var=input_var)
 

@@ -1,5 +1,6 @@
 from rllab.es.base import ExplorationStrategy
 from rllab.misc.overrides import overrides
+from rllab.misc import autoargs
 import numpy as np
 
 
@@ -10,6 +11,13 @@ class GaussianStrategy(ExplorationStrategy):
     The standard deviation (sigma) of the noise can be annealed over time.
     """
 
+    @autoargs.arg('max_sigma', type=float,
+                  help='Initial value of sigma')
+    @autoargs.arg('min_sigma', type=float,
+                  help='Minimal value of sigma')
+    @autoargs.arg('sigma_decay_range', type=int,
+                  help='How many samples should it take for sigma to decay '
+                       'from max_sigma to min_sigma')
     def __init__(
             self,
             mdp,
@@ -31,4 +39,4 @@ class GaussianStrategy(ExplorationStrategy):
     def get_action(self, t, observation, policy, **kwargs):
         sigma = self.get_sigma(t)
         action, _ = policy.get_action(observation)
-        return action + np.randn(len(action)) * sigma
+        return action + np.random.randn(len(action)) * sigma

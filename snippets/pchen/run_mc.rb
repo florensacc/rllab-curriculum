@@ -1,33 +1,38 @@
-require_relative './utils'
+require_relative '../rocky/utils'
 
 quantile = 1
 seed = 1
 
 params = {
   mdp: {
-    _name: "box2d.cartpole_mdp",
+    _name: "box2d.mountain_car_mdp",
+    # trig_angle: false,
+    # frame_skip: 2,
   },
-  normalize_mdp: true,
+  # normalize_mdp: nil,
   policy: {
     _name: "mean_std_nn_policy",
-    hidden_sizes: [],
+    # hidden_layers: [],
   },
   vf: {
     _name: "mujoco_value_function",
   },
-  # exp_name: "ppo_box2d_cartpole_quantile_#{quantile}_seed_#{seed}",
+  exp_name: "ppo_mc_seed_#{seed}",
   algo: {
     _name: "ppo",
     binary_search_penalty: false,
     whole_paths: true,
-    quantile: quantile,
-    batch_size: 1000,
+    batch_size: 10000,
     max_path_length: 100,
-    n_itr: 40,
+    n_itr: 500,
+    plot: true,
+    step_size: 0.1,
+
   },
   n_parallel: 1,
-  snapshot_mode: "none",
+  # snapshot_mode: "none",
   seed: seed,
+  plot: true,
 }
 command = to_command(params)
 puts command

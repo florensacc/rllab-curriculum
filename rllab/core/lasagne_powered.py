@@ -58,3 +58,4 @@ class LasagnePowered(Parameterized):
     def __setstate__(self, d):
         Serializable.__setstate__(self, d)
         self.set_param_values(d["params"])
+

@@ -1,5 +1,4 @@
 from __future__ import print_function
-
 from rllab.misc.ext import is_iterable
 from rllab.misc.resolve import load_class
 from rllab.misc.console import colorize
@@ -11,6 +10,7 @@ import os.path as osp
 import datetime
 import dateutil.tz
 import ast
+import uuid
 
 
 def instantiate(argvals, cls, *args, **kwargs):
@@ -29,11 +29,14 @@ def run_interactive():
 
 def run_experiment(argv):
 
-    default_log_dir = osp.join(config.PROJECT_PATH, 'data')
+    default_log_dir = "{PROJECT_PATH}/data"
     now = datetime.datetime.now(dateutil.tz.tzlocal())
+
+    # avoid name clashes when running distributed jobs
+    rand_id = str(uuid.uuid4())[:5]
     timestamp = now.strftime('%Y_%m_%d_%H_%M_%S_%f_%Z')
 
-    default_exp_name = 'experiment_%s' % timestamp
+    default_exp_name = 'experiment_%s_%s' % (timestamp, rand_id)
     parser = argparse.ArgumentParser()
     parser.add_argument('--interactive', '-i', action='store_true',
                         help='run in interactive mode')
@@ -41,7 +44,8 @@ def run_experiment(argv):
                         help='module path to the algorithm')
     parser.add_argument('--mdp', type=str, metavar='MDP_PATH',
                         help='module path to the mdp class')
-    parser.add_argument('--normalize_mdp', action='store_true',
+    parser.add_argument('--normalize_mdp', type=ast.literal_eval,
+                        default=False,
                         help="Whether to normalize the mdp's actions to take "
                              "value between -1 and 1")
     # These are optional, depending on the algorithm selected
@@ -68,10 +72,11 @@ def run_experiment(argv):
                              'the last iteration will be saved), or "none" '
                              '(do not save snapshots)')
     parser.add_argument('--tabular_log_file', type=str, default='progress.csv',
-                        help='Name of the tabular log file (should end in '
-                             '.csv).')
+                        help='Name of the tabular log file (in csv).')
     parser.add_argument('--text_log_file', type=str, default='debug.log',
-                        help='Name of the text log file.')
+                        help='Name of the text log file (in pure text).')
+    parser.add_argument('--params_log_file', type=str, default='params.json',
+                        help='Name of the parameter log file (in json).')
     parser.add_argument('--plot', type=ast.literal_eval, default=False,
                         help='Whether to plot the iteration results')
     parser.add_argument('--seed', type=int,
@@ -132,7 +137,7 @@ def run_experiment(argv):
             parser.print_help()
             sys.exit(0)
 
-        more_args = parser.parse_known_args(argv[1:])[0]
+        more_args = parser.parse_args(argv[1:])
 
         instances = dict()
         instances['mdp'] = instantiate(more_args, classes['mdp'])
@@ -152,9 +157,13 @@ def run_experiment(argv):
             more_args, classes['vf'], instances['mdp'])
         algo = instantiate(more_args, classes['algo'])
 
-        exp_dir = osp.join(args.log_dir, args.exp_name)
+        log_dir = args.log_dir.format(PROJECT_PATH=config.PROJECT_PATH)
+        exp_dir = osp.join(log_dir, args.exp_name)
         tabular_log_file = osp.join(exp_dir, args.tabular_log_file)
         text_log_file = osp.join(exp_dir, args.text_log_file)
+        params_log_file = osp.join(exp_dir, args.params_log_file)
+
+        logger.log_parameters(params_log_file, more_args, classes)
         logger.add_text_output(text_log_file)
         logger.add_tabular_output(tabular_log_file)
         prev_snapshot_dir = logger.get_snapshot_dir()

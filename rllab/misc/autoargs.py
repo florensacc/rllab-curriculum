@@ -1,5 +1,6 @@
 from rllab.misc.console import colorize
 from rllab.misc.ext import merge_dict
+import inspect
 
 
 # pylint: disable=redefined-builtin
@@ -34,6 +35,7 @@ def _get_prefix(cls):
     from rllab.vf.base import ValueFunction
     from rllab.qf.base import QFunction
     from rllab.algo.base import Algorithm
+    from rllab.es.base import ExplorationStrategy
 
     if hasattr(cls.__init__, '_autoargs_prefix'):
         return cls.__init__._autoargs_prefix
@@ -47,6 +49,8 @@ def _get_prefix(cls):
         return 'qf_'
     elif issubclass(cls, Policy):
         return 'policy_'
+    elif issubclass(cls, ExplorationStrategy):
+        return 'es_'
     else:
         return ""
 
@@ -123,3 +127,26 @@ def inherit(base_func):
         return func
     return wrap
 
+
+def get_all_parameters(cls, parsed_args):
+    prefix = _get_prefix(cls)
+    if prefix is None or len(prefix) == 0:
+        raise ValueError('Cannot retrieve parameters without prefix')
+    info = _get_info(cls)
+    spec = inspect.getargspec(cls.__init__)
+    if spec.defaults is None:
+        arg_defaults = {}
+    else:
+        arg_defaults = dict(zip(spec.args[::-1], spec.defaults[::-1]))
+    # print arg_defaults
+    all_params = {}
+    for arg_name, arg_info in info.iteritems():
+        prefixed_name = prefix + arg_name
+        arg_value = None
+        if hasattr(parsed_args, prefixed_name):
+            arg_value = getattr(parsed_args, prefixed_name)
+        if arg_value is None and arg_name in arg_defaults:
+            arg_value = arg_defaults[arg_name]
+        if arg_value is not None:
+            all_params[arg_name] = arg_value
+    return all_params
