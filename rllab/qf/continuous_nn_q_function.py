@@ -121,7 +121,7 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered,
     def normalizable(self):
         return self._output_nl is None
 
-    def get_qval_sym(self, obs_var, action_var):
+    def get_qval_sym(self, obs_var, action_var, train=False):
         qvals = L.get_output(
             self._output_layer,
             {self._obs_layer: obs_var, self._action_layer: action_var}

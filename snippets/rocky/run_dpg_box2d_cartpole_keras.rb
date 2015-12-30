@@ -13,7 +13,7 @@ params = {
   policy: {
     _name: "mean_nn_keras_policy",
     hidden_sizes: [32, 32],
-    output_nl: 'lasagne.nonlinearities.tanh',
+    output_nl: 'tanh',
     #output_W_init: 'lasagne.init.Normal(0.01)',
     #output_b_init: 'lasagne.init.Constant(0.)',#Normal(0.01)',
     bn: true,

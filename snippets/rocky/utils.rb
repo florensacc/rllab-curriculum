@@ -1,6 +1,7 @@
 require 'securerandom'
 require 'fileutils'
 require 'time'
+require 'shellwords'
 
 def to_param_val(v)
   if v.nil?
@@ -10,9 +11,9 @@ def to_param_val(v)
   elsif v == true
     "True"
   elsif v.respond_to?(:join)
-    v.join(" ")
+    v.map(&:to_s).map(&:shellescape).join(" ")
   else
-    v
+    v.to_s.shellescape
   end
 end
 

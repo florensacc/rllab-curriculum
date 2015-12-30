@@ -148,8 +148,7 @@ class DPG(RLAlgorithm):
                     # to the replay pool
                     state, observation = mdp.reset()
                     es.episode_reset()
-                action = es.get_action(
-                    itr, observation, policy=policy, qf=qf)
+                action = es.get_action(itr, observation, policy=policy, qf=qf)
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
@@ -210,7 +209,10 @@ class DPG(RLAlgorithm):
 
         # compute the on-policy y values
         next_qval = target_qf.get_qval_sym(
-            next_obs, target_policy.get_action_sym(next_obs))
+            next_obs,
+            target_policy.get_action_sym(next_obs, train=True),
+            train=True
+        )
         next_qval = next_qval * qf_scale + qf_bias
 
         ys = rewards + (1 - terminals) * self.discount * next_qval
@@ -227,14 +229,15 @@ class DPG(RLAlgorithm):
         qf_weight_decay_term = self.qf_weight_decay * \
             sum([TT.sum(TT.square(param)) for param in qf.params])
 
-        qval = qf.get_qval_sym(obs, action)
+        qval = qf.get_qval_sym(obs, action, train=True)
         qval = qval * qf_scale + qf_bias
         qf_loss = TT.mean(TT.square((yvar - qval) / qf_scale))
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
         policy_weight_decay_term = self.policy_weight_decay * \
             sum([TT.sum(TT.square(param)) for param in policy.params])
-        policy_qval = qf.get_qval_sym(obs, policy.get_action_sym(obs))
+        policy_qval = qf.get_qval_sym(
+            obs, policy.get_action_sym(obs, train=True), train=True)
         # The policy gradient is computed with respect to the unscaled Q values
         policy_surr = -TT.mean(policy_qval)
         policy_reg_surr = policy_surr + policy_weight_decay_term
