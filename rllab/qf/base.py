@@ -48,6 +48,9 @@ class ContinuousQFunction(QFunction):
     def get_qval_sym(self, input_var, action_var, train=False):
         raise NotImplementedError
 
+    def get_default_updates(self, obs_var, action_var, train=False):
+        return {}
+
 
 class NormalizableQFunction(QFunction):
 
