@@ -148,8 +148,7 @@ class DPG(RLAlgorithm):
                     # to the replay pool
                     state, observation = mdp.reset()
                     es.episode_reset()
-                action = es.get_action(
-                    itr, observation, policy=policy, qf=qf)
+                action = es.get_action(itr, observation, policy=policy, qf=qf)
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
@@ -180,11 +179,9 @@ class DPG(RLAlgorithm):
     def init_opt(self, mdp, policy, qf):
 
         if self.normalize_qval:
-            if not isinstance(qf, NormalizableQFunction):
+            if not isinstance(qf, NormalizableQFunction) or \
+                    not qf.normalizable:
                 raise ValueError('Q function must be normalizable')
-            if qf.output_nl:
-                raise ValueError('The last layer of Q function must not have '
-                                 'nonlinearity')
 
         # First, create "target" policy and Q functions
         target_policy = pickle.loads(pickle.dumps(policy))
@@ -210,7 +207,10 @@ class DPG(RLAlgorithm):
 
         # compute the on-policy y values
         next_qval = target_qf.get_qval_sym(
-            next_obs, target_policy.get_action_sym(next_obs))
+            next_obs,
+            target_policy.get_action_sym(next_obs, train=True),
+            train=True
+        )
         next_qval = next_qval * qf_scale + qf_bias
 
         ys = rewards + (1 - terminals) * self.discount * next_qval
@@ -227,21 +227,28 @@ class DPG(RLAlgorithm):
         qf_weight_decay_term = self.qf_weight_decay * \
             sum([TT.sum(TT.square(param)) for param in qf.params])
 
-        qval = qf.get_qval_sym(obs, action)
+        qval = qf.get_qval_sym(obs, action, train=True)
         qval = qval * qf_scale + qf_bias
         qf_loss = TT.mean(TT.square((yvar - qval) / qf_scale))
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
         policy_weight_decay_term = self.policy_weight_decay * \
             sum([TT.sum(TT.square(param)) for param in policy.params])
-        policy_qval = qf.get_qval_sym(obs, policy.get_action_sym(obs))
+        policy_qval = qf.get_qval_sym(
+            obs, policy.get_action_sym(obs, train=True), train=True)
         # The policy gradient is computed with respect to the unscaled Q values
         policy_surr = -TT.mean(policy_qval)
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
-        qf_updates = self.qf_update_method(qf_reg_loss, qf.params)
-        policy_updates = self.policy_update_method(
-            policy_reg_surr, policy.params)
+        qf_updates = merge_dict(
+            self.qf_update_method(qf_reg_loss, qf.params),
+            qf.get_default_updates(obs, action, train=True)
+        )
+
+        policy_updates = merge_dict(
+            self.policy_update_method(policy_reg_surr, policy.params),
+            policy.get_default_updates(obs)
+        )
 
         f_train_qf = compile_function(
             inputs=[yvar, obs, action, rewards],
@@ -286,7 +293,8 @@ class DPG(RLAlgorithm):
         target_qf = opt_info["target_qf"]
         target_policy = opt_info["target_policy"]
 
-        if self.paths_samples_cnt % self.renormalize_interval == 0:
+        if self.normalize_qval and \
+                self.paths_samples_cnt % self.renormalize_interval == 0:
             qf_scale = opt_info['qf_scale']
             qf_bias = opt_info['qf_bias']
             returns = np.concatenate([

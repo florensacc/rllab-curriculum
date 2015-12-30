@@ -39,20 +39,23 @@ class QFunction(Parameterized):
 
 class DiscreteQFunction(QFunction):
 
-    def get_qval_sym(self, input_var):
+    def get_qval_sym(self, input_var, train=False):
         raise NotImplementedError
 
 
 class ContinuousQFunction(QFunction):
 
-    def get_qval_sym(self, input_var, action_var):
+    def get_qval_sym(self, input_var, action_var, train=False):
         raise NotImplementedError
+
+    def get_default_updates(self, obs_var, action_var, train=False):
+        return {}
 
 
 class NormalizableQFunction(QFunction):
 
     @property
-    def output_nl(self):
+    def normalizable(self):
         raise NotImplementedError
 
     def get_output_W(self):

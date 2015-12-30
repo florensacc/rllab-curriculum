@@ -59,8 +59,11 @@ class Policy(Parameterized):
 
 class DeterministicPolicy(Policy):
 
-    def get_action_sym(self, input_var):
+    def get_action_sym(self, input_var, train=False):
         raise NotImplementedError
+
+    def get_default_updates(self, obs_var, train=False):
+        return {}
 
 
 class StochasticPolicy(Policy):
@@ -69,17 +72,18 @@ class StochasticPolicy(Policy):
         super(StochasticPolicy, self).__init__(mdp)
         self._f_log_prob = None
 
-    def kl(self, old_pdist_var, new_pdist_var):
+    def kl(self, old_pdist_var, new_pdist_var, train=False):
         raise NotImplementedError
 
-    def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var):
+    def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var,
+            train=False):
         raise NotImplementedError
 
     def compute_entropy(self, pdist):
         raise NotImplementedError
 
     # Only needed for vanilla policy gradient & guided policy search
-    def get_log_prob(self, observations, actions):
+    def get_log_prob(self, observations, actions, train=False):
         if self._f_log_prob is None:
             input_var = new_tensor(
                 'input',
@@ -95,8 +99,8 @@ class StochasticPolicy(Policy):
             )
         return self._f_log_prob(observations, actions)
 
-    def get_log_prob_sym(self, input_var, action_var):
+    def get_log_prob_sym(self, input_var, action_var, train=False):
         raise NotImplementedError
 
-    def get_pdist_sym(self, input_var):
+    def get_pdist_sym(self, input_var, train=False):
         raise NotImplementedError

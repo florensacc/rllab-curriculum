@@ -6,6 +6,7 @@ import itertools
 from pydoc import locate
 from rllab.policy.base import DeterministicPolicy
 from rllab.core.lasagne_powered import LasagnePowered
+from rllab.core.lasagne_layers import batch_norm
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
@@ -31,6 +32,8 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
                   help='initializer for W for the output layer')
     @autoargs.arg('output_b_init', type=str,
                   help='initializer for b for the output layer')
+    @autoargs.arg('bn', type=bool,
+                  help='whether to apply batch normalization to all layers')
     # pylint: disable=dangerous-default-value
     def __init__(
             self,
@@ -41,7 +44,8 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
             hidden_b_init=['lasagne.init.Constant(0.)'],
             output_nl='None',
             output_W_init='lasagne.init.Uniform(-3e-3, 3e-3)',
-            output_b_init='lasagne.init.Uniform(-3e-3, 3e-3)'):
+            output_b_init='lasagne.init.Uniform(-3e-3, 3e-3)',
+            bn=False):
         # pylint: enable=dangerous-default-value
         # create network
         input_var = TT.matrix('input')
@@ -74,6 +78,8 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
                 nonlinearity=eval(nl),
                 name="h%d" % idx
             )
+            if bn:
+                l_hidden = batch_norm(l_hidden)
 
         l_output = L.DenseLayer(
             l_hidden,
@@ -83,6 +89,9 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
             nonlinearity=eval(output_nl),
             name="output"
         )
+
+        # if bn:
+        #     l_output = batch_norm(l_output)
 
         action_var = L.get_output(l_output)
 
@@ -96,7 +105,7 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
             self, mdp=mdp, hidden_sizes=hidden_sizes, hidden_nl=hidden_nl,
             hidden_W_init=hidden_W_init, hidden_b_init=hidden_b_init,
             output_nl=output_nl, output_W_init=output_W_init,
-            output_b_init=output_b_init)
+            output_b_init=output_b_init, bn=bn)
 
     @property
     @overrides
@@ -109,7 +118,7 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
         return self._action_dtype
 
     @overrides
-    def get_action_sym(self, input_var):
+    def get_action_sym(self, input_var, train=False):
         return L.get_output(self._output_layer, input_var)
 
     # The return value is a pair. The first item is a matrix (N, A), where each
