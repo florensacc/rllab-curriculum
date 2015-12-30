@@ -118,7 +118,7 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
         return self._action_dtype
 
     @overrides
-    def get_action_sym(self, input_var):
+    def get_action_sym(self, input_var, train=False):
         return L.get_output(self._output_layer, input_var)
 
     # The return value is a pair. The first item is a matrix (N, A), where each

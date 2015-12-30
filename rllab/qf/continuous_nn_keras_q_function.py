@@ -1,6 +1,6 @@
 import theano.tensor as TT
 from keras.models import Graph
-from keras.layers.core import Dense
+from keras.layers.core import Dense, Layer
 from keras.layers.normalization import BatchNormalization
 from rllab.qf.base import ContinuousQFunction, NormalizableQFunction
 from rllab.core.keras_powered import KerasPowered
@@ -68,16 +68,16 @@ class ContinuousNNKerasQFunction(ContinuousQFunction, KerasPowered,
                 input=input,
                 inputs=inputs
             )
-            if bn:
-                bn_layer = BatchNormalization()
-                graph.add_node(
-                    bn_layer,
-                    name=("bn%d" % idx),
-                    input=("h%d" % idx)
-                )
-                prev_layer = ("bn%d" % idx)
-            else:
-                prev_layer = ("h%d" % idx)
+            # if bn:
+            #     bn_layer = BatchNormalization()
+            # else:
+            #     bn_layer = Layer()
+            # graph.add_node(
+            #     bn_layer,
+            #     name=("bn%d" % idx),
+            #     input=("h%d" % idx)
+            # )
+            prev_layer = ("h%d" % idx)
 
         if action_merge_layer == n_layers:
             input, inputs = None, [prev_layer, "action"]
@@ -89,13 +89,12 @@ class ContinuousNNKerasQFunction(ContinuousQFunction, KerasPowered,
             init=output_init,
             activation=output_nl,
         )
-
         graph.add_node(
             output_layer,
             name="output",
             input=input,
             inputs=inputs,
-            create_output=True,
+            create_output=True
         )
 
         self._graph = graph

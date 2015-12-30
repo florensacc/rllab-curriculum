@@ -128,11 +128,6 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered,
         )
         return TT.reshape(qvals, (-1,))
 
-    @property
-    @overrides
-    def output_nl(self):
-        return self._output_nl
-
     @overrides
     def get_output_W(self):
         return self._output_layer.W.get_value()

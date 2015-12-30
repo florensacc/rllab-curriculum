@@ -293,7 +293,8 @@ class DPG(RLAlgorithm):
         target_qf = opt_info["target_qf"]
         target_policy = opt_info["target_policy"]
 
-        if self.paths_samples_cnt % self.renormalize_interval == 0:
+        if self.normalize_qval and \
+                self.paths_samples_cnt % self.renormalize_interval == 0:
             qf_scale = opt_info['qf_scale']
             qf_bias = opt_info['qf_bias']
             returns = np.concatenate([

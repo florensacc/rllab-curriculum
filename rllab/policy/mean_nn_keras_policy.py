@@ -1,6 +1,6 @@
 import itertools
 from keras.models import Graph
-from keras.layers.core import Dense
+from keras.layers.core import Dense, Layer
 from keras.layers.normalization import BatchNormalization
 from rllab.policy.base import DeterministicPolicy
 from rllab.core.keras_powered import KerasPowered
@@ -69,23 +69,22 @@ class MeanNNKerasPolicy(DeterministicPolicy, KerasPowered, Serializable):
                 input_dim=input_dim,
             )
             graph.add_node(hidden_layer, name=("h%d" % idx), input=prev_layer)
-            if bn:
-                bn_layer = BatchNormalization()
-                graph.add_node(
-                    bn_layer,
-                    name=("bn%d" % idx),
-                    input=("h%d" % idx)
-                )
-                prev_layer = ("bn%d" % idx)
-            else:
-                prev_layer = ("h%d" % idx)
+            #if bn:
+            #    bn_layer = BatchNormalization()
+            #else:
+            #    bn_layer = Layer()
+            #graph.add_node(
+            #    bn_layer,
+            #    name=("bn%d" % idx),
+            #    input=("h%d" % idx)
+            #)
+            prev_layer = ("h%d" % idx)
 
         output_layer = Dense(
             output_dim=mdp.action_dim,
             init=output_init,
             activation=output_nl,
         )
-
         graph.add_node(
             output_layer,
             name="output",
