@@ -4,7 +4,7 @@ import numpy as np
 
 class MujocoValueFunction(ValueFunction):
 
-    def __init__(self):
+    def __init__(self, mdp):
         self.coeffs = None
 
     @overrides

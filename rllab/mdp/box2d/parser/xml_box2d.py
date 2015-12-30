@@ -1,5 +1,6 @@
 # pylint: disable=no-init, too-few-public-methods, old-style-class
 
+import numpy as np
 import xml.etree.ElementTree as ET
 from rllab.mdp.box2d.parser.xml_types import XmlElem, XmlChild, XmlAttr, \
     XmlChildren
@@ -113,13 +114,14 @@ class XmlFixture(XmlElem):
 
     class Meta:
         shape = XmlAttr("shape",
-                        Choice("polygon", "circle", "edge"), required=True)
+                        Choice("polygon", "circle", "edge", "sine_chain"), required=True)
         vertices = XmlAttr("vertices", List(Point2D()))
         box = XmlAttr("box", Either(
             Point2D(),
             Tuple(Float(), Float(), Point2D(), Angle())))
         radius = XmlAttr("radius", Float())
         width = XmlAttr("width", Float())
+        height = XmlAttr("height", Float())
         center = XmlAttr("center", Point2D())
         angle = XmlAttr("angle", Angle())
         position = XmlAttr("position", Point2D())
@@ -140,6 +142,7 @@ class XmlFixture(XmlElem):
         self.group = None
         self.radius = None
         self.width = None
+        self.height = None
         self.center = None
         self.angle = None
 
@@ -166,6 +169,16 @@ class XmlFixture(XmlElem):
             if self.center:
                 attrs["pos"] = self.center
             fixture = body.CreateCircleFixture(**attrs)
+        elif self.shape == "sine_chain":
+            if self.center:
+                attrs["pos"] = self.center
+            m = 100
+            vs = [
+                (0.5/m*i*self.width, self.height*np.sin((1./m*i-0.5)*np.pi))
+                for i in xrange(-m, m+1)
+            ]
+            attrs["vertices_chain"] = vs
+            fixture = body.CreateChainFixture(**attrs)
         else:
             assert False
         return fixture
