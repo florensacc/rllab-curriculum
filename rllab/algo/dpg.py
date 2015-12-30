@@ -240,9 +240,15 @@ class DPG(RLAlgorithm):
         policy_surr = -TT.mean(policy_qval)
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
-        qf_updates = self.qf_update_method(qf_reg_loss, qf.params)
-        policy_updates = self.policy_update_method(
-            policy_reg_surr, policy.params)
+        qf_updates = merge_dict(
+            self.qf_update_method(qf_reg_loss, qf.params),
+            qf.get_default_updates(obs, action, train=True)
+        )
+
+        policy_updates = merge_dict(
+            self.policy_update_method(policy_reg_surr, policy.params),
+            policy.get_default_updates(obs)
+        )
 
         f_train_qf = compile_function(
             inputs=[yvar, obs, action, rewards],

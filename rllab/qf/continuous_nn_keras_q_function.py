@@ -1,5 +1,4 @@
 import theano.tensor as TT
-import itertools
 from keras.models import Graph
 from keras.layers.core import Dense
 from keras.layers.normalization import BatchNormalization
@@ -31,8 +30,8 @@ class ContinuousNNKerasQFunction(ContinuousQFunction, KerasPowered,
             self,
             mdp,
             hidden_sizes=[100, 100],
-            hidden_nl=['relu'],
-            hidden_init=['he_uniform'],
+            hidden_nl='relu',
+            hidden_init='he_uniform',
             action_merge_layer=-2,
             output_nl='linear',
             output_init='he_uniform',
@@ -51,24 +50,13 @@ class ContinuousNNKerasQFunction(ContinuousQFunction, KerasPowered,
         action_merge_layer = \
             (action_merge_layer % n_layers + n_layers) % n_layers
 
-        if len(hidden_nl) == 1:
-            hidden_nl = hidden_nl * len(hidden_sizes)
-        assert len(hidden_nl) == len(hidden_sizes)
-
-        if len(hidden_init) == 1:
-            hidden_init = hidden_init * len(hidden_sizes)
-        assert len(hidden_init) == len(hidden_sizes)
-
         prev_layer = "observation"
 
-        # obs_only_model = Sequential()
-
-        for idx, size, nl, init in zip(
-                itertools.count(), hidden_sizes, hidden_nl, hidden_init):
+        for idx, size in enumerate(hidden_sizes):
             hidden_layer = Dense(
                 output_dim=size,
-                init=init,
-                activation=nl
+                init=hidden_init,
+                activation=hidden_nl
             )
             if idx == action_merge_layer:
                 input, inputs = None, [prev_layer, "action"]
@@ -137,6 +125,7 @@ class ContinuousNNKerasQFunction(ContinuousQFunction, KerasPowered,
     def get_output_W(self):
         return self._output_layer.W.get_value()
 
+    # pylint: disable=no-member
     @overrides
     def get_output_b(self):
         return self._output_layer.b.get_value()
@@ -148,3 +137,11 @@ class ContinuousNNKerasQFunction(ContinuousQFunction, KerasPowered,
     @overrides
     def set_output_b(self, b_new):
         self._output_layer.b.set_value(b_new)
+    # pylint: enable=no-member
+
+    def get_default_updates(self, obs_var, action_var, train=False):
+        self._graph.inputs["observation"].input = obs_var
+        self._graph.inputs["action"].input = action_var
+        for layer in self._graph.nodes.values():
+            layer.build()
+        return dict(self._graph.updates)

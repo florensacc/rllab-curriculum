@@ -133,3 +133,9 @@ class MeanNNKerasPolicy(DeterministicPolicy, KerasPowered, Serializable):
     def get_action(self, observation):
         actions, pdists = self.get_actions([observation])
         return actions[0], pdists[0]
+
+    def get_default_updates(self, obs_var, train=False):
+        self._graph.inputs["observation"].input = obs_var
+        for layer in self._graph.nodes.values():
+            layer.build()
+        return dict(self._graph.updates)
