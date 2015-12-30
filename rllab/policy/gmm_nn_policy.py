@@ -227,7 +227,7 @@ class GMMNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 w * np.sum(log_std + np.log(np.sqrt(2*np.pi*np.e)), axis=1))
         return ent
 
-    def start_episode(self):
+    def episode_reset(self):
         log_mixture_weights = \
             self._log_mixture_weights_layer.param.get_value(borrow=True)
         mixture_weights = softmax(

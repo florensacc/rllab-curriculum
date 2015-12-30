@@ -57,6 +57,8 @@ def run_experiment(argv):
                         help='module path to the Q function')
     parser.add_argument('--es', type=str,
                         help='module path to the exploration strategy')
+    parser.add_argument('--model', type=str,
+                        help='module path to the fitted model')
     parser.add_argument('--more_help', action='store_true',
                         help='whether to show more help depending on the '
                              'classes chosen')
@@ -99,6 +101,7 @@ def run_experiment(argv):
         from rllab.qf.base import QFunction
         from rllab.algo.base import Algorithm
         from rllab.es.base import ExplorationStrategy
+        from rllab.model.base import Model
 
         if args.seed is not None:
             import numpy as np
@@ -127,6 +130,9 @@ def run_experiment(argv):
         if args.es:
             classes['es'] = load_class(
                 args.es, ExplorationStrategy, ["rllab", "es"])
+        if args.model:
+            classes['model'] = load_class(
+                args.model, Model, ["rllab", "model"])
         classes['vf'] = load_class(args.vf, ValueFunction, ["rllab", "vf"])
         classes['algo'] = load_class(args.algo, Algorithm, ["rllab", "algo"])
 
@@ -153,6 +159,9 @@ def run_experiment(argv):
         if args.es:
             instances['es'] = instantiate(
                 more_args, classes['es'], instances['mdp'])
+        if args.model:
+            instances['model'] = instantiate(
+                more_args, classes['model'], instances['mdp'])
         instances['vf'] = instantiate(
             more_args, classes['vf'], instances['mdp'])
         algo = instantiate(more_args, classes['algo'])

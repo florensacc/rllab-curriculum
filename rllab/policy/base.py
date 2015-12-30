@@ -48,7 +48,7 @@ class Policy(Parameterized):
     def new_from_args(cls, args, mdp):
         pass
 
-    def start_episode(self):
+    def episode_reset(self):
         # This is a dummy method that allows for
         # random initializations before each episode.
         # A potential usage is for mixture policies, where one

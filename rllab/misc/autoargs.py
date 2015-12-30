@@ -5,7 +5,8 @@ import inspect
 
 # pylint: disable=redefined-builtin
 # pylint: disable=protected-access
-def arg(name, type=None, help=None, nargs=None, mapper=None, choices=None, prefix=True):
+def arg(name, type=None, help=None, nargs=None, mapper=None, choices=None,
+        prefix=True):
     def wrap(fn):
         assert fn.__name__ == '__init__'
         if not hasattr(fn, '_autoargs_info'):
@@ -36,6 +37,7 @@ def _get_prefix(cls):
     from rllab.qf.base import QFunction
     from rllab.algo.base import Algorithm
     from rllab.es.base import ExplorationStrategy
+    from rllab.model.base import Model
 
     if hasattr(cls.__init__, '_autoargs_prefix'):
         return cls.__init__._autoargs_prefix
@@ -51,6 +53,8 @@ def _get_prefix(cls):
         return 'policy_'
     elif issubclass(cls, ExplorationStrategy):
         return 'es_'
+    elif issubclass(cls, Model):
+        return 'model_'
     else:
         return ""
 

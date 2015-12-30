@@ -47,6 +47,7 @@ class ReplayPool(Serializable):
         self.actions = np.zeros((max_steps, action_dim), dtype=action_dtype)
         self.rewards = np.zeros((max_steps,), dtype=floatX)
         self.terminal = np.zeros((max_steps,), dtype='bool')
+        self.extras = None
         self.concat_states = concat_states
         self.concat_length = concat_length
         self.state_dtype = state_dtype
@@ -89,7 +90,7 @@ class ReplayPool(Serializable):
                 "terminal", "rng"
             )
 
-    def add_sample(self, state, action, reward, terminal):
+    def add_sample(self, state, action, reward, terminal, extra=None):
         """Add a time step record.
 
         Arguments:
@@ -103,6 +104,14 @@ class ReplayPool(Serializable):
         self.actions[self.top] = action
         self.rewards[self.top] = reward
         self.terminal[self.top] = terminal
+        if extra:
+            if self.extras is None:
+                assert self.size == 0, "extra must be consistent"
+                self.extras = np.zeros(
+                    (self.max_steps,) + extra.shape,
+                    dtype=extra.dtype
+                )
+            self.extras[self.top] = extra
 
         if self.size == self.max_steps:
             self.bottom = (self.bottom + 1) % self.max_steps
@@ -162,6 +171,13 @@ next_states for batch_size randomly chosen state transitions.
         )
         rewards = np.zeros((batch_size,), dtype=floatX)
         terminal = np.zeros((batch_size,), dtype='bool')
+        if self.extras:
+            extras = np.zeros(
+                (batch_size,) + self.extras.shape[1:],
+                dtype=self.extras.dtype
+            )
+        else:
+            extras = None
         next_states = np.zeros(
             (batch_size, self.concat_length) + self.state_shape,
             dtype=self.state_dtype
@@ -195,6 +211,8 @@ next_states for batch_size randomly chosen state transitions.
             actions[count] = self.actions.take(end_index, mode='wrap')
             rewards[count] = self.rewards.take(end_index, mode='wrap')
             terminal[count] = self.terminal.take(end_index, mode='wrap')
+            if self.extras:
+                extras[count] = self.extras.take(end_index, mode='wrap')
             next_states[count] = self.states.take(
                 transition_indices, axis=0, mode='wrap')
             count += 1
@@ -205,7 +223,7 @@ next_states for batch_size randomly chosen state transitions.
             states = np.squeeze(states, axis=1)
             next_states = np.squeeze(next_states, axis=1)
 
-        return states, actions, rewards, next_states, terminal
+        return states, actions, rewards, next_states, terminal, extras
 
 
 # TESTING CODE BELOW THIS POINT...
