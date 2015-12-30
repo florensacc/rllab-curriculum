@@ -179,11 +179,9 @@ class DPG(RLAlgorithm):
     def init_opt(self, mdp, policy, qf):
 
         if self.normalize_qval:
-            if not isinstance(qf, NormalizableQFunction):
+            if not isinstance(qf, NormalizableQFunction) or \
+                    not qf.normalizable:
                 raise ValueError('Q function must be normalizable')
-            if qf.output_nl:
-                raise ValueError('The last layer of Q function must not have '
-                                 'nonlinearity')
 
         # First, create "target" policy and Q functions
         target_policy = pickle.loads(pickle.dumps(policy))

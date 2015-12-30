@@ -1,4 +1,3 @@
-from keras.layers.core import Layer
 from rllab.core.parameterized import Parameterized
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
@@ -7,9 +6,8 @@ from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
 
 class KerasPowered(Parameterized):
 
-    def __init__(self, graph):
-        self._graph = graph
-        self._params = sorted(graph.params, key=lambda x: x.name)
+    def __init__(self, model):
+        self._params = sorted(model.params, key=lambda x: x.name)
         self._param_shapes = \
             [param.get_value(borrow=True).shape
              for param in self.params]
@@ -47,12 +45,6 @@ class KerasPowered(Parameterized):
                 self.param_dtypes,
                 param_values):
             param.set_value(value.astype(dtype))
-
-    def get_graph_output(self, input, train=False):
-        input_layer = Layer()
-        input_layer.input = input
-        self._graph.set_previous(input_layer)
-        return self._graph.get_output(train=train)
 
     def __getstate__(self):
         d = Serializable.__getstate__(self)

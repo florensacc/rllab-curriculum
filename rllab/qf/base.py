@@ -52,7 +52,7 @@ class ContinuousQFunction(QFunction):
 class NormalizableQFunction(QFunction):
 
     @property
-    def output_nl(self):
+    def normalizable(self):
         raise NotImplementedError
 
     def get_output_W(self):
