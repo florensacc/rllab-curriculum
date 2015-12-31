@@ -1,7 +1,10 @@
-all: hopper.xml cartpole.xml double_pendulum.xml
+all: hopper.xml cartpole.xml double_pendulum.xml half_cheetah.xml
 
 hopper.xml: gen_xml.rb hopper.xml.rb
 	ruby gen_xml.rb hopper.xml.rb > hopper.xml
+	
+half_cheetah.xml: gen_xml.rb half_cheetah.xml.rb
+	ruby gen_xml.rb half_cheetah.xml.rb > half_cheetah.xml
 
 cartpole.xml: gen_xml.rb cartpole.xml.rb
 	ruby gen_xml.rb cartpole.xml.rb > cartpole.xml

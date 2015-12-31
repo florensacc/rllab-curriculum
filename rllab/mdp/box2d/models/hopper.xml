@@ -37,8 +37,8 @@
     <state type="avel" joint="thigh_joint"/>
     <state type="avel" joint="leg_joint"/>
     <state type="avel" joint="foot_joint"/>
-    <control type="torque" joint="thigh_joint" ctrllimit="-1,1"/>
-    <control type="torque" joint="leg_joint" ctrllimit="-1,1"/>
-    <control type="torque" joint="foot_joint" ctrllimit="-1,1"/>
+    <control type="torque" joint="thigh_joint" ctrllimit="-2,2"/>
+    <control type="torque" joint="leg_joint" ctrllimit="-2,2"/>
+    <control type="torque" joint="foot_joint" ctrllimit="-2,2"/>
   </world>
 </box2d>

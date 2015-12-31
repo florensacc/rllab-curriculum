@@ -1,0 +1,52 @@
+<!-- Auto-generated. Do not edit! -->
+<box2d>
+  <world timestep="0.01">
+    <body name="torso" type="dynamic" position="0,-0.7">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="-0.5,0.046;0.5,0.046;0.5,-0.046;-0.5,-0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="-0.5,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.5,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.5351591311031733,-0.029662021173040055;0.7286070952751736,0.19963665993461144;0.6582888330688271,0.25896070228069157;0.46484086889682674,0.029662021173040055"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.5,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.6934479641720004,0.2292986811076515" radius="0.046"/>
+    </body>
+    <body name="bthigh" type="dynamic" position="-0.5,-0.7">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.02820337519077794,0.0363396426488788;0.25730112232501384,-0.14146424442341693;0.20089437194345797,-0.2141435297211745;-0.02820337519077794,-0.0363396426488788"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.22909774713423592,-0.17780388707229572" radius="0.046"/>
+    </body>
+    <body name="bshin" type="dynamic" position="-0.2709022528657641,-0.8778038870722957">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.04123466409297176,-0.020388783120622606;-0.09173566060674092,-0.2893105054660906;-0.17420498879268442,-0.2485329392248454;-0.04123466409297176,0.020388783120622606"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="-0.13297032469971268,-0.268921722345468" radius="0.046"/>
+    </body>
+    <body name="bfoot" type="dynamic" position="-0.4038725775654768,-1.1467256094177638">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.01226964608768623,0.04433346123283096;0.19345857460447366,-0.005812048864669295;0.16891928242910118,-0.09447897133033122;-0.01226964608768623,-0.04433346123283096"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.18118892851678742,-0.050145510097500255" radius="0.046"/>
+    </body>
+    <body name="fthigh" type="dynamic" position="0.5,-0.7">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.022792879154174866,-0.03995603408576958;-0.208257230993971,-0.17175833528165035;-0.25384298930232074,-0.09184626711011118;-0.022792879154174866,0.03995603408576958"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="-0.23105011014814586,-0.13180230119588077" radius="0.046"/>
+    </body>
+    <body name="fshin" type="dynamic" position="0.26894988985185414,-0.8318023011958807">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.025973553776171623,0.037965438285845206;0.20094470413702342,-0.08173876607390229;0.1489975965846802,-0.1576696426455927;-0.025973553776171623,-0.037965438285845206"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.1749711503608518,-0.11970420435974749" radius="0.046"/>
+    </body>
+    <body name="ffoot" type="dynamic" position="0.4439210402127059,-0.9515065055556282">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.025973553776171627,0.0379654382858452;0.1415205398635266,-0.041084507989459756;0.08957343231118335,-0.11701538456115015;-0.025973553776171627,-0.0379654382858452"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.11554698608735497,-0.07904994627530496" radius="0.046"/>
+    </body>
+    <joint type="revolute" name="bthigh_joint" bodyA="torso" bodyB="bthigh" anchor="-0.5,-0.7" limit="-2,2"/>
+    <joint type="revolute" name="bshin_joint" bodyA="bthigh" bodyB="bshin" anchor="-0.2709022528657641,-0.8778038870722957" limit="-2,2"/>
+    <joint type="revolute" name="bfoot_joint" bodyA="bshin" bodyB="bfoot" anchor="-0.4038725775654768,-1.1467256094177638" limit="-2,2"/>
+    <joint type="revolute" name="bthigh_joint" bodyA="torso" bodyB="fthigh" anchor="0.5,-0.7" limit="-2,2"/>
+    <joint type="revolute" name="bshin_joint" bodyA="fthigh" bodyB="fshin" anchor="0.26894988985185414,-0.8318023011958807" limit="-2,2"/>
+    <joint type="revolute" name="bfoot_joint" bodyA="fshin" bodyB="ffoot" anchor="0.44392104021270595,-0.9515065055556282" limit="-2,2"/>
+    <body name="ground" type="static" position="0,-2.0">
+      <fixture shape="polygon" box="100,0.05" friction="2.0" density="1" group="-2"/>
+    </body>
+  </world>
+</box2d>

@@ -40,7 +40,6 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
             action = sample_action(lb, ub)
             state, _, rew, done = mdp.step(state, action)
             mdp.plot()
-            time.sleep(delay)
             totrew += rew
             print rew
             if done:
