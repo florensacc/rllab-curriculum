@@ -27,3 +27,9 @@ class Baseline(object):
     @autoargs.new_from_args
     def new_from_args(cls, args, mdp):
         pass
+
+    def log_extra(self, logger, paths):
+        """
+        Log extra information per iteration based on the collected paths
+        """
+        pass

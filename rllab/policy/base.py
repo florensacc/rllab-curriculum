@@ -56,6 +56,12 @@ class Policy(Parameterized):
         # of each episode
         pass
 
+    def log_extra(self, logger, paths):
+        """
+        Log extra information per iteration based on the collected paths
+        """
+        pass
+
 
 class DeterministicPolicy(Policy):
 
@@ -76,7 +82,7 @@ class StochasticPolicy(Policy):
         raise NotImplementedError
 
     def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var,
-            train=False):
+                         train=False):
         raise NotImplementedError
 
     def compute_entropy(self, pdist):

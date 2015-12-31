@@ -49,3 +49,9 @@ class Model(Parameterized):
     @property
     def action_dtype(self):
         return self._action_dtype
+
+    def log_extra(self, logger, paths):
+        """
+        Log extra information per iteration based on the collected paths
+        """
+        pass

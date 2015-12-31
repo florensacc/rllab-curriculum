@@ -67,7 +67,7 @@ class SVG1(RLAlgorithm):
             discount=0.99,
             max_path_length=500,
             model_update_method='adam',
-            model_learning_rate=1e-2,
+            model_learning_rate=1e-4,
             vf_update_method='adam',
             vf_learning_rate=1e-4,
             policy_update_method='adam',
@@ -150,7 +150,8 @@ class SVG1(RLAlgorithm):
                 # itr += 1
             logger.log("Training finished")
             if pool.size >= self.min_pool_size:
-                opt_info = self.evaluate(epoch, vf, policy, model, opt_info)
+                opt_info = self.evaluate(
+                    epoch, mdp, vf, policy, model, opt_info)
                 yield opt_info
                 params = self.get_epoch_snapshot(
                     epoch, vf, policy, model, opt_info)
@@ -293,12 +294,13 @@ class SVG1(RLAlgorithm):
         self._vf_losses.append(vf_loss)
 
         f_train_policy = opt_info["f_train_policy"]
-        policy_obj = f_train_policy(obs, etas, actions, pdists, terminals, weights)
+        policy_obj = f_train_policy(
+            obs, etas, actions, pdists, terminals, weights)
         self._policy_objs.append(policy_obj)
 
         return opt_info
 
-    def evaluate(self, epoch, vf, policy, model, opt_info):
+    def evaluate(self, epoch, mdp, vf, policy, model, opt_info):
         paths = parallel_sampler.request_samples(
             policy_params=policy.get_param_values(),
             max_samples=self.eval_samples,
@@ -346,6 +348,10 @@ class SVG1(RLAlgorithm):
                               np.linalg.norm(vf.get_param_values()))
         logger.record_tabular('PolicyParamNorm',
                               np.linalg.norm(policy.get_param_values()))
+        mdp.log_extra(logger, paths)
+        vf.log_extra(logger, paths)
+        policy.log_extra(logger, paths)
+        model.log_extra(logger, paths)
         self._model_obs_losses = []
         self._model_reward_losses = []
         self._vf_losses = []

@@ -149,3 +149,8 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         return - TT.sum(log_std_var, axis=1) - \
             0.5*TT.sum(TT.square(stdn), axis=1) - \
             0.5*self.action_dim*np.log(2*np.pi)
+
+    def log_extra(self, logger, paths):
+        pdists = np.vstack([path["pdists"] for path in paths])
+        means, log_stds = self._split_pdist(pdists)
+        logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))

@@ -199,6 +199,8 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('ExplainedVariance', ev)
 
         mdp.log_extra(logger, paths)
+        policy.log_extra(logger, paths)
+        baseline.log_extra(logger, paths)
 
         samples_data = dict(
             observations=observations,

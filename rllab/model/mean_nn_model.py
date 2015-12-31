@@ -31,7 +31,6 @@ class MeanNNModel(Model, LasagnePowered, Serializable):
         self.normalize = normalize
         self.normalize_alpha = normalize_alpha
 
-        assert len(mdp.observation_shape) == 1
         obs_var = new_tensor(
             'obs',
             ndim=1+len(mdp.observation_shape),
@@ -46,45 +45,13 @@ class MeanNNModel(Model, LasagnePowered, Serializable):
         action_layer = L.InputLayer(shape=(None, mdp.action_dim),
                                     input_var=action_var)
 
-        hidden_layer = L.DenseLayer(
-            obs_layer,
-            num_units=100,
-            W=LI.HeUniform(),
-            b=LI.Constant(0.),
-            nonlinearity=NL.rectify,
-            name="h0"
-        )
-        hidden_layer = L.ConcatLayer([hidden_layer, action_layer])
-        hidden_layer = L.DenseLayer(
-            hidden_layer,
-            num_units=100,
-            W=LI.HeUniform(),
-            b=LI.Constant(0.),
-            nonlinearity=NL.rectify,
-            name="h1"
-        )
+        next_obs_layer = self._create_network(
+            mdp, obs_layer, action_layer, mdp.observation_shape[0])
 
-        next_obs_layer = L.DenseLayer(
-            hidden_layer,
-            num_units=mdp.observation_shape[0],
-            W=LI.HeUniform(),
-            b=LI.Constant(0.),
-            nonlinearity=None,
-            name="next_obs"
-        )
-        reward_layer = L.DenseLayer(
-            hidden_layer,
-            num_units=1,
-            W=LI.HeUniform(),
-            b=LI.Constant(0.),
-            nonlinearity=None,
-            name="reward"
-        )
+        reward_layer = self._create_network(
+            mdp, obs_layer, action_layer, 1)
 
-        self._obs_layer = obs_layer
-        self._action_layer = action_layer
-        self._next_obs_layer = next_obs_layer
-        self._reward_layer = reward_layer
+        assert len(mdp.observation_shape) == 1
 
         if self.normalize:
             self._next_obs_mean = theano.shared(
@@ -106,9 +73,44 @@ class MeanNNModel(Model, LasagnePowered, Serializable):
 
         self._in_compute_normalize = False
 
+        self._obs_layer = obs_layer
+        self._action_layer = action_layer
+        self._next_obs_layer = next_obs_layer
+        self._reward_layer = reward_layer
+
         Model.__init__(self, mdp)
         LasagnePowered.__init__(self, [next_obs_layer, reward_layer])
         Serializable.__init__(self, mdp=mdp)
+
+    def _create_network(self, mdp, obs_layer, action_layer, output_units):
+        hidden_layer = L.DenseLayer(
+            obs_layer,
+            num_units=100,
+            W=LI.HeUniform(),
+            b=LI.Constant(0.),
+            nonlinearity=NL.rectify,
+            name="h0"
+        )
+        hidden_layer = L.ConcatLayer([hidden_layer, action_layer])
+        hidden_layer = L.DenseLayer(
+            hidden_layer,
+            num_units=100,
+            W=LI.HeUniform(),
+            b=LI.Constant(0.),
+            nonlinearity=NL.rectify,
+            name="h1"
+        )
+
+        output_layer = L.DenseLayer(
+            hidden_layer,
+            num_units=output_units,
+            W=LI.HeUniform(),
+            b=LI.Constant(0.),
+            nonlinearity=None,
+            name="output"
+        )
+
+        return output_layer
 
     @overrides
     def predict_obs_sym(self, obs_var, action_var, train=False):
@@ -137,7 +139,6 @@ class MeanNNModel(Model, LasagnePowered, Serializable):
         predicted = self.predict_obs_sym(obs_var, action_var, train=train)
         diff = predicted - next_obs_var
         if self.normalize:
-            # only start learning after the initial normalization
             diff = diff / self._next_obs_std
         return TT.mean(TT.square(diff))
 
@@ -170,6 +171,5 @@ class MeanNNModel(Model, LasagnePowered, Serializable):
         predicted = self.predict_reward_sym(obs_var, action_var, train=train)
         diff = predicted - reward_var
         if self.normalize:
-            # only start learning after the initial normalization
             diff = diff / self._reward_std
         return TT.mean(TT.square(diff))

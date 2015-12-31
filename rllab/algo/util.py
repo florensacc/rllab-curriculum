@@ -78,16 +78,17 @@ class ReplayPool(Serializable):
         d["actions"] = self.actions
         d["rewards"] = self.rewards
         d["terminal"] = self.terminal
+        d["extras"] = self.extras
         d["rng"] = self.rng
         return d
 
     def __setstate__(self, d):
         super(ReplayPool, self).__setstate__(d)
         self.bottom, self.top, self.size, self.states, self.actions, \
-            self.rewards, self.terminal, self.rng = extract(
+            self.rewards, self.terminal, self.extras, self.rng = extract(
                 d,
                 "bottom", "top", "size", "states", "actions", "rewards",
-                "terminal", "rng"
+                "terminal", "extras", "rng"
             )
 
     def add_sample(self, state, action, reward, terminal, extra=None):
@@ -112,6 +113,8 @@ class ReplayPool(Serializable):
                     dtype=extra.dtype
                 )
             self.extras[self.top] = extra
+        else:
+            assert self.extras is None
 
         if self.size == self.max_steps:
             self.bottom = (self.bottom + 1) % self.max_steps
@@ -212,7 +215,8 @@ next_states for batch_size randomly chosen state transitions.
             rewards[count] = self.rewards.take(end_index, mode='wrap')
             terminal[count] = self.terminal.take(end_index, mode='wrap')
             if self.extras is not None:
-                extras[count] = self.extras.take(end_index, mode='wrap')
+                extras[count] = self.extras.take(
+                    end_index, axis=0, mode='wrap')
             next_states[count] = self.states.take(
                 transition_indices, axis=0, mode='wrap')
             count += 1

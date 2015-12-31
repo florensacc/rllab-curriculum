@@ -38,3 +38,9 @@ class ValueFunction(Parameterized):
 
     def get_val_sym(self, obs_var, train=False):
         raise NotImplementedError
+
+    def log_extra(self, logger, paths):
+        """
+        Log extra information per iteration based on the collected paths
+        """
+        pass
