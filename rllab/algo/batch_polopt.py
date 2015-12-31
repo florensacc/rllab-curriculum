@@ -74,7 +74,7 @@ class BatchPolopt(RLAlgorithm):
         self.record_states = record_states
         self.store_paths = store_paths
 
-    def start_worker(self, mdp, policy, vf):
+    def start_worker(self, mdp, policy, baseline):
         parallel_sampler.populate_task(mdp, policy)
         if self.plot:
             plotter.init_plot(mdp, policy)
@@ -82,18 +82,19 @@ class BatchPolopt(RLAlgorithm):
     def shutdown_worker(self):
         pass
 
-    def train(self, mdp, policy, vf, **kwargs):
-        opt_info = self.init_opt(mdp, policy, vf)
-        self.start_worker(mdp, policy, vf)
+    def train(self, mdp, policy, baseline, **kwargs):
+        opt_info = self.init_opt(mdp, policy, baseline)
+        self.start_worker(mdp, policy, baseline)
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
-            samples_data = self.obtain_samples(itr, mdp, policy, vf)
-            opt_info = self.update_vf(itr, vf, samples_data, opt_info)
+            samples_data = self.obtain_samples(itr, mdp, policy, baseline)
+            opt_info = self.update_baseline(itr, baseline, samples_data,
+                                            opt_info)
             opt_info = self.optimize_policy(
                 itr, policy, samples_data, opt_info)
             logger.log("saving snapshot...")
             params = self.get_itr_snapshot(
-                itr, mdp, policy, vf, samples_data, opt_info)
+                itr, mdp, policy, baseline, samples_data, opt_info)
             if self.store_paths:
                 params["paths"] = samples_data["paths"]
             logger.save_itr_params(itr, params)
@@ -107,14 +108,15 @@ class BatchPolopt(RLAlgorithm):
                               "continue...")
         self.shutdown_worker()
 
-    def init_opt(self, mdp, policy, vf):
+    def init_opt(self, mdp, policy, baseline):
         """
         Initialize the optimization procedure. If using theano / cgt, this may
         include declaring all the variables and compiling functions
         """
         raise NotImplementedError
 
-    def get_itr_snapshot(self, itr, mdp, policy, vf, samples_data, opt_info):
+    def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data,
+                         opt_info):
         """
         Returns all the data that should be saved in the snapshot for this
         iteration.
@@ -126,7 +128,7 @@ class BatchPolopt(RLAlgorithm):
             plotter.update_plot(policy, self.max_path_length)
 
     # pylint: disable=R0914
-    def obtain_samples(self, itr, mdp, policy, vf):
+    def obtain_samples(self, itr, mdp, policy, baseline):
         cur_params = policy.get_param_values()
         paths = parallel_sampler.request_samples(
             policy_params=cur_params,
@@ -152,7 +154,7 @@ class BatchPolopt(RLAlgorithm):
 
         # however, these statistics should still be computed for all paths
         for path in paths:
-            path_baselines = np.append(vf.predict(path), 0)
+            path_baselines = np.append(baseline.predict(path), 0)
             deltas = path["rewards"] + \
                 self.discount*path_baselines[1:] - \
                 path_baselines[:-1]
@@ -205,13 +207,13 @@ class BatchPolopt(RLAlgorithm):
             pdists=pdists,
             paths=paths,
             states=states,
-            vf_params=vf.get_param_values(),
+            baseline_params=baseline.get_param_values(),
         )
 
         return samples_data
 
-    def update_vf(self, itr, vf, samples_data, opt_info):
-        vf.fit(samples_data["paths"])
+    def update_baseline(self, itr, baseline, samples_data, opt_info):
+        baseline.fit(samples_data["paths"])
         return opt_info
 
     def optimize_policy(self, itr, policy, samples_data, opt_info):

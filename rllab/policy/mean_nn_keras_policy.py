@@ -1,4 +1,3 @@
-import itertools
 from keras.models import Graph
 from keras.layers.core import Dense, Layer
 from keras.layers.normalization import BatchNormalization
@@ -32,8 +31,8 @@ class MeanNNKerasPolicy(DeterministicPolicy, KerasPowered, Serializable):
             self,
             mdp,
             hidden_sizes=[100, 100],
-            hidden_nl=['relu'],
-            hidden_init=['he_uniform'],
+            hidden_nl='relu',
+            hidden_init='he_uniform',
             output_nl='linear',
             output_init='he_uniform',
             bn=False):
@@ -45,27 +44,17 @@ class MeanNNKerasPolicy(DeterministicPolicy, KerasPowered, Serializable):
 
         graph.add_input("observation", input_shape=mdp.observation_shape)
 
-        if len(hidden_nl) == 1:
-            hidden_nl *= len(hidden_sizes)
-        assert len(hidden_nl) == len(hidden_sizes)
-
-        if len(hidden_init) == 1:
-            hidden_init *= len(hidden_sizes)
-        assert len(hidden_init) == len(hidden_sizes)
-
         prev_layer = "observation"
 
-        for idx, size, nl, init in zip(
-                itertools.count(), hidden_sizes, hidden_nl,
-                hidden_init):
+        for idx, size in enumerate(hidden_sizes):
             if idx == 0:
                 input_dim = mdp.observation_shape[0]
             else:
                 input_dim = None
             hidden_layer = Dense(
                 output_dim=size,
-                init=init,
-                activation=nl,
+                init=hidden_init,
+                activation=hidden_nl,
                 input_dim=input_dim,
             )
             graph.add_node(hidden_layer, name=("h%d" % idx), input=prev_layer)

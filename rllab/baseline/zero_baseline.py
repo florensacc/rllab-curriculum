@@ -1,8 +1,9 @@
 import numpy as np
-from rllab.vf.base import ValueFunction
+from rllab.baseline.base import Baseline
 from rllab.misc.overrides import overrides
 
-class NoValueFunction(ValueFunction):
+
+class ZeroBaseline(Baseline):
 
     def __init__(self, mdp):
         pass

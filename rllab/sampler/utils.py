@@ -1,8 +1,6 @@
 import numpy as np
 import pyprind
 
-from rllab.misc import logger
-
 
 def rollout(mdp, policy, max_length=np.inf, animated=False, use_state=False):
     states = []
@@ -11,7 +9,7 @@ def rollout(mdp, policy, max_length=np.inf, animated=False, use_state=False):
     rewards = []
     pdists = []
     s, o = mdp.reset()
-    policy.start_episode()
+    policy.episode_reset()
     path_length = 0
     while path_length < max_length:
         if use_state:
@@ -39,6 +37,7 @@ def rollout(mdp, policy, max_length=np.inf, animated=False, use_state=False):
         rewards=np.vstack(rewards).reshape(-1),
         pdists=np.vstack(pdists)
     )
+
 
 class ProgBarCounter(object):
 

@@ -133,6 +133,14 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         actions, pdists = self.get_actions([observation])
         return actions[0], pdists[0]
 
+    def get_reparam_action_sym(self, obs_var, eta_var):
+        means, log_stds = self._split_pdist(self.get_pdist_sym(obs_var))
+        return eta_var * TT.exp(log_stds) + means
+
+    def infer_eta(self, pdists, actions):
+        means, log_stds = self._split_pdist(pdists)
+        return (actions - means) / np.exp(log_stds)
+
     def get_log_prob_sym(self, input_var, action_var):
         mean_var = L.get_output(self._mean_layer, input_var)
         log_std_var = L.get_output(self._log_std_layer, input_var)

@@ -51,8 +51,10 @@ def run_experiment(argv):
     # These are optional, depending on the algorithm selected
     parser.add_argument('--policy', type=str, metavar='POLICY_PATH',
                         help='module path to the policy')
-    parser.add_argument('--vf', type=str, default='no_value_function',
+    parser.add_argument('--vf', type=str,
                         help='module path to the value function')
+    parser.add_argument('--baseline', type=str,
+                        help='module path to the baseline')
     parser.add_argument('--qf', type=str,
                         help='module path to the Q function')
     parser.add_argument('--es', type=str,
@@ -97,6 +99,7 @@ def run_experiment(argv):
 
         from rllab.mdp.base import MDP
         from rllab.vf.base import ValueFunction
+        from rllab.baseline.base import Baseline
         from rllab.policy.base import Policy
         from rllab.qf.base import QFunction
         from rllab.algo.base import Algorithm
@@ -133,7 +136,12 @@ def run_experiment(argv):
         if args.model:
             classes['model'] = load_class(
                 args.model, Model, ["rllab", "model"])
-        classes['vf'] = load_class(args.vf, ValueFunction, ["rllab", "vf"])
+        if args.baseline:
+            classes['baseline'] = load_class(
+                args.baseline, Baseline, ["rllab", "baseline"])
+        if args.vf:
+            classes['vf'] = load_class(
+                args.vf, ValueFunction, ["rllab", "vf"])
         classes['algo'] = load_class(args.algo, Algorithm, ["rllab", "algo"])
 
         for cls in classes.values():
@@ -162,8 +170,12 @@ def run_experiment(argv):
         if args.model:
             instances['model'] = instantiate(
                 more_args, classes['model'], instances['mdp'])
-        instances['vf'] = instantiate(
-            more_args, classes['vf'], instances['mdp'])
+        if args.baseline:
+            instances['baseline'] = instantiate(
+                more_args, classes['baseline'], instances['mdp'])
+        if args.vf:
+            instances['vf'] = instantiate(
+                more_args, classes['vf'], instances['mdp'])
         algo = instantiate(more_args, classes['algo'])
 
         log_dir = args.log_dir.format(PROJECT_PATH=config.PROJECT_PATH)

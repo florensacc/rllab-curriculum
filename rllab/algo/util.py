@@ -104,7 +104,7 @@ class ReplayPool(Serializable):
         self.actions[self.top] = action
         self.rewards[self.top] = reward
         self.terminal[self.top] = terminal
-        if extra:
+        if extra is not None:
             if self.extras is None:
                 assert self.size == 0, "extra must be consistent"
                 self.extras = np.zeros(
@@ -171,7 +171,7 @@ next_states for batch_size randomly chosen state transitions.
         )
         rewards = np.zeros((batch_size,), dtype=floatX)
         terminal = np.zeros((batch_size,), dtype='bool')
-        if self.extras:
+        if self.extras is not None:
             extras = np.zeros(
                 (batch_size,) + self.extras.shape[1:],
                 dtype=self.extras.dtype
@@ -211,7 +211,7 @@ next_states for batch_size randomly chosen state transitions.
             actions[count] = self.actions.take(end_index, mode='wrap')
             rewards[count] = self.rewards.take(end_index, mode='wrap')
             terminal[count] = self.terminal.take(end_index, mode='wrap')
-            if self.extras:
+            if self.extras is not None:
                 extras[count] = self.extras.take(end_index, mode='wrap')
             next_states[count] = self.states.take(
                 transition_indices, axis=0, mode='wrap')

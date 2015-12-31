@@ -10,7 +10,18 @@ class Model(Parameterized):
         self._action_dim = mdp.action_dim
         self._action_dtype = mdp.action_dtype
 
-    def predict_sym(self, obs_var, action_var, train=False):
+    def predict_obs_sym(self, obs_var, action_var, train=False):
+        raise NotImplementedError
+
+    def predict_reward_sym(self, obs_var, action_var, train=False):
+        raise NotImplementedError
+
+    def obs_regression_obj(self, obs_var, action_var, next_obs_var,
+                           train=False):
+        raise NotImplementedError
+
+    def reward_regression_obj(self, obs_var, action_var, reward_var,
+                              train=False):
         raise NotImplementedError
 
     @classmethod

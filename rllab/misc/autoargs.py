@@ -33,6 +33,7 @@ def prefix(prefix_):
 def _get_prefix(cls):
     from rllab.mdp.base import MDP
     from rllab.policy.base import Policy
+    from rllab.baseline.base import Baseline
     from rllab.vf.base import ValueFunction
     from rllab.qf.base import QFunction
     from rllab.algo.base import Algorithm
@@ -45,6 +46,8 @@ def _get_prefix(cls):
         return 'mdp_'
     elif issubclass(cls, Algorithm):
         return 'algo_'
+    elif issubclass(cls, Baseline):
+        return 'baseline_'
     elif issubclass(cls, ValueFunction):
         return 'vf_'
     elif issubclass(cls, QFunction):

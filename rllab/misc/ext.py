@@ -5,9 +5,10 @@ import cPickle as pickle
 sys.setrecursionlimit(50000)
 
 
-def merge_dict(x, y):
-    z = x.copy()
-    z.update(y)
+def merge_dict(*args):
+    z = dict()
+    for x in args:
+        z.update(x)
     return z
 
 

@@ -39,13 +39,13 @@ class QFunction(Parameterized):
 
 class DiscreteQFunction(QFunction):
 
-    def get_qval_sym(self, input_var, train=False):
+    def get_qval_sym(self, obs_var, train=False):
         raise NotImplementedError
 
 
 class ContinuousQFunction(QFunction):
 
-    def get_qval_sym(self, input_var, action_var, train=False):
+    def get_qval_sym(self, obs_var, action_var, train=False):
         raise NotImplementedError
 
     def get_default_updates(self, obs_var, action_var, train=False):
