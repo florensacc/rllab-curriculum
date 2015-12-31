@@ -126,6 +126,10 @@ class Numeric
     self
   end
 
+  def rad
+    "#{self}rad"
+  end
+
   def to_rad
     self * 1.0 / 180 * Math::PI
   end

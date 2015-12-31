@@ -92,7 +92,7 @@ box2d {
           bodyA: :torso,
           bodyB: :bthigh,
           anchor: data[:bthigh_anchor],
-          limit: [-2, 2],
+          limit: [-2.rad, 2.rad],
           )
     joint(
           type: :revolute,
@@ -100,7 +100,7 @@ box2d {
           bodyA: :bthigh,
           bodyB: :bshin,
           anchor: data[:bshin_anchor],
-          limit: [-2, 2],
+          limit: [-2.rad, 2.rad],
           )
     joint(
           type: :revolute,
@@ -108,7 +108,7 @@ box2d {
           bodyA: :bshin,
           bodyB: :bfoot,
           anchor: data[:bfoot_anchor],
-          limit: [-2, 2],
+          limit: [-2.rad, 2.rad],
           )
     joint(
           type: :revolute,
@@ -116,7 +116,7 @@ box2d {
           bodyA: :torso,
           bodyB: :fthigh,
           anchor: data[:fthigh_anchor],
-          limit: [-2, 2],
+          limit: [-2.rad, 2.rad],
           )
     joint(
           type: :revolute,
@@ -124,7 +124,7 @@ box2d {
           bodyA: :fthigh,
           bodyB: :fshin,
           anchor: data[:fshin_anchor],
-          limit: [-2, 2],
+          limit: [-2.rad, 2.rad],
           )
     joint(
           type: :revolute,
@@ -132,7 +132,7 @@ box2d {
           bodyA: :fshin,
           bodyB: :ffoot,
           anchor: data[:ffoot_anchor],
-          limit: [-2, 2],
+          limit: [-2.rad, 2.rad],
           )
     body(name: :ground, type: :static, position: [0, -2.0]) {
       fixture(shape: :polygon, box: [100, 0.05], friction: 2.0, density: 1, group: -2)
