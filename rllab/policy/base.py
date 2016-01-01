@@ -48,12 +48,18 @@ class Policy(Parameterized):
     def new_from_args(cls, args, mdp):
         pass
 
-    def start_episode(self):
+    def episode_reset(self):
         # This is a dummy method that allows for
         # random initializations before each episode.
         # A potential usage is for mixture policies, where one
         # of the mixture distributions is selected at the beginning
         # of each episode
+        pass
+
+    def log_extra(self, logger, paths):
+        """
+        Log extra information per iteration based on the collected paths
+        """
         pass
 
 
@@ -76,7 +82,7 @@ class StochasticPolicy(Policy):
         raise NotImplementedError
 
     def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var,
-            train=False):
+                         train=False):
         raise NotImplementedError
 
     def compute_entropy(self, pdist):

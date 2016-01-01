@@ -285,7 +285,7 @@ class DPG(RLAlgorithm):
 
     def do_training(self, itr, batch, qf, policy, opt_info):
 
-        states, actions, rewards, next_states, terminal = batch
+        states, actions, rewards, next_states, terminal, _ = batch
 
         f_y = opt_info["f_y"]
         f_train_qf = opt_info["f_train_qf"]

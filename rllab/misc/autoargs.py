@@ -5,7 +5,8 @@ import inspect
 
 # pylint: disable=redefined-builtin
 # pylint: disable=protected-access
-def arg(name, type=None, help=None, nargs=None, mapper=None, choices=None, prefix=True):
+def arg(name, type=None, help=None, nargs=None, mapper=None, choices=None,
+        prefix=True):
     def wrap(fn):
         assert fn.__name__ == '__init__'
         if not hasattr(fn, '_autoargs_info'):
@@ -32,10 +33,12 @@ def prefix(prefix_):
 def _get_prefix(cls):
     from rllab.mdp.base import MDP
     from rllab.policy.base import Policy
+    from rllab.baseline.base import Baseline
     from rllab.vf.base import ValueFunction
     from rllab.qf.base import QFunction
     from rllab.algo.base import Algorithm
     from rllab.es.base import ExplorationStrategy
+    from rllab.model.base import Model
 
     if hasattr(cls.__init__, '_autoargs_prefix'):
         return cls.__init__._autoargs_prefix
@@ -43,6 +46,8 @@ def _get_prefix(cls):
         return 'mdp_'
     elif issubclass(cls, Algorithm):
         return 'algo_'
+    elif issubclass(cls, Baseline):
+        return 'baseline_'
     elif issubclass(cls, ValueFunction):
         return 'vf_'
     elif issubclass(cls, QFunction):
@@ -51,6 +56,8 @@ def _get_prefix(cls):
         return 'policy_'
     elif issubclass(cls, ExplorationStrategy):
         return 'es_'
+    elif issubclass(cls, Model):
+        return 'model_'
     else:
         return ""
 

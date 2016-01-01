@@ -20,7 +20,7 @@ class VPG(BatchPolopt, FirstOrderMethod):
         FirstOrderMethod.__init__(self, **kwargs)
 
     @overrides
-    def init_opt(self, mdp, policy, vf):
+    def init_opt(self, mdp, policy, baseline):
         input_var = new_tensor(
             'input',
             ndim=1+len(mdp.observation_shape),
@@ -65,11 +65,12 @@ class VPG(BatchPolopt, FirstOrderMethod):
         return opt_info
 
     @overrides
-    def get_itr_snapshot(self, itr, mdp, policy, vf, samples_data, opt_info):
+    def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data,
+                         opt_info):
         return dict(
             itr=itr,
             policy=policy,
-            vf=vf,
+            baseline=baseline,
             mdp=mdp,
             observations=samples_data["observations"],
             advantages=samples_data["advantages"],

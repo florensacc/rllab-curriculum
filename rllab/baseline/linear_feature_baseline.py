@@ -1,8 +1,8 @@
-from rllab.vf.base import ValueFunction
+from rllab.baseline.base import Baseline
 from rllab.misc.overrides import overrides
 import numpy as np
 
-class MujocoValueFunction(ValueFunction):
+class LinearFeatureBaseline(Baseline):
 
     def __init__(self, mdp):
         self.coeffs = None
