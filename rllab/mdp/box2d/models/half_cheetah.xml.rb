@@ -92,49 +92,79 @@ box2d {
           bodyA: :torso,
           bodyB: :bthigh,
           anchor: data[:bthigh_anchor],
-          limit: [-2.rad, 2.rad],
+          limit: [-30.deg, 60.deg].reverse,
           )
+    control(
+      type: :torque,
+      joint: :bthigh_joint,
+      ctrllimit: [0,0]#limit: [-120.Nm, 120.Nm]
+    )
     joint(
           type: :revolute,
           name: :bshin_joint,
           bodyA: :bthigh,
           bodyB: :bshin,
           anchor: data[:bshin_anchor],
-          limit: [-2.rad, 2.rad],
+          limit: [-45.deg, 45.deg].reverse,
           )
+    control(
+      type: :torque,
+      joint: :bshin_joint,
+      ctrllimit: [0,0]#limit: [-90.Nm, 90.Nm]
+    )
     joint(
           type: :revolute,
           name: :bfoot_joint,
           bodyA: :bshin,
           bodyB: :bfoot,
           anchor: data[:bfoot_anchor],
-          limit: [-2.rad, 2.rad],
+          limit: [-75.deg, 45.deg].reverse,
           )
+    control(
+      type: :torque,
+      joint: :bfoot_joint,
+      ctrllimit: [0,0]#limit: [-60.Nm, 60.Nm]
+    )
     joint(
           type: :revolute,
-          name: :bthigh_joint,
+          name: :fthigh_joint,
           bodyA: :torso,
           bodyB: :fthigh,
           anchor: data[:fthigh_anchor],
-          limit: [-2.rad, 2.rad],
+          limit: [-20.deg, 60.deg].reverse,
           )
+    control(
+      type: :torque,
+      joint: :fthigh_joint,
+      ctrllimit: [0,0]#limit: [-120.Nm, 120.Nm]
+    )
     joint(
           type: :revolute,
-          name: :bshin_joint,
+          name: :fshin_joint,
           bodyA: :fthigh,
           bodyB: :fshin,
           anchor: data[:fshin_anchor],
-          limit: [-2.rad, 2.rad],
+          limit: [-50.deg, 110.deg].reverse,
           )
+    control(
+      type: :torque,
+      joint: :fshin_joint,
+      ctrllimit: [0,0]#limit: [-60.Nm, 60.Nm]
+    )
     joint(
           type: :revolute,
-          name: :bfoot_joint,
+          name: :ffoot_joint,
           bodyA: :fshin,
           bodyB: :ffoot,
           anchor: data[:ffoot_anchor],
-          limit: [-2.rad, 2.rad],
+          limit: [-120.deg, 20.deg].reverse,
           )
-    body(name: :ground, type: :static, position: [0, -2.0]) {
+    control(
+      type: :torque,
+      joint: :ffoot_joint,
+      ctrllimit: [0,0]#limit: [-30.Nm, 30.Nm]
+    )
+    body(name: :ground, type: :static, position: [0, -1.0]) {
       fixture(shape: :polygon, box: [100, 0.05], friction: 2.0, density: 1, group: -2)
     }
   }
