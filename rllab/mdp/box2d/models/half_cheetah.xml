@@ -39,19 +39,19 @@
       <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
       <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.11554698608735497,-0.07904994627530496" radius="0.046"/>
     </body>
-    <joint type="revolute" name="bthigh_joint" bodyA="torso" bodyB="bthigh" anchor="-0.5,-0.7" limit="60,-30"/>
+    <joint type="revolute" name="bthigh_joint" bodyA="torso" bodyB="bthigh" anchor="-0.5,-0.7" limit="-60,30"/>
     <control type="torque" joint="bthigh_joint" ctrllimit="0,0"/>
-    <joint type="revolute" name="bshin_joint" bodyA="bthigh" bodyB="bshin" anchor="-0.2709022528657641,-0.8778038870722957" limit="45,-45"/>
+    <joint type="revolute" name="bshin_joint" bodyA="bthigh" bodyB="bshin" anchor="-0.2709022528657641,-0.8778038870722957" limit="-45,45"/>
     <control type="torque" joint="bshin_joint" ctrllimit="0,0"/>
     <joint type="revolute" name="bfoot_joint" bodyA="bshin" bodyB="bfoot" anchor="-0.4038725775654768,-1.1467256094177638" limit="45,-75"/>
     <control type="torque" joint="bfoot_joint" ctrllimit="0,0"/>
-    <joint type="revolute" name="fthigh_joint" bodyA="torso" bodyB="fthigh" anchor="0.5,-0.7" limit="60,-20"/>
+    <joint type="revolute" name="fthigh_joint" bodyA="torso" bodyB="fthigh" anchor="0.5,-0.7" limit="-60,20"/>
     <control type="torque" joint="fthigh_joint" ctrllimit="0,0"/>
-    <joint type="revolute" name="fshin_joint" bodyA="fthigh" bodyB="fshin" anchor="0.26894988985185414,-0.8318023011958807" limit="110,-50"/>
+    <joint type="revolute" name="fshin_joint" bodyA="fthigh" bodyB="fshin" anchor="0.26894988985185414,-0.8318023011958807" limit="-110,50"/>
     <control type="torque" joint="fshin_joint" ctrllimit="0,0"/>
     <joint type="revolute" name="ffoot_joint" bodyA="fshin" bodyB="ffoot" anchor="0.44392104021270595,-0.9515065055556282" limit="20,-120"/>
     <control type="torque" joint="ffoot_joint" ctrllimit="0,0"/>
-    <body name="ground" type="static" position="0,-1.0">
+    <body name="ground" type="static" position="0,-2.0">
       <fixture shape="polygon" box="100,0.05" friction="2.0" density="1" group="-2"/>
     </body>
   </world>

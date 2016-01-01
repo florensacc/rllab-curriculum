@@ -19,8 +19,8 @@ class XmlBox2D(XmlElem):
     def __init__(self):
         self.world = None
 
-    def to_box2d(self, extra_data):
-        return self.world.to_box2d(extra_data)
+    def to_box2d(self, extra_data, world=None):
+        return self.world.to_box2d(extra_data, world=world)
 
 
 class XmlWorld(XmlElem):
@@ -53,8 +53,9 @@ class XmlWorld(XmlElem):
         self.positionIterations = 3
         self.timeStep = 0.02
 
-    def to_box2d(self, extra_data):
-        world = Box2D.b2World(allow_sleeping=False)
+    def to_box2d(self, extra_data, world=None):
+        if world is None:
+            world = Box2D.b2World(allow_sleeping=False)
         world.warmStarting = self.warmStarting
         world.continuousPhysics = self.continuousPhysics
         world.subStepping = self.subStepping

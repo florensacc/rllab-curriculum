@@ -92,7 +92,7 @@ box2d {
           bodyA: :torso,
           bodyB: :bthigh,
           anchor: data[:bthigh_anchor],
-          limit: [-30.deg, 60.deg].reverse,
+          limit: [-60.deg, 30.deg],
           )
     control(
       type: :torque,
@@ -105,7 +105,7 @@ box2d {
           bodyA: :bthigh,
           bodyB: :bshin,
           anchor: data[:bshin_anchor],
-          limit: [-45.deg, 45.deg].reverse,
+          limit: [-45.deg, 45.deg],
           )
     control(
       type: :torque,
@@ -131,7 +131,7 @@ box2d {
           bodyA: :torso,
           bodyB: :fthigh,
           anchor: data[:fthigh_anchor],
-          limit: [-20.deg, 60.deg].reverse,
+          limit: [-60.deg, 20.deg],
           )
     control(
       type: :torque,
@@ -144,7 +144,7 @@ box2d {
           bodyA: :fthigh,
           bodyB: :fshin,
           anchor: data[:fshin_anchor],
-          limit: [-50.deg, 110.deg].reverse,
+          limit: [-110.deg, 50.deg],
           )
     control(
       type: :torque,
@@ -164,7 +164,7 @@ box2d {
       joint: :ffoot_joint,
       ctrllimit: [0,0]#limit: [-30.Nm, 30.Nm]
     )
-    body(name: :ground, type: :static, position: [0, -1.0]) {
+    body(name: :ground, type: :static, position: [0, -2.0]) {
       fixture(shape: :polygon, box: [100, 0.05], friction: 2.0, density: 1, group: -2)
     }
   }
