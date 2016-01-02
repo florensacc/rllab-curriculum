@@ -1,6 +1,6 @@
 <!-- Auto-generated. Do not edit! -->
 <box2d>
-  <world timestep="0.01">
+  <world timestep="0.001">
     <body name="torso" type="dynamic" position="0,-0.7">
       <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="-0.5,0.046;0.5,0.046;0.5,-0.046;-0.5,-0.046"/>
       <fixture friction="0.9" density="1" group="-1" shape="circle" center="-0.5,0" radius="0.046"/>
@@ -40,19 +40,33 @@
       <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.11554698608735497,-0.07904994627530496" radius="0.046"/>
     </body>
     <joint type="revolute" name="bthigh_joint" bodyA="torso" bodyB="bthigh" anchor="-0.5,-0.7" limit="-60,30"/>
-    <control type="torque" joint="bthigh_joint" ctrllimit="0,0"/>
+    <control type="torque" joint="bthigh_joint" ctrllimit="-120,120"/>
     <joint type="revolute" name="bshin_joint" bodyA="bthigh" bodyB="bshin" anchor="-0.2709022528657641,-0.8778038870722957" limit="-45,45"/>
-    <control type="torque" joint="bshin_joint" ctrllimit="0,0"/>
+    <control type="torque" joint="bshin_joint" ctrllimit="-90,90"/>
     <joint type="revolute" name="bfoot_joint" bodyA="bshin" bodyB="bfoot" anchor="-0.4038725775654768,-1.1467256094177638" limit="45,-75"/>
-    <control type="torque" joint="bfoot_joint" ctrllimit="0,0"/>
+    <control type="torque" joint="bfoot_joint" ctrllimit="-60,60"/>
     <joint type="revolute" name="fthigh_joint" bodyA="torso" bodyB="fthigh" anchor="0.5,-0.7" limit="-60,20"/>
-    <control type="torque" joint="fthigh_joint" ctrllimit="0,0"/>
+    <control type="torque" joint="fthigh_joint" ctrllimit="-120,120"/>
     <joint type="revolute" name="fshin_joint" bodyA="fthigh" bodyB="fshin" anchor="0.26894988985185414,-0.8318023011958807" limit="-110,50"/>
-    <control type="torque" joint="fshin_joint" ctrllimit="0,0"/>
-    <joint type="revolute" name="ffoot_joint" bodyA="fshin" bodyB="ffoot" anchor="0.44392104021270595,-0.9515065055556282" limit="20,-120"/>
-    <control type="torque" joint="ffoot_joint" ctrllimit="0,0"/>
+    <control type="torque" joint="fshin_joint" ctrllimit="-60,60"/>
+    <joint type="revolute" name="ffoot_joint" bodyA="fshin" bodyB="ffoot" anchor="0.44392104021270595,-0.9515065055556282" limit="-120,20"/>
+    <control type="torque" joint="ffoot_joint" ctrllimit="-30,30"/>
     <body name="ground" type="static" position="0,-2.0">
       <fixture shape="polygon" box="100,0.05" friction="2.0" density="1" group="-2"/>
     </body>
+    <state type="ypos" joint="bfoot_joint"/>
+    <state type="yvel" joint="bfoot_joint"/>
+    <state type="ypos" body="torso"/>
+    <state type="yvel" body="torso"/>
+    <state type="xpos" com="torso,thigh,leg,foot"/>
+    <state type="ypos" com="torso,thigh,leg,foot"/>
+    <state type="apos" joint="thigh_joint"/>
+    <state type="apos" joint="leg_joint"/>
+    <state type="apos" joint="foot_joint"/>
+    <state type="xvel" com="torso,thigh,leg,foot"/>
+    <state type="yvel" com="torso,thigh,leg,foot"/>
+    <state type="avel" joint="thigh_joint"/>
+    <state type="avel" joint="leg_joint"/>
+    <state type="avel" joint="foot_joint"/>
   </world>
 </box2d>

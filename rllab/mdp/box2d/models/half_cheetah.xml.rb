@@ -1,7 +1,7 @@
 common = { friction: 0.9, density: 1, group: -1, radius: 0.046 }
 data = {}
 box2d {
-  world(timestep: 0.01) {
+  world(timestep: 0.001) {
     base(body: {position: [0, -0.7]}) {
       body(name: :torso, type: :dynamic) {
         torso_l, torso_r = [[-0.5, 0], [0.5, 0]]
@@ -97,7 +97,7 @@ box2d {
     control(
       type: :torque,
       joint: :bthigh_joint,
-      ctrllimit: [0,0]#limit: [-120.Nm, 120.Nm]
+      ctrllimit: [-120.Nm, 120.Nm]
     )
     joint(
           type: :revolute,
@@ -110,7 +110,7 @@ box2d {
     control(
       type: :torque,
       joint: :bshin_joint,
-      ctrllimit: [0,0]#limit: [-90.Nm, 90.Nm]
+      ctrllimit: [-90.Nm, 90.Nm]
     )
     joint(
           type: :revolute,
@@ -123,7 +123,7 @@ box2d {
     control(
       type: :torque,
       joint: :bfoot_joint,
-      ctrllimit: [0,0]#limit: [-60.Nm, 60.Nm]
+      ctrllimit: [-60.Nm, 60.Nm]
     )
     joint(
           type: :revolute,
@@ -136,7 +136,7 @@ box2d {
     control(
       type: :torque,
       joint: :fthigh_joint,
-      ctrllimit: [0,0]#limit: [-120.Nm, 120.Nm]
+      ctrllimit: [-120.Nm, 120.Nm]
     )
     joint(
           type: :revolute,
@@ -149,7 +149,7 @@ box2d {
     control(
       type: :torque,
       joint: :fshin_joint,
-      ctrllimit: [0,0]#limit: [-60.Nm, 60.Nm]
+      ctrllimit: [-60.Nm, 60.Nm]
     )
     joint(
           type: :revolute,
@@ -157,15 +157,29 @@ box2d {
           bodyA: :fshin,
           bodyB: :ffoot,
           anchor: data[:ffoot_anchor],
-          limit: [-120.deg, 20.deg].reverse,
+          limit: [-120.deg, 20.deg],
           )
     control(
       type: :torque,
       joint: :ffoot_joint,
-      ctrllimit: [0,0]#limit: [-30.Nm, 30.Nm]
+      ctrllimit: [-30.Nm, 30.Nm]
     )
     body(name: :ground, type: :static, position: [0, -2.0]) {
       fixture(shape: :polygon, box: [100, 0.05], friction: 2.0, density: 1, group: -2)
     }
+    state type: :ypos, joint: :bfoot_joint
+    state type: :yvel, joint: :bfoot_joint
+    state type: :ypos, body: :torso
+    state type: :yvel, body: :torso
+    state type: :xpos, com: [:torso, :thigh, :leg, :foot]
+    state type: :ypos, com: [:torso, :thigh, :leg, :foot]
+    state type: :apos, joint: :thigh_joint
+    state type: :apos, joint: :leg_joint
+    state type: :apos, joint: :foot_joint
+    state type: :xvel, com: [:torso, :thigh, :leg, :foot]
+    state type: :yvel, com: [:torso, :thigh, :leg, :foot]
+    state type: :avel, joint: :thigh_joint
+    state type: :avel, joint: :leg_joint
+    state type: :avel, joint: :foot_joint
   }
 }

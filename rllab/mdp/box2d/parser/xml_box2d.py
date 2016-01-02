@@ -270,15 +270,17 @@ class XmlState(XmlElem):
     class Meta:
         typ = XmlAttr(
             "type", Choice(
-                "xpos", "ypos", "xvel", "yvel", "apos", "avel"))
+                "xpos", "ypos", "xvel", "yvel", "apos", "avel",))
         body = XmlAttr("body", String())
         joint = XmlAttr("joint", String())
+        local = XmlAttr("local", Point2D())
         com = XmlAttr("com", List(String()))
 
     def __init__(self):
         self.typ = None
         self.body = None
         self.joint = None
+        self.local = None
         self.com = None
 
     def to_box2d(self, world, xml_world, extra_data):
