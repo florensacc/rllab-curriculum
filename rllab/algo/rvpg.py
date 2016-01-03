@@ -36,37 +36,22 @@ class RVPG(BatchPolopt, FirstOrderMethod):
         # The gradient of the surrogate objective is the policy gradient
         surr_obj = - TT.mean(log_prob * advantage_var)
         grads = theano.grad(surr_obj, policy.params)
-        # updates = self.update_method(surr_obj, policy.params)
         input_list = [obs_var, advantage_var, action_var, reset_var]
-        # f_grads = compile_function(
-        #     inputs=input_list,
-        #     outputs=grads
-        # )
 
-        # grad_vars = [
-        #     new_tensor('grad%d' % idx, ndim=grad.ndim, dtype=grad.dtype)
-        #     for idx, grad in enumerate(grads)
-        # ]
         updates = self.update_method(grads, policy.params)
 
         f_update = compile_function(
             inputs=input_list,
-            outputs=None,#grads,
+            outputs=None,
             updates=updates,
         )
-        # f_loss = compile_function(
-        #     inputs=input_list,
-        #     outputs=surr_obj,
-        # )
         return dict(
-            # f_grads=f_grads,
             f_update=f_update,
         )
 
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
         logger.log("optimizing policy")
-        # f_grads = opt_info["f_grads"]
         f_update = opt_info["f_update"]
         paths = samples_data["paths"]
 
@@ -77,43 +62,8 @@ class RVPG(BatchPolopt, FirstOrderMethod):
         episode_starts = np.zeros_like(adv)
         start_indices = [len(path["actions"]) for path in paths]
         episode_starts[[0] + list(np.cumsum(start_indices)[:-1])] = 1
-        # print "episode_starts", episode_starts
 
         f_update(obs, adv, actions, episode_starts)
-        # print policy.params[0]
-        # print "first grad", grads[0]
-
-        # terminals = samples_data["terminals"]
-        # actions = samples["actions"]
-        # total_grads = None
-        # total_path_length = 0
-        # for path in paths:
-        #     # print "lalala"
-        #     # import sys
-        #     # sys.exit(0)
-        #     obs, adv, actions = extract(
-        #         path,
-        #         "observations", "advantages", "actions"
-        #     )
-        #     grads = f_grads(obs, adv, actions)
-        #     path_length = len(adv)
-        #     if total_grads is None:
-        #         total_grads = [grad * path_length for grad in grads]
-        #     else:
-        #         total_grads = [total_grad + grad * path_length
-        #                        for total_grad, grad in zip(total_grads, grads)]
-        #     total_path_length += path_length
-        # grads = [grad / total_path_length for grad in total_grads]
-        # f_update(*grads)
-        # inputs = extract(
-        #     samples_data,
-        #     "observations", "advantages", "actions"
-        # )
-        # loss_before = f_loss(*inputs)
-        # f_update(*inputs)
-        # loss_after = f_loss(*inputs)
-        # logger.record_tabular("LossBefore", loss_before)
-        # logger.record_tabular("LossAfter", loss_after)
         return opt_info
 
     @overrides

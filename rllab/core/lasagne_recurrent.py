@@ -1079,19 +1079,15 @@ class LSTMLayer(MergeLayer):
             # add a broadcastable dimension
             mask = mask.dimshuffle(1, 0, 'x')
             if hid_reset is not None:
-                print "reset and mask"
                 sequences = [input, mask, hid_reset]
                 step_fun = step_masked_reset
             else:
-                print "mask only"
                 sequences = [input, mask]
                 step_fun = step_masked
         elif hid_reset is not None:
-            print "reset only"
             sequences = [input, hid_reset]
             step_fun = step_reset
         else:
-            print "none of them"
             sequences = input
             step_fun = step
 
