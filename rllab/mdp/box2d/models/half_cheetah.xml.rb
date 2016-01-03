@@ -1,8 +1,9 @@
 common = { friction: 0.9, density: 1, group: -1, radius: 0.046 }
+foot_friction = 200.0
 data = {}
 box2d {
   world(timestep: 0.001) {
-    base(body: {position: [0, -0.7]}) {
+    base(body: {position: [0, 0.67]}) {
       body(name: :torso, type: :dynamic) {
         torso_l, torso_r = [[-0.5, 0], [0.5, 0]]
         capsule(common.merge(from: torso_l, to: torso_r))
@@ -16,7 +17,7 @@ box2d {
         capsule(common.merge(from: l, to: r))
       }
       base(body: {position: [-0.5, 0]}) {
-        len, ang = 0.145*2, -3.8 + 3.14
+        len, ang = 0.145*2, -1.046666667 #-0.523333333#-3.8 + 3.14
         l = [0, 0]
         data[:bthigh_anchor] = query(:body, :position)
         r = [
@@ -28,7 +29,7 @@ box2d {
         }
 
         base(body: {position: r}) {
-          len, ang = 0.15*2, -2.03
+          len, ang = 0.15*2, -2.616666667#-2.03
           l = [0, 0]
           data[:bshin_anchor] = query(:body, :position)
           r = [
@@ -40,18 +41,19 @@ box2d {
           }
           data[:bfoot_anchor] = query(:body, :position).base_merge(r)
           body(name: :bfoot, type: :dynamic, position: r) {
-            len, ang = 0.094*2, -0.27
+            len, ang = 0.094*2, -1.308333333#-0.27
             l = [0, 0]
             r = [
                  l[0]+len*Math.cos(ang),
                  l[1]+len*Math.sin(ang)
                 ]
-            capsule(common.merge(from: l, to: r))
+            data[:bfoot_end] = r
+            capsule(common.merge(from: l, to: r, friction: foot_friction))
           }
         }
       }
       base(body: {position: [0.5, 0]}) {
-        len, ang = 0.133*2, 0.52 + 3.14
+        len, ang = 0.133*2, -1.993333333#0.52
         l = [0, 0]
         data[:fthigh_anchor] = query(:body, :position)
         r = [
@@ -63,7 +65,7 @@ box2d {
         }
 
         base(body: {position: r}) {
-          len, ang = 0.106*2, -0.6
+          len, ang = 0.106*2, -1.1
           l = [0, 0]
           data[:fshin_anchor] = query(:body, :position)
           r = [
@@ -75,13 +77,14 @@ box2d {
           }
           data[:ffoot_anchor] = query(:body, :position).base_merge(r)
           body(name: :ffoot, type: :dynamic, position: r) {
-            len, ang = 0.07*2, -0.6
+            len, ang = 0.07*2, -1.1
             l = [0, 0]
             r = [
                  l[0]+len*Math.cos(ang),
                  l[1]+len*Math.sin(ang)
                 ]
-            capsule(common.merge(from: l, to: r))
+            data[:ffoot_end] = r
+            capsule(common.merge(from: l, to: r, friction: foot_friction))
           }
         }
       }
@@ -118,7 +121,7 @@ box2d {
           bodyA: :bshin,
           bodyB: :bfoot,
           anchor: data[:bfoot_anchor],
-          limit: [-75.deg, 45.deg].reverse,
+          limit: [-75.deg, 45.deg],
           )
     control(
       type: :torque,
@@ -164,22 +167,28 @@ box2d {
       joint: :ffoot_joint,
       ctrllimit: [-30.Nm, 30.Nm]
     )
-    body(name: :ground, type: :static, position: [0, -2.0]) {
+    body(name: :ground, type: :static, position: [0, 0]) {
       fixture(shape: :polygon, box: [100, 0.05], friction: 2.0, density: 1, group: -2)
     }
-    state type: :ypos, joint: :bfoot_joint
-    state type: :yvel, joint: :bfoot_joint
+    state type: :ypos, body: :bfoot, local: data[:bfoot_end]
+    state type: :yvel, body: :bfoot, local: data[:bfoot_end]
+    # indicator state neglected
     state type: :ypos, body: :torso
-    state type: :yvel, body: :torso
-    state type: :xpos, com: [:torso, :thigh, :leg, :foot]
-    state type: :ypos, com: [:torso, :thigh, :leg, :foot]
-    state type: :apos, joint: :thigh_joint
-    state type: :apos, joint: :leg_joint
-    state type: :apos, joint: :foot_joint
-    state type: :xvel, com: [:torso, :thigh, :leg, :foot]
-    state type: :yvel, com: [:torso, :thigh, :leg, :foot]
-    state type: :avel, joint: :thigh_joint
-    state type: :avel, joint: :leg_joint
-    state type: :avel, joint: :foot_joint
+    state type: :xvel, body: :torso
+    state type: :yvel, body: :bthigh
+    state type: :yvel, body: :fthigh
+    state type: :ypos, body: :ffoot, local: data[:ffoot_end]
+    state type: :yvel, body: :ffoot, local: data[:ffoot_end]
+    [
+     :bthigh_joint, :bshin_joint, :bfoot_joint,
+     :fthigh_joint, :fshin_joint, :ffoot_joint,
+    ].each do |joint|
+      state type: :apos, joint: joint
+      state type: :avel, joint: joint
+    end
+    state type: :apos, joint: :bthigh_joint
+    state type: :apos, joint: :bshin_joint
+    state type: :apos, joint: :bfoot_joint
+
   }
 }

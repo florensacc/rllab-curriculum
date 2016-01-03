@@ -212,7 +212,6 @@ class Box2DMDP(ControlMDP):
                 else:
                     raise NotImplementedError
             elif state.joint:
-                import pdb; pdb.set_trace()
                 joint = find_joint(self.world, state.joint)
                 if state.typ == "apos":
                     if self.trig_angle:

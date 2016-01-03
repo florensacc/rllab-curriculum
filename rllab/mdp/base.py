@@ -6,6 +6,8 @@ from rllab.misc import autoargs
 
 class MDP(object):
 
+    timestep = 0.05
+
     def step(self, state, action):
         raise NotImplementedError
 

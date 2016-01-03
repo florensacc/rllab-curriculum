@@ -28,6 +28,10 @@ if __name__ == "__main__":
 
         @overrides
         def Step(self, settings):
+            for body in self.world.bodies:
+                name = _get_name(body)
+                if name:
+                    record_tabular("%s pos" % name, body.position)
             for joint in self.world.joints:
                 name = _get_name(joint)
                 if name:
