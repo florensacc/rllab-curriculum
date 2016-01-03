@@ -35,7 +35,7 @@ class RVPG(BatchPolopt, FirstOrderMethod):
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
         surr_obj = - TT.mean(log_prob * advantage_var)
-        # grads = theano.grad(surr_obj, policy.params)
+        grads = theano.grad(surr_obj, policy.params)
         # updates = self.update_method(surr_obj, policy.params)
         input_list = [obs_var, advantage_var, action_var, reset_var]
         # f_grads = compile_function(
@@ -47,11 +47,11 @@ class RVPG(BatchPolopt, FirstOrderMethod):
         #     new_tensor('grad%d' % idx, ndim=grad.ndim, dtype=grad.dtype)
         #     for idx, grad in enumerate(grads)
         # ]
-        updates = self.update_method(surr_obj, policy.params)
+        updates = self.update_method(grads, policy.params)
 
         f_update = compile_function(
             inputs=input_list,
-            outputs=None,
+            outputs=None,#grads,
             updates=updates,
         )
         # f_loss = compile_function(
@@ -76,9 +76,12 @@ class RVPG(BatchPolopt, FirstOrderMethod):
         # Construct binary array to indicate start of episodes
         episode_starts = np.zeros_like(adv)
         start_indices = [len(path["actions"]) for path in paths]
-        episode_starts[[0] + np.cumsum(start_indices)[:-1]] = 1
+        episode_starts[[0] + list(np.cumsum(start_indices)[:-1])] = 1
+        # print "episode_starts", episode_starts
 
         f_update(obs, adv, actions, episode_starts)
+        # print policy.params[0]
+        # print "first grad", grads[0]
 
         # terminals = samples_data["terminals"]
         # actions = samples["actions"]

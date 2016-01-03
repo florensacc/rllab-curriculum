@@ -1053,17 +1053,22 @@ class LSTMLayer(MergeLayer):
 
         # Call me old fashioned...
         def step_reset(input_n, reset_n, cell_previous, hid_previous, *args):
-            cell, hid = step(input_n, cell_previous, hid_previous, *args)
-            cell = T.switch(reset_n, cell_init, cell)
-            hid = T.switch(reset_n, hid_init, hid)
+            cell_no_reset, hid_no_reset = step(
+                input_n, cell_previous, hid_previous, *args)
+            cell_reset, hid_reset = step(
+                input_n, cell_init, hid_init, *args)
+            cell = T.switch(reset_n, cell_reset, cell_no_reset)
+            hid = T.switch(reset_n, hid_reset, hid_no_reset)
             return [cell, hid]
 
         def step_masked_reset(
                 input_n, mask_n, reset_n, cell_previous, hid_previous, *args):
-            cell, hid = step_masked(
+            cell_no_reset, hid_no_reset = step_masked(
                 input_n, mask_n, cell_previous, hid_previous, *args)
-            cell = T.switch(reset_n, cell_init, cell)
-            hid = T.switch(reset_n, hid_init, hid)
+            cell_reset, hid_reset = step_masked(
+                input_n, mask_n, cell_init, hid_init, *args)
+            cell = T.switch(reset_n, cell_reset, cell_no_reset)
+            hid = T.switch(reset_n, hid_reset, hid_no_reset)
             return [cell, hid]
 
         if hid_reset is not None:
