@@ -158,7 +158,7 @@ class BatchPolopt(RLAlgorithm):
             deltas = path["rewards"] + \
                 self.discount*path_baselines[1:] - \
                 path_baselines[:-1]
-            path["advantage"] = discount_cumsum(
+            path["advantages"] = discount_cumsum(
                 deltas, self.discount*self.gae_lambda)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
@@ -167,7 +167,8 @@ class BatchPolopt(RLAlgorithm):
         states = np.vstack([path["states"] for path in best_paths])
         pdists = np.vstack([path["pdists"] for path in best_paths])
         actions = np.vstack([path["actions"] for path in best_paths])
-        advantages = np.concatenate([path["advantage"] for path in best_paths])
+        advantages = np.concatenate(
+            [path["advantages"] for path in best_paths])
 
         if self.center_adv:
             advantages = center_advantages(advantages)

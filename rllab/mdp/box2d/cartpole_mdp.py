@@ -9,18 +9,24 @@ from rllab.misc.overrides import overrides
 class CartpoleMDP(Box2DMDP, Serializable):
 
     @autoargs.inherit(Box2DMDP.__init__)
-    def __init__(self, **kwargs):
-        super(CartpoleMDP, self).__init__(
-            self.model_path("cartpole.xml"),
-            **kwargs
-        )
+    @autoargs.arg('position_only', type=bool,
+                  help='Whether to only provide positions as the observation')
+    def __init__(
+            self,
+            position_only=False,
+            **kwargs):
+        self.position_only = position_only
         self.max_pole_angle = .2
         self.max_cart_pos = 2.4
         self.max_cart_speed = 4.
         self.max_pole_speed = 4.
+        super(CartpoleMDP, self).__init__(
+            self.model_path("cartpole.xml"),
+            **kwargs
+        )
         self.cart = find_body(self.world, "cart")
         self.pole = find_body(self.world, "pole")
-        Serializable.__init__(self)
+        Serializable.__init__(self, position_only=position_only)
 
     @overrides
     def reset(self):
@@ -38,6 +44,14 @@ class CartpoleMDP(Box2DMDP, Serializable):
         self.pole.angle = apos
         self.pole.angularVelocity = avel
         return self.get_state(), self.get_current_obs()
+
+    @overrides
+    def get_current_obs(self):
+        raw_obs = self.get_raw_obs()
+        if self.position_only:
+            return raw_obs[[0, 2]]
+        else:
+            return raw_obs
 
     @overrides
     def get_current_reward(
