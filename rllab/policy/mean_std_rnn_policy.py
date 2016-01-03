@@ -31,20 +31,40 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         l_in = L.InputLayer(shape=(None, None, mdp.observation_shape[0]))
 
+        # These four definitions below are more or less dummy variables and
+        # layers. We'd like to support plugging in the initial values of hidden
+        # and cell states to support computation on-the-fly when rolling out
+        # policies; on the other hand, when doing training we don't want to
+        # have to pass in zero state values as inputs. Hence we treat them as
+        # shared variables here with zero value. When we need to pass in the
+        # values, we replace the input layers with other tensor variables
         hid_init_1 = theano.shared(
-            np.zeros((1, n_hidden), dtype=theano.config.floatX))
+            np.zeros((1, n_hidden), dtype=theano.config.floatX),
+            name="hid_init_1",
+        )
         cell_init_1 = theano.shared(
-            np.zeros((1, n_hidden), dtype=theano.config.floatX))
+            np.zeros((1, n_hidden), dtype=theano.config.floatX),
+            name="cell_init_1",
+        )
         l_hid_init_1 = L.InputLayer(
             input_var=hid_init_1, shape=(1, n_hidden))
         l_cell_init_1 = L.InputLayer(
             input_var=cell_init_1, shape=(1, n_hidden))
+
+        reset_var = theano.shared(
+            np.zeros((1, 1), dtype='uint8'),
+            name="reset",
+        )
+        l_reset = L.InputLayer(
+            input_var=reset_var, shape=(None, None)
+        )
 
         l_forward_1 = LR.LSTMLayer(
             l_in,
             hid_init=l_hid_init_1,
             cell_init=l_cell_init_1,
             num_units=n_hidden,
+            reset_input=l_reset,
             grad_clipping=grad_clip,
             nonlinearity=NL.tanh,
             # forgetgate=forget_gate,
@@ -84,6 +104,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self._l_mean = l_mean
         self._l_log_std = l_log_std
         self._l_in = l_in
+        self._l_reset = l_reset
         self._cur_hid = None
         self._cur_cell = None
         self.episode_reset()
@@ -115,13 +136,14 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         action = rnd * np.exp(log_std) + mean
         return action, np.concatenate([mean, log_std])
 
-    def get_log_prob_sym(self, obs_var, action_var, train=False):
+    def get_log_prob_sym(self, obs_var, action_var, reset_var, train=False):
         # Here, we assume for now that this quantity is computed over a single
         # path
         obs_var = TT.shape_padleft(obs_var, n_ones=1)
+        reset_var = TT.shape_padleft(reset_var, n_ones=1)
         means, log_stds = LH.get_output(
             [self._l_mean, self._l_log_std],
-            {self._l_in: obs_var}
+            {self._l_in: obs_var, self._l_reset: reset_var}
         )
         stdn = (action_var - means)
         stdn /= TT.exp(log_stds)

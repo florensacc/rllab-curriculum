@@ -792,6 +792,7 @@ class LSTMLayer(MergeLayer):
                  precompute_input=True,
                  mask_input=None,
                  only_return_final=False,
+                 reset_input=None,
                  **kwargs):
 
         # This layer inherits from a MergeLayer, because it can have four
@@ -803,6 +804,7 @@ class LSTMLayer(MergeLayer):
         self.mask_incoming_index = -1
         self.hid_init_incoming_index = -1
         self.cell_init_incoming_index = -1
+        self.reset_incoming_index = -1
         if mask_input is not None:
             incomings.append(mask_input)
             self.mask_incoming_index = len(incomings)-1
@@ -812,6 +814,9 @@ class LSTMLayer(MergeLayer):
         if isinstance(cell_init, Layer):
             incomings.append(cell_init)
             self.cell_init_incoming_index = len(incomings)-1
+        if reset_input is not None:
+            incomings.append(reset_input)
+            self.reset_incoming_index = len(incomings)-1
 
         # Initialize parent layer
         super(LSTMLayer, self).__init__(incomings, **kwargs)
@@ -946,6 +951,7 @@ class LSTMLayer(MergeLayer):
         input = inputs[0]
         # Retrieve the mask when it is supplied
         mask = None
+        hid_reset = None
         hid_init = None
         cell_init = None
         if self.mask_incoming_index > 0:
@@ -954,6 +960,8 @@ class LSTMLayer(MergeLayer):
             hid_init = inputs[self.hid_init_incoming_index]
         if self.cell_init_incoming_index > 0:
             cell_init = inputs[self.cell_init_incoming_index]
+        if self.reset_incoming_index > 0:
+            hid_reset = inputs[self.reset_incoming_index]
 
         # Treat all dimensions after the second as flattened feature dimensions
         if input.ndim > 3:
@@ -1043,14 +1051,42 @@ class LSTMLayer(MergeLayer):
 
             return [cell, hid]
 
+        # Call me old fashioned...
+        def step_reset(input_n, reset_n, cell_previous, hid_previous, *args):
+            cell, hid = step(input_n, cell_previous, hid_previous, *args)
+            cell = T.switch(reset_n, cell_init, cell)
+            hid = T.switch(reset_n, hid_init, hid)
+            return [cell, hid]
+
+        def step_masked_reset(
+                input_n, mask_n, reset_n, cell_previous, hid_previous, *args):
+            cell, hid = step_masked(
+                input_n, mask_n, cell_previous, hid_previous, *args)
+            cell = T.switch(reset_n, cell_init, cell)
+            hid = T.switch(reset_n, hid_init, hid)
+            return [cell, hid]
+
+        if hid_reset is not None:
+            hid_reset = hid_reset.dimshuffle(1, 0, 'x')
         if mask is not None:
             # mask is given as (batch_size, seq_len). Because scan iterates
             # over first dimension, we dimshuffle to (seq_len, batch_size) and
             # add a broadcastable dimension
             mask = mask.dimshuffle(1, 0, 'x')
-            sequences = [input, mask]
-            step_fun = step_masked
+            if hid_reset is not None:
+                print "reset and mask"
+                sequences = [input, mask, hid_reset]
+                step_fun = step_masked_reset
+            else:
+                print "mask only"
+                sequences = [input, mask]
+                step_fun = step_masked
+        elif hid_reset is not None:
+            print "reset only"
+            sequences = [input, hid_reset]
+            step_fun = step_reset
         else:
+            print "none of them"
             sequences = input
             step_fun = step
 
@@ -1079,6 +1115,12 @@ class LSTMLayer(MergeLayer):
         # provide the input weights and biases to the step function
         if not self.precompute_input:
             non_seqs += [W_in_stacked, b_stacked]
+
+        if self.reset_incoming_index > 0:
+            if cell_init is not None:
+                non_seqs += [cell_init]
+            if hid_init is not None:
+                non_seqs += [hid_init]
 
         if self.unroll_scan:
             # Retrieve the dimensionality of the incoming layer

@@ -16,7 +16,7 @@ params = {
     _name: "rvpg",
     update_method: "adam",
     learning_rate: 0.1,#e-4,
-    batch_size: 1000,
+    batch_size: 1,
     n_itr: 2,
     max_path_length: 100,
     whole_paths: true,
