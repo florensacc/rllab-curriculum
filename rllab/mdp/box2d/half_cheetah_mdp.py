@@ -12,7 +12,7 @@ class HalfCheetahMDP(Box2DMDP, Serializable):
 
     @autoargs.inherit(Box2DMDP.__init__)
     def __init__(self, **kwargs):
-        kwargs["frame_skip"] = kwargs.get("frame_skip", 10)
+        kwargs["frame_skip"] = kwargs.get("frame_skip", 1)
         super(HalfCheetahMDP, self).__init__(self.model_path("half_cheetah.xml"), **kwargs)
         Serializable.__init__(self, **kwargs)
         self.torso = find_body(self.world, "torso")
@@ -30,9 +30,10 @@ class HalfCheetahMDP(Box2DMDP, Serializable):
                 action
         ):
             joint = find_joint(self.world, ctrl.joint)
-            spring = 2./np.pi * np.arctan(-2.*joint.angle-0.05*joint.speed)
+            spring = 0#2./np.pi * np.arctan(-2.*joint.angle-0.05*joint.speed) * 0.25
             limit = min([1, max([-1, spring + action[i]])])
-            forces.append(limit * ub[i] * 1.)
+            # print limit
+            forces.append(limit * ub[i] * 0.01)
         return super(HalfCheetahMDP, self).forward_dynamics(state, np.array(forces), restore)
 
     @property
@@ -68,6 +69,6 @@ class HalfCheetahMDP(Box2DMDP, Serializable):
 
     @overrides
     def is_current_done(self):
-        if self.torso.position[1] <= 0.45 or self.bshin.position[1] <= 0.15 or self.fthigh.position[1] <= 0.3:
+        if self.torso.position[1] <= 0.3 or self.fthigh.position[1] <= 0.3:
             return True
         return False

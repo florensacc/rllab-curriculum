@@ -1,6 +1,6 @@
 <!-- Auto-generated. Do not edit! -->
 <box2d>
-  <world timestep="0.001">
+  <world timestep="0.01">
     <body name="torso" type="dynamic" position="0,0.67">
       <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="-0.5,0.046;0.5,0.046;0.5,-0.046;-0.5,-0.046"/>
       <fixture friction="0.9" density="1" group="-1" shape="circle" center="-0.5,0" radius="0.046"/>
