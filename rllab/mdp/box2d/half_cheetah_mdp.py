@@ -19,21 +19,37 @@ class HalfCheetahMDP(Box2DMDP, Serializable):
         self.bshin = find_body(self.world, "bshin")
         self.bfoot = find_body(self.world, "bfoot")
         self.fthigh = find_body(self.world, "fthigh")
+        self.ctrl_joints = [find_joint(self.world, ctrl.joint) for ctrl in self.extra_data.controls]
+
+
+    def get_spring_forces(self, state):
+        with self._set_state_tmp(state):
+            springs = [
+                2./np.pi * np.arctan(-2.*joint.angle-0.05*joint.speed) * 1
+                for joint in self.ctrl_joints
+            ]
+            return np.array(springs)
+
+    def get_torques(self, x):
+        lb, ub = super(HalfCheetahMDP, self).action_bounds
+        return x * ub * 0.01
+
 
     @overrides
     def forward_dynamics(self, state, action, restore=True):
-        lb, ub = super(HalfCheetahMDP, self).action_bounds
-        forces = []
-        for i, ctrl, act in zip(
-                xrange(len(action)),
-                self.extra_data.controls,
-                action
-        ):
-            joint = find_joint(self.world, ctrl.joint)
-            spring = 0#2./np.pi * np.arctan(-2.*joint.angle-0.05*joint.speed) * 0.25
-            limit = min([1, max([-1, spring + action[i]])])
-            # print limit
-            forces.append(limit * ub[i] * 0.01)
+        clipped = np.clip(action+self.get_spring_forces(state), -1, 1)
+        forces = self.get_torques(clipped)
+        # forces = []
+        # for i, ctrl, act in zip(
+        #         xrange(len(action)),
+        #         self.extra_data.controls,
+        #         action
+        # ):
+        #     joint = find_joint(self.world, ctrl.joint)
+        #     spring = 2./np.pi * np.arctan(-2.*joint.angle-0.05*joint.speed) * 1
+        #     limit = min([1, max([-1, spring + action[i]])])
+        #     # print limit
+        #     forces.append(limit * ub[i] * 0.01)
         return super(HalfCheetahMDP, self).forward_dynamics(state, np.array(forces), restore)
 
     @property
@@ -65,7 +81,15 @@ class HalfCheetahMDP(Box2DMDP, Serializable):
             touch_ground_penalty = (soft_step(2*self.torso.position[1])-1) + \
                                    (soft_step(9*self.bfoot.position[1])-1) + \
                                    (soft_step(4*self.bshin.position[1])-1)
-            return 0.5*speed + touch_ground_penalty + alive_bonus
+            springs = self.get_spring_forces(state)
+            outofrange_penalty = -0.05*np.sum(np.clip(np.abs(springs+action)-1, -10, 0))
+            torque_penalty = -0.5*np.sum(np.clip(
+                np.abs(self.get_torques(np.clip(springs+action, -1, 1))),
+                0,
+                0.05
+            ))
+
+            return 0.5*speed + touch_ground_penalty + alive_bonus + outofrange_penalty + torque_penalty
 
     @overrides
     def is_current_done(self):
