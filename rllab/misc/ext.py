@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from path import Path
 import sys
 import cPickle as pickle
@@ -150,7 +152,6 @@ def shuffled(sequence):
         yield card
 
 def set_seed(seed):
-    import random
     import numpy as np
     import lasagne
     random.seed(seed)

@@ -1,3 +1,5 @@
+import random
+
 from joblib.pool import MemmapingPool
 from rllab.sampler.utils import rollout, ProgBarCounter
 from rllab.misc.ext import extract, merge_dict, set_seed
@@ -17,16 +19,19 @@ _policy = None
 _n_parallel = 1
 _pool = None
 _base_seed = 0
+_queue = None
 
 
 def pool_init_theano():
     import os
     os.environ['THEANO_FLAGS'] = 'device=cpu'
 
+def processor_init(queue):
+    args = queue.get()
+    worker_init(*args)
 
-def worker_init(mdp, policy, queue):
-    inc = queue.get()
-    set_seed(inc + _base_seed)
+def worker_init(mdp, policy, seed_inc):
+    set_seed(seed_inc + _base_seed)
     pool_init_theano()
     global _mdp, _policy
     _mdp, _policy = mdp, policy
@@ -72,9 +77,17 @@ def pool_rollout(args):
 
 
 def config_parallel_sampler(n_parallel, base_seed):
-    global _n_parallel, _base_seed
+    global _n_parallel, _base_seed, _queue
     _n_parallel = n_parallel
     _base_seed = base_seed if base_seed else random.randint()
+    _queue = Queue()
+    if _n_parallel > 1:
+        global _pool
+        _pool = MemmapingPool(
+            _n_parallel,
+            initializer=worker_init,
+            initargs=_queue
+        )
 
 
 def reset():
@@ -86,19 +99,11 @@ def reset():
 
 
 def populate_task(mdp, policy):
-    queue = Queue()
-    for i in xrange(_n_parallel):
-        queue.put(i)
-    args = (mdp, policy, queue)
     if _n_parallel > 1:
-        global _pool
-        _pool = MemmapingPool(
-            _n_parallel,
-            initializer=worker_init,
-            initargs=args
-        )
+        for i in xrange(_n_parallel):
+            _queue.put((mdp, policy, i))
     else:
-        worker_init(*args)
+        worker_init(mdp, policy, 0)
 
 
 def request_samples(
