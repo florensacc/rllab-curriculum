@@ -1,6 +1,9 @@
 from path import Path
 import sys
 import cPickle as pickle
+import random
+
+from rllab.misc.console import colorize
 
 sys.setrecursionlimit(50000)
 
@@ -122,3 +125,41 @@ class AttrDict(dict):
 
 def is_iterable(obj):
     return isinstance(obj, basestring) or getattr(obj, '__iter__', False)
+
+# cut the path for any time >= t
+def truncate_path(p, t):
+    return dict((k, p[k][:t]) for k in p)
+
+
+def concat_paths(p1, p2):
+    import numpy as np
+    return dict((k1, np.concatenate([p1[k1], p2[k1]])) for k1 in p1.keys() if k1 in p2)
+
+
+def path_len(p):
+    return len(p["states"])
+
+
+def shuffled(sequence):
+    deck = list(sequence)
+    while len(deck):
+        i = random.randint(0, len(deck) - 1)  # choose random card
+        card = deck[i]  # take the card
+        deck[i] = deck[-1]  # put top card in its place
+        deck.pop()  # remove top card
+        yield card
+
+def set_seed(seed):
+    import random
+    import numpy as np
+    import lasagne
+    random.seed(seed)
+    np.random.seed(seed)
+    lasagne.random.set_rng(np.random.RandomState(seed))
+    print(
+        colorize(
+            'using seed %s' % (str(seed)),
+            'green'
+        )
+    )
+

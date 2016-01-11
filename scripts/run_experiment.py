@@ -1,5 +1,5 @@
 from __future__ import print_function
-from rllab.misc.ext import is_iterable
+from rllab.misc.ext import is_iterable, set_seed
 from rllab.misc.resolve import load_class
 from rllab.misc.console import colorize
 from rllab import config
@@ -92,7 +92,7 @@ def run_experiment(argv):
         run_interactive()
     else:
         from rllab.sampler import parallel_sampler
-        parallel_sampler.init_pool(args.n_parallel)
+        parallel_sampler.config_parallel_sampler(args.n_parallel, args.seed)
         if args.plot:
             from rllab.plotter import plotter
             plotter.init_worker()
@@ -107,16 +107,7 @@ def run_experiment(argv):
         from rllab.model.base import Model
 
         if args.seed is not None:
-            import numpy as np
-            import lasagne
-            np.random.seed(args.seed)
-            lasagne.random.set_rng(np.random.RandomState(args.seed))
-            print(
-                colorize(
-                    'using seed %s' % (str(args.seed)),
-                    'green'
-                )
-            )
+            set_seed(args.seed)
 
         # Save the arguments which might be useful for later use
         # with open(cache_file, 'w+b') as f:
