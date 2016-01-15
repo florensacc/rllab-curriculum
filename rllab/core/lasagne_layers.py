@@ -30,16 +30,22 @@ class ParamLayer(L.Layer):
         return T.tile(self.param, (input.shape[0], 1))
 
 
-class OpLayer(L.Layer):
-    def __init__(self, incoming, op, **kwargs):
-        super(OpLayer, self).__init__(incoming, **kwargs)
+class OpLayer(L.MergeLayer):
+    def __init__(self, incoming, op,
+                 shape_op=lambda x: x, extras=None, **kwargs):
+        if extras is None:
+            extras = []
+        incomings = [incoming] + extras
+        super(OpLayer, self).__init__(incomings, **kwargs)
         self.op = op
+        self.shape_op = shape_op
+        self.incomings = incomings
 
-    def get_output_shape_for(self, input_shape):
-        return input_shape
+    def get_output_shape_for(self, input_shapes):
+        return self.shape_op(*input_shapes)
 
-    def get_output_for(self, input, **kwargs):
-        return self.op(input)
+    def get_output_for(self, inputs, **kwargs):
+        return self.op(*inputs)
 
 
 """

@@ -13,7 +13,7 @@ params = {
     _name: "zero_baseline",
   },
   algo: {
-    _name: "rppo",
+    _name: "rppo1",
     binary_search_penalty: false,
     whole_paths: true,
     batch_size: 1000,
