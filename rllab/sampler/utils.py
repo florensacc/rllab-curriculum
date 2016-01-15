@@ -29,7 +29,7 @@ def rollout(mdp, policy, max_length=np.inf, animated=False, use_state=False):
         if animated:
             mdp.plot()
             import time
-            time.sleep(0.05)
+            time.sleep(mdp.timestep)
     return dict(
         states=np.vstack(states),
         observations=np.vstack(observations),

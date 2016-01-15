@@ -1,0 +1,81 @@
+<!-- Auto-generated. Do not edit! -->
+<box2d>
+  <world timestep="0.01">
+    <body name="torso" type="dynamic" position="0,0.67">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="-0.5,0.046;0.5,0.046;0.5,-0.046;-0.5,-0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="-0.5,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.5,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.5351591311031733,-0.029662021173040055;0.7286070952751736,0.19963665993461144;0.6582888330688271,0.25896070228069157;0.46484086889682674,0.029662021173040055"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.5,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.6934479641720004,0.2292986811076515" radius="0.046"/>
+    </body>
+    <body name="bthigh" type="dynamic" position="-0.5,0.67">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.039824952624321557,0.02302114568110248;0.18495826235301113,-0.22804920782005517;0.105308357104368,-0.2740914991822601;-0.039824952624321557,-0.02302114568110248"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.14513330972868957,-0.25107035350115764" radius="0.046"/>
+    </body>
+    <body name="bshin" type="dynamic" position="-0.35486669027131046,0.4189296464988424">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.023052852055358487,-0.03980660764387935;-0.23655545866559377,-0.1901512949614347;-0.28266116277631076,-0.11053807967367599;-0.023052852055358487,0.03980660764387935"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="-0.25960831072095225,-0.15034468731755535" radius="0.046"/>
+    </body>
+    <body name="bfoot" type="dynamic" position="-0.6144750009922627,0.26858495918128705">
+      <fixture friction="200.0" density="1" group="-1" shape="polygon" vertices="0.04442467754839656,0.0119351591828928;0.093203154208915,-0.16962656644968443;0.00435379911212188,-0.19349688481547006;-0.04442467754839656,-0.0119351591828928"/>
+      <fixture friction="200.0" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="200.0" density="1" group="-1" shape="circle" center="0.04877847666051844,-0.18156172563257725" radius="0.046"/>
+    </body>
+    <body name="fthigh" type="dynamic" position="0.5,0.67">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.04195436955756415,-0.018863479928882;-0.06712575350944912,-0.26146918215305737;-0.1510344926245774,-0.22374222229529334;-0.04195436955756415,0.018863479928882"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="-0.10908012306701327,-0.24260570222417535" radius="0.046"/>
+    </body>
+    <body name="fshin" type="dynamic" position="0.39091987693298674,0.4273942977758247">
+      <fixture friction="0.9" density="1" group="-1" shape="polygon" vertices="0.040995538562826034,0.020865421585576537;0.13715791630504842,-0.1680705387474478;0.055166839179396354,-0.20980138191860084;-0.040995538562826034,-0.020865421585576537"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="0.9" density="1" group="-1" shape="circle" center="0.09616237774222239,-0.18893596033302432" radius="0.046"/>
+    </body>
+    <body name="ffoot" type="dynamic" position="0.4870822546752091,0.2384583374428004">
+      <fixture friction="200.0" density="1" group="-1" shape="polygon" vertices="0.04099553856282603,0.020865421585576555;0.10449899556240685,-0.10390360882302442;0.022507918436754808,-0.14563445199417752;-0.04099553856282603,-0.020865421585576555"/>
+      <fixture friction="200.0" density="1" group="-1" shape="circle" center="0,0" radius="0.046"/>
+      <fixture friction="200.0" density="1" group="-1" shape="circle" center="0.06350345699958083,-0.12476903040860098" radius="0.046"/>
+    </body>
+    <joint type="revolute" name="bthigh_joint" bodyA="torso" bodyB="bthigh" anchor="-0.5,0.67" limit="-60,30"/>
+    <control type="torque" joint="bthigh_joint" ctrllimit="-120,120"/>
+    <joint type="revolute" name="bshin_joint" bodyA="bthigh" bodyB="bshin" anchor="-0.35486669027131046,0.4189296464988424" limit="-45,45"/>
+    <control type="torque" joint="bshin_joint" ctrllimit="-90,90"/>
+    <joint type="revolute" name="bfoot_joint" bodyA="bshin" bodyB="bfoot" anchor="-0.6144750009922627,0.26858495918128705" limit="-75,45"/>
+    <control type="torque" joint="bfoot_joint" ctrllimit="-60,60"/>
+    <joint type="revolute" name="fthigh_joint" bodyA="torso" bodyB="fthigh" anchor="0.5,0.67" limit="-60,20"/>
+    <control type="torque" joint="fthigh_joint" ctrllimit="-120,120"/>
+    <joint type="revolute" name="fshin_joint" bodyA="fthigh" bodyB="fshin" anchor="0.39091987693298674,0.4273942977758247" limit="-110,50"/>
+    <control type="torque" joint="fshin_joint" ctrllimit="-60,60"/>
+    <joint type="revolute" name="ffoot_joint" bodyA="fshin" bodyB="ffoot" anchor="0.48708225467520916,0.2384583374428004" limit="-120,20"/>
+    <control type="torque" joint="ffoot_joint" ctrllimit="-30,30"/>
+    <body name="ground" type="static" position="0,0">
+      <fixture shape="polygon" box="100,0.05" friction="2.0" density="1" group="-2"/>
+    </body>
+    <state type="ypos" body="bfoot" local="0.04877847666051844,-0.18156172563257725"/>
+    <state type="yvel" body="bfoot" local="0.04877847666051844,-0.18156172563257725"/>
+    <state type="ypos" body="torso"/>
+    <state type="xvel" body="torso"/>
+    <state type="yvel" body="bthigh"/>
+    <state type="yvel" body="fthigh"/>
+    <state type="ypos" body="ffoot" local="0.06350345699958083,-0.12476903040860098"/>
+    <state type="yvel" body="ffoot" local="0.06350345699958083,-0.12476903040860098"/>
+    <state type="apos" joint="bthigh_joint"/>
+    <state type="avel" joint="bthigh_joint"/>
+    <state type="apos" joint="bshin_joint"/>
+    <state type="avel" joint="bshin_joint"/>
+    <state type="apos" joint="bfoot_joint"/>
+    <state type="avel" joint="bfoot_joint"/>
+    <state type="apos" joint="fthigh_joint"/>
+    <state type="avel" joint="fthigh_joint"/>
+    <state type="apos" joint="fshin_joint"/>
+    <state type="avel" joint="fshin_joint"/>
+    <state type="apos" joint="ffoot_joint"/>
+    <state type="avel" joint="ffoot_joint"/>
+    <state type="apos" joint="bthigh_joint"/>
+    <state type="apos" joint="bshin_joint"/>
+    <state type="apos" joint="bfoot_joint"/>
+  </world>
+</box2d>

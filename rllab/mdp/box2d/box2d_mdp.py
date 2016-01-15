@@ -184,14 +184,23 @@ class Box2DMDP(ControlMDP):
         for state in self.extra_data.states:
             if state.body:
                 body = find_body(self.world, state.body)
+                if state.local is not None:
+                    l = state.local
+                    position = body.GetWorldPoint(l)
+                    linearVel = body.GetLinearVelocityFromLocalPoint(l)
+                    # now I wish I could write angle = error "not supported"
+                else:
+                    position = body.position
+                    linearVel = body.linearVelocity
+
                 if state.typ == "xpos":
-                    obs.append(body.position[0])
+                    obs.append(position[0])
                 elif state.typ == "ypos":
-                    obs.append(body.position[1])
+                    obs.append(position[1])
                 elif state.typ == "xvel":
-                    obs.append(body.linearVelocity[0])
+                    obs.append(linearVel[0])
                 elif state.typ == "yvel":
-                    obs.append(body.linearVelocity[1])
+                    obs.append(linearVel[1])
                 elif state.typ == "apos":
                     if self.trig_angle:
                         obs.append(np.cos(body.angle))

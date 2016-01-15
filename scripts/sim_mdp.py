@@ -36,11 +36,11 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
         lb, ub = mdp.action_bounds
         totrew = 0
         mdp.plot()
-        for _ in xrange(max_steps):
+        for i in xrange(max_steps):
             action = sample_action(lb, ub)
             state, _, rew, done = mdp.step(state, action)
-            mdp.plot()
-            time.sleep(delay)
+            if (i%10) == 0:
+                mdp.plot()
             totrew += rew
             print rew
             if done:

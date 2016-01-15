@@ -19,8 +19,8 @@ class XmlBox2D(XmlElem):
     def __init__(self):
         self.world = None
 
-    def to_box2d(self, extra_data):
-        return self.world.to_box2d(extra_data)
+    def to_box2d(self, extra_data, world=None):
+        return self.world.to_box2d(extra_data, world=world)
 
 
 class XmlWorld(XmlElem):
@@ -53,8 +53,9 @@ class XmlWorld(XmlElem):
         self.positionIterations = 3
         self.timeStep = 0.02
 
-    def to_box2d(self, extra_data):
-        world = Box2D.b2World(allow_sleeping=False)
+    def to_box2d(self, extra_data, world=None):
+        if world is None:
+            world = Box2D.b2World(allow_sleeping=False)
         world.warmStarting = self.warmStarting
         world.continuousPhysics = self.continuousPhysics
         world.subStepping = self.subStepping
@@ -269,15 +270,17 @@ class XmlState(XmlElem):
     class Meta:
         typ = XmlAttr(
             "type", Choice(
-                "xpos", "ypos", "xvel", "yvel", "apos", "avel"))
+                "xpos", "ypos", "xvel", "yvel", "apos", "avel",))
         body = XmlAttr("body", String())
         joint = XmlAttr("joint", String())
+        local = XmlAttr("local", Point2D())
         com = XmlAttr("com", List(String()))
 
     def __init__(self):
         self.typ = None
         self.body = None
         self.joint = None
+        self.local = None
         self.com = None
 
     def to_box2d(self, world, xml_world, extra_data):
