@@ -11,8 +11,8 @@ params = {
     _name: "mean_std_nn_policy",
     # hidden_layers: [32, 32],
   },
-  vf: {
-    _name: "mujoco_value_function",
+  baseline: {
+    _name: "linear_feature_baseline",
   },
   exp_name: "ppo_box2d_hopper",
   algo: {

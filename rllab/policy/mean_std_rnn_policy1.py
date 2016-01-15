@@ -146,39 +146,39 @@ class MeanStdRNNPolicy1(StochasticPolicy, LasagnePowered, Serializable):
         log_std = pdist[:, self.action_dim:]
         return mean, log_std
 
-    # def get_pdist_sym(self, obs_var):
-    #     obs_var = TT.shape_padleft(obs_var, n_ones=1)
-    #     means, log_stds = LH.get_output(
-    #         [self._l_mean, self._l_log_std],
-    #         {self._l_in: obs_var}
-    #     )
-    #     return TT.concatenate([means, log_stds], axis=-1)
+    def get_pdist_sym(self, obs_var):
+        # obs_var = TT.shape_padleft(obs_var, n_ones=1)
+        means, log_stds = LH.get_output(
+            [self._l_mean, self._l_log_std],
+            {self._l_in: obs_var}
+        )
+        return TT.concatenate([means, log_stds], axis=-1)
 
     # # Computes D_KL(p_old || p_new)
     # @overrides
-    # def kl(self, old_pdist_var, new_pdist_var):
-    #     old_mean, old_log_std = self._split_pdist(old_pdist_var)
-    #     new_mean, new_log_std = self._split_pdist(new_pdist_var)
-    #     old_std = TT.exp(old_log_std)
-    #     new_std = TT.exp(new_log_std)
-    #     # mean: (N*A)
-    #     # std: (N*A)
-    #     # formula:
-    #     # { (\mu_1 - \mu_2)^2 + \sigma_1^2 - \sigma_2^2 } / (2\sigma_2^2) +
-    #     # ln(\sigma_2/\sigma_1)
-    #     numerator = TT.square(old_mean - new_mean) + \
-    #         TT.square(old_std) - TT.square(new_std)
-    #     denominator = 2*TT.square(new_std) + 1e-8
-    #     return TT.sum(
-    #         numerator / denominator + new_log_std - old_log_std, axis=1)
+    def kl(self, old_pdist_var, new_pdist_var):
+        old_mean, old_log_std = self._split_pdist(old_pdist_var)
+        new_mean, new_log_std = self._split_pdist(new_pdist_var)
+        old_std = TT.exp(old_log_std)
+        new_std = TT.exp(new_log_std)
+        # mean: (N*A)
+        # std: (N*A)
+        # formula:
+        # { (\mu_1 - \mu_2)^2 + \sigma_1^2 - \sigma_2^2 } / (2\sigma_2^2) +
+        # ln(\sigma_2/\sigma_1)
+        numerator = TT.square(old_mean - new_mean) + \
+            TT.square(old_std) - TT.square(new_std)
+        denominator = 2*TT.square(new_std) + 1e-8
+        return TT.sum(
+            numerator / denominator + new_log_std - old_log_std, axis=-1)
 
-    # @overrides
-    # def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var):
-    #     old_mean, old_log_std = self._split_pdist(old_pdist_var)
-    #     new_mean, new_log_std = self._split_pdist(new_pdist_var)
-    #     logli_new = log_normal_pdf(action_var, new_mean, new_log_std)
-    #     logli_old = log_normal_pdf(action_var, old_mean, old_log_std)
-    #     return TT.exp(TT.sum(logli_new - logli_old, axis=1))
+    @overrides
+    def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var):
+        old_mean, old_log_std = self._split_pdist(old_pdist_var)
+        new_mean, new_log_std = self._split_pdist(new_pdist_var)
+        logli_new = log_normal_pdf(action_var, new_mean, new_log_std)
+        logli_old = log_normal_pdf(action_var, old_mean, old_log_std)
+        return TT.exp(TT.sum(logli_new - logli_old, axis=-1))
 
     @overrides
     def episode_reset(self):

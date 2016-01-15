@@ -4,6 +4,7 @@ import numpy as np
 from rllab.misc import logger, autoargs
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract, compile_function, new_tensor
+from rllab.misc.tensor_utils import pad_tensor
 from rllab.algo.batch_polopt import BatchPolopt
 from rllab.algo.first_order_method import FirstOrderMethod
 
@@ -67,19 +68,13 @@ class RVPG1(BatchPolopt, FirstOrderMethod):
 
         max_path_length = max([len(path["advantages"]) for path in paths])
 
-        def _longer(x, max_len, rep):
-            return np.concatenate([
-                x,
-                np.tile(rep, (max_len - len(x),) + (1,) * np.ndim(rep))
-            ])
-
         # make all paths the same length (pad extra advantages with 0)
         obs = [path["observations"] for path in paths]
-        obs = [_longer(ob, max_path_length, ob[0]) for ob in obs]
+        obs = [pad_tensor(ob, max_path_length, ob[0]) for ob in obs]
         adv = [path["advantages"] for path in paths]
-        adv = [_longer(a, max_path_length, 0) for a in adv]
+        adv = [pad_tensor(a, max_path_length, 0) for a in adv]
         actions = [path["actions"] for path in paths]
-        actions = [_longer(a, max_path_length, a[0]) for a in actions]
+        actions = [pad_tensor(a, max_path_length, a[0]) for a in actions]
 
         # log_prob = opt_info["f_log_prob"](obs, adv, actions)
         # import ipdb; ipdb.set_trace()

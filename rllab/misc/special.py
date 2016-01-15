@@ -127,3 +127,5 @@ def rk4(derivs, y0, t, *args, **kwargs):
         k4 = np.asarray(derivs(y0 + dt * k3, thist + dt, *args, **kwargs))
         yout[i + 1] = y0 + dt / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4)
     return yout
+
+
