@@ -2,7 +2,7 @@ from rllab.misc.tensor_utils import flatten_tensors
 from rllab.misc.ext import merge_dict, compile_function, extract, new_tensor
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
-from rllab.algo.batch_polopt import BatchPolopt
+from rllab.algo.recurrent_batch_polopt import RecurrentBatchPolopt
 import rllab.misc.logger as logger
 import theano
 import theano.tensor as TT
@@ -10,12 +10,12 @@ from pydoc import locate
 import numpy as np
 
 
-class RPPO(BatchPolopt):
+class RPPO(RecurrentBatchPolopt):
     """
     Recurrent Proximal Policy Optimization.
     """
 
-    @autoargs.inherit(BatchPolopt.__init__)
+    @autoargs.inherit(RecurrentBatchPolopt.__init__)
     @autoargs.arg("step_size", type=float,
                   help="Maximum change in mean KL per iteration.")
     @autoargs.arg("initial_penalty", type=float,
@@ -81,31 +81,39 @@ class RPPO(BatchPolopt):
 
     @overrides
     def init_opt(self, mdp, policy, baseline):
-        input_var = new_tensor(
-            'input',
-            ndim=1+len(mdp.observation_shape),
+        obs_var = new_tensor(
+            'obs',
+            ndim=2+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
-        advantage_var = TT.vector('advantage')
-        old_pdist_var = TT.matrix('old_pdist')
-        action_var = TT.matrix('action', dtype=mdp.action_dtype)
-        reset_var = TT.ivector('episode_reset')
+        advantage_var = TT.matrix('advantage')
+        old_pdist_var = new_tensor(
+            'old_pdist',
+            ndim=3,
+            dtype=theano.config.floatX
+        )
+        action_var = new_tensor(
+            'action',
+            ndim=3,
+            dtype=mdp.action_dtype
+        )
         penalty_var = TT.scalar('penalty')
+        valid_var = TT.matrix('valid')
 
-        pdist_var = policy.get_pdist_sym(input_var, reset_var)
+        pdist_var = policy.get_pdist_sym(obs_var, action_var)
         kl = policy.kl(old_pdist_var, pdist_var)
         lr = policy.likelihood_ratio(old_pdist_var, pdist_var, action_var)
-        mean_kl = TT.mean(kl)
+        mean_kl = TT.sum(valid_var * kl) / TT.sum(valid_var)
         # formulate as a minimization problem
-        surr_loss = - TT.mean(lr * advantage_var)
+        surr_loss = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
         surr_obj = surr_loss + penalty_var * mean_kl
 
         input_list = [
-            input_var,
+            obs_var,
             advantage_var,
             old_pdist_var,
             action_var,
-            reset_var,
+            valid_var,
             penalty_var
         ]
 
@@ -128,14 +136,8 @@ class RPPO(BatchPolopt):
         f_grads = opt_info['f_grads']
         all_input_values = list(extract(
             samples_data,
-            "observations", "advantages", "pdists", "actions"
+            "observations", "advantages", "pdists", "actions", "valids"
         ))
-
-        paths = samples_data["paths"]
-        episode_starts = np.zeros_like(samples_data["advantages"])
-        start_indices = [len(path["actions"]) for path in paths]
-        episode_starts[[0] + list(np.cumsum(start_indices)[:-1])] = 1
-        all_input_values += [episode_starts]
 
         cur_params = policy.get_param_values()
 
@@ -175,6 +177,7 @@ class RPPO(BatchPolopt):
                 )
             _, try_loss, try_mean_kl = f_surr_kl(
                 *(all_input_values + [try_penalty]))
+
             logger.log('penalty %f => loss %f, mean kl %f' %
                        (try_penalty, try_loss, try_mean_kl))
             if try_mean_kl < self.step_size or \
@@ -261,9 +264,9 @@ class RPPO(BatchPolopt):
             policy=policy,
             baseline=baseline,
             mdp=mdp,
-            observations=samples_data["observations"],
-            advantages=samples_data["advantages"],
-            actions=samples_data["actions"],
-            penalty=opt_info["penalty"],
-            pdists=samples_data["pdists"],
+            # observations=samples_data["observations"],
+            # advantages=samples_data["advantages"],
+            # actions=samples_data["actions"],
+            # penalty=opt_info["penalty"],
+            # pdists=samples_data["pdists"],
         )

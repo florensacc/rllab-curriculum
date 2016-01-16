@@ -4,6 +4,7 @@ import numpy as np
 from rllab.misc import logger, autoargs
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract, compile_function, new_tensor
+from rllab.misc.tensor_utils import pad_tensor
 from rllab.algo.batch_polopt import BatchPolopt
 from rllab.algo.first_order_method import FirstOrderMethod
 
@@ -25,18 +26,27 @@ class RVPG(BatchPolopt, FirstOrderMethod):
     def init_opt(self, mdp, policy, baseline):
         obs_var = new_tensor(
             'observations',
-            ndim=1+len(mdp.observation_shape),
+            ndim=2+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
-        advantage_var = TT.vector('advantage')
-        action_var = TT.matrix('action', dtype=mdp.action_dtype)
-        reset_var = TT.ivector('episode_reset')
-        log_prob = policy.get_log_prob_sym(obs_var, action_var, reset_var)
+        advantage_var = TT.matrix('advantage')
+        action_var = new_tensor(
+            'action',
+            ndim=3,
+            dtype=mdp.action_dtype
+        )
+        log_prob = policy.get_log_prob_sym(obs_var, action_var)
+
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
         surr_obj = - TT.mean(log_prob * advantage_var)
         grads = theano.grad(surr_obj, policy.params)
-        input_list = [obs_var, advantage_var, action_var, reset_var]
+        input_list = [obs_var, advantage_var, action_var]
+
+        f_log_prob = compile_function(
+            inputs=input_list,
+            outputs=log_prob
+        )
 
         updates = self.update_method(grads, policy.params)
 
@@ -47,6 +57,7 @@ class RVPG(BatchPolopt, FirstOrderMethod):
         )
         return dict(
             f_update=f_update,
+            f_log_prob=f_log_prob,
         )
 
     @overrides
@@ -55,15 +66,20 @@ class RVPG(BatchPolopt, FirstOrderMethod):
         f_update = opt_info["f_update"]
         paths = samples_data["paths"]
 
-        obs = samples_data["observations"]
-        adv = samples_data["advantages"]
-        actions = samples_data["actions"]
-        # Construct binary array to indicate start of episodes
-        episode_starts = np.zeros_like(adv)
-        start_indices = [len(path["actions"]) for path in paths]
-        episode_starts[[0] + list(np.cumsum(start_indices)[:-1])] = 1
+        max_path_length = max([len(path["advantages"]) for path in paths])
 
-        f_update(obs, adv, actions, episode_starts)
+        # make all paths the same length (pad extra advantages with 0)
+        obs = [path["observations"] for path in paths]
+        obs = [pad_tensor(ob, max_path_length, ob[0]) for ob in obs]
+        adv = [path["advantages"] for path in paths]
+        adv = [pad_tensor(a, max_path_length, 0) for a in adv]
+        actions = [path["actions"] for path in paths]
+        actions = [pad_tensor(a, max_path_length, a[0]) for a in actions]
+
+        # log_prob = opt_info["f_log_prob"](obs, adv, actions)
+        # import ipdb; ipdb.set_trace()
+
+        f_update(obs, adv, actions)
         return opt_info
 
     @overrides

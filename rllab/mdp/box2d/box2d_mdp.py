@@ -11,12 +11,9 @@ from rllab.misc.overrides import overrides
 
 class Box2DMDP(ControlMDP):
 
-    @autoargs.arg("trig_angle", type=bool,
-                  help="Use cosine and sine representation for angle "
-                       "positions.")
     @autoargs.arg("frame_skip", type=int,
                   help="Number of frames to skip")
-    def __init__(self, model_path, trig_angle=True, frame_skip=1):
+    def __init__(self, model_path, frame_skip=1):
         with open(model_path, "r") as f:
             s = f.read()
         world, extra_data = world_from_xml(s)
@@ -25,7 +22,6 @@ class Box2DMDP(ControlMDP):
         self.initial_state = self.get_state()
         self.current_state = self.initial_state
         self.viewer = None
-        self.trig_angle = trig_angle
         self.frame_skip = frame_skip
         self.timestep = self.extra_data.timeStep
         self._action_bounds = None
@@ -202,11 +198,7 @@ class Box2DMDP(ControlMDP):
                 elif state.typ == "yvel":
                     obs.append(linearVel[1])
                 elif state.typ == "apos":
-                    if self.trig_angle:
-                        obs.append(np.cos(body.angle))
-                        obs.append(np.sin(body.angle))
-                    else:
-                        obs.append(body.angle)
+                    obs.append(body.angle)
                 elif state.typ == "avel":
                     obs.append(body.angularVelocity)
                 else:
@@ -214,11 +206,7 @@ class Box2DMDP(ControlMDP):
             elif state.joint:
                 joint = find_joint(self.world, state.joint)
                 if state.typ == "apos":
-                    if self.trig_angle:
-                        obs.append(np.cos(joint.angle))
-                        obs.append(np.sin(joint.angle))
-                    else:
-                        obs.append(joint.angle)
+                    obs.append(joint.angle)
                 elif state.typ == "avel":
                     obs.append(joint.speed)
                 else:

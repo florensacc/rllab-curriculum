@@ -6,7 +6,7 @@ import lasagne.nonlinearities as NL
 import numpy as np
 import theano
 import theano.tensor as TT
-from rllab.core.lasagne_layers import ParamLayer
+from rllab.core.lasagne_layers import ParamLayer, OpLayer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc.ext import compile_function, merge_dict, new_tensor
@@ -19,17 +19,22 @@ def log_normal_pdf(x, mean, log_std):
     return -0.5*TT.square(normalized) - np.log((2*np.pi)**0.5) - log_std
 
 
-class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
+class MeanStdRNNPolicy1(StochasticPolicy, LasagnePowered, Serializable):
 
     def __init__(self, mdp):
         # create network
 
-        n_hidden = 10  # 32
-        grad_clip = 100
+        StochasticPolicy.__init__(self, mdp)
+
+        N_HIDDEN = 32
+        GRAD_CLIP = 10
 
         # forget_gate = LR.Gate(b=lasagne.init.Constant(5.0))
 
-        l_in = L.InputLayer(shape=(None, None, mdp.observation_shape[0]))
+        l_obs = L.InputLayer(shape=(None, None, mdp.observation_shape[0]))
+        l_prev_action = L.InputLayer(shape=(None, None, mdp.action_dim))
+
+        l_in = L.ConcatLayer([l_obs, l_prev_action], axis=2)
 
         # These four definitions below are more or less dummy variables and
         # layers. We'd like to support plugging in the initial values of hidden
@@ -39,47 +44,72 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         # shared variables here with zero value. When we need to pass in the
         # values, we replace the input layers with other tensor variables
         hid_init_1 = theano.shared(
-            np.zeros((1, n_hidden), dtype=theano.config.floatX),
+            np.zeros((1, N_HIDDEN), dtype=theano.config.floatX),
             name="hid_init_1",
         )
         cell_init_1 = theano.shared(
-            np.zeros((1, n_hidden), dtype=theano.config.floatX),
+            np.zeros((1, N_HIDDEN), dtype=theano.config.floatX),
             name="cell_init_1",
         )
         l_hid_init_1 = L.InputLayer(
-            input_var=hid_init_1, shape=(1, n_hidden))
+            input_var=hid_init_1, shape=(1, N_HIDDEN))
         l_cell_init_1 = L.InputLayer(
-            input_var=cell_init_1, shape=(1, n_hidden))
+            input_var=cell_init_1, shape=(1, N_HIDDEN))
 
-        reset_var = theano.shared(
-            np.zeros((1, 1), dtype='uint8'),
-            name="reset",
+        l_hid_init_tiled_1 = OpLayer(
+            l_hid_init_1,
+            op=lambda hid_init, input:
+                TT.tile(hid_init, (input.shape[0], 1)),
+            shape_op=lambda hid_init_shape, input_shape:
+                (input_shape[0],) + hid_init_shape[1:],
+            extras=[l_in],
         )
-        l_reset = L.InputLayer(
-            input_var=reset_var, shape=(None, None)
+        l_cell_init_tiled_1 = OpLayer(
+            l_cell_init_1,
+            op=lambda cell_init, input:
+                TT.tile(cell_init, (input.shape[0], 1)),
+            shape_op=lambda cell_init_shape, input_shape:
+                (input_shape[0],) + cell_init_shape[1:],
+            extras=[l_in],
         )
 
         l_forward_1 = LR.LSTMLayer(
             l_in,
-            hid_init=l_hid_init_1,
-            cell_init=l_cell_init_1,
-            num_units=n_hidden,
-            reset_input=l_reset,
-            grad_clipping=grad_clip,
+            hid_init=l_hid_init_tiled_1,
+            cell_init=l_cell_init_tiled_1,
+            num_units=N_HIDDEN,
+            grad_clipping=GRAD_CLIP,
             nonlinearity=NL.tanh,
             # forgetgate=forget_gate,
         )
 
-        l_forward_reshaped = L.ReshapeLayer(l_forward_1, (-1, n_hidden))
+        l_forward_reshaped = L.ReshapeLayer(l_forward_1, (-1, N_HIDDEN))
 
-        l_mean = L.DenseLayer(
+        l_raw_mean = L.DenseLayer(
             l_forward_reshaped,
             num_units=mdp.action_dim,
             nonlinearity=NL.tanh
         )
-        l_log_std = ParamLayer(
+        l_raw_log_std = ParamLayer(
             l_forward_reshaped,
             num_units=mdp.action_dim
+        )
+
+        l_mean = OpLayer(
+            l_raw_mean,
+            op=lambda raw_mean, input:
+                raw_mean.reshape((input.shape[0], input.shape[1], -1)),
+            shape_op=lambda raw_mean_shape, input_shape:
+                (input_shape[0], input_shape[1], raw_mean_shape[-1]),
+            extras=[l_in],
+        )
+        l_log_std = OpLayer(
+            l_raw_log_std,
+            op=lambda raw_log_std, input:
+                raw_log_std.reshape((input.shape[0], input.shape[1], -1)),
+            shape_op=lambda raw_log_std_shape, input_shape:
+                (input_shape[0], input_shape[1], raw_log_std_shape[-1]),
+            extras=[l_in],
         )
 
         hid_1_var = TT.matrix('hid_1')
@@ -94,41 +124,49 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         cell_out = extra_outputs[l_forward_1][0]
 
         f_forward = compile_function(
-            inputs=[l_in.input_var, hid_1_var, cell_1_var],
+            inputs=[l_obs.input_var, l_prev_action.input_var, hid_1_var, cell_1_var],
             outputs=[mean, log_std, hid_out, cell_out],
         )
 
-        self._n_hidden = n_hidden
-        self._grad_clip = grad_clip
+        self._n_hidden = N_HIDDEN
+        self._grad_clip = GRAD_CLIP
         self._f_forward = f_forward
         self._l_mean = l_mean
         self._l_log_std = l_log_std
-        self._l_in = l_in
-        self._l_reset = l_reset
+        self._l_obs = l_obs
+        self._l_prev_action = l_prev_action
         self._cur_hid = None
         self._cur_cell = None
         self.episode_reset()
 
-        super(MeanStdRNNPolicy, self).__init__(mdp)
         LasagnePowered.__init__(self, [l_mean, l_log_std])
         Serializable.__init__(self, mdp)
 
     def _split_pdist(self, pdist):
-        mean = pdist[:, :self.action_dim]
-        log_std = pdist[:, self.action_dim:]
+        mean = pdist[(slice(None),) * (pdist.ndim - 1) + (slice(None,
+            self.action_dim),)]
+        log_std = pdist[(slice(None),) * (pdist.ndim - 1) +
+                (slice(self.action_dim, None),)]
+        # mean = pdist[:, :, :self.action_dim]
+        # log_std = pdist[:, :, self.action_dim:]
         return mean, log_std
 
-    def get_pdist_sym(self, obs_var, reset_var):
-        obs_var = TT.shape_padleft(obs_var, n_ones=1)
-        reset_var = TT.shape_padleft(reset_var, n_ones=1)
+    def get_pdist_sym(self, obs_var, action_var):
+        prev_action = self._prev_action_var(action_var)
         means, log_stds = LH.get_output(
             [self._l_mean, self._l_log_std],
-            {self._l_in: obs_var, self._l_reset: reset_var}
+            {self._l_obs: obs_var, self._l_prev_action: prev_action}
         )
         return TT.concatenate([means, log_stds], axis=-1)
 
-    # Computes D_KL(p_old || p_new)
-    @overrides
+    def _prev_action_var(self, action_var):
+        return TT.concatenate([
+            TT.zeros((action_var.shape[0], 1, action_var.shape[2])),
+            action_var[:, :-1, :]
+        ], axis=1)
+
+    # # Computes D_KL(p_old || p_new)
+    # @overrides
     def kl(self, old_pdist_var, new_pdist_var):
         old_mean, old_log_std = self._split_pdist(old_pdist_var)
         new_mean, new_log_std = self._split_pdist(new_pdist_var)
@@ -143,7 +181,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             TT.square(old_std) - TT.square(new_std)
         denominator = 2*TT.square(new_std) + 1e-8
         return TT.sum(
-            numerator / denominator + new_log_std - old_log_std, axis=1)
+            numerator / denominator + new_log_std - old_log_std, axis=-1)
 
     @overrides
     def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var):
@@ -151,12 +189,13 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         new_mean, new_log_std = self._split_pdist(new_pdist_var)
         logli_new = log_normal_pdf(action_var, new_mean, new_log_std)
         logli_old = log_normal_pdf(action_var, old_mean, old_log_std)
-        return TT.exp(TT.sum(logli_new - logli_old, axis=1))
+        return TT.exp(TT.sum(logli_new - logli_old, axis=-1))
 
     @overrides
     def episode_reset(self):
         self._cur_hid = np.zeros((1, self._n_hidden))
         self._cur_cell = np.zeros((1, self._n_hidden))
+        self._prev_action = np.zeros((self.action_dim,))
 
     @overrides
     def get_action(self, observation):
@@ -164,24 +203,25 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             [x[0] for x in
              self._f_forward(
                  observation.reshape((1, 1, -1)),
+                 self._prev_action.reshape((1, 1, -1)),
                  self._cur_hid,
                  self._cur_cell,
             )]
+        mean = mean[0]
+        log_std = log_std[0]
         rnd = np.random.randn(*mean.shape)
         action = rnd * np.exp(log_std) + mean
+        self._prev_action = action
         return action, np.concatenate([mean, log_std])
 
-    def get_log_prob_sym(self, obs_var, action_var, reset_var, train=False):
-        # Here, we assume for now that this quantity is computed over a single
-        # path
-        obs_var = TT.shape_padleft(obs_var, n_ones=1)
-        reset_var = TT.shape_padleft(reset_var, n_ones=1)
+    def get_log_prob_sym(self, obs_var, action_var, train=False):
+        # prepend dummy action (all zeros)
+        prev_action = self._prev_action_var(action_var)
         means, log_stds = LH.get_output(
             [self._l_mean, self._l_log_std],
-            {self._l_in: obs_var, self._l_reset: reset_var}
+            {self._l_obs: obs_var, self._l_prev_action: prev_action}
         )
-        stdn = (action_var - means)
-        stdn /= TT.exp(log_stds)
+        stdn = (action_var - means) / TT.exp(log_stds)
         return - TT.sum(log_stds, axis=-1) - \
             0.5*TT.sum(TT.square(stdn), axis=-1) - \
             0.5*self.action_dim*np.log(2*np.pi)
@@ -189,7 +229,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @overrides
     def compute_entropy(self, pdist):
         _, log_std = self._split_pdist(pdist)
-        return np.mean(np.sum(log_std + np.log(np.sqrt(2*np.pi*np.e)), axis=1))
+        return np.mean(np.sum(log_std + np.log(np.sqrt(2*np.pi*np.e)), axis=-1))
 
     def log_extra(self, logger, paths):
         pdists = np.vstack([path["pdists"] for path in paths])

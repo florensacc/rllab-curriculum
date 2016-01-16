@@ -62,6 +62,15 @@ class Policy(Parameterized):
         """
         pass
 
+    @property
+    def recurrent(self):
+        """
+        Signals whether the policy is recurrent.
+        If this returns true, get_action should take in the previous action as
+        input, and some other methods might also behave differently
+        """
+        return False
+
 
 class DeterministicPolicy(Policy):
 

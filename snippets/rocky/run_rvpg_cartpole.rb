@@ -10,6 +10,7 @@ params = {
     _name: "mean_std_rnn_policy1",
   },
   baseline: {
+    # _name: "rnn_baseline",
     _name: "rnn_baseline",
   },
   algo: {

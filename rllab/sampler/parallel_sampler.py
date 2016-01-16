@@ -27,6 +27,7 @@ def pool_init_theano():
     os.environ['THEANO_FLAGS'] = 'device=cpu'
 
 def processor_init(queue):
+    pool_init_theano()
     args = queue.get()
     worker_init(*args)
 
