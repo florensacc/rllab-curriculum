@@ -271,6 +271,8 @@ class XmlState(XmlElem):
         typ = XmlAttr(
             "type", Choice(
                 "xpos", "ypos", "xvel", "yvel", "apos", "avel",))
+        transform = XmlAttr(
+            "transform", Choice("id", "sin", "cos"))
         body = XmlAttr("body", String())
         joint = XmlAttr("joint", String())
         local = XmlAttr("local", Point2D())
@@ -278,6 +280,7 @@ class XmlState(XmlElem):
 
     def __init__(self):
         self.typ = None
+        self.transform = None
         self.body = None
         self.joint = None
         self.local = None

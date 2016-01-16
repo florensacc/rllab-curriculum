@@ -178,6 +178,7 @@ class Box2DMDP(ControlMDP):
             return self._cached_obs
         obs = []
         for state in self.extra_data.states:
+            new_obs = None
             if state.body:
                 body = find_body(self.world, state.body)
                 if state.local is not None:
@@ -190,37 +191,38 @@ class Box2DMDP(ControlMDP):
                     linearVel = body.linearVelocity
 
                 if state.typ == "xpos":
-                    obs.append(position[0])
+                    new_obs = position[0]
                 elif state.typ == "ypos":
-                    obs.append(position[1])
+                    new_obs = position[1]
                 elif state.typ == "xvel":
-                    obs.append(linearVel[0])
+                    new_obs = linearVel[0]
                 elif state.typ == "yvel":
-                    obs.append(linearVel[1])
+                    new_obs = linearVel[1]
                 elif state.typ == "apos":
-                    obs.append(body.angle)
+                    new_obs = body.angle
                 elif state.typ == "avel":
-                    obs.append(body.angularVelocity)
+                    new_obs = body.angularVelocity
                 else:
                     raise NotImplementedError
+                obs.append(new_obs)
             elif state.joint:
                 joint = find_joint(self.world, state.joint)
                 if state.typ == "apos":
-                    obs.append(joint.angle)
+                    new_obs = joint.angle
                 elif state.typ == "avel":
-                    obs.append(joint.speed)
+                    new_obs = joint.speed
                 else:
                     raise NotImplementedError
             elif state.com:
                 com_quant = self._compute_com(state.com)
                 if state.typ == "xpos":
-                    obs.append(com_quant[0])
+                    new_obs = com_quant[0]
                 elif state.typ == "ypos":
-                    obs.append(com_quant[1])
+                    new_obs = com_quant[1]
                 elif state.typ == "xvel":
-                    obs.append(com_quant[2])
+                    new_obs = com_quant[2]
                 elif state.typ == "yvel":
-                    obs.append(com_quant[3])
+                    new_obs = com_quant[3]
                 else:
                     print state.typ
                     # orientation and angular velocity of the whole body is not
@@ -228,6 +230,19 @@ class Box2DMDP(ControlMDP):
                     raise NotImplementedError
             else:
                 raise NotImplementedError
+
+            if state.transform is not None:
+                if state.transform == "id":
+                    pass
+                elif state.transform == "sin":
+                    new_obs = np.sin(new_obs)
+                elif state.transform == "cos":
+                    new_obs = np.cos(new_obs)
+                else:
+                    raise NotImplementedError
+
+            obs.append(new_obs)
+
         self._cached_obs = np.array(obs)
         return self._cached_obs
 
