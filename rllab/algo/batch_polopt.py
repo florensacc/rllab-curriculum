@@ -28,8 +28,6 @@ class BatchPolopt(RLAlgorithm):
                        "slightly larger than the specified batch_size.")
     @autoargs.arg("discount", type=float,
                   help="Discount.")
-    @autoargs.arg("quantile", type=float,
-                  help="Quantile for only using the top q% trajectories.")
     @autoargs.arg("gae_lambda", type=float,
                   help="Lambda used for generalized advantage estimation.")
     @autoargs.arg("center_adv", type=bool,
@@ -50,7 +48,6 @@ class BatchPolopt(RLAlgorithm):
             batch_size=5000,
             max_path_length=500,
             discount=0.99,
-            quantile=1.,
             gae_lambda=1,
             plot=False,
             pause_for_plot=False,
@@ -65,7 +62,6 @@ class BatchPolopt(RLAlgorithm):
         self.batch_size = batch_size
         self.max_path_length = max_path_length
         self.discount = discount
-        self.quantile = quantile
         self.gae_lambda = gae_lambda
         self.plot = plot
         self.pause_for_plot = pause_for_plot
@@ -144,14 +140,6 @@ class BatchPolopt(RLAlgorithm):
         for path in paths:
             path["returns"] = discount_cumsum(path["rewards"], self.discount)
 
-        n_paths = max(1, int(len(paths) * self.quantile))
-        # only choose the best trajectories for training
-        if n_paths < len(paths):
-            best_paths = sorted(paths,
-                                key=lambda x: -x["returns"][0])[:n_paths]
-        else:
-            best_paths = paths
-
         # however, these statistics should still be computed for all paths
         for path in paths:
             path_baselines = np.append(baseline.predict(path), 0)
@@ -163,12 +151,12 @@ class BatchPolopt(RLAlgorithm):
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
 
-        observations = np.vstack([path["observations"] for path in best_paths])
-        states = np.vstack([path["states"] for path in best_paths])
-        pdists = np.vstack([path["pdists"] for path in best_paths])
-        actions = np.vstack([path["actions"] for path in best_paths])
+        observations = np.vstack([path["observations"] for path in paths])
+        states = np.vstack([path["states"] for path in paths])
+        pdists = np.vstack([path["pdists"] for path in paths])
+        actions = np.vstack([path["actions"] for path in paths])
         advantages = np.concatenate(
-            [path["advantages"] for path in best_paths])
+            [path["advantages"] for path in paths])
 
         if self.center_adv:
             advantages = center_advantages(advantages)
