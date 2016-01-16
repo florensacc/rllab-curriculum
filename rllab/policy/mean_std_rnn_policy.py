@@ -19,7 +19,7 @@ def log_normal_pdf(x, mean, log_std):
     return -0.5*TT.square(normalized) - np.log((2*np.pi)**0.5) - log_std
 
 
-class MeanStdRNNPolicy1(StochasticPolicy, LasagnePowered, Serializable):
+class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     def __init__(self, mdp):
         # create network

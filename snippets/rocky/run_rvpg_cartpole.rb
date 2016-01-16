@@ -7,17 +7,17 @@ params = {
   },
   normalize_mdp: true,
   policy: {
-    _name: "mean_std_rnn_policy1",
+    _name: "mean_std_rnn_policy",
   },
   baseline: {
     # _name: "rnn_baseline",
-    _name: "rnn_baseline",
+    _name: "zero_baseline",
   },
   algo: {
-    _name: "rvpg1",
+    _name: "rvpg",
     update_method: "adam",
     learning_rate: 0.01, #e-4,
-    batch_size: 10000,
+    batch_size: 1000,
     n_itr: 500,
     max_path_length: 100,
     whole_paths: true,
@@ -27,7 +27,7 @@ params = {
     # max_path_length: 100,
     # n_itr: 40,
   },
-  n_parallel: 4,
+  n_parallel: 1,
   snapshot_mode: "none",
   seed: 1,
 }
