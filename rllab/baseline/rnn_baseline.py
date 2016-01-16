@@ -105,35 +105,22 @@ class RNNBaseline(Baseline, LasagnePowered, Serializable):
         valids = [np.ones_like(path["returns"]) for path in paths]
         valids = [pad_tensor(v, max_path_length, 0) for v in valids]
 
-        import time
-
-        loss_eval_time = [0]
-        grad_eval_time = [0]
-
         def evaluate(params):
-            start = time.time()
             self.set_param_values(params)
             val = self._f_loss(obs, prev_actions, returns, valids)
-            loss_eval_time[0] += time.time() - start
             return val.astype(np.float64)
 
         def evaluate_grad(params):
-            start = time.time()
             self.set_param_values(params)
             grad = self._f_grad(obs, prev_actions, returns, valids)
             flattened_grad = flatten_tensors(map(np.asarray, grad))
-            grad_eval_time[0] += time.time() - start
             return flattened_grad.astype(np.float64)
 
         cur_params = self.get_param_values()
         logger.log("Running optimization...")
-        logger.log("loss before: %f" % self._f_loss(obs, prev_actions, returns, valids))
         scipy.optimize.fmin_l_bfgs_b(
             func=evaluate, x0=cur_params, fprime=evaluate_grad, maxiter=10
         )
-        logger.log("loss after: %f" % self._f_loss(obs, prev_actions, returns, valids))
-        logger.log("loss eval time: %f" % loss_eval_time[0])
-        logger.log("grad eval time: %f" % grad_eval_time[0])
 
         self._trained = True
 
