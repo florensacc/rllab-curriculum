@@ -7,20 +7,23 @@ params = {
   normalize_mdp: true,
   policy: {
     _name: "mean_std_nn_policy",
+    hidden_sizes: [64, 64, 64],
   },
   baseline: {
-    _name: "zero_baseline",
+    _name: "linear_feature_baseline",
   },
   algo: {
     _name: "ppo",
-    binary_search_penalty: false,
     whole_paths: true,
-    batch_size: 10000,
+    batch_size: 50000,
     max_path_length: 100,
-    n_itr: 40,
+    n_itr: 500,
+    binary_search_penalty: true,
+    bs_kl_tolerance: 0.001,
+    step_size: 0.01,
   },
   n_parallel: 4,
-  snapshot_mode: "none",
+  snapshot_mode: "last",
   seed: 1,
 }
 command = to_command(params)

@@ -27,7 +27,7 @@ params = {
     max_path_length: 100,
     eval_samples: 10000,
     eval_whole_paths: true,
-  },
+   },
   model: {
     _name: "mean_nn_model",
   },
