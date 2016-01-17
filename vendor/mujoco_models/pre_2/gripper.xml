@@ -1,0 +1,153 @@
+<!-- Gripper
+
+    The state space is populated with joints in the order that they are
+    defined in this file. The actuators also operate on joints.
+
+    State-Space (name/joint/parameter):
+        - shoulder      hinge       angle (rad)
+        - elbow         hinge       angle (rad)
+        - wrist         hinge       angle (rad)
+        - thumb_joint   hinge       angle (rad)
+        - finger_joint  hinge       angle (rad)
+        - payload_x     slider      position x (m)
+        - payload_y     slider      position y (m)
+        - target_x      slider      position x (m)
+        - target_y      slider      position y (m)
+        - shoulder      hinge       angular velocity (rad/s)
+        - elbow         hinge       angular velocity (rad/s)
+        - wrist         hinge       angular velocity (rad/s)
+        - thumb_joint   hinge       angular velocity (rad/s)
+        - finger_joint  hinge       angular velocity (rad/s)
+        - target_x      slider      velocity x (m/s)
+        - target_y      slider      velocity y (m/s)
+        - payload_x     slider      velocity x (m/s)
+        - payload_y     slider      velocity y (m/s)
+
+    Actuators (name/joint/parameter):
+        - shoulder      motor       force x (N)
+        - elbow         motor       force x (N)
+        - wrist         motor       force x (N)
+        - thumb_joint   motor       force x (N)
+        - finger_joint  motor       force x (N)
+
+-->
+<mujoco model='gripper'>
+    <compiler inertiafromgeom='true' coordinate='local' angle='degree'/>
+
+    <default>
+        <joint islimited='true' damping='.003' compliance='1e-2'
+               timeconst='3e-3' stiffness='0'/>
+        <geom mindist='.1' compliance='7e-2' timeconst='1e-2' contype='1'
+              conaffinity='1' condim='1' friction='.7 .1 .1'
+              rgba='0.8 0.6 .4 1'/>
+        <act-motor ctrlrange='-1 1' isctrllimited='true'/>
+    </default>
+
+    <size nstack='300000' ngeom_user='1' njmax='40' nlmax='40'/>
+
+    <option timestep='0.007' gravity='0 0 0'/>
+
+    <body>
+        <!-- Arena -->
+        <geom name='ground' type='plane' pos='0 0 0' size='1 1 10'
+              rgba='0.4 0.6 0.4 1' conaffinity='0' contype='0'/>
+        <geom name='sideS' type='capsule' fromto='-.2 -.3 .01 .3 -.3 .01'
+              size='.02' rgba='0.9 0.4 0.6 1' conaffinity='0'/>
+        <geom name='sideE' type='capsule' fromto=' .3 -.3 .01 .3  .3 .01'
+              size='.02' rgba='0.9 0.4 0.6 1' conaffinity='0'/>
+        <geom name='sideN' type='capsule' fromto='-.2  .3 .01 .3  .3 .01'
+              size='.02' rgba='0.9 0.4 0.6 1' conaffinity='0'/>
+        <geom name='sideW' type='capsule' fromto='-.2 -.3 .01 -.2 .3 .01'
+              size='.02' rgba='0.9 0.4 0.6 1' conaffinity='0'/>
+
+        <!-- Arm -->
+        <geom name='root' type='cylinder' fromto='0 0 0 0 0 0.02' size='.011'
+              rgba='0.9 0.4 0.6 1' contype='0' conaffinity='0'/>
+        <body name='uarm' pos='0 0 .01'>
+            <geom name='uarm' type='capsule' fromto='0 0 0 0.08 0 0' size='.01'
+                  rgba='0.0 0.4 0.6 1'/>
+            <joint name='shoulder' islimited='false' type='hinge' pos='0 0 0'
+                   axis='0 0 1'/>
+            <body name='larm' pos='.08 0 0'>
+                <geom name='larm' type='capsule' fromto='0 0 0 0 0.1 0'
+                      size='.01' rgba='0.0 0.4 0.6 1'/>
+                <joint name='elbow' range='-160 160' type='hinge' pos='0 0 0'
+                       axis='0 0 1' ref='90'/>
+                <body name='hand' pos='0 .1 0'>
+                    <geom name='hand' type='capsule' fromto='0 0 0 0.08 0 0'
+                          size='.01' rgba='0.0 0.4 0.6 1'/>
+                    <joint name='wrist' range='-160 160' type='hinge'
+                           pos='0 0 0' axis='0 0 1' ref='-90'/>
+                    <body name='thumb' pos='.08 -.015 0'>
+                        <geom name='thumb0' type='capsule'
+                              fromto='0 0 0 0 -.03 0' size='.006'
+                              rgba='0.0 0.4 0.6 1'/>
+                        <geom name='thumb1' type='capsule'
+                              fromto='0 -.03 0 .02 -.03 0' size='.006'
+                              rgba='0.0 0.4 0.6 1'/>
+                        <joint name='thumb_joint' type='hinge' pos='0 0 0' axis='0 0 1'
+                               islimited='true' range='0 90'
+                               stiffness='0.0001'/>
+                        <site name='griptarget0' pos='.012 -.015 0'/>
+                    </body>
+                    <body name='finger' pos='.08 .015 0'>
+                        <geom name='finger0' type='capsule'
+                              fromto='0 0 0 0 0.03 0' size='.006'
+                              rgba='0.0 0.4 0.6 1'/>
+                        <geom name='finger1' type='capsule'
+                              fromto='0 .03 0 .02 .03 0' size='.006'
+                              rgba='0.0 0.4 0.6 1'/>
+                        <joint name='finger_joint' type='hinge' pos='0 0 0' axis='0 0 -1'
+                               islimited='true' range='0 90'
+                               stiffness='0.0001'/>
+                        <site name='griptarget1' pos='.012 .015 0'/>
+                    </body>
+                    <!-- <site name='griptarget' pos='.14 0 0'/> -->
+                </body>
+            </body>
+        </body>
+
+        <!-- Payload -->
+        <body name='box' pos='0 .1 .01'>
+            <joint name='box_x' type='slide' pos='0 0 0' axis='1 0 0'
+                   islimited='true' range='-.17 .27' damping='.01' armature='0'
+                   stiffness='0.0'/>
+            <joint name='box_y' type='slide' pos='0 0 0' axis='0 1 0'
+                   islimited='true' range='-.27 .27' damping='.01' armature='0'
+                   stiffness='0.0' ref='.1'/>
+            <geom name='box' type='sphere' size='.01' rgba='0.6 0.9 0.6 1'
+                  contype='1' conaffinity='1'/>
+        </body>
+
+        <!-- Target -->
+        <body name='target' pos='.1 -.1 .01'>
+            <joint name='target_x' type='slide' pos='0 0 0' axis='1 0 0'
+                   islimited='true' range='-.17 .27' damping='0' armature='0'
+                   stiffness='0' ref='.1'/>
+            <joint name='target_y' type='slide' pos='0 0 0' axis='0 1 0'
+                   islimited='true' range='-.27 .27' damping='0' armature='0'
+                   stiffness='0' ref='-.1'/>
+            <geom name='target' pos='0 0 0' rgba='0.9 0.2 0.2 1' contype='0'
+                  conaffinity='0' type='sphere' size='.009'/>
+        </body>
+
+    </body>
+
+    <actuator>
+        <motor joint='shoulder' gear='.1'/>
+        <motor joint='elbow' gear='.1'/>
+        <motor joint='wrist' gear='.1'/>
+        <motor joint='thumb_joint' gear='.03'/>
+        <motor joint='finger_joint' gear='.03'/>
+    </actuator>
+
+    <keyframe>
+        <key qpos='0 0 0 0 0 -.2 -.2 0 -.2 .3 0'/>
+    </keyframe>
+
+
+    <textfield>
+        <text name='cost' data='features.xml'/>
+    </textfield>
+
+</mujoco>
