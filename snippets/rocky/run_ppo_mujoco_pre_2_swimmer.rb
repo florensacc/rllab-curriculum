@@ -22,7 +22,7 @@ params = {
     n_itr: 50,
   },
   n_parallel: 4,
-  snapshot_mode: "none",
+  snapshot_mode: "last",
   seed: 1,
 }
 command = to_command(params)
