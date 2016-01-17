@@ -1,18 +1,16 @@
-import os
 import numpy as np
 from contextlib import contextmanager
 import os.path as osp
-import sys
-import random
 from rllab.mdp.base import ControlMDP
-from rllab.mjcapi.rocky_mjc_1_20 import MjModel, MjViewer
+from rllab.mjcapi.rocky_mjc_pre_2 import MjModel
+from rllab.mjcapi.rocky_mjc_pre_2.mjlib import osg_lib
 from rllab.misc.overrides import overrides
 import theano
+
 
 class MujocoMDP(ControlMDP):
 
     def __init__(self, model_path, frame_skip, ctrl_scaling):
-        self.model_path = model_path
         self.model = MjModel(model_path)
         self.data = self.model.data
         self.viewer = None
@@ -24,11 +22,14 @@ class MujocoMDP(ControlMDP):
         self.ctrl_dim = self.init_ctrl.size
         self.frame_skip = frame_skip
         self.ctrl_scaling = ctrl_scaling
+        self.current_state = None
         self.reset()
         super(MujocoMDP, self).__init__()
 
     def model_path(self, file_name):
-        return osp.abspath(osp.join(osp.dirname(__file__), '../../../vendor/mujoco_models/%s' % file_name))
+        return osp.abspath(osp.join(
+            osp.dirname(__file__),
+            '../../../vendor/nips_mjc_models/%s' % file_name))
 
     @property
     @overrides
@@ -71,7 +72,6 @@ class MujocoMDP(ControlMDP):
 
     def decode_state(self, state):
         qpos, qvel = np.split(state, [self.qpos_dim])
-        #qvel = state[self.qpos_dim:self.qpos_dim+self.qvel_dim]
         return qpos, qvel
 
     def get_current_obs(self):
@@ -89,28 +89,14 @@ class MujocoMDP(ControlMDP):
             self.model.data.ctrl = action * self.ctrl_scaling
             for _ in range(self.frame_skip):
                 self.model.step()
-            #self.model.forward()
             return self.get_current_state()
 
-    def get_viewer(self):
-        if self.viewer is None:
-            self.viewer = MjViewer()
-            self.viewer.start()
-            self.viewer.set_model(self.model)
-        return self.viewer
-
     def plot(self):
-        viewer = self.get_viewer()
-        viewer.loop_once()
-
-    def start_viewer(self):
-        viewer = self.get_viewer()
-        if not viewer.running:
-            viewer.start()
-
-    def stop_viewer(self):
-        if self.viewer:
-            self.viewer.finish()
+        if self.viewer is None:
+            self.viewer = osg_lib.viewer_new()
+            osg_lib.SetModel(self.viewer, self.model.ptr)
+        osg_lib.SetData(self.viewer, self.model.data.ptr)
+        osg_lib.RenderOnce(self.viewer)
 
     def set_state(self, state):
         qpos, qvel = self.decode_state(state)

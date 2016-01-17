@@ -13,9 +13,9 @@ import numpy as np
 import pyprind
 
 
-class SVG1(RLAlgorithm):
+class RSVG1(RLAlgorithm):
     """
-    Stochastic Value Gradient - SVG(1).
+    Recurrent Stochastic Value Gradient - RSVG(1).
     """
 
     @autoargs.arg('batch_size', type=int,
