@@ -2,7 +2,7 @@ import theano
 import theano.tensor as TT
 from rllab.misc import logger, autoargs
 from rllab.misc.overrides import overrides
-from rllab.misc.ext import extract, compile_function
+from rllab.misc.ext import extract, compile_function, flatten_hessian, new_tensor
 from rllab.algo.batch_polopt import BatchPolopt
 from rllab.algo.first_order_method import FirstOrderMethod
 import cPickle as pickle
@@ -23,13 +23,21 @@ class NPG(BatchPolopt, FirstOrderMethod):
 
     @overrides
     def init_opt(self, mdp, policy, vf):
-        input_var = policy.input_var
+        input_var = new_tensor(
+            'input',
+            ndim=1+len(mdp.observation_shape),
+            dtype=mdp.observation_dtype
+        )
         advantage_var = TT.vector('advantage')
-        action_var = policy.new_action_var('action')
+        action_var = TT.matrix('action', dtype=mdp.action_dtype)
         ref_policy = pickle.loads(pickle.dumps(policy))
-        ref_input_var = ref_policy.input_var
+        ref_input_var = new_tensor(
+            'ref_input',
+            ndim=1+len(mdp.observation_shape),
+            dtype=mdp.observation_dtype
+        )
 
-        log_prob = policy.get_log_prob_sym(action_var)
+        log_prob = policy.get_log_prob_sym(input_var, action_var)
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
         surr_obj = - TT.mean(log_prob * advantage_var)
@@ -40,20 +48,24 @@ class NPG(BatchPolopt, FirstOrderMethod):
         #                  (evaluated at theta' = theta),
         # we can get I(theta) by calculating the hessian of
         # KL(p(theta)||p(theta'))
-        mean_kl = TT.mean(policy.kl(policy.pdist_var, ref_policy.pdist_var))
+        old_pdist_var = TT.matrix('old_pdist')
+        pdist_var = policy.get_pdist_sym(input_var)
+        mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
         # Here, we need to ensure that all the parameters are flattened
-        emp_fishers = theano.gradient.hessian(mean_kl, wrt=policy.params)
+        emp_fishers = flatten_hessian(mean_kl, wrt=policy.params)
         grads = theano.grad(surr_obj, wrt=policy.params)
         # Is there a better name...
         fisher_grads = []
         for emp_fisher, grad in zip(emp_fishers, grads):
             reg_fisher = emp_fisher + TT.eye(emp_fisher.shape[0])
             inv_fisher = TT.nlinalg.matrix_inverse(reg_fisher)
-            fisher_grads.append(inv_fisher.dot(grad))
+            fisher_grads.append(
+                inv_fisher.dot(grad.flatten()).reshape(grad.shape)
+            )
 
         updates = self.update_method(fisher_grads, policy.params)
 
-        input_list = [input_var, advantage_var, action_var, ref_input_var]
+        input_list = [input_var, advantage_var, old_pdist_var, action_var, ref_input_var]
         f_update = compile_function(
             inputs=input_list,
             outputs=None,
@@ -78,7 +90,8 @@ class NPG(BatchPolopt, FirstOrderMethod):
         ref_policy = opt_info["ref_policy"]
         inputs = extract(
             samples_data,
-            "observations", "advantages", "actions", "observations"
+            "observations", "advantages", "pdists", "actions",
+            "observations",
         )
         # Need to ensure this
         ref_policy.set_param_values(cur_params)
