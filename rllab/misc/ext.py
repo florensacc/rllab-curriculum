@@ -6,12 +6,16 @@ import cPickle as pickle
 import random
 
 from rllab.misc.console import colorize
+from collections import OrderedDict
 
 sys.setrecursionlimit(50000)
 
 
 def merge_dict(*args):
-    z = dict()
+    if any([isinstance(x, OrderedDict) for x in args]):
+        z = OrderedDict()
+    else:
+        z = dict()
     for x in args:
         z.update(x)
     return z

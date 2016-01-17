@@ -19,7 +19,7 @@ class SwimmerMDP(MujocoMDP, Serializable):
     def get_current_obs(self):
         qpos = self.model.data.qpos.flatten()
         qvel = self.model.data.qvel.flatten()
-        return np.concatenate([qpos[1:], qvel])
+        return np.concatenate([qpos, qvel])
 
     def step(self, state, action):
         prev_com = self.get_body_com("world")

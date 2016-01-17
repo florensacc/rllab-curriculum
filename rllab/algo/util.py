@@ -46,7 +46,7 @@ class ReplayPool(Serializable):
         self.states = np.zeros((max_steps,) + state_shape, dtype=state_dtype)
         self.actions = np.zeros((max_steps, action_dim), dtype=action_dtype)
         self.rewards = np.zeros((max_steps,), dtype=floatX)
-        self.terminal = np.zeros((max_steps,), dtype='bool')
+        self.terminals = np.zeros((max_steps,), dtype='bool')
         self.extras = None
         self.concat_states = concat_states
         self.concat_length = concat_length
@@ -77,7 +77,7 @@ class ReplayPool(Serializable):
         d["states"] = self.states
         d["actions"] = self.actions
         d["rewards"] = self.rewards
-        d["terminal"] = self.terminal
+        d["terminals"] = self.terminals
         d["extras"] = self.extras
         d["rng"] = self.rng
         return d
@@ -85,10 +85,10 @@ class ReplayPool(Serializable):
     def __setstate__(self, d):
         super(ReplayPool, self).__setstate__(d)
         self.bottom, self.top, self.size, self.states, self.actions, \
-            self.rewards, self.terminal, self.extras, self.rng = extract(
+            self.rewards, self.terminals, self.extras, self.rng = extract(
                 d,
                 "bottom", "top", "size", "states", "actions", "rewards",
-                "terminal", "extras", "rng"
+                "terminals", "extras", "rng"
             )
 
     def add_sample(self, state, action, reward, terminal, extra=None):
@@ -104,7 +104,7 @@ class ReplayPool(Serializable):
         self.states[self.top] = state
         self.actions[self.top] = action
         self.rewards[self.top] = reward
-        self.terminal[self.top] = terminal
+        self.terminals[self.top] = terminal
         if extra is not None:
             if self.extras is None:
                 assert self.size == 0, "extra must be consistent"
@@ -173,7 +173,7 @@ next_states for batch_size randomly chosen state transitions.
             dtype=self.action_dtype
         )
         rewards = np.zeros((batch_size,), dtype=floatX)
-        terminal = np.zeros((batch_size,), dtype='bool')
+        terminals = np.zeros((batch_size,), dtype='bool')
         if self.extras is not None:
             extras = np.zeros(
                 (batch_size,) + self.extras.shape[1:],
@@ -184,6 +184,10 @@ next_states for batch_size randomly chosen state transitions.
         next_states = np.zeros(
             (batch_size, self.concat_length) + self.state_shape,
             dtype=self.state_dtype
+        )
+        next_actions = np.zeros(
+            (batch_size, self.action_dim),
+            dtype=self.action_dtype
         )
 
         count = 0
@@ -205,7 +209,7 @@ next_states for batch_size randomly chosen state transitions.
             # will actually be the first frame of a new episode, which
             # the Q learner recognizes and handles correctly during
             # training by zeroing the discounted future reward estimate.
-            if np.any(self.terminal.take(initial_indices[0:-1], mode='wrap')):
+            if np.any(self.terminals.take(initial_indices[0:-1], mode='wrap')):
                 continue
 
             # Add the state transition to the response.
@@ -213,12 +217,15 @@ next_states for batch_size randomly chosen state transitions.
                 initial_indices, axis=0, mode='wrap')
             actions[count] = self.actions.take(end_index, mode='wrap')
             rewards[count] = self.rewards.take(end_index, mode='wrap')
-            terminal[count] = self.terminal.take(end_index, mode='wrap')
+            terminals[count] = self.terminals.take(end_index, mode='wrap')
             if self.extras is not None:
                 extras[count] = self.extras.take(
                     end_index, axis=0, mode='wrap')
             next_states[count] = self.states.take(
                 transition_indices, axis=0, mode='wrap')
+            next_actions[count] = self.actions.take(
+                transition_indices, axis=0, mode='wrap')
+
             count += 1
 
         if not self.concat_states:
@@ -227,7 +234,16 @@ next_states for batch_size randomly chosen state transitions.
             states = np.squeeze(states, axis=1)
             next_states = np.squeeze(next_states, axis=1)
 
-        return states, actions, rewards, next_states, terminal, extras
+        return dict(
+            states=states,
+            actions=actions,
+            rewards=rewards,
+            next_states=next_states,
+            next_actions=next_actions,
+            terminals=terminals,
+            extras=extras,
+        )
+            
 
 
 # TESTING CODE BELOW THIS POINT...

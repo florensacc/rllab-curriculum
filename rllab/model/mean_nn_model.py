@@ -4,10 +4,12 @@ import lasagne.layers as L
 import lasagne.init as LI
 import lasagne.nonlinearities as NL
 import numpy as np
+from collections import OrderedDict
 from rllab.model.base import Model
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
+from rllab.misc.special import normalize_updates
 from rllab.misc.ext import new_tensor
 from rllab.misc.overrides import overrides
 
@@ -144,23 +146,31 @@ class MeanNNModel(Model, LasagnePowered, Serializable):
 
     def next_obs_normalize_updates(self, next_obs_var):
         if not self.normalize:
-            return {}
+            return OrderedDict([])
         mean = TT.mean(next_obs_var, axis=0, keepdims=True)
         std = TT.std(next_obs_var, axis=0, keepdims=True)
-        return {
-            self._next_obs_mean: self._running_sum(mean, self._next_obs_mean),
-            self._next_obs_std: self._running_sum(std, self._next_obs_std),
-        }
+        return normalize_updates(
+            old_mean=self._next_obs_mean,
+            old_std=self._next_obs_std,
+            new_mean=self._running_sum(mean, self._next_obs_mean),
+            new_std=self._running_sum(std, self._next_obs_std),
+            old_W=self._next_obs_layer.W,
+            old_b=self._next_obs_layer.b,
+        )
 
     def reward_normalize_updates(self, reward_var):
         if not self.normalize:
             return {}
         mean = TT.mean(reward_var, axis=0, keepdims=True)
         std = TT.std(reward_var, axis=0, keepdims=True)
-        return {
-            self._reward_mean: self._running_sum(mean, self._reward_mean),
-            self._reward_std: self._running_sum(std, self._reward_std),
-        }
+        return normalize_updates(
+            old_mean=self._reward_mean,
+            old_std=self._reward_std,
+            new_mean=self._running_sum(mean, self._reward_mean),
+            new_std=self._running_sum(std, self._reward_std),
+            old_W=self._reward_layer.W,
+            old_b=self._reward_layer.b,
+        )
 
     def _running_sum(self, new, old):
         return self.normalize_alpha * new + (1 - self.normalize_alpha) * old

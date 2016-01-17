@@ -4,7 +4,7 @@ from rllab.algo.first_order_method import parse_update_method
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
 from rllab.misc.special import discount_return
-from rllab.misc.ext import compile_function, new_tensor, merge_dict
+from rllab.misc.ext import compile_function, new_tensor, merge_dict, extract
 from rllab.sampler import parallel_sampler
 from rllab.plotter import plotter
 import rllab.misc.logger as logger
@@ -13,9 +13,9 @@ import numpy as np
 import pyprind
 
 
-class RSVG1(RLAlgorithm):
+class SVG1(RLAlgorithm):
     """
-    Recurrent Stochastic Value Gradient - RSVG(1).
+    Stochastic Value Gradient - SVG(1).
     """
 
     @autoargs.arg('batch_size', type=int,
@@ -268,7 +268,11 @@ class RSVG1(RLAlgorithm):
         pool.add_sample(observation, action, reward, terminal, extra=pdist)
 
     def do_training(self, itr, batch, vf, policy, model, opt_info):
-        obs, actions, rewards, next_obs, terminals, pdists = batch
+        obs, actions, rewards, next_obs, terminals, pdists = extract(
+            batch,
+            "states", "actions", "rewards", "next_states", "terminals",
+            "extras"
+        )
         etas = policy.infer_eta(pdists, actions)
 
         f_normalize_model = opt_info["f_normalize_model"]

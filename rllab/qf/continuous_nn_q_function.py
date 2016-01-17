@@ -5,17 +5,19 @@ import lasagne.nonlinearities
 import lasagne.init
 import theano.tensor as TT
 import itertools
-
-from rllab.qf.base import ContinuousQFunction, NormalizableQFunction
+import theano
+import numpy as np
+from collections import OrderedDict
+from rllab.qf.base import ContinuousQFunction
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
 from rllab.misc.ext import new_tensor
+from rllab.misc.special import normalize_updates
 from rllab.misc.overrides import overrides
 
 
-class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered,
-                            NormalizableQFunction, Serializable):
+class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
     @autoargs.arg('hidden_sizes', type=int, nargs='*',
                   help='list of sizes for the fully-connected hidden layers')
     @autoargs.arg('hidden_nl', type=str, nargs='*',
@@ -32,6 +34,10 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered,
                   help='initializer for W for the output layer')
     @autoargs.arg('output_b_init', type=str,
                   help='initializer for b for the output layer')
+    @autoargs.arg('normalize', type=bool,
+                  help='Whether to normalize the output.')
+    @autoargs.arg('normalize_alpha', type=float,
+                  help='Coefficient for the running mean and std.')
     # pylint: disable=dangerous-default-value
     def __init__(
             self,
@@ -43,7 +49,9 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered,
             action_merge_layer=-2,
             output_nl='None',
             output_W_init='lasagne.init.Uniform(-3e-3, 3e-3)',
-            output_b_init='lasagne.init.Uniform(-3e-3, 3e-3)'):
+            output_b_init='lasagne.init.Uniform(-3e-3, 3e-3)',
+            normalize=True,
+            normalize_alpha=0.1):
         # pylint: enable=dangerous-default-value
         obs_var = new_tensor(
             'obs',
@@ -108,6 +116,13 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered,
         self._obs_layer = l_obs
         self._action_layer = l_action
         self._output_nl = eval(output_nl)
+        self._normalize = normalize
+        self._normalize_alpha = normalize_alpha
+
+        if self._normalize:
+            self._qval_mean = theano.shared(np.zeros(1), broadcastable=(True,))
+            self._qval_std = theano.shared(np.ones(1), broadcastable=(True,))
+            assert self._output_nl is None
 
         ContinuousQFunction.__init__(self, mdp)
         LasagnePowered.__init__(self, [l_output])
@@ -115,31 +130,53 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered,
             self, mdp=mdp, hidden_sizes=hidden_sizes, hidden_nl=hidden_nl,
             hidden_W_init=hidden_W_init, hidden_b_init=hidden_b_init,
             action_merge_layer=action_merge_layer, output_nl=output_nl,
-            output_W_init=output_W_init, output_b_init=output_b_init)
-
-    @property
-    def normalizable(self):
-        return self._output_nl is None
+            output_W_init=output_W_init, output_b_init=output_b_init,
+            normalize=normalize, normalize_alpha=normalize_alpha)
 
     def get_qval_sym(self, obs_var, action_var, train=False):
         qvals = L.get_output(
             self._output_layer,
             {self._obs_layer: obs_var, self._action_layer: action_var}
         )
+        if self._normalize:
+            qvals = qvals * self._qval_std + self._qval_mean
         return TT.reshape(qvals, (-1,))
 
-    @overrides
-    def get_output_W(self):
-        return self._output_layer.W.get_value()
+    def _running_sum(self, new, old):
+        return self._normalize_alpha * new + (1 - self._normalize_alpha) * old
 
-    @overrides
-    def get_output_b(self):
-        return self._output_layer.b.get_value()
+    def normalize_updates(self, ys):
+        if not self._normalize:
+            return OrderedDict()
+        mean = TT.mean(ys, axis=0, keepdims=True)
+        std = TT.std(ys, axis=0, keepdims=True)
+        return normalize_updates(
+            old_mean=self._qval_mean,
+            old_std=self._qval_std,
+            new_mean=self._running_sum(mean, self._qval_mean),
+            new_std=self._running_sum(std, self._qval_std),
+            old_W=self._output_layer.W,
+            old_b=self._output_layer.b
+        )
 
-    @overrides
-    def set_output_W(self, W_new):
-        self._output_layer.W.set_value(W_new)
+    def normalize_sym(self, qvals):
+        if self._normalize:
+            return (qvals - self._qval_mean) / self._qval_std
+        return qvals
 
-    @overrides
-    def set_output_b(self, b_new):
-        self._output_layer.b.set_value(b_new)
+    @property
+    def params(self):
+        return LasagnePowered.params.fget(self) + \
+            [self._qval_mean, self._qval_std]
+
+    def set_param_values(self, flattened_params):
+        LasagnePowered.set_param_values(self, flattened_params[:-2])
+        self._qval_mean.set_value(np.array([flattened_params[-2]]))
+        self._qval_std.set_value(np.array([flattened_params[-1]]))
+
+    def get_param_values(self):
+        return np.concatenate([
+            LasagnePowered.get_param_values(self),
+            self._qval_mean.get_value(),
+            self._qval_std.get_value(),
+        ])
