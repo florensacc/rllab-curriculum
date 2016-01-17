@@ -3,21 +3,19 @@ from rllab.algo.util import ReplayPool
 from rllab.algo.first_order_method import parse_update_method
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
-from rllab.misc.special import discount_return, discount_cumsum
+from rllab.misc.special import discount_return
 from rllab.misc.ext import compile_function, new_tensor, merge_dict, extract
 from rllab.sampler import parallel_sampler
 from rllab.plotter import plotter
 import rllab.misc.logger as logger
-import theano
 import theano.tensor as TT
-import cPickle as pickle
 import numpy as np
 import pyprind
 
 
-class DPG(RLAlgorithm):
+class SVG0(RLAlgorithm):
     """
-    Deterministic Policy Gradient.
+    Model-Free Stochastic Value Gradient - SVG(0).
     """
 
     @autoargs.arg('batch_size', type=int,
@@ -35,14 +33,11 @@ class DPG(RLAlgorithm):
                   help='Discount factor for the cumulative return.')
     @autoargs.arg('max_path_length', type=int,
                   help='Discount factor for the cumulative return.')
-    @autoargs.arg('qf_weight_decay', type=float,
-                  help='Weight decay factor for parameters of the Q function.')
     @autoargs.arg('qf_update_method', type=str,
-                  help='Online optimization method for training Q function.')
+                  help='Online optimization method for training the Q '
+                       'function.')
     @autoargs.arg('qf_learning_rate', type=float,
-                  help='Learning rate for training Q function.')
-    @autoargs.arg('policy_weight_decay', type=float,
-                  help='Weight decay factor for parameters of the policy.')
+                  help='Learning rate for training the Q function.')
     @autoargs.arg('policy_update_method', type=str,
                   help='Online optimization method for training the policy.')
     @autoargs.arg('policy_learning_rate', type=float,
@@ -55,9 +50,6 @@ class DPG(RLAlgorithm):
                        'executed until the terminal state or the '
                        'max_path_length, even at the expense of possibly more '
                        'samples for evaluation.')
-    @autoargs.arg('soft_target_tau', type=float,
-                  help='Interpolation parameter for doing the soft target '
-                       'update.')
     @autoargs.arg('plot', type=bool,
                   help='Whether to visualize the policy performance after '
                        'each eval_interval.')
@@ -70,15 +62,12 @@ class DPG(RLAlgorithm):
             replay_pool_size=1000000,
             discount=0.99,
             max_path_length=500,
-            qf_weight_decay=0.01,
             qf_update_method='adam',
             qf_learning_rate=1e-4,
-            policy_weight_decay=0,
             policy_update_method='adam',
-            policy_learning_rate=1e-3,
+            policy_learning_rate=1e-4,
             eval_samples=10000,
             eval_whole_paths=True,
-            soft_target_tau=0.001,
             plot=False):
         self.batch_size = batch_size
         self.n_epochs = n_epochs
@@ -87,28 +76,20 @@ class DPG(RLAlgorithm):
         self.replay_pool_size = replay_pool_size
         self.discount = discount
         self.max_path_length = max_path_length
-        self.qf_weight_decay = qf_weight_decay
-        self.qf_update_method = \
-            parse_update_method(
-                qf_update_method,
-                learning_rate=qf_learning_rate
-            )
-        self.policy_weight_decay = policy_weight_decay
-        self.policy_update_method = \
-            parse_update_method(
-                policy_update_method,
-                learning_rate=policy_learning_rate
-            )
+        self.qf_update_method = parse_update_method(
+            qf_update_method,
+            learning_rate=qf_learning_rate
+        )
+        self.policy_update_method = parse_update_method(
+            policy_update_method,
+            learning_rate=policy_learning_rate
+        )
         self.eval_samples = eval_samples
         self.eval_whole_paths = eval_whole_paths
-        self.soft_target_tau = soft_target_tau
         self.plot = plot
 
-        self.qf_loss_averages = []
-        self.policy_surr_averages = []
-        self.q_averages = []
-        self.paths = []
-        self.paths_samples_cnt = 0
+        self._qf_losses = []
+        self._policy_objs = []
 
     def start_worker(self, mdp, policy):
         parallel_sampler.populate_task(mdp, policy)
@@ -116,13 +97,13 @@ class DPG(RLAlgorithm):
             plotter.init_plot(mdp, policy)
 
     @overrides
-    def train(self, mdp, policy, qf, es, **kwargs):
-        # This seems like a rather sequential method
+    def train(self, mdp, policy, qf, **kwargs):
+        # hack to reset at the beginning of training
         terminal = True
         pool = ReplayPool(
             state_shape=mdp.observation_shape,
             action_dim=mdp.action_dim,
-            max_steps=self.replay_pool_size,
+            max_steps=self.replay_pool_size
         )
         self.start_worker(mdp, policy)
         opt_info = self.init_opt(mdp, policy, qf)
@@ -130,172 +111,154 @@ class DPG(RLAlgorithm):
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
-            for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
+            for itr in pyprind.prog_bar(xrange(itr, itr + self.epoch_length)):
                 # Execute policy
                 if terminal:
                     # Note that if the last time step ends an episode, the very
                     # last state and observation will be ignored and not added
                     # to the replay pool
                     state, observation = mdp.reset()
-                    es.episode_reset()
-                action = es.get_action(itr, observation, policy=policy, qf=qf)
+                    policy.episode_reset()
+                action, pdist = policy.get_action(observation)
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
 
-                pool.add_sample(observation, action, reward, terminal)
+                self.record_step(pool, state, observation, action, pdist,
+                                 next_state, next_observation, reward,
+                                 terminal)
+
                 state, observation = next_state, next_observation
 
                 if pool.size >= self.min_pool_size:
-                    # Train policy
                     batch = pool.random_batch(self.batch_size)
                     opt_info = self.do_training(
                         itr, batch, qf, policy, opt_info)
 
-                itr += 1
+                # itr += 1
             logger.log("Training finished")
             if pool.size >= self.min_pool_size:
-                opt_info = self.evaluate(epoch, qf, policy, opt_info)
+                opt_info = self.evaluate(
+                    epoch, mdp, qf, policy, opt_info)
                 yield opt_info
                 params = self.get_epoch_snapshot(
-                    epoch, qf, policy, es, opt_info)
+                    epoch, qf, policy, opt_info)
                 logger.save_itr_params(epoch, params)
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
 
     def init_opt(self, mdp, policy, qf):
-
-        # First, create "target" policy and Q functions
-        target_policy = pickle.loads(pickle.dumps(policy))
-        target_qf = pickle.loads(pickle.dumps(qf))
-
-        # y need to be computed first
         obs = new_tensor(
             'obs',
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
+        actions = TT.matrix('actions', dtype=mdp.action_dtype)
         next_obs = new_tensor(
             'next_obs',
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
+        next_actions = TT.matrix('next_actions', dtype=mdp.action_dtype)
 
-        qf_scale = theano.shared(np.cast['float32'](1.), name='qf_scale')
-        qf_bias = theano.shared(np.cast['float32'](0.), name='qf_bias')
+        terminals = TT.vector('terminals')
+        old_pdists = TT.matrix('old_pdists')
 
         rewards = TT.vector('rewards')
-        terminals = TT.vector('terminals')
 
-        # compute the on-policy y values
-        next_qval = target_qf.get_qval_sym(
-            next_obs,
-            target_policy.get_action_sym(next_obs, train=True),
-            train=True
-        )
-        next_qval = next_qval * qf_scale + qf_bias
-
-        ys = rewards + (1 - terminals) * self.discount * next_qval
-        f_y = compile_function(
-            inputs=[next_obs, rewards, terminals],
-            outputs=ys
+        # Compute value function regression target
+        ys = rewards + (1 - terminals) * self.discount * \
+            qf.get_val_sym(next_obs, next_actions)
+        f_ys = compile_function(
+            inputs=[rewards, terminals, next_obs],
+            outputs=ys,
         )
 
-        # The yi values are computed separately as above and then passed to
-        # the training functions below
-        action = TT.matrix('action', dtype=mdp.action_dtype)
-        yvar = TT.vector('ys')
-
-        qf_weight_decay_term = self.qf_weight_decay * \
-            sum([TT.sum(TT.square(param)) for param in qf.params])
-
-        qval = qf.get_qval_sym(obs, action, train=True)
-        qval = qval * qf_scale + qf_bias
-        qf_loss = TT.mean(TT.square((yvar - qval) / qf_scale))
-        qf_reg_loss = qf_loss + qf_weight_decay_term
-
-        policy_weight_decay_term = self.policy_weight_decay * \
-            sum([TT.sum(TT.square(param)) for param in policy.params])
-        policy_qval = qf.get_qval_sym(
-            obs, policy.get_action_sym(obs, train=True), train=True)
-        # The policy gradient is computed with respect to the unscaled Q values
-        policy_surr = -TT.mean(policy_qval)
-        policy_reg_surr = policy_surr + policy_weight_decay_term
-
-        qf_updates = merge_dict(
-            self.qf_update_method(qf_reg_loss, qf.params),
-            qf.get_default_updates(obs, action, train=True)
+        # Train value function
+        yvals = TT.vector('yvals')
+        # pylint: disable=assignment-from-no-return
+        diff = TT.square(qf.normalize_sym(qf.get_val_sym(obs, actions)) -
+                         qf.normalize_sym(yvals))
+        # pylint: enable=assignment-from-no-return
+        pdists = policy.get_pdist_sym(obs)
+        weights = policy.likelihood_ratio(old_pdists, pdists, actions)
+        f_weights = compile_function(
+            inputs=[obs, actions, old_pdists],
+            outputs=weights,
         )
 
-        policy_updates = merge_dict(
-            self.policy_update_method(policy_reg_surr, policy.params),
-            policy.get_default_updates(obs)
-        )
+        weight_vals = TT.vector('weights')
+        qf_loss = TT.mean(weight_vals * diff)
 
         f_normalize_qf = compile_function(
-            inputs=[yvar],
-            updates=qf.normalize_updates(yvar),
+            inputs=[yvals],
+            updates=qf.normalize_updates(yvals),
         )
 
         f_train_qf = compile_function(
-            inputs=[yvar, obs, action, rewards],
-            outputs=[qf_loss, qval],
-            updates=qf_updates
+            inputs=[obs, actions, old_pdists, yvals, weight_vals],
+            outputs=qf_loss,
+            updates=self.qf_update_method(qf_loss, qf.params),
         )
+
+        # Train policy
+        etas = TT.matrix('etas')
+        reparam_actions = policy.get_reparam_action_sym(obs, etas)
+        predicted_ys = qf.normalize_sym(
+            qf.get_val_sym(obs, reparam_actions)
+        )
+        # Negative sign since we are maximizing
+        policy_obj = - TT.mean(predicted_ys)
+        policy_updates = self.policy_update_method(policy_obj, policy.params)
+
         f_train_policy = compile_function(
-            inputs=[yvar, obs],
-            outputs=policy_surr,
+            inputs=[obs, etas, actions, old_pdists, terminals, weight_vals],
+            outputs=policy_obj,
             updates=policy_updates
         )
 
         return dict(
-            f_y=f_y,
+            f_ys=f_ys,
+            f_weights=f_weights,
             f_normalize_qf=f_normalize_qf,
             f_train_qf=f_train_qf,
-            f_train_policy=f_train_policy,
-            target_qf=target_qf,
-            target_policy=target_policy,
-            qf_scale=qf_scale,
-            qf_bias=qf_bias,
+            f_train_policy=f_train_policy
         )
 
-    def do_training(self, itr, batch, qf, policy, opt_info):
+    def record_step(self, pool, state, observation, action, pdist,
+                    next_state, next_observation, reward, terminal):
+        pool.add_sample(observation, action, reward, terminal, extra=pdist)
 
-        states, actions, rewards, next_states, terminal = extract(
-            batch,
-            "states", "actions", "rewards", "next_states", "terminal"
-        )
+    def do_training(self, itr, batch, vf, policy, model, opt_info):
+        obs, actions, rewards, next_obs, next_actions, terminals, pdists = \
+            extract(
+                batch,
+                "states", "actions", "rewards", "next_states", "next_actions",
+                "terminals", "extras"
+            )
+        etas = policy.infer_eta(pdists, actions)
 
-        f_y = opt_info["f_y"]
+        f_ys = opt_info["f_ys"]
+        yvals = f_ys(rewards, terminals, next_obs, next_actions)
+
+        f_weights = opt_info["f_weights"]
+        weights = f_weights(obs, actions, pdists)
+
         f_normalize_qf = opt_info["f_normalize_qf"]
+        f_normalize_qf(yvals)
+
         f_train_qf = opt_info["f_train_qf"]
+        qf_loss = f_train_qf(obs, actions, pdists, yvals, weights)
+        self._qf_losses.append(qf_loss)
+
         f_train_policy = opt_info["f_train_policy"]
-        target_qf = opt_info["target_qf"]
-        target_policy = opt_info["target_policy"]
-
-        ys = f_y(next_states, rewards, terminal)
-        f_normalize_qf(ys)
-        qf_loss, qval = f_train_qf(ys, states, actions, rewards)
-        policy_surr = f_train_policy(ys, states)
-
-        self.qf_loss_averages.append(qf_loss)
-        self.policy_surr_averages.append(policy_surr)
-        self.q_averages.append(qval)
-
-        target_qf.set_param_values(
-            self.soft_target_tau * qf.get_param_values() +
-            (1 - self.soft_target_tau) * target_qf.get_param_values()
-        )
-        target_policy.set_param_values(
-            self.soft_target_tau * policy.get_param_values() +
-            (1 - self.soft_target_tau) * target_policy.get_param_values()
-        )
+        policy_obj = f_train_policy(
+            obs, etas, actions, pdists, terminals, weights)
+        self._policy_objs.append(policy_obj)
 
         return opt_info
 
-    def evaluate(self, epoch, qf, policy, opt_info):
-        logger.log("Collecting samples for evaluation")
-
+    def evaluate(self, epoch, mdp, qf, policy, model, opt_info):
         paths = parallel_sampler.request_samples(
             policy_params=policy.get_param_values(),
             max_samples=self.eval_samples,
@@ -308,14 +271,16 @@ class DPG(RLAlgorithm):
 
         returns = [sum(path["rewards"]) for path in paths]
 
-        average_q_loss = np.mean(self.qf_loss_averages)
-        average_policy_surr = np.mean(self.policy_surr_averages)
-        average_q = np.mean(np.concatenate(self.q_averages))
         average_action = np.mean(np.square(np.concatenate(
             [path["actions"] for path in paths]
         )))
 
+        pdists = np.vstack([path["pdists"] for path in paths])
+        ent = policy.compute_entropy(pdists)
+
         logger.record_tabular('Epoch', epoch)
+        logger.record_tabular('Entropy', ent)
+        logger.record_tabular('Perplexity', np.exp(ent))
         logger.record_tabular('AverageReturn',
                               np.mean(returns))
         logger.record_tabular('StdReturn',
@@ -326,27 +291,35 @@ class DPG(RLAlgorithm):
                               np.min(returns))
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
-        logger.record_tabular('AverageQLoss', average_q_loss)
-        logger.record_tabular('AveragePolicySurr', average_policy_surr)
-        logger.record_tabular('AverageQ', average_q)
         logger.record_tabular('AverageAction', average_action)
+        logger.record_tabular('AverageModelObsLoss',
+                              np.mean(self._model_obs_losses))
+        logger.record_tabular('AverageModelRewardLoss',
+                              np.mean(self._model_reward_losses))
+        logger.record_tabular('AverageQFunctionLoss',
+                              np.mean(self._qf_losses))
+        logger.record_tabular('AveragePolicyObjective',
+                              np.mean(self._policy_objs))
+        logger.record_tabular('ModelParamNorm',
+                              np.linalg.norm(model.get_param_values()))
+        logger.record_tabular('QFunctionParamNorm',
+                              np.linalg.norm(qf.get_param_values()))
         logger.record_tabular('PolicyParamNorm',
                               np.linalg.norm(policy.get_param_values()))
-        logger.record_tabular('QFunParamNorm',
-                              np.linalg.norm(qf.get_param_values()))
+        mdp.log_extra(logger, paths)
+        qf.log_extra(logger, paths)
+        policy.log_extra(logger, paths)
+        model.log_extra(logger, paths)
+        self._model_obs_losses = []
+        self._model_reward_losses = []
+        self._qf_losses = []
+        self._policy_objs = []
+        return opt_info
 
-        self.qf_loss_averages = []
-        self.policy_surr_averages = []
-        self.q_averages = []
-
-        return merge_dict(opt_info, dict(
-            eval_paths=paths,
-        ))
-
-    def get_epoch_snapshot(self, epoch, qf, policy, es, opt_info):
+    def get_epoch_snapshot(self, epoch, qf, policy, model, opt_info):
         return dict(
             epoch=epoch,
             qf=qf,
             policy=policy,
-            es=es,
+            model=model,
         )

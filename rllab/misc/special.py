@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
 import theano.tensor.nnet
+from collections import OrderedDict
 
 
 def weighted_sample(weights, objects):
@@ -40,6 +41,24 @@ def explained_variance_1d(ypred, y):
     assert y.ndim == 1 and ypred.ndim == 1
     vary = np.var(y)
     return np.nan if vary == 0 else 1 - np.var(y - ypred) / vary
+
+
+def normalize_updates(old_mean, old_std, new_mean, new_std, old_W, old_b):
+    """
+    Compute the updates for normalizing the last (linear) layer of a neural
+    network
+    """
+    # Make necessary transformation so that
+    # (W_old * h + b_old) * std_old + mean_old == \
+    #   (W_new * h + b_new) * std_new + mean_new
+    new_W = old_W * old_std / (new_std + 1e-6)
+    new_b = (old_b * old_std + old_mean - new_mean) / (new_std + 1e-6)
+    return OrderedDict([
+        (old_W, new_W),
+        (old_b, new_b),
+        (old_mean, new_mean),
+        (old_std, new_std),
+    ])
 
 
 def discount_cumsum(x, discount):

@@ -4,11 +4,13 @@ import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne.init as LI
 import theano.tensor as TT
+from collections import OrderedDict
 from rllab.vf.base import ValueFunction
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
 from rllab.misc.ext import new_tensor
+from rllab.misc.special import normalize_updates
 from rllab.misc.overrides import overrides
 
 
@@ -59,7 +61,7 @@ class NNValueFunction(ValueFunction, LasagnePowered, Serializable):
             num_units=1,
             W=LI.HeUniform(),
             b=LI.Constant(0.),
-            nonlinearity=NL.rectify,
+            nonlinearity=None,
             name="output"
         )
 
@@ -86,12 +88,18 @@ class NNValueFunction(ValueFunction, LasagnePowered, Serializable):
         return self.normalize_alpha * new + (1 - self.normalize_alpha) * old
 
     def normalize_updates(self, ys):
+        if not self.normalize:
+            return OrderedDict([])
         mean = TT.mean(ys, axis=0, keepdims=True)
         std = TT.std(ys, axis=0, keepdims=True)
-        return {
-            self._val_mean: self._running_sum(mean, self._val_mean),
-            self._val_std: self._running_sum(std, self._val_std),
-        }
+        return normalize_updates(
+            old_mean=self._val_mean,
+            old_std=self._val_std,
+            new_mean=self._running_sum(mean, self._val_mean),
+            new_std=self._running_sum(std, self._val_std),
+            old_W=self._output_layer.W,
+            old_b=self._output_layer.b,
+        )
 
     def normalize_sym(self, vals):
         if self.normalize:
