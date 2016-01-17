@@ -64,6 +64,7 @@ class MujocoMDP(ControlMDP):
         self.model.data.qpos = self.init_qpos
         self.model.data.qvel = self.init_qvel
         self.model.data.ctrl = self.init_ctrl
+        self.model.forward()
         self.current_state = self.get_current_state()
         return self.get_current_state(), self.get_current_obs()
 
