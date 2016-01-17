@@ -15,7 +15,15 @@ if sys.platform.startswith("darwin"):
         osp.dirname(__file__),
         "../../../vendor/mujoco_pre_2/osx/libmjc2_osg.dylib"))
 elif sys.platform.startswith("linux"):
-    raise NotImplementedError
+    libfile = osp.abspath(osp.join(
+        osp.dirname(__file__),
+        "../../../vendor/mujoco_pre_2/linux/libmjc2.so"))
+    wrapper_libfile = osp.abspath(osp.join(
+        osp.dirname(__file__),
+        "../../../vendor/mujoco_pre_2/linux/libmjc2_wrapper.so"))
+    osg_libfile = osp.abspath(osp.join(
+        osp.dirname(__file__),
+        "../../../vendor/mujoco_pre_2/linux/libmjc2_osg.so"))
 elif sys.platform.startswith("win"):
     raise NotImplementedError
 else:
