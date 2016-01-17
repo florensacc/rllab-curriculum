@@ -7,14 +7,13 @@ osp = os.path
 if sys.platform.startswith("darwin"):
     libfile = osp.abspath(osp.join(
         osp.dirname(__file__),
-        "../../../build/lib/libmjc2.dylib"))
+        "../../../vendor/mujoco_pre_2/osx/libmjc2.dylib"))
     wrapper_libfile = osp.abspath(osp.join(
         osp.dirname(__file__),
-        "../../../build/lib/libmjc2_wrapper.dylib"))
+        "../../../vendor/mujoco_pre_2/osx/libmjc2_wrapper.dylib"))
     osg_libfile = osp.abspath(osp.join(
         osp.dirname(__file__),
-        "../../../build/lib/libmjc2_osg.dylib"))
-
+        "../../../vendor/mujoco_pre_2/osx/libmjc2_osg.dylib"))
 elif sys.platform.startswith("linux"):
     raise NotImplementedError
 elif sys.platform.startswith("win"):
