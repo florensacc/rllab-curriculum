@@ -33,7 +33,7 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
     @autoargs.arg('output_b_init', type=str,
                   help='initializer for b for the output layer')
     @autoargs.arg('bn', type=bool,
-                  help='whether to apply batch normalization to all layers')
+                  help='whether to apply batch normalization to hidden layers')
     # pylint: disable=dangerous-default-value
     def __init__(
             self,

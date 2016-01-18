@@ -2,14 +2,12 @@ require_relative './utils'
 
 seeds = (1..10).to_a
 
-hiddens = [[32, 32]]#, 32]]#, [100, 100], [32, 32, 32], [100, 100, 100]]
+hiddens = [[100, 100]]#, 100]]#32, 32, 32]]#, [100, 100], [32, 32, 32], [100, 100, 100]]
 qf_weight_decays = [0, 1e-5, 1e-6, 1e-7]
 # policy_lrs = [1e-4, 5e-4, 1e-5]
 discounts = [0.99, 0.999, 0.9999, 1]
-batch_sizes = [32]#32, 64, 128]
-epoch_lengths = [5000]#, 10000, 20000, 40000]
-qf_bns = [true, false]
-policy_bns = [true, false]
+batch_sizes = [64]#32, 64, 128]
+epoch_lengths = [10000]#, 10000, 20000, 40000]
 # qf_lrs = [1e-3, 1e-4, 1e-5]
 
 
@@ -27,14 +25,13 @@ end
     },
     normalize_mdp: true,
     qf: {
-      _name: "continuous_nn_q_function",
-      bn: qf_bns.sample,
+      _name: "continuous_nn_keras_q_function",
+      hidden_sizes: hiddens.sample,
     },
     policy: {
-      _name: "mean_nn_policy",
+      _name: "mean_nn_keras_policy",
       hidden_sizes: hiddens.sample,
-      output_nl: 'lasagne.nonlinearities.tanh',
-      bn: policy_bns.sample,
+      output_nl: 'tanh',
     },
     # exp_name: "dpg_box2d_cartpole_swingup",
     algo: {
@@ -64,7 +61,7 @@ end
   # command = to_docker_command(params)
   # system(command)
   # break
-  create_task_script(to_docker_command(params), launch: true, prefix: "dpg_hopper_bn")
+  create_task_script(to_docker_command(params), launch: true, prefix: "dpg_hopper")
   # puts command
   # system(command)
 end

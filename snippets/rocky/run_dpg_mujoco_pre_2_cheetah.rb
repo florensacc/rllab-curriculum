@@ -46,8 +46,8 @@ shuffle_params(qf_learning_rates, policy_learning_rates, seeds).each do |qf_lear
     snapshot_mode: "last",
     seed: seed,
   }
-  command = to_command(params)
-  create_task_script(to_docker_command(command), launch: true, prefix: "dpg_cheetah")
+  # command = to_command(params)
+  create_task_script(to_docker_command(params), launch: true, prefix: "dpg_cheetah")
   # puts command
   # system(command)
 

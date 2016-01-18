@@ -35,8 +35,8 @@ def to_command(params)
   command
 end
 
-def to_docker_command(command)
-  %Q{docker run \
+def to_docker_command(params)
+  command = %Q{docker run \
   -v ~/.bash_history:/root/.bash_history \
   -v /home/ubuntu/theanorc:/root/.theanorc \
   -v ~/.vim:/root/.vim \
@@ -46,8 +46,21 @@ def to_docker_command(command)
   -v /home/ubuntu/jupyter:/root/.jupyter \
   -v /home/ubuntu/data:/root/workspace/data \
   -v /home/ubuntu/workspace:/root/workspace \
-  -t dementrock/starcluster_cpu #{command}
-  }
+  -t dementrock/starcluster_cpu python scripts/run_experiment.py}
+  params.each do |k, v|
+    if v.is_a?(Hash)
+      v.each do |nk, nv|
+        if nk.to_s == "_name"
+          command += " \\\n" + "  --#{k} #{to_param_val(nv)}"
+        else
+          command += " \\\n" + "  --#{k}_#{nk} #{to_param_val(nv)}"
+        end
+      end
+    else
+      command += " \\\n" + "  --#{k} #{to_param_val(v)}"
+    end
+  end
+  command
 end
 
 def create_task_script(command, options={})
@@ -69,7 +82,7 @@ def create_task_script(command, options={})
   f.close
   system("chmod +x " + fname)
   if launch
-    sub_cmd = "qsub -V -b n -l mem_free=8G,h_vmem=14G -r y -cwd " + fname
+    sub_cmd = "qsub -V -b n -r n -cwd " + fname
     puts sub_cmd
     system(sub_cmd)
   end
