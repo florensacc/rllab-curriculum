@@ -10,7 +10,7 @@ params = {
   # normalize_mdp: nil,
   policy: {
     _name: "mean_std_nn_policy",
-    hidden_sizes: [5, 5],
+    hidden_sizes: [32, 32],
   },
   baseline: {
     _name: "linear_feature_baseline",
@@ -23,9 +23,9 @@ params = {
     batch_size: 5000,
     max_path_length: 500,
     n_itr: 500,
-    # step_size: 0.01,
-    update_method: 'adam',
-    learning_rate: 0.01,
+    step_size: 0.01,
+    update_method: 'sgd',
+    learning_rate: 0.9,
     plot: true,
   },
   n_parallel: 4,

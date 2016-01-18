@@ -221,6 +221,7 @@ def flatten_hessian(cost, wrt, consider_constant=None,
         expr = TT.concatenate([
             grad(cost, input, consider_constant=consider_constant,
                     disconnected_inputs=disconnected_inputs).flatten()
+            for input in wrt
         ])
 
     for input in wrt:

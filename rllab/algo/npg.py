@@ -3,6 +3,8 @@ from itertools import izip
 import theano
 import theano.tensor as TT
 import numpy as np
+from numpy.linalg import LinAlgError
+
 from rllab.misc import logger, autoargs
 from rllab.misc.console import Message
 from rllab.misc.krylov import cg
@@ -31,6 +33,7 @@ class NPG(BatchPolopt, FirstOrderMethod):
         super(NPG, self).__init__(**kwargs)
         FirstOrderMethod.__init__(self, **kwargs)
         self.step_size = step_size
+        self.reg_coeff = 1e-5
 
     @overrides
     def init_opt(self, mdp, policy, vf):
@@ -66,9 +69,9 @@ class NPG(BatchPolopt, FirstOrderMethod):
             new_tensor_like("%s x" % p.name, p)
             for p in policy.params
         ]
-        Hx_rop = TT.sum(TT.Rop(kl_flat_grad, policy.params, xs), axis=0)
+        # Hx_rop = TT.sum(TT.Rop(kl_flat_grad, policy.params, xs), axis=0)
         Hx_plain_splits = TT.grad(TT.sum([
-            g * x for g, x in izip(kl_grads, xs)
+            TT.sum(g * x) for g, x in izip(kl_grads, xs)
         ]), wrt=policy.params)
         Hx_plain = TT.concatenate([s.flatten() for s in Hx_plain_splits])
 
@@ -85,10 +88,11 @@ class NPG(BatchPolopt, FirstOrderMethod):
             inputs=input_list,
             outputs=[surr_obj, flat_gard, emp_fisher],
         )
-        f_Hx_rop = compile_function(
-            inputs=input_list + xs,
-            outputs=Hx_rop,
-        )
+        f_Hx_rop = None
+        # f_Hx_rop = compile_function(
+        #     inputs=input_list + xs,
+        #     outputs=Hx_rop,
+        # )
         f_Hx_plain = compile_function(
             inputs=input_list + xs,
             outputs=Hx_plain,
@@ -122,32 +126,41 @@ class NPG(BatchPolopt, FirstOrderMethod):
         f_loss, f_grad, f_fisher, f_Hx_rop, f_Hx_plain, f_update = \
             extract(opt_info, "f_loss", "f_grad", "f_fisher", "f_Hx_rop",
                     "f_Hx_plain", "f_update")
-        inputs = extract(
+        inputs = list(extract(
             samples_data,
             "observations", "advantages", "pdists", "actions",
-        )
+        ))
         # Need to ensure this
         logger.log("computing loss before")
         loss_before = f_loss(*inputs)
         logger.log("performing update")
-        # direct approach, just bite the bullet and use hessian
-        _, flat_g, fisher_mat = f_fisher(*inputs)
-        nat_direction = np.linalg.lstsq(fisher_mat, flat_g)
+        with Message("Direct compute"):
+            # direct approach, just bite the bullet and use hessian
+            _, flat_g, fisher_mat = f_fisher(*inputs)
+            while True:
+                try:
+                    nat_direction = np.linalg.solve(
+                        fisher_mat + self.reg_coeff*np.eye(fisher_mat.shape[0]), flat_g
+                    )
+                    break
+                except LinAlgError:
+                    self.reg_coeff *= 5
+                    print self.reg_coeff
 
-        # CG approach
-        _, flat_g = f_grad(*inputs)
-        def Hx(x):
-            xs = policy.flat_to_params(x)
-            with Message("rop"):
-                rop = f_Hx_rop(*(inputs + xs))
-            with Message("plain"):
+        with Message("CG approach"):
+            # CG approach
+            _, flat_g = f_grad(*inputs)
+            def Hx(x):
+                xs = policy.flat_to_params(x)
+                # with Message("rop"):
+                #     rop = f_Hx_rop(*(inputs + xs))
                 plain = f_Hx_plain(*(inputs + xs))
-            assert np.allclose(rop, plain)
-            return plain
-            # alternatively we can do finite difference on flat_grad
-        nat_direction_cg = cg(Hx, flat_g)
+                # assert np.allclose(rop, plain)
+                return plain
+                # alternatively we can do finite difference on flat_grad
+            nat_direction_cg = cg(Hx, flat_g)
 
-        logger.log("exact, cg direction diff %s" % (np.linalg.norm(nat_direction - nat_direction_cg)))
+        logger.log("exact, cg direction diff %s" % (np.linalg.norm(nat_direction - nat_direction_cg)/np.linalg.norm(nat_direction)))
         nat_step_size = 1. if self.step_size is None \
             else (self.step_size * (
                 1. / flat_g.T.dot(nat_direction)
