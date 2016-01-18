@@ -10,7 +10,7 @@ from rllab.misc.console import Message
 from rllab.misc.krylov import cg
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract, compile_function, flatten_hessian, new_tensor, new_tensor_like, \
-    flatten_tensor_variables
+    flatten_tensor_variables, lazydict
 from rllab.algo.batch_polopt import BatchPolopt
 from rllab.algo.first_order_method import FirstOrderMethod
 import cPickle as pickle
@@ -26,14 +26,30 @@ class NPG(BatchPolopt, FirstOrderMethod):
     @autoargs.arg("step_size", type=float,
                   help="KL divergence constraint. Default to None, in which case"
                        "only natural gradient direction is calculated")
+    @autoargs.arg("use_cg", type=bool,
+                  help="Directly estimate descent direction instead of inverting Fisher"
+                       "Information matrix")
+    @autoargs.arg("cg_iters", type=int,
+                  help="The number of CG iterations used to calculate H^-1 g")
+    @autoargs.arg("reg_coeff", type=float,
+                  help="A small value to add to Fisher Information Matrix's eigenvalue"
+                       "When CG is used, this value will not be changed but if we are"
+                       "directly using Hessian inverse method, this regularization will be"
+                       "adaptively increased should the regularized matrix is still singular"
+                       "(but it's unlikely)")
     def __init__(
             self,
             step_size=None,
+            use_cg=True,
+            cg_iters=10,
+            reg_coeff=1e-5,
             **kwargs):
         super(NPG, self).__init__(**kwargs)
         FirstOrderMethod.__init__(self, **kwargs)
+        self.cg_iters = cg_iters
+        self.use_cg = use_cg
         self.step_size = step_size
-        self.reg_coeff = 1e-5
+        self.reg_coeff = reg_coeff
 
     @overrides
     def init_opt(self, mdp, policy, vf):
@@ -69,6 +85,8 @@ class NPG(BatchPolopt, FirstOrderMethod):
             new_tensor_like("%s x" % p.name, p)
             for p in policy.params
         ]
+        # many Ops don't have Rop implemented so this is not that useful
+        # but the code implenting that is preserved for future reference
         # Hx_rop = TT.sum(TT.Rop(kl_flat_grad, policy.params, xs), axis=0)
         Hx_plain_splits = TT.grad(TT.sum([
             TT.sum(g * x) for g, x in izip(kl_grads, xs)
@@ -84,19 +102,6 @@ class NPG(BatchPolopt, FirstOrderMethod):
             inputs=input_list,
             outputs=[surr_obj, flat_gard],
         )
-        f_fisher = compile_function(
-            inputs=input_list,
-            outputs=[surr_obj, flat_gard, emp_fisher],
-        )
-        f_Hx_rop = None
-        # f_Hx_rop = compile_function(
-        #     inputs=input_list + xs,
-        #     outputs=Hx_rop,
-        # )
-        f_Hx_plain = compile_function(
-            inputs=input_list + xs,
-            outputs=Hx_plain,
-        )
 
         descent_steps = [
             new_tensor_like("%s descent" % p.name, p)
@@ -110,21 +115,28 @@ class NPG(BatchPolopt, FirstOrderMethod):
         )
 
         # lazy dict?
-        return dict(
-            f_loss=f_loss,
-            f_grad=f_grad,
-            f_fisher=f_fisher,
-            f_Hx_rop=f_Hx_rop,
-            f_Hx_plain=f_Hx_plain,
-            f_update=f_update,
+        return lazydict(
+            f_loss=lambda: f_loss,
+            f_grad=lambda: f_grad,
+            f_fisher=lambda:
+                compile_function(
+                    inputs=input_list,
+                    outputs=[surr_obj, flat_gard, emp_fisher],
+                ),
+            f_Hx_plain=lambda:
+                compile_function(
+                    inputs=input_list + xs,
+                    outputs=Hx_plain,
+                ),
+            f_update=lambda: f_update,
         )
 
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
         cur_params = policy.get_param_values()
         logger.log("optimizing policy")
-        f_loss, f_grad, f_fisher, f_Hx_rop, f_Hx_plain, f_update = \
-            extract(opt_info, "f_loss", "f_grad", "f_fisher", "f_Hx_rop",
+        f_loss, f_grad, f_fisher, f_Hx_plain, f_update = \
+            extract(opt_info, "f_loss", "f_grad", "f_fisher",
                     "f_Hx_plain", "f_update")
         inputs = list(extract(
             samples_data,
@@ -134,7 +146,7 @@ class NPG(BatchPolopt, FirstOrderMethod):
         logger.log("computing loss before")
         loss_before = f_loss(*inputs)
         logger.log("performing update")
-        with Message("Direct compute"):
+        if not self.use_cg:
             # direct approach, just bite the bullet and use hessian
             _, flat_g, fisher_mat = f_fisher(*inputs)
             while True:
@@ -146,21 +158,19 @@ class NPG(BatchPolopt, FirstOrderMethod):
                 except LinAlgError:
                     self.reg_coeff *= 5
                     print self.reg_coeff
-
-        with Message("CG approach"):
+        else:
             # CG approach
             _, flat_g = f_grad(*inputs)
             def Hx(x):
                 xs = policy.flat_to_params(x)
                 # with Message("rop"):
                 #     rop = f_Hx_rop(*(inputs + xs))
-                plain = f_Hx_plain(*(inputs + xs))
+                plain = f_Hx_plain(*(inputs + xs)) + self.reg_coeff*x
                 # assert np.allclose(rop, plain)
                 return plain
                 # alternatively we can do finite difference on flat_grad
-            nat_direction_cg = cg(Hx, flat_g)
+            nat_direction = cg(Hx, flat_g, cg_iters=self.cg_iters)
 
-        logger.log("exact, cg direction diff %s" % (np.linalg.norm(nat_direction - nat_direction_cg)/np.linalg.norm(nat_direction)))
         nat_step_size = 1. if self.step_size is None \
             else (self.step_size * (
                 1. / flat_g.T.dot(nat_direction)
