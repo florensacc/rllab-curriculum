@@ -127,12 +127,13 @@ class DPG(RLAlgorithm):
         self.start_worker(mdp, policy)
         opt_info = self.init_opt(mdp, policy, qf)
         itr = 0
+        path_length = 0
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
             for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
                 # Execute policy
-                if terminal:
+                if terminal or path_length > self.max_path_length:
                     # Note that if the last time step ends an episode, the very
                     # last state and observation will be ignored and not added
                     # to the replay pool
@@ -142,6 +143,7 @@ class DPG(RLAlgorithm):
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
+                path_length += 1
 
                 pool.add_sample(observation, action, reward, terminal)
                 state, observation = next_state, next_observation
@@ -153,6 +155,7 @@ class DPG(RLAlgorithm):
                         itr, batch, qf, policy, opt_info)
 
                 itr += 1
+
             logger.log("Training finished")
             if pool.size >= self.min_pool_size:
                 opt_info = self.evaluate(epoch, qf, policy, opt_info)
@@ -206,8 +209,8 @@ class DPG(RLAlgorithm):
             sum([TT.sum(TT.square(param)) for param in qf.trainable_params])
 
         qval = qf.get_qval_sym(obs, action, train=True)
-        diff = TT.square(qf.normalize_sym(qval) -
-                         qf.normalize_sym(yvar))
+        diff = TT.square(qf.normalize_sym(yvar) -
+                         qf.normalize_sym(qval))
         qf_loss = TT.mean(diff)
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
