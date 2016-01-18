@@ -135,3 +135,7 @@ class MujocoMDP(ControlMDP):
     def get_body_com(self, body_name):
         idx = self.model.body_names.index(body_name)
         return self.model.data.com_subtree[idx]
+
+    def print_stats(self):
+        super(MujocoMDP, self).print_stats()
+        print "qpos dim:\t%d" % len(self.model.data.qpos)

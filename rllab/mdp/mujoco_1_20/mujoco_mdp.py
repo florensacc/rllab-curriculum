@@ -143,3 +143,7 @@ class MujocoMDP(ControlMDP):
                 self.model.data.ctrl = prev_ctrl
                 self.model.data.act = prev_act
                 self.model.forward()
+
+    def print_stats(self):
+        super(MujocoMDP, self).print_stats()
+        print "qpos dim:\t%d" % len(self.model.data.qpos)

@@ -1,4 +1,4 @@
-from rllab.mdp.mujoco.mujoco_mdp import MujocoMDP
+from rllab.mdp.mujoco_1_20.mujoco_mdp import MujocoMDP
 import numpy as np
 from rllab.core.serializable import Serializable
 from rllab.misc import autoargs

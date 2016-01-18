@@ -68,11 +68,11 @@ def _load_library():
     # MODIFIED by john schulman for cs294 homework because existing method was broken
     osp = os.path
     if sys.platform.startswith("darwin"):
-        libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../vendor/mujoco_osx/libglfw.dylib"))
+        libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../vendor/mujoco/1_20/osx/libglfw.dylib"))
     elif sys.platform.startswith("linux"):
-        libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../vendor/mujoco_linux/libglfw.so"))
+        libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../vendor/mujoco/1_20/linux/libglfw.so"))
     elif sys.platform.startswith("win"):
-        libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../vendor/mujoco_win/glfw3.dll"))
+        libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../vendor/mujoco/1_20/win/glfw3.dll"))
     else:
         raise RuntimeError("unrecognized platform %s"%sys.platform)
     return ctypes.CDLL(libfile)

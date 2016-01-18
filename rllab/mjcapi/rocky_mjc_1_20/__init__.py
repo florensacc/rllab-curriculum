@@ -5,5 +5,5 @@ import os
 from mjconstants import *
 
 register_license(os.path.join(os.path.dirname(__file__),
-                              '../../../vendor/mujoco_osx/LICENSE_DEEPRL.TXT'))
+                              '../../../vendor/mujoco/1_20/osx/LICENSE_DEEPRL.TXT'))
 

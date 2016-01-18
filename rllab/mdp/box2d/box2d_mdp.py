@@ -204,7 +204,6 @@ class Box2DMDP(ControlMDP):
                     new_obs = body.angularVelocity
                 else:
                     raise NotImplementedError
-                obs.append(new_obs)
             elif state.joint:
                 joint = find_joint(self.world, state.joint)
                 if state.typ == "apos":
