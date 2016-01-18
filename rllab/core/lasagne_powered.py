@@ -21,41 +21,31 @@ class LasagnePowered(Parameterized):
 
     @property
     @overrides
-    def params(self):
+    def trainable_params(self):
         return self._params
 
     @property
     @overrides
-    def param_dtypes(self):
+    def trainable_param_dtypes(self):
         return self._param_dtypes
 
     @property
     @overrides
-    def param_shapes(self):
+    def trainable_param_shapes(self):
         return self._param_shapes
 
     @overrides
-    def get_param_values(self):
+    def get_trainable_param_values(self):
         return flatten_tensors(
             [param.get_value(borrow=True)
-             for param in self.params]
+             for param in self.trainable_params]
         )
 
     @overrides
-    def set_param_values(self, flattened_params):
-        param_values = unflatten_tensors(flattened_params, self.param_shapes)
+    def set_trainable_param_values(self, flattened_params):
+        param_values = unflatten_tensors(flattened_params, self.trainable_param_shapes)
         for param, dtype, value in zip(
-                self.params,
-                self.param_dtypes,
+                self.trainable_params,
+                self.trainable_param_dtypes,
                 param_values):
             param.set_value(value.astype(dtype))
-
-    def __getstate__(self):
-        d = Serializable.__getstate__(self)
-        d["params"] = self.get_param_values()
-        return d
-
-    def __setstate__(self, d):
-        Serializable.__setstate__(self, d)
-        self.set_param_values(d["params"])
-

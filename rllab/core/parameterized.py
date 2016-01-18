@@ -4,22 +4,40 @@ from rllab.core.serializable import Serializable
 class Parameterized(object):
 
     @property
+    def trainable_params(self):
+        """
+        Get the list of parameters that should be included in the optimization.
+        """
+        raise NotImplementedError
+
+    def get_trainable_param_values(self):
+        raise NotImplementedError
+
+    def set_trainable_param_values(self, flattened_params):
+        raise NotImplementedError
+
+    @property
+    def trainable_param_shapes(self):
+        raise NotImplementedError
+
+    @property
+    def trainable_param_dtypes(self):
+        raise NotImplementedError
+
+    @property
     def params(self):
-        raise NotImplementedError
+        """
+        Get the list of all parameters. This is called when performing target
+        network updates, or when serializing the parameterized object.
+        """
+        return self._params
 
-    @property
-    def param_shapes(self):
-        raise NotImplementedError
-
-    @property
-    def param_dtypes(self):
-        raise NotImplementedError
 
     def get_param_values(self):
-        raise NotImplementedError
+        return self.get_param_values()
 
     def set_param_values(self, flattened_params):
-        raise NotImplementedError
+        self.set_param_values(flattened_params)
 
     def __getstate__(self):
         d = Serializable.__getstate__(self)

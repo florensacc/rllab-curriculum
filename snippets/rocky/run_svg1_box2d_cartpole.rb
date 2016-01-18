@@ -32,7 +32,7 @@ params = {
   model: {
     _name: "mean_nn_model",
   },
-  snapshot_mode: "none",
+  snapshot_mode: "last",
   seed: seed,
 }
 command = to_command(params)

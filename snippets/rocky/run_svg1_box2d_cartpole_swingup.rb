@@ -13,6 +13,7 @@ params = {
   policy: {
     _name: "mean_std_nn_policy",
     hidden_sizes: [32, 32],
+    output_nl: "lasagne.nonlinearities.tanh",
   },
   exp_name: "dpg_box2d_cartpole",
   algo: {

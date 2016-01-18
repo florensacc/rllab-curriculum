@@ -4,7 +4,7 @@ import numpy as np
 
 
 def smooth_abs(x, param):
-    return np.sqrt(np.square(x) + np.square(param))
+    return np.sqrt(np.square(x) + np.square(param)) - param
 
 
 class CheetahMDP(MujocoMDP, Serializable):

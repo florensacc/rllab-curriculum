@@ -15,7 +15,7 @@ params = {
     hidden_sizes: [32, 32],
     output_nl: "lasagne.nonlinearities.tanh",
   },
-  exp_name: "dpg_box2d_cartpole",
+  exp_name: "svg0_box2d_cartpole",
   algo: {
     _name: "svg0",
     batch_size: 100,
@@ -27,11 +27,10 @@ params = {
     max_path_length: 100,
     eval_samples: 10000,
     eval_whole_paths: true,
+    soft_target_tau: 0.001,
+    policy_learning_rate: 1e-5,
   },
-  model: {
-    _name: "mean_nn_model",
-  },
-  snapshot_mode: "none",
+  snapshot_mode: "last",
   seed: seed,
 }
 command = to_command(params)

@@ -164,19 +164,19 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             return (qvals - self._qval_mean) / self._qval_std
         return qvals
 
-    @property
-    def params(self):
-        return LasagnePowered.params.fget(self) + \
-            [self._qval_mean, self._qval_std]
+    # @property
+    # def params(self):
+    #     return LasagnePowered.params.fget(self)
+    #         [self._qval_mean, self._qval_std]
 
-    def set_param_values(self, flattened_params):
-        LasagnePowered.set_param_values(self, flattened_params[:-2])
-        self._qval_mean.set_value(np.array([flattened_params[-2]]))
-        self._qval_std.set_value(np.array([flattened_params[-1]]))
+    # def set_param_values(self, flattened_params):
+    #     LasagnePowered.set_param_values(self, flattened_params[:-2])
+    #     self._qval_mean.set_value(np.array([flattened_params[-2]]))
+    #     self._qval_std.set_value(np.array([flattened_params[-1]]))
 
-    def get_param_values(self):
-        return np.concatenate([
-            LasagnePowered.get_param_values(self),
-            self._qval_mean.get_value(),
-            self._qval_std.get_value(),
-        ])
+    # def get_param_values(self):
+    #     return np.concatenate([
+    #         LasagnePowered.get_param_values(self),
+    #         self._qval_mean.get_value(),
+    #         self._qval_std.get_value(),
+    #     ])
