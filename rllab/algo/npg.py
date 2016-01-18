@@ -52,8 +52,8 @@ class NPG(BatchPolopt, FirstOrderMethod):
         pdist_var = policy.get_pdist_sym(input_var)
         mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
         # Here, we need to ensure that all the parameters are flattened
-        emp_fishers = flatten_hessian(mean_kl, wrt=policy.params)
-        grads = theano.grad(surr_obj, wrt=policy.params)
+        emp_fishers = flatten_hessian(mean_kl, wrt=policy.trainable_params)
+        grads = theano.grad(surr_obj, wrt=policy.trainable_params)
         # Is there a better name...
         fisher_grads = []
         for emp_fisher, grad in zip(emp_fishers, grads):
@@ -63,7 +63,7 @@ class NPG(BatchPolopt, FirstOrderMethod):
                 inv_fisher.dot(grad.flatten()).reshape(grad.shape)
             )
 
-        updates = self.update_method(fisher_grads, policy.params)
+        updates = self.update_method(fisher_grads, policy.trainable_params)
 
         input_list = [input_var, advantage_var, old_pdist_var, action_var, ref_input_var]
         f_update = compile_function(
@@ -83,7 +83,7 @@ class NPG(BatchPolopt, FirstOrderMethod):
 
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
-        cur_params = policy.get_param_values()
+        cur_params = policy.get_trainable_param_values()
         logger.log("optimizing policy")
         f_update = opt_info["f_update"]
         f_loss = opt_info["f_loss"]
@@ -94,7 +94,7 @@ class NPG(BatchPolopt, FirstOrderMethod):
             "observations",
         )
         # Need to ensure this
-        ref_policy.set_param_values(cur_params)
+        ref_policy.set_trainable_param_values(cur_params)
         logger.log("computing loss before")
         loss_before = f_loss(*inputs)
         logger.log("performing update")

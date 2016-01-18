@@ -212,7 +212,7 @@ class SVG0(RLAlgorithm):
         f_train_qf = compile_function(
             inputs=[obs, actions, old_pdists, yvals, weight_vals],
             outputs=qf_loss,
-            updates=self.qf_update_method(qf_loss, qf.params),
+            updates=self.qf_update_method(qf_loss, qf.trainable_params),
         )
 
         # Train policy
@@ -223,7 +223,8 @@ class SVG0(RLAlgorithm):
         )
         # Negative sign since we are maximizing
         policy_obj = - TT.mean(predicted_ys)
-        policy_updates = self.policy_update_method(policy_obj, policy.params)
+        policy_updates = self.policy_update_method(
+            policy_obj, policy.trainable_params)
 
         f_train_policy = compile_function(
             inputs=[obs, etas, actions, old_pdists, terminals, weight_vals],
@@ -325,9 +326,11 @@ class SVG0(RLAlgorithm):
         logger.record_tabular('AveragePolicyObjective',
                               np.mean(self._policy_objs))
         logger.record_tabular('QFunctionParamNorm',
-                              np.linalg.norm(qf.get_param_values()))
+                              np.linalg.norm(
+                                  qf.get_trainable_param_values()))
         logger.record_tabular('PolicyParamNorm',
-                              np.linalg.norm(policy.get_param_values()))
+                              np.linalg.norm(
+                                  policy.get_trainable_param_values()))
         mdp.log_extra(logger, paths)
         qf.log_extra(logger, paths)
         policy.log_extra(logger, paths)

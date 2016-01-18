@@ -203,7 +203,7 @@ class DPG(RLAlgorithm):
         yvar = TT.vector('ys')
 
         qf_weight_decay_term = self.qf_weight_decay * \
-            sum([TT.sum(TT.square(param)) for param in qf.params])
+            sum([TT.sum(TT.square(param)) for param in qf.trainable_params])
 
         qval = qf.get_qval_sym(obs, action, train=True)
         diff = TT.square(qf.normalize_sym(qval) -
@@ -212,7 +212,8 @@ class DPG(RLAlgorithm):
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
         policy_weight_decay_term = self.policy_weight_decay * \
-            sum([TT.sum(TT.square(param)) for param in policy.params])
+            sum([TT.sum(TT.square(param))
+                 for param in policy.trainable_params])
         policy_qval = qf.get_qval_sym(
             obs, policy.get_action_sym(obs, train=True), train=True)
         # The policy gradient is computed with respect to the unscaled Q values
@@ -220,12 +221,13 @@ class DPG(RLAlgorithm):
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
         qf_updates = merge_dict(
-            self.qf_update_method(qf_reg_loss, qf.params),
+            self.qf_update_method(qf_reg_loss, qf.trainable_params),
             qf.get_default_updates(obs, action, train=True)
         )
 
         policy_updates = merge_dict(
-            self.policy_update_method(policy_reg_surr, policy.params),
+            self.policy_update_method(
+                policy_reg_surr, policy.trainable_params),
             policy.get_default_updates(obs)
         )
 
@@ -326,9 +328,11 @@ class DPG(RLAlgorithm):
         logger.record_tabular('AverageQ', average_q)
         logger.record_tabular('AverageAction', average_action)
         logger.record_tabular('PolicyParamNorm',
-                              np.linalg.norm(policy.get_param_values()))
+                              np.linalg.norm(
+                                  policy.get_trainable_param_values()))
         logger.record_tabular('QFunParamNorm',
-                              np.linalg.norm(qf.get_param_values()))
+                              np.linalg.norm(
+                                  qf.get_trainable_param_values()))
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []

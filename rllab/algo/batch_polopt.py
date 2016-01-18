@@ -198,7 +198,6 @@ class BatchPolopt(RLAlgorithm):
             pdists=pdists,
             paths=paths,
             states=states,
-            baseline_params=baseline.get_param_values(),
         )
 
         return samples_data
