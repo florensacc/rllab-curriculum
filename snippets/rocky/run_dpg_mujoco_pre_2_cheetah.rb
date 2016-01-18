@@ -8,21 +8,23 @@ require_relative './utils'
 # qf_weight_decays = [0, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
 # soft_target_taus = [1e-4, 1e-3, 1e-2, 1e-1, 1]
 
-qf_learning_rates = [1e-3]
-policy_learning_rates = [1e-6]
-seeds = [1]#, 2, 3]
+qf_learning_rates = [1e-3, 1e-4, 1e-5, 1e-6]
+policy_learning_rates = [1e-4, 5e-5, 1e-5, 5e-6, 1e-6]
+seeds = [1, 2, 3]
 
 batch_sizes = [64]
 
-hidden_sizess = [[32, 32]]#:w
+hidden_sizess = [[32, 32], [400, 300]]#:w
 # [400, 300]]
-qf_weight_decays = [0]#1e-2]#1e-2]
-soft_target_taus = [1e-3]
+qf_weight_decays = [0, 1e-2, 1e-3, 1e-4]#1e-2]#1e-2]
+soft_target_taus = [1e-2, 1e-3, 1e-4, 1e-5]
+qf_normalizes = [true, false]
+bns = [true, false]
 
 
 shuffle_params(
-  qf_learning_rates, policy_learning_rates, seeds, hidden_sizess, qf_weight_decays, soft_target_taus, batch_sizes
-).each do |qf_learning_rate, policy_learning_rate, seed, hidden_sizes, qf_weight_decay, soft_target_tau, batch_size|
+  qf_learning_rates, policy_learning_rates, seeds, hidden_sizess, qf_weight_decays, soft_target_taus, batch_sizes, qf_normalizes, bns
+).take(1000).each do |qf_learning_rate, policy_learning_rate, seed, hidden_sizes, qf_weight_decay, soft_target_tau, batch_size, qf_normalize, bn|
 
   params = {
     mdp: {
@@ -32,7 +34,8 @@ shuffle_params(
     qf: {
       _name: "continuous_nn_q_function",
       hidden_sizes: hidden_sizes, # [32, 32],
-      normalize: false,
+      normalize: qf_normalize,
+      bn: bn,
     },
     policy: {
       _name: "mean_nn_policy",
@@ -41,7 +44,7 @@ shuffle_params(
       output_nl: 'lasagne.nonlinearities.tanh',
       output_W_init: 'lasagne.init.Uniform(-3e-3, 3e-3)',
       output_b_init: 'lasagne.init.Uniform(-3e-3, 3e-3)',
-      bn: false,
+      bn: bn,
     },
     algo: {
       _name: "dpg",
@@ -65,6 +68,6 @@ shuffle_params(
     snapshot_mode: "last",
     seed: seed,
   }
-  system(to_docker_command(params))
-  # create_task_script(to_docker_command(params), launch: true, prefix: "dpg_cheetah")
+  # system(to_docker_command(params))
+  create_task_script(to_docker_command(params), launch: true, prefix: "dpg_cheetah")
 end

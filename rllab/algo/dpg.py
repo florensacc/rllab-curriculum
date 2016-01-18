@@ -139,6 +139,7 @@ class DPG(RLAlgorithm):
                     # to the replay pool
                     state, observation = mdp.reset()
                     es.episode_reset()
+                    path_length = 0
                 action = es.get_action(itr, observation, policy=policy, qf=qf)
 
                 next_state, next_observation, reward, terminal = \
