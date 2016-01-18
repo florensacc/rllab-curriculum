@@ -1,4 +1,5 @@
 from rllab.core.serializable import Serializable
+from rllab.misc.tensor_utils import unflatten_tensors
 
 
 class Parameterized(object):
@@ -20,6 +21,9 @@ class Parameterized(object):
 
     def set_param_values(self, flattened_params):
         raise NotImplementedError
+
+    def flat_to_params(self, flattened_params):
+        return unflatten_tensors(flattened_params, self.param_shapes)
 
     def __getstate__(self):
         d = Serializable.__getstate__(self)
