@@ -126,8 +126,10 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
         self._normalize_alpha = normalize_alpha
 
         if self._normalize:
-            self._qval_mean = theano.shared(np.zeros(1), broadcastable=(True,))
-            self._qval_std = theano.shared(np.ones(1), broadcastable=(True,))
+            self._qval_mean = theano.shared(
+                np.zeros(1), name="qval_mean", broadcastable=(True,))
+            self._qval_std = theano.shared(
+                np.ones(1), name="qval_std", broadcastable=(True,))
             assert self._output_nl is None
 
         ContinuousQFunction.__init__(self, mdp)
@@ -170,29 +172,10 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             return (qvals - self._qval_mean) / self._qval_std
         return qvals
 
-    @property
     @overrides
-    def params(self):
-        if not self._normalize:
-            return LasagnePowered.params.fget(self)
-        return LasagnePowered.params.fget(self) + \
+    def get_params_internal(self, **tags):
+        if not self._normalize or tags.get("trainable", False) or \
+                tags.get("regularizable", False):
+            return LasagnePowered.get_params_internal(self, **tags)
+        return LasagnePowered.get_params_internal(self, **tags) + \
             [self._qval_mean, self._qval_std]
-
-    @overrides
-    def set_param_values(self, flattened_params):
-        if not self._normalize:
-            LasagnePowered.set_param_values(self, flattened_params)
-            return
-        LasagnePowered.set_param_values(self, flattened_params[:-2])
-        self._qval_mean.set_value(np.array([flattened_params[-2]]))
-        self._qval_std.set_value(np.array([flattened_params[-1]]))
-
-    @overrides
-    def get_param_values(self):
-        if not self._normalize:
-            return LasagnePowered.get_param_values(self)
-        return np.concatenate([
-            LasagnePowered.get_param_values(self),
-            self._qval_mean.get_value(),
-            self._qval_std.get_value(),
-        ])

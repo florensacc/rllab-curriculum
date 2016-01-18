@@ -139,6 +139,7 @@ class DPG(RLAlgorithm):
                     # to the replay pool
                     state, observation = mdp.reset()
                     es.episode_reset()
+                    path_length = 0
                 action = es.get_action(itr, observation, policy=policy, qf=qf)
 
                 next_state, next_observation, reward, terminal = \
@@ -190,8 +191,7 @@ class DPG(RLAlgorithm):
         # compute the on-policy y values
         next_qval = target_qf.get_qval_sym(
             next_obs,
-            target_policy.get_action_sym(next_obs, train=True),
-            train=True
+            target_policy.get_action_sym(next_obs),
         )
 
         ys = rewards + (1 - terminals) * self.discount * next_qval
@@ -206,9 +206,10 @@ class DPG(RLAlgorithm):
         yvar = TT.vector('ys')
 
         qf_weight_decay_term = self.qf_weight_decay * \
-            sum([TT.sum(TT.square(param)) for param in qf.trainable_params])
+            sum([TT.sum(TT.square(param)) for param in
+                 qf.get_params(regularizable=True)])
 
-        qval = qf.get_qval_sym(obs, action, train=True)
+        qval = qf.get_qval_sym(obs, action)
         diff = TT.square(qf.normalize_sym(yvar) -
                          qf.normalize_sym(qval))
         qf_loss = TT.mean(diff)
@@ -216,21 +217,20 @@ class DPG(RLAlgorithm):
 
         policy_weight_decay_term = self.policy_weight_decay * \
             sum([TT.sum(TT.square(param))
-                 for param in policy.trainable_params])
-        policy_qval = qf.get_qval_sym(
-            obs, policy.get_action_sym(obs, train=True), train=True)
+                 for param in policy.get_params(regularizable=True)])
+        policy_qval = qf.get_qval_sym(obs, policy.get_action_sym(obs))
         # The policy gradient is computed with respect to the unscaled Q values
         policy_surr = -TT.mean(qf.normalize_sym(policy_qval))
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
         qf_updates = merge_dict(
-            self.qf_update_method(qf_reg_loss, qf.trainable_params),
-            qf.get_default_updates(obs, action, train=True)
+            self.qf_update_method(qf_reg_loss, qf.get_params(trainable=True)),
+            qf.get_default_updates(obs, action)
         )
 
         policy_updates = merge_dict(
             self.policy_update_method(
-                policy_reg_surr, policy.trainable_params),
+                policy_reg_surr, policy.get_params(trainable=True)),
             policy.get_default_updates(obs)
         )
 
@@ -308,12 +308,41 @@ class DPG(RLAlgorithm):
 
         returns = [sum(path["rewards"]) for path in paths]
 
+        target_policy = opt_info["target_policy"]
+        target_qf = opt_info["target_qf"]
+
         average_q_loss = np.mean(self.qf_loss_averages)
         average_policy_surr = np.mean(self.policy_surr_averages)
         average_q = np.mean(np.concatenate(self.q_averages))
         average_action = np.mean(np.square(np.concatenate(
             [path["actions"] for path in paths]
         )))
+
+        policy_param_norm = np.linalg.norm(
+            policy.get_param_values()
+        )
+        target_policy_param_norm = np.linalg.norm(
+            target_policy.get_param_values()
+        )
+        qfun_param_norm = np.linalg.norm(
+            qf.get_param_values()
+        )
+        target_qfun_param_norm = np.linalg.norm(
+            target_qf.get_param_values()
+        )
+
+        policy_reg_param_norm = np.linalg.norm(
+            policy.get_param_values(regularizable=True)
+        )
+        target_policy_reg_param_norm = np.linalg.norm(
+            target_policy.get_param_values(regularizable=True)
+        )
+        qfun_reg_param_norm = np.linalg.norm(
+            qf.get_param_values(regularizable=True)
+        )
+        target_qfun_reg_param_norm = np.linalg.norm(
+            target_qf.get_param_values(regularizable=True)
+        )
 
         logger.record_tabular('Epoch', epoch)
         logger.record_tabular('AverageReturn',
@@ -330,20 +359,23 @@ class DPG(RLAlgorithm):
         logger.record_tabular('AveragePolicySurr', average_policy_surr)
         logger.record_tabular('AverageQ', average_q)
         logger.record_tabular('AverageAction', average_action)
+
         logger.record_tabular('PolicyParamNorm',
-                              np.linalg.norm(
-                                  policy.get_trainable_param_values()))
+                              policy_param_norm)
+        logger.record_tabular('PolicyRegParamNorm',
+                              policy_reg_param_norm)
         logger.record_tabular('TargetPolicyParamNorm',
-                              np.linalg.norm(
-                                  opt_info["target_policy"].get_trainable_param_values()))
-
+                              target_policy_param_norm)
+        logger.record_tabular('TargetPolicyRegParamNorm',
+                              target_policy_reg_param_norm)
         logger.record_tabular('QFunParamNorm',
-                              np.linalg.norm(
-                                  qf.get_trainable_param_values()))
+                              qfun_param_norm)
+        logger.record_tabular('QFunRegParamNorm',
+                              qfun_reg_param_norm)
         logger.record_tabular('TargetQFunParamNorm',
-                              np.linalg.norm(
-                                  opt_info["target_qf"].get_trainable_param_values()))
-
+                              target_qfun_param_norm)
+        logger.record_tabular('TargetQFunRegParamNorm',
+                              target_qfun_reg_param_norm)
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []

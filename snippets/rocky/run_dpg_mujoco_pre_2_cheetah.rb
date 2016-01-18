@@ -29,6 +29,7 @@ shuffle_params(qf_learning_rates, policy_learning_rates, seeds, hidden_sizess, q
       _name: "continuous_nn_q_function",
       hidden_sizes: hidden_sizes, # [32, 32],
       normalize: false,
+      bn: true,
     },
     policy: {
       _name: "mean_nn_policy",
@@ -37,7 +38,7 @@ shuffle_params(qf_learning_rates, policy_learning_rates, seeds, hidden_sizess, q
       output_nl: 'lasagne.nonlinearities.tanh',
       output_W_init: 'lasagne.init.Uniform(-3e-3, 3e-3)',
       output_b_init: 'lasagne.init.Uniform(-3e-3, 3e-3)',
-      bn: false,
+      bn: true,
     },
     algo: {
       _name: "dpg",
