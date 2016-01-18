@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from itertools import izip
 
 import theano
@@ -6,14 +7,12 @@ import numpy as np
 from numpy.linalg import LinAlgError
 
 from rllab.misc import logger, autoargs
-from rllab.misc.console import Message
 from rllab.misc.krylov import cg
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract, compile_function, flatten_hessian, new_tensor, new_tensor_like, \
     flatten_tensor_variables, lazydict
 from rllab.algo.batch_polopt import BatchPolopt
 from rllab.algo.first_order_method import FirstOrderMethod
-import cPickle as pickle
 
 
 class NPG(BatchPolopt, FirstOrderMethod):
@@ -24,7 +23,7 @@ class NPG(BatchPolopt, FirstOrderMethod):
     @autoargs.inherit(BatchPolopt.__init__)
     @autoargs.inherit(FirstOrderMethod.__init__)
     @autoargs.arg("step_size", type=float,
-                  help="KL divergence constraint. Default to None, in which case"
+                  help="KL divergence constraint. When it's None"
                        "only natural gradient direction is calculated")
     @autoargs.arg("use_cg", type=bool,
                   help="Directly estimate descent direction instead of inverting Fisher"
@@ -39,7 +38,7 @@ class NPG(BatchPolopt, FirstOrderMethod):
                        "(but it's unlikely)")
     def __init__(
             self,
-            step_size=None,
+            step_size=0.001,
             use_cg=True,
             cg_iters=10,
             reg_coeff=1e-5,
@@ -114,7 +113,9 @@ class NPG(BatchPolopt, FirstOrderMethod):
             updates=updates,
         )
 
-        # lazy dict?
+        # follwoing information is computed to TRPO
+        max_kl = TT.max(policy.kl(old_pdist_var, pdist_var))
+
         return lazydict(
             f_loss=lambda: f_loss,
             f_grad=lambda: f_grad,
@@ -129,11 +130,15 @@ class NPG(BatchPolopt, FirstOrderMethod):
                     outputs=Hx_plain,
                 ),
             f_update=lambda: f_update,
+            f_trpo_info=lambda:
+                compile_function(
+                    inputs=input_list,
+                    outputs=[surr_obj, mean_kl, max_kl]
+                ),
         )
 
-    @overrides
-    def optimize_policy(self, itr, policy, samples_data, opt_info):
-        cur_params = policy.get_param_values()
+    @contextmanager
+    def optimization_setup(self, itr, policy, samples_data, opt_info):
         logger.log("optimizing policy")
         f_loss, f_grad, f_fisher, f_Hx_plain, f_update = \
             extract(opt_info, "f_loss", "f_grad", "f_fisher",
@@ -173,16 +178,24 @@ class NPG(BatchPolopt, FirstOrderMethod):
 
         nat_step_size = 1. if self.step_size is None \
             else (self.step_size * (
-                1. / flat_g.T.dot(nat_direction)
-            )) ** 0.5
+            1. / flat_g.T.dot(nat_direction)
+        )) ** 0.5
         flat_descent_step = nat_step_size * nat_direction
-        descent_steps = policy.flat_to_params(flat_descent_step)
-        f_update(*descent_steps)
+        yield inputs, flat_descent_step
         logger.log("computing loss after")
         loss_after = f_loss(*inputs)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
         logger.log("optimization finished")
+
+    @overrides
+    def optimize_policy(self, itr, policy, samples_data, opt_info):
+        with self.optimization_setup(itr, policy, samples_data, opt_info) \
+                as (_, flat_descent_step):
+            f_update = opt_info['f_update']
+            descent_steps = policy.flat_to_params(flat_descent_step)
+            f_update(*descent_steps)
+
         return opt_info
 
     @overrides
