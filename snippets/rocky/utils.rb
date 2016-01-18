@@ -61,3 +61,8 @@ def create_task_script(command, options={})
     system("qsub -V -b n -l mem_free=8G,h_vmem=14G -r y -cwd " + fname)
   end
 end
+
+def shuffle_params(*params)
+  all_combs = params[0].product(*params[1..-1])
+  all_combs.shuffle
+end
