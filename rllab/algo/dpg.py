@@ -330,9 +330,17 @@ class DPG(RLAlgorithm):
         logger.record_tabular('PolicyParamNorm',
                               np.linalg.norm(
                                   policy.get_trainable_param_values()))
+        logger.record_tabular('TargetPolicyParamNorm',
+                              np.linalg.norm(
+                                  opt_info["target_policy"].get_trainable_param_values()))
+
         logger.record_tabular('QFunParamNorm',
                               np.linalg.norm(
                                   qf.get_trainable_param_values()))
+        logger.record_tabular('TargetQFunParamNorm',
+                              np.linalg.norm(
+                                  opt_info["target_qf"].get_trainable_param_values()))
+
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []

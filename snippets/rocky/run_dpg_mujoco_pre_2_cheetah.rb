@@ -8,13 +8,13 @@ require_relative './utils'
 # qf_weight_decays = [0, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
 # soft_target_taus = [1e-4, 1e-3, 1e-2, 1e-1, 1]
 
-qf_learning_rates = [1e-3]
-policy_learning_rates = [1e-4]
+qf_learning_rates = [0]
+policy_learning_rates = [0]
 seeds = [1, 2, 3]
 
 hidden_sizess = [[400, 300]]
-qf_weight_decays = [1e-2]
-soft_target_taus = [1e-3]
+qf_weight_decays = [0]#1e-2]
+soft_target_taus = [0]
 
 
 shuffle_params(qf_learning_rates, policy_learning_rates, seeds, hidden_sizess, qf_weight_decays, soft_target_taus).each do |qf_learning_rate, policy_learning_rate, seed, hidden_sizes, qf_weight_decay, soft_target_tau|
@@ -41,8 +41,8 @@ shuffle_params(qf_learning_rates, policy_learning_rates, seeds, hidden_sizess, q
     algo: {
       _name: "dpg",
       batch_size: 64,
-      n_epochs: 100,
-      epoch_length: 10000,
+      n_epochs: 1000,
+      epoch_length: 1000,
       min_pool_size: 10000,
       replay_pool_size: 1000000,
       discount: 0.99,
