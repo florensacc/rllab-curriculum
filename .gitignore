@@ -16,3 +16,5 @@ run_experiment.sh
 notebooks
 *.ipynb
 launch_scripts
+*.sh.e*
+*.sh.o*
