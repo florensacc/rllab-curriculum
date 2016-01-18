@@ -181,9 +181,6 @@ class DPG(RLAlgorithm):
             dtype=mdp.observation_dtype
         )
 
-        qf_scale = theano.shared(np.cast['float32'](1.), name='qf_scale')
-        qf_bias = theano.shared(np.cast['float32'](0.), name='qf_bias')
-
         rewards = TT.vector('rewards')
         terminals = TT.vector('terminals')
 
@@ -193,7 +190,6 @@ class DPG(RLAlgorithm):
             target_policy.get_action_sym(next_obs, train=True),
             train=True
         )
-        next_qval = next_qval * qf_scale + qf_bias
 
         ys = rewards + (1 - terminals) * self.discount * next_qval
         f_y = compile_function(
@@ -210,8 +206,9 @@ class DPG(RLAlgorithm):
             sum([TT.sum(TT.square(param)) for param in qf.params])
 
         qval = qf.get_qval_sym(obs, action, train=True)
-        qval = qval * qf_scale + qf_bias
-        qf_loss = TT.mean(TT.square((yvar - qval) / qf_scale))
+        diff = TT.square(qf.normalize_sym(qval) -
+                         qf.normalize_sym(yvar))
+        qf_loss = TT.mean(diff)
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
         policy_weight_decay_term = self.policy_weight_decay * \
@@ -219,7 +216,7 @@ class DPG(RLAlgorithm):
         policy_qval = qf.get_qval_sym(
             obs, policy.get_action_sym(obs, train=True), train=True)
         # The policy gradient is computed with respect to the unscaled Q values
-        policy_surr = -TT.mean(policy_qval)
+        policy_surr = -TT.mean(qf.normalize_sym(policy_qval))
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
         qf_updates = merge_dict(
@@ -255,15 +252,13 @@ class DPG(RLAlgorithm):
             f_train_policy=f_train_policy,
             target_qf=target_qf,
             target_policy=target_policy,
-            qf_scale=qf_scale,
-            qf_bias=qf_bias,
         )
 
     def do_training(self, itr, batch, qf, policy, opt_info):
 
         states, actions, rewards, next_states, terminal = extract(
             batch,
-            "states", "actions", "rewards", "next_states", "terminal"
+            "states", "actions", "rewards", "next_states", "terminals"
         )
 
         f_y = opt_info["f_y"]

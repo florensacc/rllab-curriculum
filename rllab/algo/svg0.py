@@ -4,9 +4,10 @@ from rllab.algo.first_order_method import parse_update_method
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
 from rllab.misc.special import discount_return
-from rllab.misc.ext import compile_function, new_tensor, merge_dict, extract
+from rllab.misc.ext import compile_function, new_tensor, extract
 from rllab.sampler import parallel_sampler
 from rllab.plotter import plotter
+import cPickle as pickle
 import rllab.misc.logger as logger
 import theano.tensor as TT
 import numpy as np
@@ -50,6 +51,9 @@ class SVG0(RLAlgorithm):
                        'executed until the terminal state or the '
                        'max_path_length, even at the expense of possibly more '
                        'samples for evaluation.')
+    @autoargs.arg('soft_target_tau', type=float,
+                  help='Interpolation parameter for doing the soft target '
+                       'update.')
     @autoargs.arg('plot', type=bool,
                   help='Whether to visualize the policy performance after '
                        'each eval_interval.')
@@ -68,6 +72,7 @@ class SVG0(RLAlgorithm):
             policy_learning_rate=1e-4,
             eval_samples=10000,
             eval_whole_paths=True,
+            soft_target_tau=0.001,
             plot=False):
         self.batch_size = batch_size
         self.n_epochs = n_epochs
@@ -86,6 +91,7 @@ class SVG0(RLAlgorithm):
         )
         self.eval_samples = eval_samples
         self.eval_whole_paths = eval_whole_paths
+        self.soft_target_tau = soft_target_tau
         self.plot = plot
 
         self._qf_losses = []
@@ -148,6 +154,11 @@ class SVG0(RLAlgorithm):
             logger.pop_prefix()
 
     def init_opt(self, mdp, policy, qf):
+
+        # First, create "target" policy and Q functions
+        target_policy = pickle.loads(pickle.dumps(policy))
+        target_qf = pickle.loads(pickle.dumps(qf))
+
         obs = new_tensor(
             'obs',
             ndim=1+len(mdp.observation_shape),
@@ -159,25 +170,28 @@ class SVG0(RLAlgorithm):
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
-        next_actions = TT.matrix('next_actions', dtype=mdp.action_dtype)
+        next_etas = TT.matrix('next_etas')
 
         terminals = TT.vector('terminals')
         old_pdists = TT.matrix('old_pdists')
 
         rewards = TT.vector('rewards')
 
-        # Compute value function regression target
+        # Compute on-policy q function regression target
         ys = rewards + (1 - terminals) * self.discount * \
-            qf.get_val_sym(next_obs, next_actions)
+            target_qf.get_qval_sym(
+                next_obs,
+                target_policy.get_reparam_action_sym(next_obs, next_etas)
+            )
         f_ys = compile_function(
-            inputs=[rewards, terminals, next_obs],
+            inputs=[rewards, terminals, next_obs, next_etas],
             outputs=ys,
         )
 
         # Train value function
         yvals = TT.vector('yvals')
         # pylint: disable=assignment-from-no-return
-        diff = TT.square(qf.normalize_sym(qf.get_val_sym(obs, actions)) -
+        diff = TT.square(qf.normalize_sym(qf.get_qval_sym(obs, actions)) -
                          qf.normalize_sym(yvals))
         # pylint: enable=assignment-from-no-return
         pdists = policy.get_pdist_sym(obs)
@@ -188,7 +202,7 @@ class SVG0(RLAlgorithm):
         )
 
         weight_vals = TT.vector('weights')
-        qf_loss = TT.mean(weight_vals * diff)
+        qf_loss = TT.sum(weight_vals * diff) / TT.sum(weight_vals)
 
         f_normalize_qf = compile_function(
             inputs=[yvals],
@@ -205,7 +219,7 @@ class SVG0(RLAlgorithm):
         etas = TT.matrix('etas')
         reparam_actions = policy.get_reparam_action_sym(obs, etas)
         predicted_ys = qf.normalize_sym(
-            qf.get_val_sym(obs, reparam_actions)
+            qf.get_qval_sym(obs, reparam_actions)
         )
         # Negative sign since we are maximizing
         policy_obj = - TT.mean(predicted_ys)
@@ -222,24 +236,27 @@ class SVG0(RLAlgorithm):
             f_weights=f_weights,
             f_normalize_qf=f_normalize_qf,
             f_train_qf=f_train_qf,
-            f_train_policy=f_train_policy
+            f_train_policy=f_train_policy,
+            target_qf=target_qf,
+            target_policy=target_policy,
         )
 
     def record_step(self, pool, state, observation, action, pdist,
                     next_state, next_observation, reward, terminal):
         pool.add_sample(observation, action, reward, terminal, extra=pdist)
 
-    def do_training(self, itr, batch, vf, policy, model, opt_info):
-        obs, actions, rewards, next_obs, next_actions, terminals, pdists = \
-            extract(
+    def do_training(self, itr, batch, qf, policy, opt_info):
+        obs, actions, rewards, next_obs, next_actions, terminals, pdists, \
+            next_pdists = extract(
                 batch,
                 "states", "actions", "rewards", "next_states", "next_actions",
-                "terminals", "extras"
+                "terminals", "extras", "next_extras"
             )
         etas = policy.infer_eta(pdists, actions)
+        next_etas = policy.infer_eta(next_pdists, next_actions)
 
         f_ys = opt_info["f_ys"]
-        yvals = f_ys(rewards, terminals, next_obs, next_actions)
+        yvals = f_ys(rewards, terminals, next_obs, next_etas)
 
         f_weights = opt_info["f_weights"]
         weights = f_weights(obs, actions, pdists)
@@ -256,9 +273,20 @@ class SVG0(RLAlgorithm):
             obs, etas, actions, pdists, terminals, weights)
         self._policy_objs.append(policy_obj)
 
+        target_qf = opt_info["target_qf"]
+        target_policy = opt_info["target_policy"]
+        target_qf.set_param_values(
+            self.soft_target_tau * qf.get_param_values() +
+            (1 - self.soft_target_tau) * target_qf.get_param_values()
+        )
+        target_policy.set_param_values(
+            self.soft_target_tau * policy.get_param_values() +
+            (1 - self.soft_target_tau) * target_policy.get_param_values()
+        )
+
         return opt_info
 
-    def evaluate(self, epoch, mdp, qf, policy, model, opt_info):
+    def evaluate(self, epoch, mdp, qf, policy, opt_info):
         paths = parallel_sampler.request_samples(
             policy_params=policy.get_param_values(),
             max_samples=self.eval_samples,
@@ -292,16 +320,10 @@ class SVG0(RLAlgorithm):
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
         logger.record_tabular('AverageAction', average_action)
-        logger.record_tabular('AverageModelObsLoss',
-                              np.mean(self._model_obs_losses))
-        logger.record_tabular('AverageModelRewardLoss',
-                              np.mean(self._model_reward_losses))
         logger.record_tabular('AverageQFunctionLoss',
                               np.mean(self._qf_losses))
         logger.record_tabular('AveragePolicyObjective',
                               np.mean(self._policy_objs))
-        logger.record_tabular('ModelParamNorm',
-                              np.linalg.norm(model.get_param_values()))
         logger.record_tabular('QFunctionParamNorm',
                               np.linalg.norm(qf.get_param_values()))
         logger.record_tabular('PolicyParamNorm',
@@ -309,17 +331,13 @@ class SVG0(RLAlgorithm):
         mdp.log_extra(logger, paths)
         qf.log_extra(logger, paths)
         policy.log_extra(logger, paths)
-        model.log_extra(logger, paths)
-        self._model_obs_losses = []
-        self._model_reward_losses = []
         self._qf_losses = []
         self._policy_objs = []
         return opt_info
 
-    def get_epoch_snapshot(self, epoch, qf, policy, model, opt_info):
+    def get_epoch_snapshot(self, epoch, qf, policy, opt_info):
         return dict(
             epoch=epoch,
             qf=qf,
             policy=policy,
-            model=model,
         )

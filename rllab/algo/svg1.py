@@ -221,7 +221,7 @@ class SVG1(RLAlgorithm):
         )
 
         weight_vals = TT.vector('weights')
-        vf_loss = TT.mean(weight_vals * diff)
+        vf_loss = TT.sum(weight_vals * diff) / TT.sum(weight_vals)
 
         f_normalize_vf = compile_function(
             inputs=[yvals],
@@ -244,7 +244,7 @@ class SVG1(RLAlgorithm):
             vf.get_val_sym(model_next_obs)
         )
         # Negative sign since we are maximizing
-        policy_obj = - TT.mean(weight_vals * model_ys)
+        policy_obj = - TT.sum(weight_vals * model_ys) / TT.sum(weight_vals)
         policy_updates = self.policy_update_method(policy_obj, policy.params)
 
         f_train_policy = compile_function(

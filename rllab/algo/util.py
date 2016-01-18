@@ -179,8 +179,13 @@ next_states for batch_size randomly chosen state transitions.
                 (batch_size,) + self.extras.shape[1:],
                 dtype=self.extras.dtype
             )
+            next_extras = np.zeros(
+                (batch_size,) + self.extras.shape[1:],
+                dtype=self.extras.dtype
+            )
         else:
             extras = None
+            next_extras = None
         next_states = np.zeros(
             (batch_size, self.concat_length) + self.state_shape,
             dtype=self.state_dtype
@@ -221,6 +226,8 @@ next_states for batch_size randomly chosen state transitions.
             if self.extras is not None:
                 extras[count] = self.extras.take(
                     end_index, axis=0, mode='wrap')
+                next_extras[count] = self.extras.take(
+                    transition_indices, axis=0, mode='wrap')
             next_states[count] = self.states.take(
                 transition_indices, axis=0, mode='wrap')
             next_actions[count] = self.actions.take(
@@ -242,6 +249,7 @@ next_states for batch_size randomly chosen state transitions.
             next_actions=next_actions,
             terminals=terminals,
             extras=extras,
+            next_extras=next_extras,
         )
             
 

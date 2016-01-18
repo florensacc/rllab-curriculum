@@ -22,6 +22,8 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     @autoargs.arg('hidden_sizes', type=int, nargs='*',
                   help='list of sizes for the fully-connected hidden layers')
+    @autoargs.arg('output_nl', type=str,
+                  help='nonlinearity for the output layer')
     @autoargs.arg('nonlinearity', type=str,
                   help='nonlinearity used for each hidden layer, can be one '
                        'of tanh, sigmoid')
@@ -30,7 +32,9 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             self,
             mdp,
             hidden_sizes=[32, 32],
-            nonlinearity='lasagne.nonlinearities.tanh'):
+            nonlinearity='lasagne.nonlinearities.tanh',
+            output_nl='None',
+            ):
         # pylint: enable=dangerous-default-value
         # create network
         if isinstance(nonlinearity, str):
@@ -49,7 +53,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         mean_layer = L.DenseLayer(
             l_hidden,
             num_units=mdp.action_dim,
-            nonlinearity=None,
+            nonlinearity=eval(output_nl),
             W=lasagne.init.Normal(0.01),
             name="output_mean")
         log_std_layer = ParamLayer(
@@ -71,7 +75,9 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         super(MeanStdNNPolicy, self).__init__(mdp)
         LasagnePowered.__init__(self, [mean_layer, log_std_layer])
-        Serializable.__init__(self, mdp, hidden_sizes, nonlinearity)
+        Serializable.__init__(
+            self, mdp=mdp, hidden_sizes=hidden_sizes,
+            nonlinearity=nonlinearity, output_nl=output_nl)
 
     def get_pdist_sym(self, input_var):
         mean_var = L.get_output(self._mean_layer, input_var)

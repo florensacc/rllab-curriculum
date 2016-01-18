@@ -31,6 +31,7 @@ params = {
     max_path_length: 100,
     eval_samples: 10000,
     eval_whole_paths: true,
+    soft_target_tau: 0.001,
     policy_learning_rate: 1e-5,#0.0001,
   },
   es: {
