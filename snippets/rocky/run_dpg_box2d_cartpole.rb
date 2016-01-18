@@ -11,7 +11,7 @@ params = {
     _name: "continuous_nn_q_function",
     hidden_sizes: [32, 32],
     normalize: false,
-    bn: false,
+    bn: true,
   },
   policy: {
     _name: "mean_nn_policy",
@@ -20,7 +20,7 @@ params = {
     output_nl: 'lasagne.nonlinearities.tanh',
     output_W_init: 'lasagne.init.Uniform(-3e-3, 3e-3)',
     output_b_init: 'lasagne.init.Uniform(-3e-3, 3e-3)',
-    bn: false,
+    bn: true,
   },
   exp_name: "dpg_box2d_cartpole",
   algo: {

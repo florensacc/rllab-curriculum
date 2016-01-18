@@ -3,12 +3,11 @@ require_relative './utils'
 params = {
   mdp: {
     _name: "box2d.cartpole_mdp",
-    position_only: true,
   },
   normalize_mdp: true,
   policy: {
-    _name: "mean_std_rnn_policy",
-    hidden_sizes: [],
+    _name: "mean_std_nn_policy",
+    hidden_sizes: [32, 32],
   },
   baseline: {
     _name: "zero_baseline",

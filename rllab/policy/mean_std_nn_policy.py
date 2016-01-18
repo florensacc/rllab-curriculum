@@ -7,6 +7,7 @@ import theano.tensor as TT
 from pydoc import locate
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
+# from rllab.core.lasagne_layers import batch_norm
 from rllab.core.serializable import Serializable
 from rllab.policy.base import StochasticPolicy
 from rllab.misc.overrides import overrides
@@ -27,6 +28,8 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @autoargs.arg('nonlinearity', type=str,
                   help='nonlinearity used for each hidden layer, can be one '
                        'of tanh, sigmoid')
+    @autoargs.arg('bn', type=bool,
+                  help='whether to apply batch normalization to hidden layers')
     # pylint: disable=dangerous-default-value
     def __init__(
             self,
@@ -34,6 +37,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             hidden_sizes=[32, 32],
             nonlinearity='lasagne.nonlinearities.tanh',
             output_nl='None',
+            bn=False,
             ):
         # pylint: enable=dangerous-default-value
         # create network
@@ -50,6 +54,8 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 nonlinearity=nonlinearity,
                 W=lasagne.init.Normal(0.1),
                 name="h%d" % idx)
+            if bn:
+                l_hidden = L.batch_norm(l_hidden)
         mean_layer = L.DenseLayer(
             l_hidden,
             num_units=mdp.action_dim,
@@ -77,7 +83,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         LasagnePowered.__init__(self, [mean_layer, log_std_layer])
         Serializable.__init__(
             self, mdp=mdp, hidden_sizes=hidden_sizes,
-            nonlinearity=nonlinearity, output_nl=output_nl)
+            nonlinearity=nonlinearity, output_nl=output_nl, bn=bn)
 
     def get_pdist_sym(self, input_var):
         mean_var = L.get_output(self._mean_layer, input_var)

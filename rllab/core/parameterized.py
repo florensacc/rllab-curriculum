@@ -48,6 +48,7 @@ class Parameterized(object):
         )
 
     def set_param_values(self, flattened_params, **tags):
+        debug = tags.pop("debug", False)
         param_values = unflatten_tensors(
             flattened_params, self.get_param_shapes(**tags))
         for param, dtype, value in zip(
@@ -55,6 +56,8 @@ class Parameterized(object):
                 self.get_param_dtypes(**tags),
                 param_values):
             param.set_value(value.astype(dtype))
+            if debug:
+                print "setting value of %s" % param.name
 
     def __getstate__(self):
         d = Serializable.__getstate__(self)

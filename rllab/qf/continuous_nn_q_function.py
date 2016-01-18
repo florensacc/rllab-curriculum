@@ -10,7 +10,7 @@ import numpy as np
 from collections import OrderedDict
 from rllab.qf.base import ContinuousQFunction
 from rllab.core.lasagne_powered import LasagnePowered
-from rllab.core.lasagne_layers import batch_norm
+# from rllab.core.lasagne_layers import batch_norm
 from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
 from rllab.misc.ext import new_tensor
@@ -104,7 +104,7 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
                 name="h%d" % idx
             )
             if bn:
-                l_hidden = batch_norm(l_hidden)
+                l_hidden = L.batch_norm(l_hidden)
 
         if action_merge_layer == n_layers:
             l_hidden = L.ConcatLayer([l_hidden, l_action])
@@ -141,10 +141,11 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             output_W_init=output_W_init, output_b_init=output_b_init,
             normalize=normalize, normalize_alpha=normalize_alpha, bn=bn)
 
-    def get_qval_sym(self, obs_var, action_var, train=False):
+    def get_qval_sym(self, obs_var, action_var, **kwargs):
         qvals = L.get_output(
             self._output_layer,
-            {self._obs_layer: obs_var, self._action_layer: action_var}
+            {self._obs_layer: obs_var, self._action_layer: action_var},
+            **kwargs
         )
         if self._normalize:
             qvals = qvals * self._qval_std + self._qval_mean

@@ -191,7 +191,8 @@ class DPG(RLAlgorithm):
         # compute the on-policy y values
         next_qval = target_qf.get_qval_sym(
             next_obs,
-            target_policy.get_action_sym(next_obs),
+            target_policy.get_action_sym(next_obs, deterministic=True),
+            deterministic=True
         )
 
         ys = rewards + (1 - terminals) * self.discount * next_qval
@@ -218,7 +219,10 @@ class DPG(RLAlgorithm):
         policy_weight_decay_term = self.policy_weight_decay * \
             sum([TT.sum(TT.square(param))
                  for param in policy.get_params(regularizable=True)])
-        policy_qval = qf.get_qval_sym(obs, policy.get_action_sym(obs))
+        policy_qval = qf.get_qval_sym(
+            obs, policy.get_action_sym(obs),
+            deterministic=True
+        )
         # The policy gradient is computed with respect to the unscaled Q values
         policy_surr = -TT.mean(qf.normalize_sym(policy_qval))
         policy_reg_surr = policy_surr + policy_weight_decay_term
@@ -250,11 +254,26 @@ class DPG(RLAlgorithm):
             updates=policy_updates
         )
 
+        target_updates = []
+        for p, tp in zip(qf.get_params(), target_qf.get_params()):
+            target_updates.append((tp, self.soft_target_tau * p + (1 -
+                                   self.soft_target_tau) * tp))
+        for p, tp in zip(policy.get_params(), target_policy.get_params()):
+            target_updates.append((tp, self.soft_target_tau * p + (1 -
+                                   self.soft_target_tau) * tp))
+
+        f_update_targets = compile_function(
+            inputs=[],
+            outputs=[],
+            updates=target_updates,
+        )
+
         return dict(
             f_y=f_y,
             f_normalize_qf=f_normalize_qf,
             f_train_qf=f_train_qf,
             f_train_policy=f_train_policy,
+            f_update_targets=f_update_targets,
             target_qf=target_qf,
             target_policy=target_policy,
         )
@@ -270,30 +289,27 @@ class DPG(RLAlgorithm):
         f_normalize_qf = opt_info["f_normalize_qf"]
         f_train_qf = opt_info["f_train_qf"]
         f_train_policy = opt_info["f_train_policy"]
-        target_qf = opt_info["target_qf"]
-        target_policy = opt_info["target_policy"]
+        f_update_targets = opt_info["f_update_targets"]
+        # target_qf = opt_info["target_qf"]
+        # target_policy = opt_info["target_policy"]
 
         ys = f_y(next_states, rewards, terminal)
         f_normalize_qf(ys)
         qf_loss, qval = f_train_qf(ys, states, actions, rewards)
         policy_surr = f_train_policy(ys, states)
 
+        f_update_targets()
+
         self.qf_loss_averages.append(qf_loss)
         self.policy_surr_averages.append(policy_surr)
         self.q_averages.append(qval)
 
-        target_qf.set_param_values(
-            self.soft_target_tau * qf.get_param_values() +
-            (1 - self.soft_target_tau) * target_qf.get_param_values()
-        )
-        target_policy.set_param_values(
-            self.soft_target_tau * policy.get_param_values() +
-            (1 - self.soft_target_tau) * target_policy.get_param_values()
-        )
-
         return opt_info
 
     def evaluate(self, epoch, qf, policy, opt_info):
+        target_policy = opt_info["target_policy"]
+        target_qf = opt_info["target_qf"]
+
         logger.log("Collecting samples for evaluation")
 
         paths = parallel_sampler.request_samples(
@@ -307,9 +323,6 @@ class DPG(RLAlgorithm):
         )
 
         returns = [sum(path["rewards"]) for path in paths]
-
-        target_policy = opt_info["target_policy"]
-        target_qf = opt_info["target_qf"]
 
         average_q_loss = np.mean(self.qf_loss_averages)
         average_policy_surr = np.mean(self.policy_surr_averages)
