@@ -1,12 +1,21 @@
 require_relative './utils'
 
-qf_learning_rates = [1e-4, 1e-5, 5e-5, 1e-6]
-policy_learning_rates = [1e-4, 1e-5, 5e-5, 1e-6]
+# qf_learning_rates = [1e-4, 1e-5, 5e-5, 1e-6]
+# policy_learning_rates = [1e-4, 1e-5, 5e-5, 1e-6]
+# seeds = [1, 2, 3]
+# 
+# hidden_sizess = [[32, 32], [400, 300]]
+# qf_weight_decays = [0, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
+# soft_target_taus = [1e-4, 1e-3, 1e-2, 1e-1, 1]
+
+qf_learning_rates = [1e-3]
+policy_learning_rates = [1e-4]
 seeds = [1, 2, 3]
 
-hidden_sizess = [[32, 32], [400, 300]]
-qf_weight_decays = [0, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
-soft_target_taus = [1e-4, 1e-3, 1e-2, 1e-1, 1]
+hidden_sizess = [[400, 300]]
+qf_weight_decays = [1e-2]
+soft_target_taus = [1e-3]
+
 
 shuffle_params(qf_learning_rates, policy_learning_rates, seeds, hidden_sizess, qf_weight_decays, soft_target_taus).each do |qf_learning_rate, policy_learning_rate, seed, hidden_sizes, qf_weight_decay, soft_target_tau|
 
@@ -18,6 +27,7 @@ shuffle_params(qf_learning_rates, policy_learning_rates, seeds, hidden_sizess, q
     qf: {
       _name: "continuous_nn_q_function",
       hidden_sizes: hidden_sizes, # [32, 32],
+      normalize: false,
     },
     policy: {
       _name: "mean_nn_policy",
@@ -50,9 +60,6 @@ shuffle_params(qf_learning_rates, policy_learning_rates, seeds, hidden_sizess, q
     snapshot_mode: "last",
     seed: seed,
   }
-  # command = to_command(params)
-  create_task_script(to_docker_command(params), launch: true, prefix: "dpg_cheetah")
-  # puts command
-  # system(command)
-
+  system(to_command(params))
+  # create_task_script(to_docker_command(params), launch: true, prefix: "dpg_cheetah")
 end
