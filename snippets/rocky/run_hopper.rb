@@ -4,28 +4,28 @@ seed = 1
 
 params = {
   mdp: {
-    _name: "box2d.hopper_mdp",
+    # _name: "box2d.hopper_mdp",
+    _name: "box2d.cartpole_mdp",
   },
   # normalize_mdp: nil,
   policy: {
     _name: "mean_std_nn_policy",
-    # hidden_layers: [32, 32],
+    hidden_sizes: [5, 5],
   },
   baseline: {
     _name: "linear_feature_baseline",
   },
   exp_name: "ppo_box2d_hopper",
   algo: {
-    _name: "ppo",
-    binary_search_penalty: true,
-    bs_kl_tolerance: 1e-3,
+    # _name: "ppo",
+    _name: "npg",
     whole_paths: true,
     batch_size: 5000,
     max_path_length: 500,
     n_itr: 500,
-    step_size: 0.01,
-    increase_penalty_factor: 5,
-    decrease_penalty_factor: 0.1,
+    # step_size: 0.01,
+    update_method: 'adam',
+    learning_rate: 0.01,
     plot: true,
   },
   n_parallel: 4,
