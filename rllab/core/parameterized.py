@@ -59,6 +59,9 @@ class Parameterized(object):
             if debug:
                 print "setting value of %s" % param.name
 
+    def flat_to_params(self, flattened_params, **tags):
+        return unflatten_tensors(flattened_params, self.get_param_shapes(**tags))
+
     def __getstate__(self):
         d = Serializable.__getstate__(self)
         d["params"] = self.get_param_values()

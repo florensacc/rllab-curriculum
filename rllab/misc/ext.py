@@ -124,6 +124,9 @@ def new_tensor(name, ndim, dtype):
     import theano.tensor as TT
     return TT.TensorType(dtype, (False,) * ndim)(name)
 
+def new_tensor_like(name, arr_like):
+    return new_tensor(name, arr_like.ndim, arr_like.dtype)
+
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
@@ -171,7 +174,7 @@ def set_seed(seed):
     )
 
 def flatten_hessian(cost, wrt, consider_constant=None,
-            disconnected_inputs='raise'):
+            disconnected_inputs='raise', block_diagonal=True):
     """
     :type cost: Scalar (0-dimensional) Variable.
     :type wrt: Vector (1-dimensional tensor) 'Variable' or list of
@@ -197,7 +200,9 @@ def flatten_hessian(cost, wrt, consider_constant=None,
     """
     from theano.tensor import arange
     # Check inputs have the right format
+    import theano.tensor as TT
     from theano import Variable
+    from theano import grad
     assert isinstance(cost, Variable), \
         "tensor.hessian expects a Variable as `cost`"
     assert cost.ndim == 0, \
@@ -212,15 +217,22 @@ def flatten_hessian(cost, wrt, consider_constant=None,
         wrt = [wrt]
 
     hessians = []
+    if not block_diagonal:
+        expr = TT.concatenate([
+            grad(cost, input, consider_constant=consider_constant,
+                    disconnected_inputs=disconnected_inputs).flatten()
+            for input in wrt
+        ])
+
     for input in wrt:
         assert isinstance(input, Variable), \
             "tensor.hessian expects a (list of) Variable as `wrt`"
         # assert input.ndim == 1, \
         #     "tensor.hessian expects a (list of) 1 dimensional variable " \
         #     "as `wrt`"
-        from theano import grad
-        expr = grad(cost, input, consider_constant=consider_constant,
-                    disconnected_inputs=disconnected_inputs).flatten()
+        if block_diagonal:
+            expr = grad(cost, input, consider_constant=consider_constant,
+                        disconnected_inputs=disconnected_inputs).flatten()
 
         # It is possible that the inputs are disconnected from expr,
         # even if they are connected to cost.
@@ -237,6 +249,13 @@ def flatten_hessian(cost, wrt, consider_constant=None,
              "happen! Report this to theano-users (also include the "
              "script that generated the error)")
         hessians.append(hess)
-    from theano.gradient import format_as
-    return format_as(using_list, using_tuple, hessians)
+    if block_diagonal:
+        from theano.gradient import format_as
+        return format_as(using_list, using_tuple, hessians)
+    else:
+        return TT.concatenate(hessians, axis=1)
+
+def flatten_tensor_variables(ts):
+    import theano.tensor as TT
+    return TT.concatenate(map(TT.flatten, ts))
 
