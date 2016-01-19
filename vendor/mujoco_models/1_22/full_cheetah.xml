@@ -47,81 +47,193 @@
 
     <size nstack='300000' nuser_geom='1'/>
 
-    <option timestep='0.01' gravity='0 0 -9.81'/>
+    <option timestep='0.001' gravity='0 0 -9.81'/>
 
     <worldbody>
-        <geom name='ground' type='plane' conaffinity='1' pos='0 0 0'
+		  <light directional="true" cutoff="100" exponent="1" diffuse="1 1 1" specular=".1 .1 .1" pos="0 0 1.3" dir="-0 0 -1.3"/>
+        <geom name='ground' material='MatGnd' type='plane' conaffinity='1' pos='0 0 0'
               size='40 40 40' rgba='0.9 0.9 0.9 1'/>
         <body name='torso' pos='0 0 .7'>
             <joint name='rootx' type='slide' pos='0 0 0' axis='1 0 0'
                    limited='false' damping='0' armature='0' stiffness='0'/>
+
+            <joint name='rootxh' type='hinge' pos='0 0 0' axis='1 0 0'
+                   limited='false' damping='0' armature='0' stiffness='0'/>
             <joint name='rootz' type='slide' pos='0 0 0' axis='0 0 1'
                    limited='false' damping='0' armature='0' stiffness='0'/>
-            <joint name='rooty' type='hinge' pos='0 0 0' axis='0 1 0'
+            <joint name='rootzh' type='hinge' pos='0 0 0' axis='0 0 1'
                    limited='false' damping='0' armature='0' stiffness='0'/>
-            <geom name='torso' type='capsule' fromto='-.5 0 0 .5 0 0'
-                  size='0.046'/>
+            <joint name='rooty' type='slide' pos='0 0 0' axis='0 1 0'
+                   limited='false' damping='0' armature='0' stiffness='0'/>
+            <joint name='rootyh' type='hinge' pos='0 0 0' axis='0 1 0'
+                   limited='false' damping='0' armature='0' stiffness='0'/>
+
+            <geom name='torso' rgba="0.8 0.6 0.4 0.5" material="trans_geom" type='box' pos="-0.03 0 0" size="0.53 0.2 0.06" />
             <geom name='head' type='capsule' pos='.6 0 .1' axisangle='0 1 0 .87'
                   size='0.046 .15'/>
             <!-- <site name='tip'  pos='.15 0 .11'/> -->
 
-            <body name='bthigh' pos='-.5 0 0'>
-                <joint name='bthigh' type='hinge' pos='0 0 0' axis='0 1 0'
+            <body name='lbthigh' pos='-.5 0.2 0'>
+                <joint name='lbthighy' type='hinge' pos='0 0 0' axis='0 1 0'
                        range='-.52 1.05' stiffness='240' damping='6'/>
-                <geom name='bthigh' type='capsule' pos='.1 0 -.13'
+                <joint name='lbthighx' type='hinge' pos='0 0 0' axis='1 0 0'
+                       range='-.52 1.05' stiffness='240' damping='6'/>
+                <geom name='lbthigh' type='capsule' pos='.1 0 -.13'
                       axisangle='0 1 0 -3.8' size='0.046 .145'/>
-                <body name='bshin' pos='.16 0 -.25'>
-                    <joint name='bshin' type='hinge' pos='0 0 0' axis='0 1 0'
+                <body name='lbshin' pos='.16 0 -.25'>
+                    <joint name='lbshiny' type='hinge' pos='0 0 0' axis='0 1 0'
                            range='-.785 .785' stiffness='180' damping='4.5'/>
-                    <geom name='bshin' type='capsule' pos='-.14 0 -.07'
+                    <joint name='lbshinx' type='hinge' pos='0 0 0' axis='1 0 0'
+                           range='-.785 .785' stiffness='180' damping='4.5'/>
+                    <geom name='lbshin' type='capsule' pos='-.14 0 -.07'
                           axisangle='0 1 0 -2.03' size='0.046 .15'
                           rgba='0.9 0.6 0.6 1'/>
-                    <body name='bfoot' pos='-.28 0 -.14'>
-                        <joint name='bfoot' type='hinge' pos='0 0 0'
+                    <body name='lbfoot' pos='-.28 0 -.14'>
+                        <joint name='lbfooty' type='hinge' pos='0 0 0'
                                axis='0 1 0' range='-.4 .785' stiffness='120'
                                damping='3'/>
-                        <geom name='bfoot' type='capsule' pos='.03 0 -.097'
+                        <joint name='lbfootx' type='hinge' pos='0 0 0'
+                               axis='1 0 0' range='-.4 .785' stiffness='120'
+                               damping='3'/>
+
+                        <geom name='lbfoot' type='capsule' pos='.03 0 -.097'
                               axisangle='0 1 0 -.27' size='0.046 .094'
                               rgba='0.9 0.6 0.6 1'/>
                     </body>
                 </body>
             </body>
 
+            <body name='rbthigh' pos='-.5 -0.2 0'>
+                <joint name='rbthighy' type='hinge' pos='0 0 0' axis='0 1 0'
+                       range='-.52 1.05' stiffness='240' damping='6'/>
+                <joint name='rbthighx' type='hinge' pos='0 0 0' axis='1 0 0'
+                       range='-.52 1.05' stiffness='240' damping='6'/>
+                <geom name='rbthigh' type='capsule' pos='.1 0 -.13'
+                      axisangle='0 1 0 -3.8' size='0.046 .145'/>
+                <body name='rbshin' pos='.16 0 -.25'>
+                    <joint name='rbshiny' type='hinge' pos='0 0 0' axis='0 1 0'
+                           range='-.785 .785' stiffness='180' damping='4.5'/>
+                    <joint name='rbshinx' type='hinge' pos='0 0 0' axis='1 0 0'
+                           range='-.785 .785' stiffness='180' damping='4.5'/>
+                    <geom name='rbshin' type='capsule' pos='-.14 0 -.07'
+                          axisangle='0 1 0 -2.03' size='0.046 .15'
+                          rgba='0.9 0.6 0.6 1'/>
+                    <body name='rbfoot' pos='-.28 0 -.14'>
+                        <joint name='rbfooty' type='hinge' pos='0 0 0'
+                               axis='0 1 0' range='-.4 .785' stiffness='120'
+                               damping='3'/>
+                        <joint name='rbfootx' type='hinge' pos='0 0 0'
+                               axis='1 0 0' range='-.4 .785' stiffness='120'
+                               damping='3'/>
 
-            <body name='fthigh' pos='.5 0 0'>
-                <joint name='fthigh' type='hinge' pos='0 0 0' axis='0 1 0'
+                        <geom name='rbfoot' type='capsule' pos='.03 0 -.097'
+                              axisangle='0 1 0 -.27' size='0.046 .094'
+                              rgba='0.9 0.6 0.6 1'/>
+                    </body>
+                </body>
+            </body>
+
+            <body name='lfthigh' pos='.5 0.2 0'>
+                <joint name='lfthighy' type='hinge' pos='0 0 0' axis='0 1 0'
                        range='-1 .7' stiffness='180' damping='4.5'/>
-                <geom name='fthigh' type='capsule' pos='-.07 0 -.12'
+                <joint name='lfthighx' type='hinge' pos='0 0 0' axis='1 0 0'
+                       range='-1 .7' stiffness='180' damping='4.5'/>
+                <geom name='lfthigh' type='capsule' pos='-.07 0 -.12'
                       axisangle='0 1 0 .52' size='0.046 .133'/>
-                <body name='fshin' pos='-.14 0 -.24'>
-                    <joint name='fshin' type='hinge' pos='0 0 0' axis='0 1 0'
+                <body name='lfshin' pos='-.14 0 -.24'>
+                    <joint name='lfshiny' type='hinge' pos='0 0 0' axis='0 1 0'
                            range='-1.2 .87' stiffness='120' damping='3'/>
-                    <geom name='fshin' type='capsule' pos='.065 0 -.09'
+                    <joint name='lfshinx' type='hinge' pos='0 0 0' axis='1 0 0'
+                           range='-1.2 .87' stiffness='120' damping='3'/>
+
+                    <geom name='lfshin' type='capsule' pos='.065 0 -.09'
                           axisangle='0 1 0 -.6' size='0.046 .106'
                           rgba='0.9 0.6 0.6 1'/>
-                    <body name='ffoot' pos='.13 0 -.18'>
-                        <joint name='ffoot' type='hinge' pos='0 0 0'
+                    <body name='lffoot' pos='.13 0 -.18'>
+                        <joint name='lffooty' type='hinge' pos='0 0 0'
                                axis='0 1 0' range='-.5 .5' stiffness='60'
                                damping='1.5'/>
-                        <geom name='ffoot' type='capsule' pos='.045 0 -.07'
+                        <joint name='lffootx' type='hinge' pos='0 0 0'
+                               axis='1 0 0' range='-.5 .5' stiffness='60'
+                               damping='1.5'/>
+
+                        <geom name='lffoot' type='capsule' pos='.045 0 -.07'
                               axisangle='0 1 0 -.6' size='0.046 .07'
                               rgba='0.9 0.6 0.6 1'/>
                     </body>
                 </body>
             </body>
 
+            <body name='rfthigh' pos='.5 -0.2 0'>
+                <joint name='rfthighy' type='hinge' pos='0 0 0' axis='0 1 0'
+                       range='-1 .7' stiffness='180' damping='4.5'/>
+                <joint name='rfthighx' type='hinge' pos='0 0 0' axis='1 0 0'
+                       range='-1 .7' stiffness='180' damping='4.5'/>
+                <geom name='rfthigh' type='capsule' pos='-.07 0 -.12'
+                      axisangle='0 1 0 .52' size='0.046 .133'/>
+                <body name='rfshin' pos='-.14 0 -.24'>
+                    <joint name='rfshiny' type='hinge' pos='0 0 0' axis='0 1 0'
+                           range='-1.2 .87' stiffness='120' damping='3'/>
+                    <joint name='rfshinx' type='hinge' pos='0 0 0' axis='1 0 0'
+                           range='-1.2 .87' stiffness='120' damping='3'/>
+
+                    <geom name='rfshin' type='capsule' pos='.065 0 -.09'
+                          axisangle='0 1 0 -.6' size='0.046 .106'
+                          rgba='0.9 0.6 0.6 1'/>
+                    <body name='rffoot' pos='.13 0 -.18'>
+                        <joint name='rffooty' type='hinge' pos='0 0 0'
+                               axis='0 1 0' range='-.5 .5' stiffness='60'
+                               damping='1.5'/>
+                        <joint name='rffootx' type='hinge' pos='0 0 0'
+                               axis='1 0 0' range='-.5 .5' stiffness='60'
+                               damping='1.5'/>
+
+                        <geom name='rffoot' type='capsule' pos='.045 0 -.07'
+                              axisangle='0 1 0 -.6' size='0.046 .07'
+                              rgba='0.9 0.6 0.6 1'/>
+                    </body>
+                </body>
+            </body>
+
+
         </body>
     </worldbody>
 
 
     <actuator>
-        <motor name='bthigh' joint='bthigh' gear='120'/>
-        <motor name='bshin' joint='bshin' gear='90'/>
-        <motor name='bfoot' joint='bfoot' gear='60'/>
-        <motor name='fthigh' joint='fthigh' gear='120'/>
-        <motor name='fshin' joint='fshin' gear='60'/>
-        <motor name='ffoot' joint='ffoot' gear='30'/>
+        <motor name='lbthighy' joint='lbthighy' gear='120'/>
+        <motor name='lbthighx' joint='lbthighx' gear='120'/>
+        <motor name='lbshiny'  joint='lbshiny' gear='90'/>
+        <motor name='lbshinx'  joint='lbshinx' gear='90'/>
+        <motor name='lbfooty'  joint='lbfooty' gear='60'/>
+        <motor name='lbfootx'  joint='lbfootx' gear='60'/>
+        <motor name='rbthighy' joint='rbthighy' gear='120'/>
+        <motor name='rbthighx' joint='rbthighx' gear='120'/>
+        <motor name='rbshiny'  joint='rbshiny' gear='90'/>
+        <motor name='rbshinx'  joint='rbshinx' gear='90'/>
+        <motor name='rbfooty'  joint='rbfooty' gear='60'/>
+        <motor name='rbfootx'  joint='rbfootx' gear='60'/>
+        <motor name='lfthighy' joint='lfthighy' gear='120'/>
+        <motor name='lfthighx' joint='lfthighx' gear='120'/>
+        <motor name='lfshiny'  joint='lfshiny' gear='60'/>
+        <motor name='lfshinx'  joint='lfshinx' gear='60'/>
+        <motor name='lffooty'  joint='lffooty' gear='30'/>
+        <motor name='lffootx'  joint='lffootx' gear='30'/>
+        <motor name='rfthighy' joint='rfthighy' gear='120'/>
+        <motor name='rfthighx' joint='rfthighx' gear='120'/>
+        <motor name='rfshiny'  joint='rfshiny' gear='60'/>
+        <motor name='rfshinx'  joint='rfshinx' gear='60'/>
+        <motor name='rffooty'  joint='rffooty' gear='30'/>
+        <motor name='rffootx'  joint='rffootx' gear='30'/>
     </actuator>
+
+    <asset>
+        <material name='trans_geom' />
+        <texture name="groundplane" type="2d" builtin="gradient" random=".08" rgb1="0.25 0.64 0.85" rgb2="0.2 0.6 0.85" width="200" height="10" mark="random" markrgb=".8 .8 .8"/>
+
+        <material name="MatGnd" texture="groundplane" texscale="1 .6" specular="1" shininess="1" reflectance="0.00001"/>
+
+    </asset>
 
 
 </mujoco>
