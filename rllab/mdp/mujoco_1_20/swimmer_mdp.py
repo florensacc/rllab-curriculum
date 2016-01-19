@@ -1,17 +1,16 @@
 from .mujoco_mdp import MujocoMDP
 import numpy as np
-from core.serializable import Serializable
+from rllab.core.serializable import Serializable
 
 
 class SwimmerMDP(MujocoMDP, Serializable):
 
-    def __init__(self, horizon=250, timestep=0.02):
+    def __init__(self, horizon=250, timestep=0.05):
         self.timestep = timestep
-        frame_skip = 25
+        # frame_skip = 25
         path = self.model_path('swimmer.xml')
-        ctrl_scaling = 30
         self.horizon = horizon
-        super(SwimmerMDP, self).__init__(path, frame_skip, ctrl_scaling)
+        super(SwimmerMDP, self).__init__(path, frame_skip=1, ctrl_scaling=1)
         Serializable.__init__(self, horizon, timestep)
 
     def get_current_obs(self):
@@ -47,7 +46,7 @@ class SwimmerMDP(MujocoMDP, Serializable):
 
     def step(self, state, action):
         #com_before = self.data.com_subtree[0]
-        next_state = self.forward_dynamics(state, action, preserve=False)
+        next_state = self.forward_dynamics(state, action, restore=False)
         #com_after = self.data.com_subtree[0]
         #import ipdb; ipdb.set_trace()
         

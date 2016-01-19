@@ -107,6 +107,7 @@ class DPG(RLAlgorithm):
         self.qf_loss_averages = []
         self.policy_surr_averages = []
         self.q_averages = []
+        self.y_averages = []
         self.paths = []
         self.paths_samples_cnt = 0
 
@@ -162,7 +163,7 @@ class DPG(RLAlgorithm):
                 opt_info = self.evaluate(epoch, qf, policy, opt_info)
                 yield opt_info
                 params = self.get_epoch_snapshot(
-                    epoch, qf, policy, es, opt_info)
+                    epoch, mdp, qf, policy, es, opt_info)
                 logger.save_itr_params(epoch, params)
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
@@ -211,8 +212,8 @@ class DPG(RLAlgorithm):
                  qf.get_params(regularizable=True)])
 
         qval = qf.get_qval_sym(obs, action)
-        diff = TT.square(qf.normalize_sym(yvar) -
-                         qf.normalize_sym(qval))
+        diff = TT.square(yvar -
+                         qval)
         qf_loss = TT.mean(diff)
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
@@ -224,7 +225,7 @@ class DPG(RLAlgorithm):
             deterministic=True
         )
         # The policy gradient is computed with respect to the unscaled Q values
-        policy_surr = -TT.mean(qf.normalize_sym(policy_qval))
+        policy_surr = -TT.mean(policy_qval)
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
         qf_updates = merge_dict(
@@ -303,6 +304,7 @@ class DPG(RLAlgorithm):
         self.qf_loss_averages.append(qf_loss)
         self.policy_surr_averages.append(policy_surr)
         self.q_averages.append(qval)
+        self.y_averages.append(ys)
 
         return opt_info
 
@@ -327,6 +329,9 @@ class DPG(RLAlgorithm):
         average_q_loss = np.mean(self.qf_loss_averages)
         average_policy_surr = np.mean(self.policy_surr_averages)
         average_q = np.mean(np.concatenate(self.q_averages))
+        average_y = np.mean(np.concatenate(self.y_averages))
+        average_qydiff = np.mean(np.abs(np.concatenate(self.q_averages) -
+                                        np.concatenate(self.y_averages)))
         average_action = np.mean(np.square(np.concatenate(
             [path["actions"] for path in paths]
         )))
@@ -371,35 +376,39 @@ class DPG(RLAlgorithm):
         logger.record_tabular('AverageQLoss', average_q_loss)
         logger.record_tabular('AveragePolicySurr', average_policy_surr)
         logger.record_tabular('AverageQ', average_q)
+        #logger.record_tabular('AverageY', average_y)
+        #logger.record_tabular('AverageQYDiff', average_qydiff)
         logger.record_tabular('AverageAction', average_action)
 
-        logger.record_tabular('PolicyParamNorm',
-                              policy_param_norm)
+        #logger.record_tabular('PolicyParamNorm',
+        #                      policy_param_norm)
         logger.record_tabular('PolicyRegParamNorm',
                               policy_reg_param_norm)
-        logger.record_tabular('TargetPolicyParamNorm',
-                              target_policy_param_norm)
-        logger.record_tabular('TargetPolicyRegParamNorm',
-                              target_policy_reg_param_norm)
-        logger.record_tabular('QFunParamNorm',
-                              qfun_param_norm)
+        #logger.record_tabular('TargetPolicyParamNorm',
+        #                      target_policy_param_norm)
+        #logger.record_tabular('TargetPolicyRegParamNorm',
+        #                      target_policy_reg_param_norm)
+        #logger.record_tabular('QFunParamNorm',
+        #                      qfun_param_norm)
         logger.record_tabular('QFunRegParamNorm',
                               qfun_reg_param_norm)
-        logger.record_tabular('TargetQFunParamNorm',
-                              target_qfun_param_norm)
-        logger.record_tabular('TargetQFunRegParamNorm',
-                              target_qfun_reg_param_norm)
+        #logger.record_tabular('TargetQFunParamNorm',
+        #                      target_qfun_param_norm)
+        #logger.record_tabular('TargetQFunRegParamNorm',
+        #                      target_qfun_reg_param_norm)
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []
         self.q_averages = []
+        self.y_averages = []
 
         return merge_dict(opt_info, dict(
             eval_paths=paths,
         ))
 
-    def get_epoch_snapshot(self, epoch, qf, policy, es, opt_info):
+    def get_epoch_snapshot(self, epoch, mdp, qf, policy, es, opt_info):
         return dict(
+            mdp=mdp,
             epoch=epoch,
             qf=qf,
             policy=policy,

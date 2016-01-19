@@ -12,6 +12,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     data = joblib.load(args.file)
     policy = data['policy']
+    from rllab.mdp.mujoco_pre_2.cheetah_mdp import CheetahMDP
     mdp = data['mdp']
     mdp.start_viewer()
     path = rollout(mdp, policy, max_length=args.max_length, animated=True)

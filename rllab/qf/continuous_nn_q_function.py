@@ -89,6 +89,8 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
         assert len(hidden_b_init) == len(hidden_sizes)
 
         l_hidden = l_obs
+        if bn:
+            l_hidden = L.batch_norm(l_hidden)
 
         for idx, size, nl, W_init, b_init in zip(
                 itertools.count(), hidden_sizes, hidden_nl,
@@ -107,7 +109,10 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
                 l_hidden = L.batch_norm(l_hidden)
 
         if action_merge_layer == n_layers:
-            l_hidden = L.ConcatLayer([l_hidden, l_action])
+            if bn:
+                l_hidden = L.ConcatLayer([l_hidden, L.batch_norm(l_action)])
+            else:
+                l_hidden = L.ConcatLayer([l_hidden, l_action])
 
         l_output = L.DenseLayer(
             l_hidden,

@@ -5,8 +5,8 @@ import numpy as np
 
 class PendulumMDP(ControlMDP):
 
-    def __init__(self, horizon=120):
-        super(PendulumMDP, self).__init__(horizon)
+    def __init__(self):
+        super(PendulumMDP, self).__init__()
         self.reset()
 
     def reset(self):
@@ -52,5 +52,19 @@ class PendulumMDP(ControlMDP):
         return np.array([newth, newthdot])
 
     @property
+    def observation_shape(self):
+        return (2,)
+
+    @property
     def action_dim(self):
         return 1
+
+    @property
+    def observation_dtype(self):
+        return 'float32'
+
+    @property
+    def action_dtype(self):
+        return 'float32'
+
+

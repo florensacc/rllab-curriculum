@@ -210,8 +210,8 @@ class MJVISUAL(Structure):
             ("alpha", c_float),
             ("fogstart", c_float),
             ("fogend", c_float),
-            ("near", c_float),
-            ("far", c_float),
+            ("znear", c_float),
+            ("zfar", c_float),
             ("shadowclip", c_float),
             ("shadowscale", c_float),
         ]
@@ -591,19 +591,20 @@ class MJMODEL(Structure):
         ("wrap_type", POINTER(c_int)),
         ("wrap_objid", POINTER(c_int)),
         ("wrap_prm", POINTER(c_double)),
-        ("actuator_dyntype", POINTER(c_int)),
         ("actuator_trntype", POINTER(c_int)),
+        ("actuator_dyntype", POINTER(c_int)),
         ("actuator_gaintype", POINTER(c_int)),
         ("actuator_biastype", POINTER(c_int)),
         ("actuator_trnid", POINTER(c_int)),
         ("actuator_ctrllimited", POINTER(c_ubyte)),
         ("actuator_forcelimited", POINTER(c_ubyte)),
         ("actuator_dynprm", POINTER(c_double)),
-        ("actuator_trnprm", POINTER(c_double)),
         ("actuator_gainprm", POINTER(c_double)),
         ("actuator_biasprm", POINTER(c_double)),
         ("actuator_ctrlrange", POINTER(c_double)),
         ("actuator_forcerange", POINTER(c_double)),
+        ("actuator_gear", POINTER(c_double)),
+        ("actuator_cranklength", POINTER(c_double)),
         ("actuator_invweight0", POINTER(c_double)),
         ("actuator_length0", POINTER(c_double)),
         ("actuator_lengthrange", POINTER(c_double)),
@@ -612,6 +613,7 @@ class MJMODEL(Structure):
         ("sensor_objid", POINTER(c_int)),
         ("sensor_dim", POINTER(c_int)),
         ("sensor_adr", POINTER(c_int)),
+        ("sensor_scale", POINTER(c_double)),
         ("sensor_user", POINTER(c_double)),
         ("numeric_adr", POINTER(c_int)),
         ("numeric_size", POINTER(c_int)),
@@ -5173,17 +5175,6 @@ class MjModelWrapper(object):
         memmove(self._wrapped.contents.wrap_prm, val_ptr, self.nwrap*1 * sizeof(c_double))
     
     @property
-    def actuator_dyntype(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_dyntype, dtype=np.int, count=(self.nu*1)), (self.nu, 1, ))
-        arr.setflags(write=False)
-        return arr
-    
-    @actuator_dyntype.setter
-    def actuator_dyntype(self, value):
-        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
-        memmove(self._wrapped.contents.actuator_dyntype, val_ptr, self.nu*1 * sizeof(c_int))
-    
-    @property
     def actuator_trntype(self):
         arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_trntype, dtype=np.int, count=(self.nu*1)), (self.nu, 1, ))
         arr.setflags(write=False)
@@ -5193,6 +5184,17 @@ class MjModelWrapper(object):
     def actuator_trntype(self, value):
         val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.actuator_trntype, val_ptr, self.nu*1 * sizeof(c_int))
+    
+    @property
+    def actuator_dyntype(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_dyntype, dtype=np.int, count=(self.nu*1)), (self.nu, 1, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @actuator_dyntype.setter
+    def actuator_dyntype(self, value):
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
+        memmove(self._wrapped.contents.actuator_dyntype, val_ptr, self.nu*1 * sizeof(c_int))
     
     @property
     def actuator_gaintype(self):
@@ -5261,17 +5263,6 @@ class MjModelWrapper(object):
         memmove(self._wrapped.contents.actuator_dynprm, val_ptr, self.nu*10 * sizeof(c_double))
     
     @property
-    def actuator_trnprm(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_trnprm, dtype=np.double, count=(self.nu*1)), (self.nu, 1, ))
-        arr.setflags(write=False)
-        return arr
-    
-    @actuator_trnprm.setter
-    def actuator_trnprm(self, value):
-        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
-        memmove(self._wrapped.contents.actuator_trnprm, val_ptr, self.nu*1 * sizeof(c_double))
-    
-    @property
     def actuator_gainprm(self):
         arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_gainprm, dtype=np.double, count=(self.nu*5)), (self.nu, 5, ))
         arr.setflags(write=False)
@@ -5314,6 +5305,28 @@ class MjModelWrapper(object):
     def actuator_forcerange(self, value):
         val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_forcerange, val_ptr, self.nu*2 * sizeof(c_double))
+    
+    @property
+    def actuator_gear(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_gear, dtype=np.double, count=(self.nu*1)), (self.nu, 1, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @actuator_gear.setter
+    def actuator_gear(self, value):
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.actuator_gear, val_ptr, self.nu*1 * sizeof(c_double))
+    
+    @property
+    def actuator_cranklength(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_cranklength, dtype=np.double, count=(self.nu*1)), (self.nu, 1, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @actuator_cranklength.setter
+    def actuator_cranklength(self, value):
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.actuator_cranklength, val_ptr, self.nu*1 * sizeof(c_double))
     
     @property
     def actuator_invweight0(self):
@@ -5402,6 +5415,17 @@ class MjModelWrapper(object):
     def sensor_adr(self, value):
         val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.sensor_adr, val_ptr, self.nsensor*1 * sizeof(c_int))
+    
+    @property
+    def sensor_scale(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.sensor_scale, dtype=np.double, count=(self.nsensor*1)), (self.nsensor, 1, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @sensor_scale.setter
+    def sensor_scale(self, value):
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.sensor_scale, val_ptr, self.nsensor*1 * sizeof(c_double))
     
     @property
     def sensor_user(self):

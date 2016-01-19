@@ -4,13 +4,13 @@ seed = 1
 
 params = {
   mdp: {
-    _name: "box2d.cartpole_swingup_mdp",
+    _name: "box2d.mountain_car_mdp",
   },
   normalize_mdp: true,
   qf: {
     _name: "continuous_nn_q_function",
     hidden_sizes: [32, 32],
-    normalize: true,
+    normalize: false,
     bn: true,
   },
   policy: {
@@ -22,7 +22,7 @@ params = {
     output_b_init: 'lasagne.init.Uniform(-3e-3, 3e-3)',
     bn: true,
   },
-  exp_name: "dpg_box2d_cartpole",
+  exp_name: "dpg_box2d_mountain_car",
   algo: {
     _name: "dpg",
     batch_size: 32,
