@@ -38,27 +38,27 @@
               settotalmass='14'/>
 
     <default>
-        <joint islimited='true' damping='.01' compliance='1e-2' timeconst='1e-2'
+        <joint limited='true' damping='.01'
                armature='.1' stiffness='8'/>
-        <geom compliance='1e-2' timeconst='1e-2' contype='1' conaffinity='0'
+        <geom contype='1' conaffinity='0'
               condim='3' friction='.4 .1 .1' rgba='0.8 0.6 .4 1'/>
-        <act-motor ctrlrange='-1 1' isctrllimited='true'/>
+        <motor ctrlrange='-1 1' ctrllimited='true'/>
     </default>
 
-    <size nstack='300000' ngeom_user='1'/>
+    <size nstack='300000' nuser_geom='1'/>
 
     <option timestep='0.01' gravity='0 0 -9.81'/>
 
-    <body>
+    <worldbody>
         <geom name='ground' type='plane' conaffinity='1' pos='0 0 0'
               size='40 40 40' rgba='0.9 0.9 0.9 1'/>
         <body name='torso' pos='0 0 .7'>
             <joint name='rootx' type='slide' pos='0 0 0' axis='1 0 0'
-                   islimited='false' damping='0' armature='0' stiffness='0'/>
+                   limited='false' damping='0' armature='0' stiffness='0'/>
             <joint name='rootz' type='slide' pos='0 0 0' axis='0 0 1'
-                   islimited='false' damping='0' armature='0' stiffness='0'/>
+                   limited='false' damping='0' armature='0' stiffness='0'/>
             <joint name='rooty' type='hinge' pos='0 0 0' axis='0 1 0'
-                   islimited='false' damping='0' armature='0' stiffness='0'/>
+                   limited='false' damping='0' armature='0' stiffness='0'/>
             <geom name='torso' type='capsule' fromto='-.5 0 0 .5 0 0'
                   size='0.046'/>
             <geom name='head' type='capsule' pos='.6 0 .1' axisangle='0 1 0 .87'
@@ -111,7 +111,7 @@
             </body>
 
         </body>
-    </body>
+    </worldbody>
 
 
     <actuator>
@@ -123,9 +123,5 @@
         <motor name='ffoot' joint='ffoot' gear='30'/>
     </actuator>
 
-
-    <textfield>
-        <text name='cost' data='features.xml'/>
-    </textfield>
 
 </mujoco>

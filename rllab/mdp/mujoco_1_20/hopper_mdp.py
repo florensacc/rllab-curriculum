@@ -20,18 +20,14 @@ class HopperMDP(MujocoMDP, Serializable):
                   help='reward coefficient for forward progress')
     def __init__(
             self,
-            timestep=0.02,
             alive_coeff=0,
             forward_coeff=1):
-        frame_skip = 1
-        ctrl_scaling = 100.0
-        self.timestep = timestep
         self.alive_coeff = alive_coeff
         self.forward_coeff = forward_coeff
         self.state = None
         path = self.model_path('hopper.xml')
-        super(HopperMDP, self).__init__(path, frame_skip, ctrl_scaling)
-        Serializable.__init__(self, timestep, alive_coeff, forward_coeff)
+        super(HopperMDP, self).__init__(path, frame_skip=1, ctrl_scaling=1)
+        Serializable.__init__(self, alive_coeff, forward_coeff)
 
     @overrides
     def get_current_obs(self):
@@ -48,7 +44,7 @@ class HopperMDP(MujocoMDP, Serializable):
         next_obs = self.get_obs(next_state)
         posbefore = state[1]
         posafter = next_state[1]
-        reward = (posafter - posbefore) / self.timestep * self.forward_coeff + \
+        reward = (posafter - posbefore) / self.model.opt.timestep * self.forward_coeff + \
             self.alive_coeff
         notdone = np.isfinite(state).all() and \
             (np.abs(state[3:]) < 100).all() and (state[0] > .7) and \

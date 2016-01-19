@@ -3,6 +3,7 @@ from rllab.core.serializable import Serializable
 import numpy as np
 from rllab.misc.overrides import overrides
 
+
 class AntMDP(MujocoMDP, Serializable):
 
     def __init__(self):
@@ -29,10 +30,6 @@ class AntMDP(MujocoMDP, Serializable):
             self.get_body_com("torso"),
         ]).reshape(-1)
 
-    # def get_current_com(self):
-    #     xipos = self.model.data.xipos[1:]
-    #     body_mass = self.model.body_mass[1:]
-    #     return (xipos * body_mass).sum(axis=0) / body_mass.sum()
 
     def step(self, state, action):
         self.set_state(state)
@@ -56,7 +53,6 @@ class AntMDP(MujocoMDP, Serializable):
             self._impact_costs = []
             self._forward_rewards = []
 
-
         notdone = np.isfinite(next_state).all() and next_state[2] >= 0.2 and next_state[2] <= 1.0
         done = not notdone
         ob = self.get_current_obs()
@@ -65,7 +61,7 @@ class AntMDP(MujocoMDP, Serializable):
     @overrides
     def log_extra(self, logger, paths):
         forward_progress = \
-            [path["states"][-1][-3] - path["states"][0][-3] for path in paths]
+            [path["observations"][-1][-3] - path["observations"][0][-3] for path in paths]
         logger.record_tabular(
             'AverageForwardProgress', np.mean(forward_progress))
         logger.record_tabular(

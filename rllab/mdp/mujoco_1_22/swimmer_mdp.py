@@ -7,7 +7,7 @@ class SwimmerMDP(MujocoMDP, Serializable):
 
     def __init__(self):
         path = self.model_path('swimmer.xml')
-        super(SwimmerMDP, self).__init__(path, frame_skip=50, ctrl_scaling=1)
+        super(SwimmerMDP, self).__init__(path, frame_skip=1, ctrl_scaling=1)
         Serializable.__init__(self)
 
     def get_current_obs(self):
