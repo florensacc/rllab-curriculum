@@ -67,16 +67,23 @@ class lazydict(object):
     def __init__(self, **kwargs):
         self._lazy_dict = kwargs
         self._dict = {}
+        dict
 
     def __getitem__(self, key):
         if key not in self._dict:
             self._dict[key] = self._lazy_dict[key]()
         return self._dict[key]
 
+    def __setitem__(self, i, y):
+        self.set(i, y)
+
     def get(self, key, default=None):
         if key in self._lazy_dict:
             return self[key]
         return default
+
+    def set(self, key, value):
+        self._lazy_dict[key] = value
 
 
 def iscanl(f, l, base=None):
