@@ -12,7 +12,15 @@ class AntMDP(MujocoMDP, Serializable):
         self.horizon = horizon
         super(AntMDP, self).__init__(path, frame_skip, ctrl_scaling)
         Serializable.__init__(self, horizon, timestep)
-        self.init_qpos = np.array([0., 0., 0.55, 1., 0., 0., 0., 0., 1.0, 0., -1.0, 0., -1.0, 0., 1.0])
+        init_qpos = np.zeros_like(self.model.data.qpos)
+        # Taken from John's code
+        init_qpos[0] = 4.0
+        init_qpos[2] = 0.55
+        init_qpos[8] = 1.0
+        init_qpos[10] = -1.0
+        init_qpos[12] = -1.0
+        init_qpos[14] = 1.0
+        self.init_qpos = init_qpos
 
     def get_current_obs(self):
         return np.concatenate([
