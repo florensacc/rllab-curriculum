@@ -24,7 +24,7 @@ class TRPO(NPG):
     def optimize_policy(self, itr, policy, samples_data, opt_info):
         with self.optimization_setup(itr, policy, samples_data, opt_info) as (
                 inputs, flat_descent_step):
-            f_update, f_trpo_info = extract(opt_info, 'f_update', 'f_trpo_info')
+            f_trpo_info = opt_info['f_trpo_info']
             prev_loss, prev_mean_kl, prev_max_kl = f_trpo_info(*inputs)
             prev_param = policy.get_param_values()
             for n_iter, ratio in enumerate(0.5 ** np.arange(self.max_backtracks)):
@@ -39,4 +39,3 @@ class TRPO(NPG):
             logger.record_tabular('MaxKL', max_kl)
 
         return opt_info
-
