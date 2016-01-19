@@ -41,8 +41,18 @@ class WrapperMDP(ControlMDP, Serializable):
 
     @property
     @overrides
+    def observation_dtype(self):
+        return 'float32'
+
+    @property
+    @overrides
     def action_dim(self):
         return self._mdp.ctrl_dim()
+
+    @property
+    @overrides
+    def action_dtype(self):
+        return 'float32'
 
     @overrides
     def reset(self):
