@@ -21,15 +21,25 @@ class SwimmerMDP(MujocoMDP, Serializable):
         qvel = self.model.data.qvel.flatten()
         return np.concatenate([qpos, qvel])
 
+    def reset(self):
+        qpos = self.init_qpos + np.random.uniform(-5, 5, self.init_qpos.shape)
+        qvel = np.random.uniform(-0.1, 0.1, self.init_qvel.shape)
+        self.model.data.qpos = qpos
+        self.model.data.qvel = qvel
+        self.model.data.ctrl = self.init_ctrl
+        self.model.forward()
+        self.current_state = self.get_current_state()
+        return self.get_current_state(), self.get_current_obs()
+
     def step(self, state, action):
-        prev_com = self.get_body_com("world")
+        prev_com = self.get_body_com("front")
         next_state = self.forward_dynamics(state, action, restore=False)
-        after_com = self.get_body_com("world")
+        after_com = self.get_body_com("front")
 
         next_obs = self.get_current_obs()
-        # ctrl_cost = 1e-6 * np.sum(np.square(action))
-        reward = (after_com[0] - prev_com[0]) / self.model.option.timestep
-        # cost = ctrl_cost + run_cost
-        # reward = -cost
+        ctrl_cost = 1e-5 * np.sum(np.square(action))
+        run_cost = -1 * (after_com[0] - prev_com[0]) / self.model.option.timestep
+        cost = ctrl_cost + run_cost
+        reward = -cost
         done = False
         return next_state, next_obs, reward, done
