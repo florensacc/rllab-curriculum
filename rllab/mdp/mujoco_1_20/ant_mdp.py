@@ -30,32 +30,21 @@ class AntMDP(MujocoMDP, Serializable):
             np.sign(self.model.data.qfrc_constraint),
         ]).reshape(-1)
 
-    def get_current_com(self):
-        xipos = self.model.data.xipos[1:]
-        body_mass = self.model.body_mass[1:]
-        return (xipos * body_mass).sum(axis=0) / body_mass.sum()
+    # def get_current_com(self):
+    #     xipos = self.model.data.xipos[1:]
+    #     body_mass = self.model.body_mass[1:]
+    #     return (xipos * body_mass).sum(axis=0) / body_mass.sum()
 
     def step(self, state, action):
         self.set_state(state)
-        #com_before = self.get_current_com()
+        com_before = self.get_body_com("torso")
         next_state = self.forward_dynamics(state, action, restore=False)
+        com_after = self.get_body_com("torso")
         #com_after = self.get_current_com()
-        #reward = (com_after[0] - com_before[0]) / self.timestep + 1.0
-        posbefore = state[0]
-        posafter = next_state[0]
-        reward = (posafter - posbefore) / self.timestep# + 1.0# - 1e-4*np.sum(np.square(action))
+        reward = (com_after[0] - com_before[0]) / self.timestep# + 1.0
+        #posbefore = state[0] #posafter = next_state[0]
+        #reward = (posafter - posbefore) / self.timestep# + 1.0# - 1e-4*np.sum(np.square(action))
         notdone = np.isfinite(next_state).all() and next_state[2] >= 0.2 and next_state[2] <= 1.0
         done = not notdone
         ob = self.get_current_obs()
         return next_state, ob, reward, done
-
-if __name__ == "__main__":
-    mdp = AntMDP()
-    state = mdp.reset()[0]
-    mdp.start_viewer()
-    mdp.plot()
-    while True:
-        state = mdp.step(state, np.zeros(mdp.action_dim))[0]
-        mdp.viewer.loop_once()
-
-    print mdp.calc_current_com()
