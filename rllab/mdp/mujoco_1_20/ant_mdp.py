@@ -14,7 +14,7 @@ class AntMDP(MujocoMDP, Serializable):
         Serializable.__init__(self, horizon, timestep)
         init_qpos = np.zeros_like(self.model.data.qpos)
         # Taken from John's code
-        init_qpos[0] = 4.0
+        init_qpos[0] = 0.0
         init_qpos[2] = 0.55
         init_qpos[8] = 1.0
         init_qpos[10] = -1.0
@@ -40,10 +40,10 @@ class AntMDP(MujocoMDP, Serializable):
         com_before = self.get_body_com("torso")
         next_state = self.forward_dynamics(state, action, restore=False)
         com_after = self.get_body_com("torso")
-        #com_after = self.get_current_com()
-        reward = (com_after[0] - com_before[0]) / self.timestep# + 1.0
-        #posbefore = state[0] #posafter = next_state[0]
-        #reward = (posafter - posbefore) / self.timestep# + 1.0# - 1e-4*np.sum(np.square(action))
+        forward_reward = com_after[0] - com_before[0]  # ) / self.timestep
+        ctrl_cost = 1e-6 * np.sum(np.square(action))
+        impact_cost = 1e-3 * np.sum(np.square(self.model.data.qfrc_impulse))
+        reward = forward_reward - ctrl_cost - impact_cost + 0.05
         notdone = np.isfinite(next_state).all() and next_state[2] >= 0.2 and next_state[2] <= 1.0
         done = not notdone
         ob = self.get_current_obs()
