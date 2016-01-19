@@ -14,16 +14,16 @@
 		<!--  ================= SWIMMER ================= /-->
 
     <body name="front" pos="0 0 0">
-      <geom type="capsule" fromto="0 0 0 -1 0 0" size="0.1" />
+      <geom type="capsule" fromto="0 0 0 1 0 0" size="0.1" />
       <joint pos="0 0 0" type="slide" name="slider1" axis="1 0 0"/>
       <joint pos="0 0 0" type="slide" name="slider2" axis="0 1 0"/>
       <joint name="rot" type="hinge" pos="0 0 0" axis="0 0 1"/>
 
-      <body name="mid" pos="-1 0 0">
-        <geom type="capsule" fromto="0 0 0 -1 0 0" size="0.1" />
+      <body name="mid" pos="1 0 0">
+        <geom type="capsule" fromto="0 0 0 1 0 0" size="0.1" />
         <joint name="rot2" type="hinge" pos="0 0 0" axis="0 0 1" range="-100 100" limited="true" />
-        <body name="back" pos="-1 0 0">
-          <geom type="capsule" fromto="0 0 0 -1 0 0" size="0.1" />
+        <body name="back" pos="1 0 0">
+          <geom type="capsule" fromto="0 0 0 1 0 0" size="0.1" />
           <joint name="rot3" type="hinge" pos="0 0 0" axis="0 0 1" range="-100 100" limited="true"/>
         </body>
       </body>

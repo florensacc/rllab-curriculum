@@ -59,6 +59,10 @@ class NormalizedMDP(MDP, Serializable):
     def plot(self, *args, **kwargs):
         return self._mdp.plot(*args, **kwargs)
 
+    @overrides
+    def log_extra(self, logger, paths):
+        self._mdp.log_extra(logger, paths)
+
 
 class NormalizedControlMDP(NormalizedMDP, ControlMDP, Serializable):
 
