@@ -5,7 +5,7 @@ import sys
 import cPickle as pickle
 import random
 
-from sympy.printing.theanocode import theano
+# from sympy.printing.theanocode import theano
 
 from rllab.misc.console import colorize
 from collections import OrderedDict

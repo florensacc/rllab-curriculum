@@ -254,9 +254,4 @@ class PPO(BatchPolopt):
             policy=policy,
             baseline=baseline,
             mdp=mdp,
-            observations=samples_data["observations"],
-            advantages=samples_data["advantages"],
-            actions=samples_data["actions"],
-            penalty=opt_info["penalty"],
-            pdists=samples_data["pdists"],
         )

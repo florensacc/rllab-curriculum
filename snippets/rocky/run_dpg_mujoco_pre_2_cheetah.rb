@@ -8,18 +8,18 @@ require_relative './utils'
 # qf_weight_decays = [0, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
 # soft_target_taus = [1e-4, 1e-3, 1e-2, 1e-1, 1]
 
-qf_learning_rates = [1e-3, 1e-4, 1e-5, 1e-6]
-policy_learning_rates = [1e-4, 5e-5, 1e-5, 5e-6, 1e-6]
-seeds = [1, 2, 3]
+qf_learning_rates = [1e-3]#, 1e-4, 1e-5, 1e-6]
+policy_learning_rates = [1e-4]#, 5e-5, 1e-5, 5e-6, 1e-6]
+seeds = [1]#, 2, 3]
 
 batch_sizes = [64]
 
-hidden_sizess = [[32, 32], [400, 300]]#:w
+hidden_sizess = [[400,300]]#[32, 32], [400, 300]]#:w
 # [400, 300]]
-qf_weight_decays = [0, 1e-2, 1e-3, 1e-4]#1e-2]#1e-2]
-soft_target_taus = [1e-2, 1e-3, 1e-4, 1e-5]
-qf_normalizes = [true, false]
-bns = [true, false]
+qf_weight_decays = [1e-2]#0, 1e-2, 1e-3, 1e-4]#1e-2]#1e-2]
+soft_target_taus = [1e-3]#1e-2, 1e-3, 1e-4, 1e-5]
+qf_normalizes = [false]#true, false]
+bns = [true]#, false]
 
 
 shuffle_params(
@@ -68,6 +68,6 @@ shuffle_params(
     snapshot_mode: "last",
     seed: seed,
   }
-  # system(to_docker_command(params))
-  create_task_script(to_docker_command(params), launch: true, prefix: "dpg_cheetah")
+  system(to_command(params))
+  # create_task_script(to_docker_command(params), launch: true, prefix: "dpg_cheetah")
 end

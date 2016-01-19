@@ -7,9 +7,10 @@ params = {
   normalize_mdp: true,
   policy: {
     _name: "mean_std_nn_policy",
+    hidden_sizes: [64, 64, 64],
   },
   baseline: {
-    _name: "zero_baseline",
+    _name: "linear_feature_baseline",
   },
   algo: {
     _name: "ppo",
@@ -19,7 +20,7 @@ params = {
     batch_size: 50000,
     max_path_length: 500,
     step_size: 0.01,
-    n_itr: 50,
+    n_itr: 500,
   },
   n_parallel: 4,
   snapshot_mode: "last",
