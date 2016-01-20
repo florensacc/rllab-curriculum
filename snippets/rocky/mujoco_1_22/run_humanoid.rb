@@ -7,10 +7,13 @@ params = {
   normalize_mdp: true,
   policy: {
     _name: "mean_std_nn_policy",
-    hidden_sizes: [32, 32],
+    hidden_sizes: [300, 300],
   },
   baseline: {
-    _name: "linear_feature_baseline",
+    _name: "nn_baseline",
+    #_name: "linear_feature_baseline",
+    hidden_sizes: [],#300, 300],
+    #max_opt_itr: 500,
   },
   exp_name: "humanoid",
   algo: {
