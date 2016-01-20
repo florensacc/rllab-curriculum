@@ -25,8 +25,8 @@ class SwimmerMDP(MujocoMDP, Serializable):
 
         next_obs = self.get_current_obs()
         ctrl_cost = 0#1e-5 * np.sum(np.square(action / 50))
-        run_cost = -1 * (after_com[0] - before_com[0])#self.model.data.qvel[0]
-        # run_cost = -1 * self.model.data.qvel[0]
+        #run_cost = -1 * (after_com[0] - before_com[0])#self.model.data.qvel[0]
+        run_cost = -1 * self.model.data.qvel[0]
         cost = ctrl_cost + run_cost
         reward = -cost
         done = False
