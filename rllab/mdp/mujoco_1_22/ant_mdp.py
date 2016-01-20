@@ -47,8 +47,8 @@ class AntMDP(MujocoMDP, Serializable):
         next_state = self.forward_dynamics(state, action, restore=False)
         com_after = self.get_body_com("torso")
         forward_reward = (com_after[0] - com_before[0]) / self.model.opt.timestep / self.frame_skip
-        ctrl_cost = self._ctrl_cost_coeff * np.sum(np.square(action))
-        impact_cost = self._impact_cost_coeff * np.sum(np.square(np.clip(self.model.data.qfrc_constraint, -10, 10)))
+        ctrl_cost = self._ctrl_cost_coeff * min(np.sum(np.square(action)), 10)
+        impact_cost = self._impact_cost_coeff * min(np.sum(np.square(self.model.data.qfrc_constraint)), 10)
         survive_reward = self._survive_reward
         reward = forward_reward - ctrl_cost - impact_cost + survive_reward
 
