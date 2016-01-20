@@ -32,13 +32,6 @@
                         <inertial pos="0 0 -0.181" mass="3.10016" diaginertia="0.045501 0.045501 0.00372174" />
                         <joint name="right_knee" type="hinge" pos="0 0 0.05" axis="0 -1 0" range="-1.3 -0.0349066" mindist="0.01" />
                         <geom name="right_shin1" type="capsule" size="0.049 0.181" pos="0 0 -0.181" user="0" />
-                        <body name="right_foot" pos="0 0 -0.45">
-                            <inertial pos="0.035 -0.01 0" quat="0 0.707107 0 0.707107" mass="1.08992" diaginertia="0.00577723 0.00529682 0.000877682" />
-                            <joint name="right_ankle_x" type="hinge" pos="0 0 0.06" axis="0.894427 0 0.447214" stiffness="1" range="-0.3 0.3" mindist="0.01" damping="0.3" />
-                            <joint name="right_ankle_y" type="hinge" pos="0 0 0.06" axis="0 1 0" stiffness="4" range="-0.4 0.8" mindist="0.01" damping="0.3" />
-                            <geom name="right_foot_cap1" type="capsule" size="0.027 0.105475" pos="0.035 -0.03 0" quat="0.707107 -0.0670402 -0.703922 0" user="0" />
-                            <geom name="right_foot_cap2" type="capsule" size="0.027 0.105475" pos="0.035 0.01 0" quat="0.707107 0.0670402 -0.703922 0" user="0" />
-                        </body>
                     </body>
                 </body>
                 <body name="left_thigh" pos="0 0.1 -0.04">
@@ -51,13 +44,6 @@
                         <inertial pos="0 0 -0.181" mass="3.10016" diaginertia="0.045501 0.045501 0.00372174" />
                         <joint name="left_knee" type="hinge" pos="0 0 0.05" axis="0 -1 0" range="-1.3 -0.0349066" mindist="0.01" />
                         <geom name="left_shin1" type="capsule" size="0.049 0.181" pos="0 0 -0.181" user="0" />
-                        <body name="left_foot" pos="0 0 -0.45">
-                            <inertial pos="0.035 0.01 0" quat="0 0.707107 0 0.707107" mass="1.08992" diaginertia="0.00577723 0.00529682 0.000877682" />
-                            <joint name="left_ankle_x" type="hinge" pos="0 0 0.06" axis="0.894427 0 0.447214" stiffness="1" range="-0.3 0.3" mindist="0.01" damping="0.3" />
-                            <joint name="left_ankle_y" type="hinge" pos="0 0 0.06" axis="0 1 0" stiffness="4" range="-0.4 0.8" mindist="0.01" damping="0.3" />
-                            <geom name="left_foot_cap1" type="capsule" size="0.027 0.105475" pos="0.035 0.03 0" quat="0.707107 0.0670402 -0.703922 0" user="0" />
-                            <geom name="left_foot_cap2" type="capsule" size="0.027 0.105475" pos="0.035 -0.01 0" quat="0.707107 -0.0670402 -0.703922 0" user="0" />
-                        </body>
                     </body>
                 </body>
             </body>
@@ -93,14 +79,10 @@
         <motor joint='right_hip2'       ctrlrange="-100.0 100.0" isctrllimited="true"/>
         <motor joint='right_hip3'       ctrlrange="-100.0 100.0" isctrllimited="true"/>
         <motor joint='right_knee'       ctrlrange="-100.0 100.0" isctrllimited="true"/>
-        <motor joint='right_ankle_x'    ctrlrange="-20 20" isctrllimited="true"/>
-        <motor joint='right_ankle_y'    ctrlrange="-20 20" isctrllimited="true"/>
         <motor joint='left_hip1'        ctrlrange="-100.0 100.0" isctrllimited="true"/>
         <motor joint='left_hip2'        ctrlrange="-100.0 100.0" isctrllimited="true"/>
         <motor joint='left_hip3'        ctrlrange="-100.0 100.0" isctrllimited="true"/>
         <motor joint='left_knee'        ctrlrange="-100.0 100.0" isctrllimited="true"/>
-        <motor joint='left_ankle_x'     ctrlrange="-20 20" isctrllimited="true"/>
-        <motor joint='left_ankle_y'     ctrlrange="-20 20" isctrllimited="true"/>
         <motor joint='right_shoulder1'  ctrlrange="-20 20" isctrllimited="true"/>
         <motor joint='right_shoulder2'  ctrlrange="-20 20" isctrllimited="true"/>
         <motor joint='right_elbow'      ctrlrange="-20 20" isctrllimited="true"/>

@@ -60,7 +60,7 @@ class PPO(BatchPolopt):
             max_penalty_itr=10,
             binary_search_penalty=True,
             max_penalty_bs_itr=10,
-            bs_kl_tolerance=1e-4,
+            bs_kl_tolerance=1e-3,
             adapt_penalty=True,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
             **kwargs):

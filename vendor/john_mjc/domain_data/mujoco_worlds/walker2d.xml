@@ -4,6 +4,8 @@
   <default>
    <joint islimited='true' damping='.1' armature='0.01'  compliance='0.01' timeconst='0.01'/>
    <geom contype='1' conaffinity='0' condim='3' friction='.7 .1 .1' rgba='0.8 0.6 .4 1' density='1000' mindist='0.04' compliance='0.01'  timeconst='0.01'/>
+
+
  </default>
 
  <body>

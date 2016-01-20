@@ -19,8 +19,6 @@ class WrapperMDP(ControlMDP, Serializable):
         state = np.array(state).astype(floatX).reshape((1, -1))
         lb, ub = self.action_bounds
         action = np.array(action).astype(floatX).reshape((1, -1))
-        # scale action
-        action = action * (ub - lb) + lb
         result = self._mdp.call({'x': state, 'u': action})
         next_state = result["x"].reshape(-1)
         next_obs = result["o"].reshape(-1)
