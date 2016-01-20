@@ -18,14 +18,21 @@ params = {
   },
   exp_name: "ppo_mc_seed_#{seed}",
   algo: {
-    _name: "ppo",
-    binary_search_penalty: false,
+    # _name: "ppo",
+    # step_size: 0.1,
+    # binary_search_penalty: false,
+
+    _name: "trpo",
+    step_size: 0.2,
+    backtrack_ratio: 0.8,
+    max_backtracks: 10,
+    cg_iters: 10,
+
     whole_paths: true,
-    batch_size: 10000,
+    batch_size: 100,
     max_path_length: 100,
     n_itr: 500,
     plot: true,
-    step_size: 0.1,
 
   },
   n_parallel: 1,

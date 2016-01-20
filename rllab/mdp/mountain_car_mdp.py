@@ -86,8 +86,9 @@ class MountainCarND(object):
         self.takeAction(action)
 
         if self.isAtGoal():
-            reward = 0.0
+            reward = 1.
             done = True
+            print "!!!!done!!!!"
 
         if self.reward_noise > 0:
             reward += np.random.normal(scale=self.reward_noise)
@@ -113,9 +114,9 @@ class MountainCarMDP(MDP):
                   help='Coefficient for the penalty for being far away from the goal')
     def __init__(
             self,
-            step_penalty_coeff=1,
-            distance_coeff=0):
-        self._mc = MountainCar(random_start=True)
+            step_penalty_coeff=0,
+            distance_coeff=0.01):
+        self._mc = MountainCar(random_start=False)
         self.step_penalty_coeff = step_penalty_coeff
         self.distance_coeff = distance_coeff
         self.reset()
@@ -151,3 +152,9 @@ class MountainCarMDP(MDP):
                 action,
                 step_penalty_coeff=self.step_penalty_coeff,
                 distance_coeff=self.distance_coeff)
+
+    def set_state(self, state):
+        self._mc.state = np.copy(state).reshape(1, -1)
+
+    def get_current_obs(self):
+        return np.copy(self._mc.state).reshape(-1)

@@ -10,7 +10,7 @@ from rllab.misc import logger, autoargs
 from rllab.misc.krylov import cg
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract, compile_function, flatten_hessian, new_tensor, new_tensor_like, \
-    flatten_tensor_variables, lazydict
+    flatten_tensor_variables, lazydict, cached_function
 from rllab.algo.batch_polopt import BatchPolopt
 from rllab.algo.first_order_method import FirstOrderMethod
 

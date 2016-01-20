@@ -12,20 +12,28 @@ from rllab.misc.overrides import overrides
 class MountainCarMDP(Box2DMDP, Serializable):
 
     @autoargs.inherit(Box2DMDP.__init__)
-    def __init__(self, **kwargs):
+    @autoargs.arg("height_bonus_coeff", type=float,
+                  help="Height bonus added to each step's reward")
+    @autoargs.arg("goal_cart_pos", type=float,
+                  help="Goal horizontal position")
+    def __init__(self,
+                 height_bonus=1.,
+                 goal_cart_pos=0.6,
+                 **kwargs):
         super(MountainCarMDP, self).__init__(
             self.model_path("mountain_car.xml"),
             **kwargs
         )
-        self.goal_cart_pos = 0.6
         self.max_cart_pos = 2
+        self.goal_cart_pos = goal_cart_pos
+        self.height_bonus = height_bonus
         self.cart = find_body(self.world, "cart")
         Serializable.__init__(self)
 
     @overrides
     def get_current_reward(
             self, state, raw_obs, action, next_state, next_raw_obs):
-        return -1 + self.cart.position[1]
+        return -1 + self.height_bonus * self.cart.position[1]
 
     @overrides
     def is_current_done(self):
