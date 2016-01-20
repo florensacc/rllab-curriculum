@@ -1,10 +1,10 @@
 <mujoco model="ant">
 	<compiler inertiafromgeom="true" angle="degree" coordinate="local"/>
-    <option timestep="0.01" integrator="RK4" gravity="0 0 -10"/>
-    <default>
-        <joint limited="true" armature="0.2" damping="0.1" />
-        <geom condim="3" conaffinity="0" margin="0.001" friction="1 0.5 0.5" rgba="0.8 0.6 0.4 1" density="100" />
-    </default>
+  <option timestep="0.01" integrator="RK4" gravity="0 0 -10"/>
+  <default>
+      <joint limited="true" armature="0.2" damping="0.1" />
+      <geom condim="3" conaffinity="0" margin="0.001" friction="1 0.5 0.5" rgba="0.8 0.6 0.4 1" density="100" />
+  </default>
 	<!-- <size nlmax="50" ncmax="50" njmax="200" nctotmax="50" ngeom_user="1" nstack="82825"/>
 	<option timestep="0.01" remotecontact="false" expdist="50.0" density="10.0"/>
 
@@ -13,8 +13,16 @@
 		<geom contype='1' conaffinity='0' condim='3' friction='.7 .1 .1' rgba='0.8 0.6 .4 1' mindist='0.04' compliance='0.01' timeconst='0.01' density='10'/>
 	</default> -->
 
+
+	<asset>
+		<texture type="skybox" builtin="gradient" rgb1="0.35 0.64 0.85" rgb2="0.25 0.64 0.85" width="100" height="100"/>
+		<texture name="groundplane" type="2d" builtin="gradient" random=".08" rgb1="0.25 0.64 0.85" rgb2="0.2 0.6 0.85" width="200" height="10" mark="random" markrgb=".8 .8 .8"/>
+		<material name="MatBody" specular="3" shininess=".5" reflectance="1" rgba=".3 .4 .35 1"/>
+		<material name="MatGnd" texture="groundplane" texscale="1 .6" specular="1" shininess="1" reflectance="0.00001"/>
+	</asset>
+
 	<worldbody>
-		<geom name='floor' pos='0 0 0' size='40 40 40' type='plane' conaffinity='1'  rgba='0.8 0.9 0.8 1' condim='3'/>
+		<geom name='floor' material="MatGnd" pos='0 0 0' size='40 40 40' type='plane' conaffinity='1'  rgba='0.8 0.9 0.8 1' condim='3'/>
 
 		<!-- <body name='ball' pos='0.0 0.0 0.0'>
     		<joint name='ballx' type='slide' axis='1 0 0' pos='0 0 0' islimited='false' damping='0.1' armature='0' stiffness='0'/>

@@ -10,6 +10,7 @@ import numpy as np
 from collections import OrderedDict
 from rllab.qf.base import ContinuousQFunction
 from rllab.core.lasagne_powered import LasagnePowered
+# from rllab.core.lasagne_layers import batch_norm
 from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
 from rllab.misc.ext import new_tensor
@@ -38,6 +39,8 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
                   help='Whether to normalize the output.')
     @autoargs.arg('normalize_alpha', type=float,
                   help='Coefficient for the running mean and std.')
+    @autoargs.arg('bn', type=bool,
+                  help='whether to apply batch normalization to hidden layers')
     # pylint: disable=dangerous-default-value
     def __init__(
             self,
@@ -51,7 +54,8 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             output_W_init='lasagne.init.Uniform(-3e-3, 3e-3)',
             output_b_init='lasagne.init.Uniform(-3e-3, 3e-3)',
             normalize=True,
-            normalize_alpha=0.1):
+            normalize_alpha=0.1,
+            bn=False):
         # pylint: enable=dangerous-default-value
         obs_var = new_tensor(
             'obs',
@@ -85,6 +89,8 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
         assert len(hidden_b_init) == len(hidden_sizes)
 
         l_hidden = l_obs
+        if bn:
+            l_hidden = L.batch_norm(l_hidden)
 
         for idx, size, nl, W_init, b_init in zip(
                 itertools.count(), hidden_sizes, hidden_nl,
@@ -99,9 +105,14 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
                 nonlinearity=eval(nl),
                 name="h%d" % idx
             )
+            if bn:
+                l_hidden = L.batch_norm(l_hidden)
 
         if action_merge_layer == n_layers:
-            l_hidden = L.ConcatLayer([l_hidden, l_action])
+            if bn:
+                l_hidden = L.ConcatLayer([l_hidden, L.batch_norm(l_action)])
+            else:
+                l_hidden = L.ConcatLayer([l_hidden, l_action])
 
         l_output = L.DenseLayer(
             l_hidden,
@@ -120,8 +131,10 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
         self._normalize_alpha = normalize_alpha
 
         if self._normalize:
-            self._qval_mean = theano.shared(np.zeros(1), broadcastable=(True,))
-            self._qval_std = theano.shared(np.ones(1), broadcastable=(True,))
+            self._qval_mean = theano.shared(
+                np.zeros(1), name="qval_mean", broadcastable=(True,))
+            self._qval_std = theano.shared(
+                np.ones(1), name="qval_std", broadcastable=(True,))
             assert self._output_nl is None
 
         ContinuousQFunction.__init__(self, mdp)
@@ -131,12 +144,13 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             hidden_W_init=hidden_W_init, hidden_b_init=hidden_b_init,
             action_merge_layer=action_merge_layer, output_nl=output_nl,
             output_W_init=output_W_init, output_b_init=output_b_init,
-            normalize=normalize, normalize_alpha=normalize_alpha)
+            normalize=normalize, normalize_alpha=normalize_alpha, bn=bn)
 
-    def get_qval_sym(self, obs_var, action_var, train=False):
+    def get_qval_sym(self, obs_var, action_var, **kwargs):
         qvals = L.get_output(
             self._output_layer,
-            {self._obs_layer: obs_var, self._action_layer: action_var}
+            {self._obs_layer: obs_var, self._action_layer: action_var},
+            **kwargs
         )
         if self._normalize:
             qvals = qvals * self._qval_std + self._qval_mean
@@ -164,19 +178,10 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             return (qvals - self._qval_mean) / self._qval_std
         return qvals
 
-    @property
-    def params(self):
-        return LasagnePowered.params.fget(self) + \
+    @overrides
+    def get_params_internal(self, **tags):
+        if not self._normalize or tags.get("trainable", False) or \
+                tags.get("regularizable", False):
+            return LasagnePowered.get_params_internal(self, **tags)
+        return LasagnePowered.get_params_internal(self, **tags) + \
             [self._qval_mean, self._qval_std]
-
-    def set_param_values(self, flattened_params):
-        LasagnePowered.set_param_values(self, flattened_params[:-2])
-        self._qval_mean.set_value(np.array([flattened_params[-2]]))
-        self._qval_std.set_value(np.array([flattened_params[-1]]))
-
-    def get_param_values(self):
-        return np.concatenate([
-            LasagnePowered.get_param_values(self),
-            self._qval_mean.get_value(),
-            self._qval_std.get_value(),
-        ])

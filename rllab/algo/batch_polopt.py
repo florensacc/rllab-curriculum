@@ -84,8 +84,6 @@ class BatchPolopt(RLAlgorithm):
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
             samples_data = self.obtain_samples(itr, mdp, policy, baseline)
-            opt_info = self.update_baseline(itr, baseline, samples_data,
-                                            opt_info)
             opt_info = self.optimize_policy(
                 itr, policy, samples_data, opt_info)
             logger.log("saving snapshot...")
@@ -139,6 +137,8 @@ class BatchPolopt(RLAlgorithm):
 
         for path in paths:
             path["returns"] = discount_cumsum(path["rewards"], self.discount)
+
+        baseline.fit(paths)
 
         # however, these statistics should still be computed for all paths
         for path in paths:
@@ -198,14 +198,9 @@ class BatchPolopt(RLAlgorithm):
             pdists=pdists,
             paths=paths,
             states=states,
-            baseline_params=baseline.get_param_values(),
         )
 
         return samples_data
-
-    def update_baseline(self, itr, baseline, samples_data, opt_info):
-        baseline.fit(samples_data["paths"])
-        return opt_info
 
     def optimize_policy(self, itr, policy, samples_data, opt_info):
         raise NotImplementedError

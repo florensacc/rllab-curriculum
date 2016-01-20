@@ -92,7 +92,7 @@ class MujocoMDP(ControlMDP):
             self.model.data.ctrl = action * self.ctrl_scaling
             for _ in range(self.frame_skip):
                 self.model.step()
-            #self.model.forward()
+            self.model.forward()
             return self.get_current_state()
 
     def get_viewer(self):
@@ -143,3 +143,15 @@ class MujocoMDP(ControlMDP):
                 self.model.data.ctrl = prev_ctrl
                 self.model.data.act = prev_act
                 self.model.forward()
+
+    def get_body_xmat(self, body_name):
+        idx = self.model.body_names.index(body_name)
+        return self.model.data.xmat[idx].reshape((3, 3))
+
+    def get_body_com(self, body_name):
+        idx = self.model.body_names.index(body_name)
+        return self.model.data.com_subtree[idx]
+
+    def print_stats(self):
+        super(MujocoMDP, self).print_stats()
+        print "qpos dim:\t%d" % len(self.model.data.qpos)

@@ -3,9 +3,9 @@
 	<size njmax ="1000" nuserdata="600000"/>
 	<default>
 		<joint islimited="true" makeactuator="false"  damping="20" maxvel="12"/>
-		<geom contype="0" conaffinity="0" friction="0.7 0.1 0.1" rgba="0.7 0.7 0 1" />
+		<geom contype="0" conaffinity="0" friction="0.7 0.1 0.1" rgba="0.7 0.7 0 1" compliance="0.01" timeconst="0.01"/>
 		<tendon makeactuator="false" />
-		<act-motor ctrlrange="-.95 .95"/>
+		<act-motor ctrlrange="-.95 .95" isctrllimited="true"/>
 	</default>
 	<option timestep="0.01"
 			/>
@@ -489,7 +489,7 @@
 				<geom type="cylinder" pos="0 0 0" size="0.019841 0.040421" /-->
 				<body name="l_lglut" pos="0 0 0" >
 					<inertial pos="0.013334 0.017048 -0.031205" quat="0.999977 0.006717 -0.000034 -0.000401" mass="0.803" diaginertia="0.023308 0.023308 0.023308" />
-					<joint name="l_leg_mhx" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.47 0.495" mindist="0.01" />
+					<joint name="l_leg_mhx" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.2 0.1" mindist="0.01" />
 					<!--geom type="cylinder" pos="0.049968 0.022488 -0.050117" quat="0.707107 0.707107 0 0" size="0.020097 0.030153" />
 					<geom type="cylinder" pos="0 0 0" quat="0.707107 0 0.707107 0" size="0.02 0.06" /-->
 					<body name="l_uleg" pos="0.05 0 -0.05" >
@@ -506,13 +506,14 @@
 							<site name="lkneecap" pos="0 0 0.1" />
 							<body name="l_talus" pos="0 0 -0.422" >
 								<inertial pos="0 0 0" quat="0 0.707107 0 0.707107" mass="0.867" diaginertia="0.004007 0.003504 0.001" />
-								<joint name="l_leg_uay" type="hinge" pos="0 0 0" axis="0 1 0" range="-0.698 0.698" mindist="0.01" />
+								<joint name="l_leg_uay" type="hinge" pos="0 0 0" axis="0 1 0" range="-0.4 0.4" mindist="0.01" />
 								<!--geom type="cylinder" pos="0 0 0" quat="0.707107 0 0.707107 0" size="0.010181 0.014771" />
 								<geom type="cylinder" pos="0 0 0" quat="0.707107 0.707107 0 0" size="0.010348 0.005030" /-->
 								<body name="l_foot" pos="0 0 0"  user ="-6007">
 									<inertial pos="0.027 0 -0.067" quat="0 0.707107 0 0.707107" mass="0.867" diaginertia="0.004007 0.003504 0.002" />
 									<joint name="l_leg_lax" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.436 0.436" mindist="0.01" />
-									<geom type="box" conaffinity="1" pos="0.048 0 -0.056119" size="0.13 0.062443 0.025" />
+									<!-- <geom type="box" conaffinity="1" pos="0.048 0 -0.056119" size="0.13 0.062443 0.025" /> -->
+									<geom type="sphere" conaffinity="1" pos="0.048 0 -0.056119" size="0.075" />
 									<site name="r_foot_target" pos="0.4 -0.08 -0.05"/>
 									<site name="l_foot_toes" pos="0.18 0 -0.09"/>
 								</body>
@@ -528,7 +529,7 @@
 				<geom type="cylinder" pos="0 0 0" size="0.019841 0.040421" /-->
 				<body name="r_lglut" pos="0 0 0" >
 					<inertial pos="0.013334 -0.017048 -0.031205" quat="0.999977 -0.006717 -0.000034 0.000401" mass="0.803" diaginertia="0.023308 0.023308 0.023308" />
-					<joint name="r_leg_mhx" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.495 0.47" mindist="0.01" />
+					<joint name="r_leg_mhx" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.2 0.1" mindist="0.01" />
 					<!--geom type="cylinder" pos="0.049968 -0.022488 -0.050117" quat="0.707107 0.707107 0 0" size="0.020097 0.030153" />
 					<geom type="cylinder" pos="0 0 0" quat="0.707107 0 0.707107 0" size="0.02 0.06" /-->
 					<body name="r_uleg" pos="0.05 0 -0.05" >
@@ -545,13 +546,14 @@
 							<site name="rkneecap" pos="0 0 0.1" />
 							<body name="r_talus" pos="0 0 -0.422" >
 								<inertial pos="0 0 0" quat="0 0.707107 0 0.707107" mass="0.867" diaginertia="0.004007 0.003504 0.001" />
-								<joint name="r_leg_uay" type="hinge" pos="0 0 0" axis="0 1 0" range="-0.698 0.698" mindist="0.01" />
+								<joint name="r_leg_uay" type="hinge" pos="0 0 0" axis="0 1 0" range="-0.4 0.4" mindist="0.01" />
 								<!--geom type="cylinder" pos="0 0 0" quat="0.707107 0 0.707107 0" size="0.010181 0.014771" />
 								<geom type="cylinder" pos="0 0 0" quat="0.707107 0.707107 0 0" size="0.010348 0.005030" /-->
 								<body name="r_foot" pos="0 0 0"  user ="-6008">
 									<inertial pos="0.027 0 -0.067" quat="0 0.707107 0 0.707107" mass="0.867" diaginertia="0.004007 0.003504 0.002" />
 									<joint name="r_leg_lax" type="hinge" pos="0 0 0" axis="1 0 0" range="-0.436 0.436" mindist="0.01" />
-									<geom type="box" conaffinity="1" pos="0.048 0 -0.056119" size="0.13 0.062443 0.025" />
+									<!-- <geom type="box" conaffinity="1" pos="0.048 0 -0.056119" size="0.13 0.062443 0.025" /> -->
+									<geom type="sphere" conaffinity="1" pos="0.048 0 -0.056119" size="0.075" />
 									<site name="r_foot_toes" pos="0.18 0 -0.09"/>
 									<site name="l_foot_target" pos="0.4 0.08 -0.05"/>
 								</body>

@@ -16,7 +16,7 @@ params = {
     _name: "ppo",
     whole_paths: true,
     batch_size: 50000,
-    max_path_length: 100,
+    max_path_length: 500,
     n_itr: 500,
     binary_search_penalty: true,
     bs_kl_tolerance: 0.001,

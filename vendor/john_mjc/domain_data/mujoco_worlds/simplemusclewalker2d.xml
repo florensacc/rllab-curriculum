@@ -3,7 +3,7 @@
   <option timestep="0.005" remotecontact="true" expdist="100.0"/>
   <default>
    <joint islimited='true' damping='.1' armature='0.01'  compliance='0.01' timeconst='0.01'/>
-   <geom contype='1' conaffinity='0' condim='3' friction='.7 .1 .1' rgba='0.8 0.6 .4 1' density='200' mindist='0.04' compliance='0.01'  timeconst='0.01'/>
+   <geom contype='1' conaffinity='0' condim='3' friction='.7 .1 .1' rgba='0.8 0.6 .4 1' density='200' mindist='0.1' compliance='0.01'  timeconst='0.01'/>
  </default>
 
  <body>
@@ -115,14 +115,14 @@
   <!-- <motor joint="leg_left_joint" ctrlrange="-100.0 100.0" isctrllimited="true"/> -->
   <!-- <motor joint="foot_left_joint" ctrlrange="-100.0 100.0" isctrllimited="true"/> -->
   <!-- <motor joint="finger2_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/> -->
-  <muscle dyntype="muscle" trntype="tendon" tendon="M1" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-10 10" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
-  <muscle dyntype="muscle" trntype="tendon" tendon="M2" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-10 10" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
-  <muscle dyntype="muscle" trntype="tendon" tendon="M3" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-10 10" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
-  <muscle dyntype="muscle" trntype="tendon" tendon="M4" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-10 10" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
-  <muscle dyntype="muscle" trntype="tendon" tendon="left_M1" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-10 10" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
-  <muscle dyntype="muscle" trntype="tendon" tendon="left_M2" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-10 10" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
-  <muscle dyntype="muscle" trntype="tendon" tendon="left_M3" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-10 10" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
-  <muscle dyntype="muscle" trntype="tendon" tendon="left_M4" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-10 10" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
+  <muscle dyntype="muscle" trntype="tendon" tendon="M1" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-20 20" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
+  <muscle dyntype="muscle" trntype="tendon" tendon="M2" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-20 20" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
+  <muscle dyntype="muscle" trntype="tendon" tendon="M3" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-20 20" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
+  <muscle dyntype="muscle" trntype="tendon" tendon="M4" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-20 20" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
+  <muscle dyntype="muscle" trntype="tendon" tendon="left_M1" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-20 20" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
+  <muscle dyntype="muscle" trntype="tendon" tendon="left_M2" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-20 20" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
+  <muscle dyntype="muscle" trntype="tendon" tendon="left_M3" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-20 20" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
+  <muscle dyntype="muscle" trntype="tendon" tendon="left_M4" gaintype="muscle" biastype="muscle" ctrlrange="-10 10" forcerange="-20 20" lminrel="0.5" lmaxrel="1" widthrel="0.2" vmaxrel="1.0" tact="1.0" tdeact="0.5" fmax="1.0"/>
 </actuator>
 
 </mujoco>

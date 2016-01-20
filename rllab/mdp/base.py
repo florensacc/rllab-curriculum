@@ -2,6 +2,7 @@ import theano
 import theano.tensor as TT
 from rllab.misc.ext import cached_function, lazydict
 from rllab.misc import autoargs
+import numpy as np
 
 
 class MDP(object):
@@ -57,6 +58,11 @@ class MDP(object):
 
     def action_from_keys(self, keys):
         raise NotImplementedError
+
+    def print_stats(self):
+        print "MDP:\t%s" % self.__class__.__name__
+        print "Observation dim:\t%d" % np.prod(self.observation_shape)
+        print "Action dim:\t%d" % self.action_dim
 
 
 class ControlMDP(MDP):

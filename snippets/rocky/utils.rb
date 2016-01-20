@@ -35,8 +35,32 @@ def to_command(params)
   command
 end
 
-def to_docker_command(command)
-  "/home/ubuntu/dockerfiles/docker_run.sh #{command}"
+def to_docker_command(params)
+  command = %Q{docker run \
+  -v ~/.bash_history:/root/.bash_history \
+  -v /home/ubuntu/theanorc:/root/.theanorc \
+  -v ~/.vim:/root/.vim \
+  -v /home/ubuntu/gitconfig:/root/.gitconfig \
+  -v ~/.vimrc:/root/.vimrc \
+  -v /home/ubuntu/ssh:/root/.ssh \
+  -v /home/ubuntu/jupyter:/root/.jupyter \
+  -v /home/ubuntu/data:/root/workspace/data \
+  -v /home/ubuntu/workspace:/root/workspace \
+  -t dementrock/starcluster_cpu python scripts/run_experiment.py}
+  params.each do |k, v|
+    if v.is_a?(Hash)
+      v.each do |nk, nv|
+        if nk.to_s == "_name"
+          command += " \\\n" + "  --#{k} #{to_param_val(nv)}"
+        else
+          command += " \\\n" + "  --#{k}_#{nk} #{to_param_val(nv)}"
+        end
+      end
+    else
+      command += " \\\n" + "  --#{k} #{to_param_val(v)}"
+    end
+  end
+  command
 end
 
 def create_task_script(command, options={})
@@ -48,7 +72,7 @@ def create_task_script(command, options={})
     FileUtils.mkdir_p(folder)
     file_name = "#{SecureRandom.uuid}.sh"
     if prefix
-      file_name = prefix + "_" + Time.now.utc.iso8601 + "_" + file_name
+      file_name = prefix + "_" + Time.now.strftime('%Y_%m_%d_%H_%M_%S') + "_" + file_name
     end
     fname = "#{folder}/#{file_name}"
   end
@@ -58,6 +82,13 @@ def create_task_script(command, options={})
   f.close
   system("chmod +x " + fname)
   if launch
-    system("qsub -V -b n -l mem_free=8G,h_vmem=14G -r y -cwd " + fname)
+    sub_cmd = "qsub -V -b n -r n -cwd " + fname
+    puts sub_cmd
+    system(sub_cmd)
   end
+end
+
+def shuffle_params(*params)
+  all_combs = params[0].product(*params[1..-1])
+  all_combs.shuffle
 end

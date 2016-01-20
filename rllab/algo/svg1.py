@@ -195,7 +195,7 @@ class SVG1(RLAlgorithm):
             inputs=[obs, actions, rewards, next_obs],
             outputs=[model_obs_loss, model_reward_loss],
             updates=merge_dict(
-                self.model_update_method(model_loss, model.params),
+                self.model_update_method(model_loss, model.trainable_params),
             )
         )
 
@@ -231,7 +231,7 @@ class SVG1(RLAlgorithm):
         f_train_vf = compile_function(
             inputs=[obs, actions, old_pdists, yvals, weight_vals],
             outputs=vf_loss,
-            updates=self.vf_update_method(vf_loss, vf.params),
+            updates=self.vf_update_method(vf_loss, vf.trainable_params),
         )
 
         # Train policy
@@ -245,7 +245,8 @@ class SVG1(RLAlgorithm):
         )
         # Negative sign since we are maximizing
         policy_obj = - TT.sum(weight_vals * model_ys) / TT.sum(weight_vals)
-        policy_updates = self.policy_update_method(policy_obj, policy.params)
+        policy_updates = self.policy_update_method(
+            policy_obj, policy.trainable_params)
 
         f_train_policy = compile_function(
             inputs=[obs, etas, actions, old_pdists, terminals, weight_vals],
@@ -347,11 +348,14 @@ class SVG1(RLAlgorithm):
         logger.record_tabular('AveragePolicyObjective',
                               np.mean(self._policy_objs))
         logger.record_tabular('ModelParamNorm',
-                              np.linalg.norm(model.get_param_values()))
+                              np.linalg.norm(
+                                  model.get_trainable_param_values()))
         logger.record_tabular('ValueFunctionParamNorm',
-                              np.linalg.norm(vf.get_param_values()))
+                              np.linalg.norm(
+                                  vf.get_trainable_param_values()))
         logger.record_tabular('PolicyParamNorm',
-                              np.linalg.norm(policy.get_param_values()))
+                              np.linalg.norm(
+                                  policy.get_trainable_param_values()))
         mdp.log_extra(logger, paths)
         vf.log_extra(logger, paths)
         policy.log_extra(logger, paths)

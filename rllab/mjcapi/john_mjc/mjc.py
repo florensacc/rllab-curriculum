@@ -32,7 +32,7 @@ def false_vector(x):
 
 
 MJC_METADATA = {
-    "3swimmer":{    
+    "3swimmer":{
         "actuated_joints":[3,4],
         "contact_type":mjcpy.ContactType.SPRING.real,
         "ctrl_bounds":arrayf([(-50,50)]*2).T,

@@ -63,6 +63,7 @@ class MountainCarND(object):
 
     def takeAction(self, intAction):
         # Translate action into a (possibly) multi-dimensional direction
+        intAction = np.array(intAction).flatten()[0]
         direction = np.zeros((self.state.shape[0],))  # Zero is Neutral
         if intAction >= 0:
             direction[int(intAction)/2] = ((intAction % 2) - 0.5)*2.0

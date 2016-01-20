@@ -46,7 +46,7 @@ class NaturalGradientMethod(object):
         self.step_size = step_size
         self.reg_coeff = reg_coeff
 
-    def init_opt(self, mdp, policy, vf):
+    def init_opt(self, mdp, policy, baseline):
         input_var = new_tensor(
             'input',
             ndim=1+len(mdp.observation_shape),
@@ -69,22 +69,22 @@ class NaturalGradientMethod(object):
         old_pdist_var = TT.matrix('old_pdist')
         pdist_var = policy.get_pdist_sym(input_var)
         mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
-        grads = theano.grad(surr_obj, wrt=policy.params)
+        grads = theano.grad(surr_obj, wrt=policy.get_params(trainable=True))
         flat_gard = flatten_tensor_variables(grads)
 
-        kl_grads = theano.grad(mean_kl, wrt=policy.params)
-        kl_flat_grad = flatten_tensor_variables(kl_grads)
-        emp_fisher = flatten_hessian(mean_kl, wrt=policy.params, block_diagonal=False)
+        kl_grads = theano.grad(mean_kl, wrt=policy.get_params(trainable=True))
+        # kl_flat_grad = flatten_tensor_variables(kl_grads)
+        emp_fisher = flatten_hessian(mean_kl, wrt=policy.get_params(trainable=True), block_diagonal=False)
         xs = [
             new_tensor_like("%s x" % p.name, p)
-            for p in policy.params
+            for p in policy.get_params(trainable=True)
             ]
         # many Ops don't have Rop implemented so this is not that useful
         # but the code implenting that is preserved for future reference
         # Hx_rop = TT.sum(TT.Rop(kl_flat_grad, policy.params, xs), axis=0)
         Hx_plain_splits = TT.grad(TT.sum([
                                              TT.sum(g * x) for g, x in izip(kl_grads, xs)
-                                             ]), wrt=policy.params)
+                                             ]), wrt=policy.get_params(trainable=True))
         Hx_plain = TT.concatenate([s.flatten() for s in Hx_plain_splits])
 
         input_list = [input_var, advantage_var, old_pdist_var, action_var]
@@ -171,14 +171,11 @@ class NaturalGradientMethod(object):
         logger.record_tabular("LossAfter", loss_after)
         logger.log("optimization finished")
 
-    def get_itr_snapshot(self, itr, mdp, policy, vf, samples_data, opt_info):
+    def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data, opt_info):
         return dict(
             itr=itr,
             policy=policy,
-            vf=vf,
+            baseline=baseline,
             mdp=mdp,
-            observations=samples_data["observations"],
-            advantages=samples_data["advantages"],
-            actions=samples_data["actions"],
         )
 

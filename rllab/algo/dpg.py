@@ -107,6 +107,7 @@ class DPG(RLAlgorithm):
         self.qf_loss_averages = []
         self.policy_surr_averages = []
         self.q_averages = []
+        self.y_averages = []
         self.paths = []
         self.paths_samples_cnt = 0
 
@@ -127,21 +128,24 @@ class DPG(RLAlgorithm):
         self.start_worker(mdp, policy)
         opt_info = self.init_opt(mdp, policy, qf)
         itr = 0
+        path_length = 0
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
             for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
                 # Execute policy
-                if terminal:
+                if terminal or path_length > self.max_path_length:
                     # Note that if the last time step ends an episode, the very
                     # last state and observation will be ignored and not added
                     # to the replay pool
                     state, observation = mdp.reset()
                     es.episode_reset()
+                    path_length = 0
                 action = es.get_action(itr, observation, policy=policy, qf=qf)
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
+                path_length += 1
 
                 pool.add_sample(observation, action, reward, terminal)
                 state, observation = next_state, next_observation
@@ -153,12 +157,13 @@ class DPG(RLAlgorithm):
                         itr, batch, qf, policy, opt_info)
 
                 itr += 1
+
             logger.log("Training finished")
             if pool.size >= self.min_pool_size:
                 opt_info = self.evaluate(epoch, qf, policy, opt_info)
                 yield opt_info
                 params = self.get_epoch_snapshot(
-                    epoch, qf, policy, es, opt_info)
+                    epoch, mdp, qf, policy, es, opt_info)
                 logger.save_itr_params(epoch, params)
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
@@ -187,8 +192,8 @@ class DPG(RLAlgorithm):
         # compute the on-policy y values
         next_qval = target_qf.get_qval_sym(
             next_obs,
-            target_policy.get_action_sym(next_obs, train=True),
-            train=True
+            target_policy.get_action_sym(next_obs, deterministic=True),
+            deterministic=True
         )
 
         ys = rewards + (1 - terminals) * self.discount * next_qval
@@ -203,29 +208,34 @@ class DPG(RLAlgorithm):
         yvar = TT.vector('ys')
 
         qf_weight_decay_term = self.qf_weight_decay * \
-            sum([TT.sum(TT.square(param)) for param in qf.params])
+            sum([TT.sum(TT.square(param)) for param in
+                 qf.get_params(regularizable=True)])
 
-        qval = qf.get_qval_sym(obs, action, train=True)
-        diff = TT.square(qf.normalize_sym(qval) -
-                         qf.normalize_sym(yvar))
+        qval = qf.get_qval_sym(obs, action)
+        diff = TT.square(yvar -
+                         qval)
         qf_loss = TT.mean(diff)
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
         policy_weight_decay_term = self.policy_weight_decay * \
-            sum([TT.sum(TT.square(param)) for param in policy.params])
+            sum([TT.sum(TT.square(param))
+                 for param in policy.get_params(regularizable=True)])
         policy_qval = qf.get_qval_sym(
-            obs, policy.get_action_sym(obs, train=True), train=True)
+            obs, policy.get_action_sym(obs),
+            deterministic=True
+        )
         # The policy gradient is computed with respect to the unscaled Q values
-        policy_surr = -TT.mean(qf.normalize_sym(policy_qval))
+        policy_surr = -TT.mean(policy_qval)
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
         qf_updates = merge_dict(
-            self.qf_update_method(qf_reg_loss, qf.params),
-            qf.get_default_updates(obs, action, train=True)
+            self.qf_update_method(qf_reg_loss, qf.get_params(trainable=True)),
+            qf.get_default_updates(obs, action)
         )
 
         policy_updates = merge_dict(
-            self.policy_update_method(policy_reg_surr, policy.params),
+            self.policy_update_method(
+                policy_reg_surr, policy.get_params(trainable=True)),
             policy.get_default_updates(obs)
         )
 
@@ -245,11 +255,26 @@ class DPG(RLAlgorithm):
             updates=policy_updates
         )
 
+        target_updates = []
+        for p, tp in zip(qf.get_params(), target_qf.get_params()):
+            target_updates.append((tp, self.soft_target_tau * p + (1 -
+                                   self.soft_target_tau) * tp))
+        for p, tp in zip(policy.get_params(), target_policy.get_params()):
+            target_updates.append((tp, self.soft_target_tau * p + (1 -
+                                   self.soft_target_tau) * tp))
+
+        f_update_targets = compile_function(
+            inputs=[],
+            outputs=[],
+            updates=target_updates,
+        )
+
         return dict(
             f_y=f_y,
             f_normalize_qf=f_normalize_qf,
             f_train_qf=f_train_qf,
             f_train_policy=f_train_policy,
+            f_update_targets=f_update_targets,
             target_qf=target_qf,
             target_policy=target_policy,
         )
@@ -265,30 +290,28 @@ class DPG(RLAlgorithm):
         f_normalize_qf = opt_info["f_normalize_qf"]
         f_train_qf = opt_info["f_train_qf"]
         f_train_policy = opt_info["f_train_policy"]
-        target_qf = opt_info["target_qf"]
-        target_policy = opt_info["target_policy"]
+        f_update_targets = opt_info["f_update_targets"]
+        # target_qf = opt_info["target_qf"]
+        # target_policy = opt_info["target_policy"]
 
         ys = f_y(next_states, rewards, terminal)
         f_normalize_qf(ys)
         qf_loss, qval = f_train_qf(ys, states, actions, rewards)
         policy_surr = f_train_policy(ys, states)
 
+        f_update_targets()
+
         self.qf_loss_averages.append(qf_loss)
         self.policy_surr_averages.append(policy_surr)
         self.q_averages.append(qval)
-
-        target_qf.set_param_values(
-            self.soft_target_tau * qf.get_param_values() +
-            (1 - self.soft_target_tau) * target_qf.get_param_values()
-        )
-        target_policy.set_param_values(
-            self.soft_target_tau * policy.get_param_values() +
-            (1 - self.soft_target_tau) * target_policy.get_param_values()
-        )
+        self.y_averages.append(ys)
 
         return opt_info
 
     def evaluate(self, epoch, qf, policy, opt_info):
+        target_policy = opt_info["target_policy"]
+        target_qf = opt_info["target_qf"]
+
         logger.log("Collecting samples for evaluation")
 
         paths = parallel_sampler.request_samples(
@@ -306,9 +329,38 @@ class DPG(RLAlgorithm):
         average_q_loss = np.mean(self.qf_loss_averages)
         average_policy_surr = np.mean(self.policy_surr_averages)
         average_q = np.mean(np.concatenate(self.q_averages))
+        average_y = np.mean(np.concatenate(self.y_averages))
+        average_qydiff = np.mean(np.abs(np.concatenate(self.q_averages) -
+                                        np.concatenate(self.y_averages)))
         average_action = np.mean(np.square(np.concatenate(
             [path["actions"] for path in paths]
         )))
+
+        policy_param_norm = np.linalg.norm(
+            policy.get_param_values()
+        )
+        target_policy_param_norm = np.linalg.norm(
+            target_policy.get_param_values()
+        )
+        qfun_param_norm = np.linalg.norm(
+            qf.get_param_values()
+        )
+        target_qfun_param_norm = np.linalg.norm(
+            target_qf.get_param_values()
+        )
+
+        policy_reg_param_norm = np.linalg.norm(
+            policy.get_param_values(regularizable=True)
+        )
+        target_policy_reg_param_norm = np.linalg.norm(
+            target_policy.get_param_values(regularizable=True)
+        )
+        qfun_reg_param_norm = np.linalg.norm(
+            qf.get_param_values(regularizable=True)
+        )
+        target_qfun_reg_param_norm = np.linalg.norm(
+            target_qf.get_param_values(regularizable=True)
+        )
 
         logger.record_tabular('Epoch', epoch)
         logger.record_tabular('AverageReturn',
@@ -324,22 +376,39 @@ class DPG(RLAlgorithm):
         logger.record_tabular('AverageQLoss', average_q_loss)
         logger.record_tabular('AveragePolicySurr', average_policy_surr)
         logger.record_tabular('AverageQ', average_q)
+        #logger.record_tabular('AverageY', average_y)
+        #logger.record_tabular('AverageQYDiff', average_qydiff)
         logger.record_tabular('AverageAction', average_action)
-        logger.record_tabular('PolicyParamNorm',
-                              np.linalg.norm(policy.get_param_values()))
-        logger.record_tabular('QFunParamNorm',
-                              np.linalg.norm(qf.get_param_values()))
+
+        #logger.record_tabular('PolicyParamNorm',
+        #                      policy_param_norm)
+        logger.record_tabular('PolicyRegParamNorm',
+                              policy_reg_param_norm)
+        #logger.record_tabular('TargetPolicyParamNorm',
+        #                      target_policy_param_norm)
+        #logger.record_tabular('TargetPolicyRegParamNorm',
+        #                      target_policy_reg_param_norm)
+        #logger.record_tabular('QFunParamNorm',
+        #                      qfun_param_norm)
+        logger.record_tabular('QFunRegParamNorm',
+                              qfun_reg_param_norm)
+        #logger.record_tabular('TargetQFunParamNorm',
+        #                      target_qfun_param_norm)
+        #logger.record_tabular('TargetQFunRegParamNorm',
+        #                      target_qfun_reg_param_norm)
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []
         self.q_averages = []
+        self.y_averages = []
 
         return merge_dict(opt_info, dict(
             eval_paths=paths,
         ))
 
-    def get_epoch_snapshot(self, epoch, qf, policy, es, opt_info):
+    def get_epoch_snapshot(self, epoch, mdp, qf, policy, es, opt_info):
         return dict(
+            mdp=mdp,
             epoch=epoch,
             qf=qf,
             policy=policy,

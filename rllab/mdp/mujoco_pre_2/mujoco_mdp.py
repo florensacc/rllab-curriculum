@@ -16,7 +16,6 @@ class MujocoMDP(ControlMDP):
         self.viewer = None
         self.init_qpos = self.model.data.qpos
         self.init_qvel = self.model.data.qvel
-        self.init_qacc = self.model.data.qacc
         self.init_ctrl = self.model.data.ctrl
         self.qpos_dim = self.init_qpos.size
         self.qvel_dim = self.init_qvel.size
@@ -64,7 +63,6 @@ class MujocoMDP(ControlMDP):
     def reset(self):
         self.model.data.qpos = self.init_qpos
         self.model.data.qvel = self.init_qvel
-        self.model.data.qacc = self.init_qacc
         self.model.data.ctrl = self.init_ctrl
         self.model.forward()
         self.current_state = self.get_current_state()
@@ -137,3 +135,7 @@ class MujocoMDP(ControlMDP):
     def get_body_com(self, body_name):
         idx = self.model.body_names.index(body_name)
         return self.model.data.com_subtree[idx]
+
+    def print_stats(self):
+        super(MujocoMDP, self).print_stats()
+        print "qpos dim:\t%d" % len(self.model.data.qpos)

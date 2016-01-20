@@ -113,7 +113,7 @@ class SwimmerMDP(SymbolicMDP):
     episodeCap = 1000
     discount_factor = 0.98
 
-    def __init__(self, n_links=3, k1=7.5, k2=0.3, horizon=400):
+    def __init__(self, n_links=3, k1=7.5, k2=0.3):
         """
         d:
             number of joints
@@ -159,7 +159,7 @@ class SwimmerMDP(SymbolicMDP):
 
         self._viewer = None
 
-        super(SwimmerMDP, self).__init__(horizon)
+        super(SwimmerMDP, self).__init__()
 
 
     @property

@@ -617,7 +617,7 @@ class MJMODEL(Structure):
         ("numeric_size", POINTER(c_int)),
         ("numeric_data", POINTER(c_double)),
         ("text_adr", POINTER(c_int)),
-        ("text_data", c_char_p),
+        ("text_data", POINTER(c_char)),
         ("key_time", POINTER(c_double)),
         ("key_qpos", POINTER(c_double)),
         ("key_qvel", POINTER(c_double)),
@@ -638,7 +638,7 @@ class MJMODEL(Structure):
         ("name_sensoradr", POINTER(c_int)),
         ("name_numericadr", POINTER(c_int)),
         ("name_textadr", POINTER(c_int)),
-        ("names", c_char_p),
+        ("names", POINTER(c_char)),
     ]
 
 class MjrRectWrapper(object):
@@ -711,7 +711,7 @@ class MjvCameraPoseWrapper(object):
     
     @head_pos.setter
     def head_pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.head_pos, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -722,7 +722,7 @@ class MjvCameraPoseWrapper(object):
     
     @head_right.setter
     def head_right(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.head_right, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -733,7 +733,7 @@ class MjvCameraPoseWrapper(object):
     
     @window_pos.setter
     def window_pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.window_pos, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -744,7 +744,7 @@ class MjvCameraPoseWrapper(object):
     
     @window_right.setter
     def window_right(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.window_right, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -755,7 +755,7 @@ class MjvCameraPoseWrapper(object):
     
     @window_up.setter
     def window_up(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.window_up, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -766,7 +766,7 @@ class MjvCameraPoseWrapper(object):
     
     @window_normal.setter
     def window_normal(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.window_normal, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -777,7 +777,7 @@ class MjvCameraPoseWrapper(object):
     
     @window_size.setter
     def window_size(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.window_size, val_ptr, 2 * sizeof(c_double))
     
     @property
@@ -827,7 +827,7 @@ class MjrOptionWrapper(object):
     
     @flags.setter
     def flags(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.flags, val_ptr, 6 * sizeof(c_ubyte))
 
 class MjrContextWrapper(object):
@@ -965,7 +965,7 @@ class MjrContextWrapper(object):
     
     @texture.setter
     def texture(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.texture, val_ptr, 100 * sizeof(c_int))
     
     @property
@@ -976,7 +976,7 @@ class MjrContextWrapper(object):
     
     @textureType.setter
     def textureType(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.textureType, val_ptr, 100 * sizeof(c_int))
     
     @property
@@ -1083,7 +1083,7 @@ class MjrContextWrapper(object):
     
     @charWidth.setter
     def charWidth(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.charWidth, val_ptr, 127 * sizeof(c_int))
     
     @property
@@ -1094,7 +1094,7 @@ class MjrContextWrapper(object):
     
     @charWidthBig.setter
     def charWidthBig(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.charWidthBig, val_ptr, 127 * sizeof(c_int))
     
     @property
@@ -1168,7 +1168,7 @@ class MjvCameraWrapper(object):
     
     @lookat.setter
     def lookat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.lookat, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -1250,7 +1250,7 @@ class MjvOptionWrapper(object):
     
     @geomgroup.setter
     def geomgroup(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.geomgroup, val_ptr, 5 * sizeof(c_ubyte))
     
     @property
@@ -1261,7 +1261,7 @@ class MjvOptionWrapper(object):
     
     @sitegroup.setter
     def sitegroup(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.sitegroup, val_ptr, 5 * sizeof(c_ubyte))
     
     @property
@@ -1272,7 +1272,7 @@ class MjvOptionWrapper(object):
     
     @flags.setter
     def flags(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.flags, val_ptr, 16 * sizeof(c_ubyte))
 
 class MjvGeomWrapper(object):
@@ -1354,7 +1354,7 @@ class MjvGeomWrapper(object):
     
     @texscale.setter
     def texscale(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.texscale, val_ptr, 2 * sizeof(c_float))
     
     @property
@@ -1365,7 +1365,7 @@ class MjvGeomWrapper(object):
     
     @size.setter
     def size(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.size, val_ptr, 3 * sizeof(c_float))
     
     @property
@@ -1376,7 +1376,7 @@ class MjvGeomWrapper(object):
     
     @pos.setter
     def pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.pos, val_ptr, 3 * sizeof(c_float))
     
     @property
@@ -1387,7 +1387,7 @@ class MjvGeomWrapper(object):
     
     @mat.setter
     def mat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.mat, val_ptr, 9 * sizeof(c_float))
     
     @property
@@ -1398,7 +1398,7 @@ class MjvGeomWrapper(object):
     
     @rgba.setter
     def rgba(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.rgba, val_ptr, 4 * sizeof(c_float))
     
     @property
@@ -1488,7 +1488,7 @@ class MjvLightWrapper(object):
     
     @pos.setter
     def pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.pos, val_ptr, 3 * sizeof(c_float))
     
     @property
@@ -1499,7 +1499,7 @@ class MjvLightWrapper(object):
     
     @dir.setter
     def dir(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.dir, val_ptr, 3 * sizeof(c_float))
     
     @property
@@ -1510,7 +1510,7 @@ class MjvLightWrapper(object):
     
     @attenuation.setter
     def attenuation(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.attenuation, val_ptr, 3 * sizeof(c_float))
     
     @property
@@ -1537,7 +1537,7 @@ class MjvLightWrapper(object):
     
     @ambient.setter
     def ambient(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.ambient, val_ptr, 3 * sizeof(c_float))
     
     @property
@@ -1548,7 +1548,7 @@ class MjvLightWrapper(object):
     
     @diffuse.setter
     def diffuse(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.diffuse, val_ptr, 3 * sizeof(c_float))
     
     @property
@@ -1559,7 +1559,7 @@ class MjvLightWrapper(object):
     
     @specular.setter
     def specular(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.specular, val_ptr, 3 * sizeof(c_float))
     
     @property
@@ -1672,7 +1672,7 @@ class MjOptionWrapper(object):
     
     @gravity.setter
     def gravity(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.gravity, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -1683,7 +1683,7 @@ class MjOptionWrapper(object):
     
     @wind.setter
     def wind(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.wind, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -1718,7 +1718,7 @@ class MjOptionWrapper(object):
     
     @o_solref.setter
     def o_solref(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.o_solref, val_ptr, 2 * sizeof(c_double))
     
     @property
@@ -1729,7 +1729,7 @@ class MjOptionWrapper(object):
     
     @o_solimp.setter
     def o_solimp(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.o_solimp, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -1906,7 +1906,7 @@ class MjStatisticWrapper(object):
     
     @center.setter
     def center(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.center, val_ptr, 3 * sizeof(c_double))
 
 class MjDataWrapper(object):
@@ -1996,7 +1996,7 @@ class MjDataWrapper(object):
     
     @nwarning.setter
     def nwarning(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.nwarning, val_ptr, 7 * sizeof(c_int))
     
     @property
@@ -2007,7 +2007,7 @@ class MjDataWrapper(object):
     
     @timer_duration.setter
     def timer_duration(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.timer_duration, val_ptr, 14 * sizeof(c_double))
     
     @property
@@ -2018,7 +2018,7 @@ class MjDataWrapper(object):
     
     @timer_ncall.setter
     def timer_ncall(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.timer_ncall, val_ptr, 14 * sizeof(c_double))
     
     @property
@@ -2029,7 +2029,7 @@ class MjDataWrapper(object):
     
     @mocaptime.setter
     def mocaptime(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.mocaptime, val_ptr, 3 * sizeof(c_double))
     
     @property
@@ -2048,7 +2048,7 @@ class MjDataWrapper(object):
     
     @energy.setter
     def energy(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.energy, val_ptr, 2 * sizeof(c_double))
     
     @property
@@ -2059,7 +2059,7 @@ class MjDataWrapper(object):
     
     @solverstat.setter
     def solverstat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.solverstat, val_ptr, 4 * sizeof(c_double))
     
     @property
@@ -2070,7 +2070,7 @@ class MjDataWrapper(object):
     
     @buffer.setter
     def buffer(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.buffer, val_ptr, self.nbuffer * sizeof(c_ubyte))
     
     @property
@@ -2081,7 +2081,7 @@ class MjDataWrapper(object):
     
     @stack.setter
     def stack(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.stack, val_ptr, self.nstack * sizeof(c_double))
     
     @property
@@ -2092,7 +2092,7 @@ class MjDataWrapper(object):
     
     @qpos.setter
     def qpos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qpos, val_ptr, self._size_src.nq*1 * sizeof(c_double))
     
     @property
@@ -2103,7 +2103,7 @@ class MjDataWrapper(object):
     
     @qvel.setter
     def qvel(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qvel, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2114,7 +2114,7 @@ class MjDataWrapper(object):
     
     @act.setter
     def act(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.act, val_ptr, self._size_src.na*1 * sizeof(c_double))
     
     @property
@@ -2125,7 +2125,7 @@ class MjDataWrapper(object):
     
     @ctrl.setter
     def ctrl(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.ctrl, val_ptr, self._size_src.nu*1 * sizeof(c_double))
     
     @property
@@ -2136,7 +2136,7 @@ class MjDataWrapper(object):
     
     @qfrc_applied.setter
     def qfrc_applied(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qfrc_applied, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2147,7 +2147,7 @@ class MjDataWrapper(object):
     
     @xfrc_applied.setter
     def xfrc_applied(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.xfrc_applied, val_ptr, self._size_src.nbody*6 * sizeof(c_double))
     
     @property
@@ -2158,7 +2158,7 @@ class MjDataWrapper(object):
     
     @qacc.setter
     def qacc(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qacc, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2169,7 +2169,7 @@ class MjDataWrapper(object):
     
     @act_dot.setter
     def act_dot(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.act_dot, val_ptr, self._size_src.na*1 * sizeof(c_double))
     
     @property
@@ -2180,7 +2180,7 @@ class MjDataWrapper(object):
     
     @mocap_pos.setter
     def mocap_pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.mocap_pos, val_ptr, self._size_src.nmocap*3 * sizeof(c_double))
     
     @property
@@ -2191,7 +2191,7 @@ class MjDataWrapper(object):
     
     @mocap_quat.setter
     def mocap_quat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.mocap_quat, val_ptr, self._size_src.nmocap*4 * sizeof(c_double))
     
     @property
@@ -2202,7 +2202,7 @@ class MjDataWrapper(object):
     
     @userdata.setter
     def userdata(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.userdata, val_ptr, self._size_src.nuserdata*1 * sizeof(c_double))
     
     @property
@@ -2213,7 +2213,7 @@ class MjDataWrapper(object):
     
     @sensordata.setter
     def sensordata(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.sensordata, val_ptr, self._size_src.nsensordata*1 * sizeof(c_double))
     
     @property
@@ -2224,7 +2224,7 @@ class MjDataWrapper(object):
     
     @xpos.setter
     def xpos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.xpos, val_ptr, self._size_src.nbody*3 * sizeof(c_double))
     
     @property
@@ -2235,7 +2235,7 @@ class MjDataWrapper(object):
     
     @xquat.setter
     def xquat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.xquat, val_ptr, self._size_src.nbody*4 * sizeof(c_double))
     
     @property
@@ -2246,7 +2246,7 @@ class MjDataWrapper(object):
     
     @xmat.setter
     def xmat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.xmat, val_ptr, self._size_src.nbody*9 * sizeof(c_double))
     
     @property
@@ -2257,7 +2257,7 @@ class MjDataWrapper(object):
     
     @xipos.setter
     def xipos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.xipos, val_ptr, self._size_src.nbody*3 * sizeof(c_double))
     
     @property
@@ -2268,7 +2268,7 @@ class MjDataWrapper(object):
     
     @ximat.setter
     def ximat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.ximat, val_ptr, self._size_src.nbody*9 * sizeof(c_double))
     
     @property
@@ -2279,7 +2279,7 @@ class MjDataWrapper(object):
     
     @xanchor.setter
     def xanchor(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.xanchor, val_ptr, self._size_src.njnt*3 * sizeof(c_double))
     
     @property
@@ -2290,7 +2290,7 @@ class MjDataWrapper(object):
     
     @xaxis.setter
     def xaxis(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.xaxis, val_ptr, self._size_src.njnt*3 * sizeof(c_double))
     
     @property
@@ -2301,7 +2301,7 @@ class MjDataWrapper(object):
     
     @geom_xpos.setter
     def geom_xpos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_xpos, val_ptr, self._size_src.ngeom*3 * sizeof(c_double))
     
     @property
@@ -2312,7 +2312,7 @@ class MjDataWrapper(object):
     
     @geom_xmat.setter
     def geom_xmat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_xmat, val_ptr, self._size_src.ngeom*9 * sizeof(c_double))
     
     @property
@@ -2323,7 +2323,7 @@ class MjDataWrapper(object):
     
     @site_xpos.setter
     def site_xpos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.site_xpos, val_ptr, self._size_src.nsite*3 * sizeof(c_double))
     
     @property
@@ -2334,7 +2334,7 @@ class MjDataWrapper(object):
     
     @site_xmat.setter
     def site_xmat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.site_xmat, val_ptr, self._size_src.nsite*9 * sizeof(c_double))
     
     @property
@@ -2345,7 +2345,7 @@ class MjDataWrapper(object):
     
     @cam_xpos.setter
     def cam_xpos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cam_xpos, val_ptr, self._size_src.ncam*3 * sizeof(c_double))
     
     @property
@@ -2356,7 +2356,7 @@ class MjDataWrapper(object):
     
     @cam_xmat.setter
     def cam_xmat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cam_xmat, val_ptr, self._size_src.ncam*9 * sizeof(c_double))
     
     @property
@@ -2367,7 +2367,7 @@ class MjDataWrapper(object):
     
     @light_xpos.setter
     def light_xpos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.light_xpos, val_ptr, self._size_src.nlight*3 * sizeof(c_double))
     
     @property
@@ -2378,7 +2378,7 @@ class MjDataWrapper(object):
     
     @light_xdir.setter
     def light_xdir(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.light_xdir, val_ptr, self._size_src.nlight*3 * sizeof(c_double))
     
     @property
@@ -2389,7 +2389,7 @@ class MjDataWrapper(object):
     
     @com_subtree.setter
     def com_subtree(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.com_subtree, val_ptr, self._size_src.nbody*3 * sizeof(c_double))
     
     @property
@@ -2400,7 +2400,7 @@ class MjDataWrapper(object):
     
     @cdof.setter
     def cdof(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cdof, val_ptr, self._size_src.nv*6 * sizeof(c_double))
     
     @property
@@ -2411,7 +2411,7 @@ class MjDataWrapper(object):
     
     @cinert.setter
     def cinert(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cinert, val_ptr, self._size_src.nbody*10 * sizeof(c_double))
     
     @property
@@ -2422,7 +2422,7 @@ class MjDataWrapper(object):
     
     @ten_wrapadr.setter
     def ten_wrapadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.ten_wrapadr, val_ptr, self._size_src.ntendon*1 * sizeof(c_int))
     
     @property
@@ -2433,7 +2433,7 @@ class MjDataWrapper(object):
     
     @ten_wrapnum.setter
     def ten_wrapnum(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.ten_wrapnum, val_ptr, self._size_src.ntendon*1 * sizeof(c_int))
     
     @property
@@ -2444,7 +2444,7 @@ class MjDataWrapper(object):
     
     @ten_length.setter
     def ten_length(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.ten_length, val_ptr, self._size_src.ntendon*1 * sizeof(c_double))
     
     @property
@@ -2455,7 +2455,7 @@ class MjDataWrapper(object):
     
     @ten_moment.setter
     def ten_moment(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.ten_moment, val_ptr, self._size_src.ntendon*self._size_src.nv * sizeof(c_double))
     
     @property
@@ -2466,7 +2466,7 @@ class MjDataWrapper(object):
     
     @wrap_obj.setter
     def wrap_obj(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.wrap_obj, val_ptr, self._size_src.nwrap*2*1 * sizeof(c_int))
     
     @property
@@ -2477,7 +2477,7 @@ class MjDataWrapper(object):
     
     @wrap_xpos.setter
     def wrap_xpos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.wrap_xpos, val_ptr, self._size_src.nwrap*2*3 * sizeof(c_double))
     
     @property
@@ -2488,7 +2488,7 @@ class MjDataWrapper(object):
     
     @actuator_length.setter
     def actuator_length(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_length, val_ptr, self._size_src.nu*1 * sizeof(c_double))
     
     @property
@@ -2499,7 +2499,7 @@ class MjDataWrapper(object):
     
     @actuator_moment.setter
     def actuator_moment(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_moment, val_ptr, self._size_src.nu*self._size_src.nv * sizeof(c_double))
     
     @property
@@ -2510,7 +2510,7 @@ class MjDataWrapper(object):
     
     @crb.setter
     def crb(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.crb, val_ptr, self._size_src.nbody*10 * sizeof(c_double))
     
     @property
@@ -2521,7 +2521,7 @@ class MjDataWrapper(object):
     
     @qM.setter
     def qM(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qM, val_ptr, self._size_src.nM*1 * sizeof(c_double))
     
     @property
@@ -2532,7 +2532,7 @@ class MjDataWrapper(object):
     
     @qLD.setter
     def qLD(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qLD, val_ptr, self._size_src.nM*1 * sizeof(c_double))
     
     @property
@@ -2543,7 +2543,7 @@ class MjDataWrapper(object):
     
     @qLDiagInv.setter
     def qLDiagInv(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qLDiagInv, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2554,7 +2554,7 @@ class MjDataWrapper(object):
     
     @qLDiagSqrtInv.setter
     def qLDiagSqrtInv(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qLDiagSqrtInv, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2565,7 +2565,7 @@ class MjDataWrapper(object):
     
     @efc_type.setter
     def efc_type(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.efc_type, val_ptr, self._size_src.njmax*1 * sizeof(c_int))
     
     @property
@@ -2576,7 +2576,7 @@ class MjDataWrapper(object):
     
     @efc_id.setter
     def efc_id(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.efc_id, val_ptr, self._size_src.njmax*1 * sizeof(c_int))
     
     @property
@@ -2587,7 +2587,7 @@ class MjDataWrapper(object):
     
     @efc_signature.setter
     def efc_signature(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.efc_signature, val_ptr, self._size_src.njmax*1 * sizeof(c_int))
     
     @property
@@ -2598,7 +2598,7 @@ class MjDataWrapper(object):
     
     @efc_rownnz.setter
     def efc_rownnz(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.efc_rownnz, val_ptr, self._size_src.njmax*1 * sizeof(c_int))
     
     @property
@@ -2609,7 +2609,7 @@ class MjDataWrapper(object):
     
     @efc_rowadr.setter
     def efc_rowadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.efc_rowadr, val_ptr, self._size_src.njmax*1 * sizeof(c_int))
     
     @property
@@ -2620,7 +2620,7 @@ class MjDataWrapper(object):
     
     @efc_colind.setter
     def efc_colind(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.efc_colind, val_ptr, self._size_src.njmax*self._size_src.nv * sizeof(c_int))
     
     @property
@@ -2631,7 +2631,7 @@ class MjDataWrapper(object):
     
     @efc_rownnz_T.setter
     def efc_rownnz_T(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.efc_rownnz_T, val_ptr, self._size_src.nv*1 * sizeof(c_int))
     
     @property
@@ -2642,7 +2642,7 @@ class MjDataWrapper(object):
     
     @efc_rowadr_T.setter
     def efc_rowadr_T(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.efc_rowadr_T, val_ptr, self._size_src.nv*1 * sizeof(c_int))
     
     @property
@@ -2653,7 +2653,7 @@ class MjDataWrapper(object):
     
     @efc_colind_T.setter
     def efc_colind_T(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.efc_colind_T, val_ptr, self._size_src.nv*self._size_src.njmax * sizeof(c_int))
     
     @property
@@ -2664,7 +2664,7 @@ class MjDataWrapper(object):
     
     @efc_solref.setter
     def efc_solref(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_solref, val_ptr, self._size_src.njmax*2 * sizeof(c_double))
     
     @property
@@ -2675,7 +2675,7 @@ class MjDataWrapper(object):
     
     @efc_solimp.setter
     def efc_solimp(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_solimp, val_ptr, self._size_src.njmax*3 * sizeof(c_double))
     
     @property
@@ -2686,7 +2686,7 @@ class MjDataWrapper(object):
     
     @efc_margin.setter
     def efc_margin(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_margin, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
@@ -2697,7 +2697,7 @@ class MjDataWrapper(object):
     
     @efc_frictionloss.setter
     def efc_frictionloss(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_frictionloss, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
@@ -2708,7 +2708,7 @@ class MjDataWrapper(object):
     
     @efc_pos.setter
     def efc_pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_pos, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
@@ -2719,7 +2719,7 @@ class MjDataWrapper(object):
     
     @efc_J.setter
     def efc_J(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_J, val_ptr, self._size_src.njmax*self._size_src.nv * sizeof(c_double))
     
     @property
@@ -2730,7 +2730,7 @@ class MjDataWrapper(object):
     
     @efc_J_T.setter
     def efc_J_T(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_J_T, val_ptr, self._size_src.nv*self._size_src.njmax * sizeof(c_double))
     
     @property
@@ -2741,7 +2741,7 @@ class MjDataWrapper(object):
     
     @efc_diagApprox.setter
     def efc_diagApprox(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_diagApprox, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
@@ -2752,7 +2752,7 @@ class MjDataWrapper(object):
     
     @efc_R.setter
     def efc_R(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_R, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
@@ -2763,7 +2763,7 @@ class MjDataWrapper(object):
     
     @efc_AR.setter
     def efc_AR(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_AR, val_ptr, self._size_src.njmax*self._size_src.njmax * sizeof(c_double))
     
     @property
@@ -2774,7 +2774,7 @@ class MjDataWrapper(object):
     
     @e_ARchol.setter
     def e_ARchol(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.e_ARchol, val_ptr, self._size_src.nemax*self._size_src.nemax * sizeof(c_double))
     
     @property
@@ -2785,7 +2785,7 @@ class MjDataWrapper(object):
     
     @fc_e_rect.setter
     def fc_e_rect(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.fc_e_rect, val_ptr, self._size_src.njmax*self._size_src.nemax * sizeof(c_double))
     
     @property
@@ -2796,7 +2796,7 @@ class MjDataWrapper(object):
     
     @fc_AR.setter
     def fc_AR(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.fc_AR, val_ptr, self._size_src.njmax*self._size_src.njmax * sizeof(c_double))
     
     @property
@@ -2807,7 +2807,7 @@ class MjDataWrapper(object):
     
     @ten_velocity.setter
     def ten_velocity(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.ten_velocity, val_ptr, self._size_src.ntendon*1 * sizeof(c_double))
     
     @property
@@ -2818,7 +2818,7 @@ class MjDataWrapper(object):
     
     @actuator_velocity.setter
     def actuator_velocity(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_velocity, val_ptr, self._size_src.nu*1 * sizeof(c_double))
     
     @property
@@ -2829,7 +2829,7 @@ class MjDataWrapper(object):
     
     @cvel.setter
     def cvel(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cvel, val_ptr, self._size_src.nbody*6 * sizeof(c_double))
     
     @property
@@ -2840,7 +2840,7 @@ class MjDataWrapper(object):
     
     @cdof_dot.setter
     def cdof_dot(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cdof_dot, val_ptr, self._size_src.nv*6 * sizeof(c_double))
     
     @property
@@ -2851,7 +2851,7 @@ class MjDataWrapper(object):
     
     @qfrc_bias.setter
     def qfrc_bias(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qfrc_bias, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2862,7 +2862,7 @@ class MjDataWrapper(object):
     
     @qfrc_passive.setter
     def qfrc_passive(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qfrc_passive, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2873,7 +2873,7 @@ class MjDataWrapper(object):
     
     @efc_vel.setter
     def efc_vel(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_vel, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
@@ -2884,7 +2884,7 @@ class MjDataWrapper(object):
     
     @efc_aref.setter
     def efc_aref(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_aref, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
@@ -2895,7 +2895,7 @@ class MjDataWrapper(object):
     
     @actuator_force.setter
     def actuator_force(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_force, val_ptr, self._size_src.nu*1 * sizeof(c_double))
     
     @property
@@ -2906,7 +2906,7 @@ class MjDataWrapper(object):
     
     @qfrc_actuator.setter
     def qfrc_actuator(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qfrc_actuator, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2917,7 +2917,7 @@ class MjDataWrapper(object):
     
     @qfrc_unc.setter
     def qfrc_unc(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qfrc_unc, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2928,7 +2928,7 @@ class MjDataWrapper(object):
     
     @qacc_unc.setter
     def qacc_unc(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qacc_unc, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2939,7 +2939,7 @@ class MjDataWrapper(object):
     
     @efc_b.setter
     def efc_b(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_b, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
@@ -2950,7 +2950,7 @@ class MjDataWrapper(object):
     
     @fc_b.setter
     def fc_b(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.fc_b, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
@@ -2961,7 +2961,7 @@ class MjDataWrapper(object):
     
     @efc_force.setter
     def efc_force(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_force, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
@@ -2972,7 +2972,7 @@ class MjDataWrapper(object):
     
     @qfrc_constraint.setter
     def qfrc_constraint(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qfrc_constraint, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2983,7 +2983,7 @@ class MjDataWrapper(object):
     
     @qfrc_inverse.setter
     def qfrc_inverse(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qfrc_inverse, val_ptr, self._size_src.nv*1 * sizeof(c_double))
     
     @property
@@ -2994,7 +2994,7 @@ class MjDataWrapper(object):
     
     @cacc.setter
     def cacc(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cacc, val_ptr, self._size_src.nbody*6 * sizeof(c_double))
     
     @property
@@ -3005,7 +3005,7 @@ class MjDataWrapper(object):
     
     @cfrc_int.setter
     def cfrc_int(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cfrc_int, val_ptr, self._size_src.nbody*6 * sizeof(c_double))
     
     @property
@@ -3016,7 +3016,7 @@ class MjDataWrapper(object):
     
     @cfrc_ext.setter
     def cfrc_ext(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cfrc_ext, val_ptr, self._size_src.nbody*6 * sizeof(c_double))
 
 class MjModelWrapper(object):
@@ -3442,7 +3442,7 @@ class MjModelWrapper(object):
     
     @buffer.setter
     def buffer(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.buffer, val_ptr, self.nbuffer * sizeof(c_ubyte))
     
     @property
@@ -3453,7 +3453,7 @@ class MjModelWrapper(object):
     
     @qpos0.setter
     def qpos0(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qpos0, val_ptr, self.nq*1 * sizeof(c_double))
     
     @property
@@ -3464,7 +3464,7 @@ class MjModelWrapper(object):
     
     @qpos_spring.setter
     def qpos_spring(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.qpos_spring, val_ptr, self.nq*1 * sizeof(c_double))
     
     @property
@@ -3475,7 +3475,7 @@ class MjModelWrapper(object):
     
     @body_parentid.setter
     def body_parentid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.body_parentid, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -3486,7 +3486,7 @@ class MjModelWrapper(object):
     
     @body_rootid.setter
     def body_rootid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.body_rootid, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -3497,7 +3497,7 @@ class MjModelWrapper(object):
     
     @body_weldid.setter
     def body_weldid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.body_weldid, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -3508,7 +3508,7 @@ class MjModelWrapper(object):
     
     @body_mocapid.setter
     def body_mocapid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.body_mocapid, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -3519,7 +3519,7 @@ class MjModelWrapper(object):
     
     @body_jntnum.setter
     def body_jntnum(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.body_jntnum, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -3530,7 +3530,7 @@ class MjModelWrapper(object):
     
     @body_jntadr.setter
     def body_jntadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.body_jntadr, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -3541,7 +3541,7 @@ class MjModelWrapper(object):
     
     @body_dofnum.setter
     def body_dofnum(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.body_dofnum, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -3552,7 +3552,7 @@ class MjModelWrapper(object):
     
     @body_dofadr.setter
     def body_dofadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.body_dofadr, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -3563,7 +3563,7 @@ class MjModelWrapper(object):
     
     @body_geomnum.setter
     def body_geomnum(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.body_geomnum, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -3574,7 +3574,7 @@ class MjModelWrapper(object):
     
     @body_geomadr.setter
     def body_geomadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.body_geomadr, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -3585,7 +3585,7 @@ class MjModelWrapper(object):
     
     @body_pos.setter
     def body_pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.body_pos, val_ptr, self.nbody*3 * sizeof(c_double))
     
     @property
@@ -3596,7 +3596,7 @@ class MjModelWrapper(object):
     
     @body_quat.setter
     def body_quat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.body_quat, val_ptr, self.nbody*4 * sizeof(c_double))
     
     @property
@@ -3607,7 +3607,7 @@ class MjModelWrapper(object):
     
     @body_ipos.setter
     def body_ipos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.body_ipos, val_ptr, self.nbody*3 * sizeof(c_double))
     
     @property
@@ -3618,7 +3618,7 @@ class MjModelWrapper(object):
     
     @body_iquat.setter
     def body_iquat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.body_iquat, val_ptr, self.nbody*4 * sizeof(c_double))
     
     @property
@@ -3629,7 +3629,7 @@ class MjModelWrapper(object):
     
     @body_mass.setter
     def body_mass(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.body_mass, val_ptr, self.nbody*1 * sizeof(c_double))
     
     @property
@@ -3640,7 +3640,7 @@ class MjModelWrapper(object):
     
     @body_inertia.setter
     def body_inertia(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.body_inertia, val_ptr, self.nbody*3 * sizeof(c_double))
     
     @property
@@ -3651,7 +3651,7 @@ class MjModelWrapper(object):
     
     @body_invweight0.setter
     def body_invweight0(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.body_invweight0, val_ptr, self.nbody*2 * sizeof(c_double))
     
     @property
@@ -3662,7 +3662,7 @@ class MjModelWrapper(object):
     
     @body_user.setter
     def body_user(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.body_user, val_ptr, self.nbody*self.nuser_body * sizeof(c_double))
     
     @property
@@ -3673,7 +3673,7 @@ class MjModelWrapper(object):
     
     @jnt_type.setter
     def jnt_type(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.jnt_type, val_ptr, self.njnt*1 * sizeof(c_int))
     
     @property
@@ -3684,7 +3684,7 @@ class MjModelWrapper(object):
     
     @jnt_qposadr.setter
     def jnt_qposadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.jnt_qposadr, val_ptr, self.njnt*1 * sizeof(c_int))
     
     @property
@@ -3695,7 +3695,7 @@ class MjModelWrapper(object):
     
     @jnt_dofadr.setter
     def jnt_dofadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.jnt_dofadr, val_ptr, self.njnt*1 * sizeof(c_int))
     
     @property
@@ -3706,7 +3706,7 @@ class MjModelWrapper(object):
     
     @jnt_bodyid.setter
     def jnt_bodyid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.jnt_bodyid, val_ptr, self.njnt*1 * sizeof(c_int))
     
     @property
@@ -3717,7 +3717,7 @@ class MjModelWrapper(object):
     
     @jnt_limited.setter
     def jnt_limited(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.jnt_limited, val_ptr, self.njnt*1 * sizeof(c_ubyte))
     
     @property
@@ -3728,7 +3728,7 @@ class MjModelWrapper(object):
     
     @jnt_solref.setter
     def jnt_solref(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.jnt_solref, val_ptr, self.njnt*2 * sizeof(c_double))
     
     @property
@@ -3739,7 +3739,7 @@ class MjModelWrapper(object):
     
     @jnt_solimp.setter
     def jnt_solimp(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.jnt_solimp, val_ptr, self.njnt*3 * sizeof(c_double))
     
     @property
@@ -3750,7 +3750,7 @@ class MjModelWrapper(object):
     
     @jnt_pos.setter
     def jnt_pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.jnt_pos, val_ptr, self.njnt*3 * sizeof(c_double))
     
     @property
@@ -3761,7 +3761,7 @@ class MjModelWrapper(object):
     
     @jnt_axis.setter
     def jnt_axis(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.jnt_axis, val_ptr, self.njnt*3 * sizeof(c_double))
     
     @property
@@ -3772,7 +3772,7 @@ class MjModelWrapper(object):
     
     @jnt_stiffness.setter
     def jnt_stiffness(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.jnt_stiffness, val_ptr, self.njnt*1 * sizeof(c_double))
     
     @property
@@ -3783,7 +3783,7 @@ class MjModelWrapper(object):
     
     @jnt_range.setter
     def jnt_range(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.jnt_range, val_ptr, self.njnt*2 * sizeof(c_double))
     
     @property
@@ -3794,7 +3794,7 @@ class MjModelWrapper(object):
     
     @jnt_margin.setter
     def jnt_margin(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.jnt_margin, val_ptr, self.njnt*1 * sizeof(c_double))
     
     @property
@@ -3805,7 +3805,7 @@ class MjModelWrapper(object):
     
     @jnt_user.setter
     def jnt_user(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.jnt_user, val_ptr, self.njnt*self.nuser_jnt * sizeof(c_double))
     
     @property
@@ -3816,7 +3816,7 @@ class MjModelWrapper(object):
     
     @dof_bodyid.setter
     def dof_bodyid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.dof_bodyid, val_ptr, self.nv*1 * sizeof(c_int))
     
     @property
@@ -3827,7 +3827,7 @@ class MjModelWrapper(object):
     
     @dof_jntid.setter
     def dof_jntid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.dof_jntid, val_ptr, self.nv*1 * sizeof(c_int))
     
     @property
@@ -3838,7 +3838,7 @@ class MjModelWrapper(object):
     
     @dof_parentid.setter
     def dof_parentid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.dof_parentid, val_ptr, self.nv*1 * sizeof(c_int))
     
     @property
@@ -3849,7 +3849,7 @@ class MjModelWrapper(object):
     
     @dof_Madr.setter
     def dof_Madr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.dof_Madr, val_ptr, self.nv*1 * sizeof(c_int))
     
     @property
@@ -3860,7 +3860,7 @@ class MjModelWrapper(object):
     
     @dof_frictional.setter
     def dof_frictional(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.dof_frictional, val_ptr, self.nv*1 * sizeof(c_ubyte))
     
     @property
@@ -3871,7 +3871,7 @@ class MjModelWrapper(object):
     
     @dof_solref.setter
     def dof_solref(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.dof_solref, val_ptr, self.nv*2 * sizeof(c_double))
     
     @property
@@ -3882,7 +3882,7 @@ class MjModelWrapper(object):
     
     @dof_solimp.setter
     def dof_solimp(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.dof_solimp, val_ptr, self.nv*3 * sizeof(c_double))
     
     @property
@@ -3893,7 +3893,7 @@ class MjModelWrapper(object):
     
     @dof_frictionloss.setter
     def dof_frictionloss(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.dof_frictionloss, val_ptr, self.nv*1 * sizeof(c_double))
     
     @property
@@ -3904,7 +3904,7 @@ class MjModelWrapper(object):
     
     @dof_armature.setter
     def dof_armature(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.dof_armature, val_ptr, self.nv*1 * sizeof(c_double))
     
     @property
@@ -3915,7 +3915,7 @@ class MjModelWrapper(object):
     
     @dof_damping.setter
     def dof_damping(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.dof_damping, val_ptr, self.nv*1 * sizeof(c_double))
     
     @property
@@ -3926,7 +3926,7 @@ class MjModelWrapper(object):
     
     @dof_invweight0.setter
     def dof_invweight0(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.dof_invweight0, val_ptr, self.nv*1 * sizeof(c_double))
     
     @property
@@ -3937,7 +3937,7 @@ class MjModelWrapper(object):
     
     @geom_type.setter
     def geom_type(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.geom_type, val_ptr, self.ngeom*1 * sizeof(c_int))
     
     @property
@@ -3948,7 +3948,7 @@ class MjModelWrapper(object):
     
     @geom_contype.setter
     def geom_contype(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.geom_contype, val_ptr, self.ngeom*1 * sizeof(c_int))
     
     @property
@@ -3959,7 +3959,7 @@ class MjModelWrapper(object):
     
     @geom_conaffinity.setter
     def geom_conaffinity(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.geom_conaffinity, val_ptr, self.ngeom*1 * sizeof(c_int))
     
     @property
@@ -3970,7 +3970,7 @@ class MjModelWrapper(object):
     
     @geom_condim.setter
     def geom_condim(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.geom_condim, val_ptr, self.ngeom*1 * sizeof(c_int))
     
     @property
@@ -3981,7 +3981,7 @@ class MjModelWrapper(object):
     
     @geom_bodyid.setter
     def geom_bodyid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.geom_bodyid, val_ptr, self.ngeom*1 * sizeof(c_int))
     
     @property
@@ -3992,7 +3992,7 @@ class MjModelWrapper(object):
     
     @geom_dataid.setter
     def geom_dataid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.geom_dataid, val_ptr, self.ngeom*1 * sizeof(c_int))
     
     @property
@@ -4003,7 +4003,7 @@ class MjModelWrapper(object):
     
     @geom_matid.setter
     def geom_matid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.geom_matid, val_ptr, self.ngeom*1 * sizeof(c_int))
     
     @property
@@ -4014,7 +4014,7 @@ class MjModelWrapper(object):
     
     @geom_group.setter
     def geom_group(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.geom_group, val_ptr, self.ngeom*1 * sizeof(c_int))
     
     @property
@@ -4025,7 +4025,7 @@ class MjModelWrapper(object):
     
     @geom_solmix.setter
     def geom_solmix(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_solmix, val_ptr, self.ngeom*1 * sizeof(c_double))
     
     @property
@@ -4036,7 +4036,7 @@ class MjModelWrapper(object):
     
     @geom_solref.setter
     def geom_solref(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_solref, val_ptr, self.ngeom*2 * sizeof(c_double))
     
     @property
@@ -4047,7 +4047,7 @@ class MjModelWrapper(object):
     
     @geom_solimp.setter
     def geom_solimp(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_solimp, val_ptr, self.ngeom*3 * sizeof(c_double))
     
     @property
@@ -4058,7 +4058,7 @@ class MjModelWrapper(object):
     
     @geom_size.setter
     def geom_size(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_size, val_ptr, self.ngeom*3 * sizeof(c_double))
     
     @property
@@ -4069,7 +4069,7 @@ class MjModelWrapper(object):
     
     @geom_rbound.setter
     def geom_rbound(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_rbound, val_ptr, self.ngeom*1 * sizeof(c_double))
     
     @property
@@ -4080,7 +4080,7 @@ class MjModelWrapper(object):
     
     @geom_pos.setter
     def geom_pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_pos, val_ptr, self.ngeom*3 * sizeof(c_double))
     
     @property
@@ -4091,7 +4091,7 @@ class MjModelWrapper(object):
     
     @geom_quat.setter
     def geom_quat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_quat, val_ptr, self.ngeom*4 * sizeof(c_double))
     
     @property
@@ -4102,7 +4102,7 @@ class MjModelWrapper(object):
     
     @geom_friction.setter
     def geom_friction(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_friction, val_ptr, self.ngeom*3 * sizeof(c_double))
     
     @property
@@ -4113,7 +4113,7 @@ class MjModelWrapper(object):
     
     @geom_margin.setter
     def geom_margin(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_margin, val_ptr, self.ngeom*1 * sizeof(c_double))
     
     @property
@@ -4124,7 +4124,7 @@ class MjModelWrapper(object):
     
     @geom_gap.setter
     def geom_gap(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_gap, val_ptr, self.ngeom*1 * sizeof(c_double))
     
     @property
@@ -4135,7 +4135,7 @@ class MjModelWrapper(object):
     
     @geom_user.setter
     def geom_user(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.geom_user, val_ptr, self.ngeom*self.nuser_geom * sizeof(c_double))
     
     @property
@@ -4146,7 +4146,7 @@ class MjModelWrapper(object):
     
     @geom_rgba.setter
     def geom_rgba(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.geom_rgba, val_ptr, self.ngeom*4 * sizeof(c_float))
     
     @property
@@ -4157,7 +4157,7 @@ class MjModelWrapper(object):
     
     @site_type.setter
     def site_type(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.site_type, val_ptr, self.nsite*1 * sizeof(c_int))
     
     @property
@@ -4168,7 +4168,7 @@ class MjModelWrapper(object):
     
     @site_bodyid.setter
     def site_bodyid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.site_bodyid, val_ptr, self.nsite*1 * sizeof(c_int))
     
     @property
@@ -4179,7 +4179,7 @@ class MjModelWrapper(object):
     
     @site_matid.setter
     def site_matid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.site_matid, val_ptr, self.nsite*1 * sizeof(c_int))
     
     @property
@@ -4190,7 +4190,7 @@ class MjModelWrapper(object):
     
     @site_group.setter
     def site_group(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.site_group, val_ptr, self.nsite*1 * sizeof(c_int))
     
     @property
@@ -4201,7 +4201,7 @@ class MjModelWrapper(object):
     
     @site_size.setter
     def site_size(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.site_size, val_ptr, self.nsite*3 * sizeof(c_double))
     
     @property
@@ -4212,7 +4212,7 @@ class MjModelWrapper(object):
     
     @site_pos.setter
     def site_pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.site_pos, val_ptr, self.nsite*3 * sizeof(c_double))
     
     @property
@@ -4223,7 +4223,7 @@ class MjModelWrapper(object):
     
     @site_quat.setter
     def site_quat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.site_quat, val_ptr, self.nsite*4 * sizeof(c_double))
     
     @property
@@ -4234,7 +4234,7 @@ class MjModelWrapper(object):
     
     @site_user.setter
     def site_user(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.site_user, val_ptr, self.nsite*self.nuser_site * sizeof(c_double))
     
     @property
@@ -4245,7 +4245,7 @@ class MjModelWrapper(object):
     
     @site_rgba.setter
     def site_rgba(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.site_rgba, val_ptr, self.nsite*4 * sizeof(c_float))
     
     @property
@@ -4256,7 +4256,7 @@ class MjModelWrapper(object):
     
     @cam_bodyid.setter
     def cam_bodyid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.cam_bodyid, val_ptr, self.ncam*1 * sizeof(c_int))
     
     @property
@@ -4267,7 +4267,7 @@ class MjModelWrapper(object):
     
     @cam_pos.setter
     def cam_pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cam_pos, val_ptr, self.ncam*3 * sizeof(c_double))
     
     @property
@@ -4278,7 +4278,7 @@ class MjModelWrapper(object):
     
     @cam_quat.setter
     def cam_quat(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cam_quat, val_ptr, self.ncam*4 * sizeof(c_double))
     
     @property
@@ -4289,7 +4289,7 @@ class MjModelWrapper(object):
     
     @cam_fovy.setter
     def cam_fovy(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cam_fovy, val_ptr, self.ncam*1 * sizeof(c_double))
     
     @property
@@ -4300,7 +4300,7 @@ class MjModelWrapper(object):
     
     @cam_ipd.setter
     def cam_ipd(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.cam_ipd, val_ptr, self.ncam*1 * sizeof(c_double))
     
     @property
@@ -4311,7 +4311,7 @@ class MjModelWrapper(object):
     
     @light_bodyid.setter
     def light_bodyid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.light_bodyid, val_ptr, self.nlight*1 * sizeof(c_int))
     
     @property
@@ -4322,7 +4322,7 @@ class MjModelWrapper(object):
     
     @light_directional.setter
     def light_directional(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.light_directional, val_ptr, self.nlight*1 * sizeof(c_ubyte))
     
     @property
@@ -4333,7 +4333,7 @@ class MjModelWrapper(object):
     
     @light_castshadow.setter
     def light_castshadow(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.light_castshadow, val_ptr, self.nlight*1 * sizeof(c_ubyte))
     
     @property
@@ -4344,7 +4344,7 @@ class MjModelWrapper(object):
     
     @light_active.setter
     def light_active(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.light_active, val_ptr, self.nlight*1 * sizeof(c_ubyte))
     
     @property
@@ -4355,7 +4355,7 @@ class MjModelWrapper(object):
     
     @light_pos.setter
     def light_pos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.light_pos, val_ptr, self.nlight*3 * sizeof(c_double))
     
     @property
@@ -4366,7 +4366,7 @@ class MjModelWrapper(object):
     
     @light_dir.setter
     def light_dir(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.light_dir, val_ptr, self.nlight*3 * sizeof(c_double))
     
     @property
@@ -4377,7 +4377,7 @@ class MjModelWrapper(object):
     
     @light_attenuation.setter
     def light_attenuation(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.light_attenuation, val_ptr, self.nlight*3 * sizeof(c_float))
     
     @property
@@ -4388,7 +4388,7 @@ class MjModelWrapper(object):
     
     @light_cutoff.setter
     def light_cutoff(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.light_cutoff, val_ptr, self.nlight*1 * sizeof(c_float))
     
     @property
@@ -4399,7 +4399,7 @@ class MjModelWrapper(object):
     
     @light_exponent.setter
     def light_exponent(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.light_exponent, val_ptr, self.nlight*1 * sizeof(c_float))
     
     @property
@@ -4410,7 +4410,7 @@ class MjModelWrapper(object):
     
     @light_ambient.setter
     def light_ambient(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.light_ambient, val_ptr, self.nlight*3 * sizeof(c_float))
     
     @property
@@ -4421,7 +4421,7 @@ class MjModelWrapper(object):
     
     @light_diffuse.setter
     def light_diffuse(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.light_diffuse, val_ptr, self.nlight*3 * sizeof(c_float))
     
     @property
@@ -4432,7 +4432,7 @@ class MjModelWrapper(object):
     
     @light_specular.setter
     def light_specular(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.light_specular, val_ptr, self.nlight*3 * sizeof(c_float))
     
     @property
@@ -4443,7 +4443,7 @@ class MjModelWrapper(object):
     
     @mesh_faceadr.setter
     def mesh_faceadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.mesh_faceadr, val_ptr, self.nmesh*1 * sizeof(c_int))
     
     @property
@@ -4454,7 +4454,7 @@ class MjModelWrapper(object):
     
     @mesh_facenum.setter
     def mesh_facenum(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.mesh_facenum, val_ptr, self.nmesh*1 * sizeof(c_int))
     
     @property
@@ -4465,7 +4465,7 @@ class MjModelWrapper(object):
     
     @mesh_vertadr.setter
     def mesh_vertadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.mesh_vertadr, val_ptr, self.nmesh*1 * sizeof(c_int))
     
     @property
@@ -4476,7 +4476,7 @@ class MjModelWrapper(object):
     
     @mesh_vertnum.setter
     def mesh_vertnum(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.mesh_vertnum, val_ptr, self.nmesh*1 * sizeof(c_int))
     
     @property
@@ -4487,7 +4487,7 @@ class MjModelWrapper(object):
     
     @mesh_graphadr.setter
     def mesh_graphadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.mesh_graphadr, val_ptr, self.nmesh*1 * sizeof(c_int))
     
     @property
@@ -4498,7 +4498,7 @@ class MjModelWrapper(object):
     
     @mesh_vert.setter
     def mesh_vert(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.mesh_vert, val_ptr, self.nmeshvert*3 * sizeof(c_float))
     
     @property
@@ -4509,7 +4509,7 @@ class MjModelWrapper(object):
     
     @mesh_normal.setter
     def mesh_normal(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.mesh_normal, val_ptr, self.nmeshvert*3 * sizeof(c_float))
     
     @property
@@ -4520,7 +4520,7 @@ class MjModelWrapper(object):
     
     @mesh_face.setter
     def mesh_face(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.mesh_face, val_ptr, self.nmeshface*3 * sizeof(c_int))
     
     @property
@@ -4531,7 +4531,7 @@ class MjModelWrapper(object):
     
     @mesh_graph.setter
     def mesh_graph(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.mesh_graph, val_ptr, self.nmeshgraph*1 * sizeof(c_int))
     
     @property
@@ -4542,7 +4542,7 @@ class MjModelWrapper(object):
     
     @hfield_size.setter
     def hfield_size(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.hfield_size, val_ptr, self.nhfield*4 * sizeof(c_double))
     
     @property
@@ -4553,7 +4553,7 @@ class MjModelWrapper(object):
     
     @hfield_nrow.setter
     def hfield_nrow(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.hfield_nrow, val_ptr, self.nhfield*1 * sizeof(c_int))
     
     @property
@@ -4564,7 +4564,7 @@ class MjModelWrapper(object):
     
     @hfield_ncol.setter
     def hfield_ncol(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.hfield_ncol, val_ptr, self.nhfield*1 * sizeof(c_int))
     
     @property
@@ -4575,7 +4575,7 @@ class MjModelWrapper(object):
     
     @hfield_adr.setter
     def hfield_adr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.hfield_adr, val_ptr, self.nhfield*1 * sizeof(c_int))
     
     @property
@@ -4586,7 +4586,7 @@ class MjModelWrapper(object):
     
     @hfield_data.setter
     def hfield_data(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.hfield_data, val_ptr, self.nhfielddata*1 * sizeof(c_float))
     
     @property
@@ -4597,7 +4597,7 @@ class MjModelWrapper(object):
     
     @tex_type.setter
     def tex_type(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.tex_type, val_ptr, self.ntex*1 * sizeof(c_int))
     
     @property
@@ -4608,7 +4608,7 @@ class MjModelWrapper(object):
     
     @tex_height.setter
     def tex_height(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.tex_height, val_ptr, self.ntex*1 * sizeof(c_int))
     
     @property
@@ -4619,7 +4619,7 @@ class MjModelWrapper(object):
     
     @tex_width.setter
     def tex_width(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.tex_width, val_ptr, self.ntex*1 * sizeof(c_int))
     
     @property
@@ -4630,7 +4630,7 @@ class MjModelWrapper(object):
     
     @tex_adr.setter
     def tex_adr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.tex_adr, val_ptr, self.ntex*1 * sizeof(c_int))
     
     @property
@@ -4641,7 +4641,7 @@ class MjModelWrapper(object):
     
     @tex_rgb.setter
     def tex_rgb(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.tex_rgb, val_ptr, self.ntexdata*1 * sizeof(c_ubyte))
     
     @property
@@ -4652,7 +4652,7 @@ class MjModelWrapper(object):
     
     @mat_texid.setter
     def mat_texid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.mat_texid, val_ptr, self.nmat*1 * sizeof(c_int))
     
     @property
@@ -4663,7 +4663,7 @@ class MjModelWrapper(object):
     
     @mat_texuniform.setter
     def mat_texuniform(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.mat_texuniform, val_ptr, self.nmat*1 * sizeof(c_ubyte))
     
     @property
@@ -4674,7 +4674,7 @@ class MjModelWrapper(object):
     
     @mat_texscale.setter
     def mat_texscale(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.mat_texscale, val_ptr, self.nmat*2 * sizeof(c_float))
     
     @property
@@ -4685,7 +4685,7 @@ class MjModelWrapper(object):
     
     @mat_emission.setter
     def mat_emission(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.mat_emission, val_ptr, self.nmat*1 * sizeof(c_float))
     
     @property
@@ -4696,7 +4696,7 @@ class MjModelWrapper(object):
     
     @mat_specular.setter
     def mat_specular(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.mat_specular, val_ptr, self.nmat*1 * sizeof(c_float))
     
     @property
@@ -4707,7 +4707,7 @@ class MjModelWrapper(object):
     
     @mat_shininess.setter
     def mat_shininess(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.mat_shininess, val_ptr, self.nmat*1 * sizeof(c_float))
     
     @property
@@ -4718,7 +4718,7 @@ class MjModelWrapper(object):
     
     @mat_reflectance.setter
     def mat_reflectance(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.mat_reflectance, val_ptr, self.nmat*1 * sizeof(c_float))
     
     @property
@@ -4729,7 +4729,7 @@ class MjModelWrapper(object):
     
     @mat_rgba.setter
     def mat_rgba(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.mat_rgba, val_ptr, self.nmat*4 * sizeof(c_float))
     
     @property
@@ -4740,7 +4740,7 @@ class MjModelWrapper(object):
     
     @pair_dim.setter
     def pair_dim(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.pair_dim, val_ptr, self.npair*1 * sizeof(c_int))
     
     @property
@@ -4751,7 +4751,7 @@ class MjModelWrapper(object):
     
     @pair_geom1.setter
     def pair_geom1(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.pair_geom1, val_ptr, self.npair*1 * sizeof(c_int))
     
     @property
@@ -4762,7 +4762,7 @@ class MjModelWrapper(object):
     
     @pair_geom2.setter
     def pair_geom2(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.pair_geom2, val_ptr, self.npair*1 * sizeof(c_int))
     
     @property
@@ -4773,7 +4773,7 @@ class MjModelWrapper(object):
     
     @pair_signature.setter
     def pair_signature(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.pair_signature, val_ptr, self.npair*1 * sizeof(c_int))
     
     @property
@@ -4784,7 +4784,7 @@ class MjModelWrapper(object):
     
     @pair_solref.setter
     def pair_solref(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.pair_solref, val_ptr, self.npair*2 * sizeof(c_double))
     
     @property
@@ -4795,7 +4795,7 @@ class MjModelWrapper(object):
     
     @pair_solimp.setter
     def pair_solimp(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.pair_solimp, val_ptr, self.npair*3 * sizeof(c_double))
     
     @property
@@ -4806,7 +4806,7 @@ class MjModelWrapper(object):
     
     @pair_margin.setter
     def pair_margin(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.pair_margin, val_ptr, self.npair*1 * sizeof(c_double))
     
     @property
@@ -4817,7 +4817,7 @@ class MjModelWrapper(object):
     
     @pair_gap.setter
     def pair_gap(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.pair_gap, val_ptr, self.npair*1 * sizeof(c_double))
     
     @property
@@ -4828,7 +4828,7 @@ class MjModelWrapper(object):
     
     @pair_friction.setter
     def pair_friction(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.pair_friction, val_ptr, self.npair*5 * sizeof(c_double))
     
     @property
@@ -4839,7 +4839,7 @@ class MjModelWrapper(object):
     
     @exclude_signature.setter
     def exclude_signature(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.exclude_signature, val_ptr, self.nexclude*1 * sizeof(c_int))
     
     @property
@@ -4850,7 +4850,7 @@ class MjModelWrapper(object):
     
     @eq_type.setter
     def eq_type(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.eq_type, val_ptr, self.neq*1 * sizeof(c_int))
     
     @property
@@ -4861,7 +4861,7 @@ class MjModelWrapper(object):
     
     @eq_obj1id.setter
     def eq_obj1id(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.eq_obj1id, val_ptr, self.neq*1 * sizeof(c_int))
     
     @property
@@ -4872,7 +4872,7 @@ class MjModelWrapper(object):
     
     @eq_obj2id.setter
     def eq_obj2id(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.eq_obj2id, val_ptr, self.neq*1 * sizeof(c_int))
     
     @property
@@ -4883,7 +4883,7 @@ class MjModelWrapper(object):
     
     @eq_active.setter
     def eq_active(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.eq_active, val_ptr, self.neq*1 * sizeof(c_ubyte))
     
     @property
@@ -4894,7 +4894,7 @@ class MjModelWrapper(object):
     
     @eq_solref.setter
     def eq_solref(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.eq_solref, val_ptr, self.neq*2 * sizeof(c_double))
     
     @property
@@ -4905,7 +4905,7 @@ class MjModelWrapper(object):
     
     @eq_solimp.setter
     def eq_solimp(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.eq_solimp, val_ptr, self.neq*3 * sizeof(c_double))
     
     @property
@@ -4916,7 +4916,7 @@ class MjModelWrapper(object):
     
     @eq_data.setter
     def eq_data(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.eq_data, val_ptr, self.neq*7 * sizeof(c_double))
     
     @property
@@ -4927,7 +4927,7 @@ class MjModelWrapper(object):
     
     @tendon_adr.setter
     def tendon_adr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.tendon_adr, val_ptr, self.ntendon*1 * sizeof(c_int))
     
     @property
@@ -4938,7 +4938,7 @@ class MjModelWrapper(object):
     
     @tendon_num.setter
     def tendon_num(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.tendon_num, val_ptr, self.ntendon*1 * sizeof(c_int))
     
     @property
@@ -4949,7 +4949,7 @@ class MjModelWrapper(object):
     
     @tendon_matid.setter
     def tendon_matid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.tendon_matid, val_ptr, self.ntendon*1 * sizeof(c_int))
     
     @property
@@ -4960,7 +4960,7 @@ class MjModelWrapper(object):
     
     @tendon_limited.setter
     def tendon_limited(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.tendon_limited, val_ptr, self.ntendon*1 * sizeof(c_ubyte))
     
     @property
@@ -4971,7 +4971,7 @@ class MjModelWrapper(object):
     
     @tendon_frictional.setter
     def tendon_frictional(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.tendon_frictional, val_ptr, self.ntendon*1 * sizeof(c_ubyte))
     
     @property
@@ -4982,7 +4982,7 @@ class MjModelWrapper(object):
     
     @tendon_width.setter
     def tendon_width(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_width, val_ptr, self.ntendon*1 * sizeof(c_double))
     
     @property
@@ -4993,7 +4993,7 @@ class MjModelWrapper(object):
     
     @tendon_solref_lim.setter
     def tendon_solref_lim(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_solref_lim, val_ptr, self.ntendon*2 * sizeof(c_double))
     
     @property
@@ -5004,7 +5004,7 @@ class MjModelWrapper(object):
     
     @tendon_solimp_lim.setter
     def tendon_solimp_lim(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_solimp_lim, val_ptr, self.ntendon*3 * sizeof(c_double))
     
     @property
@@ -5015,7 +5015,7 @@ class MjModelWrapper(object):
     
     @tendon_solref_fri.setter
     def tendon_solref_fri(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_solref_fri, val_ptr, self.ntendon*2 * sizeof(c_double))
     
     @property
@@ -5026,7 +5026,7 @@ class MjModelWrapper(object):
     
     @tendon_solimp_fri.setter
     def tendon_solimp_fri(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_solimp_fri, val_ptr, self.ntendon*3 * sizeof(c_double))
     
     @property
@@ -5037,7 +5037,7 @@ class MjModelWrapper(object):
     
     @tendon_range.setter
     def tendon_range(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_range, val_ptr, self.ntendon*2 * sizeof(c_double))
     
     @property
@@ -5048,7 +5048,7 @@ class MjModelWrapper(object):
     
     @tendon_margin.setter
     def tendon_margin(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_margin, val_ptr, self.ntendon*1 * sizeof(c_double))
     
     @property
@@ -5059,7 +5059,7 @@ class MjModelWrapper(object):
     
     @tendon_stiffness.setter
     def tendon_stiffness(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_stiffness, val_ptr, self.ntendon*1 * sizeof(c_double))
     
     @property
@@ -5070,7 +5070,7 @@ class MjModelWrapper(object):
     
     @tendon_damping.setter
     def tendon_damping(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_damping, val_ptr, self.ntendon*1 * sizeof(c_double))
     
     @property
@@ -5081,7 +5081,7 @@ class MjModelWrapper(object):
     
     @tendon_frictionloss.setter
     def tendon_frictionloss(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_frictionloss, val_ptr, self.ntendon*1 * sizeof(c_double))
     
     @property
@@ -5092,7 +5092,7 @@ class MjModelWrapper(object):
     
     @tendon_lengthspring.setter
     def tendon_lengthspring(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_lengthspring, val_ptr, self.ntendon*1 * sizeof(c_double))
     
     @property
@@ -5103,7 +5103,7 @@ class MjModelWrapper(object):
     
     @tendon_length0.setter
     def tendon_length0(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_length0, val_ptr, self.ntendon*1 * sizeof(c_double))
     
     @property
@@ -5114,7 +5114,7 @@ class MjModelWrapper(object):
     
     @tendon_invweight0.setter
     def tendon_invweight0(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_invweight0, val_ptr, self.ntendon*1 * sizeof(c_double))
     
     @property
@@ -5125,7 +5125,7 @@ class MjModelWrapper(object):
     
     @tendon_user.setter
     def tendon_user(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.tendon_user, val_ptr, self.ntendon*self.nuser_tendon * sizeof(c_double))
     
     @property
@@ -5136,7 +5136,7 @@ class MjModelWrapper(object):
     
     @tendon_rgba.setter
     def tendon_rgba(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_float))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_float))
         memmove(self._wrapped.contents.tendon_rgba, val_ptr, self.ntendon*4 * sizeof(c_float))
     
     @property
@@ -5147,7 +5147,7 @@ class MjModelWrapper(object):
     
     @wrap_type.setter
     def wrap_type(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.wrap_type, val_ptr, self.nwrap*1 * sizeof(c_int))
     
     @property
@@ -5158,7 +5158,7 @@ class MjModelWrapper(object):
     
     @wrap_objid.setter
     def wrap_objid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.wrap_objid, val_ptr, self.nwrap*1 * sizeof(c_int))
     
     @property
@@ -5169,7 +5169,7 @@ class MjModelWrapper(object):
     
     @wrap_prm.setter
     def wrap_prm(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.wrap_prm, val_ptr, self.nwrap*1 * sizeof(c_double))
     
     @property
@@ -5180,7 +5180,7 @@ class MjModelWrapper(object):
     
     @actuator_dyntype.setter
     def actuator_dyntype(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.actuator_dyntype, val_ptr, self.nu*1 * sizeof(c_int))
     
     @property
@@ -5191,7 +5191,7 @@ class MjModelWrapper(object):
     
     @actuator_trntype.setter
     def actuator_trntype(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.actuator_trntype, val_ptr, self.nu*1 * sizeof(c_int))
     
     @property
@@ -5202,7 +5202,7 @@ class MjModelWrapper(object):
     
     @actuator_gaintype.setter
     def actuator_gaintype(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.actuator_gaintype, val_ptr, self.nu*1 * sizeof(c_int))
     
     @property
@@ -5213,7 +5213,7 @@ class MjModelWrapper(object):
     
     @actuator_biastype.setter
     def actuator_biastype(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.actuator_biastype, val_ptr, self.nu*1 * sizeof(c_int))
     
     @property
@@ -5224,7 +5224,7 @@ class MjModelWrapper(object):
     
     @actuator_trnid.setter
     def actuator_trnid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.actuator_trnid, val_ptr, self.nu*2 * sizeof(c_int))
     
     @property
@@ -5235,7 +5235,7 @@ class MjModelWrapper(object):
     
     @actuator_ctrllimited.setter
     def actuator_ctrllimited(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.actuator_ctrllimited, val_ptr, self.nu*1 * sizeof(c_ubyte))
     
     @property
@@ -5246,7 +5246,7 @@ class MjModelWrapper(object):
     
     @actuator_forcelimited.setter
     def actuator_forcelimited(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_ubyte))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_ubyte))
         memmove(self._wrapped.contents.actuator_forcelimited, val_ptr, self.nu*1 * sizeof(c_ubyte))
     
     @property
@@ -5257,7 +5257,7 @@ class MjModelWrapper(object):
     
     @actuator_dynprm.setter
     def actuator_dynprm(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_dynprm, val_ptr, self.nu*10 * sizeof(c_double))
     
     @property
@@ -5268,7 +5268,7 @@ class MjModelWrapper(object):
     
     @actuator_trnprm.setter
     def actuator_trnprm(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_trnprm, val_ptr, self.nu*1 * sizeof(c_double))
     
     @property
@@ -5279,7 +5279,7 @@ class MjModelWrapper(object):
     
     @actuator_gainprm.setter
     def actuator_gainprm(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_gainprm, val_ptr, self.nu*5 * sizeof(c_double))
     
     @property
@@ -5290,7 +5290,7 @@ class MjModelWrapper(object):
     
     @actuator_biasprm.setter
     def actuator_biasprm(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_biasprm, val_ptr, self.nu*3 * sizeof(c_double))
     
     @property
@@ -5301,7 +5301,7 @@ class MjModelWrapper(object):
     
     @actuator_ctrlrange.setter
     def actuator_ctrlrange(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_ctrlrange, val_ptr, self.nu*2 * sizeof(c_double))
     
     @property
@@ -5312,7 +5312,7 @@ class MjModelWrapper(object):
     
     @actuator_forcerange.setter
     def actuator_forcerange(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_forcerange, val_ptr, self.nu*2 * sizeof(c_double))
     
     @property
@@ -5323,7 +5323,7 @@ class MjModelWrapper(object):
     
     @actuator_invweight0.setter
     def actuator_invweight0(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_invweight0, val_ptr, self.nu*1 * sizeof(c_double))
     
     @property
@@ -5334,7 +5334,7 @@ class MjModelWrapper(object):
     
     @actuator_length0.setter
     def actuator_length0(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_length0, val_ptr, self.nu*1 * sizeof(c_double))
     
     @property
@@ -5345,7 +5345,7 @@ class MjModelWrapper(object):
     
     @actuator_lengthrange.setter
     def actuator_lengthrange(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_lengthrange, val_ptr, self.nu*2 * sizeof(c_double))
     
     @property
@@ -5356,7 +5356,7 @@ class MjModelWrapper(object):
     
     @actuator_user.setter
     def actuator_user(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.actuator_user, val_ptr, self.nu*self.nuser_actuator * sizeof(c_double))
     
     @property
@@ -5367,7 +5367,7 @@ class MjModelWrapper(object):
     
     @sensor_type.setter
     def sensor_type(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.sensor_type, val_ptr, self.nsensor*1 * sizeof(c_int))
     
     @property
@@ -5378,7 +5378,7 @@ class MjModelWrapper(object):
     
     @sensor_objid.setter
     def sensor_objid(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.sensor_objid, val_ptr, self.nsensor*1 * sizeof(c_int))
     
     @property
@@ -5389,7 +5389,7 @@ class MjModelWrapper(object):
     
     @sensor_dim.setter
     def sensor_dim(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.sensor_dim, val_ptr, self.nsensor*1 * sizeof(c_int))
     
     @property
@@ -5400,7 +5400,7 @@ class MjModelWrapper(object):
     
     @sensor_adr.setter
     def sensor_adr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.sensor_adr, val_ptr, self.nsensor*1 * sizeof(c_int))
     
     @property
@@ -5411,7 +5411,7 @@ class MjModelWrapper(object):
     
     @sensor_user.setter
     def sensor_user(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.sensor_user, val_ptr, self.nsensor*self.nuser_sensor * sizeof(c_double))
     
     @property
@@ -5422,7 +5422,7 @@ class MjModelWrapper(object):
     
     @numeric_adr.setter
     def numeric_adr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.numeric_adr, val_ptr, self.nnumeric*1 * sizeof(c_int))
     
     @property
@@ -5433,7 +5433,7 @@ class MjModelWrapper(object):
     
     @numeric_size.setter
     def numeric_size(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.numeric_size, val_ptr, self.nnumeric*1 * sizeof(c_int))
     
     @property
@@ -5444,7 +5444,7 @@ class MjModelWrapper(object):
     
     @numeric_data.setter
     def numeric_data(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.numeric_data, val_ptr, self.nnumericdata*1 * sizeof(c_double))
     
     @property
@@ -5455,8 +5455,12 @@ class MjModelWrapper(object):
     
     @text_adr.setter
     def text_adr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.text_adr, val_ptr, self.ntext*1 * sizeof(c_int))
+    
+    @property
+    def text_data(self):
+        return self._wrapped.contents.text_data
     
     @property
     def key_time(self):
@@ -5466,7 +5470,7 @@ class MjModelWrapper(object):
     
     @key_time.setter
     def key_time(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.key_time, val_ptr, self.nkey*1 * sizeof(c_double))
     
     @property
@@ -5477,7 +5481,7 @@ class MjModelWrapper(object):
     
     @key_qpos.setter
     def key_qpos(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.key_qpos, val_ptr, self.nkey*self.nq * sizeof(c_double))
     
     @property
@@ -5488,7 +5492,7 @@ class MjModelWrapper(object):
     
     @key_qvel.setter
     def key_qvel(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.key_qvel, val_ptr, self.nkey*self.nv * sizeof(c_double))
     
     @property
@@ -5499,7 +5503,7 @@ class MjModelWrapper(object):
     
     @key_act.setter
     def key_act(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_double))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.key_act, val_ptr, self.nkey*self.na * sizeof(c_double))
     
     @property
@@ -5510,7 +5514,7 @@ class MjModelWrapper(object):
     
     @name_bodyadr.setter
     def name_bodyadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_bodyadr, val_ptr, self.nbody*1 * sizeof(c_int))
     
     @property
@@ -5521,7 +5525,7 @@ class MjModelWrapper(object):
     
     @name_jntadr.setter
     def name_jntadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_jntadr, val_ptr, self.njnt*1 * sizeof(c_int))
     
     @property
@@ -5532,7 +5536,7 @@ class MjModelWrapper(object):
     
     @name_geomadr.setter
     def name_geomadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_geomadr, val_ptr, self.ngeom*1 * sizeof(c_int))
     
     @property
@@ -5543,7 +5547,7 @@ class MjModelWrapper(object):
     
     @name_siteadr.setter
     def name_siteadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_siteadr, val_ptr, self.nsite*1 * sizeof(c_int))
     
     @property
@@ -5554,7 +5558,7 @@ class MjModelWrapper(object):
     
     @name_camadr.setter
     def name_camadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_camadr, val_ptr, self.ncam*1 * sizeof(c_int))
     
     @property
@@ -5565,7 +5569,7 @@ class MjModelWrapper(object):
     
     @name_lightadr.setter
     def name_lightadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_lightadr, val_ptr, self.nlight*1 * sizeof(c_int))
     
     @property
@@ -5576,7 +5580,7 @@ class MjModelWrapper(object):
     
     @name_meshadr.setter
     def name_meshadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_meshadr, val_ptr, self.nmesh*1 * sizeof(c_int))
     
     @property
@@ -5587,7 +5591,7 @@ class MjModelWrapper(object):
     
     @name_hfieldadr.setter
     def name_hfieldadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_hfieldadr, val_ptr, self.nhfield*1 * sizeof(c_int))
     
     @property
@@ -5598,7 +5602,7 @@ class MjModelWrapper(object):
     
     @name_texadr.setter
     def name_texadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_texadr, val_ptr, self.ntex*1 * sizeof(c_int))
     
     @property
@@ -5609,7 +5613,7 @@ class MjModelWrapper(object):
     
     @name_matadr.setter
     def name_matadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_matadr, val_ptr, self.nmat*1 * sizeof(c_int))
     
     @property
@@ -5620,7 +5624,7 @@ class MjModelWrapper(object):
     
     @name_eqadr.setter
     def name_eqadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_eqadr, val_ptr, self.neq*1 * sizeof(c_int))
     
     @property
@@ -5631,7 +5635,7 @@ class MjModelWrapper(object):
     
     @name_tendonadr.setter
     def name_tendonadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_tendonadr, val_ptr, self.ntendon*1 * sizeof(c_int))
     
     @property
@@ -5642,7 +5646,7 @@ class MjModelWrapper(object):
     
     @name_actuatoradr.setter
     def name_actuatoradr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_actuatoradr, val_ptr, self.nu*1 * sizeof(c_int))
     
     @property
@@ -5653,7 +5657,7 @@ class MjModelWrapper(object):
     
     @name_sensoradr.setter
     def name_sensoradr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_sensoradr, val_ptr, self.nsensor*1 * sizeof(c_int))
     
     @property
@@ -5664,7 +5668,7 @@ class MjModelWrapper(object):
     
     @name_numericadr.setter
     def name_numericadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_numericadr, val_ptr, self.nnumeric*1 * sizeof(c_int))
     
     @property
@@ -5675,5 +5679,9 @@ class MjModelWrapper(object):
     
     @name_textadr.setter
     def name_textadr(self, value):
-        val_ptr = value.ctypes.data_as(POINTER(c_int))
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.name_textadr, val_ptr, self.ntext*1 * sizeof(c_int))
+    
+    @property
+    def names(self):
+        return self._wrapped.contents.names

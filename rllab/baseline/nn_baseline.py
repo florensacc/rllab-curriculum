@@ -65,7 +65,7 @@ class NNBaseline(Baseline, LasagnePowered, Serializable):
             max_penalty_itr=10,
             adapt_penalty=True,
     ):
-        super(NNValueFunction, self).__init__(mdp)
+        super(NNBaseline, self).__init__(mdp)
         Serializable.__init__(self, mdp, hidden_sizes, nonlinearity, use_tr, optimizer,
                               max_opt_itr, step_size, initial_penalty, min_penalty, max_penalty,
                               increase_penalty_factor, decrease_penalty_factor, max_penalty_itr,
@@ -122,7 +122,7 @@ class NNBaseline(Baseline, LasagnePowered, Serializable):
         else:
             output_list = [loss]
 
-        grads = theano.gradient.grad(loss, self.params)
+        grads = theano.gradient.grad(loss, self.get_params(trainable=True))
 
         self._f_loss = compile_function(input_list, output_list)
         self._f_grads = compile_function(input_list, grads)
@@ -148,11 +148,11 @@ class NNBaseline(Baseline, LasagnePowered, Serializable):
             input_vals += [old_vs]
             var = np.mean(np.square(old_vs - returns))
 
-        cur_params = self.get_param_values()
+        cur_params = self.get_param_values(trainable=True)
 
         def evaluate_cost(penalty):
             def evaluate(params):
-                self.set_param_values(params)
+                self.set_param_values(params, trainable=True)
                 if self._use_tr:
                     inputs_with_penalty = input_vals + [penalty]
                     val, _, _ = self._f_loss(*inputs_with_penalty)
@@ -163,7 +163,7 @@ class NNBaseline(Baseline, LasagnePowered, Serializable):
 
         def evaluate_grad(penalty):
             def evaluate(params):
-                self.set_param_values(params)
+                self.set_param_values(params, trainable=True)
                 if self._use_tr:
                     grad = self._f_grads(*(input_vals + [penalty]))
                 else:
@@ -198,7 +198,7 @@ class NNBaseline(Baseline, LasagnePowered, Serializable):
                 if try_mean_kl < self._step_size or \
                         (penalty_itr == max_penalty_itr - 1 and
                                  opt_params is None):
-                    opt_params = self.get_param_values()
+                    opt_params = self.get_param_values(trainable=True)
                     penalty = try_penalty
                     mean_kl = try_mean_kl
 
@@ -227,21 +227,21 @@ class NNBaseline(Baseline, LasagnePowered, Serializable):
                                 try_penalty > self._max_penalty:
                     try_penalty = np.clip(
                         try_penalty, self._min_penalty, self._max_penalty)
-                    opt_params = self.get_param_values()
+                    opt_params = self.get_param_values(trainable=True)
                     penalty = try_penalty
                     mean_kl = try_mean_kl
                     break
 
             self._penalty = penalty
             logger.record_tabular('vf_MeanKL', mean_kl)
-            self.set_param_values(opt_params)
+            self.set_param_values(opt_params, trainable=True)
         else:
             self._optimizer(
                 func=evaluate_cost(0), x0=cur_params,
                 fprime=evaluate_grad(0),
                 maxiter=self._max_opt_itr
             )
-            opt_params = self.get_param_values()
+            opt_params = self.get_param_values(trainable=True)
         loss_after = evaluate_cost(0)(opt_params)
         logger.record_tabular('vf_LossAfter', loss_after)
         logger.record_tabular('vf_dLoss', loss_before - loss_after)
@@ -252,9 +252,9 @@ class NNBaseline(Baseline, LasagnePowered, Serializable):
         return self._f_value(self._features(path))
 
     @overrides
-    def get_param_values(self):
-        return LasagnePowered.get_param_values(self)
+    def get_param_values(self, **tags):
+        return LasagnePowered.get_param_values(self, **tags)
 
     @overrides
-    def set_param_values(self, flattened_params):
-        return LasagnePowered.set_param_values(self, flattened_params)
+    def set_param_values(self, flattened_params, **tags):
+        return LasagnePowered.set_param_values(self, flattened_params, **tags)

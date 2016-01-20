@@ -40,7 +40,7 @@ class RVPG(BatchPolopt, FirstOrderMethod):
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
         surr_obj = - TT.mean(log_prob * advantage_var)
-        grads = theano.grad(surr_obj, policy.params)
+        grads = theano.grad(surr_obj, policy.trainable_params)
         input_list = [obs_var, advantage_var, action_var]
 
         f_log_prob = compile_function(
@@ -48,7 +48,7 @@ class RVPG(BatchPolopt, FirstOrderMethod):
             outputs=log_prob
         )
 
-        updates = self.update_method(grads, policy.params)
+        updates = self.update_method(grads, policy.trainable_params)
 
         f_update = compile_function(
             inputs=input_list,

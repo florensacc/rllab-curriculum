@@ -5,8 +5,6 @@ import sys
 import cPickle as pickle
 import random
 
-from sympy.printing.theanocode import theano
-
 from rllab.misc.console import colorize, Message
 from collections import OrderedDict
 
@@ -209,6 +207,7 @@ def flatten_hessian(cost, wrt, consider_constant=None,
             variable is returned. The return value is of same type
             as `wrt`: a list/tuple or TensorVariable in all cases.
     """
+    import theano
     from theano.tensor import arange
     # Check inputs have the right format
     import theano.tensor as TT
