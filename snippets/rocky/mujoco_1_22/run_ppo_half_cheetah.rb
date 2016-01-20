@@ -12,6 +12,7 @@ params = {
   baseline: {
     _name: "linear_feature_baseline",
   },
+  exp_name: "half_cheetah_mujoco_1_22_ppo",
   algo: {
     _name: "ppo",
     whole_paths: true,

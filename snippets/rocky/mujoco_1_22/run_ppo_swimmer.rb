@@ -12,21 +12,20 @@ params = {
   baseline: {
     _name: "linear_feature_baseline",
   },
+  exp_name: "swimmer_mujoco_1_22_ppo",
   algo: {
     _name: "ppo",
     whole_paths: true,
-    batch_size: 50000,
+    batch_size: 4000,
     max_path_length: 500,
     n_itr: 500,
     binary_search_penalty: false,
     # bs_kl_tolerance: 0.001,
-    step_size: 0.01,
-    plot: true,
+    step_size: 0.1,
   },
   n_parallel: 4,
-  snapshot_mode: "all",
+  snapshot_mode: "last",
   seed: 1,
-  plot: true,
 }
 command = to_command(params)
 puts command

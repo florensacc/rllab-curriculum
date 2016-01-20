@@ -229,7 +229,7 @@
 
     <asset>
         <material name='trans_geom' />
-        <texture name="groundplane" type="2d" builtin="gradient" random=".08" rgb1="0.25 0.64 0.85" rgb2="0.2 0.6 0.85" width="200" height="10" mark="random" markrgb=".8 .8 .8"/>
+        <texture name="groundplane" type="2d" builtin="checker" random=".08" rgb1="0.25 0.64 0.85" rgb2="0.2 0.6 0.85" width="200" height="10" mark="random" markrgb=".8 .8 .8"/>
 
         <material name="MatGnd" texture="groundplane" texscale="1 .6" specular="1" shininess="1" reflectance="0.00001"/>
 
