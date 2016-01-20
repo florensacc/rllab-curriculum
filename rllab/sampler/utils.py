@@ -27,6 +27,7 @@ def rollout(mdp, policy, max_length=np.inf, animated=False):
             mdp.plot()
             import time
             time.sleep(mdp.timestep)
+            print mdp._mdp.get_body_com("front")
     return dict(
         states=np.vstack(states),
         observations=np.vstack(observations),
