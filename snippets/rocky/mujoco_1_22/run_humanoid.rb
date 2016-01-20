@@ -12,7 +12,7 @@ params = {
   baseline: {
     _name: "linear_feature_baseline",
   },
-  exp_name: "humanoid_mujoco_1_22",
+  exp_name: "humanoid",
   algo: {
     _name: "trpo",
     whole_paths: true,
