@@ -8,13 +8,13 @@ def smooth_abs(x, param):
     return np.sqrt(np.square(x) + np.square(param)) - param
 
 
-class WalkerMDP(MujocoMDP, Serializable):
+class Walker2DMDP(MujocoMDP, Serializable):
 
     def __init__(self):
         path = self.model_path('walker2d.xml')
         frame_skip = 1
         ctrl_scaling = 1
-        super(WalkerMDP, self).__init__(path, frame_skip, ctrl_scaling)
+        super(Walker2DMDP, self).__init__(path, frame_skip, ctrl_scaling)
         Serializable.__init__(self)
         # self._initial_com = self.get_body_com("torso")
 
