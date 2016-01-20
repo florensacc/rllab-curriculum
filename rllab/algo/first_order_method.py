@@ -27,7 +27,7 @@ class FirstOrderMethod(RLAlgorithm):
     def __init__(
             self,
             update_method='sgd',
-            learning_rate=None,
+            learning_rate=0.01,
             **kwargs):
         self.update_method = parse_update_method(
             update_method,

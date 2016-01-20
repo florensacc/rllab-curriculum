@@ -92,7 +92,7 @@ class MujocoMDP(ControlMDP):
             self.model.data.ctrl = action * self.ctrl_scaling
             for _ in range(self.frame_skip):
                 self.model.step()
-            #self.model.forward()
+            self.model.forward()
             return self.get_current_state()
 
     def get_viewer(self):

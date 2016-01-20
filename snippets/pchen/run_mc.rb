@@ -9,13 +9,12 @@ params = {
     # trig_angle: false,
     # frame_skip: 2,
   },
-  # normalize_mdp: nil,
   policy: {
     _name: "mean_std_nn_policy",
     # hidden_layers: [],
   },
-  vf: {
-    _name: "mujoco_value_function",
+  baseline: {
+    _name: "linear_feature_baseline",
   },
   exp_name: "ppo_mc_seed_#{seed}",
   algo: {

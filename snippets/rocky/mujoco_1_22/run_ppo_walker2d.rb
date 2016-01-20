@@ -2,7 +2,7 @@ require_relative '../utils'
 
 params = {
   mdp: {
-    _name: "mujoco_1_22.half_cheetah_mdp",
+    _name: "mujoco_1_22.walker2d_mdp",
   },
   normalize_mdp: true,
   policy: {
@@ -12,7 +12,7 @@ params = {
   baseline: {
     _name: "linear_feature_baseline",
   },
-  exp_name: "half_cheetah_mujoco_1_22_ppo",
+  exp_name: "walker2d_mujoco_1_22_ppo",
   algo: {
     _name: "ppo",
     whole_paths: true,
@@ -22,12 +22,10 @@ params = {
     binary_search_penalty: false,
     # bs_kl_tolerance: 0.001,
     step_size: 0.01,
-    # plot: true,
   },
   n_parallel: 4,
   snapshot_mode: "last",
   seed: 1,
-  # plot: true,
 }
 command = to_command(params)
 puts command
