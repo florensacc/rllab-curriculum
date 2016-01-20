@@ -32,8 +32,8 @@ class NPG(NaturalGradientMethod, BatchPolopt, FirstOrderMethod):
         FirstOrderMethod.__init__(self, **kwargs)
 
     @overrides
-    def init_opt(self, mdp, policy, vf):
-        info = super(NPG, self).init_opt(mdp, policy, vf)
+    def init_opt(self, mdp, policy, baseline):
+        info = super(NPG, self).init_opt(mdp, policy, baseline)
         descent_steps = [
             new_tensor_like("%s descent" % p.name, p)
             for p in policy.params

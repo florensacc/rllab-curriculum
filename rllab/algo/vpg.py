@@ -72,7 +72,4 @@ class VPG(BatchPolopt, FirstOrderMethod):
             policy=policy,
             baseline=baseline,
             mdp=mdp,
-            observations=samples_data["observations"],
-            advantages=samples_data["advantages"],
-            actions=samples_data["actions"],
         )

@@ -46,7 +46,7 @@ class NaturalGradientMethod(object):
         self.step_size = step_size
         self.reg_coeff = reg_coeff
 
-    def init_opt(self, mdp, policy, vf):
+    def init_opt(self, mdp, policy, baseline):
         input_var = new_tensor(
             'input',
             ndim=1+len(mdp.observation_shape),
@@ -171,14 +171,11 @@ class NaturalGradientMethod(object):
         logger.record_tabular("LossAfter", loss_after)
         logger.log("optimization finished")
 
-    def get_itr_snapshot(self, itr, mdp, policy, vf, samples_data, opt_info):
+    def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data, opt_info):
         return dict(
             itr=itr,
             policy=policy,
-            vf=vf,
+            baseline=baseline,
             mdp=mdp,
-            observations=samples_data["observations"],
-            advantages=samples_data["advantages"],
-            actions=samples_data["actions"],
         )
 
