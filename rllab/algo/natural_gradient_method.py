@@ -123,12 +123,12 @@ class NaturalGradientMethod(object):
     @contextmanager
     def optimization_setup(self, itr, policy, samples_data, opt_info):
         logger.log("optimizing policy")
-        f_loss, f_grad, f_fisher, f_Hx_plain, = \
+        f_loss, f_grad, f_fisher, f_Hx_plain = \
             extract(opt_info, "f_loss", "f_grad", "f_fisher",
-                    "f_Hx_plain",)
+                    "f_Hx_plain")
         inputs = list(extract(
             samples_data,
-            "observations", "advantages", "pdists", "actions",
+            "observations", "advantages", "pdists", "actions"
         ))
         # Need to ensure this
         logger.log("computing loss before")
