@@ -10,10 +10,10 @@ params = {
     hidden_sizes: [100, 50, 25],
   },
   baseline: {
-    _name: "nn_baseline",
-    #_name: "linear_feature_baseline",
-    hidden_sizes: [100, 50, 25],#300, 300],
-    max_opt_itr: 5,#500,
+    #_name: "nn_baseline",
+    _name: "linear_feature_baseline",
+    #hidden_sizes: [],#100, 50, 25],#300, 300],
+    #max_opt_itr: 50,#5,#500,
   },
   exp_name: "humanoid_mujoco_pre_2",
   algo: {
@@ -21,7 +21,7 @@ params = {
     whole_paths: true,
     batch_size: 50000,
     max_path_length: 2000,
-    n_itr: 1000,
+    n_itr: 2000,
     step_size: 0.1,
   },
   n_parallel: 4,

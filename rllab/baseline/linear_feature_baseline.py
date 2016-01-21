@@ -8,11 +8,11 @@ class LinearFeatureBaseline(Baseline):
         self.coeffs = None
 
     @overrides
-    def get_param_values(self):
+    def get_param_values(self, **tags):
         return self.coeffs
 
     @overrides
-    def set_param_values(self, val):
+    def set_param_values(self, val, **tags):
         self.coeffs = val
 
     def _features(self, path):
