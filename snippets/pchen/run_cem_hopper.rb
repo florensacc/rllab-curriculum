@@ -5,9 +5,7 @@ seed = 1
 
 params = {
   mdp: {
-    _name: "box2d.mountain_car_mdp",
-    # trig_angle: false,
-    # frame_skip: 2,
+    _name: "mujoco_1_22.hopper_mdp",
   },
   policy: {
     _name: "mean_std_nn_policy",
@@ -16,7 +14,7 @@ params = {
   baseline: {
     _name: "linear_feature_baseline",
   },
-  exp_name: "ppo_mc_seed_#{seed}",
+  exp_name: "cem_ho_seed_#{seed}",
   algo: {
     # _name: "ppo",
     # step_size: 0.1,
@@ -31,14 +29,16 @@ params = {
 
 
     _name: "cem",
+    n_samples: 1000,
+
     whole_paths: true,
-    max_path_length: 100,
+    max_path_length: 500,
     n_itr: 500,
     plot: true,
 
   },
   n_parallel: 4,
-  # snapshot_mode: "none",
+  snapshot_mode: "last",
   seed: seed,
   plot: true,
 }
