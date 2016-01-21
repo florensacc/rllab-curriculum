@@ -216,3 +216,15 @@ def request_samples(
             record_states=record_states
         )
         pool_rollout(args)
+
+def dispatch(inps):
+    f, args = inps
+    return f(*([G.mdp, G.policy]+list(args)))
+
+def pool_map(f, args_lst):
+    go_args = [[f, args] for args in args_lst]
+    if G.n_parallel > 1:
+        return G.pool.map(dispatch, go_args)
+    else:
+        return map(dispatch, go_args)
+

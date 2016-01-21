@@ -55,7 +55,7 @@ python scripts/run_experiment.py \
   --seed 1
   ```
 
-  See [Recipies](https://github.com/dementrock/rllab/wiki/Recipies) for more.
+  See [Recipes](https://github.com/dementrock/rllab/wiki/Recipes) for more.
 
 ## Visualize a policy
 
