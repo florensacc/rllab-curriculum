@@ -56,20 +56,21 @@ def worker_init_opt():
 
 
 def worker_inputs():
-    return list(extract(
+    return extract(
         G.samples_data,
         "observations", "advantages", "pdists", "actions"
-    ))
+    )
 
 
-def worker_f(f_name, *args):
-    return G.ngm_opt_info[f_name](*(worker_inputs() + list(args)))
+def worker_f(f_name, params, *args):
+    G.policy.set_param_values(params, trainable=True)
+    return G.ngm_opt_info[f_name](*(worker_inputs() + args))
 
 
 def master_f(f_name):
     def f(params, *args):
-        parallel_sampler.master_set_param_values(params)
-        return parallel_sampler.master_collect_mean(worker_f, f_name, *args)
+        return parallel_sampler.master_collect_mean(
+            worker_f, f_name, params, *args)
     return f
 
 

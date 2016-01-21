@@ -28,8 +28,10 @@ def worker_init_opt():
 
     grads = theano.gradient.grad(loss, baseline.get_params(trainable=True))
 
-    G.par_nn_baseline_f_loss = compile_function(input_list, loss)
-    G.par_nn_baseline_f_grads = compile_function(input_list, grads)
+    G.nn_baseline_opt_info = dict(
+        loss=compile_function(input_list, loss),
+        grads=compile_function(input_list, grads)
+    )
 
 
 def worker_prepare_data():
@@ -40,25 +42,17 @@ def worker_prepare_data():
     G.par_nn_baseline_input_vals = (featmat, returns)
 
 
-def worker_f_loss(params):
+def worker_f(f_name, params, *args):
     G.baseline.set_param_values(params, trainable=True)
-    return G.par_nn_baseline_f_loss(*G.par_nn_baseline_input_vals)
+    return G.nn_baseline_opt_info[f_name](
+        *(G.par_nn_baseline_input_vals + args))
 
 
-def master_f_loss(params):
-    return np.mean(parallel_sampler.run_map(worker_f_loss, params))
-
-
-def worker_f_grads(params):
-    G.baseline.set_param_values(params, trainable=True)
-    return G.par_nn_baseline_f_grads(*G.par_nn_baseline_input_vals)
-
-
-def master_f_grads(params):
-    results = parallel_sampler.run_map(worker_f_grads, params)
-    n_grads = len(results[0])
-    return [np.mean(np.array([np.array(x[i]) for x in results]), axis=0)
-            for i in range(n_grads)]
+def master_f(f_name):
+    def f(params, *args):
+        return parallel_sampler.master_collect_mean(
+            worker_f, f_name, params, *args)
+    return f
 
 
 class ParNNBaseline(Baseline, LasagnePowered, Serializable):
@@ -145,13 +139,13 @@ class ParNNBaseline(Baseline, LasagnePowered, Serializable):
 
         def evaluate_cost(penalty):
             def evaluate(params):
-                val = master_f_loss(params)
+                val = master_f("loss")(params)
                 return val.astype(np.float64)
             return evaluate
 
         def evaluate_grad(penalty):
             def evaluate(params):
-                grad = master_f_grads(params)
+                grad = master_f("grads")(params)
                 flattened_grad = flatten_tensors(map(np.asarray, grad))
                 return flattened_grad.astype(np.float64)
             return evaluate
