@@ -22,7 +22,10 @@ def merge_dict(*args):
 
 
 def extract(x, *keys):
-    return tuple(x[k] for k in keys)
+    if isinstance(x, dict):
+        return tuple(x[k] for k in keys)
+    elif isinstance(x, list):
+        return tuple([xi[k] for xi in x] for k in keys)
 
 
 def compact(x):
