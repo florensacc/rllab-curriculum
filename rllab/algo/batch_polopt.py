@@ -12,12 +12,11 @@ import rllab.plotter as plotter
 G = parallel_sampler.G
 
 
-def worker_inject_baseline(args):
-    baseline, = args
+def worker_inject_baseline(baseline):
     G.baseline = baseline
 
 
-def worker_retrieve_paths(*args):
+def worker_retrieve_paths():
     return G.paths
 
 
@@ -25,13 +24,12 @@ def retrieve_paths():
     return sum(parallel_sampler.run_map(worker_retrieve_paths), [])
 
 
-def worker_compute_paths_returns(args):
-    opt, = args
+def worker_compute_paths_returns(opt):
     for path in G.paths:
         path["returns"] = discount_cumsum(path["rewards"], opt.discount)
 
 
-def worker_retrieve_samples_data(args):
+def worker_retrieve_samples_data():
     return G.samples_data
 
 
@@ -52,13 +50,12 @@ def aggregate_samples_data():
     )
 
 
-def worker_process_paths(args):
+def worker_process_paths(opt):
     try:
-        baseline, opt = args
         baselines = []
         returns = []
         for path in G.paths:
-            path_baselines = np.append(baseline.predict(path), 0)
+            path_baselines = np.append(G.baseline.predict(path), 0)
             deltas = path["rewards"] + \
                 opt.discount*path_baselines[1:] - \
                 path_baselines[:-1]
@@ -251,8 +248,7 @@ class BatchPolopt(RLAlgorithm):
                       "parallel algorithm for best possible performance"
             paths = retrieve_paths()
             baseline.fit(paths)
-        results = parallel_sampler.run_map(
-            worker_process_paths, baseline, self.opt)
+        results = parallel_sampler.run_map(worker_process_paths, self.opt)
 
         average_discounted_returns, average_returns, std_returns, max_returns, \
             min_returns, num_trajses, ents, evs = extract(

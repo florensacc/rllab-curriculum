@@ -125,10 +125,20 @@ def populate_task(mdp, policy):
         worker_init(mdp, policy, 0)
 
 
+def worker_run_task(all_args):
+    runner, args = all_args
+    G.queue.get()
+    return runner(*args)
+
+
 def run_map(runner, *args):
     if G.n_parallel > 1:
-        return G.pool.map(runner, [args] * G.n_parallel)
-    return [runner(args)]
+        results = G.pool.map_async(
+            worker_run_task, [(runner, args)] * G.n_parallel)
+        for i in range(G.n_parallel):
+            G.queue.put(None)
+        return results.get()
+    return [runner(*args)]
 
 
 def request_samples(

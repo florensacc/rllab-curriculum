@@ -17,13 +17,13 @@ params = {
   algo: {
     _name: "par_ppo",
     whole_paths: true,
-    batch_size: 5000,
+    batch_size: 1000,
     max_path_length: 500,
     n_itr: 2,
     step_size: 0.01,
     binary_search_penalty: false,
   },
-  n_parallel: 4,
+  n_parallel: 2,
   snapshot_mode: "last",
   seed: 1,
 }

@@ -14,7 +14,7 @@ import numpy as np
 G = parallel_sampler.G
 
 
-def worker_init_opt(args):
+def worker_init_opt():
     mdp = G.mdp
     policy = G.policy
     input_var = new_tensor(
@@ -53,8 +53,7 @@ def worker_init_opt(args):
     G.par_ppo_f_grads = f_grads
 
 
-def worker_surr_kl(args):
-    params, penalty = args
+def worker_surr_kl(params, penalty):
     G.policy.set_param_values(params, trainable=True)
     observations, advantages, pdists, actions = extract(
         G.samples_data,
@@ -64,8 +63,7 @@ def worker_surr_kl(args):
         observations, advantages, pdists, actions, penalty)
 
 
-def worker_f_grads(args):
-    params, penalty = args
+def worker_f_grads(params, penalty):
     G.policy.set_param_values(params, trainable=True)
     observations, advantages, pdists, actions = extract(
         G.samples_data,

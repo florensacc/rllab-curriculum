@@ -19,7 +19,7 @@ import lasagne
 G = parallel_sampler.G
 
 
-def worker_init_opt(args):
+def worker_init_opt():
     baseline = G.baseline
 
     new_v_var = TT.vector("new_values")
@@ -32,7 +32,7 @@ def worker_init_opt(args):
     G.par_nn_baseline_f_grads = compile_function(input_list, grads)
 
 
-def worker_prepare_data(args):
+def worker_prepare_data():
     baseline = G.baseline
     paths = G.paths
     featmat = np.concatenate([baseline.features(path) for path in paths])
@@ -40,8 +40,7 @@ def worker_prepare_data(args):
     G.par_nn_baseline_input_vals = (featmat, returns)
 
 
-def worker_f_loss(args):
-    params, = args
+def worker_f_loss(params):
     G.baseline.set_param_values(params, trainable=True)
     return G.par_nn_baseline_f_loss(*G.par_nn_baseline_input_vals)
 
@@ -50,15 +49,13 @@ def master_f_loss(params):
     return np.mean(parallel_sampler.run_map(worker_f_loss, params))
 
 
-def worker_f_grads(args):
-    params, = args
+def worker_f_grads(params):
     G.baseline.set_param_values(params, trainable=True)
     return G.par_nn_baseline_f_grads(*G.par_nn_baseline_input_vals)
 
 
 def master_f_grads(params):
     results = parallel_sampler.run_map(worker_f_grads, params)
-    # import ipdb; ipdb.set_trace()
     n_grads = len(results[0])
     return [np.mean(np.array([np.array(x[i]) for x in results]), axis=0)
             for i in range(n_grads)]
