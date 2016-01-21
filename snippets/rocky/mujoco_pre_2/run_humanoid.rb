@@ -14,14 +14,14 @@ params = {
   },
   exp_name: "humanoid_mujoco_pre_2",
   algo: {
-    _name: "parallel.ppo",
+    _name: "parallel.trpo",
     whole_paths: true,
     batch_size: 50000,
     max_path_length: 2000,
-    n_itr: 2,
+    n_itr: 1000,
     step_size: 0.1,
   },
-  n_parallel: 4,
+  n_parallel: 10,
   snapshot_mode: "last",
   seed: 1,
 }

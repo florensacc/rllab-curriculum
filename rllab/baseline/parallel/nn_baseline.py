@@ -158,7 +158,6 @@ class ParNNBaseline(Baseline, LasagnePowered, Serializable):
             fprime=evaluate_grad(0),
             maxiter=self._max_opt_itr
         )
-
         self.set_param_values(opt_params, trainable=True)
 
         loss_after = evaluate_cost(0)(opt_params)
