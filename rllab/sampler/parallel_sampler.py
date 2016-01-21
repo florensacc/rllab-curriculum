@@ -97,9 +97,8 @@ def config_parallel_sampler(n_parallel, base_seed):
 
     if G.n_parallel > 1:
         G.base_seed = base_seed if base_seed else random.randint()
-        m = Manager()
-        G.queue = m.Queue()
-        G.worker_queue = m.Queue()
+        G.queue = Queue()
+        G.worker_queue = Queue()
 
         G.pool = MemmapingPool(
             G.n_parallel,

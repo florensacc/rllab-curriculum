@@ -17,7 +17,7 @@ params = {
   },
   exp_name: "humanoid_mujoco_pre_2",
   algo: {
-    _name: "parallel.ppo",
+    _name: "parallel.trpo",
     whole_paths: true,
     batch_size: 50000,
     max_path_length: 500,
