@@ -166,25 +166,16 @@ class ParPPO(BatchPolopt):
 
         cur_params = policy.get_param_values(trainable=True)
 
-        import time
-
-        eval_cost_time = [0]
-        eval_grad_time = [0]
-
         def evaluate_cost(penalty):
             def evaluate(params):
-                t = time.time()
                 val, _, _ = master_f("surr_kl")(params, penalty)
-                eval_cost_time[0] += time.time() - t
                 return val.astype(np.float64)
             return evaluate
 
         def evaluate_grad(penalty):
             def evaluate(params):
-                t = time.time()
                 grad = master_f("grads")(params, penalty)
                 flattened_grad = flatten_tensors(map(np.asarray, grad))
-                eval_grad_time[0] += time.time() - t
                 return flattened_grad.astype(np.float64)
             return evaluate
 
@@ -209,8 +200,6 @@ class ParPPO(BatchPolopt):
                 maxiter=self.opt.max_opt_itr
                 )
 
-            print "eval cost time: %f" % eval_cost_time[0]
-            print "eval grad time: %f" % eval_grad_time[0]
             _, try_loss, try_mean_kl = master_f("surr_kl")(
                 itr_opt_params, try_penalty)
             logger.log('penalty %f => loss %f, mean kl %f' %

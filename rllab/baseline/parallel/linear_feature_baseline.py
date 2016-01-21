@@ -46,7 +46,7 @@ class LinearFeatureBaseline(Baseline):
         mats = parallel_sampler.run_map(worker_compute)
         ATA = sum(mat[0] for mat in mats)
         ATb = sum(mat[1] for mat in mats)
-        self.coeffs = np.linalg.inv(ATA + 1e-5*np.eye(ATA.shape[0])).dot(ATb)
+        self.coeffs = np.linalg.solve(ATA + 1e-5*np.eye(ATA.shape[0]), ATb)
 
     @overrides
     def predict(self, path):

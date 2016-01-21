@@ -256,10 +256,10 @@ class BatchPolopt(RLAlgorithm):
                       "parallel algorithm for best possible performance"
             paths = retrieve_paths()
             baseline.fit(paths)
-            parallel_sampler.run_map(
-                worker_update_baseline,
-                baseline.get_param_values(trainable=True)
-            )
+        parallel_sampler.run_map(
+            worker_update_baseline,
+            baseline.get_param_values(trainable=True)
+        )
         logger.log("fitted")
         results = parallel_sampler.run_map(worker_process_paths, self.opt)
 

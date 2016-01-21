@@ -18,7 +18,7 @@ params = {
     whole_paths: true,
     batch_size: 50000,
     max_path_length: 2000,
-    n_itr: 2000,
+    n_itr: 2,
     step_size: 0.1,
   },
   n_parallel: 4,
