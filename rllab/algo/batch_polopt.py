@@ -240,6 +240,7 @@ class BatchPolopt(RLAlgorithm):
 
         parallel_sampler.run_map(worker_compute_paths_returns, self.opt)
 
+        logger.log("fitting baseline...")
         if baseline.algorithm_parallelized:
             try:
                 baseline.fit()
@@ -251,6 +252,7 @@ class BatchPolopt(RLAlgorithm):
                       "parallel algorithm for best possible performance"
             paths = retrieve_paths()
             baseline.fit(paths)
+        logger.log("fitted")
         results = parallel_sampler.run_map(worker_process_paths, self.opt)
 
         average_discounted_returns, average_returns, std_returns, max_returns, \

@@ -32,6 +32,7 @@ class TRPO(NaturalGradientMethod, BatchPolopt):
     def optimize_policy(self, itr, policy, samples_data, opt_info):
         with self.optimization_setup(itr, policy, samples_data, opt_info) as (
                 inputs, flat_descent_step):
+            logger.log("performing backtracking")
             f_trpo_info = opt_info['f_trpo_info']
             prev_loss, prev_mean_kl, prev_max_kl = f_trpo_info(*inputs)
             prev_param = policy.get_param_values(trainable=True)
@@ -42,6 +43,7 @@ class TRPO(NaturalGradientMethod, BatchPolopt):
                 loss, mean_kl, max_kl = f_trpo_info(*inputs)
                 if loss < prev_loss and max_kl <= self.step_size:
                     break
+            logger.log("backtracking finished")
             logger.record_tabular('BacktrackItr', n_iter)
             logger.record_tabular('MeanKL', mean_kl)
             logger.record_tabular('MaxKL', max_kl)

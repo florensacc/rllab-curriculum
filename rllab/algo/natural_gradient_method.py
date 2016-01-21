@@ -134,6 +134,7 @@ class NaturalGradientMethod(object):
         logger.log("computing loss before")
         loss_before = f_loss(*inputs)
         logger.log("performing update")
+        logger.log("computing descent direction")
         if not self.use_cg:
             # direct approach, just bite the bullet and use hessian
             _, flat_g, fisher_mat = f_fisher(*inputs)
@@ -164,6 +165,7 @@ class NaturalGradientMethod(object):
             1. / flat_g.T.dot(nat_direction)
         )) ** 0.5
         flat_descent_step = nat_step_size * nat_direction
+        logger.log("descent direction computed")
         yield inputs, flat_descent_step
         logger.log("computing loss after")
         loss_after = f_loss(*inputs)
