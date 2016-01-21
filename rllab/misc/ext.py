@@ -22,7 +22,12 @@ def merge_dict(*args):
 
 
 def extract(x, *keys):
-    return tuple(x[k] for k in keys)
+    if isinstance(x, (dict, lazydict)):
+        return tuple(x[k] for k in keys)
+    elif isinstance(x, list):
+        return tuple([xi[k] for xi in x] for k in keys)
+    else:
+        raise NotImplementedError
 
 
 def compact(x):
@@ -69,7 +74,6 @@ class lazydict(object):
     def __init__(self, **kwargs):
         self._lazy_dict = kwargs
         self._dict = {}
-        dict
 
     def __getitem__(self, key):
         if key not in self._dict:

@@ -123,17 +123,18 @@ class NaturalGradientMethod(object):
     @contextmanager
     def optimization_setup(self, itr, policy, samples_data, opt_info):
         logger.log("optimizing policy")
-        f_loss, f_grad, f_fisher, f_Hx_plain, = \
+        f_loss, f_grad, f_fisher, f_Hx_plain = \
             extract(opt_info, "f_loss", "f_grad", "f_fisher",
-                    "f_Hx_plain",)
+                    "f_Hx_plain")
         inputs = list(extract(
             samples_data,
-            "observations", "advantages", "pdists", "actions",
+            "observations", "advantages", "pdists", "actions"
         ))
         # Need to ensure this
         logger.log("computing loss before")
         loss_before = f_loss(*inputs)
         logger.log("performing update")
+        logger.log("computing descent direction")
         if not self.use_cg:
             # direct approach, just bite the bullet and use hessian
             _, flat_g, fisher_mat = f_fisher(*inputs)
@@ -164,6 +165,7 @@ class NaturalGradientMethod(object):
             1. / flat_g.T.dot(nat_direction)
         )) ** 0.5
         flat_descent_step = nat_step_size * nat_direction
+        logger.log("descent direction computed")
         yield inputs, flat_descent_step
         logger.log("computing loss after")
         loss_after = f_loss(*inputs)

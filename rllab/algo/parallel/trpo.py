@@ -1,12 +1,13 @@
 import numpy as np
 
 from rllab.algo.batch_polopt import BatchPolopt
-from rllab.algo.natural_gradient_method import NaturalGradientMethod
-from rllab.algo.npg import NPG
+from rllab.algo.parallel.natural_gradient_method import \
+    NaturalGradientMethod, master_f
+from rllab.sampler import parallel_sampler
 from rllab.misc import autoargs
-from rllab.misc.ext import extract
 from rllab.misc.overrides import overrides
 import rllab.misc.logger as logger
+
 
 class TRPO(NaturalGradientMethod, BatchPolopt):
     """
@@ -23,24 +24,26 @@ class TRPO(NaturalGradientMethod, BatchPolopt):
                  backtrack_ratio=0.5,
                  max_backtracks=10,
                  **kwargs):
-        super(TRPO, self).__init__(**kwargs)
+        super(TRPO, self).__init__(algorithm_parallelized=True, **kwargs)
         BatchPolopt.__init__(self, **kwargs)
         self.backtrack_ratio = backtrack_ratio
         self.max_backtracks = max_backtracks
 
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
-        with self.optimization_setup(itr, policy, samples_data, opt_info) as (
-                inputs, flat_descent_step):
+        with self.optimization_setup(itr, policy, samples_data, opt_info) as \
+                flat_descent_step:
             logger.log("performing backtracking")
-            f_trpo_info = opt_info['f_trpo_info']
-            prev_loss, prev_mean_kl, prev_max_kl = f_trpo_info(*inputs)
+            prev_loss, prev_mean_kl, prev_max_kl = master_f("trpo_info")()
             prev_param = policy.get_param_values(trainable=True)
-            for n_iter, ratio in enumerate(self.backtrack_ratio ** np.arange(self.max_backtracks)):
+            for n_iter, ratio in enumerate(
+                    self.backtrack_ratio ** np.arange(self.max_backtracks)):
                 cur_step = ratio * flat_descent_step
                 cur_param = prev_param - cur_step
                 policy.set_param_values(cur_param, trainable=True)
-                loss, mean_kl, max_kl = f_trpo_info(*inputs)
+                parallel_sampler.master_set_param_values(
+                    cur_param, trainable=True)
+                loss, mean_kl, max_kl = master_f("trpo_info")()
                 if loss < prev_loss and max_kl <= self.step_size:
                     break
             logger.log("backtracking finished")

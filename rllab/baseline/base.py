@@ -6,6 +6,10 @@ class Baseline(object):
     def __init__(self, mdp):
         self._mdp = mdp
 
+    @property
+    def algorithm_parallelized(self):
+        return False
+
     def get_param_values(self):
         raise NotImplementedError
 

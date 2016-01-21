@@ -2,6 +2,7 @@ from rllab.misc.tensor_utils import flatten_tensors
 from rllab.misc.ext import merge_dict, compile_function, extract, new_tensor
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
+from rllab.sampler import parallel_sampler
 from rllab.algo.batch_polopt import BatchPolopt
 import rllab.misc.logger as logger
 import theano
@@ -10,9 +11,77 @@ from pydoc import locate
 import numpy as np
 
 
-class PPO(BatchPolopt):
+G = parallel_sampler.G
+
+
+def worker_init_opt():
+    mdp = G.mdp
+    policy = G.policy
+    input_var = new_tensor(
+        'input',
+        ndim=1+len(mdp.observation_shape),
+        dtype=mdp.observation_dtype
+    )
+    advantage_var = TT.vector('advantage')
+    old_pdist_var = TT.matrix('old_pdist')
+    action_var = TT.matrix('action', dtype=mdp.action_dtype)
+    penalty_var = TT.scalar('penalty')
+
+    pdist_var = policy.get_pdist_sym(input_var)
+    kl = policy.kl(old_pdist_var, pdist_var)
+    lr = policy.likelihood_ratio(old_pdist_var, pdist_var, action_var)
+    mean_kl = TT.mean(kl)
+    # formulate as a minimization problem
+    surr_loss = - TT.mean(lr * advantage_var)
+    surr_obj = surr_loss + penalty_var * mean_kl
+
+    input_list = [
+        input_var,
+        advantage_var,
+        old_pdist_var,
+        action_var,
+        penalty_var
+    ]
+
+    grads = theano.gradient.grad(
+        surr_obj, policy.get_params(trainable=True))
+    f_surr_kl = compile_function(
+        input_list, [surr_obj, surr_loss, mean_kl])
+    f_grads = compile_function(input_list, grads)
+
+    G.ppo_opt_info = dict(
+        surr_kl=f_surr_kl,
+        grads=f_grads
+    )
+
+
+def worker_inputs():
+    return extract(
+        G.samples_data,
+        "observations", "advantages", "pdists", "actions"
+    )
+
+
+def worker_f(f_name, params, *args):
+    try:
+        G.policy.set_param_values(params, trainable=True)
+        return G.ppo_opt_info[f_name](*(worker_inputs() + args))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise
+
+
+def master_f(f_name):
+    def f(params, *args):
+        return parallel_sampler.master_collect_mean(
+            worker_f, f_name, params, *args)
+    return f
+
+
+class ParPPO(BatchPolopt):
     """
-    Proximal Policy Optimization.
+    Parallel Proximal Policy Optimization.
     """
 
     @autoargs.inherit(BatchPolopt.__init__)
@@ -64,86 +133,48 @@ class PPO(BatchPolopt):
             adapt_penalty=True,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
             **kwargs):
-        self.step_size = step_size
-        self.initial_penalty = initial_penalty
-        self.min_penalty = min_penalty
-        self.max_penalty = max_penalty
-        self.increase_penalty_factor = increase_penalty_factor
-        self.decrease_penalty_factor = decrease_penalty_factor
-        self.max_opt_itr = max_opt_itr
-        self.max_penalty_itr = max_penalty_itr
-        self.binary_search_penalty = binary_search_penalty
-        self.max_penalty_bs_itr = max_penalty_bs_itr
-        self.bs_kl_tolerance = bs_kl_tolerance
-        self.adapt_penalty = adapt_penalty
-        self.optimizer = locate(optimizer)
-        super(PPO, self).__init__(**kwargs)
+        super(ParPPO, self).__init__(algorithm_parallelized=True, **kwargs)
+        self.opt.step_size = step_size
+        self.opt.initial_penalty = initial_penalty
+        self.opt.min_penalty = min_penalty
+        self.opt.max_penalty = max_penalty
+        self.opt.increase_penalty_factor = increase_penalty_factor
+        self.opt.decrease_penalty_factor = decrease_penalty_factor
+        self.opt.max_opt_itr = max_opt_itr
+        self.opt.max_penalty_itr = max_penalty_itr
+        self.opt.binary_search_penalty = binary_search_penalty
+        self.opt.max_penalty_bs_itr = max_penalty_bs_itr
+        self.opt.bs_kl_tolerance = bs_kl_tolerance
+        self.opt.adapt_penalty = adapt_penalty
+        self.opt.optimizer = locate(optimizer)
 
     @overrides
     def init_opt(self, mdp, policy, baseline):
-        input_var = new_tensor(
-            'input',
-            ndim=1+len(mdp.observation_shape),
-            dtype=mdp.observation_dtype
-        )
-        advantage_var = TT.vector('advantage')
-        old_pdist_var = TT.matrix('old_pdist')
-        action_var = TT.matrix('action', dtype=mdp.action_dtype)
-        penalty_var = TT.scalar('penalty')
-
-        pdist_var = policy.get_pdist_sym(input_var)
-        kl = policy.kl(old_pdist_var, pdist_var)
-        lr = policy.likelihood_ratio(old_pdist_var, pdist_var, action_var)
-        mean_kl = TT.mean(kl)
-        # formulate as a minimization problem
-        surr_loss = - TT.mean(lr * advantage_var)
-        surr_obj = surr_loss + penalty_var * mean_kl
-
-        input_list = [
-            input_var,
-            advantage_var,
-            old_pdist_var,
-            action_var,
-            penalty_var
-        ]
-
-        grads = theano.gradient.grad(
-            surr_obj, policy.get_params(trainable=True))
-        f_surr_kl = compile_function(
-            input_list, [surr_obj, surr_loss, mean_kl])
-        f_grads = compile_function(input_list, grads)
-        penalty = self.initial_penalty
-
+        logger.log("compiling theano functions on all workers...")
+        parallel_sampler.run_map(worker_init_opt)
+        logger.log("compiled")
+        penalty = self.opt.initial_penalty
         return dict(
-            f_surr_kl=f_surr_kl,
-            f_grads=f_grads,
-            penalty=penalty,
+            penalty=penalty
         )
 
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
         penalty = opt_info['penalty']
-        f_surr_kl = opt_info['f_surr_kl']
-        f_grads = opt_info['f_grads']
-        all_input_values = list(extract(
-            samples_data,
-            "observations", "advantages", "pdists", "actions"
-        ))
+        # f_surr_kl = opt_info['f_surr_kl']
+        # f_grads = opt_info['f_grads']
 
         cur_params = policy.get_param_values(trainable=True)
 
         def evaluate_cost(penalty):
             def evaluate(params):
-                policy.set_param_values(params, trainable=True)
-                inputs_with_penalty = all_input_values + [penalty]
-                val, _, _ = f_surr_kl(*inputs_with_penalty)
+                val, _, _ = master_f("surr_kl")(params, penalty)
                 return val.astype(np.float64)
             return evaluate
 
         def evaluate_grad(penalty):
             def evaluate(params):
-                policy.set_param_values(params, trainable=True)
-                grad = f_grads(*(all_input_values + [penalty]))
+                grad = master_f("grads")(params, penalty)
                 flattened_grad = flatten_tensors(map(np.asarray, grad))
                 return flattened_grad.astype(np.float64)
             return evaluate
@@ -151,63 +182,66 @@ class PPO(BatchPolopt):
         loss_before = evaluate_cost(0)(cur_params)
         logger.record_tabular('LossBefore', loss_before)
 
-        try_penalty = np.clip(penalty, self.min_penalty, self.max_penalty)
+        try_penalty = np.clip(
+            penalty, self.opt.min_penalty, self.opt.max_penalty)
 
         # search for the best penalty parameter
         penalty_scale_factor = None
         opt_params = None
-        max_penalty_itr = self.max_penalty_itr
+        max_penalty_itr = self.opt.max_penalty_itr
         mean_kl = None
         search_succeeded = False
         for penalty_itr in range(max_penalty_itr):
             logger.log('trying penalty=%.3f...' % try_penalty)
-            self.optimizer(
+
+            itr_opt_params, _, _ = self.opt.optimizer(
                 func=evaluate_cost(try_penalty), x0=cur_params,
                 fprime=evaluate_grad(try_penalty),
-                maxiter=self.max_opt_itr
+                maxiter=self.opt.max_opt_itr
                 )
-            _, try_loss, try_mean_kl = f_surr_kl(
-                *(all_input_values + [try_penalty]))
+
+            _, try_loss, try_mean_kl = master_f("surr_kl")(
+                itr_opt_params, try_penalty)
             logger.log('penalty %f => loss %f, mean kl %f' %
                        (try_penalty, try_loss, try_mean_kl))
-            if try_mean_kl < self.step_size or \
+            if try_mean_kl < self.opt.step_size or \
                     (penalty_itr == max_penalty_itr - 1 and
                      opt_params is None):
-                opt_params = policy.get_param_values(trainable=True)
+                opt_params = itr_opt_params
                 penalty = try_penalty
                 mean_kl = try_mean_kl
 
-            if not self.adapt_penalty:
+            if not self.opt.adapt_penalty:
                 break
 
             # decide scale factor on the first iteration
             if penalty_scale_factor is None or np.isnan(try_mean_kl):
-                if try_mean_kl > self.step_size or np.isnan(try_mean_kl):
+                if try_mean_kl > self.opt.step_size or np.isnan(try_mean_kl):
                     # need to increase penalty
-                    penalty_scale_factor = self.increase_penalty_factor
+                    penalty_scale_factor = self.opt.increase_penalty_factor
                 else:
                     # can shrink penalty
-                    penalty_scale_factor = self.decrease_penalty_factor
+                    penalty_scale_factor = self.opt.decrease_penalty_factor
             else:
                 if penalty_scale_factor > 1 and \
-                        try_mean_kl <= self.step_size:
+                        try_mean_kl <= self.opt.step_size:
                     search_succeeded = True
                     break
                 elif penalty_scale_factor < 1 and \
-                        try_mean_kl >= self.step_size:
+                        try_mean_kl >= self.opt.step_size:
                     search_succeeded = True
                     break
             try_penalty *= penalty_scale_factor
-            if try_penalty < self.min_penalty or \
-                    try_penalty > self.max_penalty:
+            if try_penalty < self.opt.min_penalty or \
+                    try_penalty > self.opt.max_penalty:
                 try_penalty = np.clip(
-                    try_penalty, self.min_penalty, self.max_penalty)
+                    try_penalty, self.opt.min_penalty, self.opt.max_penalty)
                 opt_params = policy.get_param_values(trainable=True)
                 penalty = try_penalty
                 mean_kl = try_mean_kl
                 break
 
-        if self.adapt_penalty and self.binary_search_penalty and \
+        if self.opt.adapt_penalty and self.opt.binary_search_penalty and \
                 search_succeeded:
             # perform more fine-grained search of penalty parameter
             logger.log('Perform binary search for fine grained penalty')
@@ -219,25 +253,26 @@ class PPO(BatchPolopt):
                 max_bs_penalty = try_penalty / penalty_scale_factor
             logger.log('Min penalty: %f; max penalty: %f' %
                        (min_bs_penalty, max_bs_penalty))
-            for _ in range(self.max_penalty_bs_itr):
+            for _ in range(self.opt.max_penalty_bs_itr):
                 penalty = 0.5 * (min_bs_penalty + max_bs_penalty)
-                self.optimizer(
+                itr_opt_params, _, _ = self.opt.optimizer(
                     func=evaluate_cost(penalty), x0=cur_params,
                     fprime=evaluate_grad(penalty),
-                    maxiter=self.max_opt_itr
+                    maxiter=self.opt.max_opt_itr
                     )
-                _, loss_after, mean_kl = f_surr_kl(
-                    *(all_input_values + [penalty]))
+                _, loss_after, mean_kl = master_f("surr_kl")(
+                    itr_opt_params, penalty)
                 logger.log('penalty %f => loss %f, mean kl %f' %
                            (penalty, loss_after, mean_kl))
-                if abs(mean_kl - self.step_size) < self.bs_kl_tolerance:
+                if abs(mean_kl - self.opt.step_size) < \
+                        self.opt.bs_kl_tolerance:
                     break
-                if mean_kl > self.step_size:
+                if mean_kl > self.opt.step_size:
                     # need to increase penalty
                     min_bs_penalty = penalty
                 else:
                     max_bs_penalty = penalty
-            opt_params = policy.get_param_values(trainable=True)
+            opt_params = itr_opt_params
 
         policy.set_param_values(opt_params, trainable=True)
         loss_after = evaluate_cost(0)(opt_params)

@@ -8,11 +8,11 @@ class LinearFeatureBaseline(Baseline):
         self.coeffs = None
 
     @overrides
-    def get_param_values(self):
+    def get_param_values(self, **tags):
         return self.coeffs
 
     @overrides
-    def set_param_values(self, val):
+    def set_param_values(self, val, **tags):
         self.coeffs = val
 
     def _features(self, path):
@@ -25,6 +25,7 @@ class LinearFeatureBaseline(Baseline):
     def fit(self, paths):
         featmat = np.concatenate([self._features(path) for path in paths])
         returns = np.concatenate([path["returns"] for path in paths])
+        import ipdb; ipdb.set_trace()
         self.coeffs = np.linalg.lstsq(featmat, returns)[0]
 
     @overrides
