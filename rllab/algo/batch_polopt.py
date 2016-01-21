@@ -16,6 +16,10 @@ def worker_inject_baseline(baseline):
     G.baseline = baseline
 
 
+def worker_update_baseline(params):
+    G.baseline.set_param_values(params, trainable=True)
+
+
 def worker_retrieve_paths():
     return G.paths
 
@@ -252,6 +256,10 @@ class BatchPolopt(RLAlgorithm):
                       "parallel algorithm for best possible performance"
             paths = retrieve_paths()
             baseline.fit(paths)
+            parallel_sampler.run_map(
+                worker_update_baseline,
+                baseline.get_param_values(trainable=True)
+            )
         logger.log("fitted")
         results = parallel_sampler.run_map(worker_process_paths, self.opt)
 
