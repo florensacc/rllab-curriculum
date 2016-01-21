@@ -97,8 +97,9 @@ def config_parallel_sampler(n_parallel, base_seed):
 
     if G.n_parallel > 1:
         G.base_seed = base_seed if base_seed else random.randint()
-        G.queue = Queue()
-        G.worker_queue = Queue()
+        m = Manager()
+        G.queue = m.Queue()
+        G.worker_queue = m.Queue()
 
         G.pool = MemmapingPool(
             G.n_parallel,
@@ -127,6 +128,9 @@ def populate_task(mdp, policy):
 
 def worker_run_task(all_args):
     runner, args, kwargs = all_args
+    # signals to the master that this task is up and running
+    G.worker_queue.put(None)
+    # wait for the master to signal continuation
     G.queue.get()
     return runner(*args, **kwargs)
 
@@ -136,23 +140,30 @@ def run_map(runner, *args, **kwargs):
         results = G.pool.map_async(
             worker_run_task, [(runner, args, kwargs)] * G.n_parallel)
         for i in range(G.n_parallel):
+            G.worker_queue.get()
+        for i in range(G.n_parallel):
             G.queue.put(None)
         return results.get()
     return [runner(*args, **kwargs)]
 
 
 def master_collect_mean(worker_f, *args, **kwargs):
-    results = run_map(worker_f, *args, **kwargs)
-    if isinstance(results[0], (list, tuple)):
-        # returning a list / tuple of results, compute the mean of each of them
-        n_results = len(results[0])
-        ret = [np.mean(np.array([np.array(x[i]) for x in results]), axis=0)
-               for i in range(n_results)]
-        if isinstance(results[0], tuple):
-            ret = tuple(ret)
-        return ret
-    else:
-        return np.mean(np.array(results), axis=0)
+    try:
+        results = run_map(worker_f, *args, **kwargs)
+        if isinstance(results[0], (list, tuple)):
+            # returning a list / tuple of results, compute the mean of each of them
+            n_results = len(results[0])
+            ret = [np.mean(np.array([np.array(x[i]) for x in results]), axis=0)
+                   for i in range(n_results)]
+            if isinstance(results[0], tuple):
+                ret = tuple(ret)
+            return ret
+        else:
+            return np.mean(np.array(results), axis=0)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        import ipdb; ipdb.set_trace()
 
 
 def worker_set_param_values(params, **tags):

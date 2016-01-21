@@ -24,7 +24,7 @@ class TRPO(NaturalGradientMethod, BatchPolopt):
                  backtrack_ratio=0.5,
                  max_backtracks=10,
                  **kwargs):
-        super(TRPO, self).__init__(**kwargs)
+        super(TRPO, self).__init__(algorithm_parallelized=True, **kwargs)
         BatchPolopt.__init__(self, **kwargs)
         self.backtrack_ratio = backtrack_ratio
         self.max_backtracks = max_backtracks
@@ -39,6 +39,7 @@ class TRPO(NaturalGradientMethod, BatchPolopt):
                     self.backtrack_ratio ** np.arange(self.max_backtracks)):
                 cur_step = ratio * flat_descent_step
                 cur_param = prev_param - cur_step
+                policy.set_param_values(cur_param, trainable=True)
                 parallel_sampler.master_set_param_values(
                     cur_param, trainable=True)
                 loss, mean_kl, max_kl = master_f("trpo_info")()

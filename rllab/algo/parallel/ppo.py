@@ -63,8 +63,13 @@ def worker_inputs():
 
 
 def worker_f(f_name, params, *args):
-    G.policy.set_param_values(params, trainable=True)
-    return G.ngm_opt_info[f_name](*(worker_inputs() + args))
+    try:
+        G.policy.set_param_values(params, trainable=True)
+        return G.ppo_opt_info[f_name](*(worker_inputs() + args))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 def master_f(f_name):
@@ -169,7 +174,7 @@ class ParPPO(BatchPolopt):
         def evaluate_cost(penalty):
             def evaluate(params):
                 t = time.time()
-                val, _, _ = master_f("surr_kl")(penalty)
+                val, _, _ = master_f("surr_kl")(params, penalty)
                 eval_cost_time[0] += time.time() - t
                 return val.astype(np.float64)
             return evaluate
@@ -177,8 +182,7 @@ class ParPPO(BatchPolopt):
         def evaluate_grad(penalty):
             def evaluate(params):
                 t = time.time()
-                parallel_sampler.master_set_param_values(params)
-                grad = master_f("grads")(penalty)
+                grad = master_f("grads")(params, penalty)
                 flattened_grad = flatten_tensors(map(np.asarray, grad))
                 eval_grad_time[0] += time.time() - t
                 return flattened_grad.astype(np.float64)

@@ -241,7 +241,10 @@ class BatchPolopt(RLAlgorithm):
         parallel_sampler.run_map(worker_compute_paths_returns, self.opt)
 
         if baseline.algorithm_parallelized:
-            baseline.fit()
+            try:
+                baseline.fit()
+            except Exception as e:
+                import ipdb; ipdb.set_trace()
         else:
             if self.opt.algorithm_parallelized:
                 print "[Warning] Baseline should be parallelized when using a " \
