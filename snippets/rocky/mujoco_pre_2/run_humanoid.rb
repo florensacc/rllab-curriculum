@@ -21,7 +21,7 @@ params = {
     n_itr: 1000,
     step_size: 0.1,
   },
-  n_parallel: 10,
+  n_parallel: 4,
   snapshot_mode: "last",
   seed: 1,
 }

@@ -1,25 +1,15 @@
 from mujoco_mdp import MujocoMDP
 from rllab.core.serializable import Serializable
 import numpy as np
-from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 
 
 class AntMDP(MujocoMDP, Serializable):
 
-    @autoargs.arg('ctrl_cost_coeff', type=float,
-                  help='Coefficient for the control cost')
-    @autoargs.arg('impact_cost_coeff', type=float,
-                  help='Coefficient for the impact cost')
-    @autoargs.arg('survive_reward', type=float,
-                  help='Reward for being alive')
-    def __init__(self, ctrl_cost_coeff=0.0, impact_cost_coeff=0.0, survive_reward=0.0):
+    def __init__(self):
         path = self.model_path('ant.xml')
-        super(AntMDP, self).__init__(path, frame_skip=1, ctrl_scaling=1)
-        Serializable.__init__(
-            self, ctrl_cost_coeff=ctrl_cost_coeff,
-            impact_cost_coeff=impact_cost_coeff, survive_reward=survive_reward
-        )
+        super(AntMDP, self).__init__(path, frame_skip=10, ctrl_scaling=1)
+        Serializable.__init__(self)
         init_qpos = np.zeros_like(self.model.data.qpos)
         # Taken from John's code
         init_qpos[0] = 0.0
@@ -29,30 +19,28 @@ class AntMDP(MujocoMDP, Serializable):
         init_qpos[12] = -1.0
         init_qpos[14] = 1.0
         self.init_qpos = init_qpos
-        self._ctrl_cost_coeff = ctrl_cost_coeff
-        self._impact_cost_coeff = impact_cost_coeff
-        self._survive_reward = survive_reward
 
-    def get_current_obs(self):
-        return np.concatenate([
-            self.model.data.qpos.flatten(),
-            self.model.data.qvel.flatten(),
-            np.clip(self.model.data.qfrc_constraint.flatten(), -10, 10),
-            self.get_body_com("torso"),
-        ]).reshape(-1)
+    # def get_current_obs(self):
+    #     return np.concatenate([
+    #         self.model.data.qpos.flatten(),
+    #         self.model.data.qvel.flatten(),
+    #         self.model.data.qfrc_constraint.flatten(),
+    #         self.get_body_com("torso"),
+    #     ]).reshape(-1)
 
     def step(self, state, action):
-        self.set_state(state)
-        com_before = self.get_body_com("torso")
         next_state = self.forward_dynamics(state, action, restore=False)
-        com_after = self.get_body_com("torso")
-        forward_reward = (com_after[0] - com_before[0]) / self.model.opt.timestep / self.frame_skip
-        ctrl_cost = self._ctrl_cost_coeff * min(np.sum(np.square(action)), 10)
-        impact_cost = self._impact_cost_coeff * min(np.sum(np.square(self.model.data.qfrc_constraint)), 10)
-        survive_reward = self._survive_reward
+        forward_reward = (self.dcom[0]) \
+            / self.model.opt.timestep / self.frame_skip
+        ctrl_cost = 0.5 * 1e-5 * np.sum(np.square(action))
+        impact_cost = min(
+            0.5 * 1e-5 * np.sum(np.square(self.model.data.qfrc_constraint)),
+            10.0
+        )
+        survive_reward = 1.0
         reward = forward_reward - ctrl_cost - impact_cost + survive_reward
-
-        notdone = np.isfinite(next_state).all() and next_state[2] >= 0.2 and next_state[2] <= 1.0
+        notdone = np.isfinite(next_state).all() \
+            and next_state[2] >= 0.2 and next_state[2] <= 1.0
         done = not notdone
         ob = self.get_current_obs()
         return next_state, ob, reward, done
