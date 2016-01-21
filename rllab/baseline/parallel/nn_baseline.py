@@ -112,14 +112,13 @@ class ParNNBaseline(Baseline, LasagnePowered, Serializable):
 
     def _feature_size(self, mdp):
         obs_dim = mdp.observation_shape[0]
-        return obs_dim#*2 + 3
+        return obs_dim * 2 + 3
 
     def features(self, path):
-        return path["observations"]
-        # o = np.clip(path["observations"], -10, 10)
-        # l = len(path["rewards"])
-        # al = np.arange(l).reshape(-1, 1)/100.0
-        # return np.concatenate([o, o**2, al, al**2, al**3], axis=1)
+        o = np.clip(path["observations"], -10, 10)
+        l = len(path["rewards"])
+        al = np.arange(l).reshape(-1, 1) / 100.0
+        return np.concatenate([o, o**2, al, al**2, al**3], axis=1)
 
     @property
     @overrides

@@ -10,14 +10,11 @@ params = {
     hidden_sizes: [100, 50, 25],
   },
   baseline: {
-    _name: "parallel.nn_baseline",
-    #_name: "linear_feature_baseline",
-    hidden_sizes: [100, 50, 25],#300, 300],
-    max_opt_itr: 5,#500,
+    _name: "parallel.linear_feature_baseline",
   },
   exp_name: "humanoid_mujoco_pre_2",
   algo: {
-    _name: "parallel.trpo",
+    _name: "parallel.ppo",
     whole_paths: true,
     batch_size: 50000,
     max_path_length: 2000,
