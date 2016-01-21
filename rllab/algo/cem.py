@@ -108,6 +108,8 @@ class CEM(RLAlgorithm):
                                   np.max(fs))
             logger.record_tabular('MinReturn',
                                   np.min(fs))
+            logger.record_tabular('AvgTrajLen',
+                                  np.mean([len(info['returns']) for info in infos]))
             policy.set_param_values(best_x)
             logger.save_itr_params(itr, dict(
                 itr=itr,
