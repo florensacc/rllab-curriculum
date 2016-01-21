@@ -25,6 +25,7 @@ class LinearFeatureBaseline(Baseline):
     def fit(self, paths):
         featmat = np.concatenate([self._features(path) for path in paths])
         returns = np.concatenate([path["returns"] for path in paths])
+        import ipdb; ipdb.set_trace()
         self.coeffs = np.linalg.lstsq(featmat, returns)[0]
 
     @overrides
