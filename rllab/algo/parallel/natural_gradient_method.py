@@ -56,9 +56,10 @@ def master_f(f_name):
     return f
 
 
-def worker_init_opt():
+def worker_init_opt(opt):
     mdp = PG.mdp
     policy = PG.policy
+    G.opt = opt
     input_var = new_tensor(
         'input',
         ndim=1+len(mdp.observation_shape),
@@ -173,19 +174,18 @@ class NaturalGradientMethod(BatchPolopt):
         self.opt.step_size = step_size
         self.opt.reg_coeff = reg_coeff
         self.opt.subsample_factor = subsample_factor
-        G.opt = self.opt
 
     def init_opt(self, mdp, policy, baseline):
-        parallel_sampler.run_map(worker_init_opt)
+        parallel_sampler.run_map(worker_init_opt, self.opt)
 
     @contextmanager
     def optimization_setup(self, itr, policy, samples_data, opt_info):
+        parallel_sampler.run_map(worker_prepare_inputs)
         logger.log("optimizing policy")
         logger.log("computing loss before")
         loss_before = master_f("f_loss")()
         logger.log("performing update")
         logger.log("computing descent direction")
-        parallel_sampler.run_map(worker_prepare_inputs)
         if not self.opt.use_cg:
             # direct approach, just bite the bullet and use hessian
             _, flat_g, fisher_mat = master_f("f_fisher")()
