@@ -12,6 +12,11 @@ import rllab.plotter as plotter
 G = parallel_sampler.G
 
 
+def worker_inject_baseline(args):
+    baseline, = args
+    G.baseline = baseline
+
+
 def worker_retrieve_paths(*args):
     return G.paths
 
@@ -84,12 +89,14 @@ def worker_process_paths(args):
         average_discounted_return = \
             np.mean([path["returns"][0] for path in G.paths])
 
+        undiscounted_returns = [sum(path["rewards"]) for path in G.paths]
+
         return dict(
             average_discounted_return=average_discounted_return,
-            average_return=np.mean(returns),
-            std_return=np.std(returns),
-            max_return=np.max(returns),
-            min_return=np.min(returns),
+            average_return=np.mean(undiscounted_returns),
+            std_return=np.std(undiscounted_returns),
+            max_return=np.max(undiscounted_returns),
+            min_return=np.min(undiscounted_returns),
             num_trajs=len(G.paths),
             ent=G.policy.compute_entropy(pdists),
             ev=explained_variance_1d(
@@ -171,6 +178,7 @@ class BatchPolopt(RLAlgorithm):
 
     def start_worker(self, mdp, policy, baseline):
         parallel_sampler.populate_task(mdp, policy)
+        parallel_sampler.run_map(worker_inject_baseline, baseline)
         if self.opt.plot:
             plotter.init_plot(mdp, policy)
 
@@ -238,8 +246,9 @@ class BatchPolopt(RLAlgorithm):
         if baseline.algorithm_parallelized:
             baseline.fit()
         else:
-            print "[Warning] Baseline should be parallelized when using a " \
-                  "parallel algorithm for best possible performance"
+            if self.opt.algorithm_parallelized:
+                print "[Warning] Baseline should be parallelized when using a " \
+                      "parallel algorithm for best possible performance"
             paths = retrieve_paths()
             baseline.fit(paths)
         results = parallel_sampler.run_map(

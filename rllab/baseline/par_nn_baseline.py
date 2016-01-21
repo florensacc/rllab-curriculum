@@ -20,7 +20,7 @@ G = parallel_sampler.G
 
 
 def worker_init_opt(args):
-    baseline, = args
+    baseline = G.baseline
 
     new_v_var = TT.vector("new_values")
     loss = TT.mean(TT.square(baseline.v_var - new_v_var[:, np.newaxis]))
@@ -28,13 +28,12 @@ def worker_init_opt(args):
 
     grads = theano.gradient.grad(loss, baseline.get_params(trainable=True))
 
-    G.par_nn_baseline = baseline
     G.par_nn_baseline_f_loss = compile_function(input_list, loss)
     G.par_nn_baseline_f_grads = compile_function(input_list, grads)
 
 
 def worker_prepare_data(args):
-    baseline = G.par_nn_baseline
+    baseline = G.baseline
     paths = G.paths
     featmat = np.concatenate([baseline.features(path) for path in paths])
     returns = np.concatenate([path["returns"] for path in paths])
@@ -43,7 +42,7 @@ def worker_prepare_data(args):
 
 def worker_f_loss(args):
     params, = args
-    G.par_nn_baseline.set_param_values(params, trainable=True)
+    G.baseline.set_param_values(params, trainable=True)
     return G.par_nn_baseline_f_loss(*G.par_nn_baseline_input_vals)
 
 
@@ -53,14 +52,15 @@ def master_f_loss(params):
 
 def worker_f_grads(args):
     params, = args
-    G.par_nn_baseline.set_param_values(params, trainable=True)
+    G.baseline.set_param_values(params, trainable=True)
     return G.par_nn_baseline_f_grads(*G.par_nn_baseline_input_vals)
 
 
 def master_f_grads(params):
     results = parallel_sampler.run_map(worker_f_grads, params)
+    # import ipdb; ipdb.set_trace()
     n_grads = len(results[0])
-    return [np.mean(np.array([x[i] for x in results]), axis=0)
+    return [np.mean(np.array([np.array(x[i]) for x in results]), axis=0)
             for i in range(n_grads)]
 
 
@@ -138,7 +138,7 @@ class ParNNBaseline(Baseline, LasagnePowered, Serializable):
     def fit(self):
         if not self._opt_initialized:
             logger.log("initializing worker baseline optimization")
-            parallel_sampler.run_map(worker_init_opt, self)
+            parallel_sampler.run_map(worker_init_opt)
             logger.log("initialized")
             self._opt_initialized = True
 

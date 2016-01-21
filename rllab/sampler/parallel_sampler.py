@@ -173,4 +173,4 @@ def request_samples(
             whole_paths=whole_paths,
             record_states=record_states
         )
-        G.paths = pool_rollout(args)
+        pool_rollout(args)
