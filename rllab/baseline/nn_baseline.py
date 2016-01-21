@@ -130,13 +130,10 @@ class NNBaseline(Baseline, LasagnePowered, Serializable):
 
     def _feature_size(self, mdp):
         obs_dim = mdp.observation_shape[0]
-        return obs_dim*2 + 3
+        return obs_dim
 
     def _features(self, path):
-        o = np.clip(path["observations"], -10,10)
-        l = len(path["rewards"])
-        al = np.arange(l).reshape(-1,1)/100.0
-        return np.concatenate([o, o**2, al, al**2, al**3], axis=1)
+        return path["observations"]
 
     @overrides
     def fit(self, paths):
