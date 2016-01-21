@@ -126,19 +126,41 @@ def populate_task(mdp, policy):
 
 
 def worker_run_task(all_args):
-    runner, args = all_args
+    runner, args, kwargs = all_args
     G.queue.get()
-    return runner(*args)
+    return runner(*args, **kwargs)
 
 
-def run_map(runner, *args):
+def run_map(runner, *args, **kwargs):
     if G.n_parallel > 1:
         results = G.pool.map_async(
-            worker_run_task, [(runner, args)] * G.n_parallel)
+            worker_run_task, [(runner, args, kwargs)] * G.n_parallel)
         for i in range(G.n_parallel):
             G.queue.put(None)
         return results.get()
-    return [runner(*args)]
+    return [runner(*args, **kwargs)]
+
+
+def master_collect_mean(worker_f, *args, **kwargs):
+    results = run_map(worker_f, *args, **kwargs)
+    if isinstance(results[0], (list, tuple)):
+        # returning a list / tuple of results, compute the mean of each of them
+        n_results = len(results[0])
+        ret = [np.mean(np.array([np.array(x[i]) for x in results]), axis=0)
+               for i in range(n_results)]
+        if isinstance(results[0], tuple):
+            ret = tuple(ret)
+        return ret
+    else:
+        return np.mean(np.array(results), axis=0)
+
+
+def worker_set_param_values(params, **tags):
+    G.policy.set_param_values(params, **tags)
+
+
+def master_set_param_values(params, **tags):
+    run_map(worker_set_param_values, params, **tags)
 
 
 def request_samples(

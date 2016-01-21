@@ -49,41 +49,28 @@ def worker_init_opt():
         input_list, [surr_obj, surr_loss, mean_kl])
     f_grads = compile_function(input_list, grads)
 
-    G.par_ppo_f_surr_kl = f_surr_kl
-    G.par_ppo_f_grads = f_grads
+    G.ppo_opt_info = dict(
+        surr_kl=f_surr_kl,
+        grads=f_grads
+    )
 
 
-def worker_surr_kl(params, penalty):
-    G.policy.set_param_values(params, trainable=True)
-    observations, advantages, pdists, actions = extract(
+def worker_inputs():
+    return list(extract(
         G.samples_data,
         "observations", "advantages", "pdists", "actions"
-    )
-    return G.par_ppo_f_surr_kl(
-        observations, advantages, pdists, actions, penalty)
+    ))
 
 
-def worker_f_grads(params, penalty):
-    G.policy.set_param_values(params, trainable=True)
-    observations, advantages, pdists, actions = extract(
-        G.samples_data,
-        "observations", "advantages", "pdists", "actions"
-    )
-    return G.par_ppo_f_grads(
-        observations, advantages, pdists, actions, penalty)
+def worker_f(f_name, *args):
+    return G.ngm_opt_info[f_name](*(worker_inputs() + list(args)))
 
 
-def master_f_surr_kl(params, penalty):
-    results = parallel_sampler.run_map(worker_surr_kl, params, penalty)
-    surr_objs, surr_losses, mean_kls = extract(results, 0, 1, 2)
-    return np.mean(surr_objs), np.mean(surr_losses), np.mean(mean_kls)
-
-
-def master_f_grads(params, penalty):
-    results = parallel_sampler.run_map(worker_f_grads, params, penalty)
-    n_grads = len(results[0])
-    return [np.mean(np.array([np.array(x[i]) for x in results]), axis=0)
-            for i in range(n_grads)]
+def master_f(f_name):
+    def f(params, *args):
+        parallel_sampler.master_set_param_values(params)
+        return parallel_sampler.master_collect_mean(worker_f, f_name, *args)
+    return f
 
 
 class ParPPO(BatchPolopt):
@@ -178,11 +165,10 @@ class ParPPO(BatchPolopt):
         eval_cost_time = [0]
         eval_grad_time = [0]
 
-
         def evaluate_cost(penalty):
             def evaluate(params):
                 t = time.time()
-                val, _, _ = master_f_surr_kl(params, penalty)
+                val, _, _ = master_f("surr_kl")(penalty)
                 eval_cost_time[0] += time.time() - t
                 return val.astype(np.float64)
             return evaluate
@@ -190,7 +176,8 @@ class ParPPO(BatchPolopt):
         def evaluate_grad(penalty):
             def evaluate(params):
                 t = time.time()
-                grad = master_f_grads(params, penalty)
+                parallel_sampler.master_set_param_values(params)
+                grad = master_f("grads")(penalty)
                 flattened_grad = flatten_tensors(map(np.asarray, grad))
                 eval_grad_time[0] += time.time() - t
                 return flattened_grad.astype(np.float64)
@@ -219,7 +206,7 @@ class ParPPO(BatchPolopt):
 
             print "eval cost time: %f" % eval_cost_time[0]
             print "eval grad time: %f" % eval_grad_time[0]
-            _, try_loss, try_mean_kl = master_f_surr_kl(
+            _, try_loss, try_mean_kl = master_f("surr_kl")(
                 itr_opt_params, try_penalty)
             logger.log('penalty %f => loss %f, mean kl %f' %
                        (try_penalty, try_loss, try_mean_kl))
@@ -279,7 +266,7 @@ class ParPPO(BatchPolopt):
                     fprime=evaluate_grad(penalty),
                     maxiter=self.opt.max_opt_itr
                     )
-                _, loss_after, mean_kl = master_f_surr_kl(
+                _, loss_after, mean_kl = master_f("surr_kl")(
                     itr_opt_params, penalty)
                 logger.log('penalty %f => loss %f, mean kl %f' %
                            (penalty, loss_after, mean_kl))

@@ -10,23 +10,24 @@ params = {
     hidden_sizes: [32, 32],
   },
   baseline: {
-    _name: "par_nn_baseline",
+    _name: "parallel.nn_baseline",
     hidden_sizes: [],
   },
   exp_name: "swimmer",
   algo: {
-    _name: "par_ppo",
+    _name: "parallel.trpo",
     whole_paths: true,
-    batch_size: 1000,
+    batch_size: 10000,
     max_path_length: 500,
     n_itr: 2,
     step_size: 0.01,
-    binary_search_penalty: false,
+    # binary_search_penalty: false,
   },
-  n_parallel: 2,
+  n_parallel: 4,
   snapshot_mode: "last",
   seed: 1,
 }
+
 command = to_command(params)
 puts command
 system(command)
