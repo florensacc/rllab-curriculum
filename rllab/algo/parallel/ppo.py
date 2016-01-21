@@ -11,12 +11,20 @@ from pydoc import locate
 import numpy as np
 
 
-G = parallel_sampler.G
+PG = parallel_sampler.G
+
+
+class Globals(object):
+
+    def __init__(self):
+        self.opt_info = None
+
+G = Globals()
 
 
 def worker_init_opt():
-    mdp = G.mdp
-    policy = G.policy
+    mdp = PG.mdp
+    policy = PG.policy
     input_var = new_tensor(
         'input',
         ndim=1+len(mdp.observation_shape),
@@ -49,27 +57,22 @@ def worker_init_opt():
         input_list, [surr_obj, surr_loss, mean_kl])
     f_grads = compile_function(input_list, grads)
 
-    G.ppo_opt_info = dict(
-        surr_kl=f_surr_kl,
-        grads=f_grads
+    G.opt_info = dict(
+        f_surr_kl=f_surr_kl,
+        f_grads=f_grads
     )
 
 
 def worker_inputs():
     return extract(
-        G.samples_data,
+        PG.samples_data,
         "observations", "advantages", "pdists", "actions"
     )
 
 
 def worker_f(f_name, params, *args):
-    try:
-        G.policy.set_param_values(params, trainable=True)
-        return G.ppo_opt_info[f_name](*(worker_inputs() + args))
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise
+    PG.policy.set_param_values(params, trainable=True)
+    return G.opt_info[f_name](*(worker_inputs() + args))
 
 
 def master_f(f_name):
@@ -168,13 +171,13 @@ class ParPPO(BatchPolopt):
 
         def evaluate_cost(penalty):
             def evaluate(params):
-                val, _, _ = master_f("surr_kl")(params, penalty)
+                val, _, _ = master_f("f_surr_kl")(params, penalty)
                 return val.astype(np.float64)
             return evaluate
 
         def evaluate_grad(penalty):
             def evaluate(params):
-                grad = master_f("grads")(params, penalty)
+                grad = master_f("f_grads")(params, penalty)
                 flattened_grad = flatten_tensors(map(np.asarray, grad))
                 return flattened_grad.astype(np.float64)
             return evaluate
@@ -200,7 +203,7 @@ class ParPPO(BatchPolopt):
                 maxiter=self.opt.max_opt_itr
                 )
 
-            _, try_loss, try_mean_kl = master_f("surr_kl")(
+            _, try_loss, try_mean_kl = master_f("f_surr_kl")(
                 itr_opt_params, try_penalty)
             logger.log('penalty %f => loss %f, mean kl %f' %
                        (try_penalty, try_loss, try_mean_kl))
@@ -260,7 +263,7 @@ class ParPPO(BatchPolopt):
                     fprime=evaluate_grad(penalty),
                     maxiter=self.opt.max_opt_itr
                     )
-                _, loss_after, mean_kl = master_f("surr_kl")(
+                _, loss_after, mean_kl = master_f("f_surr_kl")(
                     itr_opt_params, penalty)
                 logger.log('penalty %f => loss %f, mean kl %f' %
                            (penalty, loss_after, mean_kl))

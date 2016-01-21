@@ -3,6 +3,23 @@
 from ctypes import *
 import numpy as np
 
+class MJCONTACT(Structure):
+    
+    _fields_ = [
+        ("dist", c_double),
+        ("pos", c_double * 3),
+        ("frame", c_double * 9),
+        ("includemargin", c_double),
+        ("friction", c_double * 5),
+        ("solref", c_double * 2),
+        ("solimp", c_double * 3),
+        ("dim", c_int),
+        ("geom1", c_int),
+        ("geom2", c_int),
+        ("exclude", c_int),
+        ("efc_address", c_int),
+    ]
+
 class MJRRECT(Structure):
     
     _fields_ = [
@@ -335,7 +352,7 @@ class MJDATA(Structure):
         ("qLD", POINTER(c_double)),
         ("qLDiagInv", POINTER(c_double)),
         ("qLDiagSqrtInv", POINTER(c_double)),
-        ("contact", POINTER(c_void_p)),
+        ("contact", POINTER(MJCONTACT)),
         ("efc_type", POINTER(c_int)),
         ("efc_id", POINTER(c_int)),
         ("efc_signature", POINTER(c_int)),
@@ -642,6 +659,132 @@ class MJMODEL(Structure):
         ("name_textadr", POINTER(c_int)),
         ("names", POINTER(c_char)),
     ]
+
+class MjContactWrapper(object):
+    
+    def __init__(self, wrapped, size_src=None):
+        self._wrapped = wrapped
+        self._size_src = size_src
+
+    @property
+    def ptr(self):
+        return self._wrapped
+
+    @property
+    def obj(self):
+        return self._wrapped.contents
+
+    
+    @property
+    def dist(self):
+        return self._wrapped.contents.dist
+    
+    @dist.setter
+    def dist(self, value):
+        self._wrapped.contents.dist = value
+    
+    @property
+    def pos(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.pos, dtype=np.double, count=(3)), (3, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @pos.setter
+    def pos(self, value):
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.pos, val_ptr, 3 * sizeof(c_double))
+    
+    @property
+    def frame(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.frame, dtype=np.double, count=(9)), (9, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @frame.setter
+    def frame(self, value):
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.frame, val_ptr, 9 * sizeof(c_double))
+    
+    @property
+    def includemargin(self):
+        return self._wrapped.contents.includemargin
+    
+    @includemargin.setter
+    def includemargin(self, value):
+        self._wrapped.contents.includemargin = value
+    
+    @property
+    def friction(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.friction, dtype=np.double, count=(5)), (5, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @friction.setter
+    def friction(self, value):
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.friction, val_ptr, 5 * sizeof(c_double))
+    
+    @property
+    def solref(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.solref, dtype=np.double, count=(2)), (2, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @solref.setter
+    def solref(self, value):
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.solref, val_ptr, 2 * sizeof(c_double))
+    
+    @property
+    def solimp(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.solimp, dtype=np.double, count=(3)), (3, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @solimp.setter
+    def solimp(self, value):
+        val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.solimp, val_ptr, 3 * sizeof(c_double))
+    
+    @property
+    def dim(self):
+        return self._wrapped.contents.dim
+    
+    @dim.setter
+    def dim(self, value):
+        self._wrapped.contents.dim = value
+    
+    @property
+    def geom1(self):
+        return self._wrapped.contents.geom1
+    
+    @geom1.setter
+    def geom1(self, value):
+        self._wrapped.contents.geom1 = value
+    
+    @property
+    def geom2(self):
+        return self._wrapped.contents.geom2
+    
+    @geom2.setter
+    def geom2(self, value):
+        self._wrapped.contents.geom2 = value
+    
+    @property
+    def exclude(self):
+        return self._wrapped.contents.exclude
+    
+    @exclude.setter
+    def exclude(self, value):
+        self._wrapped.contents.exclude = value
+    
+    @property
+    def efc_address(self):
+        return self._wrapped.contents.efc_address
+    
+    @efc_address.setter
+    def efc_address(self, value):
+        self._wrapped.contents.efc_address = value
 
 class MjrRectWrapper(object):
     

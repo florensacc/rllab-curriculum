@@ -1,18 +1,15 @@
-import os
 import numpy as np
 from contextlib import contextmanager
 import os.path as osp
-import sys
-import random
 from rllab.mdp.base import ControlMDP
 from rllab.mjcapi.rocky_mjc_1_22 import MjModel, MjViewer
 from rllab.misc.overrides import overrides
 import theano
 
+
 class MujocoMDP(ControlMDP):
 
     def __init__(self, model_path, frame_skip, ctrl_scaling):
-        self.model_path = model_path
         self.model = MjModel(model_path)
         self.data = self.model.data
         self.viewer = None
@@ -25,11 +22,16 @@ class MujocoMDP(ControlMDP):
         self.ctrl_dim = self.init_ctrl.size
         self.frame_skip = frame_skip
         self.ctrl_scaling = ctrl_scaling
+        self.dcom = None
+        self.current_com = None
         self.reset()
         super(MujocoMDP, self).__init__()
 
     def model_path(self, file_name):
-        return osp.abspath(osp.join(osp.dirname(__file__), '../../../vendor/mujoco_models/1_22/%s' % file_name))
+        return osp.abspath(osp.join(
+            osp.dirname(__file__),
+            '../../../vendor/mujoco_models/1_22/%s' % file_name
+        ))
 
     @property
     @overrides
@@ -66,6 +68,8 @@ class MujocoMDP(ControlMDP):
         self.model.data.qacc = self.init_qacc
         self.model.data.ctrl = self.init_ctrl
         self.model.forward()
+        self.current_com = self.model.data.com_subtree[0]
+        self.dcom = np.zeros_like(self.current_com)
         self.current_state = self.get_current_state()
         return self.get_current_state(), self.get_current_obs()
 
@@ -74,11 +78,31 @@ class MujocoMDP(ControlMDP):
 
     def decode_state(self, state):
         qpos, qvel = np.split(state, [self.qpos_dim])
-        #qvel = state[self.qpos_dim:self.qpos_dim+self.qvel_dim]
         return qpos, qvel
 
     def get_current_obs(self):
-        raise NotImplementedError
+        return self.get_full_obs()
+
+    def get_full_obs(self):
+        data = self.model.data
+        cdists = np.copy(self.model.geom_margin).flat
+        for c in self.model.data.contact:
+            cdists[c.geom2] = min(cdists[c.geom2], c.dist)
+        return np.concatenate([
+            data.qpos.flat,
+            data.qvel.flat,
+            # data.cdof.flat,
+            data.cinert.flat,
+            data.cvel.flat,
+            # data.cacc.flat,
+            data.qfrc_actuator.flat,
+            data.cfrc_ext.flat,
+            data.qfrc_constraint.flat,
+            cdists,
+            # data.qfrc_bias.flat,
+            # data.qfrc_passive.flat,
+            self.dcom.flat,
+        ])
 
     def get_obs(self, state):
         with self.set_state_tmp(state):
@@ -93,6 +117,9 @@ class MujocoMDP(ControlMDP):
             for _ in range(self.frame_skip):
                 self.model.step()
             self.model.forward()
+            new_com = self.model.data.com_subtree[0]
+            self.dcom = new_com - self.current_com
+            self.current_com = new_com
             return self.get_current_state()
 
     def get_viewer(self):

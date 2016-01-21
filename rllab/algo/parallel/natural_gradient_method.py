@@ -6,6 +6,7 @@ import theano.tensor as TT
 import numpy as np
 from numpy.linalg import LinAlgError
 
+from rllab.algo.batch_polopt import BatchPolopt
 from rllab.misc import logger, autoargs
 from rllab.misc.krylov import cg
 from rllab.sampler import parallel_sampler
@@ -13,18 +14,40 @@ from rllab.misc.ext import extract, compile_function, flatten_hessian, \
     new_tensor, new_tensor_like, flatten_tensor_variables, lazydict
 
 
-G = parallel_sampler.G
+PG = parallel_sampler.G
 
 
-def worker_inputs():
-    return list(extract(
-        G.samples_data,
+class Globals():
+
+    def __init__(self):
+        self.opt = None
+        self.opt_info = None
+        self.inputs = None
+        self.subsample_inputs = None
+
+G = Globals()
+
+
+def worker_prepare_inputs():
+    G.inputs = list(extract(
+        PG.samples_data,
         "observations", "advantages", "pdists", "actions"
     ))
+    if G.opt.subsample_factor < 1:
+        n_samples = len(G.inputs[0])
+        inds = np.random.choice(
+            n_samples, n_samples * G.opt.subsample_factor, replace=False)
+        G.subsample_inputs = [x[inds] for x in G.inputs]
+    else:
+        G.subsample_inputs = G.inputs
 
 
 def worker_f(f_name, *args):
-    return G.ngm_opt_info[f_name](*(worker_inputs() + list(args)))
+    if f_name == "Hx_plain" or f_name == "fisher":
+        inputs = G.subsample_inputs
+    else:
+        inputs = G.inputs
+    return G.opt_info[f_name](*(inputs + list(args)))
 
 
 def master_f(f_name):
@@ -34,8 +57,8 @@ def master_f(f_name):
 
 
 def worker_init_opt():
-    mdp = G.mdp
-    policy = G.policy
+    mdp = PG.mdp
+    policy = PG.policy
     input_var = new_tensor(
         'input',
         ndim=1+len(mdp.observation_shape),
@@ -91,20 +114,20 @@ def worker_init_opt():
     # follwoing information is computed to TRPO
     max_kl = TT.max(policy.kl(old_pdist_var, pdist_var))
 
-    G.ngm_opt_info = lazydict(
-        loss=lambda: f_loss,
-        grad=lambda: f_grad,
-        fisher=lambda:
+    G.opt_info = lazydict(
+        f_loss=lambda: f_loss,
+        f_grad=lambda: f_grad,
+        f_fisher=lambda:
         compile_function(
             inputs=input_list,
             outputs=[surr_obj, flat_grad, emp_fisher],
         ),
-        Hx_plain=lambda:
+        f_Hx_plain=lambda:
         compile_function(
             inputs=input_list + xs,
             outputs=Hx_plain,
         ),
-        trpo_info=lambda:
+        f_trpo_info=lambda:
         compile_function(
             inputs=input_list,
             outputs=[surr_obj, mean_kl, max_kl]
@@ -112,7 +135,7 @@ def worker_init_opt():
     )
 
 
-class NaturalGradientMethod(object):
+class NaturalGradientMethod(BatchPolopt):
     """
     Natural Gradient Method infrastructure for NPG & TRPO. (and possibly more)
     """
@@ -132,17 +155,25 @@ class NaturalGradientMethod(object):
                        "method, this regularization will be adaptively "
                        "increased should the regularized matrix is still "
                        "singular (but it's unlikely)")
+    @autoargs.arg("subsample_factor", type=float,
+                  help="Subsampling factor to reduce samples when using "
+                       "conjugate gradient. Since the computation time for "
+                       "the descent direction dominates, this can greatly "
+                       "reduce the overall computation time.")
     def __init__(
             self,
             step_size=0.001,
             use_cg=True,
             cg_iters=10,
             reg_coeff=1e-5,
+            subsample_factor=0.1,
             **kwargs):
-        self.cg_iters = cg_iters
-        self.use_cg = use_cg
-        self.step_size = step_size
-        self.reg_coeff = reg_coeff
+        self.opt.cg_iters = cg_iters
+        self.opt.use_cg = use_cg
+        self.opt.step_size = step_size
+        self.opt.reg_coeff = reg_coeff
+        self.opt.subsample_factor = subsample_factor
+        G.opt = self.opt
 
     def init_opt(self, mdp, policy, baseline):
         parallel_sampler.run_map(worker_init_opt)
@@ -151,46 +182,47 @@ class NaturalGradientMethod(object):
     def optimization_setup(self, itr, policy, samples_data, opt_info):
         logger.log("optimizing policy")
         logger.log("computing loss before")
-        loss_before = master_f("loss")()
+        loss_before = master_f("f_loss")()
         logger.log("performing update")
         logger.log("computing descent direction")
-        if not self.use_cg:
+        parallel_sampler.run_map(worker_prepare_inputs)
+        if not self.opt.use_cg:
             # direct approach, just bite the bullet and use hessian
-            _, flat_g, fisher_mat = master_f("fisher")()
+            _, flat_g, fisher_mat = master_f("f_fisher")()
             while True:
                 reg_fisher_mat = fisher_mat + \
-                    self.reg_coeff*np.eye(fisher_mat.shape[0])
+                    self.opt.reg_coeff*np.eye(fisher_mat.shape[0])
                 try:
                     nat_direction = np.linalg.solve(
                         reg_fisher_mat, flat_g
                     )
                     break
                 except LinAlgError:
-                    self.reg_coeff *= 5
-                    print self.reg_coeff
+                    self.opt.reg_coeff *= 5
+                    print self.opt.reg_coeff
         else:
             # CG approach
-            _, flat_g = master_f("grad")()
+            _, flat_g = master_f("f_grad")()
 
             def Hx(x):
                 xs = policy.flat_to_params(x)
                 # with Message("rop"):
                 #     rop = f_Hx_rop(*(inputs + xs))
-                plain = master_f("Hx_plain")(*xs) + self.reg_coeff*x
+                plain = master_f("f_Hx_plain")(*xs) + self.opt.reg_coeff*x
                 # assert np.allclose(rop, plain)
                 return plain
                 # alternatively we can do finite difference on flat_grad
-            nat_direction = cg(Hx, flat_g, cg_iters=self.cg_iters)
+            nat_direction = cg(Hx, flat_g, cg_iters=self.opt.cg_iters)
 
-        nat_step_size = 1. if self.step_size is None \
-            else (self.step_size * (
+        nat_step_size = 1. if self.opt.step_size is None \
+            else (self.opt.step_size * (
                 1. / flat_g.T.dot(nat_direction)
             )) ** 0.5
         flat_descent_step = nat_step_size * nat_direction
         logger.log("descent direction computed")
         yield flat_descent_step
         logger.log("computing loss after")
-        loss_after = master_f("loss")()
+        loss_after = master_f("f_loss")()
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
         logger.log("optimization finished")

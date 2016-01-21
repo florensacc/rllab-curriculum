@@ -1,4 +1,4 @@
-from ctypes import Structure, c_int, POINTER, cdll, c_char_p, create_string_buffer
+from ctypes import Structure, c_int, POINTER, cdll, c_char_p, create_string_buffer, pointer
 import numpy as np
 from numpy.ctypeslib import as_ctypes
 import os
@@ -83,3 +83,8 @@ class MjData(MjDataWrapper):
     def __del__(self):
         if self._wrapped is not None:
             mjlib.mj_deleteData(self._wrapped)
+
+    @property
+    def contact(self):
+        contacts = self._wrapped.contents.contact[:self.ncon]
+        return [MjContactWrapper(pointer(c)) for c in contacts]

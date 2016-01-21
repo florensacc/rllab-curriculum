@@ -39,16 +39,19 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
         for i in xrange(max_steps):
             action = sample_action(lb, ub)
             state, _, rew, done = mdp.step(state, action)
-            if (i%10) == 0:
-                mdp.plot()
+            # if i % 10 == 0:
+            mdp.plot()
+            # import time as ttime
+            time.sleep(mdp.timestep)
             totrew += rew
-            print rew
+            print "reward:", rew
             if done:
-                print totrew
-                totret = 0
+                print "total reward:", totrew
+                totrew = 0
                 state = mdp.reset()[0]
         if not done:
-            print totrew
+            print "total reward:", totrew
+            totrew = 0
     elif mode == 'static':
         mdp.reset()
         while True:

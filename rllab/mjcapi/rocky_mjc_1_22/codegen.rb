@@ -3,7 +3,7 @@ require 'active_support/all'
 
 CTYPES_MAP = {
   'int' => 'c_int',
-  'mjContact' => 'c_void_p',
+  # 'mjContact' => 'c_void_p',
   'double' => 'c_double',
   'float' => 'c_float',
   'char' => 'c_char',
@@ -303,6 +303,9 @@ def #{prop[:name]}(self, value):
 def #{prop[:name]}(self):
     return self._wrapped.contents.#{prop[:name]}
 }
+      elsif prop[:kind] == :pointer && prop[:type] == 'mjContact'
+        count = prop[:hint].map{|hint_elem| to_size_factor(source, struct, hint_elem)}.join("*")
+        binding.pry
       else
         # move on
         # binding.pry
@@ -322,7 +325,7 @@ from ctypes import *
 import numpy as np
 }
 
-structs = %w[_mjrRect _mjvCameraPose _mjrOption _mjrContext _mjvCamera _mjvOption _mjvGeom _mjvLight _mjvObjects _mjOption _mjVisual _mjStatistic _mjData _mjModel].map{|x| parse_struct(source, x) }
+structs = %w[_mjContact _mjrRect _mjvCameraPose _mjrOption _mjrContext _mjvCamera _mjvOption _mjvGeom _mjvLight _mjvObjects _mjOption _mjVisual _mjStatistic _mjData _mjModel].map{|x| parse_struct(source, x) }
 
 structs.each {|s| puts gen_ctypes_src(source, s) }
 structs.each {|s| puts gen_wrapper_src(source, s) }
