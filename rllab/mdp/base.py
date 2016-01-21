@@ -50,7 +50,7 @@ class MDP(object):
     def new_from_args(cls, args):
         pass
 
-    def log_extra(self, logger, paths):
+    def log_extra(self):
         """
         Log extra information per iteration based on the collected paths
         """

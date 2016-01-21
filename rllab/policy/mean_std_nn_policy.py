@@ -11,12 +11,23 @@ from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.policy.base import StochasticPolicy
 from rllab.misc.overrides import overrides
+from rllab.misc import logger
 from rllab.misc import autoargs
+from rllab.sampler import parallel_sampler
+
+
+PG = parallel_sampler.G
 
 
 def log_normal_pdf(x, mean, log_std):
     normalized = (x - mean) / TT.exp(log_std)
     return -0.5*TT.square(normalized) - np.log((2*np.pi)**0.5) - log_std
+
+
+def worker_collect_stats(action_dim):
+    pdists = PG.samples_data["pdists"]
+    log_stds = pdists[:, action_dim:]
+    return np.mean(np.exp(log_stds))
 
 
 class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
@@ -162,7 +173,6 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             0.5*TT.sum(TT.square(stdn), axis=1) - \
             0.5*self.action_dim*np.log(2*np.pi)
 
-    def log_extra(self, logger, paths):
-        pdists = np.vstack([path["pdists"] for path in paths])
-        means, log_stds = self._split_pdist(pdists)
-        logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
+    def log_extra(self):
+        stds = parallel_sampler.run_map(worker_collect_stats, self.action_dim)
+        logger.record_tabular('AveragePolicyStd', np.mean(stds))

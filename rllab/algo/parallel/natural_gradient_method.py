@@ -17,7 +17,7 @@ from rllab.misc.ext import extract, compile_function, flatten_hessian, \
 PG = parallel_sampler.G
 
 
-class Globals():
+class Globals(object):
 
     def __init__(self):
         self.opt = None

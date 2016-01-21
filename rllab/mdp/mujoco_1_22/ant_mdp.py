@@ -2,6 +2,9 @@ from mujoco_mdp import MujocoMDP
 from rllab.core.serializable import Serializable
 import numpy as np
 from rllab.misc.overrides import overrides
+from rllab.misc import logger
+from rllab.misc.ext import extract
+from rllab.sampler import parallel_sampler
 
 
 class AntMDP(MujocoMDP, Serializable):
@@ -45,15 +48,29 @@ class AntMDP(MujocoMDP, Serializable):
         ob = self.get_current_obs()
         return next_state, ob, reward, done
 
+    @staticmethod
+    def _worker_collect_stats():
+        PG = parallel_sampler.G
+        paths = PG.paths
+        progs = [
+            path["observations"][-1][-3] - path["observations"][0][-3]
+            for path in paths
+        ]
+        return dict(
+            mean_prog=np.mean(progs),
+            max_prog=np.max(progs),
+            min_prog=np.min(progs),
+            std_prog=np.std(progs),
+        )
+
     @overrides
-    def log_extra(self, logger, paths):
-        forward_progress = \
-            [path["observations"][-1][-3] - path["observations"][0][-3] for path in paths]
-        logger.record_tabular(
-            'AverageForwardProgress', np.mean(forward_progress))
-        logger.record_tabular(
-            'MaxForwardProgress', np.max(forward_progress))
-        logger.record_tabular(
-            'MinForwardProgress', np.min(forward_progress))
-        logger.record_tabular(
-            'StdForwardProgress', np.std(forward_progress))
+    def log_extra(self):
+        stats = parallel_sampler.run_map(AntMDP._worker_collect_stats)
+        mean_progs, max_progs, min_progs, std_progs = extract(
+            stats,
+            "mean_prog", "max_prog", "min_prog", "std_prog"
+        )
+        logger.record_tabular('AverageForwardProgress', np.mean(mean_progs))
+        logger.record_tabular('MaxForwardProgress', np.max(max_progs))
+        logger.record_tabular('MinForwardProgress', np.min(min_progs))
+        logger.record_tabular('StdForwardProgress', np.mean(std_progs))

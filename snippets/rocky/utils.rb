@@ -17,6 +17,25 @@ def to_param_val(v)
   end
 end
 
+def to_profile_command(params)
+  command = "kernprof -l scripts/run_experiment.py"
+  params.each do |k, v|
+    if v.is_a?(Hash)
+      v.each do |nk, nv|
+        if nk.to_s == "_name"
+          command += " \\\n" + "  --#{k} #{to_param_val(nv)}"
+        else
+          command += " \\\n" + "  --#{k}_#{nk} #{to_param_val(nv)}"
+        end
+      end
+    else
+      command += " \\\n" + "  --#{k} #{to_param_val(v)}"
+    end
+  end
+  command
+end
+
+
 def to_command(params)
   command = "python scripts/run_experiment.py"
   params.each do |k, v|

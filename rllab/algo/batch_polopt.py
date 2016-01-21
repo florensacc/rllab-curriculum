@@ -234,6 +234,7 @@ class BatchPolopt(RLAlgorithm):
 
     def obtain_samples(self, itr, mdp, policy, baseline):
         cur_params = policy.get_param_values()
+
         parallel_sampler.request_samples(
             policy_params=cur_params,
             max_samples=self.opt.batch_size,
@@ -286,12 +287,11 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('NumTrajs', np.sum(num_trajses))
         logger.record_tabular('ExplainedVariance', np.mean(evs))
 
-        # the log_extra feature is going to be tricky...
+        mdp.log_extra()
+        policy.log_extra()
+        baseline.log_extra()
+
         if not self.opt.algorithm_parallelized:
-            paths = retrieve_paths()
-            mdp.log_extra(logger, paths)
-            policy.log_extra(logger, paths)
-            baseline.log_extra(logger, paths)
             return aggregate_samples_data()
         else:
             return dict()

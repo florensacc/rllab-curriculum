@@ -88,7 +88,7 @@ class MujocoMDP(ControlMDP):
         cdists = np.copy(self.model.geom_margin).flat
         for c in self.model.data.contact:
             cdists[c.geom2] = min(cdists[c.geom2], c.dist)
-        return np.concatenate([
+        obs = np.concatenate([
             data.qpos.flat,
             data.qvel.flat,
             # data.cdof.flat,
@@ -103,6 +103,7 @@ class MujocoMDP(ControlMDP):
             # data.qfrc_passive.flat,
             self.dcom.flat,
         ])
+        return obs
 
     def get_obs(self, state):
         with self.set_state_tmp(state):

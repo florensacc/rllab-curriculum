@@ -14,17 +14,14 @@ params = {
   },
   exp_name: "ant",
   algo: {
-    _name: "parallel.trpo",
+    _name: "vpg",
     whole_paths: true,
     batch_size: 1000,
-    max_path_length: 500,
-    n_itr: 1,
-    step_size: 0.1,
   },
   n_parallel: 1,
   snapshot_mode: "last",
   seed: 1,
 }
-command = to_command(params)
+command = to_profile_command(params)
 puts command
 system(command)
