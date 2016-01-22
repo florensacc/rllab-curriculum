@@ -10,17 +10,17 @@ from rllab.misc.overrides import overrides
 class DoublePendulumMDP(Box2DMDP, Serializable):
 
     @autoargs.inherit(Box2DMDP.__init__)
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         # make sure mdp-level step is 100ms long
         kwargs["frame_skip"] = kwargs.get("frame_skip", 2)
         super(DoublePendulumMDP, self).__init__(
             self.model_path("double_pendulum.xml"),
-            **kwargs
+            *args, **kwargs
         )
         self.link_len = 1.
         self.link1 = find_body(self.world, "link1")
         self.link2 = find_body(self.world, "link2")
-        Serializable.__init__(self)
+        Serializable.__init__(self, *args, **kwargs)
 
     @overrides
     def reset(self):
@@ -42,12 +42,13 @@ class DoublePendulumMDP(Box2DMDP, Serializable):
         )
         return cur_pos
 
-    def get_current_reward(
-            self, state, raw_obs, action, next_state, next_raw_obs):
+    @overrides
+    def compute_reward(self, action):
+        yield
         tgt_pos = np.asarray([0, self.link_len * 2])
         cur_pos = self.get_tip_pos()
         dist = np.linalg.norm(cur_pos - tgt_pos)
-        return -dist
+        yield -dist
 
     def is_current_done(self):
         return False

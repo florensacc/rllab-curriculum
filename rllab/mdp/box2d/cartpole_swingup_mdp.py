@@ -1,7 +1,6 @@
 import pygame
 
 from rllab.mdp.box2d.box2d_mdp import Box2DMDP
-from rllab.mdp.box2d.box2d_viewer import Box2DViewer
 from rllab.mdp.box2d.parser import find_body
 import numpy as np
 from rllab.core.serializable import Serializable
@@ -9,20 +8,22 @@ from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 
 
-# Tornio, Matti, and Tapani Raiko. "Variational Bayesian approach for nonlinear identification and control." Proc. of the IFAC Workshop on Nonlinear Model Predictive Control for Fast Systems, NMPC FS06. 2006.
+# Tornio, Matti, and Tapani Raiko. "Variational Bayesian approach for
+# nonlinear identification and control." Proc. of the IFAC Workshop on
+# Nonlinear Model Predictive Control for Fast Systems, NMPC FS06. 2006.
 class CartpoleSwingupMDP(Box2DMDP, Serializable):
 
     @autoargs.inherit(Box2DMDP.__init__)
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         super(CartpoleSwingupMDP, self).__init__(
             self.model_path("cartpole.xml"),
-            **kwargs
+            *args, **kwargs
         )
         self.max_cart_pos = 3
         self.max_reward_cart_pos = 3
         self.cart = find_body(self.world, "cart")
         self.pole = find_body(self.world, "pole")
-        Serializable.__init__(self)
+        Serializable.__init__(self, *args, **kwargs)
 
     @overrides
     def reset(self):
@@ -40,15 +41,15 @@ class CartpoleSwingupMDP(Box2DMDP, Serializable):
         return self.get_state(), self.get_current_obs()
 
     @overrides
-    def get_current_reward(
-            self, state, raw_obs, action, next_state, next_raw_obs):
+    def compute_reward(self, action):
+        yield
         if self.is_current_done():
-            return -100
+            yield -100
         else:
             if abs(self.cart.position[0]) > self.max_reward_cart_pos:
-                return -1
+                yield -1
             else:
-                return np.cos(self.pole.angle)
+                yield np.cos(self.pole.angle)
 
     @overrides
     def is_current_done(self):

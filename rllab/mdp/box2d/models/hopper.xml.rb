@@ -41,7 +41,7 @@ box2d {
       anchor: [0, 0.1],
       limit: [-45.deg, 45.deg],
     )
-    state type: :xpos, com: [:torso, :thigh, :leg, :foot]
+    # state type: :xpos, com: [:torso, :thigh, :leg, :foot]
     state type: :ypos, com: [:torso, :thigh, :leg, :foot]
     state type: :apos, joint: :thigh_joint
     state type: :apos, joint: :leg_joint

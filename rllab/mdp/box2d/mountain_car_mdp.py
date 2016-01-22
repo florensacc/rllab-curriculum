@@ -1,7 +1,6 @@
 import pygame
 
 from rllab.mdp.box2d.box2d_mdp import Box2DMDP
-from rllab.mdp.box2d.box2d_viewer import Box2DViewer
 from rllab.mdp.box2d.parser import find_body
 import numpy as np
 from rllab.core.serializable import Serializable
@@ -19,26 +18,26 @@ class MountainCarMDP(Box2DMDP, Serializable):
     def __init__(self,
                  height_bonus=1.,
                  goal_cart_pos=0.6,
-                 **kwargs):
+                 *args, **kwargs):
         super(MountainCarMDP, self).__init__(
             self.model_path("mountain_car.xml"),
-            **kwargs
+            *args, **kwargs
         )
         self.max_cart_pos = 2
         self.goal_cart_pos = goal_cart_pos
         self.height_bonus = height_bonus
         self.cart = find_body(self.world, "cart")
-        Serializable.__init__(self)
+        Serializable.__init__(self, *args, **kwargs)
 
     @overrides
-    def get_current_reward(
-            self, state, raw_obs, action, next_state, next_raw_obs):
-        return -1 + self.height_bonus * self.cart.position[1]
+    def compute_reward(self, action):
+        yield
+        yield -1 + self.height_bonus * self.cart.position[1]
 
     @overrides
     def is_current_done(self):
         return self.cart.position[0] >= self.goal_cart_pos \
-               or abs(self.cart.position[0]) >= self.max_cart_pos
+            or abs(self.cart.position[0]) >= self.max_cart_pos
 
     @overrides
     def reset(self):

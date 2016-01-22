@@ -13,7 +13,18 @@ class Box2DMDP(ControlMDP):
 
     @autoargs.arg("frame_skip", type=int,
                   help="Number of frames to skip")
-    def __init__(self, model_path, frame_skip=1):
+    @autoargs.arg('position_only', type=bool,
+                  help='Whether to only provide (generalized) position as the '
+                       'observation (i.e. no velocities etc.)')
+    @autoargs.arg('obs_noise', type=float,
+                  help='Noise added to the observations (note: this makes the '
+                       'problem non-Markovian!)')
+    @autoargs.arg('action_noise', type=float,
+                  help='Noise added to the controls, which will be '
+                       'proportional to the action bounds')
+    def __init__(
+            self, model_path, frame_skip=1, position_only=False,
+            obs_noise=0.0, action_noise=0.0):
         with open(model_path, "r") as f:
             s = f.read()
         world, extra_data = world_from_xml(s)
@@ -24,8 +35,12 @@ class Box2DMDP(ControlMDP):
         self.viewer = None
         self.frame_skip = frame_skip
         self.timestep = self.extra_data.timeStep
+        self.position_only = position_only
+        self.obs_noise = obs_noise
+        self.action_noise = action_noise
         self._action_bounds = None
-        self._observation_shape = None
+        # cache the computation of position mask
+        self._position_ids = None
         self._cached_obs = None
         self._cached_coms = {}
 
@@ -86,9 +101,10 @@ class Box2DMDP(ControlMDP):
     @property
     @overrides
     def observation_shape(self):
-        if not self._observation_shape:
-            self._observation_shape = self.get_current_obs().shape
-        return self._observation_shape
+        if self.position_only:
+            return (len(self.get_position_ids()),)
+        else:
+            return (len(self.extra_data.states),)
 
     @property
     @overrides
@@ -148,32 +164,98 @@ class Box2DMDP(ControlMDP):
             )
             return self.get_state()
 
+    def compute_reward(self, action):
+        """
+        The implementation of this method should have two parts, structured
+        like the following:
+
+        <perform calculations before stepping the world>
+        yield
+        reward = <perform calculations after stepping the world>
+        yield reward
+        """
+        raise NotImplementedError
+
     @overrides
     def step(self, state, action):
-        raw_obs = self.get_raw_obs()
-        next_state = state
-        for _ in range(self.frame_skip):
-            next_state = self.forward_dynamics(next_state, action,
-                                               restore=False)
-        self._invalidate_state_caches()
-        done = self.is_current_done()
-        next_raw_obs = self.get_raw_obs()
-        next_obs = self.get_current_obs()
-        reward = self.get_current_reward(
-            state, raw_obs, action, next_state, next_raw_obs)
-        return next_state, next_obs, reward, done
+        """
+        Note: override this method with great care, as it post-processes the
+        observations, etc.
+        """
+        with self._set_state_tmp(state, restore=False):
+            reward_computer = self.compute_reward(action)
+            # forward the state
+            next_state = state
+            action = self.inject_action_noise(action)
+            for _ in range(self.frame_skip):
+                next_state = self.forward_dynamics(next_state, action,
+                                                   restore=False)
+            # notifies that we have stepped the world
+            reward_computer.next()
+            # actually get the reward
+            reward = reward_computer.next()
+            self._invalidate_state_caches()
+            done = self.is_current_done()
+            next_obs = self.get_current_obs()
+            return next_state, next_obs, reward, done
+
+    def filter_position(self, obs):
+        """
+        Filter the observation to contain only position information.
+        """
+        return obs[self.get_position_ids()]
+
+    def get_obs_noise_scale_factor(self, obs):
+        return np.ones_like(obs)
+
+    def inject_obs_noise(self, obs):
+        """
+        Inject entry-wise noise to the observation. This should not change
+        the dimension of the observation.
+        """
+        noise = self.get_obs_noise_scale_factor(obs) * self.obs_noise * \
+            np.random.normal(size=obs.shape)
+        return obs + noise
 
     def get_current_reward(
-            self, state, raw_obs, action, next_state, next_raw_obs):
+            self, state, xml_obs, action, next_state, next_xml_obs):
         raise NotImplementedError
 
     def is_current_done(self):
         raise NotImplementedError
 
+    def inject_action_noise(self, action):
+        # generate action noise
+        noise = self.action_noise * \
+            np.random.normal(size=action.shape)
+        # rescale the noise to make it proportional to the action bounds
+        lb, ub = self.action_bounds
+        noise = 0.5 * (ub - lb) * noise
+        return action + noise
+
     def get_current_obs(self):
-        return self.get_raw_obs()
+        """
+        This method should not be overwritten.
+        """
+        raw_obs = self.get_raw_obs()
+        noisy_obs = self.inject_obs_noise(raw_obs)
+        if self.position_only:
+            return self.filter_position(noisy_obs)
+        return noisy_obs
+
+    def get_position_ids(self):
+        if self._position_ids is None:
+            self._position_ids = []
+            for idx, state in enumerate(self.extra_data.states):
+                if state.typ in ["xpos", "ypos", "apos"]:
+                    self._position_ids.append(idx)
+        return self._position_ids
 
     def get_raw_obs(self):
+        """
+        Return the unfiltered & noiseless observation. By default, it computes
+        based on the declarations in the xml file.
+        """
         if self._cached_obs is not None:
             return self._cached_obs
         obs = []
@@ -213,7 +295,7 @@ class Box2DMDP(ControlMDP):
                 else:
                     raise NotImplementedError
             elif state.com:
-                com_quant = self._compute_com(state.com)
+                com_quant = self.compute_com_pos_vel(*state.com)
                 if state.typ == "xpos":
                     new_obs = com_quant[0]
                 elif state.typ == "ypos":
@@ -245,7 +327,7 @@ class Box2DMDP(ControlMDP):
         self._cached_obs = np.array(obs)
         return self._cached_obs
 
-    def _compute_com(self, com):
+    def compute_com_pos_vel(self, *com):
         com_key = ",".join(sorted(com))
         if com_key in self._cached_coms:
             return self._cached_coms[com_key]
@@ -259,6 +341,12 @@ class Box2DMDP(ControlMDP):
         com_quant = total_mass_quant / total_mass
         self._cached_coms[com_key] = com_quant
         return com_quant
+
+    def get_com_position(self, *com):
+        return self.compute_com_pos_vel(*com)[:2]
+
+    def get_com_velocity(self, *com):
+        return self.compute_com_pos_vel(*com)[2:]
 
     @overrides
     def start_viewer(self):

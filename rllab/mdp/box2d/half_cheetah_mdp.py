@@ -11,34 +11,36 @@ class HalfCheetahMDP(Box2DMDP, Serializable):
     timestep = 0.001
 
     @autoargs.inherit(Box2DMDP.__init__)
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         kwargs["frame_skip"] = kwargs.get("frame_skip", 1)
-        super(HalfCheetahMDP, self).__init__(self.model_path("half_cheetah.xml"), **kwargs)
-        Serializable.__init__(self, **kwargs)
+        super(HalfCheetahMDP, self).__init__(
+            self.model_path("half_cheetah.xml"), *args, **kwargs)
+        Serializable.__init__(self, *args, **kwargs)
         self.torso = find_body(self.world, "torso")
         self.bshin = find_body(self.world, "bshin")
         self.bfoot = find_body(self.world, "bfoot")
         self.fthigh = find_body(self.world, "fthigh")
-        self.ctrl_joints = [find_joint(self.world, ctrl.joint) for ctrl in self.extra_data.controls]
+        self.ctrl_joints = [
+            find_joint(self.world, ctrl.joint)
+            for ctrl in self.extra_data.controls
+        ]
 
-
-    def get_spring_forces(self, state):
-        with self._set_state_tmp(state):
-            springs = [
-                2./np.pi * np.arctan(-2.*joint.angle-0.05*joint.speed) * 1
-                for joint in self.ctrl_joints
-            ]
-            return np.array(springs)
+    def _get_spring_forces(self):
+        springs = [
+            2./np.pi * np.arctan(-2.*joint.angle-0.05*joint.speed) * 1
+            for joint in self.ctrl_joints
+        ]
+        return np.array(springs)
 
     def get_torques(self, x):
         lb, ub = super(HalfCheetahMDP, self).action_bounds
         return x * ub * 0.01
 
-
     @overrides
     def forward_dynamics(self, state, action, restore=True):
-        clipped = np.clip(action+self.get_spring_forces(state), -1, 1)
-        forces = self.get_torques(clipped)
+        with self._set_state_tmp(state):
+            clipped = np.clip(action+self._get_spring_forces(), -1, 1)
+            forces = self.get_torques(clipped)
         # forces = []
         # for i, ctrl, act in zip(
         #         xrange(len(action)),
@@ -46,11 +48,12 @@ class HalfCheetahMDP(Box2DMDP, Serializable):
         #         action
         # ):
         #     joint = find_joint(self.world, ctrl.joint)
-        #     spring = 2./np.pi * np.arctan(-2.*joint.angle-0.05*joint.speed) * 1
+        #     spring = 2./np.pi * np.arctan(-2.*joint.angle-0.05*joint.speed)
         #     limit = min([1, max([-1, spring + action[i]])])
         #     # print limit
         #     forces.append(limit * ub[i] * 0.01)
-        return super(HalfCheetahMDP, self).forward_dynamics(state, np.array(forces), restore)
+        return super(HalfCheetahMDP, self).forward_dynamics(
+            state, np.array(forces), restore)
 
     @property
     @overrides
@@ -64,8 +67,7 @@ class HalfCheetahMDP(Box2DMDP, Serializable):
         return raw_obs
 
     @overrides
-    def get_current_reward(
-            self, state, raw_obs, action, next_state, next_raw_obs):
+    def compute_reward(self, action):
         def soft_step(x):
             if x <= 0:
                 return 0
@@ -75,21 +77,22 @@ class HalfCheetahMDP(Box2DMDP, Serializable):
                 return 1-2*(x-1)**2
             else:
                 return 1
-        with self._set_state_tmp(state):
-            alive_bonus = 0.1
-            speed = self.torso.linearVelocity[0]
-            touch_ground_penalty = (soft_step(2*self.torso.position[1])-1) + \
-                                   (soft_step(9*self.bfoot.position[1])-1) + \
-                                   (soft_step(4*self.bshin.position[1])-1)
-            springs = self.get_spring_forces(state)
-            outofrange_penalty = -0.05*np.sum(np.clip(np.abs(springs+action)-1, -10, 0))
-            torque_penalty = -0.5*np.sum(np.clip(
-                np.abs(self.get_torques(np.clip(springs+action, -1, 1))),
-                0,
-                0.05
-            ))
-
-            return 0.5*speed + touch_ground_penalty + alive_bonus + outofrange_penalty + torque_penalty
+        alive_bonus = 0.1
+        speed = self.torso.linearVelocity[0]
+        touch_ground_penalty = (soft_step(2*self.torso.position[1])-1) + \
+                               (soft_step(9*self.bfoot.position[1])-1) + \
+                               (soft_step(4*self.bshin.position[1])-1)
+        springs = self._get_spring_forces()
+        outofrange_penalty = -0.05*np.sum(
+            np.clip(np.abs(springs+action)-1, -10, 0))
+        torque_penalty = -0.5*np.sum(np.clip(
+            np.abs(self.get_torques(np.clip(springs+action, -1, 1))),
+            0,
+            0.05
+        ))
+        yield
+        yield 0.5*speed + touch_ground_penalty + alive_bonus + \
+            outofrange_penalty + torque_penalty
 
     @overrides
     def is_current_done(self):
