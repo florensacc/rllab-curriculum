@@ -1,0 +1,6 @@
+[submodule "private/mujoco"]
+	path = private/mujoco
+	url = git@bitbucket.org:dementrock/private-mujoco.git
+[submodule "private/atari_roms"]
+	path = private/atari_roms
+	url = git@bitbucket.org:dementrock/private-atari.git
