@@ -28,6 +28,7 @@ class MujocoMDP(ControlMDP):
         self.qpos_dim = self.init_qpos.size
         self.qvel_dim = self.init_qvel.size
         self.ctrl_dim = self.init_ctrl.size
+        self.action_noise = action_noise
         if "frame_skip" in self.model.numeric_names:
             frame_skip_id = self.model.numeric_names.index("frame_skip")
             self.frame_skip = int(self.model.numeric_data.flat[frame_skip_id])
@@ -121,9 +122,18 @@ class MujocoMDP(ControlMDP):
     def get_current_state(self):
         return self.get_state(self.model.data.qpos, self.model.data.qvel)
 
+    def inject_action_noise(self, action):
+        # generate action noise
+        noise = self.action_noise * \
+            np.random.normal(size=action.shape)
+        # rescale the noise to make it proportional to the action bounds
+        lb, ub = self.action_bounds
+        noise = 0.5 * (ub - lb) * noise
+        return action + noise
+
     def forward_dynamics(self, state, action, restore=True):
         with self.set_state_tmp(state, restore):
-            self.model.data.ctrl = action
+            self.model.data.ctrl = self.inject_action_noise(action)
             for _ in range(self.frame_skip):
                 self.model.step()
             self.model.forward()
