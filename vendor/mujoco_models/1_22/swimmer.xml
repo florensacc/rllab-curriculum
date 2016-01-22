@@ -1,5 +1,8 @@
 <mujoco model="swimmer">
   <compiler inertiafromgeom="true" angle="degree" coordinate="local" />
+  <custom>
+    <numeric name="frame_skip" data="50" />
+  </custom>
   <option timestep="0.001" density="1000" viscosity="0.1" collision="predefined" integrator="Euler" iterations="1000" >
     <flag warmstart="disable" />
   </option>

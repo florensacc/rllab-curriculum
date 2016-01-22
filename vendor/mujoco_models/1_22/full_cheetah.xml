@@ -36,6 +36,9 @@
 <mujoco model='cheetah'>
     <compiler inertiafromgeom='true' coordinate='local' angle='radian'
               settotalmass='14'/>
+    <custom>
+      <numeric name="frame_skip" data="10" />
+    </custom>
 
     <default>
         <joint limited='true' damping='.01'

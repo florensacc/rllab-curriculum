@@ -9,10 +9,11 @@ from rllab.sampler import parallel_sampler
 
 class AntMDP(MujocoMDP, Serializable):
 
-    def __init__(self):
-        path = self.model_path('ant.xml')
-        super(AntMDP, self).__init__(path, frame_skip=10, ctrl_scaling=1)
-        Serializable.__init__(self)
+    FILE = 'ant.xml'
+
+    def __init__(self, *args, **kwargs):
+        super(AntMDP, self).__init__(*args, **kwargs)
+        Serializable.__init__(self, *args, **kwargs)
         init_qpos = np.zeros_like(self.model.data.qpos)
         # Taken from John's code
         init_qpos[0] = 0.0

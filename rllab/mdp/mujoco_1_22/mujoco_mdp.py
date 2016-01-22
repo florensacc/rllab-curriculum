@@ -4,13 +4,21 @@ import os.path as osp
 from rllab.mdp.base import ControlMDP
 from rllab.mjcapi.rocky_mjc_1_22 import MjModel, MjViewer
 from rllab.misc.overrides import overrides
+from rllab.misc import autoargs
 import theano
 
 
 class MujocoMDP(ControlMDP):
 
-    def __init__(self, model_path, frame_skip, ctrl_scaling):
-        self.model = MjModel(model_path)
+    FILE = None
+
+    @autoargs.arg('action_noise', type=float,
+                  help='Noise added to the controls, which will be '
+                       'proportional to the action bounds')
+    def __init__(self, action_noise=0.0):
+        if self.__class__.FILE is None:
+            raise "mujoco xml file not specified"
+        self.model = MjModel(self.model_path(self.__class__.FILE))
         self.data = self.model.data
         self.viewer = None
         self.init_qpos = self.model.data.qpos
@@ -20,8 +28,9 @@ class MujocoMDP(ControlMDP):
         self.qpos_dim = self.init_qpos.size
         self.qvel_dim = self.init_qvel.size
         self.ctrl_dim = self.init_ctrl.size
-        self.frame_skip = frame_skip
-        self.ctrl_scaling = ctrl_scaling
+        if "frame_skip" in self.model.numeric_names:
+            frame_skip_id = self.model.numeric_names.index("frame_skip")
+            self.frame_skip = int(self.model.numeric_data.flat[frame_skip_id])
         self.dcom = None
         self.current_com = None
         self.reset()
@@ -56,7 +65,7 @@ class MujocoMDP(ControlMDP):
     @property
     @overrides
     def action_bounds(self):
-        bounds = self.model.actuator_ctrlrange / self.ctrl_scaling
+        bounds = self.model.actuator_ctrlrange
         lb = bounds[:, 0]
         ub = bounds[:, 1]
         return lb, ub
@@ -114,7 +123,7 @@ class MujocoMDP(ControlMDP):
 
     def forward_dynamics(self, state, action, restore=True):
         with self.set_state_tmp(state, restore):
-            self.model.data.ctrl = action * self.ctrl_scaling
+            self.model.data.ctrl = action
             for _ in range(self.frame_skip):
                 self.model.step()
             self.model.forward()

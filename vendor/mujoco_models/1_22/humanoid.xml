@@ -1,5 +1,8 @@
 <mujoco model='humanoid'>
     <compiler inertiafromgeom='true' angle='degree'/>
+    <custom>
+      <numeric name="frame_skip" data="4" />
+    </custom>
 
     <default>
         <joint limited='true' damping='1' armature='0'  />

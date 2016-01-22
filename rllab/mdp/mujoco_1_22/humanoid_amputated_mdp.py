@@ -5,11 +5,11 @@ from rllab.core.serializable import Serializable
 
 class HumanoidAmputatedMDP(MujocoMDP, Serializable):
 
-    def __init__(self):
-        path = self.model_path('humanoid.xml')
-        super(HumanoidAmputatedMDP, self).__init__(
-            path, frame_skip=1, ctrl_scaling=1)
-        Serializable.__init__(self)
+    FILE = 'humanoid_amputated.xml'
+
+    def __init__(self, *args, **kwargs):
+        super(HumanoidAmputatedMDP, self).__init__(*args, **kwargs)
+        Serializable.__init__(self, *args, **kwargs)
 
     def _get_com(self):
         data = self.model.data

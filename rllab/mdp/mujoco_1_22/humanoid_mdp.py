@@ -6,10 +6,11 @@ from rllab.core.serializable import Serializable
 # Taken from Wojciech's code
 class HumanoidMDP(MujocoMDP, Serializable):
 
-    def __init__(self):
-        path = self.model_path('humanoid.xml')
-        super(HumanoidMDP, self).__init__(path, frame_skip=4, ctrl_scaling=1)
-        Serializable.__init__(self)
+    FILE = 'humanoid.xml'
+
+    def __init__(self, *args, **kwargs):
+        super(HumanoidMDP, self).__init__(*args, **kwargs)
+        Serializable.__init__(self, *args, **kwargs)
 
     def get_current_obs(self):
         data = self.model.data

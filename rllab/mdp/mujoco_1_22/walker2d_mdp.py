@@ -10,13 +10,11 @@ def smooth_abs(x, param):
 
 class Walker2DMDP(MujocoMDP, Serializable):
 
-    def __init__(self):
-        path = self.model_path('walker2d.xml')
-        frame_skip = 1
-        ctrl_scaling = 1
-        super(Walker2DMDP, self).__init__(path, frame_skip, ctrl_scaling)
-        Serializable.__init__(self)
-        # self._initial_com = self.get_body_com("torso")
+    FILE = 'walker2d.xml'
+
+    def __init__(self, *args, **kwargs):
+        super(Walker2DMDP, self).__init__(*args, **kwargs)
+        Serializable.__init__(self, *args, **kwargs)
 
     def get_current_obs(self):
         return np.concatenate([

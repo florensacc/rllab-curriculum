@@ -1,5 +1,8 @@
 <mujoco model="ant">
 	<compiler inertiafromgeom="true" angle="degree" coordinate="local"/>
+  <custom>
+    <numeric name="frame_skip" data="10" />
+  </custom>
     <option timestep="0.002" integrator="RK4" />
     <default>
         <joint limited="true" armature="0.2" damping="0.1" />

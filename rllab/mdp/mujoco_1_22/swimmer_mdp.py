@@ -5,10 +5,11 @@ from rllab.core.serializable import Serializable
 
 class SwimmerMDP(MujocoMDP, Serializable):
 
-    def __init__(self):
-        path = self.model_path('swimmer.xml')
-        super(SwimmerMDP, self).__init__(path, frame_skip=50, ctrl_scaling=1)
-        Serializable.__init__(self)
+    FILE = 'swimmer.xml'
+
+    def __init__(self, *args, **kwargs):
+        super(SwimmerMDP, self).__init__(*args, **kwargs)
+        Serializable.__init__(self, *args, **kwargs)
 
     def get_current_obs(self):
         qpos = self.model.data.qpos.flatten()[1:]

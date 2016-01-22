@@ -10,12 +10,11 @@ def smooth_abs(x, param):
 
 class FullCheetahMDP(MujocoMDP, Serializable):
 
-    def __init__(self):
-        path = self.model_path('full_cheetah.xml')
-        frame_skip = 10
-        ctrl_scaling = 1
-        super(FullCheetahMDP, self).__init__(path, frame_skip, ctrl_scaling)
-        Serializable.__init__(self)
+    FILE = 'full_cheetah.xml'
+
+    def __init__(self, *args, **kwargs):
+        super(FullCheetahMDP, self).__init__(*args, **kwargs)
+        Serializable.__init__(self, *args, **kwargs)
         self._initial_com = self.get_body_com("torso")
 
     def get_current_obs(self):
