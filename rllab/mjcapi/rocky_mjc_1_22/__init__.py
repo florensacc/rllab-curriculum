@@ -5,5 +5,5 @@ import os
 from mjconstants import *
 
 register_license(os.path.join(os.path.dirname(__file__),
-                              '../../../vendor/mujoco/1_22/mjkey.txt'))
+                              '../../../private/mujoco/binaries/1_22/mjkey.txt'))
 
