@@ -65,6 +65,8 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
         assert len(hidden_b_init) == len(hidden_sizes)
 
         l_hidden = l_input
+        if bn:
+            l_hidden = L.batch_norm(l_hidden)
 
         for idx, size, nl, W_init, b_init in zip(
                 itertools.count(), hidden_sizes, hidden_nl,
@@ -88,6 +90,9 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
             nonlinearity=eval(output_nl),
             name="output"
         )
+
+        if bn:
+            l_output = L.batch_norm(l_output)
 
         # Note the deterministic=True argument. It makes sure that when getting
         # actions from single observations, we do not update params in the

@@ -7,35 +7,35 @@ osp = os.path
 if sys.platform.startswith("darwin"):
     libfile = osp.abspath(osp.join(
         osp.dirname(__file__),
-        "../../../vendor/mujoco/pre_2/osx/libmjc2.dylib"))
+        "../../../private/mujoco/binaries/pre_2/osx/libmjc2.dylib"))
     wrapper_libfile = osp.abspath(osp.join(
         osp.dirname(__file__),
-        "../../../vendor/mujoco/pre_2/osx/libmjc2_wrapper.dylib"))
+        "../../../private/mujoco/binaries/pre_2/osx/libmjc2_wrapper.dylib"))
     osg_libfile = osp.abspath(osp.join(
         osp.dirname(__file__),
-        "../../../vendor/mujoco/pre_2/osx/libmjc2_osg.dylib"))
+        "../../../private/mujoco/binaries/pre_2/osx/libmjc2_osg.dylib"))
 elif sys.platform.startswith("linux"):
     # check if running in docker
     if "docker" in open("/proc/self/cgroup").read():
         libfile = osp.abspath(osp.join(
             osp.dirname(__file__),
-            "../../../vendor/mujoco/pre_2/linux_docker/libmjc2.so"))
+            "../../../private/mujoco/binaries/pre_2/linux_docker/libmjc2.so"))
         wrapper_libfile = osp.abspath(osp.join(
             osp.dirname(__file__),
-            "../../../vendor/mujoco/pre_2/linux_docker/libmjc2_wrapper.so"))
+            "../../../private/mujoco/binaries/pre_2/linux_docker/libmjc2_wrapper.so"))
         osg_libfile = osp.abspath(osp.join(
             osp.dirname(__file__),
-            "../../../vendor/mujoco/pre_2/linux_docker/libmjc2_osg.so"))
+            "../../../private/mujoco/binaries/pre_2/linux_docker/libmjc2_osg.so"))
     else:
         libfile = osp.abspath(osp.join(
             osp.dirname(__file__),
-            "../../../vendor/mujoco/pre_2/linux/libmjc2.so"))
+            "../../../private/mujoco/binaries/pre_2/linux/libmjc2.so"))
         wrapper_libfile = osp.abspath(osp.join(
             osp.dirname(__file__),
-            "../../../vendor/mujoco/pre_2/linux/libmjc2_wrapper.so"))
+            "../../../private/mujoco/binaries/pre_2/linux/libmjc2_wrapper.so"))
         osg_libfile = osp.abspath(osp.join(
             osp.dirname(__file__),
-            "../../../vendor/mujoco/pre_2/linux/libmjc2_osg.so"))
+            "../../../private/mujoco/binaries/pre_2/linux/libmjc2_osg.so"))
 elif sys.platform.startswith("win"):
     raise NotImplementedError
 else:

@@ -3,12 +3,11 @@ from rllab.algo.util import ReplayPool
 from rllab.algo.first_order_method import parse_update_method
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
-from rllab.misc.special import discount_return, discount_cumsum
+from rllab.misc.special import discount_return
 from rllab.misc.ext import compile_function, new_tensor, merge_dict, extract
 from rllab.sampler import parallel_sampler
 from rllab.plotter import plotter
 import rllab.misc.logger as logger
-import theano
 import theano.tensor as TT
 import cPickle as pickle
 import numpy as np
@@ -109,6 +108,7 @@ class DPG(RLAlgorithm):
         self.q_averages = []
         self.y_averages = []
         self.paths = []
+        self.es_path_returns = []
         self.paths_samples_cnt = 0
 
     def start_worker(self, mdp, policy):
@@ -119,16 +119,20 @@ class DPG(RLAlgorithm):
     @overrides
     def train(self, mdp, policy, qf, es, **kwargs):
         # This seems like a rather sequential method
-        terminal = True
         pool = ReplayPool(
-            state_shape=mdp.observation_shape,
+            observation_shape=mdp.observation_shape,
             action_dim=mdp.action_dim,
             max_steps=self.replay_pool_size,
         )
         self.start_worker(mdp, policy)
+
         opt_info = self.init_opt(mdp, policy, qf)
         itr = 0
         path_length = 0
+        path_return = 0
+        terminal = False
+        state, observation = mdp.reset()
+
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
@@ -140,12 +144,15 @@ class DPG(RLAlgorithm):
                     # to the replay pool
                     state, observation = mdp.reset()
                     es.episode_reset()
+                    self.es_path_returns.append(path_return)
                     path_length = 0
+                    path_return = 0
                 action = es.get_action(itr, observation, policy=policy, qf=qf)
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
                 path_length += 1
+                path_return += reward
 
                 pool.add_sample(observation, action, reward, terminal)
                 state, observation = next_state, next_observation
@@ -212,9 +219,7 @@ class DPG(RLAlgorithm):
                  qf.get_params(regularizable=True)])
 
         qval = qf.get_qval_sym(obs, action)
-        diff = TT.square(yvar -
-                         qval)
-        qf_loss = TT.mean(diff)
+        qf_loss = TT.mean(TT.square(yvar - qval))
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
         policy_weight_decay_term = self.policy_weight_decay * \
@@ -256,12 +261,11 @@ class DPG(RLAlgorithm):
         )
 
         target_updates = []
-        for p, tp in zip(qf.get_params(), target_qf.get_params()):
-            target_updates.append((tp, self.soft_target_tau * p + (1 -
-                                   self.soft_target_tau) * tp))
-        for p, tp in zip(policy.get_params(), target_policy.get_params()):
-            target_updates.append((tp, self.soft_target_tau * p + (1 -
-                                   self.soft_target_tau) * tp))
+        for p, tp in zip(
+                qf.get_params() + policy.get_params(),
+                target_qf.get_params() + target_policy.get_params()):
+            target_updates.append((tp, self.soft_target_tau * p +
+                                   (1 - self.soft_target_tau) * tp))
 
         f_update_targets = compile_function(
             inputs=[],
@@ -281,9 +285,10 @@ class DPG(RLAlgorithm):
 
     def do_training(self, itr, batch, qf, policy, opt_info):
 
-        states, actions, rewards, next_states, terminal = extract(
+        obs, actions, rewards, next_obs, terminal = extract(
             batch,
-            "states", "actions", "rewards", "next_states", "terminals"
+            "observations", "actions", "rewards", "next_observations",
+            "terminals"
         )
 
         f_y = opt_info["f_y"]
@@ -291,13 +296,11 @@ class DPG(RLAlgorithm):
         f_train_qf = opt_info["f_train_qf"]
         f_train_policy = opt_info["f_train_policy"]
         f_update_targets = opt_info["f_update_targets"]
-        # target_qf = opt_info["target_qf"]
-        # target_policy = opt_info["target_policy"]
 
-        ys = f_y(next_states, rewards, terminal)
+        ys = f_y(next_obs, rewards, terminal)
         f_normalize_qf(ys)
-        qf_loss, qval = f_train_qf(ys, states, actions, rewards)
-        policy_surr = f_train_policy(ys, states)
+        qf_loss, qval = f_train_qf(ys, obs, actions, rewards)
+        policy_surr = f_train_policy(ys, obs)
 
         f_update_targets()
 
@@ -309,17 +312,18 @@ class DPG(RLAlgorithm):
         return opt_info
 
     def evaluate(self, epoch, qf, policy, opt_info):
-        target_policy = opt_info["target_policy"]
-        target_qf = opt_info["target_qf"]
 
         logger.log("Collecting samples for evaluation")
 
-        paths = parallel_sampler.request_samples(
+        parallel_sampler.request_samples(
             policy_params=policy.get_param_values(),
             max_samples=self.eval_samples,
             max_path_length=self.max_path_length,
             whole_paths=self.eval_whole_paths,
         )
+
+        paths = parallel_sampler.collect_paths()
+
         average_discounted_return = np.mean(
             [discount_return(path["rewards"], self.discount) for path in paths]
         )
@@ -329,37 +333,18 @@ class DPG(RLAlgorithm):
         average_q_loss = np.mean(self.qf_loss_averages)
         average_policy_surr = np.mean(self.policy_surr_averages)
         average_q = np.mean(np.concatenate(self.q_averages))
+        average_abs_q = np.mean(np.abs(np.concatenate(self.q_averages)))
         average_y = np.mean(np.concatenate(self.y_averages))
-        average_qydiff = np.mean(np.abs(np.concatenate(self.q_averages) -
-                                        np.concatenate(self.y_averages)))
+        average_abs_y = np.mean(np.abs(np.concatenate(self.y_averages)))
         average_action = np.mean(np.square(np.concatenate(
             [path["actions"] for path in paths]
         )))
 
-        policy_param_norm = np.linalg.norm(
-            policy.get_param_values()
-        )
-        target_policy_param_norm = np.linalg.norm(
-            target_policy.get_param_values()
-        )
-        qfun_param_norm = np.linalg.norm(
-            qf.get_param_values()
-        )
-        target_qfun_param_norm = np.linalg.norm(
-            target_qf.get_param_values()
-        )
-
         policy_reg_param_norm = np.linalg.norm(
             policy.get_param_values(regularizable=True)
         )
-        target_policy_reg_param_norm = np.linalg.norm(
-            target_policy.get_param_values(regularizable=True)
-        )
         qfun_reg_param_norm = np.linalg.norm(
             qf.get_param_values(regularizable=True)
-        )
-        target_qfun_reg_param_norm = np.linalg.norm(
-            target_qf.get_param_values(regularizable=True)
         )
 
         logger.record_tabular('Epoch', epoch)
@@ -371,36 +356,34 @@ class DPG(RLAlgorithm):
                               np.max(returns))
         logger.record_tabular('MinReturn',
                               np.min(returns))
+        logger.record_tabular('AverageEsReturn',
+                              np.mean(self.es_path_returns))
+        logger.record_tabular('StdEsReturn',
+                              np.std(self.es_path_returns))
+        logger.record_tabular('MaxEsReturn',
+                              np.max(self.es_path_returns))
+        logger.record_tabular('MinEsReturn',
+                              np.min(self.es_path_returns))
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
         logger.record_tabular('AverageQLoss', average_q_loss)
         logger.record_tabular('AveragePolicySurr', average_policy_surr)
         logger.record_tabular('AverageQ', average_q)
-        #logger.record_tabular('AverageY', average_y)
-        #logger.record_tabular('AverageQYDiff', average_qydiff)
+        logger.record_tabular('AverageAbsQ', average_abs_q)
+        logger.record_tabular('AverageY', average_y)
+        logger.record_tabular('AverageAbsY', average_abs_y)
         logger.record_tabular('AverageAction', average_action)
 
-        #logger.record_tabular('PolicyParamNorm',
-        #                      policy_param_norm)
         logger.record_tabular('PolicyRegParamNorm',
                               policy_reg_param_norm)
-        #logger.record_tabular('TargetPolicyParamNorm',
-        #                      target_policy_param_norm)
-        #logger.record_tabular('TargetPolicyRegParamNorm',
-        #                      target_policy_reg_param_norm)
-        #logger.record_tabular('QFunParamNorm',
-        #                      qfun_param_norm)
         logger.record_tabular('QFunRegParamNorm',
                               qfun_reg_param_norm)
-        #logger.record_tabular('TargetQFunParamNorm',
-        #                      target_qfun_param_norm)
-        #logger.record_tabular('TargetQFunRegParamNorm',
-        #                      target_qfun_reg_param_norm)
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []
         self.q_averages = []
         self.y_averages = []
+        self.es_path_returns = []
 
         return merge_dict(opt_info, dict(
             eval_paths=paths,
@@ -412,5 +395,7 @@ class DPG(RLAlgorithm):
             epoch=epoch,
             qf=qf,
             policy=policy,
+            target_qf=opt_info["target_qf"],
+            target_policy=opt_info["target_policy"],
             es=es,
         )

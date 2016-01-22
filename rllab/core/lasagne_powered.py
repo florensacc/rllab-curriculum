@@ -11,7 +11,7 @@ class LasagnePowered(Parameterized):
 
     @overrides
     def get_params_internal(self, **tags):
-        return sorted(L.get_all_params(
+        return L.get_all_params(
             L.concat(self._output_layers),
             **tags
-        ), key=lambda x: x.name)
+        )#, key=lambda x: x.name)

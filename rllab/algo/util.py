@@ -19,54 +19,56 @@ class ReplayPool(Serializable):
 
     def __init__(
             self,
-            state_shape,
+            observation_shape,
             action_dim,
             max_steps,
-            state_dtype=floatX,
+            observation_dtype=floatX,
             action_dtype=floatX,
-            concat_states=False,
+            concat_observations=False,
             concat_length=1,
             rng=None):
         """Construct a ReplayPool.
 
         Arguments:
-            state_shape - tuple indicating the shape of the state
+            observation_shape - tuple indicating the shape of the observation
             action_dim - dimension of the action
             size - capacity of the replay pool
-            state_dtype - ...
+            observation_dtype - ...
             action_dtype - ...
-            concat_states - whether to concat the past few states as a single
-            state, to ensure the Markov property
+            concat_observations - whether to concat the past few observations
+            as a single one, so as to ensure the Markov property
             concat_length - length of the concatenation
         """
 
-        self.state_shape = state_shape
+        self.observation_shape = observation_shape
         self.action_dim = action_dim
         self.max_steps = max_steps
-        self.states = np.zeros((max_steps,) + state_shape, dtype=state_dtype)
+        self.observations = np.zeros(
+            (max_steps,) + observation_shape, dtype=observation_dtype)
         self.actions = np.zeros((max_steps, action_dim), dtype=action_dtype)
         self.rewards = np.zeros((max_steps,), dtype=floatX)
         self.terminals = np.zeros((max_steps,), dtype='bool')
         self.extras = None
-        self.concat_states = concat_states
+        self.concat_observations = concat_observations
         self.concat_length = concat_length
-        self.state_dtype = state_dtype
+        self.observation_dtype = observation_dtype
         self.action_dtype = action_dtype
         if rng:
             self.rng = rng
         else:
             self.rng = np.random.RandomState()
 
-        if not concat_states:
+        if not concat_observations:
             assert concat_length == 1, \
-                "concat_length must be set to 1 if not concatenating states"
+                "concat_length must be set to 1 if not concatenating " \
+                "observations"
 
         self.bottom = 0
         self.top = 0
         self.size = 0
         super(ReplayPool, self).__init__(
-            self, state_shape, action_dim, max_steps, state_dtype,
-            action_dtype, concat_states, concat_length, rng
+            self, observation_shape, action_dim, max_steps, observation_dtype,
+            action_dtype, concat_observations, concat_length, rng
         )
 
     def __getstate__(self):
@@ -74,7 +76,7 @@ class ReplayPool(Serializable):
         d["bottom"] = self.bottom
         d["top"] = self.top
         d["size"] = self.size
-        d["states"] = self.states
+        d["observations"] = self.observations
         d["actions"] = self.actions
         d["rewards"] = self.rewards
         d["terminals"] = self.terminals
@@ -84,10 +86,10 @@ class ReplayPool(Serializable):
 
     def __setstate__(self, d):
         super(ReplayPool, self).__setstate__(d)
-        self.bottom, self.top, self.size, self.states, self.actions, \
+        self.bottom, self.top, self.size, self.observations, self.actions, \
             self.rewards, self.terminals, self.extras, self.rng = extract(
                 d,
-                "bottom", "top", "size", "states", "actions", "rewards",
+                "bottom", "top", "size", "observations", "actions", "rewards",
                 "terminals", "extras", "rng"
             )
 
@@ -101,7 +103,7 @@ class ReplayPool(Serializable):
             terminal -- boolean indicating whether the episode ended after this
             time step
         """
-        self.states[self.top] = state
+        self.observations[self.top] = state
         self.actions[self.top] = action
         self.rewards[self.top] = reward
         self.terminals[self.top] = terminal
@@ -130,28 +132,28 @@ class ReplayPool(Serializable):
 
     def last_concat_state(self):
         """
-        Return the most recent sample (concatenated states if needed).
+        Return the most recent sample (concatenated observations if needed).
         """
-        if self.concat_states:
+        if self.concat_observations:
             indexes = np.arange(self.top - self.concat_length, self.top)
-            return self.states.take(indexes, axis=0, mode='wrap')
+            return self.observations.take(indexes, axis=0, mode='wrap')
         else:
-            return self.states[self.top - 1]
+            return self.observations[self.top - 1]
 
     def concat_state(self, state):
         """Return a concatenated state, using the last concat_length -
         1, plus state.
 
         """
-        if self.concat_states:
+        if self.concat_observations:
             indexes = np.arange(self.top - self.concat_length + 1, self.top)
 
             concat_state = np.empty(
-                (self.concat_length,) + self.state_shape,
+                (self.concat_length,) + self.observation_shape,
                 dtype=floatX
             )
             concat_state[0:self.concat_length - 1] = \
-                self.states.take(indexes, axis=0, mode='wrap')
+                self.observations.take(indexes, axis=0, mode='wrap')
             concat_state[-1] = state
             return concat_state
         else:
@@ -159,14 +161,14 @@ class ReplayPool(Serializable):
 
     def random_batch(self, batch_size):
         """
-        Return corresponding states, actions, rewards, terminal status, and
-next_states for batch_size randomly chosen state transitions.
+        Return corresponding observations, actions, rewards, terminal status,
+        and next_observations for batch_size randomly chosen state transitions.
         """
         # Allocate the response.
 
-        states = np.zeros(
-            (batch_size, self.concat_length) + self.state_shape,
-            dtype=self.state_dtype
+        observations = np.zeros(
+            (batch_size, self.concat_length) + self.observation_shape,
+            dtype=self.observation_dtype
         )
         actions = np.zeros(
             (batch_size, self.action_dim),
@@ -186,9 +188,9 @@ next_states for batch_size randomly chosen state transitions.
         else:
             extras = None
             next_extras = None
-        next_states = np.zeros(
-            (batch_size, self.concat_length) + self.state_shape,
-            dtype=self.state_dtype
+        next_observations = np.zeros(
+            (batch_size, self.concat_length) + self.observation_shape,
+            dtype=self.observation_dtype
         )
         next_actions = np.zeros(
             (batch_size, self.action_dim),
@@ -218,7 +220,7 @@ next_states for batch_size randomly chosen state transitions.
                 continue
 
             # Add the state transition to the response.
-            states[count] = self.states.take(
+            observations[count] = self.observations.take(
                 initial_indices, axis=0, mode='wrap')
             actions[count] = self.actions.take(end_index, mode='wrap')
             rewards[count] = self.rewards.take(end_index, mode='wrap')
@@ -228,24 +230,24 @@ next_states for batch_size randomly chosen state transitions.
                     end_index, axis=0, mode='wrap')
                 next_extras[count] = self.extras.take(
                     transition_indices, axis=0, mode='wrap')
-            next_states[count] = self.states.take(
+            next_observations[count] = self.observations.take(
                 transition_indices, axis=0, mode='wrap')
             next_actions[count] = self.actions.take(
                 transition_indices, axis=0, mode='wrap')
 
             count += 1
 
-        if not self.concat_states:
-            # If we're not concatenating states, we should squeeze the second
-            # dimension in states and next_states
-            states = np.squeeze(states, axis=1)
-            next_states = np.squeeze(next_states, axis=1)
+        if not self.concat_observations:
+            # If we're not concatenating observations, we should squeeze the
+            # second dimension in observations and next_observations
+            observations = np.squeeze(observations, axis=1)
+            next_observations = np.squeeze(next_observations, axis=1)
 
         return dict(
-            states=states,
+            observations=observations,
             actions=actions,
             rewards=rewards,
-            next_states=next_states,
+            next_observations=next_observations,
             next_actions=next_actions,
             terminals=terminals,
             extras=extras,
@@ -259,10 +261,10 @@ next_states for batch_size randomly chosen state transitions.
 def simple_tests():
     np.random.seed(222)
     dataset = ReplayPool(
-        state_shape=(3, 2),
+        observation_shape=(3, 2),
         action_dim=1,
         max_steps=6,
-        concat_states=True,
+        concat_observations=True,
         concat_length=4
     )
     for _ in range(10):
@@ -274,7 +276,7 @@ def simple_tests():
             terminal = True
         print 'img', img
         dataset.add_sample(img, action, reward, terminal)
-        print "S", dataset.states
+        print "S", dataset.observations
         print "A", dataset.actions
         print "R", dataset.rewards
         print "T", dataset.terminal
@@ -288,10 +290,10 @@ def simple_tests():
 def speed_tests():
 
     dataset = ReplayPool(
-        state_shape=(80, 80),
+        observation_shape=(80, 80),
         action_dim=1,
         max_steps=20000,
-        concat_states=True,
+        concat_observations=True,
         concat_length=4,
     )
 
@@ -317,10 +319,10 @@ def speed_tests():
 def trivial_tests():
 
     dataset = ReplayPool(
-        state_shape=(1, 2),
+        observation_shape=(1, 2),
         action_dim=1,
         max_steps=3,
-        concat_states=True,
+        concat_observations=True,
         concat_length=2
     )
 
@@ -337,18 +339,18 @@ def trivial_tests():
 
 def max_size_tests():
     dataset1 = ReplayPool(
-        state_shape=(4, 3),
+        observation_shape=(4, 3),
         action_dim=1,
         max_steps=10,
-        concat_states=True,
+        concat_observations=True,
         concat_length=4,
         rng=np.random.RandomState(42)
     )
     dataset2 = ReplayPool(
-        state_shape=(4, 3),
+        observation_shape=(4, 3),
         action_dim=1,
         max_steps=1000,
-        concat_states=True,
+        concat_observations=True,
         concat_length=4,
         rng=np.random.RandomState(42)
     )
@@ -369,10 +371,10 @@ def max_size_tests():
 def test_memory_usage_ok():
     import memory_profiler
     dataset = ReplayPool(
-        state_shape=(80, 80),
+        observation_shape=(80, 80),
         action_dim=1,
         max_steps=100000,
-        concat_states=True,
+        concat_observations=True,
         concat_length=4
     )
     last = time.time()
