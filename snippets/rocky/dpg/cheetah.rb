@@ -35,7 +35,7 @@ params = {
     eval_whole_paths: true,
     soft_target: true,
     #hard_target_interval: 1000,
-    soft_target_tau: 1e-5,
+    soft_target_tau: 1e-3,
     policy_learning_rate: 1e-4,
   },
   es: {

@@ -9,13 +9,13 @@ params = {
   normalize_mdp: true,
   qf: {
     _name: "continuous_nn_q_function",
-    hidden_sizes: [32, 32],
+    hidden_sizes: [400, 300],
     normalize: false,
     bn: true,
   },
   policy: {
     _name: "mean_nn_policy",
-    hidden_sizes: [32,32],
+    hidden_sizes: [400, 300],
     output_nl: 'lasagne.nonlinearities.tanh',
     bn: true,
   },
