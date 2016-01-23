@@ -120,7 +120,9 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             nonlinearity=eval(output_nl),
             name="output"
         )
-        l_output = L.batch_norm(l_output)
+        # if bn:
+        #     l_output = L.batch_norm(l_output)
+        #     self._output_W = l_output
 
         self._output_layer = l_output
         self._obs_layer = l_obs
@@ -181,6 +183,13 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
     def get_params_internal(self, **tags):
         if not self._normalize or tags.get("trainable", False) or \
                 tags.get("regularizable", False):
-            return LasagnePowered.get_params_internal(self, **tags)
+            params = LasagnePowered.get_params_internal(self, **tags)
+            if tags.get("regularizable"):
+                # If the last layer is linear, do not regularize its weights
+                params = [p for p in params
+                          if p is not self._output_layer.W and p is not
+                          self._output_layer.b]
+                
+            return params
         return LasagnePowered.get_params_internal(self, **tags) + \
             [self._qval_mean, self._qval_std]

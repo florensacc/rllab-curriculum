@@ -93,17 +93,17 @@ class ReplayPool(Serializable):
                 "terminals", "extras", "rng"
             )
 
-    def add_sample(self, state, action, reward, terminal, extra=None):
+    def add_sample(self, observation, action, reward, terminal, extra=None):
         """Add a time step record.
 
         Arguments:
-            state -- current state (or observation)
+            observation -- current or observation
             action -- action chosen by the agent
             reward -- reward received after taking the action
             terminal -- boolean indicating whether the episode ended after this
             time step
         """
-        self.observations[self.top] = state
+        self.observations[self.top] = observation
         self.actions[self.top] = action
         self.rewards[self.top] = reward
         self.terminals[self.top] = terminal

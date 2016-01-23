@@ -118,8 +118,8 @@ class DPG(RLAlgorithm):
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []
-        self.obses = []
-        self.actions = []
+        #self.obses = []
+        #self.actions = []
         self.q_averages = []
         self.y_averages = []
         self.paths = []
@@ -328,8 +328,8 @@ class DPG(RLAlgorithm):
 
         self.qf_loss_averages.append(qf_loss)
         self.policy_surr_averages.append(policy_surr)
-        self.obses.append(obs)
-        self.actions.append(actions)
+        #self.obses.append(obs)
+        #self.actions.append(actions)
         self.q_averages.append(qval)
         self.y_averages.append(ys)
 
@@ -348,14 +348,18 @@ class DPG(RLAlgorithm):
 
         paths = parallel_sampler.collect_paths()
         # evaluate the quality of q functions
-        for path in paths:
-            path["returns"] = discount_cumsum(path["rewards"], self.discount)
-        returns = np.concatenate([path["returns"] for path in paths])
-        actions = np.concatenate([path["actions"] for path in paths])
-        obs = np.concatenate([path["observations"] for path in paths])
+        #for path in paths:
+        #    path["returns"] = discount_cumsum(path["rewards"], self.discount)
+        #returns = np.concatenate([path["returns"] for path in paths])
+        #actions = np.concatenate([path["actions"] for path in paths])
+        #obs = np.concatenate([path["observations"] for path in paths])
 
-        predicted = opt_info["f_qval"](obs, actions)
-        predicted_ratio = explained_variance_1d(predicted, returns)
+        #predicted = opt_info["f_qval"](obs, actions)
+
+        # normalized error
+        #predicted = (predicted - np.mean(predicted)) / (np.std(predicted) + 1e-8)
+        #returns = (returns - np.mean(returns)) / (np.std(returns) + 1e-8)
+        #predicted_ratio = np.median(np.square(predicted - returns))
 
         average_discounted_return = np.mean(
             [discount_return(path["rewards"], self.discount) for path in paths]
@@ -408,23 +412,23 @@ class DPG(RLAlgorithm):
         logger.record_tabular('AverageAbsQYDiff',
                               np.mean(np.abs(all_qs - all_ys)))
         logger.record_tabular('AverageAction', average_action)
-        logger.record_tabular('PredictRatio', predicted_ratio)
+        #logger.record_tabular('PredictRatio', predicted_ratio)
 
         logger.record_tabular('PolicyRegParamNorm',
                               policy_reg_param_norm)
         logger.record_tabular('QFunRegParamNorm',
                               qfun_reg_param_norm)
 
-        if abs(average_q_loss) > 1000:
-            import ipdb; ipdb.set_trace()
+        #if abs(average_q_loss) > 1000:
+        #    import ipdb; ipdb.set_trace()
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []
         self.q_averages = []
         self.y_averages = []
         self.es_path_returns = []
-        self.obses = []
-        self.actions = []
+        #self.obses = []
+        #self.actions = []
 
         return merge_dict(opt_info, dict(
             eval_paths=paths,
