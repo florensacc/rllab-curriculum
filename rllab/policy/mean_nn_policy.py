@@ -91,8 +91,8 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
             name="output"
         )
 
-        if bn:
-            l_output = L.batch_norm(l_output)
+        #if bn:
+        l_output = L.batch_norm(l_output)
 
         # Note the deterministic=True argument. It makes sure that when getting
         # actions from single observations, we do not update params in the

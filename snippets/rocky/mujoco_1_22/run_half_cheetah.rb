@@ -16,8 +16,8 @@ params = {
   algo: {
     _name: "trpo",
     whole_paths: true,
-    batch_size: 50000,
-    max_path_length: 500,
+    batch_size: 10000,
+    max_path_length: 100,
     n_itr: 500,
     step_size: 0.01,
   },

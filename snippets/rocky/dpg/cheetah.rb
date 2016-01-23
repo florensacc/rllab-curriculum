@@ -4,31 +4,33 @@ require_relative '../utils'
 
 params = {
   mdp: {
-    _name: "mujoco_pre_2.cheetah_mdp",
-    action_noise: 0.01,
+    _name: "mujoco_1_22.half_cheetah_mdp",
+    #action_noise: 0.01,
   },
   normalize_mdp: true,
   qf: {
     _name: "continuous_nn_q_function",
-    hidden_sizes: [400, 300],
+    hidden_sizes: [100, 100],#32, 32],
     normalize: false,
-    bn: true,
+    #output_nl: 'lasa
+    #output_nl: 'lasagne.nonlinearities.tanh',
+    bn: true,#true,
   },
   policy: {
     _name: "mean_nn_policy",
-    hidden_sizes: [400, 300],#32,32],
+    hidden_sizes: [400, 300],#32, 32],#32,32],
     output_nl: 'lasagne.nonlinearities.tanh',
-    bn: true,
+    bn: true,#true,
   },
   algo: {
     _name: "dpg",
-    batch_size: 32,
+    batch_size: 64,
     n_epochs: 1000,
     epoch_length: 1000,
-    min_pool_size: 10000,
+    min_pool_size: 64,#10000,
     replay_pool_size: 1000000,
     discount: 0.99,
-    qf_weight_decay: 5e-2,#0,#1e-3,
+    qf_weight_decay: 1e-2,#0,#1e-2,#0,#1e-3,
     qf_learning_rate: 1e-3,
     max_path_length: 100,
     eval_samples: 10000,

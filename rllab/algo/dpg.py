@@ -3,7 +3,8 @@ from rllab.algo.util import ReplayPool
 from rllab.algo.first_order_method import parse_update_method
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
-from rllab.misc.special import discount_return
+from rllab.misc.special import discount_return, discount_cumsum, \
+    explained_variance_1d
 from rllab.misc.ext import compile_function, new_tensor, merge_dict, extract
 from rllab.sampler import parallel_sampler
 from rllab.plotter import plotter
@@ -117,6 +118,8 @@ class DPG(RLAlgorithm):
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []
+        self.obses = []
+        self.actions = []
         self.q_averages = []
         self.y_averages = []
         self.paths = []
@@ -150,7 +153,7 @@ class DPG(RLAlgorithm):
             logger.log("Training started")
             for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
                 # Execute policy
-                if terminal or path_length > self.max_path_length:
+                if terminal:  # or path_length > self.max_path_length:
                     # Note that if the last time step ends an episode, the very
                     # last state and observation will be ignored and not added
                     # to the replay pool
@@ -165,6 +168,9 @@ class DPG(RLAlgorithm):
                     mdp.step(state, action)
                 path_length += 1
                 path_return += reward
+
+                if path_length > self.max_path_length:
+                    terminal = True
 
                 pool.add_sample(observation, action, reward, terminal)
                 state, observation = next_state, next_observation
@@ -231,6 +237,10 @@ class DPG(RLAlgorithm):
                  qf.get_params(regularizable=True)])
 
         qval = qf.get_qval_sym(obs, action)
+        f_qval = compile_function(
+            inputs=[obs, action],
+            outputs=qval,
+        )
         qf_loss = TT.mean(TT.square(yvar - qval))
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
@@ -248,12 +258,12 @@ class DPG(RLAlgorithm):
         qf_updates = self.qf_update_method(
             qf_reg_loss, qf.get_params(trainable=True))
         policy_updates = self.policy_update_method(
-            policy_reg_surr, qf.get_params(trainable=True))
+            policy_reg_surr, policy.get_params(trainable=True))
 
-        f_normalize_qf = compile_function(
-            inputs=[yvar],
-            updates=qf.normalize_updates(yvar),
-        )
+        #f_normalize_qf = compile_function(
+        #    inputs=[yvar],
+        #    updates=qf.normalize_updates(yvar),
+        #)
 
         f_train_qf = compile_function(
             inputs=[yvar, obs, action, rewards],
@@ -285,9 +295,10 @@ class DPG(RLAlgorithm):
 
         return dict(
             f_y=f_y,
-            f_normalize_qf=f_normalize_qf,
+            #f_normalize_qf=f_normalize_qf,
             f_train_qf=f_train_qf,
             f_train_policy=f_train_policy,
+            f_qval=f_qval,
             f_update_targets=f_update_targets,
             target_qf=target_qf,
             target_policy=target_policy,
@@ -302,13 +313,13 @@ class DPG(RLAlgorithm):
         )
 
         f_y = opt_info["f_y"]
-        f_normalize_qf = opt_info["f_normalize_qf"]
+        #f_normalize_qf = opt_info["f_normalize_qf"]
         f_train_qf = opt_info["f_train_qf"]
         f_train_policy = opt_info["f_train_policy"]
         f_update_targets = opt_info["f_update_targets"]
 
         ys = f_y(next_obs, rewards, terminal)
-        f_normalize_qf(ys)
+        #f_normalize_qf(ys)
         qf_loss, qval = f_train_qf(ys, obs, actions, rewards)
         policy_surr = f_train_policy(ys, obs)
 
@@ -317,6 +328,8 @@ class DPG(RLAlgorithm):
 
         self.qf_loss_averages.append(qf_loss)
         self.policy_surr_averages.append(policy_surr)
+        self.obses.append(obs)
+        self.actions.append(actions)
         self.q_averages.append(qval)
         self.y_averages.append(ys)
 
@@ -334,10 +347,20 @@ class DPG(RLAlgorithm):
         )
 
         paths = parallel_sampler.collect_paths()
+        # evaluate the quality of q functions
+        for path in paths:
+            path["returns"] = discount_cumsum(path["rewards"], self.discount)
+        returns = np.concatenate([path["returns"] for path in paths])
+        actions = np.concatenate([path["actions"] for path in paths])
+        obs = np.concatenate([path["observations"] for path in paths])
+
+        predicted = opt_info["f_qval"](obs, actions)
+        predicted_ratio = explained_variance_1d(predicted, returns)
 
         average_discounted_return = np.mean(
             [discount_return(path["rewards"], self.discount) for path in paths]
         )
+
 
         returns = [sum(path["rewards"]) for path in paths]
 
@@ -382,19 +405,26 @@ class DPG(RLAlgorithm):
         logger.record_tabular('AverageAbsQ', np.mean(np.abs(all_qs)))
         logger.record_tabular('AverageY', np.mean(all_ys))
         logger.record_tabular('AverageAbsY', np.mean(np.abs(all_ys)))
-        logger.record_tabular('AverageAbsQYDiff', np.mean(np.abs(all_qs - all_ys)))
+        logger.record_tabular('AverageAbsQYDiff',
+                              np.mean(np.abs(all_qs - all_ys)))
         logger.record_tabular('AverageAction', average_action)
+        logger.record_tabular('PredictRatio', predicted_ratio)
 
         logger.record_tabular('PolicyRegParamNorm',
                               policy_reg_param_norm)
         logger.record_tabular('QFunRegParamNorm',
                               qfun_reg_param_norm)
 
+        if abs(average_q_loss) > 1000:
+            import ipdb; ipdb.set_trace()
+
         self.qf_loss_averages = []
         self.policy_surr_averages = []
         self.q_averages = []
         self.y_averages = []
         self.es_path_returns = []
+        self.obses = []
+        self.actions = []
 
         return merge_dict(opt_info, dict(
             eval_paths=paths,

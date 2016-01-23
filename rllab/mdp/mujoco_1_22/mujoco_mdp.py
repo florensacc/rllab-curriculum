@@ -73,12 +73,15 @@ class MujocoMDP(ControlMDP):
         ub = bounds[:, 1]
         return lb, ub
 
-    @overrides
-    def reset(self):
+    def reset_mujoco(self):
         self.model.data.qpos = self.init_qpos
         self.model.data.qvel = self.init_qvel
         self.model.data.qacc = self.init_qacc
         self.model.data.ctrl = self.init_ctrl
+
+    @overrides
+    def reset(self):
+        self.reset_mujoco()
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]
         self.dcom = np.zeros_like(self.current_com)
@@ -200,6 +203,10 @@ class MujocoMDP(ControlMDP):
     def get_body_com(self, body_name):
         idx = self.model.body_names.index(body_name)
         return self.model.data.com_subtree[idx]
+
+    def get_body_comvel(self, body_name):
+        idx = self.model.body_names.index(body_name)
+        return self.model.body_comvels[idx]
 
     def print_stats(self):
         super(MujocoMDP, self).print_stats()

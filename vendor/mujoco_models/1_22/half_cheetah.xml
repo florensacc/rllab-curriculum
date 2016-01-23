@@ -39,9 +39,12 @@
 
     <default>
         <joint limited='true' damping='.01'
-               armature='.1' stiffness='8'/>
+          armature='.1' stiffness='8'
+          solreflimit='.02 1' solimplimit='0 .8 .03'
+          />
         <geom contype='1' conaffinity='0'
-              condim='3' friction='.4 .1 .1' rgba='0.8 0.6 .4 1'/>
+          condim='3' friction='.4 .1 .1' rgba='0.8 0.6 .4 1'
+          solimp='0.0 0.8 0.01' solref='0.02 1'/>
         <motor ctrlrange='-1 1' ctrllimited='true'/>
     </default>
 
