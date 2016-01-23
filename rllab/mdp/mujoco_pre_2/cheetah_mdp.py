@@ -41,7 +41,7 @@ class CheetahMDP(MujocoMDP, Serializable):
         next_obs = self.get_current_obs()
         action = np.clip(action, *self.action_bounds)
         ctrl_cost = 1e-1 * np.sum(np.square(action))
-        passive_cost = 1e-5 * np.sum(np.square(self.model.data.qfrc_passive))
+        passive_cost = min(10, 1e-5 * np.sum(np.square(self.model.data.qfrc_passive)))
         run_cost = -1 * (after_com[0] - prev_com[0]) / self.model.option.timestep
         upright_cost = 1e-5 * smooth_abs(self.get_body_xmat("torso")[2, 2] - 1, 0.1)
         cost = ctrl_cost + passive_cost + run_cost + upright_cost

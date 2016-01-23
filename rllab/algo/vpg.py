@@ -21,19 +21,19 @@ class VPG(BatchPolopt, FirstOrderMethod):
 
     @overrides
     def init_opt(self, mdp, policy, baseline):
-        input_var = new_tensor(
-            'input',
+        obs_var = new_tensor(
+            'obs',
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
         advantage_var = TT.vector('advantage')
         action_var = TT.matrix('action', dtype=mdp.action_dtype)
-        log_prob = policy.get_log_prob_sym(input_var, action_var)
+        log_prob = policy.get_log_prob_sym(obs_var, action_var)
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
         surr_obj = - TT.mean(log_prob * advantage_var)
         updates = self.update_method(surr_obj, policy.trainable_params)
-        input_list = [input_var, advantage_var, action_var]
+        input_list = [obs_var, advantage_var, action_var]
         f_update = compile_function(
             inputs=input_list,
             outputs=None,

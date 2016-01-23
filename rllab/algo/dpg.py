@@ -7,11 +7,13 @@ from rllab.misc.special import discount_return
 from rllab.misc.ext import compile_function, new_tensor, merge_dict, extract
 from rllab.sampler import parallel_sampler
 from rllab.plotter import plotter
+from collections import OrderedDict
 import rllab.misc.logger as logger
 import theano.tensor as TT
 import cPickle as pickle
 import numpy as np
 import pyprind
+import theano
 
 
 class DPG(RLAlgorithm):
@@ -54,9 +56,13 @@ class DPG(RLAlgorithm):
                        'executed until the terminal state or the '
                        'max_path_length, even at the expense of possibly more '
                        'samples for evaluation.')
+    @autoargs.arg('soft_target', type=bool,
+                  help='Whether to use soft target updates')
     @autoargs.arg('soft_target_tau', type=float,
                   help='Interpolation parameter for doing the soft target '
                        'update.')
+    @autoargs.arg('hard_target_interval', type=int,
+                  help='Interval between each "hard" target updates')
     @autoargs.arg('plot', type=bool,
                   help='Whether to visualize the policy performance after '
                        'each eval_interval.')
@@ -77,7 +83,9 @@ class DPG(RLAlgorithm):
             policy_learning_rate=1e-3,
             eval_samples=10000,
             eval_whole_paths=True,
+            soft_target=True,
             soft_target_tau=0.001,
+            hard_target_interval=1000,
             plot=False):
         self.batch_size = batch_size
         self.n_epochs = n_epochs
@@ -92,15 +100,19 @@ class DPG(RLAlgorithm):
                 qf_update_method,
                 learning_rate=qf_learning_rate
             )
+        self.qf_learning_rate = qf_learning_rate
         self.policy_weight_decay = policy_weight_decay
         self.policy_update_method = \
             parse_update_method(
                 policy_update_method,
                 learning_rate=policy_learning_rate
             )
+        self.policy_learning_rate = policy_learning_rate
         self.eval_samples = eval_samples
         self.eval_whole_paths = eval_whole_paths
+        self.soft_target = soft_target
         self.soft_target_tau = soft_target_tau
+        self.hard_target_interval = hard_target_interval
         self.plot = plot
 
         self.qf_loss_averages = []
@@ -214,7 +226,7 @@ class DPG(RLAlgorithm):
         action = TT.matrix('action', dtype=mdp.action_dtype)
         yvar = TT.vector('ys')
 
-        qf_weight_decay_term = self.qf_weight_decay * \
+        qf_weight_decay_term = 0.5 * self.qf_weight_decay * \
             sum([TT.sum(TT.square(param)) for param in
                  qf.get_params(regularizable=True)])
 
@@ -222,7 +234,7 @@ class DPG(RLAlgorithm):
         qf_loss = TT.mean(TT.square(yvar - qval))
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
-        policy_weight_decay_term = self.policy_weight_decay * \
+        policy_weight_decay_term = 0.5 * self.policy_weight_decay * \
             sum([TT.sum(TT.square(param))
                  for param in policy.get_params(regularizable=True)])
         policy_qval = qf.get_qval_sym(
@@ -233,16 +245,10 @@ class DPG(RLAlgorithm):
         policy_surr = -TT.mean(policy_qval)
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
-        qf_updates = merge_dict(
-            self.qf_update_method(qf_reg_loss, qf.get_params(trainable=True)),
-            qf.get_default_updates(obs, action)
-        )
-
-        policy_updates = merge_dict(
-            self.policy_update_method(
-                policy_reg_surr, policy.get_params(trainable=True)),
-            policy.get_default_updates(obs)
-        )
+        qf_updates = self.qf_update_method(
+            qf_reg_loss, qf.get_params(trainable=True))
+        policy_updates = self.policy_update_method(
+            policy_reg_surr, qf.get_params(trainable=True))
 
         f_normalize_qf = compile_function(
             inputs=[yvar],
@@ -254,6 +260,7 @@ class DPG(RLAlgorithm):
             outputs=[qf_loss, qval],
             updates=qf_updates
         )
+
         f_train_policy = compile_function(
             inputs=[yvar, obs],
             outputs=policy_surr,
@@ -264,8 +271,11 @@ class DPG(RLAlgorithm):
         for p, tp in zip(
                 qf.get_params() + policy.get_params(),
                 target_qf.get_params() + target_policy.get_params()):
-            target_updates.append((tp, self.soft_target_tau * p +
-                                   (1 - self.soft_target_tau) * tp))
+            if self.soft_target:
+                target_updates.append((tp, self.soft_target_tau * p +
+                                       (1 - self.soft_target_tau) * tp))
+            else:
+                target_updates.append((tp, p))
 
         f_update_targets = compile_function(
             inputs=[],
@@ -302,7 +312,8 @@ class DPG(RLAlgorithm):
         qf_loss, qval = f_train_qf(ys, obs, actions, rewards)
         policy_surr = f_train_policy(ys, obs)
 
-        f_update_targets()
+        if self.soft_target or itr % self.hard_target_interval:
+            f_update_targets()
 
         self.qf_loss_averages.append(qf_loss)
         self.policy_surr_averages.append(policy_surr)
@@ -330,12 +341,11 @@ class DPG(RLAlgorithm):
 
         returns = [sum(path["rewards"]) for path in paths]
 
+        all_qs = np.concatenate(self.q_averages)
+        all_ys = np.concatenate(self.y_averages)
+
         average_q_loss = np.mean(self.qf_loss_averages)
         average_policy_surr = np.mean(self.policy_surr_averages)
-        average_q = np.mean(np.concatenate(self.q_averages))
-        average_abs_q = np.mean(np.abs(np.concatenate(self.q_averages)))
-        average_y = np.mean(np.concatenate(self.y_averages))
-        average_abs_y = np.mean(np.abs(np.concatenate(self.y_averages)))
         average_action = np.mean(np.square(np.concatenate(
             [path["actions"] for path in paths]
         )))
@@ -368,10 +378,11 @@ class DPG(RLAlgorithm):
                               average_discounted_return)
         logger.record_tabular('AverageQLoss', average_q_loss)
         logger.record_tabular('AveragePolicySurr', average_policy_surr)
-        logger.record_tabular('AverageQ', average_q)
-        logger.record_tabular('AverageAbsQ', average_abs_q)
-        logger.record_tabular('AverageY', average_y)
-        logger.record_tabular('AverageAbsY', average_abs_y)
+        logger.record_tabular('AverageQ', np.mean(all_qs))
+        logger.record_tabular('AverageAbsQ', np.mean(np.abs(all_qs)))
+        logger.record_tabular('AverageY', np.mean(all_ys))
+        logger.record_tabular('AverageAbsY', np.mean(np.abs(all_ys)))
+        logger.record_tabular('AverageAbsQYDiff', np.mean(np.abs(all_qs - all_ys)))
         logger.record_tabular('AverageAction', average_action)
 
         logger.record_tabular('PolicyRegParamNorm',
