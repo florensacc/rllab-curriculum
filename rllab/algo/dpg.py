@@ -248,7 +248,7 @@ class DPG(RLAlgorithm):
         qf_updates = self.qf_update_method(
             qf_reg_loss, qf.get_params(trainable=True))
         policy_updates = self.policy_update_method(
-            policy_reg_surr, qf.get_params(trainable=True))
+            policy_reg_surr, policy.get_params(trainable=True))
 
         f_normalize_qf = compile_function(
             inputs=[yvar],

@@ -5,7 +5,7 @@ require_relative '../utils'
 params = {
   mdp: {
     _name: "mujoco_pre_2.cheetah_mdp",
-    action_noise: 0.01,
+    # action_noise: 0.01,
   },
   normalize_mdp: true,
   qf: {
@@ -22,20 +22,20 @@ params = {
   },
   algo: {
     _name: "dpg",
-    batch_size: 32,
+    batch_size: 64,
     n_epochs: 1000,
     epoch_length: 1000,
     min_pool_size: 10000,
     replay_pool_size: 1000000,
     discount: 0.99,
-    qf_weight_decay: 5e-2,#0,#1e-3,
+    qf_weight_decay: 1e-2,#0,#1e-3,
     qf_learning_rate: 1e-3,
     max_path_length: 100,
     eval_samples: 10000,
     eval_whole_paths: true,
     soft_target: true,
     #hard_target_interval: 1000,
-    soft_target_tau: 1e-3,
+    soft_target_tau: 1e-5,
     policy_learning_rate: 1e-4,
   },
   es: {

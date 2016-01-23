@@ -27,7 +27,7 @@ params = {
     min_pool_size: 10000,
     replay_pool_size: 100000,
     discount: 0.99,
-    qf_weight_decay: 0,
+    qf_weight_decay: 1e-2,
     qf_learning_rate: 1e-3,
     max_path_length: 100,
     eval_samples: 10000,
