@@ -10,11 +10,9 @@ import numpy as np
 from collections import OrderedDict
 from rllab.qf.base import ContinuousQFunction
 from rllab.core.lasagne_powered import LasagnePowered
-# from rllab.core.lasagne_layers import batch_norm
 from rllab.core.serializable import Serializable
 from rllab.misc import autoargs
 from rllab.misc.ext import new_tensor
-from rllab.misc.special import normalize_updates
 from rllab.misc.overrides import overrides
 
 
@@ -35,10 +33,6 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
                   help='initializer for W for the output layer')
     @autoargs.arg('output_b_init', type=str,
                   help='initializer for b for the output layer')
-    @autoargs.arg('normalize', type=bool,
-                  help='Whether to normalize the output.')
-    @autoargs.arg('normalize_alpha', type=float,
-                  help='Coefficient for the running mean and std.')
     @autoargs.arg('bn', type=bool,
                   help='whether to apply batch normalization to hidden layers')
     # pylint: disable=dangerous-default-value
@@ -53,8 +47,6 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             output_nl='None',
             output_W_init='lasagne.init.Uniform(-3e-3, 3e-3)',
             output_b_init='lasagne.init.Uniform(-3e-3, 3e-3)',
-            normalize=True,
-            normalize_alpha=0.1,
             bn=False):
         # pylint: enable=dangerous-default-value
         obs_var = new_tensor(
@@ -91,7 +83,44 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             hidden_b_init = hidden_b_init * len(hidden_sizes)
         assert len(hidden_b_init) == len(hidden_sizes)
 
+        # l_obs_bn = L.batch_norm(l_obs)
+
+        # l_h1 = L.DenseLayer(
+        #     l_obs_bn,
+        #     num_units=100,
+        #     W=lasagne.init.HeUniform(),
+        #     b=lasagne.init.Constant(0.),
+        #     nonlinearity=lasagne.nonlinearities.rectify,
+        #     name="h1"
+        # )
+
+        # l_h1_bn = L.batch_norm(l_h1)
+
+        # l_h2 = L.DenseLayer(
+        #     L.ConcatLayer([l_h1_bn, l_action]),
+        #     num_units=100,
+        #     W=lasagne.init.HeUniform(),
+        #     b=lasagne.init.Constant(0.),
+        #     nonlinearity=lasagne.nonlinearities.rectify,
+        #     name="h2"
+        # )
+
+        # l_h2_bn = L.batch_norm(l_h2)
+
+        # l_output = L.DenseLayer(
+        #     l_h2_bn,
+        #     num_units=1,
+        #     W=lasagne.init.Uniform(-3e-3, 3e-3),
+        #     b=lasagne.init.Uniform(-3e-3, 3e-3),
+        #     nonlinearity=None,
+        #     name="output"
+        # )
+
+
+
         l_hidden = l_obs
+        if bn:
+            l_hidden = L.batch_norm(l_hidden)
 
         for idx, size, nl, W_init, b_init in zip(
                 itertools.count(), hidden_sizes, hidden_nl,
@@ -120,23 +149,11 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             nonlinearity=eval(output_nl),
             name="output"
         )
-        # if bn:
-        #     l_output = L.batch_norm(l_output)
-        #     self._output_W = l_output
 
         self._output_layer = l_output
         self._obs_layer = l_obs
         self._action_layer = l_action
         self._output_nl = eval(output_nl)
-        self._normalize = normalize
-        self._normalize_alpha = normalize_alpha
-
-        if self._normalize:
-            self._qval_mean = theano.shared(
-                np.zeros(1), name="qval_mean", broadcastable=(True,))
-            self._qval_std = theano.shared(
-                np.ones(1), name="qval_std", broadcastable=(True,))
-            assert self._output_nl is None
 
         ContinuousQFunction.__init__(self, mdp)
         LasagnePowered.__init__(self, [l_output])
@@ -145,7 +162,7 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             hidden_W_init=hidden_W_init, hidden_b_init=hidden_b_init,
             action_merge_layer=action_merge_layer, output_nl=output_nl,
             output_W_init=output_W_init, output_b_init=output_b_init,
-            normalize=normalize, normalize_alpha=normalize_alpha, bn=bn)
+            bn=bn)
 
     def get_qval_sym(self, obs_var, action_var, **kwargs):
         qvals = L.get_output(
@@ -153,43 +170,14 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             {self._obs_layer: obs_var, self._action_layer: action_var},
             **kwargs
         )
-        if self._normalize:
-            qvals = qvals * self._qval_std + self._qval_mean
         return TT.reshape(qvals, (-1,))
-
-    def _running_sum(self, new, old):
-        return self._normalize_alpha * new + (1 - self._normalize_alpha) * old
-
-    def normalize_updates(self, ys):
-        if not self._normalize:
-            return OrderedDict()
-        mean = TT.mean(ys, axis=0, keepdims=True)
-        std = TT.std(ys, axis=0, keepdims=True)
-        return normalize_updates(
-            old_mean=self._qval_mean,
-            old_std=self._qval_std,
-            new_mean=self._running_sum(mean, self._qval_mean),
-            new_std=self._running_sum(std, self._qval_std),
-            old_W=self._output_layer.W,
-            old_b=self._output_layer.b
-        )
-
-    def normalize_sym(self, qvals):
-        if self._normalize:
-            return (qvals - self._qval_mean) / self._qval_std
-        return qvals
 
     @overrides
     def get_params_internal(self, **tags):
-        if not self._normalize or tags.get("trainable", False) or \
-                tags.get("regularizable", False):
-            params = LasagnePowered.get_params_internal(self, **tags)
-            if tags.get("regularizable"):
-                # If the last layer is linear, do not regularize its weights
-                params = [p for p in params
-                          if p is not self._output_layer.W and p is not
-                          self._output_layer.b]
-                
-            return params
-        return LasagnePowered.get_params_internal(self, **tags) + \
-            [self._qval_mean, self._qval_std]
+        params = LasagnePowered.get_params_internal(self, **tags)
+        if tags.get("regularizable"):
+            # If the last layer is linear, do not regularize its weights
+            params = [p for p in params
+                      if p is not self._output_layer.W and p is not
+                      self._output_layer.b]
+        return params

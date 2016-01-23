@@ -10,8 +10,7 @@ params = {
   qf: {
     _name: "continuous_nn_q_function",
     hidden_sizes: [32, 32],
-    normalize: false,
-    bn: false,#true,
+    bn: true,
   },
   policy: {
     _name: "mean_nn_policy",
@@ -32,6 +31,8 @@ params = {
     max_path_length: 100,
     eval_samples: 1000,
     eval_whole_paths: true,
+    soft_target: true,
+    #hard_target_interval: 1000,
     soft_target_tau: 0.001,
     policy_learning_rate: 1e-4,
   },
@@ -40,6 +41,7 @@ params = {
     theta: 0.15,
     sigma: 0.3,
   },
+  n_parallel: 4,
   seed: seed,
 }
 command = to_command(params)
