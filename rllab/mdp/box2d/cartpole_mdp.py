@@ -20,11 +20,13 @@ class CartpoleMDP(Box2DMDP, Serializable):
         )
         self.cart = find_body(self.world, "cart")
         self.pole = find_body(self.world, "pole")
+        self._done = False
         Serializable.__init__(self, *args, **kwargs)
 
     @overrides
     def reset(self):
         self._set_state(self.initial_state)
+        self._done = False
         bounds = np.array([
             self.max_cart_pos,
             self.max_cart_speed,
@@ -42,12 +44,17 @@ class CartpoleMDP(Box2DMDP, Serializable):
     @overrides
     def compute_reward(self, action):
         yield
-        notdone = 1 - int(self.is_current_done())
+        #notdone = 1 - int(self.is_current_done())
+        done = abs(self.cart.position[0]) > self.max_cart_pos or \
+            abs(self.pole.angle) > self.max_pole_angle or self._done
+        if done:
+            self._done = True
+        notdone = 1 - int(done)
         ucost = 1e-5*(action**2).sum()
         xcost = 1 - np.cos(self.pole.angle)
         yield notdone * 10 - notdone * xcost - notdone * ucost
 
     @overrides
     def is_current_done(self):
-        return abs(self.cart.position[0]) > self.max_cart_pos or \
-            abs(self.pole.angle) > self.max_pole_angle
+        return False#abs(self.cart.position[0]) > self.max_cart_pos or \
+            #abs(self.pole.angle) > self.max_pole_angle

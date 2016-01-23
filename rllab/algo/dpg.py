@@ -159,6 +159,7 @@ class DPG(RLAlgorithm):
                     # to the replay pool
                     state, observation = mdp.reset()
                     es.episode_reset()
+                    policy.episode_reset()
                     self.es_path_returns.append(path_return)
                     path_length = 0
                     path_return = 0
@@ -166,6 +167,7 @@ class DPG(RLAlgorithm):
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
+                #mdp.plot()
                 path_length += 1
                 path_return += reward
 
@@ -266,7 +268,7 @@ class DPG(RLAlgorithm):
         #)
 
         f_train_qf = compile_function(
-            inputs=[yvar, obs, action, rewards],
+            inputs=[yvar, obs, action],
             outputs=[qf_loss, qval],
             updates=qf_updates
         )
@@ -320,7 +322,7 @@ class DPG(RLAlgorithm):
 
         ys = f_y(next_obs, rewards, terminal)
         #f_normalize_qf(ys)
-        qf_loss, qval = f_train_qf(ys, obs, actions, rewards)
+        qf_loss, qval = f_train_qf(ys, obs, actions)
         policy_surr = f_train_policy(ys, obs)
 
         if self.soft_target or itr % self.hard_target_interval:
