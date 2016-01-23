@@ -65,8 +65,6 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
         assert len(hidden_b_init) == len(hidden_sizes)
 
         l_hidden = l_input
-        if bn:
-            l_hidden = L.batch_norm(l_hidden)
 
         for idx, size, nl, W_init, b_init in zip(
                 itertools.count(), hidden_sizes, hidden_nl,

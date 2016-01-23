@@ -5,7 +5,6 @@ require_relative '../utils'
 params = {
   mdp: {
     _name: "mujoco_1_22.half_cheetah_mdp",
-    #action_noise: 0.01,
   },
   normalize_mdp: true,
   qf: {
