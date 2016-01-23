@@ -47,10 +47,10 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
             bn=False):
         # pylint: enable=dangerous-default-value
         # create network
-        input_var = TT.matrix('input')
+        obs_var = TT.matrix('obs')
                               
-        l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]),
-                               input_var=input_var)
+        l_obs = L.InputLayer(shape=(None, mdp.observation_shape[0]),
+                               input_var=obs_var)
 
         if len(hidden_nl) == 1:
             hidden_nl *= len(hidden_sizes)
@@ -64,7 +64,9 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
             hidden_b_init *= len(hidden_sizes)
         assert len(hidden_b_init) == len(hidden_sizes)
 
-        l_hidden = l_input
+        l_hidden = l_obs
+        if bn:
+            l_hidden = L.batch_norm(l_hidden)
 
         for idx, size, nl, W_init, b_init in zip(
                 itertools.count(), hidden_sizes, hidden_nl,
@@ -100,7 +102,7 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
 
         self._output_layer = l_output
 
-        self._f_actions = compile_function([input_var], action_var)
+        self._f_actions = compile_function([obs_var], action_var)
 
         super(MeanNNPolicy, self).__init__(mdp)
         LasagnePowered.__init__(self, [l_output])
@@ -121,8 +123,8 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
         return self._action_dtype
 
     @overrides
-    def get_action_sym(self, input_var, **kwargs):
-        return L.get_output(self._output_layer, input_var, **kwargs)
+    def get_action_sym(self, obs_var, **kwargs):
+        return L.get_output(self._output_layer, obs_var, **kwargs)
 
     # The return value is a pair. The first item is a matrix (N, A), where each
     # entry corresponds to the action value taken. The second item is a vector

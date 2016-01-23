@@ -55,7 +55,8 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
         upright_cost = 0  # 1e-5 * smooth_abs(self.get_body_xmat("torso")[2, 2] - 1, 0.1)
         cost = ctrl_cost + passive_cost + run_cost + upright_cost
         reward = -cost
-        done = False  # after_com[0] < self._initial_com[0] - 0.1 # False
+        done = False#self.model.data.qpos[1] < -0.2
+        #done = False  # after_com[0] < self._initial_com[0] - 0.1 # False
         return next_state, next_obs, reward, done
 
     @staticmethod

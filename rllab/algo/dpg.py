@@ -169,10 +169,18 @@ class DPG(RLAlgorithm):
                 path_length += 1
                 path_return += reward
 
-                if path_length > self.max_path_length:
+                if path_length >= self.max_path_length:
                     terminal = True
-
+                    #if not terminal:
+                    #    pool.add_sample(observation, action, reward, terminal,
+                    #            horizon_terminal=True)
+                    #else:
+                    #    pool.add_sample(observation, action, reward, terminal)
+                    #terminal = True
+                #else:
+                #    pool.add_sample(observation, action, reward, terminal)
                 pool.add_sample(observation, action, reward, terminal)
+
                 state, observation = next_state, next_observation
 
                 if pool.size >= self.min_pool_size:
@@ -185,7 +193,7 @@ class DPG(RLAlgorithm):
 
             logger.log("Training finished")
             if pool.size >= self.min_pool_size:
-                opt_info = self.evaluate(epoch, qf, policy, opt_info)
+                opt_info = self.evaluate(epoch, qf, policy, opt_info, mdp, pool)
                 yield opt_info
                 params = self.get_epoch_snapshot(
                     epoch, mdp, qf, policy, es, opt_info)
@@ -212,7 +220,7 @@ class DPG(RLAlgorithm):
         )
 
         rewards = TT.vector('rewards')
-        terminals = TT.vector('terminals')
+        terminals = TT.ivector('terminals')
 
         # compute the on-policy y values
         next_qval = target_qf.get_qval_sym(
@@ -221,7 +229,7 @@ class DPG(RLAlgorithm):
             deterministic=True
         )
 
-        ys = rewards + (1 - terminals) * self.discount * next_qval
+        ys = rewards + (TT.ones_like(terminals) - terminals) * self.discount * next_qval
         f_y = compile_function(
             inputs=[next_obs, rewards, terminals],
             outputs=ys
@@ -251,7 +259,6 @@ class DPG(RLAlgorithm):
             obs, policy.get_action_sym(obs),
             deterministic=True
         )
-        # The policy gradient is computed with respect to the unscaled Q values
         policy_surr = -TT.mean(policy_qval)
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
@@ -259,11 +266,6 @@ class DPG(RLAlgorithm):
             qf_reg_loss, qf.get_params(trainable=True))
         policy_updates = self.policy_update_method(
             policy_reg_surr, policy.get_params(trainable=True))
-
-        #f_normalize_qf = compile_function(
-        #    inputs=[yvar],
-        #    updates=qf.normalize_updates(yvar),
-        #)
 
         f_train_qf = compile_function(
             inputs=[yvar, obs, action, rewards],
@@ -295,7 +297,6 @@ class DPG(RLAlgorithm):
 
         return dict(
             f_y=f_y,
-            #f_normalize_qf=f_normalize_qf,
             f_train_qf=f_train_qf,
             f_train_policy=f_train_policy,
             f_qval=f_qval,
@@ -306,24 +307,22 @@ class DPG(RLAlgorithm):
 
     def do_training(self, itr, batch, qf, policy, opt_info):
 
-        obs, actions, rewards, next_obs, terminal = extract(
+        obs, actions, rewards, next_obs, terminals = extract(
             batch,
             "observations", "actions", "rewards", "next_observations",
             "terminals"
         )
 
         f_y = opt_info["f_y"]
-        #f_normalize_qf = opt_info["f_normalize_qf"]
         f_train_qf = opt_info["f_train_qf"]
         f_train_policy = opt_info["f_train_policy"]
         f_update_targets = opt_info["f_update_targets"]
 
-        ys = f_y(next_obs, rewards, terminal)
-        #f_normalize_qf(ys)
+        ys = f_y(next_obs, rewards, terminals)
         qf_loss, qval = f_train_qf(ys, obs, actions, rewards)
         policy_surr = f_train_policy(ys, obs)
 
-        if self.soft_target or itr % self.hard_target_interval:
+        if self.soft_target or not self.soft_target and itr % self.hard_target_interval == 0:
             f_update_targets()
 
         self.qf_loss_averages.append(qf_loss)
@@ -335,7 +334,7 @@ class DPG(RLAlgorithm):
 
         return opt_info
 
-    def evaluate(self, epoch, qf, policy, opt_info):
+    def evaluate(self, epoch, qf, policy, opt_info, mdp, pool):
 
         logger.log("Collecting samples for evaluation")
 
@@ -347,19 +346,6 @@ class DPG(RLAlgorithm):
         )
 
         paths = parallel_sampler.collect_paths()
-        # evaluate the quality of q functions
-        #for path in paths:
-        #    path["returns"] = discount_cumsum(path["rewards"], self.discount)
-        #returns = np.concatenate([path["returns"] for path in paths])
-        #actions = np.concatenate([path["actions"] for path in paths])
-        #obs = np.concatenate([path["observations"] for path in paths])
-
-        #predicted = opt_info["f_qval"](obs, actions)
-
-        # normalized error
-        #predicted = (predicted - np.mean(predicted)) / (np.std(predicted) + 1e-8)
-        #returns = (returns - np.mean(returns)) / (np.std(returns) + 1e-8)
-        #predicted_ratio = np.median(np.square(predicted - returns))
 
         average_discounted_return = np.mean(
             [discount_return(path["rewards"], self.discount) for path in paths]
@@ -412,23 +398,17 @@ class DPG(RLAlgorithm):
         logger.record_tabular('AverageAbsQYDiff',
                               np.mean(np.abs(all_qs - all_ys)))
         logger.record_tabular('AverageAction', average_action)
-        #logger.record_tabular('PredictRatio', predicted_ratio)
 
         logger.record_tabular('PolicyRegParamNorm',
                               policy_reg_param_norm)
         logger.record_tabular('QFunRegParamNorm',
                               qfun_reg_param_norm)
 
-        #if abs(average_q_loss) > 1000:
-        #    import ipdb; ipdb.set_trace()
-
         self.qf_loss_averages = []
         self.policy_surr_averages = []
         self.q_averages = []
         self.y_averages = []
         self.es_path_returns = []
-        #self.obses = []
-        #self.actions = []
 
         return merge_dict(opt_info, dict(
             eval_paths=paths,

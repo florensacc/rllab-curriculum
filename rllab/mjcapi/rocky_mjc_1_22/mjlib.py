@@ -9,6 +9,7 @@ if sys.platform.startswith("darwin"):
     addn_libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/osx/libmjc122.dylib"))
 elif sys.platform.startswith("linux"):
     libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/linux/libmujoco.so"))
+    addn_libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/linux/libmjc122.so"))
 elif sys.platform.startswith("win"):
     libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/win/mujoco.lib"))
 else:
