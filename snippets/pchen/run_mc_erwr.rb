@@ -5,8 +5,8 @@ seed = 1
 
 params = {
   mdp: {
-    _name: "box2d.mountain_car_mdp",
-    # _name: "box2d.cartpole_mdp",
+    # _name: "box2d.mountain_car_mdp",
+    _name: "box2d.cartpole_mdp",
   },
   policy: {
     _name: "mean_std_nn_policy",
@@ -34,8 +34,9 @@ params = {
 
     _name: "erwr",
     max_opt_itr: 10,
+    best_quantile: 0.1,
 
-    batch_size: 5000,
+    batch_size: 50000,
     whole_paths: true,
     max_path_length: 100,
     n_itr: 500,
