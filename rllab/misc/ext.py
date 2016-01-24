@@ -273,3 +273,17 @@ def flatten_tensor_variables(ts):
     import theano.tensor as TT
     return TT.concatenate(map(TT.flatten, ts))
 
+def unflatten_tensor_variables(flatarr, shapes, symb_arrs):
+    import theano.tensor as TT
+    import numpy as np
+    arrs = []
+    n = 0
+    for (shape, symb_arr) in zip(shapes, symb_arrs):
+        size = np.prod(list(shape))
+        arr = flatarr[n:n+size].reshape(shape)
+        if arr.type.broadcastable != symb_arr.type.broadcastable:
+            arr = TT.patternbroadcast(arr, symb_arr.type.broadcastable)
+        arrs.append(arr)
+        n += size
+    return arrs
+

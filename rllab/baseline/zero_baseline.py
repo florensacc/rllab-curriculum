@@ -9,11 +9,11 @@ class ZeroBaseline(Baseline):
         pass
 
     @overrides
-    def get_param_values(self):
+    def get_param_values(self, **kwargs):
         return None
 
     @overrides
-    def set_param_values(self, val):
+    def set_param_values(self, val, **kwargs):
         pass
 
     @overrides
@@ -23,3 +23,4 @@ class ZeroBaseline(Baseline):
     @overrides
     def predict(self, path):
         return np.zeros_like(path["returns"])
+

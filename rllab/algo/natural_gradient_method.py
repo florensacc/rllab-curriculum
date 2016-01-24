@@ -151,7 +151,7 @@ class NaturalGradientMethod(object):
             # CG approach
             _, flat_g = f_grad(*inputs)
             def Hx(x):
-                xs = policy.flat_to_params(x)
+                xs = policy.flat_to_params(x, trainable=True)
                 # with Message("rop"):
                 #     rop = f_Hx_rop(*(inputs + xs))
                 plain = f_Hx_plain(*(inputs + xs)) + self.reg_coeff*x
