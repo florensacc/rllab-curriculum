@@ -269,7 +269,21 @@ def flatten_hessian(cost, wrt, consider_constant=None,
     else:
         return TT.concatenate(hessians, axis=1)
 
+
 def flatten_tensor_variables(ts):
     import theano.tensor as TT
     return TT.concatenate(map(TT.flatten, ts))
 
+
+def print_lasagne_layer(layer, prefix=""):
+    params = ""
+    if layer.name:
+        params += ", name=" + layer.name
+    if getattr(layer, 'nonlinearity', None):
+        params += ", nonlinearity=" + layer.nonlinearity.__name__
+    params = params[2:]
+    print prefix + layer.__class__.__name__ + "[" + params + "]"
+    if hasattr(layer, 'input_layers') and layer.input_layers is not None:
+        [print_lasagne_layer(x, prefix + "  ") for x in layer.input_layers]
+    elif hasattr(layer, 'input_layer') and layer.input_layer is not None:
+        print_lasagne_layer(layer.input_layer, prefix + "  ")

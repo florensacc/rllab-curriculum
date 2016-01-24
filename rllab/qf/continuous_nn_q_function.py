@@ -59,9 +59,9 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             dtype=mdp.action_dtype
         )
         l_obs = L.InputLayer(shape=(None,) + mdp.observation_shape,
-                             input_var=obs_var)
+                             input_var=obs_var, name="obs")
         l_action = L.InputLayer(shape=(None, mdp.action_dim),
-                                input_var=action_var)
+                                input_var=action_var, name="actions")
 
         n_layers = len(hidden_sizes) + 1
 
@@ -83,60 +83,25 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             hidden_b_init = hidden_b_init * len(hidden_sizes)
         assert len(hidden_b_init) == len(hidden_sizes)
 
-        # l_obs_bn = L.batch_norm(l_obs)
-
-        # l_h1 = L.DenseLayer(
-        #     l_obs_bn,
-        #     num_units=100,
-        #     W=lasagne.init.HeUniform(),
-        #     b=lasagne.init.Constant(0.),
-        #     nonlinearity=lasagne.nonlinearities.rectify,
-        #     name="h1"
-        # )
-
-        # l_h1_bn = L.batch_norm(l_h1)
-
-        # l_h2 = L.DenseLayer(
-        #     L.ConcatLayer([l_h1_bn, l_action]),
-        #     num_units=100,
-        #     W=lasagne.init.HeUniform(),
-        #     b=lasagne.init.Constant(0.),
-        #     nonlinearity=lasagne.nonlinearities.rectify,
-        #     name="h2"
-        # )
-
-        # l_h2_bn = L.batch_norm(l_h2)
-
-        # l_output = L.DenseLayer(
-        #     l_h2_bn,
-        #     num_units=1,
-        #     W=lasagne.init.Uniform(-3e-3, 3e-3),
-        #     b=lasagne.init.Uniform(-3e-3, 3e-3),
-        #     nonlinearity=None,
-        #     name="output"
-        # )
-
-
-
         l_hidden = l_obs
-        if bn:
-            l_hidden = L.batch_norm(l_hidden)
 
         for idx, size, nl, W_init, b_init in zip(
                 itertools.count(), hidden_sizes, hidden_nl,
                 hidden_W_init, hidden_b_init):
+            if bn:
+                l_hidden = L.batch_norm(l_hidden)
+
             if idx == action_merge_layer:
                 l_hidden = L.ConcatLayer([l_hidden, l_action])
+
             l_hidden = L.DenseLayer(
                 l_hidden,
                 num_units=size,
                 W=eval(W_init),
                 b=eval(b_init),
                 nonlinearity=eval(nl),
-                name="h%d" % idx
+                name="h%d" % (idx+1)
             )
-            if bn:
-                l_hidden = L.batch_norm(l_hidden)
 
         if action_merge_layer == n_layers:
             l_hidden = L.ConcatLayer([l_hidden, l_action])
@@ -171,13 +136,3 @@ class ContinuousNNQFunction(ContinuousQFunction, LasagnePowered, Serializable):
             **kwargs
         )
         return TT.reshape(qvals, (-1,))
-
-    @overrides
-    def get_params_internal(self, **tags):
-        params = LasagnePowered.get_params_internal(self, **tags)
-        if tags.get("regularizable"):
-            # If the last layer is linear, do not regularize its weights
-            params = [p for p in params
-                      if p is not self._output_layer.W and p is not
-                      self._output_layer.b]
-        return params

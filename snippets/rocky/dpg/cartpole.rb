@@ -1,6 +1,6 @@
 require_relative '../utils'
 
-seed = 1
+#seed = 1
 
 params = {
   mdp: {
@@ -9,14 +9,14 @@ params = {
   normalize_mdp: true,
   qf: {
     _name: "continuous_nn_q_function",
-    hidden_sizes: [32, 32],
-    bn: true,
+    hidden_sizes: [32,32],#10,10],#32, 32],
+    bn: true,#false,#true,
   },
   policy: {
     _name: "mean_nn_policy",
-    hidden_sizes: [32, 32],
+    hidden_sizes: [32,32],#10,10],#32, 32],
     output_nl: 'lasagne.nonlinearities.tanh',
-    bn: false,#true,
+    bn: true,#false,#true,
   },
   algo: {
     _name: "dpg",
@@ -28,7 +28,7 @@ params = {
     discount: 0.99,
     qf_weight_decay: 1e-2,
     qf_learning_rate: 1e-3,
-    max_path_length: 100,
+    max_path_length: 40,
     eval_samples: 1000,
     eval_whole_paths: true,
     soft_target: true,
@@ -42,7 +42,7 @@ params = {
     sigma: 0.3,
   },
   n_parallel: 4,
-  seed: seed,
+  #seed: seed,
 }
 command = to_command(params)
 puts command

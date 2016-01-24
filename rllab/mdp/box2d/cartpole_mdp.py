@@ -44,17 +44,18 @@ class CartpoleMDP(Box2DMDP, Serializable):
     @overrides
     def compute_reward(self, action):
         yield
-        #notdone = 1 - int(self.is_current_done())
-        done = abs(self.cart.position[0]) > self.max_cart_pos or \
-            abs(self.pole.angle) > self.max_pole_angle or self._done
-        if done:
-            self._done = True
-        notdone = 1 - int(done)
+        notdone = 1 - int(self.is_current_done())
+        #done = abs(self.cart.position[0]) > self.max_cart_pos or \
+        #    abs(self.pole.angle) > self.max_pole_angle or self._done
+        #if done:
+        #    self._done = True
+        #notdone = 1 - int(done)
         ucost = 1e-5*(action**2).sum()
         xcost = 1 - np.cos(self.pole.angle)
         yield notdone * 10 - notdone * xcost - notdone * ucost
 
     @overrides
     def is_current_done(self):
-        return False#abs(self.cart.position[0]) > self.max_cart_pos or \
-            #abs(self.pole.angle) > self.max_pole_angle
+        #return False
+        return abs(self.cart.position[0]) > self.max_cart_pos or \
+            abs(self.pole.angle) > self.max_pole_angle

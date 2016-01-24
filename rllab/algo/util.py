@@ -94,8 +94,7 @@ class ReplayPool(Serializable):
                 "terminals", "extras", "rng"
             )
 
-    def add_sample(self, observation, action, reward, terminal, extra=None):#,
-            #horizon_terminal=False):
+    def add_sample(self, observation, action, reward, terminal, extra=None):
         """Add a time step record.
 
         Arguments:

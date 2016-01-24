@@ -99,14 +99,14 @@ class DPG(RLAlgorithm):
         self.qf_update_method = \
             parse_update_method(
                 qf_update_method,
-                learning_rate=qf_learning_rate
+                learning_rate=qf_learning_rate,
             )
         self.qf_learning_rate = qf_learning_rate
         self.policy_weight_decay = policy_weight_decay
         self.policy_update_method = \
             parse_update_method(
                 policy_update_method,
-                learning_rate=policy_learning_rate
+                learning_rate=policy_learning_rate,
             )
         self.policy_learning_rate = policy_learning_rate
         self.eval_samples = eval_samples
@@ -148,6 +148,8 @@ class DPG(RLAlgorithm):
         terminal = False
         state, observation = mdp.reset()
 
+        sample_policy = pickle.loads(pickle.dumps(policy))
+
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
@@ -163,24 +165,16 @@ class DPG(RLAlgorithm):
                     self.es_path_returns.append(path_return)
                     path_length = 0
                     path_return = 0
-                action = es.get_action(itr, observation, policy=policy, qf=qf)
+                action = es.get_action(itr, observation, policy=sample_policy)#qf=qf)
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
-                #mdp.plot()
                 path_length += 1
                 path_return += reward
 
                 if path_length >= self.max_path_length:
                     terminal = True
-                    #if not terminal:
-                    #    pool.add_sample(observation, action, reward, terminal,
-                    #            horizon_terminal=True)
-                    #else:
-                    #    pool.add_sample(observation, action, reward, terminal)
-                    #terminal = True
-                #else:
-                #    pool.add_sample(observation, action, reward, terminal)
+
                 pool.add_sample(observation, action, reward, terminal)
 
                 state, observation = next_state, next_observation
@@ -190,6 +184,7 @@ class DPG(RLAlgorithm):
                     batch = pool.random_batch(self.batch_size)
                     opt_info = self.do_training(
                         itr, batch, qf, policy, opt_info)
+                    sample_policy.set_param_values(policy.get_param_values())
 
                 itr += 1
 
@@ -222,7 +217,7 @@ class DPG(RLAlgorithm):
         )
 
         rewards = TT.vector('rewards')
-        terminals = TT.ivector('terminals')
+        terminals = TT.vector('terminals')
 
         # compute the on-policy y values
         next_qval = target_qf.get_qval_sym(
@@ -231,7 +226,7 @@ class DPG(RLAlgorithm):
             deterministic=True
         )
 
-        ys = rewards + (TT.ones_like(terminals) - terminals) * self.discount * next_qval
+        ys = rewards + (1 - terminals) * self.discount * next_qval
         f_y = compile_function(
             inputs=[next_obs, rewards, terminals],
             outputs=ys
@@ -247,12 +242,11 @@ class DPG(RLAlgorithm):
                  qf.get_params(regularizable=True)])
 
         qval = qf.get_qval_sym(obs, action)
-        f_qval = compile_function(
-            inputs=[obs, action],
-            outputs=qval,
-        )
+        
         qf_loss = TT.mean(TT.square(yvar - qval))
         qf_reg_loss = qf_loss + qf_weight_decay_term
+
+        #import ipdb; ipdb.set_trace()
 
         policy_weight_decay_term = 0.5 * self.policy_weight_decay * \
             sum([TT.sum(TT.square(param))
@@ -301,7 +295,6 @@ class DPG(RLAlgorithm):
             f_y=f_y,
             f_train_qf=f_train_qf,
             f_train_policy=f_train_policy,
-            f_qval=f_qval,
             f_update_targets=f_update_targets,
             target_qf=target_qf,
             target_policy=target_policy,
