@@ -37,7 +37,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @autoargs.arg('std_sizes', type=int, nargs='*',
                   help='list of sizes for the fully-connected layers for std, note'
                        'there is a difference in semantics than above: here an empty'
-                       'list means that std is independent of input')
+                       'list means that std is independent of input and the last size is ignored')
     @autoargs.arg('initial_std', type=float,
                   help='Initial std')
     @autoargs.arg('std_trainable', type=bool,
@@ -61,6 +61,10 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             output_nl='None',
             bn=False,
             ):
+        Serializable.__init__(
+            self, mdp=mdp, hidden_sizes=hidden_sizes, std_sizes=std_sizes,
+            initial_std=initial_std, std_trainable=std_trainable,
+            nonlinearity=nonlinearity, output_nl=output_nl, bn=bn)
         # pylint: enable=dangerous-default-value
         # create network
         if isinstance(nonlinearity, str):
@@ -123,9 +127,6 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         super(MeanStdNNPolicy, self).__init__(mdp)
         LasagnePowered.__init__(self, [mean_layer, log_std_layer])
-        Serializable.__init__(
-            self, mdp=mdp, hidden_sizes=hidden_sizes,
-            nonlinearity=nonlinearity, output_nl=output_nl, bn=bn)
 
     def get_pdist_sym(self, input_var):
         mean_var = L.get_output(self._mean_layer, input_var)

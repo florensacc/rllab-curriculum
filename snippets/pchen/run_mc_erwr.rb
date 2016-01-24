@@ -5,14 +5,15 @@ seed = 1
 
 params = {
   mdp: {
-    # _name: "box2d.mountain_car_mdp",
-    _name: "box2d.cartpole_mdp",
+    _name: "box2d.mountain_car_mdp",
+    # _name: "box2d.cartpole_mdp",
   },
   policy: {
     _name: "mean_std_nn_policy",
     std_trainable: false,
-    initial_std: 10,
-    # hidden_sizes: [],
+    initial_std: 1,
+    hidden_sizes: [],
+    std_sizes: []
   },
   baseline: {
     _name: "zero_baseline",
