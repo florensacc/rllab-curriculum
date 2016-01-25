@@ -1,11 +1,8 @@
 local NNQFunction = torch.class('NNQFunction')
 
 function NNQFunction:__init(mdp, h1Size, h2Size)
-  local obsDim = mdp:observationShape()[1]
+  local obsDim = mdp:observationDim()
   local actionDim = mdp:actionDim()
-
-  --local h1Size = 100
-  --local h2Size = 100
 
   local model1 = nn.Sequential()
   model1:add(nn.BatchNormalization(obsDim))
@@ -24,18 +21,6 @@ function NNQFunction:__init(mdp, h1Size, h2Size)
   model:add(nn.ReLU())
   model:add(nn.Linear(h2Size, 1))
 
-  --local obs = nn.Identity()()
-  --local action = nn.Identity()()
-  --local obs_bn = nn.BatchNormalization(obsDim)(obs)
-  --local l1 = nn.Linear(obsDim, 100)(obs_bn)
-  --local l1_bn = nn.BatchNormalization(100)(l1)
-  --local h1 = nn.ReLU()(l1_bn)
-  --local h1_action = nn.Concat(){h1, action}
-  --local l2 = nn.Linear(100 + actionDim, 100)(h1_action)
-  --local h2 = nn.ReLU()(l2)
-  --local output = nn.Linear(1, 100)(h2)
-
-  --local model = nn.gModule({obs, action}, {output})
   self.model = model
 end
 

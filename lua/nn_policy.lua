@@ -1,7 +1,7 @@
 local NNPolicy = torch.class('NNPolicy')
 
 function NNPolicy:__init(mdp, h1Size, h2Size)
-  local obsDim = mdp:observationShape()[1]
+  local obsDim = mdp:observationDim()
   local actionDim = mdp:actionDim()
 
   local model = nn.Sequential()

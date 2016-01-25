@@ -5,6 +5,7 @@ require('optim')
 --require 'cunn'
 
 require('./cartpole_mdp')
+require('./client_mdp')
 
 require('./nn_policy')
 require('./nn_q_function')
@@ -37,9 +38,8 @@ options = {
   qfH2Size = 100,
 }
 
-mdp = CartpoleMDP()
-
-eval_mdp = CartpoleMDP()
+mdp = ClientMDP('box2d.cartpole_mdp')--CartpoleMDP()
+--eval_mdp = ClientMDP('box2d.cartpole_mdp')--CartpoleMDP()
 
 policy = NNPolicy(mdp, options.policyH1Size, options.policyH2Size)
 targetPolicy = NNPolicy(mdp, options.policyH1Size, options.policyH2Size)
@@ -51,7 +51,7 @@ targetQf:getParameters():copy(qf:getParameters())
 
 es = OUStrategy.new(mdp, options.ouTheta, options.ouSigma)
 pool = ReplayPool(
-  mdp:observationShape()[1],
+  mdp:observationDim(),
   mdp:actionDim(),
   options.replayPoolSize
 )
@@ -171,7 +171,7 @@ for epoch = 1,options.nEpochs do
       local terminal = false
       local path_return = 0
       local path_length = 0
-      state, obs = eval_mdp:reset()
+      local state, obs = mdp:reset()
       n_eval_samples = n_eval_samples + 1
 
       while not terminal and path_length < options.maxPathLength do
@@ -179,7 +179,7 @@ for epoch = 1,options.nEpochs do
         local nextState
         local nextObs
         local reward
-        nextState, nextObs, reward, terminal = eval_mdp:step(state, action)
+        nextState, nextObs, reward, terminal = mdp:step(state, action)
         path_return = path_return + reward
         path_length = path_length + 1
         n_eval_samples = n_eval_samples + 1

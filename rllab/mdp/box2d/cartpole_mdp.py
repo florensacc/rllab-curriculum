@@ -20,7 +20,6 @@ class CartpoleMDP(Box2DMDP, Serializable):
         )
         self.cart = find_body(self.world, "cart")
         self.pole = find_body(self.world, "pole")
-        self._done = False
         Serializable.__init__(self, *args, **kwargs)
 
     @overrides
