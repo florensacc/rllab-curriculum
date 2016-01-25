@@ -3,9 +3,10 @@ local CartpoleMDP = torch.class('CartpoleMDP')
 function CartpoleMDP:__init()
   self.py = require 'fb.python'
   self.py.exec([=[
-from rllab.mdp.box2d.cartpole_mdp import CartpoleMDP
+from rllab.mdp.mujoco_pre_2.cheetah_mdp import CheetahMDP
+# from rllab.box2d.cartpole_mdp import CartpoleMDP
 from rllab.mdp.normalized_mdp import normalize
-mdp = normalize(CartpoleMDP())
+mdp = normalize(CheetahMDP())#CartpoleMDP())
   ]=])
 end
 
