@@ -10,14 +10,15 @@ require('./nn_policy')
 require('./nn_q_function')
 require('./replay_pool')
 require('./ou_strategy')
+require('./utils')
 
-local dbg = require("./debugger")
+dbg = require("./debugger")
 
 
 options = {
-  nEpochs = 2,
+  nEpochs = 200,
   batchSize = 32,
-  epochLength = 1000,
+  epochLength = 100,
   minPoolSize = 1000,
   evalSamples = 1000,
   replayPoolSize = 1000000,
@@ -103,7 +104,7 @@ for epoch = 1,options.nEpochs do
       nextPolicyActions = targetPolicy:getActions(nextObservations)
       nextQVals = targetQf:getQVal(nextObservations, nextPolicyActions)
 
-      ys = rewards + (torch.ones(terminals:size()) - terminals) * options.discount * nextQVals
+      ys = rewards + torch.cmul(torch.ones(terminals:size()) - terminals, nextQVals) * options.discount
 
       -- train the critic
       pred = qf:forward(observations, actions)
@@ -125,8 +126,9 @@ for epoch = 1,options.nEpochs do
 
       optim.adam(qfeval, qf_params, {learningRate = options.qfLearningRate}, qf_optim_state)
 
-      print(string.format("Iteration %d; Q loss: %f; Q param norm: %f; target Q param norm: %f", itr, q_loss, torch.norm(qf_params), torch.norm(target_qf_params)))
-
+      if itr % 100 == 0 then
+        print(string.format("Iteration %d; Q loss: %f; Q param norm: %f; target Q param norm: %f", itr, q_loss, torch.norm(qf_params), torch.norm(target_qf_params)))
+      end
 
       -- train the actor
       -- This is a bit tricky
@@ -138,7 +140,7 @@ for epoch = 1,options.nEpochs do
 
         local policyActions = policy:forward(observations)
         local qvals = qf:forward(observations, policyActions)
-        _, gradAction = qf:backward(observations, policyActions, -torch.ones(options.batchSize) / options.batchSize)
+        local gradAction = qf:backward(observations, policyActions, -torch.ones(options.batchSize) / options.batchSize)[2]
 
         -- the objective is to maximize Q(s, policy(s)), or equivalently minimize
         -- -Q(s, policy(s)), hence we should pass a vector of -1s as the errors
@@ -148,13 +150,15 @@ for epoch = 1,options.nEpochs do
         return policy_loss, policy_grads
       end
 
-      optim.adam(policeval, policy_params, {learningRate = options.policyLearningRate}, policy_optim_state)
+      optim.adam(policyeval, policy_params, {learningRate = options.policyLearningRate}, policy_optim_state)
 
+      updateTarget(qf.model, targetQf.model, options.softTargetTau)
+      updateTarget(policy.model, targetPolicy.model, options.softTargetTau)
       -- update target networks
-      target_qf_params:mul(1.0 - options.softTargetTau)
-      target_qf_params:add(options.softTargetTau, qf_params)
-      target_policy_params:mul(1.0 - options.softTargetTau)
-      target_policy_params:add(options.softTargetTau, policy_params)
+      --target_qf_params:mul(1.0 - options.softTargetTau)
+      --target_qf_params:add(options.softTargetTau, qf_params)
+      --target_policy_params:mul(1.0 - options.softTargetTau)
+      --target_policy_params:add(options.softTargetTau, policy_params)
 
     end -- if pool.size >= options.minPoolSize
   end -- for epoch_itr
@@ -179,6 +183,7 @@ for epoch = 1,options.nEpochs do
         path_return = path_return + reward
         path_length = path_length + 1
         n_eval_samples = n_eval_samples + 1
+        state, obs = nextState, nextObs
       end
       eval_path_returns[#eval_path_returns+1] = path_return
     end

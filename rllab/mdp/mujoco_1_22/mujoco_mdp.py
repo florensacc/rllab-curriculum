@@ -6,6 +6,17 @@ from rllab.mjcapi.rocky_mjc_1_22 import MjModel, MjViewer
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
 import theano
+import tempfile
+import mako.template
+import mako.lookup
+
+
+MODEL_DIR = osp.abspath(
+    osp.join(
+        osp.dirname(__file__),
+        '../../../vendor/mujoco_models/1_22'
+    )
+)
 
 
 class MujocoMDP(ControlMDP):
@@ -18,7 +29,20 @@ class MujocoMDP(ControlMDP):
     def __init__(self, action_noise=0.0):
         if self.__class__.FILE is None:
             raise "mujoco xml file not specified"
-        self.model = MjModel(self.model_path(self.__class__.FILE))
+        # compile template
+        if self.__class__.FILE.endswith(".mako"):
+            template_file_path = osp.join(MODEL_DIR, self.__class__.FILE)
+            lookup = mako.lookup.TemplateLookup(directories=[MODEL_DIR])
+            with open(template_file_path) as template_file:
+                template = mako.template.Template(
+                    template_file.read(), lookup=lookup)
+            content = template.render()
+            _, file_path = tempfile.mkstemp(text=True)
+            with open(file_path, 'w') as f:
+                f.write(content)
+        else:
+            file_path = osp.join(MODEL_DIR, self.__class__.FILE)
+        self.model = MjModel(file_path)
         self.data = self.model.data
         self.viewer = None
         self.init_qpos = self.model.data.qpos

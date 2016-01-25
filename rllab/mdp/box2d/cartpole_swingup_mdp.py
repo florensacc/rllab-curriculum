@@ -28,6 +28,7 @@ class CartpoleSwingupMDP(Box2DMDP, Serializable):
     @overrides
     def reset(self):
         self._set_state(self.initial_state)
+        self._invalidate_state_caches()
         bounds = np.array([
             [-1, -2, np.pi-1, -3],
             [1, 2, np.pi+1, 3],

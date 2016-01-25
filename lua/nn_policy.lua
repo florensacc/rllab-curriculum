@@ -6,10 +6,6 @@ function NNPolicy:__init(mdp, h1Size, h2Size)
 
   local model = nn.Sequential()
   model:add(nn.BatchNormalization(obsDim))
-
-  --local h1Size = 400
-  --local h2Size = 300
-
   model:add(nn.Linear(obsDim, h1Size))
   model:add(nn.BatchNormalization(h1Size))
   model:add(nn.ReLU())
