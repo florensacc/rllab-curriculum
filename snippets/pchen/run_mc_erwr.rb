@@ -5,8 +5,8 @@ seed = 1
 
 params = {
   mdp: {
-    # _name: "box2d.mountain_car_mdp",
-    _name: "box2d.cartpole_mdp",
+    _name: "box2d.mountain_car_mdp",
+    # _name: "box2d.cartpole_mdp",
   },
   normalize_mdp: true,
   policy: {
@@ -22,9 +22,9 @@ params = {
   },
   exp_name: "erwr_mc_seed_#{seed}",
   algo: {
-    # _name: "ppo",
-    # step_size: 0.1,
-    # binary_search_penalty: false,
+    _name: "ppo",
+    step_size: 0.1,
+    binary_search_penalty: false,
 
     # _name: "trpo",
     # step_size: 0.2,
@@ -34,18 +34,19 @@ params = {
 
     # _name: "cem",
 
-    _name: "erwr",
-    max_opt_itr: 50,
-    # best_quantile: 0.1,
+    # _name: "erwr",
+    # max_opt_itr: 50,
+    # # best_quantile: 0.1,
 
-    center_adv: false,
+    center_adv: true,
+    positive_adv: true,
     batch_size: 5000,
     whole_paths: true,
     max_path_length: 100,
     n_itr: 500,
     plot: true,
   },
-  n_parallel: 4,
+  n_parallel: 1,
   # snapshot_mode: "none",
   seed: seed,
   plot: true,
