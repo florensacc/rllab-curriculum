@@ -25,7 +25,7 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
             self.model.data.qpos.flatten()[1:],
             self.model.data.qvel.flatten(),
             # self.model.data.qfrc_passive.flatten(),
-            self.get_body_com("torso").flatten(),
+            #self.get_body_com("torso").flatten(),
         ])
 
     @overrides
