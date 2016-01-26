@@ -13,7 +13,7 @@ params = {
     _name: "mean_std_nn_policy",
     std_trainable: true,
     initial_std: 1,
-    hidden_sizes: [],
+    hidden_sizes: [32, 32],
     std_sizes: []
   },
   baseline: {
@@ -22,9 +22,9 @@ params = {
   },
   exp_name: "erwr_mc_seed_#{seed}",
   algo: {
-    _name: "ppo",
-    step_size: 0.1,
-    binary_search_penalty: false,
+    # _name: "ppo",
+    # step_size: 0.1,
+    # binary_search_penalty: false,
 
     # _name: "trpo",
     # step_size: 0.2,
@@ -34,12 +34,12 @@ params = {
 
     # _name: "cem",
 
-    # _name: "erwr",
-    # max_opt_itr: 50,
-    # # best_quantile: 0.1,
+    _name: "erwr",
+    max_opt_itr: 50,
+    # best_quantile: 0.1,
 
-    center_adv: true,
-    positive_adv: true,
+    center_adv: false,
+    # positive_adv: true,
     batch_size: 5000,
     whole_paths: true,
     max_path_length: 100,
