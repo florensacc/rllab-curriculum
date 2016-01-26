@@ -36,9 +36,9 @@ class NPG(NaturalGradientMethod, BatchPolopt, FirstOrderMethod):
         info = super(NPG, self).init_opt(mdp, policy, baseline)
         descent_steps = [
             new_tensor_like("%s descent" % p.name, p)
-            for p in policy.params
+            for p in policy.get_params(trainable=True)
             ]
-        updates = self.update_method(descent_steps, policy.params)
+        updates = self.update_method(descent_steps, policy.get_params(trainable=True))
         info['f_update'] = lambda: compile_function(
             inputs=descent_steps,
             outputs=None,
@@ -56,3 +56,4 @@ class NPG(NaturalGradientMethod, BatchPolopt, FirstOrderMethod):
             f_update(*descent_steps)
 
         return opt_info
+

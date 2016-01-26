@@ -1,6 +1,6 @@
 <!-- Auto-generated. Do not edit! -->
 <box2d>
-  <world timestep="0.1">
+  <world timestep="0.05" velitr="20" positr="20">
     <body name="link1" type="dynamic" position="0,0">
       <fixture density="5.0" group="-1" shape="polygon" vertices="0.05,0.0;0.05,-1.0;-0.05,-1.0;-0.05,0.0"/>
     </body>
