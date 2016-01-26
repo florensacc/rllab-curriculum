@@ -178,7 +178,10 @@ def worker_collect_paths():
 
 
 def collect_paths():
-    return sum(run_map(worker_collect_paths), [])
+    if G.n_parallel > 1:
+        return sum(run_map(worker_collect_paths), [])
+    else:
+        return G.paths
 
 
 def request_samples(

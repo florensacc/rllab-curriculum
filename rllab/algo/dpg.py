@@ -17,6 +17,72 @@ import pyprind
 import theano
 
 
+class SimpleReplayPool(object):
+
+
+    def __init__(
+            self, max_pool_size, observation_shape, action_dim,
+            observation_dtype=theano.config.floatX,
+            action_dtype=theano.config.floatX):
+        self._observation_shape = observation_shape
+        self._action_dim = action_dim
+        self._observation_dtype = observation_dtype
+        self._action_dtype = action_dtype
+        self._max_pool_size = max_pool_size
+
+        self._observations = np.zeros(
+            (max_pool_size,) + observation_shape,
+            dtype=observation_dtype
+        )
+        self._actions = np.zeros(
+            (max_pool_size, action_dim),
+            dtype=action_dtype
+        )
+        self._rewards = np.zeros(max_pool_size, dtype='float32')
+        self._terminals = np.zeros(max_pool_size, dtype='uint8')
+        self._bottom = 0
+        self._top = 0
+        self._size = 0
+
+    def add_sample(self, observation, action, reward, terminal):
+        self._observations[self._top] = observation
+        self._actions[self._top] = action
+        self._rewards[self._top] = reward
+        self._terminals[self._top] = terminal
+        self._top = (self._top + 1) % self._max_pool_size
+        if self._size >= self._max_pool_size:
+            self._bottom = (self._bottom + 1) % self._max_pool_size
+        else:
+            self._size = self._size + 1
+
+    def random_batch(self, batch_size):
+        assert self._size > batch_size
+        indices = np.zeros(batch_size, dtype='uint64')
+        transition_indices = np.zeros(batch_size, dtype='uint64')
+        count = 0
+        while count < batch_size:
+            index = np.random.randint(self._bottom, self._bottom + self._size) % self._max_pool_size
+            # make sure that the transition is valid: if we are at the end of the pool, we need to discard
+            # this sample
+            if index == self._size - 1 and self._size <= self._max_pool_size:
+                continue
+            transition_index = (index + 1) % self._max_pool_size
+            indices[count] = index
+            transition_indices[count] = transition_index
+            count += 1
+        return dict(
+            observations=self._observations[indices],
+            actions=self._actions[indices],
+            rewards=self._rewards[indices],
+            terminals=self._terminals[indices],
+            next_observations=self._observations[transition_indices]
+        )
+
+    @property
+    def size(self):
+        return self._size
+
+
 class DPG(RLAlgorithm):
     """
     Deterministic Policy Gradient.
@@ -64,6 +130,9 @@ class DPG(RLAlgorithm):
                        'update.')
     @autoargs.arg('hard_target_interval', type=int,
                   help='Interval between each "hard" target updates')
+    @autoargs.arg('n_updates_per_sample', type=int,
+                  help='Number of Q function and policy updates per new '
+                       'sample obtained')
     @autoargs.arg('plot', type=bool,
                   help='Whether to visualize the policy performance after '
                        'each eval_interval.')
@@ -87,6 +156,7 @@ class DPG(RLAlgorithm):
             soft_target=True,
             soft_target_tau=0.001,
             hard_target_interval=1000,
+            n_updates_per_sample=1,
             plot=False):
         self.batch_size = batch_size
         self.n_epochs = n_epochs
@@ -114,6 +184,7 @@ class DPG(RLAlgorithm):
         self.soft_target = soft_target
         self.soft_target_tau = soft_target_tau
         self.hard_target_interval = hard_target_interval
+        self.n_updates_per_sample = n_updates_per_sample
         self.plot = plot
 
         self.qf_loss_averages = []
@@ -134,10 +205,10 @@ class DPG(RLAlgorithm):
     @overrides
     def train(self, mdp, policy, qf, es, **kwargs):
         # This seems like a rather sequential method
-        pool = ReplayPool(
+        pool = SimpleReplayPool(
+            max_pool_size=self.replay_pool_size,
             observation_shape=mdp.observation_shape,
             action_dim=mdp.action_dim,
-            max_steps=self.replay_pool_size,
         )
         self.start_worker(mdp, policy)
 
@@ -180,10 +251,11 @@ class DPG(RLAlgorithm):
                 state, observation = next_state, next_observation
 
                 if pool.size >= self.min_pool_size:
-                    # Train policy
-                    batch = pool.random_batch(self.batch_size)
-                    opt_info = self.do_training(
-                        itr, batch, qf, policy, opt_info)
+                    for update_itr in xrange(self.n_updates_per_sample):
+                        # Train policy
+                        batch = pool.random_batch(self.batch_size)
+                        opt_info = self.do_training(
+                            itr, batch, qf, policy, opt_info)
                     sample_policy.set_param_values(policy.get_param_values())
 
                 itr += 1
@@ -210,27 +282,14 @@ class DPG(RLAlgorithm):
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
-        next_obs = new_tensor(
-            'next_obs',
-            ndim=1+len(mdp.observation_shape),
-            dtype=mdp.observation_dtype
-        )
+        #next_obs = new_tensor(
+        #    'next_obs',
+        #    ndim=1+len(mdp.observation_shape),
+        #    dtype=mdp.observation_dtype
+        #)
 
-        rewards = TT.vector('rewards')
-        terminals = TT.vector('terminals')
-
-        # compute the on-policy y values
-        next_qval = target_qf.get_qval_sym(
-            next_obs,
-            target_policy.get_action_sym(next_obs, deterministic=True),
-            deterministic=True
-        )
-
-        ys = rewards + (1 - terminals) * self.discount * next_qval
-        f_y = compile_function(
-            inputs=[next_obs, rewards, terminals],
-            outputs=ys
-        )
+        #rewards = TT.vector('rewards')
+        #terminals = TT.vector('terminals')
 
         # The yi values are computed separately as above and then passed to
         # the training functions below
@@ -245,8 +304,6 @@ class DPG(RLAlgorithm):
         
         qf_loss = TT.mean(TT.square(yvar - qval))
         qf_reg_loss = qf_loss + qf_weight_decay_term
-
-        #import ipdb; ipdb.set_trace()
 
         policy_weight_decay_term = 0.5 * self.policy_weight_decay * \
             sum([TT.sum(TT.square(param))
@@ -275,27 +332,27 @@ class DPG(RLAlgorithm):
             updates=policy_updates
         )
 
-        target_updates = []
-        for p, tp in zip(
-                qf.get_params() + policy.get_params(),
-                target_qf.get_params() + target_policy.get_params()):
-            if self.soft_target:
-                target_updates.append((tp, self.soft_target_tau * p +
-                                       (1 - self.soft_target_tau) * tp))
-            else:
-                target_updates.append((tp, p))
+        #target_updates = []
+        #for p, tp in zip(
+        #        qf.get_params() + policy.get_params(),
+        #        target_qf.get_params() + target_policy.get_params()):
+        #    if self.soft_target:
+        #        target_updates.append((tp, self.soft_target_tau * p +
+        #                               (1 - self.soft_target_tau) * tp))
+        #    else:
+        #        target_updates.append((tp, p))
 
-        f_update_targets = compile_function(
-            inputs=[],
-            outputs=[],
-            updates=target_updates,
-        )
+        #f_update_targets = compile_function(
+        #    inputs=[],
+        #    outputs=[],
+        #    updates=target_updates,
+        #)
 
         return dict(
-            f_y=f_y,
+            #f_y=f_y,
             f_train_qf=f_train_qf,
             f_train_policy=f_train_policy,
-            f_update_targets=f_update_targets,
+            #f_update_targets=f_update_targets,
             target_qf=target_qf,
             target_policy=target_policy,
         )
@@ -308,17 +365,36 @@ class DPG(RLAlgorithm):
             "terminals"
         )
 
-        f_y = opt_info["f_y"]
+        # compute the on-policy y values
+        target_qf = opt_info["target_qf"]
+        target_policy = opt_info["target_policy"]
+
+        next_actions, _ = target_policy.get_actions(next_obs)
+        next_qvals = target_qf.get_qval(next_obs, next_actions)
+        ys = rewards + (1 - terminals) * self.discount * next_qvals
+        #print sum(terminals)
+
+        #if itr % 100 == 0:
+        #    import ipdb; ipdb.set_trace()
+
         f_train_qf = opt_info["f_train_qf"]
         f_train_policy = opt_info["f_train_policy"]
-        f_update_targets = opt_info["f_update_targets"]
+        #f_update_targets = opt_info["f_update_targets"]
 
-        ys = f_y(next_obs, rewards, terminals)
         qf_loss, qval = f_train_qf(ys, obs, actions)
         policy_surr = f_train_policy(ys, obs)
 
-        if self.soft_target or not self.soft_target and itr % self.hard_target_interval == 0:
-            f_update_targets()
+        if self.soft_target:
+             target_policy.set_param_values(
+                target_policy.get_param_values() * (1.0 - self.soft_target_tau) + \
+                policy.get_param_values() * self.soft_target_tau)
+             target_qf.set_param_values(
+                target_qf.get_param_values() * (1.0 - self.soft_target_tau) + \
+                qf.get_param_values() * self.soft_target_tau)
+           
+        elif itr % self.hard_target_interval == 0:
+            raise NotImplementedError
+            #f_update_targets()
 
         self.qf_loss_averages.append(qf_loss)
         self.policy_surr_averages.append(policy_surr)
@@ -374,14 +450,15 @@ class DPG(RLAlgorithm):
                               np.max(returns))
         logger.record_tabular('MinReturn',
                               np.min(returns))
-        logger.record_tabular('AverageEsReturn',
-                              np.mean(self.es_path_returns))
-        logger.record_tabular('StdEsReturn',
-                              np.std(self.es_path_returns))
-        logger.record_tabular('MaxEsReturn',
-                              np.max(self.es_path_returns))
-        logger.record_tabular('MinEsReturn',
-                              np.min(self.es_path_returns))
+        if len(self.es_path_returns) > 0:
+            logger.record_tabular('AverageEsReturn',
+                                  np.mean(self.es_path_returns))
+            logger.record_tabular('StdEsReturn',
+                                  np.std(self.es_path_returns))
+            logger.record_tabular('MaxEsReturn',
+                                  np.max(self.es_path_returns))
+            logger.record_tabular('MinEsReturn',
+                                  np.min(self.es_path_returns))
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
         logger.record_tabular('AverageQLoss', average_q_loss)

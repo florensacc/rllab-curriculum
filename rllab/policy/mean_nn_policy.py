@@ -6,6 +6,7 @@ import itertools
 from pydoc import locate
 from rllab.policy.base import DeterministicPolicy
 from rllab.core.lasagne_powered import LasagnePowered
+from rllab.core.lasagne_layers import batch_norm
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
@@ -66,7 +67,7 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
 
         l_hidden = l_obs
         if bn:
-            l_hidden = L.batch_norm(l_hidden)
+            l_hidden = batch_norm(l_hidden)
 
         for idx, size, nl, W_init, b_init in zip(
                 itertools.count(), hidden_sizes, hidden_nl,
@@ -80,7 +81,7 @@ class MeanNNPolicy(DeterministicPolicy, LasagnePowered, Serializable):
                 name="h%d" % idx
             )
             if bn:
-                l_hidden = L.batch_norm(l_hidden)
+                l_hidden = batch_norm(l_hidden)
 
         l_output = L.DenseLayer(
             l_hidden,

@@ -49,12 +49,13 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
 
         next_obs = self.get_current_obs()
         action = np.clip(action, *self.action_bounds)
-        ctrl_cost = 1e-1 * np.sum(np.square(action))
+        ctrl_cost = 1e-1 * 0.5 * np.sum(np.square(action))
         passive_cost = 0  # 1e-5 * np.sum(np.square(self.model.data.qfrc_passive))
         run_cost = -1 * comvel[0]
         upright_cost = 0  # 1e-5 * smooth_abs(self.get_body_xmat("torso")[2, 2] - 1, 0.1)
         cost = ctrl_cost + passive_cost + run_cost + upright_cost
         reward = -cost
+        reward = reward * 0.01
         done = False#self.model.data.qpos[1] < -0.2
         #done = False  # after_com[0] < self._initial_com[0] - 0.1 # False
         return next_state, next_obs, reward, done
