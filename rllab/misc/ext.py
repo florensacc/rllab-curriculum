@@ -287,3 +287,18 @@ def print_lasagne_layer(layer, prefix=""):
         [print_lasagne_layer(x, prefix + "  ") for x in layer.input_layers]
     elif hasattr(layer, 'input_layer') and layer.input_layer is not None:
         print_lasagne_layer(layer.input_layer, prefix + "  ")
+
+
+def unflatten_tensor_variables(flatarr, shapes, symb_arrs):
+    import theano.tensor as TT
+    import numpy as np
+    arrs = []
+    n = 0
+    for (shape, symb_arr) in zip(shapes, symb_arrs):
+        size = np.prod(list(shape))
+        arr = flatarr[n:n+size].reshape(shape)
+        if arr.type.broadcastable != symb_arr.type.broadcastable:
+            arr = TT.patternbroadcast(arr, symb_arr.type.broadcastable)
+        arrs.append(arr)
+        n += size
+    return arrs
