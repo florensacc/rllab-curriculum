@@ -71,11 +71,11 @@ end
 end
 
 
+inc = 0
 seeds.each do |seed|
   mdps.each do |mdp|
     algos.each do |algo|
-      inc = 0
-      exp_name = "0127_linear_pi_basics_#{inc = inc + 1}"
+      exp_name = "n_0127_linear_pi_basics_#{inc = inc + 1}"
       params = {
         mdp: {
           _name: mdp,
