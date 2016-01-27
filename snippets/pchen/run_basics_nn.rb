@@ -75,7 +75,7 @@ inc = 0
 seeds.each do |seed|
   mdps.each do |mdp|
     algos.each do |algo|
-      exp_name = "run0_0126_linear_pi_basics_#{inc = inc + 1}"
+      exp_name = "run0_0126_nn_pi_basics_#{inc = inc + 1}"
       params = {
         mdp: {
           _name: mdp,
@@ -83,7 +83,7 @@ seeds.each do |seed|
         normalize_mdp: true,
         policy: {
           _name: "mean_std_nn_policy",
-          hidden_sizes: [],
+          hidden_sizes: [32, 32],
         },
         baseline: {
           _name: "linear_feature_baseline",
