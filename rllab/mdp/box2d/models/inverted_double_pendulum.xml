@@ -1,0 +1,29 @@
+<!-- Auto-generated. Do not edit! -->
+<box2d>
+  <world timestep="0.001" velitr="20" positr="20">
+    <body name="cart" type="dynamic" position="0,0">
+      <fixture density="1" friction="0.0005" group="-1" shape="polygon" box="0.5773502691896258,0.43301270189221935"/>
+    </body>
+    <body name="link1" type="dynamic" position="0,0.43301270189221935">
+      <fixture density="10.0" group="-1" shape="polygon" vertices="0.05,0.0;0.05,1.0;-0.05,1.0;-0.05,0.0"/>
+    </body>
+    <body name="link2" type="dynamic" position="0,1.4330127018922194">
+      <fixture density="10.0" group="-1" shape="polygon" vertices="0.05,0.0;0.05,1.0;-0.05,1.0;-0.05,0.0"/>
+    </body>
+    <body name="track" type="static" position="0,0">
+      <fixture group="-1" shape="polygon" box="100,0.1"/>
+    </body>
+    <joint type="prismatic" name="track_cart" bodyA="track" bodyB="cart"/>
+    <joint type="revolute" name="link_joint_1" bodyA="cart" bodyB="link1" localAnchorA="0,0.43301270189221935" localAnchorB="0,0"/>
+    <joint type="revolute" name="link_joint_2" bodyA="link1" bodyB="link2" localAnchorA="0,1" localAnchorB="0,0"/>
+    <control type="force" body="cart" anchor="0,0" direction="1,0" ctrllimit="-10,10"/>
+    <state type="xpos" body="cart"/>
+    <state type="xvel" body="cart"/>
+    <state type="apos" body="link1" transform="sin"/>
+    <state type="apos" body="link1" transform="cos"/>
+    <state type="avel" body="link1"/>
+    <state type="apos" body="link2" transform="sin"/>
+    <state type="apos" body="link2" transform="cos"/>
+    <state type="avel" body="link2"/>
+  </world>
+</box2d>
