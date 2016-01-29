@@ -32,6 +32,8 @@ class MujocoMDP(ControlMDP):
         if "frame_skip" in self.model.numeric_names:
             frame_skip_id = self.model.numeric_names.index("frame_skip")
             self.frame_skip = int(self.model.numeric_data.flat[frame_skip_id])
+        else:
+            self.frame_skip = 1
         self.dcom = None
         self.current_com = None
         self.reset()

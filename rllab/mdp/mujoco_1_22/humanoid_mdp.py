@@ -1,7 +1,9 @@
+from rllab.misc.overrides import overrides
 from .mujoco_mdp import MujocoMDP
 import numpy as np
 from rllab.core.serializable import Serializable
-
+from rllab.misc import logger
+from rllab.sampler import parallel_sampler
 
 # Taken from Wojciech's code
 class HumanoidMDP(MujocoMDP, Serializable):
@@ -51,3 +53,22 @@ class HumanoidMDP(MujocoMDP, Serializable):
         done = data.qpos[2] < 1.2 or data.qpos[2] > 2.0
 
         return next_state, next_obs, reward, done
+
+    @overrides
+    def log_extra(self):
+        pass
+        # forward_progress = parallel_sampler.run_map(worker_collect_stats)
+        # logger.record_tabular(
+        #     'AverageForwardProgress', np.mean(forward_progress))
+        # logger.record_tabular(
+        #     'MaxForwardProgress', np.max(forward_progress))
+        # logger.record_tabular(
+        #     'MinForwardProgress', np.min(forward_progress))
+        # logger.record_tabular(
+        #     'StdForwardProgress', np.std(forward_progress))
+
+PG = parallel_sampler.G
+
+def worker_collect_stats():
+    return [path["states"][-1][0] - path["observations"][0][0] for path in PG.paths]
+
