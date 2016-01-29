@@ -1,6 +1,9 @@
+from rllab.misc.overrides import overrides
 from .mujoco_mdp import MujocoMDP
 import numpy as np
 from rllab.core.serializable import Serializable
+from rllab.misc import logger
+from rllab.sampler import parallel_sampler
 
 
 class SwimmerMDP(MujocoMDP, Serializable):
@@ -19,10 +22,10 @@ class SwimmerMDP(MujocoMDP, Serializable):
     def step(self, state, action):
         self.set_state(state)
         self.model.forward()
-        before_com = self.get_body_com("front")
+        # before_com = self.get_body_com("front")
         next_state = self.forward_dynamics(state, action, restore=False)
         self.model.forward()
-        after_com = self.get_body_com("front")
+        # after_com = self.get_body_com("front")
 
         next_obs = self.get_current_obs()
         ctrl_cost = 0#1e-5 * np.sum(np.square(action / 50))
@@ -32,3 +35,21 @@ class SwimmerMDP(MujocoMDP, Serializable):
         reward = -cost
         done = False
         return next_state, next_obs, reward, done
+
+    @overrides
+    def log_extra(self):
+        forward_progress = parallel_sampler.run_map(worker_collect_stats)
+        logger.record_tabular(
+            'AverageForwardProgress', np.mean(forward_progress))
+        logger.record_tabular(
+            'MaxForwardProgress', np.max(forward_progress))
+        logger.record_tabular(
+            'MinForwardProgress', np.min(forward_progress))
+        logger.record_tabular(
+            'StdForwardProgress', np.std(forward_progress))
+
+PG = parallel_sampler.G
+
+def worker_collect_stats():
+    return [path["states"][-1][0] - path["observations"][0][0] for path in PG.paths]
+

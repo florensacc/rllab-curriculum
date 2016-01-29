@@ -2,7 +2,8 @@ from rllab.mdp.mujoco_1_22.mujoco_mdp import MujocoMDP
 from rllab.core.serializable import Serializable
 import numpy as np
 from rllab.misc.overrides import overrides
-
+from rllab.misc import logger
+from rllab.sampler import parallel_sampler
 
 def smooth_abs(x, param):
     return np.sqrt(np.square(x) + np.square(param)) - param
@@ -50,9 +51,8 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
         return next_state, next_obs, reward, done
 
     @overrides
-    def log_extra(self, logger, paths):
-        forward_progress = \
-            [path["observations"][-1][-3] - path["observations"][0][-3] for path in paths]
+    def log_extra(self):
+        forward_progress = parallel_sampler.run_map(worker_collect_stats)
         logger.record_tabular(
             'AverageForwardProgress', np.mean(forward_progress))
         logger.record_tabular(
@@ -61,3 +61,9 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
             'MinForwardProgress', np.min(forward_progress))
         logger.record_tabular(
             'StdForwardProgress', np.std(forward_progress))
+
+PG = parallel_sampler.G
+
+def worker_collect_stats():
+       return [path["observations"][-1][-3] - path["observations"][0][-3] for path in PG.paths]
+
