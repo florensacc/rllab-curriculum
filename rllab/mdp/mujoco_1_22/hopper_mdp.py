@@ -58,7 +58,7 @@ class HopperMDP(MujocoMDP, Serializable):
 
     @overrides
     def log_extra(self):
-        forward_progress = parallel_sampler.run_map(worker_collect_stats)
+        forward_progress = np.concatenate(parallel_sampler.run_map(worker_collect_stats))
         logger.record_tabular(
             'AverageForwardProgress', np.mean(forward_progress))
         logger.record_tabular(
