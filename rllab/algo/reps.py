@@ -28,7 +28,7 @@ class REPS(BatchPolopt):
     def __init__(
             self,
             epsilon=0.1,
-            L2_reg_dual=0.,
+            L2_reg_dual=1e-7,
             L2_reg_loss=0.,
             max_opt_itr=50,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
@@ -44,8 +44,9 @@ class REPS(BatchPolopt):
     def init_opt(self, mdp, policy, baseline):
 
         # Init dual param values
-        self.param_eta = 150.
-        self.param_v = np.random.randn(mdp.observation_shape[0])
+        self.param_eta = 0.001
+        # Adjust for linear feature vector.
+        self.param_v = np.random.randn(mdp.observation_shape[0] * 2 + 4)
 
         # Theano vars
         observations = new_tensor(
@@ -72,8 +73,7 @@ class REPS(BatchPolopt):
 
         # Policy loss (negative because we minimize)
         loss = - TT.mean(log_prob * TT.exp(
-            TT.clip(
-            delta_v / param_eta, -100, 100)
+            delta_v / param_eta - TT.max(delta_v / param_eta)
         ))
         # Add regularization to loss.
         loss += self.L2_reg_loss * TT.mean([TT.mean(TT.square(param)) for param in
@@ -95,10 +95,6 @@ class REPS(BatchPolopt):
         )
 
         # Debug prints
-        f_log_prob = compile_function(
-            inputs=[observations, action_var],
-            outputs=log_prob,
-        )
         old_pdist = TT.matrix()
         pdist = policy.get_pdist_sym(observations)
         mean_kl = TT.mean(policy.kl(old_pdist, pdist))
@@ -109,25 +105,20 @@ class REPS(BatchPolopt):
 
         # Dual stuff
         # Symbolic dual
-        dual = param_eta * \
+        dual = param_eta * self.epsilon + param_eta * \
             TT.log(
                 TT.mean(
                     TT.exp(
-                        TT.clip(
-                        self.epsilon + delta_v / param_eta , -100, 100)
-                    )))
+                        delta_v / param_eta - TT.max(delta_v / param_eta)
+                    ))) + param_eta * TT.max(delta_v / param_eta)
         # Add L2 regularization.
         dual += self.L2_reg_dual * \
-            (TT.mean((1 / param_eta)**2) + TT.mean(param_v**2))
+            (TT.mean(param_eta**2) + TT.mean(param_v**2))
 
         # Symbolic dual gradient
         dual_grad = TT.grad(cost=dual, wrt=[param_eta, param_v])
 
         # Eval functions.
-        f_delta_v = compile_function(
-            inputs=[rewards, feat_diff, param_v],
-            outputs=delta_v
-        )
         f_dual = compile_function(
             inputs=[rewards, feat_diff, param_eta, param_v],
             outputs=dual
@@ -142,10 +133,14 @@ class REPS(BatchPolopt):
             f_loss=f_loss,
             f_dual=f_dual,
             f_dual_grad=f_dual_grad,
-            f_delta_v=f_delta_v,
-            f_log_prob=f_log_prob,
             f_kl=f_kl
         )
+
+    def _features(self, path):
+        o = np.clip(path["observations"], -10, 10)
+        l = len(path["rewards"])
+        al = np.arange(l).reshape(-1, 1) / 100.0
+        return np.concatenate([o, o**2, al, al**2, al**3, np.ones((l, 1))], axis=1)
 
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
@@ -157,10 +152,9 @@ class REPS(BatchPolopt):
         # Compute sample Bellman error.
         feat_diff = []
         for path in samples_data['paths']:
-            o = path['observations']
-            # FIXME: hack as last observation is not recorded.s
-            o = np.vstack([o, np.zeros(o.shape[1])])
-            feat_diff.append(o[1:] - o[:-1])
+            feats = self._features(path)
+            feats = np.vstack([feats, np.zeros(feats.shape[1])])
+            feat_diff.append(feats[1:] - feats[:-1])
         feat_diff = np.vstack(feat_diff)
 
         #################
@@ -194,7 +188,7 @@ class REPS(BatchPolopt):
 
         # Set parameter boundaries: \eta>0, v unrestricted.
         bounds = [(-np.inf, np.inf) for _ in x0]
-        bounds[0] = (0.0, np.inf)
+        bounds[0] = (0., np.inf)
 
         # Optimize through BFGS
         logger.log('optimizing dual')
