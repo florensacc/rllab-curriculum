@@ -72,8 +72,8 @@ class REPS(BatchPolopt):
 
         # Policy loss (negative because we minimize)
         loss = - TT.mean(log_prob * TT.exp(
-            # TT.clip(
-            delta_v / param_eta  # , -100, 100)
+            TT.clip(
+            delta_v / param_eta, -100, 100)
         ))
         # Add regularization to loss.
         loss += self.L2_reg_loss * TT.mean([TT.mean(TT.square(param)) for param in
@@ -113,8 +113,8 @@ class REPS(BatchPolopt):
             TT.log(
                 TT.mean(
                     TT.exp(
-                        # TT.clip(
-                        self.epsilon + delta_v / param_eta  # , -100, 100)
+                        TT.clip(
+                        self.epsilon + delta_v / param_eta , -100, 100)
                     )))
         # Add L2 regularization.
         dual += self.L2_reg_dual * \
@@ -194,7 +194,7 @@ class REPS(BatchPolopt):
 
         # Set parameter boundaries: \eta>0, v unrestricted.
         bounds = [(-np.inf, np.inf) for _ in x0]
-        bounds[0] = (0., np.inf)
+        bounds[0] = (0.0, np.inf)
 
         # Optimize through BFGS
         logger.log('optimizing dual')
