@@ -1,14 +1,14 @@
 <!-- Auto-generated. Do not edit! -->
 <box2d>
-  <world timestep="0.001" velitr="20" positr="20">
+  <world timestep="0.001" velitr="200" positr="200">
     <body name="cart" type="dynamic" position="0,0">
       <fixture density="1" friction="0.0005" group="-1" shape="polygon" box="0.5773502691896258,0.43301270189221935"/>
     </body>
     <body name="link1" type="dynamic" position="0,0.43301270189221935">
-      <fixture density="10.0" group="-1" shape="polygon" vertices="0.05,0.0;0.05,1.0;-0.05,1.0;-0.05,0.0"/>
+      <fixture density="0.09999999999999999" group="-1" shape="polygon" vertices="0.05,0.0;0.05,1.0;-0.05,1.0;-0.05,0.0"/>
     </body>
     <body name="link2" type="dynamic" position="0,1.4330127018922194">
-      <fixture density="10.0" group="-1" shape="polygon" vertices="0.05,0.0;0.05,1.0;-0.05,1.0;-0.05,0.0"/>
+      <fixture density="0.09999999999999999" group="-1" shape="polygon" vertices="0.05,0.0;0.05,1.0;-0.05,1.0;-0.05,0.0"/>
     </body>
     <body name="track" type="static" position="0,0">
       <fixture group="-1" shape="polygon" box="100,0.1"/>

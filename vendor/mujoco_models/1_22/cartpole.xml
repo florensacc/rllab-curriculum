@@ -14,13 +14,11 @@
 
 -->
 <mujoco model='cartpole'>
-    <compiler uniquevertex='false'
-              inertiafromgeom='true'
+    <compiler inertiafromgeom='true'
               coordinate='local'/>
 
     <default>
-        <joint damping='0.05'
-               makeactuator='false' />
+        <joint damping='0.05' />
         <geom contype='0'
               friction='1 0.1 0.1'
               rgba='0.7 0.7 0 1' />
@@ -31,7 +29,7 @@
 
     <size nstack='3000'/>
 
-    <body>
+    <worldbody>
         <geom name='floor'
               pos='0 0 -3.0'
               size='40 40 40'
@@ -46,11 +44,11 @@
         <body name='cart' pos='0 0 0'>
             <joint name='slider'
                    type='slide'
-                   islimited='true'
+                   limited='true'
                    pos='0 0 0'
                    axis='1 0 0'
-                   range='-1 1'
-                   mindist='0.01'/>
+                   range='-10 10'
+                   margin='0.01'/>
             <geom name='cart'
                   type='capsule'
                   pos='0 0 0'
@@ -66,18 +64,30 @@
                       fromto='0 0 0 0 0 0.6'
                       size='0.045 0.3'
                       rgba='0 0.7 0.7 1' />
-                <site name='tip'
-                      pos='.001 0 .6'/>
+                <body name='pole2' pos='0 0 0.6'>
+                    <joint name='hinge2'
+                           type='hinge'
+                           pos='0 0 0'
+                           axis='0 1 0'/>
+                    <geom name='cpole2'
+                          type='capsule'
+                          fromto='0 0 0 0 0 0.6'
+                          size='0.045 0.3'
+                          rgba='0 0.7 0.7 1' />
+                    <site name='tip'
+                          size='0.01 0.01'
+                          pos='0 0 .6'/>
+                </body>
             </body>
         </body>
-    </body>
+    </worldbody>
 
     <actuator>
         <motor name='slide'
                joint='slider'
-               gear='100'
+               gear='200'
                ctrlrange='-.5 .5'
-               isctrllimited='true'/>
+               ctrllimited='true'/>
     </actuator>
 </mujoco>
 

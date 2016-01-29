@@ -1,5 +1,5 @@
 link_len = 1
-link_mass = 1
+link_mass = 0.01
 link_width = 0.1
 
 link_track_group = -1
@@ -9,7 +9,7 @@ cart_height = 3.0 / (12 ** 0.5)
 cart_friction = 0.0005
 
 box2d {
-  world(timestep: 0.001, velitr: 20, positr: 20) {
+  world(timestep: 0.001, velitr: 200, positr: 200) {
     body(name: :cart, type: :dynamic, position: [0, 0]) {
       rect(
         box: [cart_width / 2, cart_height / 2],
@@ -25,6 +25,10 @@ box2d {
         density: link_mass / link_len / link_width,
         group: link_track_group
       )
+      # fixture(
+      #         shape: :circle, center: [0, link_len], radius: link_width/2, density: 10,
+      #   group: link_track_group
+      # )
     }
     body(name: :link2, type: :dynamic, position: [0, cart_height/2 + link_len]) {
       rect(
@@ -33,6 +37,10 @@ box2d {
         density: link_mass / link_len / link_width,
         group: link_track_group
       )
+      # fixture(
+      #         shape: :circle, center: [0, link_len], radius: link_width/2, density: 10,
+      #   group: link_track_group
+      # )
     }
     body(name: :track, type: :static, position: [0, 0]) {
       rect(
