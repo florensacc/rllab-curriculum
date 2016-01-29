@@ -32,7 +32,8 @@ class VPG(BatchPolopt, FirstOrderMethod):
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
         surr_obj = - TT.mean(log_prob * advantage_var)
-        updates = self.update_method(surr_obj, policy.trainable_params)
+        updates = self.update_method(
+            surr_obj, policy.get_params(trainable=True))
         input_list = [obs_var, advantage_var, action_var]
         f_update = compile_function(
             inputs=input_list,

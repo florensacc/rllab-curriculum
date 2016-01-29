@@ -5,7 +5,7 @@ link_width = 0.1
 link_track_group = -1
 
 box2d {
-  world(timestep: 0.1) {
+  world(timestep: 0.05, velitr: 20, positr: 20) {
     body(name: :link1, type: :dynamic, position: [0, 0]) {
       rect(
         from: [0, 0], to: [0, -link_len],

@@ -10,6 +10,9 @@ floatX = theano.config.floatX
 def center_advantages(advantages):
     return (advantages - np.mean(advantages)) / (advantages.std() + 1e-8)
 
+def shift_advantages_to_positive(advantages):
+    return (advantages - np.min(advantages)) + 1e-8
+
 
 class ReplayPool(Serializable):
     """

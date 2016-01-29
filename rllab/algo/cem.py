@@ -21,8 +21,10 @@ def sample_return(mdp, policy, params, max_path_length, discount):
         max_path_length,
     )
     path["returns"] = discount_cumsum(path["rewards"], discount)
+    undiscounted_return = sum(path["rewards"])
     return dict(
-        returns=path['returns']
+        returns=path['returns'],
+        undiscounted_return=undiscounted_return,
     )
 
 
@@ -53,7 +55,7 @@ class CEM(RLAlgorithm):
             self,
             n_itr=500,
             max_path_length=500,
-            discount=1.,
+            discount=0.99,
             whole_paths=True,
             init_std=1.,
             n_samples=100,
@@ -100,14 +102,17 @@ class CEM(RLAlgorithm):
             logger.push_prefix('itr #%d | ' % itr)
             logger.record_tabular('Iteration', itr)
             logger.record_tabular('CurStdMean', np.mean(cur_std))
+            undiscounted_returns = np.array([info['undiscounted_return'] for info in infos])
             logger.record_tabular('AverageReturn',
-                                  np.mean(fs))
+                                  np.mean(undiscounted_returns))
             logger.record_tabular('StdReturn',
-                                  np.std(fs))
+                                  np.mean(undiscounted_returns))
             logger.record_tabular('MaxReturn',
-                                  np.max(fs))
+                                  np.max(undiscounted_returns))
             logger.record_tabular('MinReturn',
-                                  np.min(fs))
+                                  np.min(undiscounted_returns))
+            logger.record_tabular('AverageDiscountedReturn',
+                                  np.mean(fs))
             logger.record_tabular('AvgTrajLen',
                                   np.mean([len(info['returns']) for info in infos]))
             policy.set_param_values(best_x)

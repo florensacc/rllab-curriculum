@@ -1,10 +1,12 @@
+from pydoc import locate
+
 import numpy as np
 from rllab.algo.base import RLAlgorithm
 from rllab.sampler import parallel_sampler
 from rllab.misc import autoargs
 from rllab.misc.ext import extract
 from rllab.misc.special import explained_variance_1d, discount_cumsum
-from rllab.algo.util import center_advantages
+from rllab.algo.util import center_advantages, shift_advantages_to_positive
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 
@@ -78,6 +80,9 @@ def worker_process_paths(opt):
         if opt.center_adv:
             advantages = center_advantages(advantages)
 
+        if opt.positive_adv:
+            advantages = shift_advantages_to_positive(advantages)
+
         G.samples_data = dict(
             observations=observations,
             states=states,
@@ -137,6 +142,10 @@ class BatchPolopt(RLAlgorithm):
     @autoargs.arg("center_adv", type=bool,
                   help="Whether to rescale the advantages so that they have "
                        "mean 0 and standard deviation 1")
+    @autoargs.arg("positive_adv", type=bool,
+                  help="Whether to shift the advantages so that they are "
+                       "always positive. When used in conjunction with center adv"
+                       "the advantages will be standardized before shifting")
     @autoargs.arg("record_states", type=bool,
                   help="Whether to record states when sampling")
     @autoargs.arg("store_paths", type=bool,
@@ -157,6 +166,7 @@ class BatchPolopt(RLAlgorithm):
             pause_for_plot=False,
             whole_paths=True,
             center_adv=True,
+            positive_adv=False,
             record_states=False,
             store_paths=False,
             algorithm_parallelized=False,
@@ -173,6 +183,7 @@ class BatchPolopt(RLAlgorithm):
         self.opt.pause_for_plot = pause_for_plot
         self.opt.whole_paths = whole_paths
         self.opt.center_adv = center_adv
+        self.opt.positive_adv = positive_adv
         self.opt.record_states = record_states
         self.opt.store_paths = store_paths
         self.opt.algorithm_parallelized = algorithm_parallelized
