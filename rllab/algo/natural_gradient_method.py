@@ -32,7 +32,7 @@ class NaturalGradientMethod(object):
                   help="A small value to add to Fisher Information Matrix's eigenvalue"
                        "When CG is used, this value will not be changed but if we are"
                        "directly using Hessian inverse method, this regularization will be"
-                       "adaptively increased should the regularized matrix is still singular"
+                       "adaptively increased should the regularized matrix still be singular"
                        "(but it's unlikely)")
     def __init__(
             self,
