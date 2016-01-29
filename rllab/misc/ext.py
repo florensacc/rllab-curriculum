@@ -122,15 +122,21 @@ def scanr(f, l, base=None):
     return list(iscanr(f, l, base))
 
 
-def compile_function(inputs=None, outputs=None, updates=None):
+def compile_function(inputs=None, outputs=None, updates=None, log_name=None):
     import theano
-    return theano.function(
+    if log_name:
+        msg = Message("Compiling function %s" % log_name)
+        msg.__enter__()
+    ret = theano.function(
         inputs=inputs,
         outputs=outputs,
         updates=updates,
         on_unused_input='ignore',
         allow_input_downcast=True
     )
+    if log_name:
+        msg.__exit__(None, None, None)
+    return ret
 
 
 def new_tensor(name, ndim, dtype):

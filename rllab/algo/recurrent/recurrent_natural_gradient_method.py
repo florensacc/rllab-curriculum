@@ -8,16 +8,13 @@ from numpy.linalg import LinAlgError
 
 from rllab.misc import logger, autoargs
 from rllab.misc.krylov import cg
-from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract, compile_function, flatten_hessian, new_tensor, new_tensor_like, \
     flatten_tensor_variables, lazydict, cached_function
-from rllab.algo.batch_polopt import BatchPolopt
-from rllab.algo.first_order_method import FirstOrderMethod
 
 
-class NaturalGradientMethod(object):
+class RecurrentNaturalGradientMethod(object):
     """
-    Natural Gradient Method infrastructure for NPG & TRPO. (and possibly more)
+    Natural Gradient Method infrastructure for RNPG & RTRPO. (and possibly more)
     """
 
     @autoargs.arg("step_size", type=float,
@@ -49,16 +46,16 @@ class NaturalGradientMethod(object):
     def init_opt(self, mdp, policy, baseline):
         obs_var = new_tensor(
             'input',
-            ndim=1+len(mdp.observation_shape),
+            ndim=2+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
         )
-        advantage_var = TT.vector('advantage')
-        action_var = TT.matrix('action', dtype=mdp.action_dtype)
-
+        advantage_var = TT.matrix('advantage')
+        valid_var = TT.matrix('valid')
+        action_var = new_tensor('action', ndim=3, dtype=mdp.action_dtype)
         log_prob = policy.get_log_prob_sym(obs_var, action_var)
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
-        surr_obj = - TT.mean(log_prob * advantage_var)
+        surr_obj = - TT.sum(log_prob * advantage_var * valid_var) / TT.sum(valid_var)
         # We would need to calculate the empirical fisher information matrix
         # This can be done as follows (though probably not the most efficient
         # way):
@@ -66,15 +63,17 @@ class NaturalGradientMethod(object):
         #                  (evaluated at theta' = theta),
         # we can get I(theta) by calculating the hessian of
         # KL(p(theta)||p(theta'))
-        old_pdist_var = TT.matrix('old_pdist')
-        pdist_var = policy.get_pdist_sym(obs_var)
-        mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
+        old_pdist_var = new_tensor('old_pdist', ndim=3, dtype=theano.config.floatX)
+        pdist_var = policy.get_pdist_sym(obs_var, action_var)
+        mean_kl = TT.sum(valid_var * policy.kl(old_pdist_var, pdist_var)) / TT.sum(valid_var)
         grads = theano.grad(surr_obj, wrt=policy.get_params(trainable=True))
         flat_grad = flatten_tensor_variables(grads)
 
+        logger.log("computing symbolic kl_grad")
         kl_grads = theano.grad(mean_kl, wrt=policy.get_params(trainable=True))
+        # logger.log("computing symbolic empirical Fisher")
         # kl_flat_grad = flatten_tensor_variables(kl_grads)
-        
+        # emp_fisher = 
         xs = [
             new_tensor_like("%s x" % p.name, p)
             for p in policy.get_params(trainable=True)
@@ -82,23 +81,27 @@ class NaturalGradientMethod(object):
         # many Ops don't have Rop implemented so this is not that useful
         # but the code implenting that is preserved for future reference
         # Hx_rop = TT.sum(TT.Rop(kl_flat_grad, policy.params, xs), axis=0)
+        logger.log("computing symbolic Hessian vector product")
         Hx_plain_splits = TT.grad(TT.sum([
                                              TT.sum(g * x) for g, x in izip(kl_grads, xs)
                                              ]), wrt=policy.get_params(trainable=True))
         Hx_plain = TT.concatenate([s.flatten() for s in Hx_plain_splits])
 
-        input_list = [obs_var, advantage_var, old_pdist_var, action_var]
+        input_list = [
+            obs_var, advantage_var, old_pdist_var, action_var, valid_var]
         f_loss = compile_function(
             inputs=input_list,
             outputs=surr_obj,
+            log_name="f_loss",
         )
         f_grad = compile_function(
             inputs=input_list,
             outputs=[surr_obj, flat_grad],
+            log_name="f_grad",
         )
 
         # follwoing information is computed to TRPO
-        max_kl = TT.max(policy.kl(old_pdist_var, pdist_var))
+        max_kl = TT.max(valid_var * policy.kl(old_pdist_var, pdist_var))
 
         return lazydict(
             f_loss=lambda: f_loss,
@@ -109,18 +112,22 @@ class NaturalGradientMethod(object):
                 outputs=[
                     surr_obj,
                     flat_grad,
+                    # This last term is the empirical Fisher information
                     flatten_hessian(mean_kl, wrt=policy.get_params(trainable=True), block_diagonal=False)
                 ],
+                log_name="f_fisher",
             ),
             f_Hx_plain=lambda:
             compile_function(
                 inputs=input_list + xs,
                 outputs=Hx_plain,
+                log_name="f_Hx_plain",
             ),
             f_trpo_info=lambda:
             compile_function(
                 inputs=input_list,
-                outputs=[surr_obj, mean_kl, max_kl]
+                outputs=[surr_obj, mean_kl, max_kl],
+                log_name="f_trpo_info"
             ),
         )
 
@@ -129,7 +136,7 @@ class NaturalGradientMethod(object):
         logger.log("optimizing policy")
         inputs = list(extract(
             samples_data,
-            "observations", "advantages", "pdists", "actions"
+            "observations", "advantages", "pdists", "actions", "valids"
         ))
         # Need to ensure this
         logger.log("computing loss before")

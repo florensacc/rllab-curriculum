@@ -1,17 +1,13 @@
-import glfw
-from mjlib import mjlib
-from ctypes import pointer, byref
+from rllab.mjcapi.rocky_mjc_1_22 import glfw, mjcore
+from rllab.mjcapi.rocky_mjc_1_22.mjconstants import *
+from rllab.mjcapi.rocky_mjc_1_22.mjlib import mjlib
+from ctypes import byref
 import ctypes
-import mjcore
-import os
-import numpy as np
 from threading import Lock
-from mjconstants import *
-import mjextra
 
 mjCAT_ALL = 7
 
-class MjViewer(object):
+class CubeViewer(object):
 
     def __init__(self):
         self.last_render_time = 0
@@ -85,26 +81,6 @@ class MjViewer(object):
         prev_alpha = self.model.vis.map_.alpha
 
         self.model.vis.map_.alpha = 0.01
-        #tmpobjects = mjcore.MJVOBJECTS()
-        #mjlib.mjv_makeObjects(byref(tmpobjects), 1000)
-        #for idx, frame in enumerate(self.frames):
-        #    #print 'painting fixed'
-        #    self.model.data.qpos = frame['pos']
-        #    self.model.forward()
-        #    #if idx == 0:
-        #    #    mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(self.objects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
-        #    #else:
-        #    mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(tmpobjects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
-        #    for i in range(tmpobjects.ngeom):
-        #        alpha = frame['extra'].get('alpha', None)
-        #        emission = frame['extra'].get('emission', None)
-        #        #= frame['extra'].get('emission', None)
-        #        geom = tmpobjects.geoms[i]
-        #        if alpha is not None:
-        #            geom.rgba[3] = alpha
-        #        if emission is not None:
-        #            geom.emission = emission
-        #    mjextra.append_objects(self.objects, tmpobjects)
 
         self.model.vis.map_.alpha = prev_alpha
         self.model.data.qpos = prev_pos
@@ -120,36 +96,8 @@ class MjViewer(object):
 
         self.gui_lock.release()
 
-    def start(self):
-        if not glfw.init():
-            return
-
-        glfw.window_hint(glfw.SAMPLES, 4)
-
-        # try stereo if refresh rate is at least 100Hz
-        window = None
-        stereo_available = False
-
-        _, _, refresh_rate = glfw.get_video_mode(glfw.get_primary_monitor())
-        if refresh_rate >= 100:
-            glfw.window_hint(glfw.STEREO, 1)
-            window = glfw.create_window(500, 500, "Simulate", None, None)
-            if window:
-                stereo_available = True
-
-        # no stereo: try mono
-        if not window:
-            glfw.window_hint(glfw.STEREO, 0)
-            window = glfw.create_window(500, 500, "Simulate", None, None)
-
-        if not window:
-            glfw.terminate()
-            return
-
+    def start(self, window):
         self.running = True
-
-        # Make the window's context current
-        glfw.make_context_current(window)
 
         width, height = glfw.get_framebuffer_size(window)
         width1, height = glfw.get_window_size(window)
@@ -171,9 +119,9 @@ class MjViewer(object):
         else:
             mjlib.mjr_makeContext(None, byref(self.con), 150)
 
-        glfw.set_cursor_pos_callback(window, self.handle_mouse_move)
-        glfw.set_mouse_button_callback(window, self.handle_mouse_button)
-        glfw.set_scroll_callback(window, self.handle_scroll)
+        #glfw.set_cursor_pos_callback(window, self.handle_mouse_move)
+        #glfw.set_mouse_button_callback(window, self.handle_mouse_button)
+        #glfw.set_scroll_callback(window, self.handle_scroll)
 
     def handle_mouse_move(self, window, xpos, ypos):
 

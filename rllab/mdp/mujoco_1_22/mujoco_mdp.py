@@ -26,22 +26,21 @@ class MujocoMDP(ControlMDP):
     @autoargs.arg('action_noise', type=float,
                   help='Noise added to the controls, which will be '
                        'proportional to the action bounds')
-    def __init__(self, action_noise=0.0):
-        if self.__class__.FILE is None:
-            raise "mujoco xml file not specified"
+    def __init__(self, action_noise=0.0, file_path=None):
         # compile template
-        if self.__class__.FILE.endswith(".mako"):
-            template_file_path = osp.join(MODEL_DIR, self.__class__.FILE)
+        if file_path is None:
+            if self.__class__.FILE is None:
+                raise "Mujoco file not specified"
+            file_path = osp.join(MODEL_DIR, self.__class__.FILE)
+        if file_path.endswith(".mako"):
             lookup = mako.lookup.TemplateLookup(directories=[MODEL_DIR])
-            with open(template_file_path) as template_file:
+            with open(file_path) as template_file:
                 template = mako.template.Template(
                     template_file.read(), lookup=lookup)
             content = template.render()
             _, file_path = tempfile.mkstemp(text=True)
             with open(file_path, 'w') as f:
                 f.write(content)
-        else:
-            file_path = osp.join(MODEL_DIR, self.__class__.FILE)
         self.model = MjModel(file_path)
         self.data = self.model.data
         self.viewer = None
@@ -62,12 +61,6 @@ class MujocoMDP(ControlMDP):
         self.current_com = None
         self.reset()
         super(MujocoMDP, self).__init__()
-
-    def model_path(self, file_name):
-        return osp.abspath(osp.join(
-            osp.dirname(__file__),
-            '../../../vendor/mujoco_models/1_22/%s' % file_name
-        ))
 
     @property
     @overrides

@@ -27,6 +27,7 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
         mdp.plot()
         for _ in xrange(max_steps):
             state, _, _, done = mdp.step(state, action)
+            print state
             mdp.plot()
             time.sleep(delay)
             if done:
