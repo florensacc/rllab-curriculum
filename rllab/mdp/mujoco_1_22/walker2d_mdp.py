@@ -26,17 +26,17 @@ class Walker2DMDP(MujocoMDP, Serializable):
 
     def step(self, state, action):
         self.set_state(state)
-        prev_com = self.get_body_com("torso")
+        # prev_com = self.get_body_com("torso")
         next_state = self.forward_dynamics(state, action, restore=False)
-        after_com = self.get_body_com("torso")
-
+        # after_com = self.get_body_com("torso")
         next_obs = self.get_current_obs()
         action = np.clip(action, *self.action_bounds)
-        ctrl_cost = 0  # 1e-1 * np.sum(np.square(action))
-        passive_cost = 0  # 1e-5 * np.sum(np.square(self.model.data.qfrc_passive))
-
-        run_cost = -1 * (after_com[0] - prev_com[0]) / self.model.opt.timestep
-        upright_cost = 0#1e-5 * smooth_abs(self.get_body_xmat("torso")[2, 2] - 1, 0.1)
+        lb, ub = self.action_bounds
+        scaling = (ub - lb) * 0.5
+        ctrl_cost = 1e-1 * np.sum(np.square(action / scaling))
+        passive_cost = 1e-5 * np.sum(np.square(self.model.data.qfrc_passive))
+        run_cost = -1 * self.get_body_comvel("torso")#(self.dcom[0]) / self.model.opt.timestep / self.frame_skip
+        upright_cost = 1e-5 * smooth_abs(self.get_body_xmat("torso")[2, 2] - 1, 0.1)
         cost = ctrl_cost + passive_cost + run_cost + upright_cost
         reward = -cost
         qpos = self.model.data.qpos

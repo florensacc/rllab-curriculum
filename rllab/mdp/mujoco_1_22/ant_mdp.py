@@ -24,13 +24,13 @@ class AntMDP(MujocoMDP, Serializable):
         init_qpos[14] = 1.0
         self.init_qpos = init_qpos
 
-    # def get_current_obs(self):
-    #     return np.concatenate([
-    #         self.model.data.qpos.flatten(),
-    #         self.model.data.qvel.flatten(),
-    #         self.model.data.qfrc_constraint.flatten(),
-    #         self.get_body_com("torso"),
-    #     ]).reshape(-1)
+    def get_current_obs(self):
+        return np.concatenate([
+            self.model.data.qpos.flat,
+            self.model.data.qvel.flat,
+            self.model.data.qfrc_constraint.flat,
+            self.get_body_com("torso"),
+        ]).reshape(-1)
 
     def step(self, state, action):
         next_state = self.forward_dynamics(state, action, restore=False)
