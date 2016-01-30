@@ -1,4 +1,4 @@
-require_relative '../rocky/utils'
+require_relative '../../rocky/utils'
 
 itrs = 1000
 batch_size = 5000
