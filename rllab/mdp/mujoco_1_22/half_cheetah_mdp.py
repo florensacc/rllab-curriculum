@@ -42,12 +42,12 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
 
     def step(self, state, action):
         next_state = self.forward_dynamics(state, action, restore=False)
-        comvel = self.get_body_comvel("torso")
+        # comvel = self.dcomget_body_comvel("torso")
         next_obs = self.get_current_obs()
         action = np.clip(action, *self.action_bounds)
         ctrl_cost = 1e-1 * 0.5 * np.sum(np.square(action))
         passive_cost = 1e-5 * np.sum(np.square(self.model.data.qfrc_passive))
-        run_cost = -1 * comvel[0]
+        run_cost = -1 * self.dcom[0] / self.timestep / self.frame_skip
         upright_cost = 1e-5 * smooth_abs(
             self.get_body_xmat("torso")[2, 2] - 1, 0.1)
         cost = ctrl_cost + passive_cost + run_cost + upright_cost

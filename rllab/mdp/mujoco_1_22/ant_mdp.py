@@ -34,7 +34,7 @@ class AntMDP(MujocoMDP, Serializable):
 
     def step(self, state, action):
         next_state = self.forward_dynamics(state, action, restore=False)
-        forward_reward = self.get_body_comvel("torso")[0]
+        forward_reward = self.dcom[0] / self.timestep / self.frame_skip
         ctrl_cost = 0.5 * 1e-5 * np.sum(np.square(action))
         impact_cost = min(
             0.5 * 1e-5 * np.sum(np.square(self.model.data.qfrc_constraint)),

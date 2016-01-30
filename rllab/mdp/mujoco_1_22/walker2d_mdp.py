@@ -36,7 +36,7 @@ class Walker2DMDP(MujocoMDP, Serializable):
         scaling = (ub - lb) * 0.5
         ctrl_cost = 1e-1 * np.sum(np.square(action / scaling))
         passive_cost = 1e-5 * np.sum(np.square(self.model.data.qfrc_passive))
-        forward_reward = self.get_body_comvel("torso")[0]
+        forward_reward = self.dcom[0] / self.timestep / self.frame_skip
         upright_cost = 1e-5 * smooth_abs(
             self.get_body_xmat("torso")[2, 2] - 1, 0.1)
         reward = forward_reward - ctrl_cost - passive_cost - upright_cost
