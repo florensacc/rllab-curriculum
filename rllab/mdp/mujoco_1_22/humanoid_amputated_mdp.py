@@ -47,13 +47,13 @@ class HumanoidAmputatedMDP(MujocoMDP, Serializable):
         # mass = self.model.body_mass
         # xpos = data.xipos
         # after_center = (np.sum(mass * xpos, 0) / np.sum(mass))[0]
-        lin_vel_reward = 0.25 * self.get_body_comvel("torso")[0]
-        quad_ctrl_cost = .5e-4 * np.sum(np.square(data.ctrl))
-        quad_impact_cost = .5e-4 * np.sum(np.square(data.cfrc_ext))
+        lin_vel_reward = 1 * self.get_body_comvel("torso")[0]
+        quad_ctrl_cost = .5 * 1e-5 * np.sum(np.square(data.ctrl))
+        quad_impact_cost = .5 * 1e-5 * np.sum(np.square(data.cfrc_ext))
         quad_impact_cost = min(10.0, quad_impact_cost)
         reward = lin_vel_reward + alive_bonus - quad_ctrl_cost - \
             quad_impact_cost
-        done = data.qpos[2] < 1.2 or data.qpos[2] > 2.0
+        done = data.qpos[2] < 0.9 or data.qpos[2] > 2.0
 
         return next_state, next_obs, reward, done
 
