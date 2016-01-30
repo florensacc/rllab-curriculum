@@ -34,8 +34,7 @@ class AntMDP(MujocoMDP, Serializable):
 
     def step(self, state, action):
         next_state = self.forward_dynamics(state, action, restore=False)
-        forward_reward = (self.dcom[0]) \
-            / self.model.opt.timestep / self.frame_skip
+        forward_reward = self.get_body_comvel("torso")[0]
         ctrl_cost = 0.5 * 1e-5 * np.sum(np.square(action))
         impact_cost = min(
             0.5 * 1e-5 * np.sum(np.square(self.model.data.qfrc_constraint)),
@@ -49,24 +48,9 @@ class AntMDP(MujocoMDP, Serializable):
         ob = self.get_current_obs()
         return next_state, ob, reward, done
 
-    @staticmethod
-    def _worker_collect_stats():
-        PG = parallel_sampler.G
-        paths = PG.paths
-        progs = [
-            path["observations"][-1][-3] - path["observations"][0][-3]
-            for path in paths
-        ]
-        return dict(
-            mean_prog=np.mean(progs),
-            max_prog=np.max(progs),
-            min_prog=np.min(progs),
-            std_prog=np.std(progs),
-        )
-
     @overrides
     def log_extra(self):
-        stats = parallel_sampler.run_map(AntMDP._worker_collect_stats)
+        stats = parallel_sampler.run_map(_worker_collect_stats)
         mean_progs, max_progs, min_progs, std_progs = extract(
             stats,
             "mean_prog", "max_prog", "min_prog", "std_prog"
@@ -75,3 +59,18 @@ class AntMDP(MujocoMDP, Serializable):
         logger.record_tabular('MaxForwardProgress', np.max(max_progs))
         logger.record_tabular('MinForwardProgress', np.min(min_progs))
         logger.record_tabular('StdForwardProgress', np.mean(std_progs))
+
+
+def _worker_collect_stats():
+    PG = parallel_sampler.G
+    paths = PG.paths
+    progs = [
+        path["observations"][-1][-3] - path["observations"][0][-3]
+        for path in paths
+    ]
+    return dict(
+        mean_prog=np.mean(progs),
+        max_prog=np.max(progs),
+        min_prog=np.min(progs),
+        std_prog=np.std(progs),
+    )

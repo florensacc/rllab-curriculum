@@ -117,10 +117,8 @@ def populate_task(mdp, policy):
         # pipes = []
         for i in xrange(G.n_parallel):
             G.queue.put((mdp, policy, i))
-        print "Waiting for all workers to be initialized"
         for i in xrange(G.n_parallel):
             G.worker_queue.get()
-        print "all workers initialized"
     else:
         worker_init(mdp, policy, 0)
 

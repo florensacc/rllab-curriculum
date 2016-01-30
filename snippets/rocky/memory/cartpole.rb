@@ -13,7 +13,7 @@ params = {
     _name: "linear_feature_baseline",
   },
   algo: {
-    _name: "recurrent.rvpg",
+    _name: "recurrent.rtrpo",
     #binary_search_penalty: false,
     whole_paths: true,
     batch_size: 10000,

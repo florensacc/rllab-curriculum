@@ -16,7 +16,7 @@ params = {
   algo: {
     _name: "trpo",
     whole_paths: true,
-    batch_size: 50000,
+    batch_size: 10000,
     max_path_length: 500,
     n_itr: 500,
     step_size: 0.1,
@@ -25,6 +25,7 @@ params = {
   n_parallel: 4,
   snapshot_mode: "last",
   seed: 1,
+  plot: true,
 }
 command = to_command(params)
 puts command
