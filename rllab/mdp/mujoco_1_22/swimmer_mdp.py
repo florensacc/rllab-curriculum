@@ -38,7 +38,7 @@ class SwimmerMDP(MujocoMDP, Serializable):
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5
         ctrl_cost = self.ctrl_cost_coeff * np.sum(np.square(action / scaling))
-        forward_reward = self.dcom[0] / self.timestep / self.frame_skip
+        forward_reward = self.get_body_comvel("front")[0]
         reward = forward_reward - ctrl_cost
         done = False
         return next_state, next_obs, reward, done
