@@ -44,9 +44,11 @@ class HopperMDP(MujocoMDP, Serializable):
         next_state = self.forward_dynamics(state, action, restore=False)
         next_obs = self.get_obs(next_state)
         posbefore = state[1]
+        lb, ub = self.action_bounds
+        scaling = (ub - lb) * 0.5
         posafter = next_state[1]
         reward = (posafter - posbefore) / self.timestep * self.forward_coeff + \
-            self.alive_coeff
+            self.alive_coeff - 0.5 * 1e-5 * np.sum(np.square(action / scaling))
         notdone = np.isfinite(state).all() and \
             (np.abs(state[3:]) < 100).all() and (state[0] > .7) and \
             (abs(state[2]) < .2)
@@ -54,15 +56,15 @@ class HopperMDP(MujocoMDP, Serializable):
         self.state = next_state
         return next_state, next_obs, reward, done
 
-    @overrides
-    def log_extra(self, logger, paths):
-        forward_progress = \
-            [path["states"][-1][1] - path["states"][0][1] for path in paths]
-        logger.record_tabular(
-            'AverageForwardProgress', np.mean(forward_progress))
-        logger.record_tabular(
-            'MaxForwardProgress', np.max(forward_progress))
-        logger.record_tabular(
-            'MinForwardProgress', np.min(forward_progress))
-        logger.record_tabular(
-            'StdForwardProgress', np.std(forward_progress))
+    # @overrides
+    # def log_extra(self, logger, paths):
+    #     forward_progress = \
+    #         [path["states"][-1][1] - path["states"][0][1] for path in paths]
+    #     logger.record_tabular(
+    #         'AverageForwardProgress', np.mean(forward_progress))
+    #     logger.record_tabular(
+    #         'MaxForwardProgress', np.max(forward_progress))
+    #     logger.record_tabular(
+    #         'MinForwardProgress', np.min(forward_progress))
+    #     logger.record_tabular(
+    #         'StdForwardProgress', np.std(forward_progress))

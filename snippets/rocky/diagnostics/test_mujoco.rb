@@ -2,7 +2,7 @@ require_relative '../utils'
 
 params = {
   mdp: {
-    _name: "mujoco_1_22.ant_mdp",
+    _name: "mujoco_1_22.hopper_mdp",
   },
   normalize_mdp: true,
   policy: {
