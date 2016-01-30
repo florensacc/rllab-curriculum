@@ -5,6 +5,7 @@ from rllab.misc.overrides import overrides
 from rllab.sampler import parallel_sampler
 from rllab.misc.ext import extract
 from rllab.misc import logger
+from rllab.misc import autoargs
 
 
 def smooth_abs(x, param):
@@ -15,9 +16,18 @@ class Walker2DMDP(MujocoMDP, Serializable):
 
     FILE = 'walker2d.xml'
 
-    def __init__(self, *args, **kwargs):
+    @autoargs.arg('ctrl_cost_coeff', type=float,
+                  help='cost coefficient for controls')
+    def __init__(
+            self,
+            ctrl_cost_coeff=0,
+            *args, **kwargs):
+        self.ctrl_cost_coeff = ctrl_cost_coeff
         super(Walker2DMDP, self).__init__(*args, **kwargs)
-        Serializable.__init__(self, *args, **kwargs)
+        Serializable.__init__(
+            self,
+            ctrl_cost_coeff=ctrl_cost_coeff,
+            *args, **kwargs)
 
     def get_current_obs(self):
         return np.concatenate([
@@ -34,11 +44,10 @@ class Walker2DMDP(MujocoMDP, Serializable):
         action = np.clip(action, *self.action_bounds)
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5
-        ctrl_cost = 1e-1 * np.sum(np.square(action / scaling))
-        passive_cost = 1e-5 * np.sum(np.square(self.model.data.qfrc_passive))
+        ctrl_cost = self.ctrl_cost_coeff * np.sum(np.square(action / scaling))
+        passive_cost = 0
         forward_reward = self.get_body_comvel("torso")[0]
-        upright_cost = 1e-5 * smooth_abs(
-            self.get_body_xmat("torso")[2, 2] - 1, 0.1)
+        upright_cost = 0
         reward = forward_reward - ctrl_cost - passive_cost - upright_cost
         qpos = self.model.data.qpos
         done = not (qpos[0] > 0.8 and qpos[0] < 2.0
