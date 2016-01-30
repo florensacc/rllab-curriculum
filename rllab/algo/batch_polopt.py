@@ -299,7 +299,7 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('ExplainedVariance', np.mean(evs))
 
         mdp.log_extra()
-        policy.log_extra()
+        policy.log_extra(logger, paths)
         baseline.log_extra()
 
         if not self.opt.algorithm_parallelized:

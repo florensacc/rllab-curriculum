@@ -1,53 +1,71 @@
 require_relative '../../rocky/utils'
 
 itrs = 1000
-batch_size = 5000
+batch_size = 50000
 horizon = 100
 discount = 0.99
 seeds = (1..5).each do |i| i ** 2 * 5 + 23 end
 
 mdps = []
-mdps << "box2d.cartpole_mdp"
-mdps << "box2d.mountain_car_mdp"
-mdps << "box2d.cartpole_swingup_mdp"
-mdps << "box2d.double_pendulum_mdp"
+# mdps << "mujoco_1_22.half_cheetah_mdp"
+mdps << "mujoco_1_22.full_cheetah_mdp"
+mdps << "mujoco_1_22.hopper_mdp"
+# mdps << "mujoco_1_22.swimmer_mdp"
+# mdps << "mujoco_1_22.humanoid_mdp"
 
 algos = []
-# erwr
-# [0.2, 1].each do |best_quantile|
-#   [5, 50].each do |max_opt_itr|
-#     algos << {
-#       _name: "erwr",
-#       max_opt_itr: max_opt_itr,
-#       best_quantile: best_quantile,
-#       positive_adv: true,
-#     }
-#   end
-# end
-# trpo & ppo
-# [0.1, 0.01].each do |ss|
-#   algos << {
-#     _name: "trpo",
-#     step_size: ss,
-#     backtrack_ratio: 0.8,
-#   }
-#   algos << {
-#     _name: "ppo",
-#     step_size: ss,
-#   }
-# end
-# # npg
-# [0.1, 0.01].each do |ss|
-#   [1e-2, 1e-1, 1e0].each do |lr|
-#     algos << {
-#       _name: "npg",
-#       step_size: ss,
-#       update_method: "adam",
-#       learning_rate: lr,
-#     }
-#   end
-# end
-# vpg
+# # erwr
+[0.2, 1].each do |best_quantile|
+  algos << {
+    _name: "erwr",
+    max_opt_itr: 50,
+    best_quantile: best_quantile,
+    positive_adv: true,
+  }
+end
+# # # trpo & ppo
+[0.01, 0.1].each do |ss|
+  algos << {
+    _name: "ppo",
+    step_size: ss,
+  }
+end
+[0.1, 1].each do |ss|
+  algos << {
+    _name: "trpo",
+    step_size: ss,
+    backtrack_ratio: 0.8,
+  }
+end
+# # # npg
+[0.1, 0.01].each do |ss|
+  [1e-1, 1e0, 1e-2].each do |lr|
+    algos << {
+      _name: "npg",
+      step_size: ss,
+      update_method: "adam",
+      learning_rate: lr,
+    }
+  end
+end
+[0.1, 0.01].each do |ss|
+  [1e-1, 1e0, 1e-2].each do |lr|
+    algos << {
+      _name: "npg",
+      step_size: ss,
+      update_method: "sgd",
+      learning_rate: lr,
+    }
+  end
+end
+# # vpg
+[1e-4, 1e-3, 1e-2, 1e-1].each do |lr|
+  algos << {
+    _name: "vpg",
+    update_method: "adam",
+    learning_rate: lr,
+  }
+end
 [1e-4, 1e-3, 1e-2, 1e-1].each do |lr|
   algos << {
     _name: "vpg",
@@ -56,26 +74,26 @@ algos = []
   }
 end
 # cem
-[0.05, 0.15].each do |best_frac|
-  [0.5, 1].each do |extra_std|
-    [100, 500].each do |extra_decay_time|
-      algos << {
-        _name: "cem",
-        n_samples: 100,
-        best_frac: best_frac,
-        extra_std: extra_std,
-        extra_decay_time: extra_decay_time,
-      }
-    end
-  end
-end
-
-
+# [0.05, 0.15].each do |best_frac|
+#   [1].each do |extra_std|
+#     [100, 500].each do |extra_decay_time|
+#       algos << {
+#         _name: "cem",
+#         n_samples: 100,
+#         best_frac: best_frac,
+#         extra_std: extra_std,
+#         extra_decay_time: extra_decay_time,
+#       }
+#     end
+#   end
+# end
+# 
+# 
 inc = 0
 seeds.each do |seed|
   mdps.each do |mdp|
     algos.each do |algo|
-      exp_name = "run1_0128_nn_pi_basics_#{inc = inc + 1}"
+      exp_name = "mdp_fixed_0129_nn_pi_loco_#{inc = inc + 1}"
       params = {
         mdp: {
           _name: mdp,
@@ -94,12 +112,12 @@ seeds.each do |seed|
           max_path_length: horizon,
           n_itr: itrs,
           discount: discount,
-          # plot: true,
+          plot: true,
         }.merge(algo),
         n_parallel: 8,
         snapshot_mode: "last",
         seed: seed,
-        # plot: true,
+        plot: true,
       }
       command = to_command(params)
       # puts command
@@ -120,8 +138,6 @@ seeds.each do |seed|
   --device /dev/nvidiactl:/dev/nvidiactl \
   --device /dev/nvidia-uvm:/dev/nvidia-uvm \
   dementrock/starcluster:new #{command}"""
-      # puts dockerified
-      # system(dockerified)
       fname = "#{exp_name}.sh"
       f = File.open(fname, "w")
       f.puts dockerified

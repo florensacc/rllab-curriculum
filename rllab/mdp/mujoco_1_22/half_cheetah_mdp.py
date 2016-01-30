@@ -6,7 +6,6 @@ from rllab.misc.ext import extract
 from rllab.misc import logger
 from rllab.sampler import parallel_sampler
 
-
 def smooth_abs(x, param):
     return np.sqrt(np.square(x) + np.square(param)) - param
 
@@ -87,13 +86,12 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
 
     @overrides
     def log_extra(self):
-        return
-        stats = parallel_sampler.run_map(HalfCheetahMDP._worker_collect_stats)
-        mean_progs, max_progs, min_progs, std_progs = extract(
-            stats,
-            "mean_prog", "max_prog", "min_prog", "std_prog"
-        )
-        logger.record_tabular('AverageForwardProgress', np.mean(mean_progs))
-        logger.record_tabular('MaxForwardProgress', np.max(max_progs))
-        logger.record_tabular('MinForwardProgress', np.min(min_progs))
-        logger.record_tabular('StdForwardProgress', np.mean(std_progs))
+        forward_progress = np.concatenate(parallel_sampler.run_map(worker_collect_stats))
+        logger.record_tabular(
+            'AverageForwardProgress', np.mean(forward_progress))
+        logger.record_tabular(
+            'MaxForwardProgress', np.max(forward_progress))
+        logger.record_tabular(
+            'MinForwardProgress', np.min(forward_progress))
+        logger.record_tabular(
+            'StdForwardProgress', np.std(forward_progress))
