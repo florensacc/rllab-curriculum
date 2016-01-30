@@ -6,7 +6,6 @@ from rllab.misc.ext import extract
 from rllab.misc import logger
 from rllab.sampler import parallel_sampler
 
-
 def smooth_abs(x, param):
     return np.sqrt(np.square(x) + np.square(param)) - param
 

@@ -7,7 +7,6 @@ from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract
 from rllab.sampler import parallel_sampler
 
-
 # states: [
 # 0: z-coord,
 # 1: x-coord (forward distance),

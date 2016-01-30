@@ -306,3 +306,4 @@ class BatchPolopt(RLAlgorithm):
             return aggregate_samples_data()
         else:
             return dict()
+

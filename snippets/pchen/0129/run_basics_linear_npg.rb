@@ -37,45 +37,55 @@ algos = []
 #   }
 # end
 # # npg
-# [0.1, 0.01].each do |ss|
-#   [1e-2, 1e-1, 1e0].each do |lr|
-#     algos << {
-#       _name: "npg",
-#       step_size: ss,
-#       update_method: "adam",
-#       learning_rate: lr,
-#     }
-#   end
-# end
-# vpg
-[1e-4, 1e-3, 1e-2, 1e-1].each do |lr|
-  algos << {
-    _name: "vpg",
-    update_method: "sgd",
-    learning_rate: lr,
-  }
-end
-# cem
-[0.05, 0.15].each do |best_frac|
-  [0.5, 1].each do |extra_std|
-    [100, 500].each do |extra_decay_time|
-      algos << {
-        _name: "cem",
-        n_samples: 100,
-        best_frac: best_frac,
-        extra_std: extra_std,
-        extra_decay_time: extra_decay_time,
-      }
-    end
+[0.1, 0.01, 1e-3].each do |ss|
+  [1e-2, 1e-1, 1e0].each do |lr|
+    algos << {
+      _name: "npg",
+      step_size: ss,
+      update_method: "sgd",
+      learning_rate: lr,
+    }
   end
 end
+[0.1, 0.01, 1e-3].each do |ss|
+  [1e1, 1e0, 1e-1].each do |lr|
+    algos << {
+      _name: "npg",
+      step_size: ss,
+      update_method: "adam",
+      learning_rate: lr,
+    }
+  end
+end
+# vpg
+# [1e-4, 1e-3, 1e-2, 1e-1].each do |lr|
+#   algos << {
+#     _name: "vpg",
+#     update_method: "sgd",
+#     learning_rate: lr,
+#   }
+# end
+# # cem
+# [0.05, 0.15].each do |best_frac|
+#   [0.5, 1].each do |extra_std|
+#     [100, 500].each do |extra_decay_time|
+#       algos << {
+#         _name: "cem",
+#         n_samples: 100,
+#         best_frac: best_frac,
+#         extra_std: extra_std,
+#         extra_decay_time: extra_decay_time,
+#       }
+#     end
+#   end
+# end
 
 
 inc = 0
 seeds.each do |seed|
   mdps.each do |mdp|
     algos.each do |algo|
-      exp_name = "run1_0128_nn_pi_basics_#{inc = inc + 1}"
+      exp_name = "npg_0129_linear_pi_basics_#{inc = inc + 1}"
       params = {
         mdp: {
           _name: mdp,
@@ -83,7 +93,7 @@ seeds.each do |seed|
         normalize_mdp: true,
         policy: {
           _name: "mean_std_nn_policy",
-          hidden_sizes: [32, 32],
+          hidden_sizes: [],
         },
         baseline: {
           _name: "linear_feature_baseline",

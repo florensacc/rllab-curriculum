@@ -70,6 +70,7 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
             tr += r
             mdp.plot()
             time.sleep(delay)
+            print "reward:", r
             if done:
                 print "Episode done, reward: ", tr
                 tr = 0.
