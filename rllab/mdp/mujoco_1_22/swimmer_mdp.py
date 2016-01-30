@@ -20,7 +20,10 @@ class SwimmerMDP(MujocoMDP, Serializable):
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         super(SwimmerMDP, self).__init__(*args, **kwargs)
-        Serializable.__init__(self, *args, **kwargs)
+        Serializable.__init__(
+            self,
+            ctrl_cost_coeff=ctrl_cost_coeff,
+            *args, **kwargs)
 
     def get_current_obs(self):
         return np.concatenate([
