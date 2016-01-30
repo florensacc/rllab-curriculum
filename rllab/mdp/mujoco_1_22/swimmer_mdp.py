@@ -35,7 +35,9 @@ class SwimmerMDP(MujocoMDP, Serializable):
     def step(self, state, action):
         next_state = self.forward_dynamics(state, action, restore=False)
         next_obs = self.get_current_obs()
-        ctrl_cost = self.ctrl_cost_coeff * np.sum(np.square(action))
+        lb, ub = self.action_bounds
+        scaling = (ub - lb) * 0.5
+        ctrl_cost = self.ctrl_cost_coeff * np.sum(np.square(action / scaling))
         forward_reward = self.dcom[0] / self.timestep / self.frame_skip
         reward = forward_reward - ctrl_cost
         done = False
