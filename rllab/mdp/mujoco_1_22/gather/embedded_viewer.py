@@ -7,7 +7,7 @@ from threading import Lock
 
 mjCAT_ALL = 7
 
-class CubeViewer(object):
+class EmbeddedViewer(object):
 
     def __init__(self):
         self.last_render_time = 0
@@ -71,20 +71,9 @@ class CubeViewer(object):
     def render(self):
         rect = self.get_rect()
         arr = (ctypes.c_double*3)(0, 0, 0)
-
         mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(self.objects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
-        mjlib.mjv_makeLights(self.model.ptr, self.data.ptr, byref(self.objects))
-
+        # mjlib.mjv_makeLights(self.model.ptr, self.data.ptr, byref(self.objects))
         mjlib.mjv_setCamera(self.model.ptr, self.data.ptr, byref(self.cam))
-
-        prev_pos = self.model.data.qpos
-        prev_alpha = self.model.vis.map_.alpha
-
-        self.model.vis.map_.alpha = 0.01
-
-        self.model.vis.map_.alpha = prev_alpha
-        self.model.data.qpos = prev_pos
-        self.model.forward()
         mjlib.mjv_updateCameraPose(byref(self.cam), rect.width*1.0/rect.height)
         mjlib.mjr_render(0, rect, byref(self.objects), byref(self.ropt), byref(self.cam.pose), byref(self.con))
 

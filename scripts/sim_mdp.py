@@ -17,9 +17,8 @@ def sample_action(lb, ub):
         raise ValueError('Cannot sample unbounded actions')
     return np.random.rand(Du) * (ub - lb) + lb
 
-def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
+def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
     # step ahead with all-zero action
-    delay = 1.0 / fps
     viewer = mdp.start_viewer()
     if mode == 'noop':
         action = np.zeros(mdp.action_dim)
@@ -27,9 +26,8 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
         mdp.plot()
         for _ in xrange(max_steps):
             state, _, _, done = mdp.step(state, action)
-            print state
             mdp.plot()
-            time.sleep(delay)
+            time.sleep(mdp.timestep / speedup)
             if done:
                 state = mdp.reset()[0]
     elif mode == 'random':
@@ -43,21 +41,18 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
             # if i % 10 == 0:
             mdp.plot()
             # import time as ttime
-            time.sleep(mdp.timestep)
+            time.sleep(mdp.timestep / speedup)
             totrew += rew
-            print "reward:", rew
             if done:
-                print "total reward:", totrew
                 totrew = 0
                 state = mdp.reset()[0]
         if not done:
-            print "total reward:", totrew
             totrew = 0
     elif mode == 'static':
         mdp.reset()
         while True:
             mdp.plot()
-            time.sleep(delay)
+            time.sleep(mdp.timestep / speedup)
     elif mode == 'human':
         state = mdp.reset()[0]
         mdp.plot()
@@ -69,10 +64,8 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, fps=20):
             state, _, r, done = mdp.step(state, action)
             tr += r
             mdp.plot()
-            time.sleep(delay)
-            print "reward:", r
+            time.sleep(mdp.timestep / speedup)
             if done:
-                print "Episode done, reward: ", tr
                 tr = 0.
                 state = mdp.reset()[0]
     else:
@@ -85,8 +78,8 @@ if __name__ == "__main__":
     parser.add_argument('--mode', type=str, default='static',
                         choices=['noop', 'random', 'static', 'human'],
                         help='module path to the mdp class')
-    parser.add_argument('--fps', type=int, default=20, help='frames per second')
+    parser.add_argument('--speedup', type=int, default=1, help='speedup')
     parser.add_argument('--max_steps', type=int, default=sys.maxint, help='max steps')
     args = parser.parse_args()
     mdp = load_class(args.mdp, MDP, ["rllab", "mdp"])()#load_mdp_class(args.mdp)()
-    visualize_mdp(mdp, mode=args.mode, max_steps=args.max_steps, fps=args.fps)
+    visualize_mdp(mdp, mode=args.mode, max_steps=args.max_steps, speedup=args.speedup)
