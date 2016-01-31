@@ -1,3 +1,5 @@
+import pygame
+
 from rllab.mdp.box2d.box2d_mdp import Box2DMDP
 from rllab.mdp.box2d.parser import find_body
 import numpy as np
@@ -18,18 +20,30 @@ class CarParkingMDP(Box2DMDP, Serializable):
         self.goal = find_body(self.world, "goal")
         self.car = find_body(self.world, "car")
         self.wheels = [body for body in self.world.bodies if "wheel" in _get_name(body)]
-        self.max_deg = 30
+        self.front_wheels = [body for body in self.wheels if "front" in _get_name(body)]
+        self.max_deg = 30.
+        self.goal_radius = 1.
+        self.vel_thres = 1e-1
         Serializable.__init__(self, *args, **kwargs)
 
     @overrides
     def before_world_step(self, state, action):
+        desired_angle = self.car.angle + action[-1]/180*np.pi
+        for wheel in self.front_wheels:
+            wheel.angle = desired_angle
+            wheel.angularVelocity = 0 # kill angular velocity
+
         # kill all wheels' lateral speed
         for wheel in self.wheels:
             ortho = wheel.GetWorldVector((1, 0))
             lateral_speed = wheel.linearVelocity.dot(ortho) * ortho
             impulse = wheel.mass * -lateral_speed
             wheel.ApplyLinearImpulse(impulse, wheel.worldCenter, True)
-            # wheel.ApplyAngularImpulse(0.1*wheel.inertia*-wheel.angularVelocity)
+            # also apply a tiny bit of fraction
+            mag = wheel.linearVelocity.dot(wheel.linearVelocity)
+            if mag != 0:
+                wheel.ApplyLinearImpulse(0.1 * wheel.mass * -wheel.linearVelocity/mag**0.5, wheel.worldCenter, True)
+
 
     @property
     @overrides
@@ -51,9 +65,24 @@ class CarParkingMDP(Box2DMDP, Serializable):
     @overrides
     def compute_reward(self, action):
         yield
-        yield 0
+        yield -1
 
     @overrides
     def is_current_done(self):
-        return False
+        pos_satified = np.linalg.norm(self.car.position) <= self.goal_radius
+        vel_satisfied = np.linalg.norm(self.car.linearVelocity) <= self.vel_thres
+        return pos_satified and vel_satisfied
+
+    @overrides
+    def action_from_keys(self, keys):
+        go = np.zeros(self.action_dim)
+        if keys[pygame.K_LEFT]:
+            go[-1] = self.max_deg
+        if keys[pygame.K_RIGHT]:
+            go[-1] = -self.max_deg
+        if keys[pygame.K_UP]:
+            go[0] = 10
+        if keys[pygame.K_DOWN]:
+            go[0] = -10
+        return go
 
