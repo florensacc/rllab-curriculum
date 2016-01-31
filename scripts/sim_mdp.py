@@ -64,7 +64,6 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
             state, ob, r, done = mdp.step(state, action)
             tr += r
             mdp.plot()
-            time.sleep(delay)
             print "observation:", ob
             print "reward:", r
             time.sleep(mdp.timestep / speedup)
@@ -86,3 +85,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     mdp = load_class(args.mdp, MDP, ["rllab", "mdp"])()#load_mdp_class(args.mdp)()
     visualize_mdp(mdp, mode=args.mode, max_steps=args.max_steps, speedup=args.speedup)
+
