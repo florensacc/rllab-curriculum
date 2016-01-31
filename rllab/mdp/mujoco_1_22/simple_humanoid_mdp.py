@@ -17,7 +17,7 @@ class SimpleHumanoidMDP(MujocoMDP, Serializable):
 
     @overrides
     def reset_mujoco(self):
-        bending = -0.3
+        bending = 0#-0.3
         init_qpos = np.copy(self.init_qpos)
         init_qpos[12] = bending
         init_qpos[13] = 2 * bending
@@ -28,7 +28,7 @@ class SimpleHumanoidMDP(MujocoMDP, Serializable):
         init_qvel[2] = 2 * bending
         init_qvel[4] = bending
         # make one knee stick forward
-        forward_init = 0.5
+        forward_init = 0#0.5
         if np.random.rand() <= 0.5:
             init_qpos[12] += forward_init
         else:
@@ -63,20 +63,25 @@ class SimpleHumanoidMDP(MujocoMDP, Serializable):
         next_obs = self.get_current_obs()
         # after_center = self._get_com()
 
-        alive_bonus = 1.0
+        alive_bonus = 0.2
         data = self.model.data
         # mass = self.model.body_mass
         # xpos = data.xipos
         # after_center = (np.sum(mass * xpos, 0) / np.sum(mass))[0]
         lin_vel_reward = 1 * self.get_body_comvel("torso")[0]
-        quad_ctrl_cost = .5 * 1e-5 * np.sum(np.square(data.ctrl))
-        quad_impact_cost = .5 * 1e-5 * np.sum(np.square(data.cfrc_ext / 100))
-        quad_impact_cost = min(10.0, quad_impact_cost)
+        lb, ub = self.action_bounds
+        scaling = (ub - lb) * 0.5
+        quad_ctrl_cost = .5 * 1e-2 * np.sum(np.square(action / scaling))
+        quad_impact_cost = min(
+            .5 * 1e-5 * np.sum(
+                np.square(np.clip(data.cfrc_ext, -1, 1))),
+            0.5
+        )
         vel_deviation_cost = 1. * np.sum(
             np.square(self.get_body_comvel("torso")[1:]))
         reward = lin_vel_reward + alive_bonus - quad_ctrl_cost - \
             quad_impact_cost - vel_deviation_cost
-        done = data.qpos[2] < 0.9 or data.qpos[2] > 2.0
+        done = data.qpos[2] < 0.8 or data.qpos[2] > 2.0
 
         return next_state, next_obs, reward, done
 
