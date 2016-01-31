@@ -1,5 +1,7 @@
 require_relative '../utils'
 
+# checked
+
 params = {
   mdp: {
     _name: "mujoco_1_22.ant_mdp",
