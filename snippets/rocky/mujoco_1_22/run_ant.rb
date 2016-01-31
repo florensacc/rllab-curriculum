@@ -10,20 +10,22 @@ params = {
     hidden_sizes: [32, 32],
   },
   baseline: {
-    _name: "parallel.linear_feature_baseline",
+    _name: "linear_feature_baseline",
   },
   exp_name: "ant",
   algo: {
     _name: "parallel.trpo",
     whole_paths: true,
-    batch_size: 1000,
+    batch_size: 10000,
     max_path_length: 500,
-    n_itr: 1,
-    step_size: 0.1,
+    n_itr: 500,
+    step_size: 1,
+    plot: true,
   },
-  n_parallel: 1,
+  n_parallel: 4,
   snapshot_mode: "last",
   seed: 1,
+  plot: true,
 }
 command = to_command(params)
 puts command

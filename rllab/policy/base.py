@@ -77,9 +77,6 @@ class DeterministicPolicy(Policy):
     def get_action_sym(self, input_var, train=False):
         raise NotImplementedError
 
-    def get_default_updates(self, obs_var, train=False):
-        return {}
-
 
 class StochasticPolicy(Policy):
 

@@ -5,12 +5,16 @@ from rllab.mdp.base import ControlMDP
 from rllab.mjcapi.rocky_mjc_pre_2 import MjModel
 from rllab.mjcapi.rocky_mjc_pre_2.mjlib import osg_lib
 from rllab.misc.overrides import overrides
+from rllab.misc import autoargs
 import theano
 
 
 class MujocoMDP(ControlMDP):
 
-    def __init__(self, model_path, frame_skip, ctrl_scaling):
+    @autoargs.arg('action_noise', type=float,
+                  help='Noise added to the controls, which will be '
+                       'proportional to the action bounds')
+    def __init__(self, model_path, frame_skip, ctrl_scaling, action_noise=0.0):
         self.model = MjModel(model_path)
         self.data = self.model.data
         self.viewer = None
@@ -23,6 +27,7 @@ class MujocoMDP(ControlMDP):
         self.frame_skip = frame_skip
         self.ctrl_scaling = ctrl_scaling
         self.current_state = None
+        self.action_noise = action_noise
         self.reset()
         super(MujocoMDP, self).__init__()
 
@@ -85,9 +90,18 @@ class MujocoMDP(ControlMDP):
     def get_current_state(self):
         return self.get_state(self.model.data.qpos, self.model.data.qvel)
 
+    def inject_action_noise(self, action):
+        # generate action noise
+        noise = self.action_noise * \
+            np.random.normal(size=action.shape)
+        # rescale the noise to make it proportional to the action bounds
+        lb, ub = self.action_bounds
+        noise = 0.5 * (ub - lb) * noise
+        return action + noise
+
     def forward_dynamics(self, state, action, restore=True):
         with self.set_state_tmp(state, restore):
-            self.model.data.ctrl = action * self.ctrl_scaling
+            self.model.data.ctrl = self.inject_action_noise(action * self.ctrl_scaling)
             for _ in range(self.frame_skip):
                 self.model.step()
             return self.get_current_state()

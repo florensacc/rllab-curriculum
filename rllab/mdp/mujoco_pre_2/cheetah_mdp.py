@@ -1,5 +1,6 @@
 from rllab.mdp.mujoco_pre_2.mujoco_mdp import MujocoMDP
 from rllab.core.serializable import Serializable
+from rllab.misc import autoargs
 import numpy as np
 
 
@@ -9,12 +10,14 @@ def smooth_abs(x, param):
 
 class CheetahMDP(MujocoMDP, Serializable):
 
-    def __init__(self):
+    @autoargs.inherit(MujocoMDP.__init__)
+    def __init__(self, *args, **kwargs):
         path = self.model_path('cheetah.xml')
         frame_skip = 1
         ctrl_scaling = 1
-        super(CheetahMDP, self).__init__(path, frame_skip, ctrl_scaling)
-        Serializable.__init__(self)
+        super(CheetahMDP, self).__init__(path, frame_skip, ctrl_scaling, *args,
+                **kwargs)
+        Serializable.__init__(self, *args, **kwargs)
         self._initial_com = self.get_body_com("torso")
 
     def get_current_obs(self):
@@ -38,7 +41,7 @@ class CheetahMDP(MujocoMDP, Serializable):
         next_obs = self.get_current_obs()
         action = np.clip(action, *self.action_bounds)
         ctrl_cost = 1e-1 * np.sum(np.square(action))
-        passive_cost = 1e-5 * np.sum(np.square(self.model.data.qfrc_passive))
+        passive_cost = min(10, 1e-5 * np.sum(np.square(self.model.data.qfrc_passive)))
         run_cost = -1 * (after_com[0] - prev_com[0]) / self.model.option.timestep
         upright_cost = 1e-5 * smooth_abs(self.get_body_xmat("torso")[2, 2] - 1, 0.1)
         cost = ctrl_cost + passive_cost + run_cost + upright_cost

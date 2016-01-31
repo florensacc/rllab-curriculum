@@ -374,6 +374,8 @@ class Box2DMDP(ControlMDP):
     def plot(self, states=None, actions=None, pause=False):
         if states or actions or pause:
             raise NotImplementedError
+        if not self.viewer:
+            self.start_viewer()
         if self.viewer:
             self.viewer.loop_once()
 

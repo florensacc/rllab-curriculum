@@ -17,7 +17,7 @@ params = {
     _name: "parallel.trpo",
     whole_paths: true,
     batch_size: 50000,
-    max_path_length: 2000,
+    max_path_length: 500,
     n_itr: 1000,
     step_size: 0.1,
   },
