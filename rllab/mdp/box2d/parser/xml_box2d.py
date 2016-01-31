@@ -213,6 +213,8 @@ class XmlJoint(XmlElem):
         bodyA = XmlAttr("bodyA", String(), required=True)
         bodyB = XmlAttr("bodyB", String(), required=True)
         anchor = XmlAttr("anchor", Tuple(Float(), Float()))
+        localAnchorA = XmlAttr("localAnchorA", Tuple(Float(), Float()))
+        localAnchorB = XmlAttr("localAnchorB", Tuple(Float(), Float()))
         axis = XmlAttr("axis", Tuple(Float(), Float()))
         limit = XmlAttr("limit", Tuple(Angle(), Angle()))
         ctrllimit = XmlAttr("ctrllimit", Tuple(Angle(), Angle()))
@@ -224,6 +226,8 @@ class XmlJoint(XmlElem):
         self.bodyA = None
         self.bodyB = None
         self.anchor = None
+        self.localAnchorA = None
+        self.localAnchorB = None
         self.limit = None
         self.ctrllimit = None
         self.motor = False
@@ -236,6 +240,10 @@ class XmlJoint(XmlElem):
         bodyB = find_body(world, self.bodyB)
         args = dict()
         if self.typ == "revolute":
+            if self.localAnchorA:
+                args["localAnchorA"] = self.localAnchorA
+            if self.localAnchorB:
+                args["localAnchorB"] = self.localAnchorB
             if self.anchor:
                 args["anchor"] = self.anchor
             if self.limit:

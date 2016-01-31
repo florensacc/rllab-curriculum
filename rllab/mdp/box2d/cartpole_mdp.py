@@ -25,6 +25,7 @@ class CartpoleMDP(Box2DMDP, Serializable):
     @overrides
     def reset(self):
         self._set_state(self.initial_state)
+        self._invalidate_state_caches()
         bounds = np.array([
             self.max_cart_pos,
             self.max_cart_speed,

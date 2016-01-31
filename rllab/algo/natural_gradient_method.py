@@ -32,7 +32,7 @@ class NaturalGradientMethod(object):
                   help="A small value to add to Fisher Information Matrix's eigenvalue"
                        "When CG is used, this value will not be changed but if we are"
                        "directly using Hessian inverse method, this regularization will be"
-                       "adaptively increased should the regularized matrix is still singular"
+                       "adaptively increased should the regularized matrix still be singular"
                        "(but it's unlikely)")
     def __init__(
             self,
@@ -70,11 +70,11 @@ class NaturalGradientMethod(object):
         pdist_var = policy.get_pdist_sym(input_var)
         mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
         grads = theano.grad(surr_obj, wrt=policy.get_params(trainable=True))
-        flat_gard = flatten_tensor_variables(grads)
+        flat_grad = flatten_tensor_variables(grads)
 
         kl_grads = theano.grad(mean_kl, wrt=policy.get_params(trainable=True))
         # kl_flat_grad = flatten_tensor_variables(kl_grads)
-        emp_fisher = flatten_hessian(mean_kl, wrt=policy.get_params(trainable=True), block_diagonal=False)
+        # emp_fisher = flatten_hessian(mean_kl, wrt=policy.get_params(trainable=True), block_diagonal=False)
         xs = [
             new_tensor_like("%s x" % p.name, p)
             for p in policy.get_params(trainable=True)
@@ -94,7 +94,7 @@ class NaturalGradientMethod(object):
         )
         f_grad = compile_function(
             inputs=input_list,
-            outputs=[surr_obj, flat_gard],
+            outputs=[surr_obj, flat_grad],
         )
 
         # follwoing information is computed to TRPO
@@ -106,7 +106,11 @@ class NaturalGradientMethod(object):
             f_fisher=lambda:
             compile_function(
                 inputs=input_list,
-                outputs=[surr_obj, flat_gard, emp_fisher],
+                outputs=[
+                    surr_obj,
+                    flat_grad,
+                    flatten_hessian(mean_kl, wrt=policy.get_params(trainable=True), block_diagonal=False)
+                ],
             ),
             f_Hx_plain=lambda:
             compile_function(
@@ -151,7 +155,7 @@ class NaturalGradientMethod(object):
             # CG approach
             _, flat_g = f_grad(*inputs)
             def Hx(x):
-                xs = policy.flat_to_params(x)
+                xs = policy.flat_to_params(x, trainable=True)
                 # with Message("rop"):
                 #     rop = f_Hx_rop(*(inputs + xs))
                 plain = f_Hx_plain(*(inputs + xs)) + self.reg_coeff*x
