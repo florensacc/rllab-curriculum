@@ -1,5 +1,7 @@
 require_relative '../utils'
 
+# checked
+
 params = {
   mdp: {
     _name: "mujoco_1_22.walker2d_mdp",
@@ -14,16 +16,18 @@ params = {
   },
   exp_name: "walker2d",
   algo: {
-    _name: "trpo",
+    _name: "parallel.trpo",
     whole_paths: true,
-    batch_size: 50000,
-    max_path_length: 500,
+    batch_size: 10000,
+    max_path_length: 2000,
     n_itr: 500,
-    step_size: 0.01,
+    step_size: 0.1,
+    plot: true,
   },
   n_parallel: 4,
   snapshot_mode: "last",
   seed: 1,
+  plot: true,
 }
 command = to_command(params)
 puts command

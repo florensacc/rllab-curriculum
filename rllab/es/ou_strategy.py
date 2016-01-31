@@ -31,6 +31,7 @@ class OUStrategy(ExplorationStrategy, Serializable):
         self.sigma = sigma
         self.action_dim = mdp.action_dim
         self.state = np.ones(self.action_dim) * self.mu
+        self.action_bounds = mdp.action_bounds
         self.episode_reset()
         Serializable.__init__(self, mdp, mu, theta, sigma, **kwargs)
 
@@ -57,7 +58,7 @@ class OUStrategy(ExplorationStrategy, Serializable):
     def get_action(self, t, observation, policy, **kwargs):
         action, _ = policy.get_action(observation)
         ou_state = self.evolve_state()
-        return action + ou_state
+        return np.clip(action + ou_state, *self.action_bounds)
 
 
 if __name__ == "__main__":

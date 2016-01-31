@@ -2,6 +2,7 @@ from rllab.mdp.mujoco_1_22.mujoco_mdp import MujocoMDP
 from rllab.core.serializable import Serializable
 import numpy as np
 from rllab.misc.overrides import overrides
+from rllab.misc.ext import extract
 from rllab.misc import logger
 from rllab.sampler import parallel_sampler
 
@@ -16,15 +17,20 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
     def __init__(self, *args, **kwargs):
         super(HalfCheetahMDP, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)
-        self._initial_com = self.get_body_com("torso")
 
     def get_current_obs(self):
         return np.concatenate([
-            self.model.data.qpos.flatten(),
-            self.model.data.qvel.flatten(),
-            self.model.data.qfrc_passive.flatten(),
-            self.get_body_com("torso").flatten(),
+            self.model.data.qpos.flatten()[1:],
+            self.model.data.qvel.flat,
+            self.get_body_com("torso").flat,
         ])
+
+    @overrides
+    def reset_mujoco(self):
+        self.model.data.qpos = np.random.randn(9) * 0.01
+        self.model.data.qvel = np.random.randn(9) * 0.1
+        self.model.data.qacc = self.init_qacc
+        self.model.data.ctrl = self.init_ctrl
 
     def get_body_xmat(self, body_name):
         idx = self.model.body_names.index(body_name)
@@ -35,35 +41,43 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
         return self.model.data.com_subtree[idx]
 
     def step(self, state, action):
-        prev_com = self.get_body_com("torso")
         next_state = self.forward_dynamics(state, action, restore=False)
-        after_com = self.get_body_com("torso")
-
         next_obs = self.get_current_obs()
         action = np.clip(action, *self.action_bounds)
-        ctrl_cost = 1e-1 * np.sum(np.square(action))
+        ctrl_cost = 1e-1 * 0.5 * np.sum(np.square(action))
         passive_cost = 1e-5 * np.sum(np.square(self.model.data.qfrc_passive))
-        run_cost = -1 * (after_com[0] - prev_com[0]) / self.model.opt.timestep
-        upright_cost = 1e-5 * smooth_abs(self.get_body_xmat("torso")[2, 2] - 1, 0.1)
+        run_cost = -1 * self.get_body_comvel("torso")[0]
+        upright_cost = 1e-5 * smooth_abs(
+            self.get_body_xmat("torso")[2, 2] - 1, 0.1)
         cost = ctrl_cost + passive_cost + run_cost + upright_cost
         reward = -cost
-        done = False  # after_com[0] < self._initial_com[0] - 0.1 # False
+        reward = reward
+        done = False
         return next_state, next_obs, reward, done
 
     @overrides
     def log_extra(self):
-        forward_progress = np.concatenate(parallel_sampler.run_map(worker_collect_stats))
-        logger.record_tabular(
-            'AverageForwardProgress', np.mean(forward_progress))
-        logger.record_tabular(
-            'MaxForwardProgress', np.max(forward_progress))
-        logger.record_tabular(
-            'MinForwardProgress', np.min(forward_progress))
-        logger.record_tabular(
-            'StdForwardProgress', np.std(forward_progress))
+        stats = parallel_sampler.run_map(_worker_collect_stats)
+        mean_progs, max_progs, min_progs, std_progs = extract(
+            stats,
+            "mean_prog", "max_prog", "min_prog", "std_prog"
+        )
+        logger.record_tabular('AverageForwardProgress', np.mean(mean_progs))
+        logger.record_tabular('MaxForwardProgress', np.max(max_progs))
+        logger.record_tabular('MinForwardProgress', np.min(min_progs))
+        logger.record_tabular('StdForwardProgress', np.mean(std_progs))
 
-PG = parallel_sampler.G
 
-def worker_collect_stats():
-       return [path["observations"][-1][-3] - path["observations"][0][-3] for path in PG.paths]
-
+def _worker_collect_stats():
+    PG = parallel_sampler.G
+    paths = PG.paths
+    progs = [
+        path["observations"][-1][-3] - path["observations"][0][-3]
+        for path in paths
+    ]
+    return dict(
+        mean_prog=np.mean(progs),
+        max_prog=np.max(progs),
+        min_prog=np.min(progs),
+        std_prog=np.std(progs),
+    )

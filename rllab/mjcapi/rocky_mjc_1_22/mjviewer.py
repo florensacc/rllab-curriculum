@@ -73,15 +73,8 @@ class MjViewer(object):
         self.frames = []
 
     def render(self):
-        if not self.data:
-            return
-        self.gui_lock.acquire()
         rect = self.get_rect()
         arr = (ctypes.c_double*3)(0, 0, 0)
-
-        #mjlib.mjr_freeContext(byref(self.con))
-        #mjlib.mjv_freeObjects(byref(self.objects))
-
 
         mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(self.objects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
         mjlib.mjv_makeLights(self.model.ptr, self.data.ptr, byref(self.objects))
@@ -92,34 +85,38 @@ class MjViewer(object):
         prev_alpha = self.model.vis.map_.alpha
 
         self.model.vis.map_.alpha = 0.01
-        tmpobjects = mjcore.MJVOBJECTS()
-        mjlib.mjv_makeObjects(byref(tmpobjects), 1000)
-        for idx, frame in enumerate(self.frames):
-            #print 'painting fixed'
-            self.model.data.qpos = frame['pos']
-            self.model.forward()
-            #if idx == 0:
-            #    mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(self.objects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
-            #else:
-            mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(tmpobjects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
-            for i in range(tmpobjects.ngeom):
-                alpha = frame['extra'].get('alpha', None)
-                emission = frame['extra'].get('emission', None)
-                #= frame['extra'].get('emission', None)
-                geom = tmpobjects.geoms[i]
-                if alpha is not None:
-                    geom.rgba[3] = alpha
-                if emission is not None:
-                    geom.emission = emission
-            mjextra.append_objects(self.objects, tmpobjects)
+        #tmpobjects = mjcore.MJVOBJECTS()
+        #mjlib.mjv_makeObjects(byref(tmpobjects), 1000)
+        #for idx, frame in enumerate(self.frames):
+        #    #print 'painting fixed'
+        #    self.model.data.qpos = frame['pos']
+        #    self.model.forward()
+        #    #if idx == 0:
+        #    #    mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(self.objects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
+        #    #else:
+        #    mjlib.mjv_makeGeoms(self.model.ptr, self.data.ptr, byref(tmpobjects), byref(self.vopt), mjCAT_ALL, 0, None, None, ctypes.cast(arr, ctypes.POINTER(ctypes.c_double)))
+        #    for i in range(tmpobjects.ngeom):
+        #        alpha = frame['extra'].get('alpha', None)
+        #        emission = frame['extra'].get('emission', None)
+        #        #= frame['extra'].get('emission', None)
+        #        geom = tmpobjects.geoms[i]
+        #        if alpha is not None:
+        #            geom.rgba[3] = alpha
+        #        if emission is not None:
+        #            geom.emission = emission
+        #    mjextra.append_objects(self.objects, tmpobjects)
 
         self.model.vis.map_.alpha = prev_alpha
         self.model.data.qpos = prev_pos
         self.model.forward()
-
         mjlib.mjv_updateCameraPose(byref(self.cam), rect.width*1.0/rect.height)
-
         mjlib.mjr_render(0, rect, byref(self.objects), byref(self.ropt), byref(self.cam.pose), byref(self.con))
+
+    def render_internal(self):
+        if not self.data:
+            return
+        self.gui_lock.acquire()
+        self.render()
 
         self.gui_lock.release()
 

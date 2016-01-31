@@ -51,6 +51,7 @@ class ReplayPool(Serializable):
         self.actions = np.zeros((max_steps, action_dim), dtype=action_dtype)
         self.rewards = np.zeros((max_steps,), dtype=floatX)
         self.terminals = np.zeros((max_steps,), dtype='bool')
+        #self.horizon_terminals = np.zeros((max_steps,), dtype='bool')
         self.extras = None
         self.concat_observations = concat_observations
         self.concat_length = concat_length
@@ -96,20 +97,21 @@ class ReplayPool(Serializable):
                 "terminals", "extras", "rng"
             )
 
-    def add_sample(self, state, action, reward, terminal, extra=None):
+    def add_sample(self, observation, action, reward, terminal, extra=None):
         """Add a time step record.
 
         Arguments:
-            state -- current state (or observation)
+            observation -- current or observation
             action -- action chosen by the agent
             reward -- reward received after taking the action
             terminal -- boolean indicating whether the episode ended after this
             time step
         """
-        self.observations[self.top] = state
+        self.observations[self.top] = observation
         self.actions[self.top] = action
         self.rewards[self.top] = reward
         self.terminals[self.top] = terminal
+        #self.horizon_terminals[self.top] = horizon_terminal
         if extra is not None:
             if self.extras is None:
                 assert self.size == 0, "extra must be consistent"
@@ -221,6 +223,10 @@ class ReplayPool(Serializable):
             # training by zeroing the discounted future reward estimate.
             if np.any(self.terminals.take(initial_indices[0:-1], mode='wrap')):
                 continue
+            # do not pick samples which terminated because of horizon
+            #if np.any(self.horizon_terminals.take(initial_indices[0:-1],
+            #    mode='wrap')) or self.horizon_terminals[end_index]:
+            #    continue
 
             # Add the state transition to the response.
             observations[count] = self.observations.take(

@@ -3,7 +3,7 @@ import numpy as np
 from numpy.ctypeslib import as_ctypes
 import os
 from mjtypes import *
-from mjlib import mjlib
+from mjlib import mjlib, addn_lib
 from util import *
 
 
@@ -31,11 +31,21 @@ class MjModel(MjModelWrapper):
         data_ptr = mjlib.mj_makeData(model_ptr)
         data = MjData(data_ptr, self)
         self.data = data
+        self.body_coms = np.zeros((self.nbody, 3))
+        self.body_comvels = np.zeros((self.nbody, 3))
+        self.body_momentums = np.zeros((self.nbody, 6))
         self.forward()
 
     # This is like updating the state of mujoco. I'm not really sure what it's updating though
     def forward(self):
         mjlib.mj_forward(self.ptr, self.data.ptr)
+        addn_lib.mj_subtree(
+            self.ptr,
+            self.data.ptr,
+            self.body_coms.ctypes.data_as(POINTER(c_int)),
+            self.body_comvels.ctypes.data_as(POINTER(c_int)),
+            self.body_momentums.ctypes.data_as(POINTER(c_int)),
+        )
 
     def step(self):
         mjlib.mj_step(self.ptr, self.data.ptr)

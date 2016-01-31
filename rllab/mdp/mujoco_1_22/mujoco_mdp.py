@@ -6,6 +6,17 @@ from rllab.mjcapi.rocky_mjc_1_22 import MjModel, MjViewer
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
 import theano
+import tempfile
+import mako.template
+import mako.lookup
+
+
+MODEL_DIR = osp.abspath(
+    osp.join(
+        osp.dirname(__file__),
+        '../../../vendor/mujoco_models/1_22'
+    )
+)
 
 
 class MujocoMDP(ControlMDP):
@@ -15,10 +26,22 @@ class MujocoMDP(ControlMDP):
     @autoargs.arg('action_noise', type=float,
                   help='Noise added to the controls, which will be '
                        'proportional to the action bounds')
-    def __init__(self, action_noise=0.0):
-        if self.__class__.FILE is None:
-            raise "mujoco xml file not specified"
-        self.model = MjModel(self.model_path(self.__class__.FILE))
+    def __init__(self, action_noise=0.0, file_path=None):
+        # compile template
+        if file_path is None:
+            if self.__class__.FILE is None:
+                raise "Mujoco file not specified"
+            file_path = osp.join(MODEL_DIR, self.__class__.FILE)
+        if file_path.endswith(".mako"):
+            lookup = mako.lookup.TemplateLookup(directories=[MODEL_DIR])
+            with open(file_path) as template_file:
+                template = mako.template.Template(
+                    template_file.read(), lookup=lookup)
+            content = template.render()
+            _, file_path = tempfile.mkstemp(text=True)
+            with open(file_path, 'w') as f:
+                f.write(content)
+        self.model = MjModel(file_path)
         self.data = self.model.data
         self.viewer = None
         self.init_qpos = self.model.data.qpos
@@ -38,12 +61,6 @@ class MujocoMDP(ControlMDP):
         self.current_com = None
         self.reset()
         super(MujocoMDP, self).__init__()
-
-    def model_path(self, file_name):
-        return osp.abspath(osp.join(
-            osp.dirname(__file__),
-            '../../../vendor/mujoco_models/1_22/%s' % file_name
-        ))
 
     @property
     @overrides
@@ -73,12 +90,15 @@ class MujocoMDP(ControlMDP):
         ub = bounds[:, 1]
         return lb, ub
 
-    @overrides
-    def reset(self):
+    def reset_mujoco(self):
         self.model.data.qpos = self.init_qpos
         self.model.data.qvel = self.init_qvel
         self.model.data.qacc = self.init_qacc
         self.model.data.ctrl = self.init_ctrl
+
+    @overrides
+    def reset(self):
+        self.reset_mujoco()
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]
         self.dcom = np.zeros_like(self.current_com)
@@ -200,6 +220,10 @@ class MujocoMDP(ControlMDP):
     def get_body_com(self, body_name):
         idx = self.model.body_names.index(body_name)
         return self.model.data.com_subtree[idx]
+
+    def get_body_comvel(self, body_name):
+        idx = self.model.body_names.index(body_name)
+        return self.model.body_comvels[idx]
 
     def print_stats(self):
         super(MujocoMDP, self).print_stats()

@@ -4,9 +4,9 @@ from rllab.sampler import parallel_sampler
 def worker_collect_paths():
     return parallel_sampler.G.paths
 
-parallel_sampler.config_parallel_sampler(n_parallel=1, base_seed=1)
+#parallel_sampler.config_parallel_sampler(n_parallel=1, base_seed=1)
 
-from rllab.mdp.box2d.mountain_car_mdp import MountainCarMDP
+from rllab.mdp.mujoco_1_22.half_cheetah_mdp import HalfCheetahMDP
 from rllab.mdp.normalized_mdp import normalize
 from rllab.policy.mean_nn_policy import MeanNNPolicy
 from rllab.qf.continuous_nn_q_function import ContinuousNNQFunction
@@ -29,30 +29,31 @@ if __name__ == "__main__":
             self.discount = 0.99
             self.epoch_length = 1000
             self.n_epochs = 100
-            self.max_path_length = 100
-            self.min_pool_size = 10000
-            self.batch_size = 32
+            self.max_path_length = 150
+            self.min_pool_size = 1000
+            self.max_pool_size = 1e6
+            self.batch_size = 64
             self.eval_samples = 1000
-            self.soft_target_tau = 0.001
+            self.soft_target_tau = 0.005
 
     options = Options()
 
-    mdp = normalize(MountainCarMDP())#action_noise=0.01))
+    mdp = normalize(HalfCheetahMDP())#action_noise=0.01))
 
-    policy = MeanNNPolicy(mdp, hidden_sizes=[32, 32], output_nl='lasagne.nonlinearities.tanh')
-    target_policy = MeanNNPolicy(mdp, hidden_sizes=[32, 32], output_nl='lasagne.nonlinearities.tanh')
+    policy = MeanNNPolicy(mdp, hidden_sizes=[400, 300], bn=True, output_nl='lasagne.nonlinearities.tanh')
+    target_policy = MeanNNPolicy(mdp, hidden_sizes=[400, 300], bn=True, output_nl='lasagne.nonlinearities.tanh')
     target_policy.set_param_values(policy.get_param_values())
 
-    qf = ContinuousNNQFunction(mdp, hidden_sizes=[32, 32], normalize=False)
-    target_qf = ContinuousNNQFunction(mdp, hidden_sizes=[32, 32], normalize=False)
+    qf = ContinuousNNQFunction(mdp, hidden_sizes=[100, 100], bn=True)
+    target_qf = ContinuousNNQFunction(mdp, hidden_sizes=[100, 100], bn=True)
     target_qf.set_param_values(qf.get_param_values())
 
-    es = OUStrategy(mdp, theta=0.15, sigma=1)
+    es = OUStrategy(mdp, theta=0.15, sigma=0.3)
 
     pool = ReplayPool(
         observation_shape=mdp.observation_shape,
         action_dim=mdp.action_dim,
-        max_steps=100000
+        max_steps=options.max_pool_size,
     )
 
     parallel_sampler.populate_task(mdp, policy)
@@ -65,7 +66,12 @@ if __name__ == "__main__":
 
     ys_var = reward_var + options.discount * (1 - terminal_var) * \
         target_qf.get_qval_sym(
-            next_obs_var, target_policy.get_action_sym(next_obs_var))
+            next_obs_var,
+            target_policy.get_action_sym(
+                next_obs_var, deterministic=True
+            ),
+            deterministic=True
+        )
 
     input_vars = (obs_var, action_var, next_obs_var, reward_var, terminal_var)
 
@@ -84,7 +90,12 @@ if __name__ == "__main__":
     )
 
     policy_surr_loss = - TT.mean(
-        qf.get_qval_sym(obs_var, policy.get_action_sym(obs_var)))
+        qf.get_qval_sym(
+            obs_var,
+            policy.get_action_sym(obs_var),
+            deterministic=True
+        )
+    )
 
     f_train_policy = compile_function(
         inputs=input_vars,
@@ -136,6 +147,9 @@ if __name__ == "__main__":
             mdp.plot()
             path_length += 1
             path_return += reward
+
+            if path_length > options.max_path_length:
+                terminal = True
 
             pool.add_sample(obs, action, reward, terminal)
             state, obs = next_state, next_obs

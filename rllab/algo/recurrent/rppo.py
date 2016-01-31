@@ -2,7 +2,7 @@ from rllab.misc.tensor_utils import flatten_tensors
 from rllab.misc.ext import merge_dict, compile_function, extract, new_tensor
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
-from rllab.algo.recurrent_batch_polopt import RecurrentBatchPolopt
+from rllab.algo.recurrent.recurrent_batch_polopt import RecurrentBatchPolopt
 import rllab.misc.logger as logger
 import theano
 import theano.tensor as TT
@@ -117,7 +117,8 @@ class RPPO(RecurrentBatchPolopt):
             penalty_var
         ]
 
-        grads = theano.gradient.grad(surr_obj, policy.trainable_params)
+        grads = theano.gradient.grad(
+            surr_obj, policy.get_params(trainable=True))
         f_surr_kl = compile_function(
             input_list, [surr_obj, surr_loss, mean_kl])
         f_grads = compile_function(input_list, grads)
@@ -139,11 +140,11 @@ class RPPO(RecurrentBatchPolopt):
             "observations", "advantages", "pdists", "actions", "valids"
         ))
 
-        cur_params = policy.get_trainable_param_values()
+        cur_params = policy.get_param_values(trainable=True)
 
         def evaluate_cost(penalty):
             def evaluate(params):
-                policy.set_trainable_param_values(params)
+                policy.set_param_values(params, trainable=True)
                 inputs_with_penalty = all_input_values + [penalty]
                 val, _, _ = f_surr_kl(*inputs_with_penalty)
                 return val.astype(np.float64)
@@ -151,7 +152,7 @@ class RPPO(RecurrentBatchPolopt):
 
         def evaluate_grad(penalty):
             def evaluate(params):
-                policy.set_trainable_param_values(params)
+                policy.set_param_values(params, trainable=True)
                 grad = f_grads(*(all_input_values + [penalty]))
                 flattened_grad = flatten_tensors(map(np.asarray, grad))
                 return flattened_grad.astype(np.float64)
@@ -183,7 +184,7 @@ class RPPO(RecurrentBatchPolopt):
             if try_mean_kl < self.step_size or \
                     (penalty_itr == max_penalty_itr - 1 and
                      opt_params is None):
-                opt_params = policy.get_trainable_param_values()
+                opt_params = policy.get_param_values(trainable=True)
                 penalty = try_penalty
                 mean_kl = try_mean_kl
 
@@ -212,7 +213,7 @@ class RPPO(RecurrentBatchPolopt):
                     try_penalty > self.max_penalty:
                 try_penalty = np.clip(
                     try_penalty, self.min_penalty, self.max_penalty)
-                opt_params = policy.get_trainable_param_values()
+                opt_params = policy.get_param_values(trainable=True)
                 penalty = try_penalty
                 mean_kl = try_mean_kl
                 break
@@ -247,9 +248,9 @@ class RPPO(RecurrentBatchPolopt):
                     min_bs_penalty = penalty
                 else:
                     max_bs_penalty = penalty
-            opt_params = policy.get_trainable_param_values()
+            opt_params = policy.get_param_values(trainable=True)
 
-        policy.set_trainable_param_values(opt_params)
+        policy.set_param_values(opt_params, trainable=True)
         loss_after = evaluate_cost(0)(opt_params)
         logger.record_tabular('LossAfter', loss_after)
         logger.record_tabular('MeanKL', mean_kl)

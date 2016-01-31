@@ -47,7 +47,7 @@ class NaturalGradientMethod(object):
         self.reg_coeff = reg_coeff
 
     def init_opt(self, mdp, policy, baseline):
-        input_var = new_tensor(
+        obs_var = new_tensor(
             'input',
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
@@ -55,7 +55,7 @@ class NaturalGradientMethod(object):
         advantage_var = TT.vector('advantage')
         action_var = TT.matrix('action', dtype=mdp.action_dtype)
 
-        log_prob = policy.get_log_prob_sym(input_var, action_var)
+        log_prob = policy.get_log_prob_sym(obs_var, action_var)
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
         surr_obj = - TT.mean(log_prob * advantage_var)
@@ -67,14 +67,13 @@ class NaturalGradientMethod(object):
         # we can get I(theta) by calculating the hessian of
         # KL(p(theta)||p(theta'))
         old_pdist_var = TT.matrix('old_pdist')
-        pdist_var = policy.get_pdist_sym(input_var)
+        pdist_var = policy.get_pdist_sym(obs_var)
         mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
         grads = theano.grad(surr_obj, wrt=policy.get_params(trainable=True))
         flat_grad = flatten_tensor_variables(grads)
 
         kl_grads = theano.grad(mean_kl, wrt=policy.get_params(trainable=True))
         # kl_flat_grad = flatten_tensor_variables(kl_grads)
-        # emp_fisher = flatten_hessian(mean_kl, wrt=policy.get_params(trainable=True), block_diagonal=False)
         xs = [
             new_tensor_like("%s x" % p.name, p)
             for p in policy.get_params(trainable=True)
@@ -87,7 +86,7 @@ class NaturalGradientMethod(object):
                                              ]), wrt=policy.get_params(trainable=True))
         Hx_plain = TT.concatenate([s.flatten() for s in Hx_plain_splits])
 
-        input_list = [input_var, advantage_var, old_pdist_var, action_var]
+        input_list = [obs_var, advantage_var, old_pdist_var, action_var]
         f_loss = compile_function(
             inputs=input_list,
             outputs=surr_obj,
@@ -127,21 +126,18 @@ class NaturalGradientMethod(object):
     @contextmanager
     def optimization_setup(self, itr, policy, samples_data, opt_info):
         logger.log("optimizing policy")
-        f_loss, f_grad, f_fisher, f_Hx_plain = \
-            extract(opt_info, "f_loss", "f_grad", "f_fisher",
-                    "f_Hx_plain")
         inputs = list(extract(
             samples_data,
             "observations", "advantages", "pdists", "actions"
         ))
         # Need to ensure this
         logger.log("computing loss before")
-        loss_before = f_loss(*inputs)
+        loss_before = opt_info["f_loss"](*inputs)
         logger.log("performing update")
         logger.log("computing descent direction")
         if not self.use_cg:
             # direct approach, just bite the bullet and use hessian
-            _, flat_g, fisher_mat = f_fisher(*inputs)
+            _, flat_g, fisher_mat = opt_info["f_fisher"](*inputs)
             while True:
                 try:
                     nat_direction = np.linalg.solve(
@@ -153,12 +149,12 @@ class NaturalGradientMethod(object):
                     print self.reg_coeff
         else:
             # CG approach
-            _, flat_g = f_grad(*inputs)
+            _, flat_g = opt_info["f_grad"](*inputs)
             def Hx(x):
                 xs = policy.flat_to_params(x, trainable=True)
                 # with Message("rop"):
                 #     rop = f_Hx_rop(*(inputs + xs))
-                plain = f_Hx_plain(*(inputs + xs)) + self.reg_coeff*x
+                plain = opt_info["f_Hx_plain"](*(inputs + xs)) + self.reg_coeff*x
                 # assert np.allclose(rop, plain)
                 return plain
                 # alternatively we can do finite difference on flat_grad
@@ -172,7 +168,7 @@ class NaturalGradientMethod(object):
         logger.log("descent direction computed")
         yield inputs, flat_descent_step
         logger.log("computing loss after")
-        loss_after = f_loss(*inputs)
+        loss_after = opt_info["f_loss"](*inputs)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
         logger.log("optimization finished")

@@ -25,6 +25,7 @@ class DoublePendulumMDP(Box2DMDP, Serializable):
     @overrides
     def reset(self):
         self._set_state(self.initial_state)
+        self._invalidate_state_caches()
         stds = np.array([0.1, 0.1, 0.01, 0.01])
         pos1, pos2, v1, v2 = np.random.randn(*stds.shape) * stds
         self.link1.angle = pos1

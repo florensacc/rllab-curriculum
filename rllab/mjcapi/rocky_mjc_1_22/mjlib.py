@@ -6,8 +6,10 @@ from mjtypes import *
 osp = os.path
 if sys.platform.startswith("darwin"):
     libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/osx/libmujoco.dylib"))
+    addn_libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/osx/libmjc122.dylib"))
 elif sys.platform.startswith("linux"):
     libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/linux/libmujoco.so"))
+    addn_libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/linux/libmjc122.so"))
 elif sys.platform.startswith("win"):
     libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/win/mujoco.lib"))
 else:
@@ -15,12 +17,17 @@ else:
 
 
 mjlib = cdll.LoadLibrary(libfile)
+addn_lib = cdll.LoadLibrary(addn_libfile)
 
 
 mjlib.mj_loadXML.argtypes = [c_char_p, c_char_p]
 mjlib.mj_loadXML.restype = POINTER(MJMODEL)
 mjlib.mj_saveXML.argtypes = [String, POINTER(MJMODEL), String]
 mjlib.mj_saveXML.restype = c_int
+
+addn_lib.mj_subtree.argtypes = [POINTER(MJMODEL), POINTER(MJDATA), POINTER(c_int), POINTER(c_int), POINTER(c_int)]
+addn_lib.mj_subtree.restype = None
+
 #mjlib.mj_printSchema.argtypes = [String, String, c_int, c_int, c_int]
 #mjlib.mj_printSchema.restype = c_int
 mjlib.mj_activate.argtypes = [String]
