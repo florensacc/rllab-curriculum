@@ -138,13 +138,13 @@ class Box2DMDP(ControlMDP):
             action = np.clip(action, lb, ub)
             for ctrl, act in zip(self.extra_data.controls, action):
                 if ctrl.typ == "force":
-                    assert ctrl.body
-                    body = find_body(self.world, ctrl.body)
-                    direction = np.array(ctrl.direction)
-                    direction = direction / np.linalg.norm(direction)
-                    world_force = body.GetWorldVector(direction * act)
-                    world_point = body.GetWorldPoint(ctrl.anchor)
-                    body.ApplyForce(world_force, world_point, wake=True)
+                    for name in ctrl.bodies:
+                        body = find_body(self.world, name)
+                        direction = np.array(ctrl.direction)
+                        direction = direction / np.linalg.norm(direction)
+                        world_force = body.GetWorldVector(direction * act)
+                        world_point = body.GetWorldPoint(ctrl.anchor)
+                        body.ApplyForce(world_force, world_point, wake=True)
                 elif ctrl.typ == "torque":
                     assert ctrl.joint
                     joint = find_joint(self.world, ctrl.joint)
@@ -157,6 +157,7 @@ class Box2DMDP(ControlMDP):
                     joint.maxMotorTorque = abs(act)
                 else:
                     raise NotImplementedError
+            self.before_world_step(state, action)
             self.world.Step(
                 self.extra_data.timeStep,
                 self.extra_data.velocityIterations,
@@ -272,6 +273,9 @@ class Box2DMDP(ControlMDP):
                     position = body.position
                     linearVel = body.linearVelocity
 
+                if state.to is not None:
+                    to = find_body(self.world, state.to)
+
                 if state.typ == "xpos":
                     new_obs = position[0]
                 elif state.typ == "ypos":
@@ -284,6 +288,12 @@ class Box2DMDP(ControlMDP):
                     new_obs = body.angle
                 elif state.typ == "avel":
                     new_obs = body.angularVelocity
+                elif state.typ == "dist":
+                    new_obs = np.linalg.norm(position-to.position)
+                elif state.typ == "angle":
+                    diff = to.position - position
+                    abs_angle = np.arccos(diff.dot((0, 1)) / np.linalg.norm(diff))
+                    new_obs = body.angle + abs_angle
                 else:
                     raise NotImplementedError
             elif state.joint:
@@ -368,3 +378,7 @@ class Box2DMDP(ControlMDP):
             self.start_viewer()
         if self.viewer:
             self.viewer.loop_once()
+
+    def before_world_step(self, state, action):
+        pass
+

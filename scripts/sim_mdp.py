@@ -61,9 +61,12 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
             pygame.event.pump()
             keys = pygame.key.get_pressed()
             action = mdp.action_from_keys(keys)
-            state, _, r, done = mdp.step(state, action)
+            state, ob, r, done = mdp.step(state, action)
             tr += r
             mdp.plot()
+            time.sleep(delay)
+            print "observation:", ob
+            print "reward:", r
             time.sleep(mdp.timestep / speedup)
             if done:
                 tr = 0.

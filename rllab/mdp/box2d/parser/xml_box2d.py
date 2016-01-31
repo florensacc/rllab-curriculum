@@ -278,10 +278,13 @@ class XmlState(XmlElem):
     class Meta:
         typ = XmlAttr(
             "type", Choice(
-                "xpos", "ypos", "xvel", "yvel", "apos", "avel",))
+                "xpos", "ypos", "xvel", "yvel", "apos", "avel",
+                "dist", "angle",
+            ))
         transform = XmlAttr(
             "transform", Choice("id", "sin", "cos"))
         body = XmlAttr("body", String())
+        to = XmlAttr("to", String())
         joint = XmlAttr("joint", String())
         local = XmlAttr("local", Point2D())
         com = XmlAttr("com", List(String()))
@@ -293,6 +296,7 @@ class XmlState(XmlElem):
         self.joint = None
         self.local = None
         self.com = None
+        self.to = None
 
     def to_box2d(self, world, xml_world, extra_data):
         extra_data.states.append(self)
@@ -307,6 +311,9 @@ class XmlControl(XmlElem):
         body = XmlAttr(
             "body", String(),
             help="name of the body to apply force on")
+        bodies = XmlAttr(
+            "bodies", List(String()),
+            help="names of the bodies to apply force on")
         joint = XmlAttr(
             "joint", String(),
             help="name of the joint")
@@ -323,12 +330,17 @@ class XmlControl(XmlElem):
     def __init__(self):
         self.typ = None
         self.body = None
+        self.bodies = None
         self.joint = None
         self.anchor = None
         self.direction = None
         self.ctrllimit = None
 
     def to_box2d(self, world, xml_world, extra_data):
+        if self.body != None:
+            assert self.bodies is None, "Should not set body and bodies at the same time"
+            self.bodies = [self.body]
+
         extra_data.controls.append(self)
 
 
