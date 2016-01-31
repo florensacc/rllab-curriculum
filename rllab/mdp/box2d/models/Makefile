@@ -1,4 +1,4 @@
-all: hopper.xml cartpole.xml double_pendulum.xml half_cheetah.xml inverted_double_pendulum.xml
+all: hopper.xml cartpole.xml double_pendulum.xml half_cheetah.xml inverted_double_pendulum.xml car_parking.xml
 
 hopper.xml: gen_xml.rb hopper.xml.rb
 	ruby gen_xml.rb hopper.xml.rb > hopper.xml
@@ -14,6 +14,9 @@ double_pendulum.xml: gen_xml.rb double_pendulum.xml.rb
 
 inverted_double_pendulum.xml: gen_xml.rb inverted_double_pendulum.xml.rb
 	ruby gen_xml.rb inverted_double_pendulum.xml.rb > inverted_double_pendulum.xml
+
+car_parking.xml: gen_xml.rb car_parking.xml.rb
+	ruby gen_xml.rb car_parking.xml.rb > car_parking.xml
 
 test_cartpole:
 	python cartpole.py
