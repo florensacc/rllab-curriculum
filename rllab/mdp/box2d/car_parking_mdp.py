@@ -12,11 +12,15 @@ from rllab.misc.overrides import overrides
 class CarParkingMDP(Box2DMDP, Serializable):
 
     @autoargs.inherit(Box2DMDP.__init__)
+    @autoargs.arg("random_start", type=bool,
+                  help="Randomized starting position by uniforming sampling starting car angle"
+                       "and position from a circle of radius 5")
     def __init__(self, *args, **kwargs):
         super(CarParkingMDP, self).__init__(
             self.model_path("car_parking.xml"),
             *args, **kwargs
         )
+        self.random_start = kwargs.get("random_start", True)
         self.goal = find_body(self.world, "goal")
         self.car = find_body(self.world, "car")
         self.wheels = [body for body in self.world.bodies if "wheel" in _get_name(body)]
@@ -24,6 +28,7 @@ class CarParkingMDP(Box2DMDP, Serializable):
         self.max_deg = 30.
         self.goal_radius = 1.
         self.vel_thres = 1e-1
+        self.start_radius = 5.
         Serializable.__init__(self, *args, **kwargs)
 
     @overrides
@@ -60,12 +65,18 @@ class CarParkingMDP(Box2DMDP, Serializable):
     def reset(self):
         self._set_state(self.initial_state)
         self._invalidate_state_caches()
+        if self.random_start:
+            pos_angle, car_angle = np.random.rand(2) * np.pi * 2
+            self.car.position = (self.start_radius*np.cos(pos_angle), self.start_radius*np.sin(pos_angle))
+            self.car.angle = car_angle
         return self.get_state(), self.get_current_obs()
 
     @overrides
     def compute_reward(self, action):
         yield
-        yield -1
+        not_done = not self.is_current_done()
+        dist_to_goal = self.get_current_obs()[-3]
+        yield - 1*not_done - 2*dist_to_goal
 
     @overrides
     def is_current_done(self):

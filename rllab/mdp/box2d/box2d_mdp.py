@@ -273,6 +273,9 @@ class Box2DMDP(ControlMDP):
                     position = body.position
                     linearVel = body.linearVelocity
 
+                if state.to is not None:
+                    to = find_body(self.world, state.to)
+
                 if state.typ == "xpos":
                     new_obs = position[0]
                 elif state.typ == "ypos":
@@ -285,6 +288,12 @@ class Box2DMDP(ControlMDP):
                     new_obs = body.angle
                 elif state.typ == "avel":
                     new_obs = body.angularVelocity
+                elif state.typ == "dist":
+                    new_obs = np.linalg.norm(position-to.position)
+                elif state.typ == "angle":
+                    diff = to.position - position
+                    abs_angle = np.arccos(diff.dot((0, 1)) / np.linalg.norm(diff))
+                    new_obs = body.angle + abs_angle
                 else:
                     raise NotImplementedError
             elif state.joint:
