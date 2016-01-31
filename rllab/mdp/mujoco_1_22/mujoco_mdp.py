@@ -91,8 +91,10 @@ class MujocoMDP(ControlMDP):
         return lb, ub
 
     def reset_mujoco(self):
-        self.model.data.qpos = self.init_qpos
-        self.model.data.qvel = self.init_qvel
+        self.model.data.qpos = self.init_qpos + \
+            np.random.normal(size=self.init_qpos.shape) * 0.01
+        self.model.data.qvel = self.init_qvel + \
+            np.random.normal(size=self.init_qvel.shape) * 0.1
         self.model.data.qacc = self.init_qacc
         self.model.data.ctrl = self.init_ctrl
 

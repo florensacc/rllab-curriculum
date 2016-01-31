@@ -4,7 +4,7 @@ itrs = 1000
 batch_size = 50000#0#0
 horizon = 500
 discount = 0.99
-n_parallel = 10##1#2
+n_parallel = 4#10##1#2
 seeds = (1..5).each do |i| i ** 2 * 5 + 23 end
 
 mdps = []
@@ -16,13 +16,13 @@ mdps << {
   _name: "mujoco_1_22.half_cheetah_mdp",
 }
 
-mdps << {
-  _name: "mujoco_1_22.humanoid_amputated_mdp",
-}
-
-mdps << {
-  _name: "mujoco_1_22.humanoid_mdp",
-}
+#mdps << {
+#  _name: "mujoco_1_22.humanoid_amputated_mdp",
+#}
+#
+#mdps << {
+#  _name: "mujoco_1_22.humanoid_mdp",
+#}
 
 mdps << {
   _name: "mujoco_1_22.walker2d_mdp",
@@ -30,24 +30,24 @@ mdps << {
 
 
 
-[0, 0.1, 1, 10].each do |alive_coeff|
-  [0, 0.1, 0.01, 0.001, 0.0001, 0.00001].each do |ctrl_cost_coeff|
+#[0, 0.1, 1, 10].each do |alive_coeff|
+#  [0, 0.1, 0.01, 0.001, 0.0001, 0.00001].each do |ctrl_cost_coeff|
     mdps << {
       _name: "mujoco_1_22.hopper_mdp",
-      ctrl_cost_coeff: ctrl_cost_coeff,
-      alive_coeff: alive_coeff,
+      #ctrl_cost_coeff: ctrl_cost_coeff,
+      #alive_coeff: alive_coeff,
     }
-  end
-end
+#  end
+#end
 
 
 
-[0, 0.1, 0.01, 0.001, 0.0001, 0.00001].each do |ctrl_cost_coeff|
+#[0, 0.1, 0.01, 0.001, 0.0001, 0.00001].each do |ctrl_cost_coeff|
   mdps << {
     _name: "mujoco_1_22.swimmer_mdp",
-    ctrl_cost_coeff: ctrl_cost_coeff,
+    #ctrl_cost_coeff: ctrl_cost_coeff,
   }
-end
+#end
 
 inc = 0
 seeds.each do |seed|
@@ -65,7 +65,7 @@ seeds.each do |seed|
       },
       exp_name: exp_name,
       algo: {
-        _name: "trpo",
+        _name: "parallel.trpo",
         batch_size: batch_size,
         whole_paths: true,
         max_path_length: horizon,

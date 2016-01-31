@@ -25,13 +25,6 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
             self.get_body_com("torso").flat,
         ])
 
-    @overrides
-    def reset_mujoco(self):
-        self.model.data.qpos = np.random.randn(9) * 0.01
-        self.model.data.qvel = np.random.randn(9) * 0.1
-        self.model.data.qacc = self.init_qacc
-        self.model.data.ctrl = self.init_ctrl
-
     def get_body_xmat(self, body_name):
         idx = self.model.body_names.index(body_name)
         return self.model.data.xmat[idx].reshape((3, 3))
