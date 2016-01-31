@@ -17,6 +17,7 @@ queue = None
 def _worker_start():
     mdp = None
     policy = None
+    max_length = None
     try:
         while True:
             msgs = {}
@@ -29,13 +30,16 @@ def _worker_start():
                     break
             if 'stop' in msgs:
                 break
-            if 'update' in msgs:
+            elif 'update' in msgs:
                 mdp, policy = msgs['update']
                 mdp.start_viewer()
-            if 'demo' in msgs:
+            elif 'demo' in msgs:
                 param_values, max_length = msgs['demo']
                 policy.set_param_values(param_values)
-                rollout(mdp, policy, max_length=max_length, animated=True)
+                rollout(mdp, policy, max_length=max_length, animated=True, speedup=5)
+            else:
+                if max_length:
+                    rollout(mdp, policy, max_length=max_length, animated=True, speedup=5)
     except KeyboardInterrupt:
         pass
     if mdp:

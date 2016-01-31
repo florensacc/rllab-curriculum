@@ -16,7 +16,7 @@ class SwimmerMDP(MujocoMDP, Serializable):
                   help='cost coefficient for controls')
     def __init__(
             self,
-            ctrl_cost_coeff=0,
+            ctrl_cost_coeff=1e-2,
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         super(SwimmerMDP, self).__init__(*args, **kwargs)
@@ -29,7 +29,7 @@ class SwimmerMDP(MujocoMDP, Serializable):
         return np.concatenate([
             self.model.data.qpos.flat,
             self.model.data.qvel.flat,
-            self.get_body_com("front").flat,
+            self.get_body_com("torso").flat,
         ]).reshape(-1)
 
     def step(self, state, action):
@@ -37,8 +37,9 @@ class SwimmerMDP(MujocoMDP, Serializable):
         next_obs = self.get_current_obs()
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5
-        ctrl_cost = self.ctrl_cost_coeff * np.sum(np.square(action / scaling))
-        forward_reward = self.get_body_comvel("front")[0]
+        ctrl_cost = 0.5 * self.ctrl_cost_coeff * np.sum(
+            np.square(action / scaling))
+        forward_reward = self.get_body_comvel("torso")[0]
         reward = forward_reward - ctrl_cost
         done = False
         return next_state, next_obs, reward, done

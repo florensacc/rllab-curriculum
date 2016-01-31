@@ -7,13 +7,34 @@ from rllab.misc.ext import extract
 from rllab.misc import logger
 
 
-class HumanoidAmputatedMDP(MujocoMDP, Serializable):
+class SimpleHumanoidMDP(MujocoMDP, Serializable):
 
-    FILE = 'humanoid_amputated.xml'
+    FILE = 'simple_humanoid.xml'
 
     def __init__(self, *args, **kwargs):
-        super(HumanoidAmputatedMDP, self).__init__(*args, **kwargs)
-        Serializable.__init__(self, *args, **kwargs)
+        super(SimpleHumanoidMDP, self).__init__(*args, **kwargs)
+        Serializable.quick_init(self, locals())
+
+    @overrides
+    def reset_mujoco(self):
+        bending = -0.3
+        init_qpos = np.copy(self.init_qpos)
+        init_qpos[12] = bending
+        init_qpos[13] = 2 * bending
+        init_qpos[15] = bending
+
+        init_qvel = np.copy(self.init_qvel)
+        init_qvel[1] = bending
+        init_qvel[2] = 2 * bending
+        init_qvel[4] = bending
+        # make one knee stick forward
+        forward_init = 0.5
+        if np.random.rand() <= 0.5:
+            init_qpos[12] += forward_init
+        else:
+            init_qvel[1] += forward_init
+        self.model.data.qpos = init_qpos
+        self.model.data.qvel = init_qvel
 
     def get_current_obs(self):
         data = self.model.data
@@ -23,7 +44,7 @@ class HumanoidAmputatedMDP(MujocoMDP, Serializable):
             # data.cinert.flat,
             # data.cvel.flat,
             # data.qfrc_actuator.flat,
-            data.cfrc_ext.flat,
+            np.clip(data.cfrc_ext, -1, 1).flat,
             self.get_body_com("torso").flat,
         ])
 
@@ -49,10 +70,12 @@ class HumanoidAmputatedMDP(MujocoMDP, Serializable):
         # after_center = (np.sum(mass * xpos, 0) / np.sum(mass))[0]
         lin_vel_reward = 1 * self.get_body_comvel("torso")[0]
         quad_ctrl_cost = .5 * 1e-5 * np.sum(np.square(data.ctrl))
-        quad_impact_cost = .5 * 1e-5 * np.sum(np.square(data.cfrc_ext))
+        quad_impact_cost = .5 * 1e-5 * np.sum(np.square(data.cfrc_ext / 100))
         quad_impact_cost = min(10.0, quad_impact_cost)
+        vel_deviation_cost = 1. * np.sum(
+            np.square(self.get_body_comvel("torso")[1:]))
         reward = lin_vel_reward + alive_bonus - quad_ctrl_cost - \
-            quad_impact_cost
+            quad_impact_cost - vel_deviation_cost
         done = data.qpos[2] < 0.9 or data.qpos[2] > 2.0
 
         return next_state, next_obs, reward, done

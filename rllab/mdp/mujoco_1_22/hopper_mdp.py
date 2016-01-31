@@ -21,26 +21,17 @@ class HopperMDP(MujocoMDP, Serializable):
 
     @autoargs.arg('alive_coeff', type=float,
                   help='reward coefficient for being alive')
-    #@autoargs.arg('forward_coeff', type=float,
-    #              help='reward coefficient for forward progress')
     @autoargs.arg('ctrl_cost_coeff', type=float,
                   help='cost coefficient for controls')
     def __init__(
             self,
-            alive_coeff=0,
-            #forward_coeff=1,
-            ctrl_cost_coeff=0,
+            alive_coeff=1,
+            ctrl_cost_coeff=0.01,
             *args, **kwargs):
         self.alive_coeff = alive_coeff
-        #self.forward_coeff = forward_coeff
         self.ctrl_cost_coeff = ctrl_cost_coeff
         super(HopperMDP, self).__init__(*args, **kwargs)
-        Serializable.__init__(
-            self,
-            alive_coeff=alive_coeff,
-            #forward_coeff=forward_coeff,
-            ctrl_cost_coeff=ctrl_cost_coeff,
-            *args, **kwargs)
+        Serializable.quick_init(self, locals())
 
     @overrides
     def get_current_obs(self):
@@ -58,7 +49,7 @@ class HopperMDP(MujocoMDP, Serializable):
         next_obs = self.get_current_obs()
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5
-        vel = (next_state[1] - state[1]) / self.timestep / self.frame_skip
+        vel = self.get_body_comvel("torso")[0]
         reward = vel + self.alive_coeff - \
             0.5 * self.ctrl_cost_coeff * np.sum(np.square(action / scaling))
         notdone = np.isfinite(state).all() and \
@@ -84,7 +75,7 @@ def _worker_collect_stats():
     PG = parallel_sampler.G
     paths = PG.paths
     progs = [
-        path["states"][-1][1] - path["states"][0][1]
+        path["observations"][-1][-3] - path["observations"][0][-3]
         for path in paths
     ]
     return dict(

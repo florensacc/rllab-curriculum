@@ -1,5 +1,7 @@
 require_relative '../utils'
 
+# checked
+
 params = {
   mdp: {
     _name: "mujoco_1_22.hopper_mdp",
@@ -19,12 +21,14 @@ params = {
     whole_paths: true,
     batch_size: 10000,
     max_path_length: 500,
-    n_itr: 100,
+    n_itr: 500,
     step_size: 0.1,
+    plot: true,
   },
   n_parallel: 4,
   snapshot_mode: "last",
   seed: 1,
+  plot: true,
 }
 command = to_command(params)
 puts command

@@ -2,20 +2,17 @@ require_relative '../utils'
 
 params = {
   mdp: {
-    _name: "john_mjc2.IcmlHumanoidMDP",#mujoco_pre_2.humanoid_amputated_mdp",
+    _name: "mujoco_1_22.simple_humanoid_mdp",
   },
   normalize_mdp: true,
   policy: {
     _name: "mean_std_nn_policy",
-    hidden_sizes: [100, 50, 32],
+    hidden_sizes: [32, 32],#100, 50, 32],
   },
   baseline: {
-    #_name: "nn_baseline",
-    _name: "parallel.linear_feature_baseline",
-    #hidden_sizes: [],#300, 300],
-    #max_opt_itr: 500,
+    _name: "linear_feature_baseline",
   },
-  exp_name: "humanoid",
+  exp_name: "simple_humanoid",
   algo: {
     _name: "parallel.trpo",
     whole_paths: true,

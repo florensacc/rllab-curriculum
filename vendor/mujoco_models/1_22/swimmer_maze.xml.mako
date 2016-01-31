@@ -50,7 +50,7 @@
 
 		<!--  ================= SWIMMER ================= /-->
 
-    <body name="front" pos="${utils.find_robot(structure, size_scaling=size_scaling)}">
+    <body name="torso" pos="${utils.find_robot(structure, size_scaling=size_scaling)}">
     <geom type="capsule" fromto="1.5 0 0 0.5 0 0" size="0.1" density="1000" />
           <joint pos="0 0 0" type="slide" name="slider1" axis="1 0 0" />
           <joint pos="0 0 0" type="slide" name="slider2" axis="0 1 0" />
