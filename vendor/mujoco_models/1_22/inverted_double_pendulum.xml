@@ -17,6 +17,10 @@
     <compiler inertiafromgeom='true'
               coordinate='local'/>
 
+    <custom>
+        <numeric name="frame_skip" data="2" />
+    </custom>
+
     <default>
         <joint damping='0.05' />
         <geom contype='0'
@@ -24,8 +28,10 @@
               rgba='0.7 0.7 0 1' />
     </default>
 
-    <option timestep='0.02'
-            gravity='1e-5 0 -9.81' />
+    <option timestep='0.01'
+            gravity='1e-5 0 -9.81'
+            integrator="RK4"
+    />
 
     <size nstack='3000'/>
 
@@ -85,8 +91,8 @@
     <actuator>
         <motor name='slide'
                joint='slider'
-               gear='200'
-               ctrlrange='-.5 .5'
+               gear='500'
+               ctrlrange='-1 1'
                ctrllimited='true'/>
     </actuator>
 </mujoco>

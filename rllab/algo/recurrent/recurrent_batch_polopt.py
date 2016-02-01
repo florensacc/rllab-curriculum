@@ -30,7 +30,7 @@ class RecurrentBatchPolopt(BatchPolopt):
         obs = [path["observations"] for path in paths]
         obs = [pad_tensor(ob, max_path_length, ob[0]) for ob in obs]
 
-        if self.center_adv:
+        if self.opt.center_adv:
             raw_adv = np.concatenate([path["advantages"] for path in paths])
             adv_mean = np.mean(raw_adv)
             adv_std = np.std(raw_adv) + 1e-8

@@ -96,7 +96,7 @@ def config_parallel_sampler(n_parallel, base_seed):
     G.n_parallel = n_parallel
 
     if G.n_parallel > 1:
-        G.base_seed = base_seed if base_seed else random.randint()
+        G.base_seed = base_seed if base_seed else random.getrandbits(32)
         G.queue = Queue()
         G.worker_queue = Queue()
 
@@ -117,10 +117,8 @@ def populate_task(mdp, policy):
         # pipes = []
         for i in xrange(G.n_parallel):
             G.queue.put((mdp, policy, i))
-        print "Waiting for all workers to be initialized"
         for i in xrange(G.n_parallel):
             G.worker_queue.get()
-        print "all workers initialized"
     else:
         worker_init(mdp, policy, 0)
 
@@ -171,6 +169,17 @@ def worker_set_param_values(params, **tags):
 
 def master_set_param_values(params, **tags):
     run_map(worker_set_param_values, params, **tags)
+
+
+def worker_collect_paths():
+    return G.paths
+
+
+def collect_paths():
+    if G.n_parallel > 1:
+        return sum(run_map(worker_collect_paths), [])
+    else:
+        return G.paths
 
 
 def request_samples(

@@ -122,15 +122,21 @@ def scanr(f, l, base=None):
     return list(iscanr(f, l, base))
 
 
-def compile_function(inputs=None, outputs=None, updates=None):
+def compile_function(inputs=None, outputs=None, updates=None, log_name=None):
     import theano
-    return theano.function(
+    if log_name:
+        msg = Message("Compiling function %s" % log_name)
+        msg.__enter__()
+    ret = theano.function(
         inputs=inputs,
         outputs=outputs,
         updates=updates,
         on_unused_input='ignore',
         allow_input_downcast=True
     )
+    if log_name:
+        msg.__exit__(None, None, None)
+    return ret
 
 
 def new_tensor(name, ndim, dtype):
@@ -269,9 +275,25 @@ def flatten_hessian(cost, wrt, consider_constant=None,
     else:
         return TT.concatenate(hessians, axis=1)
 
+
 def flatten_tensor_variables(ts):
     import theano.tensor as TT
     return TT.concatenate(map(TT.flatten, ts))
+
+
+def print_lasagne_layer(layer, prefix=""):
+    params = ""
+    if layer.name:
+        params += ", name=" + layer.name
+    if getattr(layer, 'nonlinearity', None):
+        params += ", nonlinearity=" + layer.nonlinearity.__name__
+    params = params[2:]
+    print prefix + layer.__class__.__name__ + "[" + params + "]"
+    if hasattr(layer, 'input_layers') and layer.input_layers is not None:
+        [print_lasagne_layer(x, prefix + "  ") for x in layer.input_layers]
+    elif hasattr(layer, 'input_layer') and layer.input_layer is not None:
+        print_lasagne_layer(layer.input_layer, prefix + "  ")
+
 
 def unflatten_tensor_variables(flatarr, shapes, symb_arrs):
     import theano.tensor as TT
@@ -286,4 +308,3 @@ def unflatten_tensor_variables(flatarr, shapes, symb_arrs):
         arrs.append(arr)
         n += size
     return arrs
-

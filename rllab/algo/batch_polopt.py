@@ -256,6 +256,8 @@ class BatchPolopt(RLAlgorithm):
 
         parallel_sampler.run_map(worker_compute_paths_returns, self.opt)
 
+        results = parallel_sampler.run_map(worker_process_paths, self.opt)
+
         logger.log("fitting baseline...")
         if baseline.algorithm_parallelized:
             try:
@@ -273,7 +275,6 @@ class BatchPolopt(RLAlgorithm):
             baseline.get_param_values(trainable=True)
         )
         logger.log("fitted")
-        results = parallel_sampler.run_map(worker_process_paths, self.opt)
 
         average_discounted_returns, average_returns, std_returns, max_returns, \
             min_returns, num_trajses, ents, evs = extract(
@@ -306,3 +307,4 @@ class BatchPolopt(RLAlgorithm):
             return aggregate_samples_data()
         else:
             return dict()
+
