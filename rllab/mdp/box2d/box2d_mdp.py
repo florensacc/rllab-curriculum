@@ -382,3 +382,5 @@ class Box2DMDP(ControlMDP):
     def before_world_step(self, state, action):
         pass
 
+    def action_from_keys(self, keys):
+        raise NotImplementedError

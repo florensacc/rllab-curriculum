@@ -6,8 +6,16 @@
     <geom condim="3" conaffinity="0" margin="0.1" friction="1.0 0.5 0.5" rgba="0.8 0.6 0.4 1" />
   </default>
   <option timestep="0.01" integrator="RK4" />
+  <asset>
+    <texture type="skybox" builtin="gradient" width="100" height="100" rgb1="1 1 1" rgb2="0 0 0" />
+    <texture name="texgeom" type="cube" builtin="flat" mark="cross" width="127" height="1278" rgb1="0.8 0.6 0.4" rgb2="0.8 0.6 0.4" markrgb="1 1 1" random="0.01" />
+    <texture name="texplane" type="2d" builtin="checker" rgb1="0 0 0" rgb2="0.8 0.8 0.8" width="100" height="100" />
+    <material name='MatPlane' texture="texplane" shininess="1" texscale="0.6 0.6" specular="1"  reflectance="0.5" />
+    <material name='geom' texture="texgeom" texuniform="true" />
+  </asset>
   <worldbody>
-    <geom name="floor" type="plane" conaffinity="1" size="5 5 5" rgba=".8 .9 .9 1" pos="0 0 0" user="0" />
+    <light directional="true" cutoff="100" exponent="1" diffuse="1 1 1" specular=".1 .1 .1" pos="0 0 1.3" dir="-0 0 -1.3" />
+    <geom name='floor' material="MatPlane" pos='0 0 0' size='40 40 40' type='plane' conaffinity='1' rgba='0.8 0.9 0.8 1' condim='3' />
     <body name="torso" pos="0 0 1.4">
       <inertial pos="0 0 0.0403624" mass="8.32208" diaginertia="0.159056 0.147471 0.0330627" />
       <joint name="root" type="free" limited="false" pos="0 0 0" axis="0 0 1" margin="0.01" armature="0" damping="0" />

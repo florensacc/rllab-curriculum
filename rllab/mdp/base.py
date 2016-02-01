@@ -56,9 +56,6 @@ class MDP(object):
         """
         pass
 
-    def action_from_keys(self, keys):
-        raise NotImplementedError
-
     def print_stats(self):
         print "MDP:\t%s" % self.__class__.__name__
         print "Observation dim:\t%d" % np.prod(self.observation_shape)
