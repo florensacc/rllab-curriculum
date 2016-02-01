@@ -14,11 +14,6 @@ import math
 import tempfile
 import theano
 
-from OpenGL.GL import *
-from OpenGL.GLUT import *
-from OpenGL.GLU import *
-
-
 APPLE = 0
 BOMB = 1
 
@@ -88,43 +83,45 @@ class GatherViewer(MjViewer):
         mjlib.mjlib.mjr_render(0, self.get_rect(), byref(tmpobjects), byref(
             self.ropt), byref(self.cam.pose), byref(self.con))
 
+        import OpenGL.GL as GL
+
         def draw_rect(x, y, width, height):
             # start drawing a rectangle
-            glBegin(GL_QUADS)
+            GL.glBegin(GL.GL_QUADS)
             # bottom left point
-            glVertex2f(x, y)
+            GL.glVertex2f(x, y)
             # bottom right point
-            glVertex2f(x + width, y)
+            GL.glVertex2f(x + width, y)
             # top right point
-            glVertex2f(x + width, y + height)
+            GL.glVertex2f(x + width, y + height)
             # top left point
-            glVertex2f(x, y + height)
-            glEnd()
+            GL.glVertex2f(x, y + height)
+            GL.glEnd()
 
         def refresh2d(width, height):
-            glViewport(0, 0, width, height)
-            glMatrixMode(GL_PROJECTION)
-            glLoadIdentity()
-            glOrtho(0.0, width, 0.0, height, 0.0, 1.0)
-            glMatrixMode(GL_MODELVIEW)
-            glLoadIdentity()
+            GL.glViewport(0, 0, width, height)
+            GL.glMatrixMode(GL.GL_PROJECTION)
+            GL.glLoadIdentity()
+            GL.glOrtho(0.0, width, 0.0, height, 0.0, 1.0)
+            GL.glMatrixMode(GL.GL_MODELVIEW)
+            GL.glLoadIdentity()
 
-        glLoadIdentity()
+        GL.glLoadIdentity()
         width, height = glfw.get_framebuffer_size(self.window)
         refresh2d(width, height)
-        glDisable(GL_LIGHTING)
-        glEnable(GL_BLEND)
-        glColor4f(0.0, 0.0, 0.0, 0.8)
+        GL.glDisable(GL.GL_LIGHTING)
+        GL.glEnable(GL.GL_BLEND)
+        GL.glColor4f(0.0, 0.0, 0.0, 0.8)
         draw_rect(10, 10, 300, 100)
 
         apple_readings, bomb_readings = self.mdp.get_readings()
         for idx, reading in enumerate(apple_readings):
             if reading > 0:
-                glColor4f(0.0, 1.0, 0.0, reading)
+                GL.glColor4f(0.0, 1.0, 0.0, reading)
                 draw_rect(20 * (idx + 1), 10, 5, 50)
         for idx, reading in enumerate(bomb_readings):
             if reading > 0:
-                glColor4f(1.0, 0.0, 0.0, reading)
+                GL.glColor4f(1.0, 0.0, 0.0, reading)
                 draw_rect(20 * (idx + 1), 60, 5, 50)
 
 
@@ -281,7 +278,8 @@ class GatherMDP(ControlMDP, Serializable):
                 continue
             angle = math.atan2(oy - robot_y, ox - robot_x) - ori
             if math.isnan(angle):
-                import ipdb; ipdb.set_trace()
+                import ipdb
+                ipdb.set_trace()
             angle = angle % (2 * math.pi)
             if angle > math.pi:
                 angle = angle - 2 * math.pi
