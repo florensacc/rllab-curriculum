@@ -1,6 +1,6 @@
 <!-- Auto-generated. Do not edit! -->
 <box2d>
-  <world timestep="0.001" velitr="20" positr="20">
+  <world timestep="0.01" velitr="20" positr="20">
     <body name="link1" type="dynamic" position="0,0">
       <fixture density="5.0" group="-1" shape="polygon" vertices="0.05,0.0;0.05,-1.0;-0.05,-1.0;-0.05,0.0"/>
     </body>
@@ -14,11 +14,11 @@
     <joint type="revolute" name="link_joint_2" bodyA="link1" bodyB="link2" anchor="0,-1"/>
     <control type="torque" joint="link_joint_1" ctrllimit="-3,3"/>
     <control type="torque" joint="link_joint_2" ctrllimit="-3,3"/>
-    <state type="apos" body="link1" transform="sin" />
-    <state type="apos" body="link1" transform="cos" />
+    <state type="apos" body="link1" transform="sin"/>
+    <state type="apos" body="link1" transform="cos"/>
     <state type="avel" body="link1"/>
-    <state type="apos" body="link2" transform="sin" />
-    <state type="apos" body="link2" transform="cos" />
+    <state type="apos" body="link2" transform="sin"/>
+    <state type="apos" body="link2" transform="cos"/>
     <state type="avel" body="link2"/>
   </world>
 </box2d>

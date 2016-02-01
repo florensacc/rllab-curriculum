@@ -9,25 +9,27 @@ params = {
     # trig_angle: false,
     # frame_skip: 2,
   },
-  # normalize_mdp: nil,
+        normalize_mdp: true,
   policy: {
     _name: "mean_std_nn_policy",
     # hidden_layers: [],
   },
-  vf: {
-    _name: "mujoco_value_function",
-  },
+        baseline: {
+          _name: "linear_feature_baseline",
+        },
   exp_name: "ppo_double_skip2_pendulum_seed_#{seed}",
   algo: {
-    _name: "ppo",
-    binary_search_penalty: false,
-    whole_paths: true,
-    # quantile: quantile,
-    batch_size: 10000,
+    # _name: "ppo",
+    # binary_search_penalty: false,
+    # whole_paths: true,
+    # # quantile: quantile,
+
+    _name: "reps",
+    batch_size: 5000,
     max_path_length: 100,
     n_itr: 500,
     plot: true,
-    step_size: 0.1,
+    # step_size: 0.1,
 
   },
   n_parallel: 1,
