@@ -14,15 +14,6 @@ class AntMDP(MujocoMDP, Serializable):
     def __init__(self, *args, **kwargs):
         super(AntMDP, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)
-        init_qpos = np.copy(self.init_qpos)
-        # Taken from John's code
-        init_qpos[0] = 0.0
-        init_qpos[2] = 0.55
-        init_qpos[8] = 1.0
-        init_qpos[10] = -1.0
-        init_qpos[12] = -1.0
-        init_qpos[14] = 1.0
-        self.init_qpos = init_qpos
 
     def get_current_obs(self):
         return np.concatenate([
