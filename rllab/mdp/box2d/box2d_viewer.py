@@ -155,16 +155,17 @@ class Box2DViewer(b2ContactListener):
         self.renderer = PygameDraw(surface=self.screen, test=self)
         self.world.renderer = self.renderer
 
-        try:
-            self.font = pygame.font.Font(None, 15)
-        except IOError:
-            try:
-                self.font = pygame.font.Font("freesansbold.ttf", 15)
-            except IOError:
-                print("Unable to load default font or 'freesansbold.ttf'")
-                print("Disabling text drawing.")
-                self.Print = lambda *args: 0
-                self.DrawStringAt = lambda *args: 0
+        # FIXME, commented to avoid Linux error due to font.
+#         try:
+#             self.font = pygame.font.Font(None, 15)
+#         except IOError:
+#             try:
+#                 self.font = pygame.font.Font("freesansbold.ttf", 15)
+#             except IOError:
+#                 print("Unable to load default font or 'freesansbold.ttf'")
+#                 print("Disabling text drawing.")
+#                 self.Print = lambda *args: 0
+#                 self.DrawStringAt = lambda *args: 0
 
         self.viewCenter = (0, 20.0)
         self._viewZoom = 100
