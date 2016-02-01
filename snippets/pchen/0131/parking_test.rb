@@ -1,6 +1,6 @@
 require_relative '../../rocky/utils'
 
-itrs = 300
+itrs = 2000
 batch_size = 50000
 horizon = 500
 discount = 0.99
@@ -11,12 +11,12 @@ mdps = []
 # mdps << "box2d.cartpole_mdp"
 # mdps << "box2d.mountain_car_mdp"
 # mdps << "box2d.cartpole_swingup_mdp"
-mdps << "box2d.double_pendulum_mdp"
+# mdps << "box2d.double_pendulum_mdp"
 mdps << "box2d.car_parking_mdp"
 # mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
-# 
-# # loco
-# mdps << "mujoco_1_22.swimmer_mdp"
+
+# loco
+# mdps << "mujoco_1_22.simmer_mdp"
 # mdps << "mujoco_1_22.hopper_mdp"
 # mdps << "mujoco_1_22.walker2d_mdp"
 # mdps << "mujoco_1_22.half_cheetah_mdp"
@@ -26,25 +26,8 @@ mdps << "box2d.car_parking_mdp"
 
 algos = []
 
-#reps
-[1e-1, 1e-2].each do |ss|
-  algos << {
-    _name: "reps",
-    epsilon: ss,
-  }
-end
-
-# erwr
-[50].each do |max_opt_itr|
-  algos << {
-    _name: "erwr",
-    max_opt_itr: max_opt_itr,
-    positive_adv: true,
-  }
-end
-
 # trpo
-[10, 1, 0.1, ].each do |ss|
+[1, 0.1, 0.01].each do |ss|
   algos << {
     _name: "trpo",
     step_size: ss,
@@ -52,52 +35,6 @@ end
     max_backtracks: 15,
   }
 end
-
-# npg
-[1, 0.1, 0.01].each do |ss|
-  [1e-1, 1e0].each do |lr|
-    algos << {
-      _name: "npg",
-      step_size: ss,
-      update_method: "sgd",
-      learning_rate: lr,
-    }
-  end
-end
-
-# vpg
-[1e-3, 1e-2, 1e-1].each do |lr|
-  algos << {
-    _name: "vpg",
-    update_method: "adam",
-    learning_rate: lr,
-  }
-end
-[1e-3, 1e-2, 1e-1].each do |lr|
-  algos << {
-    _name: "vpg",
-    update_method: "sgd",
-    learning_rate: lr,
-  }
-end
-
-
-# # algos = []
-# # cem
-# [0.05, 0.15].each do |best_frac|
-#   [0.5, 1].each do |extra_std|
-#     [itrs*0.8, itrs*0.5].each do |extra_decay_time|
-#       algos << {
-#         _name: "cem",
-#         n_samples: (batch_size*1.0/horizon).to_i,
-#         best_frac: best_frac,
-#         extra_std: extra_std,
-#         extra_decay_time: extra_decay_time.to_i,
-#       }
-#     end
-#   end
-# end
-
 
 hss = []
 hss << [100, 50, 32]
@@ -107,7 +44,7 @@ hss.each do |hidden_sizes|
   seeds.each do |seed|
     mdps.each do |mdp|
       algos.each do |algo|
-        exp_name = "bsf_big_nn_0131_all_#{inc = inc + 1}_fixed_double_parking"
+        exp_name = "parking_test_0131_all_#{inc = inc + 1}"
         params = {
           mdp: {
             _name: mdp,
@@ -126,7 +63,6 @@ hss.each do |hidden_sizes|
             max_path_length: horizon,
             n_itr: itrs,
             discount: discount,
-            batch_size: batch_size,
             # plot: true,
           }.merge(algo),
           n_parallel: 8,
@@ -163,11 +99,7 @@ hss.each do |hidden_sizes|
         f.close
         system("chmod +x " + fname)
         system("qsub -V -b n -l mem_free=8G,h_vmem=14G -r y -cwd " + fname)
-        # if mdp =~ /parking/ or mdp =~ /\.double/
-        #     puts `~/qs.sh | grep #{exp_name} | /usr/local/sbin/kill.rb`
-        # end
       end
     end
   end
 end
-
