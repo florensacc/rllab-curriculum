@@ -44,7 +44,7 @@ class REPS(BatchPolopt):
     def init_opt(self, mdp, policy, baseline):
 
         # Init dual param values
-        self.param_eta = 15.
+        self.param_eta = 0.1
         # Adjust for linear feature vector.
         self.param_v = np.random.randn(mdp.observation_shape[0] * 2 + 4)
 

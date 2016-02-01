@@ -32,7 +32,7 @@ class NaturalGradientMethod(object):
                   help="A small value to add to Fisher Information Matrix's eigenvalue"
                        "When CG is used, this value will not be changed but if we are"
                        "directly using Hessian inverse method, this regularization will be"
-                       "adaptively increased should the regularized matrix is still singular"
+                       "adaptively increased should the regularized matrix still be singular"
                        "(but it's unlikely)")
     def __init__(
             self,
@@ -74,7 +74,6 @@ class NaturalGradientMethod(object):
 
         kl_grads = theano.grad(mean_kl, wrt=policy.get_params(trainable=True))
         # kl_flat_grad = flatten_tensor_variables(kl_grads)
-        
         xs = [
             new_tensor_like("%s x" % p.name, p)
             for p in policy.get_params(trainable=True)

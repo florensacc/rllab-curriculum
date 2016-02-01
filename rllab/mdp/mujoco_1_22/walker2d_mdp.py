@@ -2,6 +2,10 @@ from rllab.mdp.mujoco_1_22.mujoco_mdp import MujocoMDP
 from rllab.core.serializable import Serializable
 import numpy as np
 from rllab.misc.overrides import overrides
+from rllab.sampler import parallel_sampler
+from rllab.misc.ext import extract
+from rllab.misc import logger
+from rllab.misc import autoargs
 
 
 def smooth_abs(x, param):
@@ -12,46 +16,66 @@ class Walker2DMDP(MujocoMDP, Serializable):
 
     FILE = 'walker2d.xml'
 
-    def __init__(self, *args, **kwargs):
+    @autoargs.arg('ctrl_cost_coeff', type=float,
+                  help='cost coefficient for controls')
+    def __init__(
+            self,
+            ctrl_cost_coeff=1e-2,
+            *args, **kwargs):
+        self.ctrl_cost_coeff = ctrl_cost_coeff
         super(Walker2DMDP, self).__init__(*args, **kwargs)
-        Serializable.__init__(self, *args, **kwargs)
+        Serializable.__init__(
+            self,
+            ctrl_cost_coeff=ctrl_cost_coeff,
+            *args, **kwargs)
 
     def get_current_obs(self):
         return np.concatenate([
             self.model.data.qpos.flat,
             self.model.data.qvel.flat,
-            # self.model.data.qfrc_passive.flat,
+            self.model.data.qfrc_passive.flat,
             self.get_body_com("torso").flat,
         ])
 
     def step(self, state, action):
         self.set_state(state)
-        prev_com = self.get_body_com("torso")
         next_state = self.forward_dynamics(state, action, restore=False)
-        after_com = self.get_body_com("torso")
-
         next_obs = self.get_current_obs()
         action = np.clip(action, *self.action_bounds)
-        ctrl_cost = 0  # 1e-1 * np.sum(np.square(action))
-        passive_cost = 0  # 1e-5 * np.sum(np.square(self.model.data.qfrc_passive))
-
-        run_cost = -1 * (after_com[0] - prev_com[0]) / self.model.opt.timestep
-        upright_cost = 0#1e-5 * smooth_abs(self.get_body_xmat("torso")[2, 2] - 1, 0.1)
-        cost = ctrl_cost + passive_cost + run_cost + upright_cost
-        reward = -cost
+        lb, ub = self.action_bounds
+        scaling = (ub - lb) * 0.5
+        ctrl_cost = 0.5 * self.ctrl_cost_coeff * np.sum(np.square(action / scaling))
+        passive_cost = min(10, 0.5 * 1e-2 * np.sum(np.square(self.model.data.qfrc_passive)))
+        forward_reward = self.get_body_comvel("torso")[0]
+        reward = forward_reward - ctrl_cost - passive_cost
         qpos = self.model.data.qpos
-        done = not (qpos[0] > 0.8 and qpos[0] < 2.0 and qpos[2] > -1.0 and qpos[2] < 1.0)
+        done = not (qpos[0] > 0.8 and qpos[0] < 2.0
+                    and qpos[2] > -1.0 and qpos[2] < 1.0)
         return next_state, next_obs, reward, done
 
     @overrides
-    def log_extra(self, logger, paths):
-        forward_progress = \
-            [path["observations"][-1][-3] - path["observations"][0][-3] for path in paths]
-        logger.record_tabular(
-            'AverageForwardProgress', np.mean(forward_progress))
-        logger.record_tabular(
-            'MaxForwardProgress', np.max(forward_progress))
-        logger.record_tabular(
-            'MinForwardProgress', np.min(forward_progress))
-        logger.record_tabular(
-            'StdForwardProgress', np.std(forward_progress))
+    def log_extra(self):
+        stats = parallel_sampler.run_map(_worker_collect_stats)
+        mean_progs, max_progs, min_progs, std_progs = extract(
+            stats,
+            "mean_prog", "max_prog", "min_prog", "std_prog"
+        )
+        logger.record_tabular('AverageForwardProgress', np.mean(mean_progs))
+        logger.record_tabular('MaxForwardProgress', np.max(max_progs))
+        logger.record_tabular('MinForwardProgress', np.min(min_progs))
+        logger.record_tabular('StdForwardProgress', np.mean(std_progs))
+
+
+def _worker_collect_stats():
+    PG = parallel_sampler.G
+    paths = PG.paths
+    progs = [
+        path["observations"][-1][-3] - path["observations"][0][-3]
+        for path in paths
+    ]
+    return dict(
+        mean_prog=np.mean(progs),
+        max_prog=np.max(progs),
+        min_prog=np.min(progs),
+        std_prog=np.std(progs),
+    )

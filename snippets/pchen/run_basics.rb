@@ -7,10 +7,11 @@ discount = 0.99
 seeds = (1..5).each do |i| i ** 2 * 5 + 23 end
 
 mdps = []
-mdps << "box2d.cartpole_mdp"
-mdps << "box2d.mountain_car_mdp"
-mdps << "box2d.cartpole_swingup_mdp"
-mdps << "box2d.double_pendulum_mdp"
+# mdps << "box2d.cartpole_mdp"
+# mdps << "box2d.mountain_car_mdp"
+# mdps << "box2d.cartpole_swingup_mdp"
+# mdps << "box2d.double_pendulum_mdp"
+mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
 
 algos = []
 # erwr
@@ -42,7 +43,7 @@ end
     algos << {
       _name: "npg",
       step_size: ss,
-      update_method: "adam",
+      update_method: "sgd",
       learning_rate: lr,
     }
   end
@@ -75,7 +76,7 @@ inc = 0
 seeds.each do |seed|
   mdps.each do |mdp|
     algos.each do |algo|
-      exp_name = "run0_0126_linear_pi_basics_#{inc = inc + 1}"
+      exp_name = "f_idp_0129_linear_pi_basics_#{inc = inc + 1}"
       params = {
         mdp: {
           _name: mdp,

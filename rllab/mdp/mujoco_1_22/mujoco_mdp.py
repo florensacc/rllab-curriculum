@@ -54,9 +54,16 @@ class MujocoMDP(ControlMDP):
         self.action_noise = action_noise
         if "frame_skip" in self.model.numeric_names:
             frame_skip_id = self.model.numeric_names.index("frame_skip")
-            self.frame_skip = int(self.model.numeric_data.flat[frame_skip_id])
+            addr = self.model.numeric_adr.flat[frame_skip_id]
+            self.frame_skip = int(self.model.numeric_data.flat[addr])
         else:
             self.frame_skip = 1
+        if "init_qpos" in self.model.numeric_names:
+            init_qpos_id = self.model.numeric_names.index("init_qpos")
+            addr = self.model.numeric_adr.flat[init_qpos_id]
+            size = self.model.numeric_size.flat[init_qpos_id]
+            init_qpos = self.model.numeric_data.flat[addr:addr+size]
+            self.init_qpos = init_qpos
         self.dcom = None
         self.current_com = None
         self.reset()
@@ -91,8 +98,10 @@ class MujocoMDP(ControlMDP):
         return lb, ub
 
     def reset_mujoco(self):
-        self.model.data.qpos = self.init_qpos
-        self.model.data.qvel = self.init_qvel
+        self.model.data.qpos = self.init_qpos + \
+            np.random.normal(size=self.init_qpos.shape) * 0.01
+        self.model.data.qvel = self.init_qvel + \
+            np.random.normal(size=self.init_qvel.shape) * 0.1
         self.model.data.qacc = self.init_qacc
         self.model.data.ctrl = self.init_ctrl
 
@@ -228,3 +237,6 @@ class MujocoMDP(ControlMDP):
     def print_stats(self):
         super(MujocoMDP, self).print_stats()
         print "qpos dim:\t%d" % len(self.model.data.qpos)
+
+    def action_from_key(self, key):
+        raise NotImplementedError

@@ -20,7 +20,9 @@ params = {
     max_path_length: 100,
     n_itr: 500,
     whole_paths: true,
-    step_size: 0.1,
+    update_method: 'adam',
+    learning_rate: 0.01,
+    #step_size: 0.1,
     #max_opt_itr: 20,
   },
   n_parallel: 4,
@@ -30,4 +32,3 @@ params = {
 command = to_command(params)
 puts command
 system(command)
-

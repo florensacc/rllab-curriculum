@@ -16,7 +16,7 @@ def arg(name, type=None, help=None, nargs=None, mapper=None, choices=None,
             help=help,
             nargs=nargs,
             choices=choices,
-            mapper=mapper
+            mapper=mapper,
         )
         return fn
     return wrap
