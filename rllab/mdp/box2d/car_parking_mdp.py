@@ -16,11 +16,12 @@ class CarParkingMDP(Box2DMDP, Serializable):
                   help="Randomized starting position by uniforming sampling starting car angle"
                        "and position from a circle of radius 5")
     def __init__(self, *args, **kwargs):
+        Serializable.__init__(self, *args, **kwargs)
+        self.random_start = kwargs.pop("random_start", True)
         super(CarParkingMDP, self).__init__(
             self.model_path("car_parking.xml"),
             *args, **kwargs
         )
-        self.random_start = kwargs.get("random_start", True)
         self.goal = find_body(self.world, "goal")
         self.car = find_body(self.world, "car")
         self.wheels = [body for body in self.world.bodies if "wheel" in _get_name(body)]
@@ -29,7 +30,6 @@ class CarParkingMDP(Box2DMDP, Serializable):
         self.goal_radius = 1.
         self.vel_thres = 1e-1
         self.start_radius = 5.
-        Serializable.__init__(self, *args, **kwargs)
 
     @overrides
     def before_world_step(self, state, action):
@@ -67,8 +67,17 @@ class CarParkingMDP(Box2DMDP, Serializable):
         self._invalidate_state_caches()
         if self.random_start:
             pos_angle, car_angle = np.random.rand(2) * np.pi * 2
-            self.car.position = (self.start_radius*np.cos(pos_angle), self.start_radius*np.sin(pos_angle))
-            self.car.angle = car_angle
+            dis = (self.start_radius*np.cos(pos_angle), self.start_radius*np.sin(pos_angle))
+            for body in [self.car] + self.wheels:
+                body.angle = car_angle
+            for wheel in self.wheels:
+                wheel.position = wheel.position - self.car.position + dis
+            self.car.position = dis
+            self.world.Step(
+                self.extra_data.timeStep,
+                self.extra_data.velocityIterations,
+                self.extra_data.positionIterations
+            )
         return self.get_state(), self.get_current_obs()
 
     @overrides

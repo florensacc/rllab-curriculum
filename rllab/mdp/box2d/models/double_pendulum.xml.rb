@@ -5,7 +5,7 @@ link_width = 0.1
 link_track_group = -1
 
 box2d {
-  world(timestep: 0.05, velitr: 20, positr: 20) {
+  world(timestep: 0.01, velitr: 20, positr: 20) {
     body(name: :link1, type: :dynamic, position: [0, 0]) {
       rect(
         from: [0, 0], to: [0, -link_len],
@@ -52,9 +52,12 @@ box2d {
       joint: :link_joint_2,
       ctrllimit: [-3.N, 3.N],
     )
-    state type: :apos, body: :link1
+    state type: :apos, body: :link1, transform: :sin
+    state type: :apos, body: :link1, transform: :cos
     state type: :avel, body: :link1
-    state type: :apos, body: :link2
+    state type: :apos, body: :link2, transform: :sin
+    state type: :apos, body: :link2, transform: :cos
     state type: :avel, body: :link2
   }
 }
+
