@@ -27,7 +27,7 @@ class REPS(BatchPolopt):
                   "same interface as scipy.optimize.fmin_l_bfgs_b")
     def __init__(
             self,
-            epsilon=1.,
+            epsilon=0.1,
             L2_reg_dual=0.,
             L2_reg_loss=0.,
             max_opt_itr=50,
@@ -44,10 +44,9 @@ class REPS(BatchPolopt):
     def init_opt(self, mdp, policy, baseline):
   
         # Init dual param values
-        self.param_eta = 1.
+        self.param_eta = 15.
         # Adjust for linear feature vector.
         self.param_v = np.random.randn(mdp.observation_shape[0] * 2 + 4)
-#         self.param_v = np.random.randn(mdp.observation_shape[0] * 1 + 0)
   
         # Theano vars
         observations = new_tensor(
@@ -143,8 +142,6 @@ class REPS(BatchPolopt):
         l = len(path["rewards"])
         al = np.arange(l).reshape(-1, 1) / 100.0
         return np.concatenate([o, o**2, al, al**2, al**3, np.ones((l, 1))], axis=1)
-#         return np.concatenate([o, o**2, o**3, np.ones((l, 1))], axis=1)
-#         return path["observations"]
   
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
