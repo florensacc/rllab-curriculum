@@ -6,6 +6,7 @@ seed = 1
 params = {
   mdp: {
     _name: "box2d.car_parking_mdp",
+    random_start: true,
   },
   normalize_mdp: true,
   policy: {
@@ -20,20 +21,21 @@ params = {
     # _name: "ppo",
     # step_size: 0.1,
     # binary_search_penalty: false,
+    # batch_size: 10000,
 
     _name: "trpo",
     step_size: 0.1,
     backtrack_ratio: 0.7,
     max_backtracks: 15,
     cg_iters: 10,
-    batch_size: 5000,
+    batch_size: 10000,
 
 
     # _name: "cem",
     # extra_decay_time: 300,
 
     whole_paths: true,
-    max_path_length: 70,
+    max_path_length: 100,
     n_itr: 5000,
     plot: true,
   },
