@@ -5,45 +5,44 @@ from rllab.sampler import parallel_sampler
 from rllab.misc.overrides import overrides
 from rllab.misc.ext import extract
 from rllab.misc import logger
+from rllab.misc import autoargs
 
 
 class SimpleHumanoidMDP(MujocoMDP, Serializable):
 
     FILE = 'simple_humanoid.xml'
 
-    def __init__(self, *args, **kwargs):
+    @autoargs.arg('vel_deviation_cost_coeff', type=float,
+                  help='cost coefficient for velocity deviation')
+    @autoargs.arg('alive_bonus', type=float,
+                  help='bonus reward for being alive')
+    @autoargs.arg('ctrl_cost_coeff', type=float,
+                  help='cost coefficient for control inputs')
+    @autoargs.arg('impact_cost_coeff', type=float,
+                  help='cost coefficient for impact')
+    @autoargs.arg('clip_impact_cost', type=float,
+                  help='maximum value of impact cost')
+    def __init__(
+            self,
+            vel_deviation_cost_coeff=1,
+            alive_bonus=0.2,
+            ctrl_cost_coeff=1e-2,
+            impact_cost_coeff=1e-5,
+            clip_impact_cost=0.5,
+            *args, **kwargs):
+        self.vel_deviation_cost_coeff = vel_deviation_cost_coeff
+        self.alive_bonus = alive_bonus
+        self.ctrl_cost_coeff = ctrl_cost_coeff
+        self.impact_cost_coeff = impact_cost_coeff
+        self.clip_impact_cost = clip_impact_cost
         super(SimpleHumanoidMDP, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
-
-    @overrides
-    def reset_mujoco(self):
-        bending = -0.3
-        init_qpos = np.copy(self.init_qpos)
-        init_qpos[12] = bending
-        init_qpos[13] = 2 * bending
-        init_qpos[15] = bending
-
-        init_qvel = np.copy(self.init_qvel)
-        init_qvel[1] = bending
-        init_qvel[2] = 2 * bending
-        init_qvel[4] = bending
-        # make one knee stick forward
-        forward_init = 0.5
-        if np.random.rand() <= 0.5:
-            init_qpos[12] += forward_init
-        else:
-            init_qvel[1] += forward_init
-        self.model.data.qpos = init_qpos
-        self.model.data.qvel = init_qvel
 
     def get_current_obs(self):
         data = self.model.data
         return np.concatenate([
             data.qpos.flat,
             data.qvel.flat,
-            # data.cinert.flat,
-            # data.cvel.flat,
-            # data.qfrc_actuator.flat,
             np.clip(data.cfrc_ext, -1, 1).flat,
             self.get_body_com("torso").flat,
         ])
@@ -55,28 +54,29 @@ class SimpleHumanoidMDP(MujocoMDP, Serializable):
         return (np.sum(mass * xpos, 0) / np.sum(mass))[0]
 
     def step(self, state, action):
-        # self.set_state(state)
-        # before_center = self._get_com()
-        # self.model.forward()
-        # before_com = self.get_body_com("front")
         next_state = self.forward_dynamics(state, action, restore=False)
         next_obs = self.get_current_obs()
-        # after_center = self._get_com()
 
-        alive_bonus = 1.0
+        alive_bonus = self.alive_bonus
         data = self.model.data
-        # mass = self.model.body_mass
-        # xpos = data.xipos
-        # after_center = (np.sum(mass * xpos, 0) / np.sum(mass))[0]
-        lin_vel_reward = 1 * self.get_body_comvel("torso")[0]
-        quad_ctrl_cost = .5 * 1e-5 * np.sum(np.square(data.ctrl))
-        quad_impact_cost = .5 * 1e-5 * np.sum(np.square(data.cfrc_ext / 100))
-        quad_impact_cost = min(10.0, quad_impact_cost)
-        vel_deviation_cost = 1. * np.sum(
-            np.square(self.get_body_comvel("torso")[1:]))
-        reward = lin_vel_reward + alive_bonus - quad_ctrl_cost - \
-            quad_impact_cost - vel_deviation_cost
-        done = data.qpos[2] < 0.9 or data.qpos[2] > 2.0
+
+        comvel = self.get_body_comvel("torso")
+
+        lin_vel_reward = comvel[0]
+        lb, ub = self.action_bounds
+        scaling = (ub - lb) * 0.5
+        ctrl_cost = .5 * self.ctrl_cost_coeff * np.sum(
+            np.square(action / scaling))
+        impact_cost = min(
+            .5 * self.impact_cost_coeff * np.sum(
+                np.square(np.clip(data.cfrc_ext, -1, 1))),
+            self.clip_impact_cost,
+        )
+        vel_deviation_cost = 0.5 * self.vel_deviation_cost_coeff * np.sum(
+            np.square(comvel[1:]))
+        reward = lin_vel_reward + alive_bonus - ctrl_cost - \
+            impact_cost - vel_deviation_cost
+        done = data.qpos[2] < 0.8 or data.qpos[2] > 2.0
 
         return next_state, next_obs, reward, done
 

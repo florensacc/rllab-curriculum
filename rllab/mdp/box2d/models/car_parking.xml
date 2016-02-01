@@ -24,6 +24,8 @@
     </body>
     <joint type="revolute" name="right_rear_wheel_joint" bodyA="car" bodyB="right_rear_wheel" localAnchorA="0.3,-0.3" localAnchorB="0,0" limit="0,0"/>
     <control type="force" bodies="left_front_wheel,right_front_wheel" anchor="0,0" direction="0,1" ctrllimit="-10,10"/>
+    <state body="car" type="xvel"/>
+    <state body="car" type="yvel"/>
     <state body="car" type="dist" to="goal"/>
     <state body="car" type="angle" to="goal" transform="cos"/>
     <state body="car" type="angle" to="goal" transform="sin"/>

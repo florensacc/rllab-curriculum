@@ -7,7 +7,7 @@ params = {
   normalize_mdp: true,
   policy: {
     _name: "mean_std_nn_policy",
-    hidden_sizes: [100, 50, 25],
+    hidden_sizes: [100, 50, 32],
   },
   baseline: {
     _name: "parallel.linear_feature_baseline",
@@ -17,9 +17,11 @@ params = {
     _name: "parallel.trpo",
     whole_paths: true,
     batch_size: 50000,
-    max_path_length: 500,
-    n_itr: 1000,
-    step_size: 0.1,
+    max_path_length: 1000,
+    n_itr: 10000,
+    step_size: 1,
+    gae_lambda: 0.99,
+    discount: 0.995,
   },
   n_parallel: 4,
   snapshot_mode: "last",
