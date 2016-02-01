@@ -27,10 +27,10 @@ class REPS(BatchPolopt):
                   "same interface as scipy.optimize.fmin_l_bfgs_b")
     def __init__(
             self,
-            epsilon=0.1,
+            epsilon=1000.0,
             L2_reg_dual=1e-7,
             L2_reg_loss=0.,
-            max_opt_itr=50,
+            max_opt_itr=150,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
             **kwargs):
         super(REPS, self).__init__(**kwargs)
@@ -44,7 +44,7 @@ class REPS(BatchPolopt):
     def init_opt(self, mdp, policy, baseline):
 
         # Init dual param values
-        self.param_eta = 0.001
+        self.param_eta = 15.
         # Adjust for linear feature vector.
         self.param_v = np.random.randn(mdp.observation_shape[0] * 2 + 4)
 
@@ -113,7 +113,8 @@ class REPS(BatchPolopt):
                     ))) + param_eta * TT.max(delta_v / param_eta)
         # Add L2 regularization.
         dual += self.L2_reg_dual * \
-            (TT.mean(param_eta**2) + TT.mean(param_v**2))
+            (TT.mean(param_eta**2) +
+             TT.mean((1 / param_eta)**2) + TT.mean(param_v**2))
 
         # Symbolic dual gradient
         dual_grad = TT.grad(cost=dual, wrt=[param_eta, param_v])
@@ -198,7 +199,7 @@ class REPS(BatchPolopt):
             func=eval_dual, x0=x0,
             fprime=eval_dual_grad,
             bounds=bounds,
-            maxiter=50,
+            maxiter=self.max_opt_itr,
             disp=0
         )
         dual_after = eval_dual(params_ast)
@@ -235,7 +236,7 @@ class REPS(BatchPolopt):
             func=eval_loss, x0=cur_params,
             fprime=eval_loss_grad,
             disp=0,
-            maxiter=50
+            maxiter=self.max_opt_itr
         )
         opt_params = policy.get_param_values(trainable=True)
         loss_after = eval_loss(opt_params)
