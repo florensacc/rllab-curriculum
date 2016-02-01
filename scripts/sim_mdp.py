@@ -95,7 +95,6 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
                             states[0] = mdp.reset()[0]
                     except Exception as e:
                         print e
-
     else:
         raise ValueError('Unsupported mode: %s' % mode)
     mdp.stop_viewer()
@@ -111,7 +110,6 @@ if __name__ == "__main__":
     parser.add_argument('--max_steps', type=int,
                         default=sys.maxint, help='max steps')
     args = parser.parse_args()
-    # load_mdp_class(args.mdp)()
     mdp = load_class(args.mdp, MDP, ["rllab", "mdp"])()
     visualize_mdp(mdp, mode=args.mode, max_steps=args.max_steps,
                   speedup=args.speedup)

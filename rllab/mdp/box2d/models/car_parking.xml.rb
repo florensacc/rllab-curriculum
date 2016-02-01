@@ -56,6 +56,8 @@ box2d {
             direction: [0, 1],
             ctrllimit: [-10.N, 10.N],
             )
+    state body: :car, type: :xvel
+    state body: :car, type: :yvel
     state body: :car, type: :dist, to: :goal
     state body: :car, type: :angle, to: :goal, transform: :cos
     state body: :car, type: :angle, to: :goal, transform: :sin
