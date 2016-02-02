@@ -42,16 +42,10 @@ class CEM(RLAlgorithm):
                   help="Make sure that the samples contain whole "
                        "trajectories, even if the actual batch size is "
                        "slightly larger than the specified batch_size.")
-    @autoargs.arg("init_std", type=float,
+    @autoargs.arg("sigma0", type=float,
                   help="Initial std for param distribution")
-    @autoargs.arg("extra_std", type=float,
-                  help="Decaying std added to param distribution at each iteration")
-    @autoargs.arg("extra_decay_time", type=int,
-                  help="Iterations that it takes to decay extra std")
     @autoargs.arg("n_samples", type=int,
                   help="# of samples from param distribution")
-    @autoargs.arg("best_frac", type=float,
-                  help="Best fraction of the sampled params")
     @autoargs.arg("plot", type=bool,
                   help="Plot evaluation run after each iteration")
     def __init__(
@@ -60,9 +54,8 @@ class CEM(RLAlgorithm):
             max_path_length=500,
             discount=0.99,
             whole_paths=True,
-            init_std=1.,
+            sigma0=1.,
             n_samples=100,
-            best_frac=0.05,
             extra_std=1.,
             extra_decay_time=100,
             plot=False,
@@ -70,11 +63,8 @@ class CEM(RLAlgorithm):
     ):
         super(CEM, self).__init__(**kwargs)
         self.plot = plot
-        self.extra_decay_time = extra_decay_time
-        self.extra_std = extra_std
-        self.best_frac = best_frac
         self.n_samples = n_samples
-        self.init_std = init_std
+        self.sigma0 = sigma0
         self.whole_paths = whole_paths
         self.discount = discount
         self.max_path_length = max_path_length
@@ -82,7 +72,7 @@ class CEM(RLAlgorithm):
 
     def train(self, mdp, policy, **kwargs):
         # CMA-ES
-        cur_std = self.init_std
+        cur_std = self.sigma0
         cur_mean = policy.get_param_values()
         es = cma_es_lib.CMAEvolutionStrategy(cur_mean, cur_std)
         es.result()  # where the result can be found
