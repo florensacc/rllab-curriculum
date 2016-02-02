@@ -27,7 +27,7 @@ class MountainCarMDP(Box2DMDP, Serializable):
         self.goal_cart_pos = goal_cart_pos
         self.height_bonus = height_bonus
         self.cart = find_body(self.world, "cart")
-        Serializable.__init__(self, *args, **kwargs)
+        Serializable.quick_init(self, locals())
 
     @overrides
     def compute_reward(self, action):
