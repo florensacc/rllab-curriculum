@@ -6,12 +6,14 @@ seed = 1
 params = {
   mdp: {
     # _name: "box2d.double_pendulum_mdp",
-    _name: "box2d.car_parking_mdp",
+    # _name: "box2d.car_parking_mdp",
+    _name: "box2d.cartpole_mdp",
     # trig_angle: false,
     # frame_skip: 2,
   },
   normalize_mdp: true,
-  action_delay: 3,
+  obs_noise: 0.05,
+  action_delay: 0,
   policy: {
     _name: "mean_std_nn_policy",
     # hidden_layers: [],

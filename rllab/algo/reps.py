@@ -28,7 +28,7 @@ class REPS(BatchPolopt):
     def __init__(
             self,
             epsilon=0.1,
-            L2_reg_dual=0.,
+            L2_reg_dual=1e-7,
             L2_reg_loss=0.,
             max_opt_itr=50,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
@@ -76,8 +76,10 @@ class REPS(BatchPolopt):
             delta_v / param_eta - TT.max(delta_v / param_eta)
         ))
         # Add regularization to loss.
-        loss += self.L2_reg_loss * TT.mean([TT.mean(TT.square(param)) for param in
-                                            policy.get_params(regularizable=True)])
+        reg_params = policy.get_params(regularizable=True)
+        loss += self.L2_reg_loss * TT.sum([
+            TT.mean(TT.square(param)) for param in reg_params]) / \
+            len(reg_params)
   
         # Policy loss gradient.
         loss_grad = TT.grad(

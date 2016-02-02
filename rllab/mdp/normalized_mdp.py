@@ -30,6 +30,7 @@ class NormalizedControlMDP(ProxyMDP, ControlMDP, Serializable):
     def step(self, state, action):
         lb, ub = self._mdp.action_bounds
         scaled_action = lb + (action + 1.) * 0.5 * (ub - lb)
+        scaled_action = np.clip(scaled_action, lb, ub)
         return self._mdp.step(state, scaled_action)
 
 
