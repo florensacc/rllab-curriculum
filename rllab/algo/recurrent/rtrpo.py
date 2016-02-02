@@ -41,7 +41,7 @@ class RTRPO(RecurrentNaturalGradientMethod, RecurrentBatchPolopt):
                 cur_param = prev_param - cur_step
                 policy.set_param_values(cur_param, trainable=True)
                 loss, mean_kl, max_kl = f_trpo_info(*inputs)
-                if loss < prev_loss and max_kl <= self.step_size:
+                if loss < prev_loss and mean_kl <= self.step_size:
                     break
             logger.log("backtracking finished")
             logger.record_tabular('BacktrackItr', n_iter)
