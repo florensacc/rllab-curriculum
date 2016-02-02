@@ -40,6 +40,17 @@ class GatherViewer(MjViewer):
         self.red_ball_model = red_ball_model
         self.red_ball_renderer.set_model(red_ball_model)
 
+        # detect retina display (or best effort)
+        import sys
+        if sys.platform.startswith("darwin"):
+            try:
+                import Cocoa
+            except ImportError as e:
+                print "Warning: Mac OS X detected but pyobjc is not " \
+                      "installed. Viewer might be off if using a retina " \
+                      "display"
+                 
+
     def start(self):
         super(GatherViewer, self).start()
         self.green_ball_renderer.start(self.window)
@@ -111,6 +122,7 @@ class GatherViewer(MjViewer):
         refresh2d(width, height)
         GL.glDisable(GL.GL_LIGHTING)
         GL.glEnable(GL.GL_BLEND)
+
         GL.glColor4f(0.0, 0.0, 0.0, 0.8)
         draw_rect(10, 10, 300, 100)
 
@@ -214,16 +226,16 @@ class GatherMDP(ControlMDP, Serializable):
         # super(GatherMDP, self).reset()
         self.objects = []
         while len(self.objects) < self.n_apples:
-            x = np.random.uniform(-self.activity_range, self.activity_range)
-            y = np.random.uniform(-self.activity_range, self.activity_range)
+            x = np.random.randint(-self.activity_range/2, self.activity_range/2) * 2
+            y = np.random.randint(-self.activity_range/2, self.activity_range/2) * 2
             # regenerate, since it is too close to the robot's initial position
             if x**2 + y**2 < self.robot_object_spacing**2:
                 continue
             typ = APPLE
             self.objects.append((x, y, typ))
         while len(self.objects) < self.n_apples + self.n_bombs:
-            x = np.random.uniform(-self.activity_range, self.activity_range)
-            y = np.random.uniform(-self.activity_range, self.activity_range)
+            x = np.random.randint(-self.activity_range/2, self.activity_range/2) * 2
+            y = np.random.randint(-self.activity_range/2, self.activity_range/2) * 2
             # regenerate, since it is too close to the robot's initial position
             if x**2 + y**2 < self.robot_object_spacing**2:
                 continue

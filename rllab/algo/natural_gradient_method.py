@@ -34,17 +34,24 @@ class NaturalGradientMethod(object):
                        "directly using Hessian inverse method, this regularization will be"
                        "adaptively increased should the regularized matrix still be singular"
                        "(but it's unlikely)")
+    @autoargs.arg("subsample_factor", type=float,
+                  help="Subsampling factor to reduce samples when using "
+                       "conjugate gradient. Since the computation time for "
+                       "the descent direction dominates, this can greatly "
+                       "reduce the overall computation time.")
     def __init__(
             self,
             step_size=0.001,
             use_cg=True,
             cg_iters=10,
             reg_coeff=1e-5,
+            subsample_factor=0.1,
             **kwargs):
         self.cg_iters = cg_iters
         self.use_cg = use_cg
         self.step_size = step_size
         self.reg_coeff = reg_coeff
+        self.subsample_factor = subsample_factor
 
     def init_opt(self, mdp, policy, baseline):
         obs_var = new_tensor(
@@ -130,6 +137,13 @@ class NaturalGradientMethod(object):
             samples_data,
             "observations", "advantages", "pdists", "actions"
         ))
+        if self.subsample_factor < 1:
+            n_samples = len(inputs[0])
+            inds = np.random.choice(
+                n_samples, n_samples * self.subsample_factor, replace=False)
+            subsample_inputs = [x[inds] for x in inputs]
+        else:
+            subsample_inputs = inputs
         # Need to ensure this
         logger.log("computing loss before")
         loss_before = opt_info["f_loss"](*inputs)
@@ -154,7 +168,7 @@ class NaturalGradientMethod(object):
                 xs = policy.flat_to_params(x, trainable=True)
                 # with Message("rop"):
                 #     rop = f_Hx_rop(*(inputs + xs))
-                plain = opt_info["f_Hx_plain"](*(inputs + xs)) + self.reg_coeff*x
+                plain = opt_info["f_Hx_plain"](*(subsample_inputs + xs)) + self.reg_coeff*x
                 # assert np.allclose(rop, plain)
                 return plain
                 # alternatively we can do finite difference on flat_grad
