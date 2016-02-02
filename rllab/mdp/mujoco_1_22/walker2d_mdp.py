@@ -24,10 +24,7 @@ class Walker2DMDP(MujocoMDP, Serializable):
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         super(Walker2DMDP, self).__init__(*args, **kwargs)
-        Serializable.__init__(
-            self,
-            ctrl_cost_coeff=ctrl_cost_coeff,
-            *args, **kwargs)
+        Serializable.quick_init(self, locals())
 
     def get_current_obs(self):
         return np.concatenate([
