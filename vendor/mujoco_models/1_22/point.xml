@@ -25,7 +25,7 @@
   </worldbody>
   <actuator>
     <!-- Those are just dummy actuators for providing ranges -->
-    <motor joint='ballx' ctrlrange="-0.25 0.25" ctrllimited="true" />
-    <motor joint='rot' ctrlrange="-0.1 0.1" ctrllimited="true" />
+    <motor joint='ballx' ctrlrange="-1 1" ctrllimited="true" />
+    <motor joint='rot' ctrlrange="-0.25 0.25" ctrllimited="true" />
   </actuator>
 </mujoco>
