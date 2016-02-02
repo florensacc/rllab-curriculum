@@ -39,7 +39,7 @@ params = {
     n_itr: 5000,
     plot: true,
   },
-  n_parallel: 4,
+  n_parallel: 1,
   snapshot_mode: "last",
   seed: seed,
   plot: true,

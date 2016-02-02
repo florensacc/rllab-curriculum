@@ -5,26 +5,28 @@ seed = 1
 
 params = {
   mdp: {
-    _name: "box2d.double_pendulum_mdp",
+    # _name: "box2d.double_pendulum_mdp",
+    _name: "box2d.car_parking_mdp",
     # trig_angle: false,
     # frame_skip: 2,
   },
-        normalize_mdp: true,
+  normalize_mdp: true,
+  action_delay: 3,
   policy: {
     _name: "mean_std_nn_policy",
     # hidden_layers: [],
   },
-        baseline: {
-          _name: "linear_feature_baseline",
-        },
+  baseline: {
+    _name: "linear_feature_baseline",
+  },
   exp_name: "ppo_double_skip2_pendulum_seed_#{seed}",
   algo: {
-    # _name: "ppo",
-    # binary_search_penalty: false,
-    # whole_paths: true,
+    _name: "ppo",
+    binary_search_penalty: false,
+    whole_paths: true,
     # # quantile: quantile,
 
-    _name: "reps",
+    # _name: "reps",
     batch_size: 5000,
     max_path_length: 100,
     n_itr: 500,
