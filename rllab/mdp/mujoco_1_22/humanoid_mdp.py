@@ -1,7 +1,7 @@
-from .humanoid_amputated_mdp import HumanoidAmputatedMDP
+from .simple_humanoid_mdp import SimpleHumanoidMDP
 
 
 # Taken from Wojciech's code
-class HumanoidMDP(HumanoidAmputatedMDP):
+class HumanoidMDP(SimpleHumanoidMDP):
 
     FILE = 'humanoid.xml'
