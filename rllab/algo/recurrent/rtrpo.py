@@ -4,6 +4,7 @@ from rllab.algo.recurrent.recurrent_batch_polopt import RecurrentBatchPolopt
 from rllab.algo.recurrent.recurrent_natural_gradient_method \
     import RecurrentNaturalGradientMethod
 from rllab.misc import autoargs
+from rllab.misc.ext import sliced_fun
 from rllab.misc.overrides import overrides
 import rllab.misc.logger as logger
 
@@ -34,13 +35,13 @@ class RTRPO(RecurrentNaturalGradientMethod, RecurrentBatchPolopt):
                 inputs, flat_descent_step):
             logger.log("performing backtracking")
             f_trpo_info = opt_info['f_trpo_info']
-            prev_loss, prev_mean_kl, prev_max_kl = f_trpo_info(*inputs)
+            prev_loss, prev_mean_kl, prev_max_kl = sliced_fun(f_trpo_info, self.n_slices)(inputs)
             prev_param = policy.get_param_values(trainable=True)
             for n_iter, ratio in enumerate(self.backtrack_ratio ** np.arange(self.max_backtracks)):
                 cur_step = ratio * flat_descent_step
                 cur_param = prev_param - cur_step
                 policy.set_param_values(cur_param, trainable=True)
-                loss, mean_kl, max_kl = f_trpo_info(*inputs)
+                loss, mean_kl, max_kl = sliced_fun(f_trpo_info, self.n_slices)(inputs)
                 if loss < prev_loss and mean_kl <= self.step_size:
                     break
             logger.log("backtracking finished")
