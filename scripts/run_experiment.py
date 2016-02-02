@@ -48,6 +48,12 @@ def run_experiment(argv):
                         default=False,
                         help="Whether to normalize the mdp's actions to take "
                              "value between -1 and 1")
+    parser.add_argument('--action_delay', type=int,
+                        default=0,
+                        help="Time steps delayed injected into MDP")
+    parser.add_argument('--obs_noise', type=float,
+                        default=0,
+                        help="Guassian noise added to obs")
     # These are optional, depending on the algorithm selected
     parser.add_argument('--policy', type=str, metavar='POLICY_PATH',
                         help='module path to the policy')
@@ -149,6 +155,12 @@ def run_experiment(argv):
         if args.normalize_mdp:
             from rllab.mdp.normalized_mdp import normalize
             instances['mdp'] = normalize(instances['mdp'])
+        if args.action_delay != 0:
+            from rllab.mdp.noisy_mdp import DelayedActionControlMDP
+            instances['mdp'] = DelayedActionControlMDP(instances['mdp'], args.action_delay)
+        if args.obs_noise != 0:
+            from rllab.mdp.noisy_mdp import NoisyObservationControlMDP
+            instances['mdp'] = NoisyObservationControlMDP(instances['mdp'], args.obs_noise)
         if args.policy:
             instances['policy'] = instantiate(
                 more_args, classes['policy'], instances['mdp'])
