@@ -9,7 +9,7 @@ from numpy.linalg import LinAlgError
 from rllab.misc import logger, autoargs
 from rllab.misc.krylov import cg
 from rllab.misc.ext import extract, compile_function, flatten_hessian, new_tensor, new_tensor_like, \
-    flatten_tensor_variables, lazydict, cached_function
+    flatten_tensor_variables, lazydict, cached_function, sliced_fun
 
 
 class RecurrentNaturalGradientMethod(object):
@@ -31,17 +31,21 @@ class RecurrentNaturalGradientMethod(object):
                        "directly using Hessian inverse method, this regularization will be"
                        "adaptively increased should the regularized matrix is still singular"
                        "(but it's unlikely)")
+    @autoargs.arg("n_slices", type=int,
+                  help="slice batches to reduce GPU memory burden")
     def __init__(
             self,
             step_size=0.001,
             use_cg=True,
             cg_iters=10,
             reg_coeff=1e-5,
+            n_slices=1,
             **kwargs):
         self.cg_iters = cg_iters
         self.use_cg = use_cg
         self.step_size = step_size
         self.reg_coeff = reg_coeff
+        self.n_slices = n_slices
 
     def init_opt(self, mdp, policy, baseline):
         obs_var = new_tensor(
@@ -89,23 +93,21 @@ class RecurrentNaturalGradientMethod(object):
 
         input_list = [
             obs_var, advantage_var, old_pdist_var, action_var, valid_var]
-        f_loss = compile_function(
-            inputs=input_list,
-            outputs=surr_obj,
-            log_name="f_loss",
-        )
-        f_grad = compile_function(
-            inputs=input_list,
-            outputs=[surr_obj, flat_grad],
-            log_name="f_grad",
-        )
 
         # follwoing information is computed to TRPO
         max_kl = TT.max(valid_var * policy.kl(old_pdist_var, pdist_var))
 
         return lazydict(
-            f_loss=lambda: f_loss,
-            f_grad=lambda: f_grad,
+            f_loss=lambda: compile_function(
+                inputs=input_list,
+                outputs=surr_obj,
+                log_name="f_loss",
+            ),
+            f_grad=lambda: compile_function(
+                inputs=input_list,
+                outputs=[surr_obj, flat_grad],
+                log_name="f_grad",
+            ),
             f_fisher=lambda:
             compile_function(
                 inputs=input_list,
@@ -140,12 +142,12 @@ class RecurrentNaturalGradientMethod(object):
         ))
         # Need to ensure this
         logger.log("computing loss before")
-        loss_before = opt_info["f_loss"](*inputs)
+        loss_before = sliced_fun(opt_info["f_loss"], self.n_slices)(inputs)
         logger.log("performing update")
         logger.log("computing descent direction")
         if not self.use_cg:
             # direct approach, just bite the bullet and use hessian
-            _, flat_g, fisher_mat = opt_info["f_fisher"](*inputs)
+            _, flat_g, fisher_mat = sliced_fun(opt_info["f_fisher"], self.n_slices)(inputs)
             while True:
                 try:
                     nat_direction = np.linalg.solve(
@@ -157,13 +159,10 @@ class RecurrentNaturalGradientMethod(object):
                     print self.reg_coeff
         else:
             # CG approach
-            _, flat_g = opt_info["f_grad"](*inputs)
+            _, flat_g = sliced_fun(opt_info["f_grad"], self.n_slices)(inputs)
             def Hx(x):
                 xs = policy.flat_to_params(x, trainable=True)
-                # with Message("rop"):
-                #     rop = f_Hx_rop(*(inputs + xs))
-                plain = opt_info["f_Hx_plain"](*(inputs + xs)) + self.reg_coeff*x
-                # assert np.allclose(rop, plain)
+                plain = sliced_fun(opt_info["f_Hx_plain"], self.n_slices)(inputs, xs) + self.reg_coeff*x
                 return plain
                 # alternatively we can do finite difference on flat_grad
             nat_direction = cg(Hx, flat_g, cg_iters=self.cg_iters)
@@ -176,7 +175,7 @@ class RecurrentNaturalGradientMethod(object):
         logger.log("descent direction computed")
         yield inputs, flat_descent_step
         logger.log("computing loss after")
-        loss_after = opt_info["f_loss"](*inputs)
+        loss_after = sliced_fun(opt_info["f_loss"], self.n_slices)(inputs)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
         logger.log("optimization finished")

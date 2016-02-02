@@ -308,3 +308,22 @@ def unflatten_tensor_variables(flatarr, shapes, symb_arrs):
         arrs.append(arr)
         n += size
     return arrs
+
+
+# assuming that the result could be averaged
+def sliced_fun(self, f, n_slices):
+    def sliced_f(sliced_inputs, non_sliced_inputs):
+        n_paths = len(sliced_inputs[0])
+        slice_size = max(1, n_paths / n_slices)
+        ret_vals = None
+        for start in range(0, n_paths, slice_size):
+            inputs_slice = [v[start:start+slice_size] for v in sliced_inputs]
+            slice_ret_vals = f(*(inputs_slice + non_sliced_inputs))
+            scaled_ret_vals = [v*len(inputs_slice[0]) for v in slice_ret_vals]
+            if ret_vals is None:
+                ret_vals = scaled_ret_vals
+            else:
+                ret_vals = [x+y for x, y in zip(ret_vals, scaled_ret_vals)]
+        ret_vals = [v / n_paths for v in ret_vals]
+        return ret_vals
+    return sliced_f
