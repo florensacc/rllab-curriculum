@@ -1,12 +1,10 @@
-from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 from .base import MDP
 
-class ProxyMDP(MDP, Serializable):
+class ProxyMDP(MDP):
 
     def __init__(self, mdp):
         self._mdp = mdp
-        Serializable.__init__(self, mdp)
 
     @overrides
     def reset(self):

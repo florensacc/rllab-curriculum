@@ -16,7 +16,7 @@ class NoisyObservationControlMDP(ProxyMDP, ControlMDP, Serializable):
                  ):
         super(NoisyObservationControlMDP, self).__init__(mdp)
         ControlMDP.__init__(self)
-        Serializable.__init__(self, mdp)
+        Serializable.quick_init(self, locals())
         self.obs_noise = obs_noise
 
     def get_obs_noise_scale_factor(self, obs):
@@ -35,6 +35,11 @@ class NoisyObservationControlMDP(ProxyMDP, ControlMDP, Serializable):
         return self.inject_obs_noise(self._mdp.get_current_obs())
 
     @overrides
+    def reset(self):
+        state, obs = self._mdp.reset()
+        return state, self.inject_obs_noise(obs)
+
+    @overrides
     def step(self, state, action):
         next_state, next_obs, reward, done = self._mdp.step(state, action)
         return next_state, self.inject_obs_noise(next_obs), reward, done
@@ -50,7 +55,7 @@ class DelayedActionControlMDP(ProxyMDP, ControlMDP, Serializable):
         assert action_delay > 0, "Should not use this mdp transformer"
         super(DelayedActionControlMDP, self).__init__(mdp)
         ControlMDP.__init__(self)
-        Serializable.__init__(self, mdp)
+        Serializable.quick_init(self, locals())
         self.action_delay = action_delay
         self.original_state_len = mdp.state_shape[0]
         self.delayed_state = None
