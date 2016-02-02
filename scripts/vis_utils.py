@@ -217,12 +217,16 @@ def factorize_params(lst_hash):
 
 def comp(pattern, **kwargs):
     kwargs["plot"] = kwargs.get("plot", False)
+    mstd = kwargs.pop("mstd", False)
     rets=plot_experiments(
         pattern,
         **kwargs
     )
     plt.figure()
     groups=group_by_params(rets)
+    if mstd:
+        # mean - std
+        groups = sorted(groups, key=lambda group: -np.mean(group[1] - group[2]))
     common, factors = factorize_params(map(lambda x: x[0], groups))
     for group in groups:
         plot_std(group[1], group[2])
