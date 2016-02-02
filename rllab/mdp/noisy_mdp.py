@@ -19,11 +19,25 @@ class NoisyObservationControlMDP(ProxyMDP, ControlMDP, Serializable):
         Serializable.__init__(self, mdp)
         self.obs_noise = obs_noise
 
+    def get_obs_noise_scale_factor(self, obs):
+        return np.ones_like(obs)
+
+    def inject_obs_noise(self, obs):
+        """
+        Inject entry-wise noise to the observation. This should not change
+        the dimension of the observation.
+        """
+        noise = self.get_obs_noise_scale_factor(obs) * self.obs_noise * \
+                np.random.normal(size=obs.shape)
+        return obs + noise
+
+    def get_current_obs(self):
+        return self.inject_obs_noise(self._mdp.get_current_obs())
+
     @overrides
     def step(self, state, action):
-        lb, ub = self._mdp.action_bounds
-        scaled_action = lb + (action + 1.) * 0.5 * (ub - lb)
-        return self._mdp.step(state, scaled_action)
+        next_state, next_obs, reward, done = self._mdp.step(state, action)
+        return next_state, self.inject_obs_noise(next_obs), reward, done
 
 class DelayedActionControlMDP(ProxyMDP, ControlMDP, Serializable):
 
