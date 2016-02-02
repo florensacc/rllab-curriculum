@@ -110,7 +110,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             num_units=n_hidden,
             grad_clipping=grad_clip,
             nonlinearity=eval(nonlinearity),
-            forgetgate=forget_gate,
+            # forgetgate=forget_gate,
         )
 
         l_forward_reshaped = L.ReshapeLayer(l_forward_1, (-1, n_hidden))
