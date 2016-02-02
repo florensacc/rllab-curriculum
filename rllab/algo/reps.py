@@ -46,7 +46,9 @@ class REPS(BatchPolopt):
         # Init dual param values
         self.param_eta = 15.
         # Adjust for linear feature vector.
-        self.param_v = np.random.randn(mdp.observation_shape[0] * 2 + 4)
+        self.param_v = np.random.rand(mdp.observation_shape[0] * 2 + 4)
+        self.param_v = np.random.rand(mdp.observation_shape[0])
+
   
         # Theano vars
         observations = new_tensor(
@@ -143,6 +145,7 @@ class REPS(BatchPolopt):
         o = np.clip(path["observations"], -10, 10)
         l = len(path["rewards"])
         al = np.arange(l).reshape(-1, 1) / 100.0
+        return path["observations"]
         return np.concatenate([o, o**2, al, al**2, al**3, np.ones((l, 1))], axis=1)
   
     @overrides
