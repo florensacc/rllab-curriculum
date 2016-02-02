@@ -5,11 +5,12 @@ seed = 1
 
 params = {
   mdp: {
-    _name: "mujoco_1_22.half_cheetah_mdp",
+    # _name: "mujoco_1_22.half_cheetah_mdp",
+    _name: "box2d.car_parking_mdp",
   },
   policy: {
     _name: "mean_std_nn_policy",
-    # hidden_layers: [],
+    # _name: "mean_nn_policy",
   },
   baseline: {
     _name: "linear_feature_baseline",
@@ -29,6 +30,7 @@ params = {
 
 
     _name: "cem",
+    batch_size: 50000,
     whole_paths: true,
     max_path_length: 500,
     n_itr: 500,
