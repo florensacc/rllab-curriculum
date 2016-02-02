@@ -84,3 +84,4 @@ def _worker_collect_stats():
         min_prog=np.min(progs),
         std_prog=np.std(progs),
     )
+
