@@ -104,16 +104,19 @@ class CEM(RLAlgorithm):
                 cum_len = 0
                 infos = []
                 xss = []
-                while True:
-                    sbs = G.n_parallel * 3
+                done = False
+                while not done:
+                    sbs = G.n_parallel * 2
                     xs = np.random.randn(sbs, K) * sample_std.reshape(1, -1) + cur_mean.reshape(1, -1)
                     xss.append(xs)
                     sinfos = pool_map(sample_return, [(x, self.max_path_length, self.discount) for x in xs])
-                    infos += sinfos
-                    cum_len += sum([len(info['returns']) for info in infos])
-                    if cum_len >= self.batch_size:
-                        xs = np.concatenate(xss)
-                        break
+                    for info in sinfos:
+                        infos.append(info)
+                        cum_len += len(info['returns'])
+                        if cum_len >= self.batch_size:
+                            xs = np.concatenate(xss)
+                            done = True
+                            break
 
             fs = np.array([info['returns'][0] for info in infos])
             best_inds = (-fs).argsort()[:n_best]
