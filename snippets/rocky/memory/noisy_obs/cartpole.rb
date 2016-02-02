@@ -10,6 +10,7 @@ params = {
   obs_noise: 0.1,
   policy: {
     _name: "mean_std_rnn_policy",
+    #forget_gate_init: -5.0,
     #_name: "mean_std_nn_policy",
   },
   baseline: {

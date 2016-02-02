@@ -45,6 +45,8 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                        'of tanh, sigmoid')
     @autoargs.arg('output_nl', type=str,
                   help='nonlinearity for the output layer')
+    @autoargs.arg('forget_gate_init', type=str,
+                  help='initialization for the forget gate')
     def __init__(
             self,
             mdp,
@@ -54,12 +56,17 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             grad_clip=100,
             nonlinearity='lasagne.nonlinearities.rectify',
             output_nl='None',
+            forget_gate_init='None'
     ):
+
         # create network
 
         StochasticPolicy.__init__(self, mdp)
 
-        forget_gate = LR.Gate(b=lasagne.init.Constant(5.0))
+        if eval(forget_gate_init) is not None:
+            forget_gate = LR.Gate(b=lasagne.init.Constant(eval(forget_gate_init)))
+        else:
+            forget_gate = LR.Gate()
 
         l_obs = L.InputLayer(shape=(None, None, mdp.observation_shape[0]))
         l_prev_action = L.InputLayer(shape=(None, None, mdp.action_dim))
@@ -110,7 +117,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             num_units=n_hidden,
             grad_clipping=grad_clip,
             nonlinearity=eval(nonlinearity),
-            # forgetgate=forget_gate,
+            forgetgate=forget_gate,
         )
 
         l_forward_reshaped = L.ReshapeLayer(l_forward_1, (-1, n_hidden))
