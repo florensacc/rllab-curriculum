@@ -24,9 +24,9 @@ class SimpleHumanoidMDP(MujocoMDP, Serializable):
                   help='maximum value of impact cost')
     def __init__(
             self,
-            vel_deviation_cost_coeff=1,
+            vel_deviation_cost_coeff=1e-2,
             alive_bonus=0.2,
-            ctrl_cost_coeff=1e-2,
+            ctrl_cost_coeff=1e-3,
             impact_cost_coeff=1e-5,
             clip_impact_cost=0.5,
             *args, **kwargs):
