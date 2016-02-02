@@ -120,8 +120,15 @@ class RPPO(RecurrentBatchPolopt):
         grads = theano.gradient.grad(
             surr_obj, policy.get_params(trainable=True))
         f_surr_kl = compile_function(
-            input_list, [surr_obj, surr_loss, mean_kl])
-        f_grads = compile_function(input_list, grads)
+            input_list,
+            [surr_obj, surr_loss, mean_kl],
+            log_name="f_surr_kl"
+        )
+        f_grads = compile_function(
+            input_list,
+            grads,
+            log_name="f_grads"
+        )
         penalty = self.initial_penalty
 
         return dict(

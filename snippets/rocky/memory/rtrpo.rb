@@ -19,6 +19,7 @@ params = {
     max_path_length: 500,
     n_itr: 500,
     step_size: 0.01,
+    subsample_factor: 0.1,
   },
   n_parallel: 4,
   snapshot_mode: "none",

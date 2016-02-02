@@ -31,6 +31,11 @@ class RecurrentNaturalGradientMethod(object):
                        "directly using Hessian inverse method, this regularization will be"
                        "adaptively increased should the regularized matrix is still singular"
                        "(but it's unlikely)")
+    @autoargs.arg("subsample_factor", type=float,
+                  help="Subsampling factor to reduce samples when using "
+                       "conjugate gradient. Since the computation time for "
+                       "the descent direction dominates, this can greatly "
+                       "reduce the overall computation time.")
     @autoargs.arg("n_slices", type=int,
                   help="slice batches to reduce GPU memory burden")
     def __init__(
@@ -39,12 +44,14 @@ class RecurrentNaturalGradientMethod(object):
             use_cg=True,
             cg_iters=10,
             reg_coeff=1e-5,
+            subsample_factor=0.1,
             n_slices=1,
             **kwargs):
         self.cg_iters = cg_iters
         self.use_cg = use_cg
         self.step_size = step_size
         self.reg_coeff = reg_coeff
+        self.subsample_factor = subsample_factor
         self.n_slices = n_slices
 
     def init_opt(self, mdp, policy, baseline):
@@ -140,6 +147,13 @@ class RecurrentNaturalGradientMethod(object):
             samples_data,
             "observations", "advantages", "pdists", "actions", "valids"
         ))
+        if self.subsample_factor < 1:
+            n_samples = len(inputs[0])
+            inds = np.random.choice(
+                n_samples, n_samples * self.subsample_factor, replace=False)
+            subsample_inputs = [x[inds] for x in inputs]
+        else:
+            subsample_inputs = inputs
         # Need to ensure this
         logger.log("computing loss before")
         loss_before = sliced_fun(opt_info["f_loss"], self.n_slices)(inputs)
@@ -147,7 +161,7 @@ class RecurrentNaturalGradientMethod(object):
         logger.log("computing descent direction")
         if not self.use_cg:
             # direct approach, just bite the bullet and use hessian
-            _, flat_g, fisher_mat = sliced_fun(opt_info["f_fisher"], self.n_slices)(inputs)
+            _, flat_g, fisher_mat = sliced_fun(opt_info["f_fisher"], self.n_slices)(subsample_inputs)
             while True:
                 try:
                     nat_direction = np.linalg.solve(
@@ -162,7 +176,8 @@ class RecurrentNaturalGradientMethod(object):
             _, flat_g = sliced_fun(opt_info["f_grad"], self.n_slices)(inputs)
             def Hx(x):
                 xs = policy.flat_to_params(x, trainable=True)
-                plain = sliced_fun(opt_info["f_Hx_plain"], self.n_slices)(inputs, xs) + self.reg_coeff*x
+                plain = sliced_fun(opt_info["f_Hx_plain"],
+                        self.n_slices)(subsample_inputs, xs) + self.reg_coeff*x
                 return plain
                 # alternatively we can do finite difference on flat_grad
             nat_direction = cg(Hx, flat_g, cg_iters=self.cg_iters)
