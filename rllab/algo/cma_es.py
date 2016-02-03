@@ -56,7 +56,8 @@ class CEM(RLAlgorithm):
             discount=0.99,
             whole_paths=True,
             sigma0=1.,
-            n_traj_per_setting = 10,
+            batch_size = 1000,
+            n_traj_per_setting = 1,
             extra_std=1.,
             extra_decay_time=100,
             plot=False,
@@ -70,11 +71,13 @@ class CEM(RLAlgorithm):
         self.discount = discount
         self.max_path_length = max_path_length
         self.n_itr = n_itr
+        self.batch_size = batch_size
 
     def train(self, mdp, policy, **kwargs):
         cur_std = self.sigma0
         cur_mean = policy.get_param_values()
-        es = cma_es_lib.CMAEvolutionStrategy(cur_mean, cur_std)
+        popsize = np.ceil(self.batch_size / self.n_traj_per_setting).astype(np.int)
+        es = cma_es_lib.CMAEvolutionStrategy(cur_mean, cur_std, {'popsize':popsize})
 
         parallel_sampler.populate_task(mdp, policy)
         if self.plot:
