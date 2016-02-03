@@ -20,21 +20,17 @@ class SimpleHumanoidMDP(MujocoMDP, Serializable):
                   help='cost coefficient for control inputs')
     @autoargs.arg('impact_cost_coeff', type=float,
                   help='cost coefficient for impact')
-    @autoargs.arg('clip_impact_cost', type=float,
-                  help='maximum value of impact cost')
     def __init__(
             self,
             vel_deviation_cost_coeff=1e-2,
             alive_bonus=0.2,
             ctrl_cost_coeff=1e-3,
             impact_cost_coeff=1e-5,
-            clip_impact_cost=0.5,
             *args, **kwargs):
         self.vel_deviation_cost_coeff = vel_deviation_cost_coeff
         self.alive_bonus = alive_bonus
         self.ctrl_cost_coeff = ctrl_cost_coeff
         self.impact_cost_coeff = impact_cost_coeff
-        self.clip_impact_cost = clip_impact_cost
         super(SimpleHumanoidMDP, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
@@ -67,11 +63,8 @@ class SimpleHumanoidMDP(MujocoMDP, Serializable):
         scaling = (ub - lb) * 0.5
         ctrl_cost = .5 * self.ctrl_cost_coeff * np.sum(
             np.square(action / scaling))
-        impact_cost = min(
-            .5 * self.impact_cost_coeff * np.sum(
-                np.square(np.clip(data.cfrc_ext, -1, 1))),
-            self.clip_impact_cost,
-        )
+        impact_cost = .5 * self.impact_cost_coeff * np.sum(
+            np.square(np.clip(data.cfrc_ext, -1, 1)))
         vel_deviation_cost = 0.5 * self.vel_deviation_cost_coeff * np.sum(
             np.square(comvel[1:]))
         reward = lin_vel_reward + alive_bonus - ctrl_cost - \

@@ -118,7 +118,9 @@ class CEM(RLAlgorithm):
                             done = True
                             break
 
+            
             fs = np.array([info['returns'][0] for info in infos])
+            print(xs.shape, fs.shape)
             best_inds = (-fs).argsort()[:n_best]
             best_xs = xs[best_inds]
             cur_mean = best_xs.mean(axis=0)

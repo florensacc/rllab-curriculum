@@ -30,7 +30,7 @@ class Walker2DMDP(MujocoMDP, Serializable):
         return np.concatenate([
             self.model.data.qpos.flat,
             self.model.data.qvel.flat,
-            self.model.data.qfrc_passive.flat,
+            #self.model.data.qfrc_passive.flat,
             self.get_body_com("torso").flat,
         ])
 
@@ -42,7 +42,7 @@ class Walker2DMDP(MujocoMDP, Serializable):
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5
         ctrl_cost = 0.5 * self.ctrl_cost_coeff * np.sum(np.square(action / scaling))
-        passive_cost = min(10, 0.5 * 1e-2 * np.sum(np.square(self.model.data.qfrc_passive)))
+        passive_cost = 0#min(10, 0.5 * 1e-2 * np.sum(np.square(self.model.data.qfrc_passive)))
         forward_reward = self.get_body_comvel("torso")[0]
         reward = forward_reward - ctrl_cost - passive_cost
         qpos = self.model.data.qpos
