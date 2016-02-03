@@ -8,6 +8,8 @@ import random
 from rllab.misc.console import colorize, Message
 from collections import OrderedDict
 
+import numpy as np
+
 sys.setrecursionlimit(50000)
 
 
@@ -325,7 +327,7 @@ def sliced_fun(f, n_slices):
                 slice_ret_vals_as_list = [slice_ret_vals]
             else:
                 slice_ret_vals_as_list = slice_ret_vals
-            scaled_ret_vals = [v*len(inputs_slice[0]) for v in slice_ret_vals_as_list]
+            scaled_ret_vals = [np.asarray(v)*len(inputs_slice[0]) for v in slice_ret_vals_as_list]
             if ret_vals is None:
                 ret_vals = scaled_ret_vals
             else:

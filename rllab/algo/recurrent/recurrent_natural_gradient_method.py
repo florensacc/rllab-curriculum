@@ -38,6 +38,8 @@ class RecurrentNaturalGradientMethod(object):
                        "reduce the overall computation time.")
     @autoargs.arg("n_slices", type=int,
                   help="slice batches to reduce GPU memory burden")
+    @autoargs.arg('grad_clip', type=float,
+                  help='how much to clip the descent step')
     def __init__(
             self,
             step_size=0.001,
@@ -46,7 +48,9 @@ class RecurrentNaturalGradientMethod(object):
             reg_coeff=1e-5,
             subsample_factor=0.1,
             n_slices=1,
+            grad_clip=100,
             **kwargs):
+        self.grad_clip = grad_clip
         self.cg_iters = cg_iters
         self.use_cg = use_cg
         self.step_size = step_size
@@ -187,6 +191,7 @@ class RecurrentNaturalGradientMethod(object):
             1. / flat_g.T.dot(nat_direction)
         )) ** 0.5
         flat_descent_step = nat_step_size * nat_direction
+        flat_descent_step = np.clip(flat_descent_step, -self.grad_clip, +self.grad_clip)
         logger.log("descent direction computed")
         yield inputs, flat_descent_step
         logger.log("computing loss after")

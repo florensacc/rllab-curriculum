@@ -1,5 +1,5 @@
 from rllab.misc.tensor_utils import flatten_tensors
-from rllab.misc.ext import merge_dict, compile_function, extract, new_tensor
+from rllab.misc.ext import merge_dict, compile_function, extract, new_tensor, sliced_fun
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 from rllab.algo.recurrent.recurrent_batch_polopt import RecurrentBatchPolopt
@@ -48,6 +48,8 @@ class RPPO(RecurrentBatchPolopt):
     @autoargs.arg("optimizer", type=str,
                   help="Module path to the optimizer. It must support the "
                        "same interface as scipy.optimize.fmin_l_bfgs_b")
+    @autoargs.arg("n_slices", type=int,
+                  help="slice batches to reduce GPU memory burden")
     def __init__(
             self,
             step_size=0.01,
@@ -63,6 +65,7 @@ class RPPO(RecurrentBatchPolopt):
             bs_kl_tolerance=1e-4,
             adapt_penalty=True,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
+            n_slices=1,
             **kwargs):
         self.step_size = step_size
         self.initial_penalty = initial_penalty
@@ -77,6 +80,7 @@ class RPPO(RecurrentBatchPolopt):
         self.bs_kl_tolerance = bs_kl_tolerance
         self.adapt_penalty = adapt_penalty
         self.optimizer = locate(optimizer)
+        self.n_slices = n_slices
         super(RPPO, self).__init__(**kwargs)
 
     @overrides
@@ -152,21 +156,24 @@ class RPPO(RecurrentBatchPolopt):
         def evaluate_cost(penalty):
             def evaluate(params):
                 policy.set_param_values(params, trainable=True)
-                inputs_with_penalty = all_input_values + [penalty]
-                val, _, _ = f_surr_kl(*inputs_with_penalty)
+                val, _, _ = sliced_fun(f_surr_kl, self.n_slices)(
+                    all_input_values, [penalty])
                 return val.astype(np.float64)
             return evaluate
 
         def evaluate_grad(penalty):
             def evaluate(params):
                 policy.set_param_values(params, trainable=True)
-                grad = f_grads(*(all_input_values + [penalty]))
+                grad = sliced_fun(f_grads, self.n_slices)(
+                    all_input_values, [penalty])
                 flattened_grad = flatten_tensors(map(np.asarray, grad))
                 return flattened_grad.astype(np.float64)
             return evaluate
 
-        loss_before = evaluate_cost(0)(cur_params)
+        loss_before, _, mean_kl_before = sliced_fun(f_surr_kl, self.n_slices)(
+            all_input_values, [0])
         logger.record_tabular('LossBefore', loss_before)
+        logger.record_tabular('MeanKLBefore', mean_kl_before)
 
         try_penalty = np.clip(penalty, self.min_penalty, self.max_penalty)
 
@@ -183,8 +190,8 @@ class RPPO(RecurrentBatchPolopt):
                 fprime=evaluate_grad(try_penalty),
                 maxiter=self.max_opt_itr
                 )
-            _, try_loss, try_mean_kl = f_surr_kl(
-                *(all_input_values + [try_penalty]))
+            _, try_loss, try_mean_kl = sliced_fun(f_surr_kl, self.n_slices)(
+                all_input_values, [try_penalty])
 
             logger.log('penalty %f => loss %f, mean kl %f' %
                        (try_penalty, try_loss, try_mean_kl))
@@ -244,8 +251,8 @@ class RPPO(RecurrentBatchPolopt):
                     fprime=evaluate_grad(penalty),
                     maxiter=self.max_opt_itr
                     )
-                _, loss_after, mean_kl = f_surr_kl(
-                    *(all_input_values + [penalty]))
+                _, loss_after, mean_kl = sliced_fun(f_surr_kl, self.n_slices)(
+                    all_input_values, [penalty])
                 logger.log('penalty %f => loss %f, mean kl %f' %
                            (penalty, loss_after, mean_kl))
                 if abs(mean_kl - self.step_size) < self.bs_kl_tolerance:
