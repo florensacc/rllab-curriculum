@@ -161,6 +161,8 @@ class NaturalGradientMethod(BatchPolopt):
                        "conjugate gradient. Since the computation time for "
                        "the descent direction dominates, this can greatly "
                        "reduce the overall computation time.")
+    @autoargs.arg('grad_clip', type=float,
+                  help='how much to clip the descent step')
     def __init__(
             self,
             step_size=0.001,
@@ -168,7 +170,9 @@ class NaturalGradientMethod(BatchPolopt):
             cg_iters=10,
             reg_coeff=1e-5,
             subsample_factor=0.1,
+            grad_clip=100,
             **kwargs):
+        self.opt.grad_clip = grad_clip
         self.opt.cg_iters = cg_iters
         self.opt.use_cg = use_cg
         self.opt.step_size = step_size
@@ -219,6 +223,7 @@ class NaturalGradientMethod(BatchPolopt):
                 1. / flat_g.T.dot(nat_direction)
             )) ** 0.5
         flat_descent_step = nat_step_size * nat_direction
+        flat_descent_step = np.clip(flat_descent_step, -self.opt.grad_clip, +self.opt.grad_clip)
         logger.log("descent direction computed")
         yield flat_descent_step
         logger.log("computing loss after")
