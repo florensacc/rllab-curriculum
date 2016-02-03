@@ -30,7 +30,7 @@ def sample_return(mdp, policy, params, max_path_length, discount):
     )
 
 
-class CEM(RLAlgorithm):
+class CMAES(RLAlgorithm):
 
     @autoargs.arg("n_itr", type=int,
                   help="Number of iterations.")
@@ -61,7 +61,7 @@ class CEM(RLAlgorithm):
             plot=False,
             **kwargs
     ):
-        super(CEM, self).__init__(**kwargs)
+        super(CMAES, self).__init__(**kwargs)
         self.plot = plot
         self.sigma0 = sigma0
         self.whole_paths = whole_paths
@@ -157,3 +157,4 @@ class CEM(RLAlgorithm):
 
         # Set final params.
         policy.set_param_values(es.result()[0])
+

@@ -1,4 +1,6 @@
 from __future__ import print_function
+
+from rllab.mdp.identification_mdp import IdentificationControlMDP
 from rllab.misc.ext import is_iterable, set_seed
 from rllab.misc.resolve import load_class
 from rllab.misc.console import colorize
@@ -27,6 +29,7 @@ def run_interactive():
     pass
 
 
+
 def run_experiment(argv):
 
     default_log_dir = "{PROJECT_PATH}/data"
@@ -48,6 +51,10 @@ def run_experiment(argv):
                         default=False,
                         help="Whether to normalize the mdp's actions to take "
                              "value between -1 and 1")
+    parser.add_argument('--random_mdp', type=ast.literal_eval,
+                        default=False,
+                        help="Whether to reinit the mdp from random physical model every"
+                             "episode")
     parser.add_argument('--action_delay', type=int,
                         default=0,
                         help="Time steps delayed injected into MDP")
@@ -151,7 +158,10 @@ def run_experiment(argv):
         more_args = parser.parse_args(argv[1:])
 
         instances = dict()
-        instances['mdp'] = instantiate(more_args, classes['mdp'])
+        if args.random_mdp:
+            instances['mdp'] = IdentificationControlMDP(classes['mdp'], more_args)
+        else:
+            instances['mdp'] = instantiate(more_args, classes['mdp'])
         if args.normalize_mdp:
             from rllab.mdp.normalized_mdp import normalize
             instances['mdp'] = normalize(instances['mdp'])

@@ -13,11 +13,16 @@ class DoublePendulumMDP(Box2DMDP, Serializable):
     def __init__(self, *args, **kwargs):
         # make sure mdp-level step is 100ms long
         kwargs["frame_skip"] = kwargs.get("frame_skip", 2)
+        if kwargs.get("template_args", {}).get("noise", False):
+            self.link_len = (np.random.rand()-0.5) + 1
+        else:
+            self.link_len = 1
+        kwargs["template_args"] = kwargs.get("template_args", {})
+        kwargs["template_args"]["link_len"] = self.link_len
         super(DoublePendulumMDP, self).__init__(
-            self.model_path("double_pendulum.xml"),
+            self.model_path("double_pendulum.xml.mako"),
             *args, **kwargs
         )
-        self.link_len = 1.
         self.link1 = find_body(self.world, "link1")
         self.link2 = find_body(self.world, "link2")
         Serializable.__init__(self, *args, **kwargs)
