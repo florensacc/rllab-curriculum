@@ -50,7 +50,7 @@ class RecurrentNaturalGradientMethod(object):
             n_slices=1,
             grad_clip=100,
             **kwargs):
-        self.opt.grad_clip = grad_clip
+        self.grad_clip = grad_clip
         self.cg_iters = cg_iters
         self.use_cg = use_cg
         self.step_size = step_size
@@ -191,7 +191,7 @@ class RecurrentNaturalGradientMethod(object):
             1. / flat_g.T.dot(nat_direction)
         )) ** 0.5
         flat_descent_step = nat_step_size * nat_direction
-        flat_descent_step = np.clip(flat_descent_step, -self.opt.grad_clip, +self.opt.grad_clip)
+        flat_descent_step = np.clip(flat_descent_step, -self.grad_clip, +self.grad_clip)
         logger.log("descent direction computed")
         yield inputs, flat_descent_step
         logger.log("computing loss after")
