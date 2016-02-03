@@ -2730,12 +2730,11 @@ class CMAEvolutionStrategy(OOOptimizer):
         """
         return self.sp.popsize
 
-    # this is not compatible with python2.5:
-    #     @popsize.setter
-    #     def popsize(self, p):
-    #         """popsize cannot be set (this might change in future)
-    #         """
-    #         raise _Error("popsize cannot be changed")
+    @popsize.setter
+    def popsize(self, p):
+        """popsize cannot be set (this might change in future)
+        """
+        raise _Error("popsize cannot be changed")
 
     def stop(self, check=True):
         """return a dictionary with the termination status.

@@ -8,6 +8,7 @@ params = {
   normalize_mdp: true,
   policy: {
     _name: "mean_std_rnn_policy",
+    grad_clip: 10,
   },
   baseline: {
     _name: "linear_feature_baseline",

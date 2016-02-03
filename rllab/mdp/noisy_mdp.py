@@ -20,6 +20,7 @@ class NoisyObservationControlMDP(ProxyMDP, ControlMDP, Serializable):
         self.obs_noise = obs_noise
 
     def get_obs_noise_scale_factor(self, obs):
+        # return np.abs(obs)
         return np.ones_like(obs)
 
     def inject_obs_noise(self, obs):
