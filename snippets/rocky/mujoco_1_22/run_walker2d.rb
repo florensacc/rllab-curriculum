@@ -16,10 +16,10 @@ params = {
   },
   exp_name: "walker2d",
   algo: {
-    _name: "parallel.trpo",
+    _name: "ppo",
     whole_paths: true,
     batch_size: 10000,
-    max_path_length: 2000,
+    max_path_length: 500,
     n_itr: 500,
     step_size: 0.1,
     plot: true,

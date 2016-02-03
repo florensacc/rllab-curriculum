@@ -47,10 +47,10 @@ class RecurrentBatchPolopt(BatchPolopt):
         valids = [np.ones_like(path["returns"]) for path in paths]
         valids = [pad_tensor(v, max_path_length, 0) for v in valids]
 
-        samples_data["observations"] = obs
-        samples_data["advantages"] = adv
-        samples_data["actions"] = actions
-        samples_data["valids"] = valids
-        samples_data["pdists"] = pdists
+        samples_data["observations"] = np.asarray(obs)
+        samples_data["advantages"] = np.asarray(adv)
+        samples_data["actions"] = np.asarray(actions)
+        samples_data["valids"] = np.asarray(valids)
+        samples_data["pdists"] = np.asarray(pdists)
 
         return samples_data

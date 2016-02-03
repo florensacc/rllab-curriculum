@@ -1,33 +1,29 @@
 require_relative '../utils'
 
-# checked
-
 params = {
   mdp: {
-    _name: "mujoco_1_22.ant_mdp",
+    _name: "box2d.cartpole_mdp",
+    position_only: true,
   },
   normalize_mdp: true,
   policy: {
-    _name: "mean_std_nn_policy",
-    hidden_sizes: [32, 32],
+    _name: "mean_std_rnn_policy",
   },
   baseline: {
     _name: "linear_feature_baseline",
   },
-  exp_name: "ant",
   algo: {
-    _name: "ppo",
+    _name: "recurrent.rnpg",
+    batch_size: 50000,
     whole_paths: true,
-    batch_size: 10000,
     max_path_length: 500,
+    step_size: 0.1,
+    learning_rate: 1,
     n_itr: 500,
-    step_size: 0.01,
-    # plot: true,
   },
-  n_parallel: 1,
-  snapshot_mode: "last",
+  n_parallel: 4,
+  snapshot_mode: "none",
   seed: 1,
-  # plot: true,
 }
 command = to_command(params)
 puts command

@@ -28,7 +28,7 @@ class REPS(BatchPolopt):
     def __init__(
             self,
             epsilon=0.1,
-            L2_reg_dual=0.,
+            L2_reg_dual=1e-7,
             L2_reg_loss=0.,
             max_opt_itr=50,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
@@ -46,7 +46,9 @@ class REPS(BatchPolopt):
         # Init dual param values
         self.param_eta = 15.
         # Adjust for linear feature vector.
-        self.param_v = np.random.randn(mdp.observation_shape[0] * 2 + 4)
+        self.param_v = np.random.rand(mdp.observation_shape[0] * 2 + 4)
+        self.param_v = np.random.rand(mdp.observation_shape[0])
+
   
         # Theano vars
         observations = new_tensor(
@@ -76,8 +78,10 @@ class REPS(BatchPolopt):
             delta_v / param_eta - TT.max(delta_v / param_eta)
         ))
         # Add regularization to loss.
-        loss += self.L2_reg_loss * TT.mean([TT.mean(TT.square(param)) for param in
-                                            policy.get_params(regularizable=True)])
+        reg_params = policy.get_params(regularizable=True)
+        loss += self.L2_reg_loss * TT.sum([
+            TT.mean(TT.square(param)) for param in reg_params]) / \
+            len(reg_params)
   
         # Policy loss gradient.
         loss_grad = TT.grad(
@@ -141,6 +145,7 @@ class REPS(BatchPolopt):
         o = np.clip(path["observations"], -10, 10)
         l = len(path["rewards"])
         al = np.arange(l).reshape(-1, 1) / 100.0
+        return path["observations"]
         return np.concatenate([o, o**2, al, al**2, al**3, np.ones((l, 1))], axis=1)
   
     @overrides

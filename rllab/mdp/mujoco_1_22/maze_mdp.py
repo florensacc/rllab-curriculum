@@ -19,10 +19,10 @@ class MazeMDP(MujocoMDP, Serializable):
     def step(self, state, action):
         self.set_state(state)
         self.model.forward()
-        before_com = self.get_body_com("front")
+        before_com = self.get_body_com("torso")
         next_state = self.forward_dynamics(state, action, restore=False)
         self.model.forward()
-        after_com = self.get_body_com("front")
+        after_com = self.get_body_com("torso")
 
         next_obs = self.get_current_obs()
         ctrl_cost = 0#1e-5 * np.sum(np.square(action / 50))
