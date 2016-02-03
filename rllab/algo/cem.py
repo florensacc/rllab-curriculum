@@ -155,4 +155,3 @@ class CEM(RLAlgorithm):
             logger.dump_tabular(with_prefix=False)
             if self.plot:
                 plotter.update_plot(policy, self.max_path_length)
-
