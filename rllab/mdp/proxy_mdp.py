@@ -16,6 +16,10 @@ class ProxyMDP(MDP):
         return self._mdp.action_dim
 
     @property
+    def action_bounds(self):
+        return self._mdp.action_bounds
+
+    @property
     @overrides
     def action_dtype(self):
         return self._mdp.action_dtype

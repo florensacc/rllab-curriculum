@@ -15,7 +15,7 @@ class CartpoleMDP(Box2DMDP, Serializable):
         self.max_cart_speed = 4.
         self.max_pole_speed = 4.
         super(CartpoleMDP, self).__init__(
-            self.model_path("cartpole.xml"),
+            self.model_path("cartpole.xml.mako"),
             *args, **kwargs
         )
         self.cart = find_body(self.world, "cart")
