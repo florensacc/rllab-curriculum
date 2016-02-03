@@ -263,7 +263,7 @@ class Box2DMDP(ControlMDP):
         if self._position_ids is None:
             self._position_ids = []
             for idx, state in enumerate(self.extra_data.states):
-                if state.typ in ["xpos", "ypos", "apos"]:
+                if state.typ in ["xpos", "ypos", "apos", "dist", "angle"]:
                     self._position_ids.append(idx)
         return self._position_ids
 
