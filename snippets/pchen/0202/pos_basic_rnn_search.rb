@@ -102,7 +102,7 @@ hss.each do |hidden_sizes|
   seeds.each do |seed|
     mdps.each do |mdp|
       algos.each do |algo|
-        exp_name = "clipped_pos_basic_rnn_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
+        exp_name = "yetagain_pos_basic_rnn_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
         params = {
           mdp: {
             _name: mdp,
