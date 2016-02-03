@@ -102,10 +102,10 @@ def add_args(_):
 
 
 def new_from_args(_):
-    def _new_from_args(cls, parsed_args, *args):
+    def _new_from_args(cls, parsed_args, *args, **params):
         args_info = _get_info(cls)
         prefix_ = _get_prefix(cls)
-        params = dict()
+        #     params = dict()
         for arg_name, arg_info in args_info.iteritems():
             prefixed_arg_name = prefix_ + arg_name
             if hasattr(parsed_args, prefixed_arg_name):

@@ -16,18 +16,18 @@ params = {
   },
   exp_name: "ant",
   algo: {
-    _name: "parallel.trpo",
+    _name: "ppo",
     whole_paths: true,
     batch_size: 10000,
     max_path_length: 500,
     n_itr: 500,
-    step_size: 1,
-    plot: true,
+    step_size: 0.01,
+    # plot: true,
   },
-  n_parallel: 4,
+  n_parallel: 1,
   snapshot_mode: "last",
   seed: 1,
-  plot: true,
+  # plot: true,
 }
 command = to_command(params)
 puts command

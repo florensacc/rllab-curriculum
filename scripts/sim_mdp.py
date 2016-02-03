@@ -106,7 +106,7 @@ if __name__ == "__main__":
     parser.add_argument('--mode', type=str, default='static',
                         choices=['noop', 'random', 'static', 'human'],
                         help='module path to the mdp class')
-    parser.add_argument('--speedup', type=int, default=1, help='speedup')
+    parser.add_argument('--speedup', type=float, default=1, help='speedup')
     parser.add_argument('--max_steps', type=int,
                         default=sys.maxint, help='max steps')
     args = parser.parse_args()

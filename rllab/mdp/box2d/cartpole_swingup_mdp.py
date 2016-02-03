@@ -16,7 +16,7 @@ class CartpoleSwingupMDP(Box2DMDP, Serializable):
     @autoargs.inherit(Box2DMDP.__init__)
     def __init__(self, *args, **kwargs):
         super(CartpoleSwingupMDP, self).__init__(
-            self.model_path("cartpole.xml"),
+            self.model_path("cartpole.xml.mako"),
             *args, **kwargs
         )
         self.max_cart_pos = 3

@@ -1,4 +1,7 @@
 from contextlib import contextmanager
+
+import mako.template
+import mako.lookup
 import numpy as np
 import os.path as osp
 from rllab.mdp.box2d.parser.xml_box2d import world_from_xml, find_body, \
@@ -24,10 +27,22 @@ class Box2DMDP(ControlMDP):
                        'proportional to the action bounds')
     def __init__(
             self, model_path, frame_skip=1, position_only=False,
-            obs_noise=0.0, action_noise=0.0):
-        with open(model_path, "r") as f:
-            s = f.read()
-        world, extra_data = world_from_xml(s)
+            obs_noise=0.0, action_noise=0.0, template_string=None,
+            template_args=None,
+    ):
+        self.full_model_path = model_path
+        if template_string is None:
+            if model_path.endswith(".mako"):
+                with open(model_path) as template_file:
+                    template = mako.template.Template(
+                        template_file.read())
+                template_string = template.render(
+                    opts=template_args if template_args is not None else {},
+                )
+            else:
+                with open(model_path, "r") as f:
+                    template_string = f.read()
+        world, extra_data = world_from_xml(template_string)
         self.world = world
         self.extra_data = extra_data
         self.initial_state = self.get_state()
@@ -248,7 +263,7 @@ class Box2DMDP(ControlMDP):
         if self._position_ids is None:
             self._position_ids = []
             for idx, state in enumerate(self.extra_data.states):
-                if state.typ in ["xpos", "ypos", "apos"]:
+                if state.typ in ["xpos", "ypos", "apos", "dist", "angle"]:
                     self._position_ids.append(idx)
         return self._position_ids
 
