@@ -6,7 +6,7 @@ import numpy as np
 from rllab.misc import autoargs
 from rllab.misc.special import discount_cumsum
 from rllab.sampler import parallel_sampler
-from rllab.sampler.parallel_sampler import pool_map
+from rllab.sampler.parallel_sampler import pool_map, G
 from rllab.sampler.utils import rollout
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
@@ -42,11 +42,10 @@ class CEM(RLAlgorithm):
                   help="Make sure that the samples contain whole "
                        "trajectories, even if the actual batch size is "
                        "slightly larger than the specified batch_size.")
+    @autoargs.arg("batch_size", type=int,
+                  help="# of samples from trajs from param distribution.")
     @autoargs.arg("sigma0", type=float,
                   help="Initial std for param distribution.")
-    @autoargs.arg("n_traj_per_setting", type=float,
-                  help="Number of trajectories run for each sample of the distribution. "
-                  "The actual fitness is average over these trajectories.")
     @autoargs.arg("plot", type=bool,
                   help="Plot evaluation run after each iteration")
     def __init__(
@@ -56,8 +55,7 @@ class CEM(RLAlgorithm):
             discount=0.99,
             whole_paths=True,
             sigma0=1.,
-            batch_size = 1000,
-            n_traj_per_setting = 1,
+            batch_size=None,
             extra_std=1.,
             extra_decay_time=100,
             plot=False,
@@ -66,7 +64,6 @@ class CEM(RLAlgorithm):
         super(CEM, self).__init__(**kwargs)
         self.plot = plot
         self.sigma0 = sigma0
-        self.n_traj_per_setting = n_traj_per_setting
         self.whole_paths = whole_paths
         self.discount = discount
         self.max_path_length = max_path_length
@@ -74,10 +71,11 @@ class CEM(RLAlgorithm):
         self.batch_size = batch_size
 
     def train(self, mdp, policy, **kwargs):
+
         cur_std = self.sigma0
         cur_mean = policy.get_param_values()
-        popsize = np.ceil(self.batch_size / self.n_traj_per_setting).astype(np.int)
-        es = cma_es_lib.CMAEvolutionStrategy(cur_mean, cur_std, {'popsize':popsize})
+        es = cma_es_lib.CMAEvolutionStrategy(
+            cur_mean, cur_std)
 
         parallel_sampler.populate_task(mdp, policy)
         if self.plot:
@@ -88,20 +86,43 @@ class CEM(RLAlgorithm):
 
         itr = 0
         while itr < self.n_itr and not es.stop():
-            # Sample from multivariate normal distribution.
-            xs = es.ask()
-            xs = np.asarray(xs)
 
-            # Repeat for self.n_traj_per_setting per setting.
-            xss = np.repeat(xs, self.n_traj_per_setting, axis=0)
-            # For each sample, do a rollout.
-            infos = (
-                pool_map(sample_return, [(x, self.max_path_length, self.discount) for x in xss]))
+            if self.batch_size is None:
+                # Sample from multivariate normal distribution.
+                xs = es.ask()
+                xs = np.asarray(xs)
+                # For each sample, do a rollout.
+                infos = (
+                    pool_map(sample_return, [(x, self.max_path_length, self.discount) for x in xs]))
+            else:
+                cum_len = 0
+                infos = []
+                xss = []
+                done = False
+                while not done:
+                    sbs = G.n_parallel * 2
+                    # Sample from multivariate normal distribution.
+                    # You want to ask for sbs samples here.
+                    xs = es.ask(sbs)
+                    xs = np.asarray(xs)
+
+                    xss.append(xs)
+                    sinfos = pool_map(
+                        sample_return, [(x, self.max_path_length, self.discount) for x in xs])
+                    for info in sinfos:
+                        infos.append(info)
+                        cum_len += len(info['returns'])
+                        if cum_len >= self.batch_size:
+                            xs = np.concatenate(xss)
+                            done = True
+                            break
+
             # Evaluate fitness of samples (negative as it is minimization
             # problem).
             fs = - np.array([info['returns'][0] for info in infos])
-            # Undo repeat by mean over self.n_traj_per_setting per setting.
-            fs = np.mean(fs.reshape(-1, self.n_traj_per_setting), axis=1)
+            # When batching, you could have generated too many samples compared
+            # to the actual evaluations. So we cut it off in this case.
+            xs = xs[:len(fs)]
             # Update CMA-ES params based on sample fitness.
             es.tell(xs, fs)
 
