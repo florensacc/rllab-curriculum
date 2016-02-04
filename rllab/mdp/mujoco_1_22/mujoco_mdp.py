@@ -7,6 +7,7 @@ from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
 import theano
 import tempfile
+import os
 import mako.template
 import mako.lookup
 
@@ -26,7 +27,7 @@ class MujocoMDP(ControlMDP):
     @autoargs.arg('action_noise', type=float,
                   help='Noise added to the controls, which will be '
                        'proportional to the action bounds')
-    def __init__(self, action_noise=0.0, file_path=None):
+    def __init__(self, action_noise=0.0, file_path=None, template_args=None):
         # compile template
         if file_path is None:
             if self.__class__.FILE is None:
@@ -37,11 +38,16 @@ class MujocoMDP(ControlMDP):
             with open(file_path) as template_file:
                 template = mako.template.Template(
                     template_file.read(), lookup=lookup)
-            content = template.render()
-            _, file_path = tempfile.mkstemp(text=True)
+            content = template.render(
+                opts=template_args if template_args is not None else {},
+            )
+            tmp_f, file_path = tempfile.mkstemp(text=True)
             with open(file_path, 'w') as f:
                 f.write(content)
-        self.model = MjModel(file_path)
+            self.model = MjModel(file_path)
+            os.close(tmp_f)
+        else:
+            self.model = MjModel(file_path)
         self.data = self.model.data
         self.viewer = None
         self.init_qpos = self.model.data.qpos
@@ -221,6 +227,12 @@ class MujocoMDP(ControlMDP):
                 self.model.data.ctrl = prev_ctrl
                 self.model.data.act = prev_act
                 self.model.forward()
+
+    def release(self):
+        # temporarily alleviate the issue (but still some leak)
+        from rllab.mjcapi.rocky_mjc_1_22.mjlib import mjlib
+        mjlib.mj_deleteModel(self.model._wrapped)
+        mjlib.mj_deleteData(self.data._wrapped)
 
     def get_body_xmat(self, body_name):
         idx = self.model.body_names.index(body_name)
