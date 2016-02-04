@@ -20,10 +20,12 @@ params = {
   },
   exp_name: "trpo_idp_seed_#{seed}",
   algo: {
-    _name: "ppo",
-    # _name: "recurrent.rppo",
-    step_size: 0.1,
-    binary_search_penalty: false,
+    # _name: "ppo",
+    # # _name: "recurrent.rppo",
+    # step_size: 0.1,
+    # binary_search_penalty: false,
+    _name: "vpg",
+    learning_rate: 1,
     batch_size: 5000,
 
     # _name: "trpo",
