@@ -27,3 +27,4 @@ class IdentificationControlMDP(ProxyMDP, ControlMDP, Serializable):
                 self._mdp.release()
         self._mdp = self.gen_mdp()
         return super(IdentificationControlMDP, self).reset()
+
