@@ -50,10 +50,13 @@ class NPG(NaturalGradientMethod, BatchPolopt, FirstOrderMethod):
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
         with self.optimization_setup(itr, policy, samples_data, opt_info) \
-                as (_, flat_descent_step):
+                as (inputs, flat_descent_step):
             f_update = opt_info['f_update']
             descent_steps = policy.flat_to_params(flat_descent_step, trainable=True)
             f_update(*descent_steps)
+            _, mean_kl, max_kl = opt_info['f_trpo_info'](*inputs)
+        logger.record_tabular('MeanKL', mean_kl)
+        logger.record_tabular('MaxKL', max_kl)
 
         return opt_info
 

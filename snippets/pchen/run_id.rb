@@ -24,8 +24,7 @@ params = {
     # # _name: "recurrent.rppo",
     # step_size: 0.1,
     # binary_search_penalty: false,
-    _name: "vpg",
-    learning_rate: 1,
+    _name: "npg",
     batch_size: 5000,
 
     # _name: "trpo",
