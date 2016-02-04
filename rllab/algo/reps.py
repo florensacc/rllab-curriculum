@@ -25,11 +25,17 @@ class REPS(BatchPolopt):
     @autoargs.arg("optimizer", type=str,
                   help="Module path to the optimizer. It must support the "
                   "same interface as scipy.optimize.fmin_l_bfgs_b")
+#    cartpole
+#    baseline_hidden_size = ''
+#     epsilon=0.5,
+#     L2_reg_dual=1e-5,
+#     L2_reg_loss=1e-5,
+#     max_opt_itr=500,
     def __init__(
             self,
-            epsilon=0.01,
-            L2_reg_dual=1e-5,
-            L2_reg_loss=1e-5,
+            epsilon=0.5,
+            L2_reg_dual=0.,#1e-5,
+            L2_reg_loss=0.,
             max_opt_itr=50,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
             **kwargs):
@@ -107,6 +113,12 @@ class REPS(BatchPolopt):
 
         # Dual stuff
         # Symbolic dual
+        dual = param_eta * self.epsilon + param_eta * \
+            TT.log(
+                TT.mean(
+                    TT.exp(
+                        delta_v / param_eta - TT.max(delta_v / param_eta)
+                    ))) + param_eta * TT.max(delta_v / param_eta)
         dual = param_eta * self.epsilon + param_eta * \
             TT.log(
                 TT.mean(
