@@ -103,6 +103,7 @@ def add_args(_):
 
 def new_from_args(_):
     def _new_from_args(cls, parsed_args, *args, **params):
+        silent = params.pop("_silent", False)
         args_info = _get_info(cls)
         prefix_ = _get_prefix(cls)
         #     params = dict()
@@ -115,9 +116,10 @@ def new_from_args(_):
                         params[arg_name] = arg_info['mapper'](val)
                     else:
                         params[arg_name] = val
-                    print colorize(
-                        "using argument %s with value %s" % (arg_name, val),
-                        "yellow")
+                    if not silent:
+                        print colorize(
+                            "using argument %s with value %s" % (arg_name, val),
+                            "yellow")
         return cls(*args, **params)
     return _new_from_args
 

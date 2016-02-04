@@ -54,3 +54,4 @@ class RecurrentBatchPolopt(BatchPolopt):
         samples_data["pdists"] = np.asarray(pdists)
 
         return samples_data
+

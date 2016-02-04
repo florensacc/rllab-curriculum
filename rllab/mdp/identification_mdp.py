@@ -18,10 +18,13 @@ class IdentificationControlMDP(ProxyMDP, ControlMDP, Serializable):
         ControlMDP.__init__(self)
 
     def gen_mdp(self):
-        return self.mdp_cls.new_from_args(self.mdp_args, template_args=dict(noise=True))
+        return self.mdp_cls.new_from_args(self.mdp_args, _silent=True, template_args=dict(noise=True))
 
     @overrides
     def reset(self):
+        if getattr(self, "_mdp", None):
+            if hasattr(self._mdp, "release"):
+                self._mdp.release()
         self._mdp = self.gen_mdp()
         return super(IdentificationControlMDP, self).reset()
 
