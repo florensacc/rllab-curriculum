@@ -1,6 +1,6 @@
 require_relative '../../rocky/utils'
 
-itrs = 100
+itrs = 300
 batch_size = 50000
 horizon = 100
 discount = 0.99
@@ -8,8 +8,8 @@ seeds = (1..5).map do |i| i ** 2 * 5 + 23 end
 
 mdps = []
 # basics
-# mdps << "box2d.cartpole_mdp"
-# mdps << "box2d.mountain_car_mdp"
+mdps << "box2d.cartpole_mdp"
+mdps << "box2d.mountain_car_mdp"
 mdps << "box2d.cartpole_swingup_mdp"
 mdps << "box2d.double_pendulum_mdp"
 # mdps << "box2d.car_parking_mdp"
@@ -27,38 +27,70 @@ mdps << "box2d.double_pendulum_mdp"
 algos = []
 
 # # cem
-# [0.1].each do |best_frac|
-#   [0.001,  1].each do |extra_std|
-#     [itrs*0.5, ].each do |extra_decay_time|
-#       algos << {
-#         _name: "cem",
-#         # n_samples: (batch_size*1.0/horizon).to_i,
-#         best_frac: best_frac,
-#         extra_std: extra_std,
-#         extra_decay_time: extra_decay_time.to_i,
-#       }
-#     end
-#   end
-# end
+[0.1].each do |best_frac|
+  [0.001,  ].each do |extra_std|
+    [itrs*0.5, ].each do |extra_decay_time|
+      algos << {
+        _name: "cem",
+        # n_samples: (batch_size*1.0/horizon).to_i,
+        best_frac: best_frac,
+        extra_std: extra_std,
+        extra_decay_time: extra_decay_time.to_i,
+      }
+    end
+  end
+end
 
-[0.1, 0.05].each do |ss|
+[0.001, 0.1, 1].each do |ss|
+  algos << {
+    _name: "recurrent.rreps",
+    epsilon: ss,
+  }
+end
+
+[50].each do |max_opt_itr|
+  algos << {
+    _name: "recurrent.rerwr",
+    max_opt_itr: max_opt_itr,
+    positive_adv: true,
+  }
+end
+
+[0.1, 0.5].each do |ss|
   [1e0].each do |lr|
     algos << {
-      _name: "npg",
+      _name: "recurrent.rnpg",
       step_size: ss,
       update_method: "sgd",
       learning_rate: lr,
+      grad_clip: 10,
     }
   end
 end
 
-[0.1, 0.01, ].each do |ss|
+[0.01, 0.05, ].each do |lr|
   algos << {
-    _name: "trpo",
+    _name: "recurrent.rvpg",
+    update_method: "adam",
+    learning_rate: lr,
+  }
+end
+
+[0.1, 0.5, ].each do |ss|
+  algos << {
+    _name: "recurrent.rppo",
+    step_size: ss,
+  }
+end
+
+[0.1, 0.5, ].each do |ss|
+  algos << {
+    _name: "recurrent.rtrpo",
     step_size: ss,
     backtrack_ratio: 0.8,
     max_backtracks: 15,
     subsample_factor: 0.1,
+    grad_clip: 10,
   }
 end
 
@@ -70,7 +102,7 @@ hss.each do |hidden_sizes|
   seeds.each do |seed|
     mdps.each do |mdp|
       algos.each do |algo|
-        exp_name = "reflexive_system_id_search_nn_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
+        exp_name = "eval_system_id_rnn_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
         params = {
           mdp: {
             _name: mdp,
@@ -78,9 +110,9 @@ hss.each do |hidden_sizes|
           normalize_mdp: true,
           random_mdp: true,
           policy: {
-            # _name: "mean_std_rnn_policy",
-            # grad_clip: 10,
-            _name: "mean_std_nn_policy",
+            _name: "mean_std_rnn_policy",
+            grad_clip: 10,
+            # _name: "mean_std_nn_policy",
             # hidden_sizes: hidden_sizes,
           },
           baseline: {
