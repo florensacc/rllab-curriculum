@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-from rllab.mdp.identification_mdp import IdentificationControlMDP
 from rllab.misc.ext import is_iterable, set_seed
 from rllab.misc.resolve import load_class
 from rllab.misc.console import colorize
@@ -27,7 +26,6 @@ def instantiate(argvals, cls, *args, **kwargs):
 
 def run_interactive():
     pass
-
 
 
 def run_experiment(argv):
@@ -159,6 +157,7 @@ def run_experiment(argv):
 
         instances = dict()
         if args.random_mdp:
+            from rllab.mdp.identification_mdp import IdentificationControlMDP
             instances['mdp'] = IdentificationControlMDP(classes['mdp'], more_args)
         else:
             instances['mdp'] = instantiate(more_args, classes['mdp'])
