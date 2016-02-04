@@ -49,3 +49,4 @@ class TRPO(NaturalGradientMethod, BatchPolopt):
             logger.record_tabular('MaxKL', max_kl)
 
         return opt_info
+

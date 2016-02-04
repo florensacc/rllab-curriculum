@@ -35,6 +35,13 @@ class VPG(BatchPolopt, FirstOrderMethod):
         updates = self.update_method(
             surr_obj, policy.get_params(trainable=True))
         input_list = [obs_var, advantage_var, action_var]
+
+        old_pdist_var = TT.matrix('old_pdist')
+        pdist_var = policy.get_pdist_sym(obs_var)
+        kl = policy.kl(old_pdist_var, pdist_var)
+        mean_kl = TT.mean(kl)
+        max_kl = TT.max(kl)
+
         f_update = compile_function(
             inputs=input_list,
             outputs=None,
@@ -44,9 +51,14 @@ class VPG(BatchPolopt, FirstOrderMethod):
             inputs=input_list,
             outputs=surr_obj,
         )
+        f_kl = compile_function(
+            inputs=input_list + [old_pdist_var],
+            outputs=[mean_kl, max_kl],
+        )
         return dict(
             f_update=f_update,
             f_loss=f_loss,
+            f_kl=f_kl,
         )
 
     @overrides
@@ -58,11 +70,16 @@ class VPG(BatchPolopt, FirstOrderMethod):
             samples_data,
             "observations", "advantages", "actions"
         )
+        pdists = samples_data["pdists"]
         loss_before = f_loss(*inputs)
         f_update(*inputs)
         loss_after = f_loss(*inputs)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
+        mean_kl, max_kl = opt_info['f_kl'](*(list(inputs) + [pdists]))
+        logger.record_tabular('MeanKL', mean_kl)
+        logger.record_tabular('MaxKL', max_kl)
+
         return opt_info
 
     @overrides
@@ -74,3 +91,4 @@ class VPG(BatchPolopt, FirstOrderMethod):
             baseline=baseline,
             mdp=mdp,
         )
+

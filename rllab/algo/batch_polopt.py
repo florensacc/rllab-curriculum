@@ -308,3 +308,10 @@ class BatchPolopt(RLAlgorithm):
         else:
             return dict()
 
+        # numerical check
+        check_param = policy.get_params()
+        if np.any(np.isnan(check_param)):
+            raise ArithmeticError("NaN in params")
+        elif np.any(np.isinf(check_param)):
+            raise ArithmeticError("InF in params")
+
