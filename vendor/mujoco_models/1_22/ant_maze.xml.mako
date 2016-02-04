@@ -1,8 +1,22 @@
 <mujoco model="ant">
+  <%namespace file="utils.mako" name="utils" />
+
+  <%
+      height = 2.0
+      size_scaling = 3
+      structure = [
+          [1, 1, 1, 1, 1],
+          [1, 'r', 0, 0, 1],
+          [1, 1, 1, 0, 1],
+          [1, 'g', 0, 0, 1],
+          [1, 1, 1, 1, 1],
+      ]
+  %>
   <compiler inertiafromgeom="true" angle="degree" coordinate="local" />
   <option timestep="0.02" integrator="RK4" />
   <custom>
-    <numeric name="init_qpos" data="0.0 0.0 0.55 1.0 0.0 0.0 0.0 0.0 1.0 0.0 -1.0 0.0 -1.0 0.0 1.0" />
+    <numeric name="init_qpos" data="${utils.find_robot(structure, size_scaling=size_scaling, z_offset=0.55)} 1.0 0.0 0.0 0.0 0.0 1.0 0.0 -1.0 0.0 -1.0 0.0 1.0" />
+    ${utils.find_goal_range(structure, size_scaling)}
   </custom>
   <default>
     <joint limited="true" armature="1" damping="1" />
@@ -18,7 +32,8 @@
   <worldbody>
     <light directional="true" cutoff="100" exponent="1" diffuse="1 1 1" specular=".1 .1 .1" pos="0 0 1.3" dir="-0 0 -1.3" />
     <geom name='floor' material="MatPlane" pos='0 0 0' size='40 40 40' type='plane' conaffinity='1' rgba='0.8 0.9 0.8 1' condim='3' />
-    <body name="torso" pos="0 0 0.75">
+    ${utils.make_maze(structure, height=height, size_scaling=size_scaling)}
+    <body name="torso" pos="${utils.find_robot(structure, size_scaling=size_scaling, z_offset=0.75)}">
       <geom name="torso_geom" type="sphere" size="0.25" pos="0 0 0" />
       <joint name="root" type="free" limited="false" pos="0 0 0" axis="0 0 1" margin="0.01" armature="0" damping="0" />
       <body name="front_left_leg" pos="0 0 0">
