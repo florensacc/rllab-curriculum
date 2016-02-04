@@ -3,8 +3,10 @@ import operator
 
 
 def flatten_tensors(tensors):
-    return np.concatenate(map(lambda x: np.reshape(x, [-1]), tensors))
-    
+    if len(tensors) > 0:
+        return np.concatenate(map(lambda x: np.reshape(x, [-1]), tensors))
+    else:
+        return np.asarray([])
 
 def unflatten_tensors(flattened, tensor_shapes):
     tensor_sizes = map(lambda shape: reduce(operator.mul, shape), tensor_shapes)
