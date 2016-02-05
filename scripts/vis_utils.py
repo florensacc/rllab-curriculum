@@ -44,8 +44,8 @@ def plot_experiments(
                 cnt = 0
                 for row in reader:
                     cnt += 1
-                    if cnt <= 3:
-                        continue
+                    # if cnt <= 3:
+                    #     continue
                     if row_reader is not None:
                         maybe = row_reader(row)
                         if maybe is not None:
