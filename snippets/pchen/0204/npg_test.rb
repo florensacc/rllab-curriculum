@@ -8,7 +8,7 @@ seeds = (1..5).map do |i| i ** 2 * 5 + 23 end
 
 mdps = []
 # basics
-# mdps << "box2d.cartpole_mdp"
+mdps << "box2d.cartpole_mdp"
 # mdps << "box2d.mountain_car_mdp"
 # mdps << "box2d.cartpole_swingup_mdp"
 # mdps << "box2d.double_pendulum_mdp"
@@ -16,9 +16,9 @@ mdps = []
 # mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
 # 
 # # loco
-mdps << "mujoco_1_22.swimmer_mdp"
+# mdps << "mujoco_1_22.swimmer_mdp"
 # mdps << "mujoco_1_22.hopper_mdp"
-mdps << "mujoco_1_22.walker2d_mdp"
+# mdps << "mujoco_1_22.walker2d_mdp"
 # mdps << "mujoco_1_22.half_cheetah_mdp"
 # mdps << "mujoco_1_22.ant_mdp"
 # mdps << "mujoco_1_22.simple_humanoid_mdp"
