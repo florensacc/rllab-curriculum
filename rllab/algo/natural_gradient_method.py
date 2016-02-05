@@ -39,6 +39,8 @@ class NaturalGradientMethod(object):
                        "conjugate gradient. Since the computation time for "
                        "the descent direction dominates, this can greatly "
                        "reduce the overall computation time.")
+    @autoargs.arg("trpo_stepsize", type=bool,
+                  help="hehe")
     def __init__(
             self,
             step_size=0.001,
@@ -46,7 +48,9 @@ class NaturalGradientMethod(object):
             cg_iters=10,
             reg_coeff=1e-5,
             subsample_factor=0.1,
+            trpo_stepsize=False,
             **kwargs):
+        self.trpo_stepsize = trpo_stepsize
         self.cg_iters = cg_iters
         self.use_cg = use_cg
         self.step_size = step_size
@@ -175,7 +179,7 @@ class NaturalGradientMethod(object):
             nat_direction = cg(Hx, flat_g, cg_iters=self.cg_iters)
 
         nat_step_size = 1. if self.step_size is None \
-            else (self.step_size * (
+            else ((2 if self.trpo_stepsize else 1) * self.step_size * (
             1. / flat_g.T.dot(nat_direction)
         )) ** 0.5
         flat_descent_step = nat_step_size * nat_direction
