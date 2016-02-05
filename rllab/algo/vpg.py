@@ -76,6 +76,7 @@ class VPG(BatchPolopt, FirstOrderMethod):
         loss_after = f_loss(*inputs)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
+
         mean_kl, max_kl = opt_info['f_kl'](*(list(inputs) + [pdists]))
         logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('MaxKL', max_kl)

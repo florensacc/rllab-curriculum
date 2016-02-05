@@ -44,8 +44,8 @@ def plot_experiments(
                 cnt = 0
                 for row in reader:
                     cnt += 1
-                    if cnt <= 3:
-                        continue
+                    # if cnt <= 3:
+                    #     continue
                     if row_reader is not None:
                         maybe = row_reader(row)
                         if maybe is not None:
@@ -169,7 +169,7 @@ def mk_matcher(*args, **h):
 # different seeds will be grouped into same param
 import json
 from collections import defaultdict
-def group_by_params(rets, key=lambda x: -x[-1]):
+def group_by_params(rets, warn=False, key=lambda x: -x[-1]):
     def conv(h):
         h = dict(h)
         if "seed" in h:
@@ -186,8 +186,9 @@ def group_by_params(rets, key=lambda x: -x[-1]):
         params = json.loads(param_str)
         max_len = max([len(s) for s in lst_series])
         eligible_lst_series = [s for s in lst_series if len(s) == max_len]
-        if len(lst_series) != len(eligible_lst_series):
-            print "warning: some series have imcomplete data, ignoring"
+        if warn:
+            if len(lst_series) != len(eligible_lst_series):
+                print "warning: some series have imcomplete data, ignoring"
         mean_series = np.mean(eligible_lst_series, axis=0).flatten()
         std_series = np.std(eligible_lst_series, axis=0).flatten()
         outs.append(
