@@ -109,7 +109,7 @@ import matplotlib.patches as mpatches
 def plot_std(means, stds):
     plot = plt.plot(means)[0]
     color = plot.get_color()
-    plt.fill_between(plot.get_xdata(), means-2*stds, means+2*stds,
+    plt.fill_between(plot.get_xdata(), means-1*stds, means+1*stds,
         alpha=0.3, facecolor=color,
         linewidth=0)
 
