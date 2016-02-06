@@ -28,7 +28,8 @@ params = {
     # batch_size: 5000jj0,
 
     _name: "trpo",
-    trpo_stepsize: false,
+    trpo_stepsize: true,
+    maybe_aggressive: true,
     step_size: 0.1,
     backtrack_ratio: 0.7,
     max_backtracks: 15,

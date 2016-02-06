@@ -141,9 +141,13 @@ import json
 def get_params(fn):
     data_folder = osp.abspath('data')
     fn = osp.join(data_folder, fn)
-    with open(osp.join(fn, 'params.json'), 'rb') as jsonfile:
-        param_h = json.load(jsonfile)
-        return param_h
+    try:
+        with open(osp.join(fn, 'params.json'), 'rb') as jsonfile:
+            param_h = json.load(jsonfile)
+            return param_h
+    except IOError as e:
+        return None
+
 
 def mk_matcher(*args, **h):
     if len(args) != 0:

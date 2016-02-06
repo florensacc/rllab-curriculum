@@ -1,6 +1,6 @@
 require_relative '../../rocky/utils'
 
-itrs = 500#100
+itrs = 2000#100
 batch_size = 50000
 horizon = 500
 discount = 0.99
@@ -9,60 +9,35 @@ seeds = (1..5).map do |i| i ** 2 * 5 + 23 end
 mdps = []
 # basics
 mdps << "box2d.cartpole_mdp"
-# mdps << "box2d.mountain_car_mdp"
-# mdps << "box2d.cartpole_swingup_mdp"
-# mdps << "box2d.double_pendulum_mdp"
-# mdps << "box2d.car_parking_mdp"
-# mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
+mdps << "box2d.mountain_car_mdp"
+mdps << "box2d.cartpole_swingup_mdp"
+mdps << "box2d.double_pendulum_mdp"
+mdps << "box2d.car_parking_mdp"
+mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
 # 
 # # loco
-# mdps << "mujoco_1_22.swimmer_mdp"
-# mdps << "mujoco_1_22.hopper_mdp"
-# mdps << "mujoco_1_22.walker2d_mdp"
-# mdps << "mujoco_1_22.half_cheetah_mdp"
-# mdps << "mujoco_1_22.ant_mdp"
+mdps << "mujoco_1_22.swimmer_mdp"
+mdps << "mujoco_1_22.hopper_mdp"
+mdps << "mujoco_1_22.walker2d_mdp"
+mdps << "mujoco_1_22.half_cheetah_mdp"
+mdps << "mujoco_1_22.ant_mdp"
 # mdps << "mujoco_1_22.simple_humanoid_mdp"
 # mdps << "mujoco_1_22.humanoid_mdp"
 
 algos = []
 
-# vpg
-# [0.005, 0.01].each do |lr|
-#   algos << {
-#     _name: "vpg",
-#     update_method: "adam",
-#     learning_rate: lr,
-#   }
-# end
-
-# npg
-[0.1, 0.3].each do |ss|
-  [1e0].each do |lr|
-    algos << {
-      _name: "npg",
-      step_size: ss,
-      update_method: "sgd",
-      learning_rate: lr,
-    }
-  end
+# trpo
+[0.1, 0.08, 0.05, ].each do |ss|
+  algos << {
+    _name: "trpo",
+    step_size: ss,
+    backtrack_ratio: 0.8,
+    max_backtracks: 15,
+   trpo_stepsize: true,
+   maybe_aggressive: true,
+  }
 end
 
-
-# # algos = []
-# # cem
-# [0.05, 0.15].each do |best_frac|
-#   [0.5, 1].each do |extra_std|
-#     [itrs*0.8, itrs*0.5].each do |extra_decay_time|
-#       algos << {
-#         _name: "cem",
-#         n_samples: (batch_size*1.0/horizon).to_i,
-#         best_frac: best_frac,
-#         extra_std: extra_std,
-#         extra_decay_time: extra_decay_time.to_i,
-#       }
-#     end
-#   end
-# end
 
 
 hss = []
@@ -73,7 +48,7 @@ mdps.each do |mdp|
     hss.each do |hidden_sizes|
         seeds.each do |seed|
             algos.each do |algo|
-                exp_name = "npg_test_loco_eval_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
+                exp_name = "alt_ftrpo_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
                 params = {
                     mdp: {
                         _name: mdp,
@@ -103,9 +78,6 @@ mdps.each do |mdp|
                 # puts command
                 # system(command)
                 # command = "LD_LIBRARY_PATH=/root/workspace/rllab/private/mujoco/binaries/1_22/linux #{command}"
-  # --device /dev/nvidia0:/dev/nvidia0 \
-  # --device /dev/nvidiactl:/dev/nvidiactl \
-  # --device /dev/nvidia-uvm:/dev/nvidia-uvm \
                 dockerified = """docker run \
   -v ~/.bash_history:/root/.bash_history \
   -v /slave/theano_cache_docker:/root/.theano \
