@@ -1,6 +1,6 @@
 require_relative '../../rocky/utils'
 
-itrs = 2000#100
+itrs = 500#100
 batch_size = 50000
 horizon = 500
 discount = 0.99
@@ -8,18 +8,18 @@ seeds = (1..5).map do |i| i ** 2 * 5 + 23 end
 
 mdps = []
 # basics
-# mdps << "box2d.cartpole_mdp"
-# mdps << "box2d.mountain_car_mdp"
+mdps << "box2d.cartpole_mdp"
+mdps << "box2d.mountain_car_mdp"
 mdps << "box2d.cartpole_swingup_mdp"
-# mdps << "box2d.double_pendulum_mdp"
-# mdps << "box2d.car_parking_mdp"
+mdps << "box2d.double_pendulum_mdp"
+mdps << "box2d.car_parking_mdp"
 mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
 # 
 # # loco
 mdps << "mujoco_1_22.swimmer_mdp"
-# mdps << "mujoco_1_22.hopper_mdp"
-# mdps << "mujoco_1_22.walker2d_mdp"
-# mdps << "mujoco_1_22.half_cheetah_mdp"
+mdps << "mujoco_1_22.hopper_mdp"
+mdps << "mujoco_1_22.walker2d_mdp"
+mdps << "mujoco_1_22.half_cheetah_mdp"
 mdps << "mujoco_1_22.ant_mdp"
 # mdps << "mujoco_1_22.simple_humanoid_mdp"
 # mdps << "mujoco_1_22.humanoid_mdp"
@@ -27,7 +27,8 @@ mdps << "mujoco_1_22.ant_mdp"
 algos = []
 
 # trpo
-[0.13, 0.1, 0.08, 0.05, 0.03, 0.01,].each do |ss|
+# [0.13, 0.1, 0.08, 0.05, 0.03, 0.01,].each do |ss|
+[0.4, 0.3, 0.25, 0.2,].each do |ss|
   algos << {
     _name: "trpo",
     step_size: ss,
@@ -47,7 +48,7 @@ mdps.each do |mdp|
     hss.each do |hidden_sizes|
         seeds.each do |seed|
             algos.each do |algo|
-                exp_name = "ftrpo_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
+                exp_name = "more_ftrpo_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
                 params = {
                     mdp: {
                         _name: mdp,

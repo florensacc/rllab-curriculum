@@ -36,18 +36,20 @@ end
 hss = []
 hss << [64, 32, 16]
 
-ranges = [0, 0.1, 0.5, 1]
+# ranges = [0, 0.1, 0.5, 1]
+ranges = [0.2, 0.3, 0.4, 0.6, 0.7, 0.8]
 
-inc = 0
+inc = 999
 ranges.each do |range|
   hss.each do |hidden_sizes|
     seeds.each do |seed|
       mdps.each do |mdp|
         algos.each do |algo|
-          exp_name = "cp_range_test_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
+          exp_name = "ok_cp_range_test_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
           params = {
             mdp: {
               _name: mdp,
+              random_start_range: range,
             },
             normalize_mdp: true,
             policy: {

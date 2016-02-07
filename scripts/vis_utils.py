@@ -169,7 +169,7 @@ def mk_matcher(*args, **h):
         return match(h, get_params(fn))
     return matcher
 
-# Dict FileName Series -> (Series -> Number)? -> [(param, mean_series, std_series, [series]) sorted by key mean_series]
+# Dict FileName Series -> (Series -> Number)? -> [(param, mean_series, std_series, [series], [fns]) sorted by key mean_series]
 # different seeds will be grouped into same param
 import json
 from collections import defaultdict
@@ -184,9 +184,10 @@ def group_by_params(rets, warn=False, key=lambda x: -x[-1]):
     seen = defaultdict(list)
     for filename, series in rets.items():
         params = get_params(filename)
-        seen[conv(params)].append(series)
+        seen[conv(params)].append((filename, series))
     outs = []
-    for param_str, lst_series in seen.items():
+    for param_str, tup in seen.items():
+        filenames, lst_series = zip(*tup)
         params = json.loads(param_str)
         max_len = max([len(s) for s in lst_series])
         eligible_lst_series = [s for s in lst_series if len(s) == max_len]
@@ -196,7 +197,7 @@ def group_by_params(rets, warn=False, key=lambda x: -x[-1]):
         mean_series = np.mean(eligible_lst_series, axis=0).flatten()
         std_series = np.std(eligible_lst_series, axis=0).flatten()
         outs.append(
-            (params, mean_series, std_series, lst_series)
+            (params, mean_series, std_series, lst_series, filenames)
         )
     return sorted(outs, key=lambda o: key(o[1]))
 
