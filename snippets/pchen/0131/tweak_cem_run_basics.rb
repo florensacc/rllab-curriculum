@@ -11,8 +11,8 @@ mdps << "box2d.cartpole_mdp"
 mdps << "box2d.mountain_car_mdp"
 mdps << "box2d.cartpole_swingup_mdp"
 mdps << "box2d.double_pendulum_mdp"
-mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
-mdps << "box2d.car_parking_mdp"
+# mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
+# mdps << "box2d.car_parking_mdp"
 
 algos = []
 # erwr
@@ -63,8 +63,8 @@ algos = []
 # end
 # cem
 [100, 200].each do |ns|
-  [0.03, 0.05, 0.15, 0.3].each do |best_frac|
-    [0.5, 1, 2].each do |extra_std|
+  [0.15, 0.3].each do |best_frac|
+    [1, 2].each do |extra_std|
       [500, 800].each do |extra_decay_time|
         algos << {
           _name: "cem",

@@ -22,6 +22,9 @@ class IdentificationControlMDP(ProxyMDP, ControlMDP, Serializable):
 
     @overrides
     def reset(self):
+        if getattr(self, "_mdp", None):
+            if hasattr(self._mdp, "release"):
+                self._mdp.release()
         self._mdp = self.gen_mdp()
         return super(IdentificationControlMDP, self).reset()
 

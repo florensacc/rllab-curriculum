@@ -21,3 +21,4 @@ launch_scripts
 MUJOCO_LOG.TXT
 .project
 .pydevproject
+*.pdf

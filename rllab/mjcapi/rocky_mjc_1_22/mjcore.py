@@ -53,6 +53,7 @@ class MjModel(MjModelWrapper):
     def __del__(self):
         if self._wrapped is not None:
             mjlib.mj_deleteModel(self._wrapped)
+            self._wrapped = None
 
     @property
     def body_names(self):

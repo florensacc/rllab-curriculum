@@ -7,7 +7,7 @@ from rllab.misc.overrides import overrides
 
 class InvertedDoublePendulum(MujocoMDP, Serializable):
 
-    FILE = 'inverted_double_pendulum.xml'
+    FILE = 'inverted_double_pendulum.xml.mako'
 
     @autoargs.arg("random_start", type=bool,
                   help="Randomized starting position by adjusting the angles"

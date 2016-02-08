@@ -15,9 +15,12 @@ class CarParkingMDP(Box2DMDP, Serializable):
     @autoargs.arg("random_start", type=bool,
                   help="Randomized starting position by uniforming sampling starting car angle"
                        "and position from a circle of radius 5")
+    @autoargs.arg("random_start_range", type=float,
+                  help="Defaulted to 1. which means possible angles are 1. * 2*pi")
     def __init__(self, *args, **kwargs):
         Serializable.__init__(self, *args, **kwargs)
         self.random_start = kwargs.pop("random_start", True)
+        self.random_start_range = kwargs.pop("random_start_range", 1.)
         super(CarParkingMDP, self).__init__(
             self.model_path("car_parking.xml"),
             *args, **kwargs
@@ -66,7 +69,7 @@ class CarParkingMDP(Box2DMDP, Serializable):
         self._set_state(self.initial_state)
         self._invalidate_state_caches()
         if self.random_start:
-            pos_angle, car_angle = np.random.rand(2) * np.pi * 2
+            pos_angle, car_angle = np.random.rand(2) * np.pi * 2 * self.random_start_range
             dis = (self.start_radius*np.cos(pos_angle), self.start_radius*np.sin(pos_angle))
             for body in [self.car] + self.wheels:
                 body.angle = car_angle

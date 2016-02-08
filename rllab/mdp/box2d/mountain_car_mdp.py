@@ -20,7 +20,7 @@ class MountainCarMDP(Box2DMDP, Serializable):
                  goal_cart_pos=0.6,
                  *args, **kwargs):
         super(MountainCarMDP, self).__init__(
-            self.model_path("mountain_car.xml"),
+            self.model_path("mountain_car.xml.mako"),
             *args, **kwargs
         )
         self.max_cart_pos = 2

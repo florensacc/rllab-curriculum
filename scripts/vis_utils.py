@@ -44,8 +44,8 @@ def plot_experiments(
                 cnt = 0
                 for row in reader:
                     cnt += 1
-                    if cnt <= 3:
-                        continue
+                    # if cnt <= 3:
+                    #     continue
                     if row_reader is not None:
                         maybe = row_reader(row)
                         if maybe is not None:
@@ -109,7 +109,7 @@ import matplotlib.patches as mpatches
 def plot_std(means, stds):
     plot = plt.plot(means)[0]
     color = plot.get_color()
-    plt.fill_between(plot.get_xdata(), means-2*stds, means+2*stds,
+    plt.fill_between(plot.get_xdata(), means-1*stds, means+1*stds,
         alpha=0.3, facecolor=color,
         linewidth=0)
 
@@ -141,9 +141,13 @@ import json
 def get_params(fn):
     data_folder = osp.abspath('data')
     fn = osp.join(data_folder, fn)
-    with open(osp.join(fn, 'params.json'), 'rb') as jsonfile:
-        param_h = json.load(jsonfile)
-        return param_h
+    try:
+        with open(osp.join(fn, 'params.json'), 'rb') as jsonfile:
+            param_h = json.load(jsonfile)
+            return param_h
+    except IOError as e:
+        return None
+
 
 def mk_matcher(*args, **h):
     if len(args) != 0:
@@ -165,11 +169,11 @@ def mk_matcher(*args, **h):
         return match(h, get_params(fn))
     return matcher
 
-# Dict FileName Series -> (Series -> Number)? -> [(param, mean_series, std_series, [series]) sorted by key mean_series]
+# Dict FileName Series -> (Series -> Number)? -> [(param, mean_series, std_series, [series], [fns]) sorted by key mean_series]
 # different seeds will be grouped into same param
 import json
 from collections import defaultdict
-def group_by_params(rets, key=lambda x: -x[-1]):
+def group_by_params(rets, warn=False, key=lambda x: -x[-1]):
     def conv(h):
         h = dict(h)
         if "seed" in h:
@@ -180,18 +184,20 @@ def group_by_params(rets, key=lambda x: -x[-1]):
     seen = defaultdict(list)
     for filename, series in rets.items():
         params = get_params(filename)
-        seen[conv(params)].append(series)
+        seen[conv(params)].append((filename, series))
     outs = []
-    for param_str, lst_series in seen.items():
+    for param_str, tup in seen.items():
+        filenames, lst_series = zip(*tup)
         params = json.loads(param_str)
         max_len = max([len(s) for s in lst_series])
         eligible_lst_series = [s for s in lst_series if len(s) == max_len]
-        if len(lst_series) != len(eligible_lst_series):
-            print "warning: some series have imcomplete data, ignoring"
+        if warn:
+            if len(lst_series) != len(eligible_lst_series):
+                print "warning: some series have imcomplete data, ignoring"
         mean_series = np.mean(eligible_lst_series, axis=0).flatten()
         std_series = np.std(eligible_lst_series, axis=0).flatten()
         outs.append(
-            (params, mean_series, std_series, lst_series)
+            (params, mean_series, std_series, lst_series, filenames)
         )
     return sorted(outs, key=lambda o: key(o[1]))
 
@@ -217,12 +223,16 @@ def factorize_params(lst_hash):
 
 def comp(pattern, **kwargs):
     kwargs["plot"] = kwargs.get("plot", False)
+    mstd = kwargs.pop("mstd", False)
     rets=plot_experiments(
         pattern,
         **kwargs
     )
     plt.figure()
     groups=group_by_params(rets)
+    if mstd:
+        # mean - std
+        groups = sorted(groups, key=lambda group: -np.mean(group[1] - group[2]))
     common, factors = factorize_params(map(lambda x: x[0], groups))
     for group in groups:
         plot_std(group[1], group[2])
