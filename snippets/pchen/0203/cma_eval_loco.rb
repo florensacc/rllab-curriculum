@@ -1,6 +1,6 @@
 require_relative '../../rocky/utils'
 
-itrs = 300
+itrs = 500# 100
 batch_size = 50000
 horizon = 500
 discount = 0.99
@@ -11,103 +11,39 @@ mdps = []
 # mdps << "box2d.cartpole_mdp"
 # mdps << "box2d.mountain_car_mdp"
 # mdps << "box2d.cartpole_swingup_mdp"
-mdps << "box2d.double_pendulum_mdp"
-mdps << "box2d.car_parking_mdp"
+# mdps << "box2d.double_pendulum_mdp"
+# mdps << "box2d.car_parking_mdp"
 # mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
 # 
 # # loco
-# mdps << "mujoco_1_22.swimmer_mdp"
-# mdps << "mujoco_1_22.hopper_mdp"
-# mdps << "mujoco_1_22.walker2d_mdp"
-# mdps << "mujoco_1_22.half_cheetah_mdp"
-# mdps << "mujoco_1_22.ant_mdp"
-# mdps << "mujoco_1_22.simple_humanoid_mdp"
-# mdps << "mujoco_1_22.humanoid_mdp"
+mdps << "mujoco_1_22.swimmer_mdp"
+mdps << "mujoco_1_22.hopper_mdp"
+mdps << "mujoco_1_22.walker2d_mdp"
+mdps << "mujoco_1_22.half_cheetah_mdp"
+mdps << "mujoco_1_22.ant_mdp"
+mdps << "mujoco_1_22.simple_humanoid_mdp"
+mdps << "mujoco_1_22.humanoid_mdp"
 
 algos = []
 
-#reps
-[1e-1, 1e-2].each do |ss|
-  algos << {
-    _name: "reps",
-    epsilon: ss,
-  }
+# cma_es
+[0.1].each do |sigma0|
+      algos << {
+        _name: "cma_es",
+        sigma0: sigma0,
+      }
 end
-
-# erwr
-[50].each do |max_opt_itr|
-  algos << {
-    _name: "erwr",
-    max_opt_itr: max_opt_itr,
-    positive_adv: true,
-  }
-end
-
-# trpo
-[10, 1, 0.1, ].each do |ss|
-  algos << {
-    _name: "trpo",
-    step_size: ss,
-    backtrack_ratio: 0.8,
-    max_backtracks: 15,
-  }
-end
-
-# npg
-[1, 0.1, 0.01].each do |ss|
-  [1e-1, 1e0].each do |lr|
-    algos << {
-      _name: "npg",
-      step_size: ss,
-      update_method: "sgd",
-      learning_rate: lr,
-    }
-  end
-end
-
-# vpg
-[1e-3, 1e-2, 1e-1].each do |lr|
-  algos << {
-    _name: "vpg",
-    update_method: "adam",
-    learning_rate: lr,
-  }
-end
-[1e-3, 1e-2, 1e-1].each do |lr|
-  algos << {
-    _name: "vpg",
-    update_method: "sgd",
-    learning_rate: lr,
-  }
-end
-
-
-# # algos = []
-# # cem
-# [0.05, 0.15].each do |best_frac|
-#   [0.5, 1].each do |extra_std|
-#     [itrs*0.8, itrs*0.5].each do |extra_decay_time|
-#       algos << {
-#         _name: "cem",
-#         n_samples: (batch_size*1.0/horizon).to_i,
-#         best_frac: best_frac,
-#         extra_std: extra_std,
-#         extra_decay_time: extra_decay_time.to_i,
-#       }
-#     end
-#   end
-# end
 
 
 hss = []
-hss << [100, 50, 32]
+hss << [100, 50, 25]
 
 inc = 0
 hss.each do |hidden_sizes|
   seeds.each do |seed|
     mdps.each do |mdp|
       algos.each do |algo|
-        exp_name = "bsf_big_nn_0131_all_#{inc = inc + 1}_fixed_double_parking"
+        exp_name = "cma_eval_loco__#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
         params = {
           mdp: {
             _name: mdp,
@@ -126,9 +62,8 @@ hss.each do |hidden_sizes|
             max_path_length: horizon,
             n_itr: itrs,
             discount: discount,
-            batch_size: batch_size,
             # plot: true,
-          }.merge(algo),
+          }.merge(algo).merge({batch_size: batch_size}),
           n_parallel: 8,
           snapshot_mode: "last",
           seed: seed,
@@ -138,6 +73,9 @@ hss.each do |hidden_sizes|
         # puts command
         # system(command)
         # command = "LD_LIBRARY_PATH=/root/workspace/rllab/private/mujoco/binaries/1_22/linux #{command}"
+  # --device /dev/nvidia0:/dev/nvidia0 \
+  # --device /dev/nvidiactl:/dev/nvidiactl \
+  # --device /dev/nvidia-uvm:/dev/nvidia-uvm \
         dockerified = """docker run \
   -v ~/.bash_history:/root/.bash_history \
   -v /slave/theano_cache_docker:/root/.theano \
@@ -150,9 +88,6 @@ hss.each do |hidden_sizes|
   -v /home/ubuntu/data:/root/workspace/data \
   -v /slave/workspace:/root/workspace \
   -v `pwd`/rllab:/root/workspace/rllab \
-  --device /dev/nvidia0:/dev/nvidia0 \
-  --device /dev/nvidiactl:/dev/nvidiactl \
-  --device /dev/nvidia-uvm:/dev/nvidia-uvm \
   --env LD_LIBRARY_PATH=/root/workspace/rllab/private/mujoco/binaries/1_22/linux:/usr/local/cuda/lib64 \
   dementrock/starcluster:0131 #{command}"""
         # puts dockerified
@@ -162,7 +97,7 @@ hss.each do |hidden_sizes|
         f.puts dockerified
         f.close
         system("chmod +x " + fname)
-        system("qsub -V -b n -l mem_free=8G,h_vmem=14G -r y -cwd " + fname)
+        system("qsub -V -b n -l mem_free=18G,h_vmem=20G -r y -cwd " + fname)
         # if mdp =~ /parking/ or mdp =~ /\.double/
         #     puts `~/qs.sh | grep #{exp_name} | /usr/local/sbin/kill.rb`
         # end

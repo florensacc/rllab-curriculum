@@ -1,93 +1,56 @@
 require_relative '../../rocky/utils'
 
-itrs = 1000
-batch_size = 5000
-horizon = 100
+itrs = 500# 100
+batch_size = 50000
+horizon = 500
 discount = 0.99
-seeds = (1..5).each do |i| i ** 2 * 5 + 23 end
+seeds = (1..5).map do |i| i ** 2 * 5 + 23 end
 
 mdps = []
+# basics
 mdps << "box2d.cartpole_mdp"
 mdps << "box2d.mountain_car_mdp"
 mdps << "box2d.cartpole_swingup_mdp"
 mdps << "box2d.double_pendulum_mdp"
-# mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
-# mdps << "box2d.car_parking_mdp"
+mdps << "box2d.car_parking_mdp"
+mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
+# 
+# # loco
+# mdps << "mujoco_1_22.swimmer_mdp"
+# mdps << "mujoco_1_22.hopper_mdp"
+# mdps << "mujoco_1_22.walker2d_mdp"
+# mdps << "mujoco_1_22.half_cheetah_mdp"
+# mdps << "mujoco_1_22.ant_mdp"
+# mdps << "mujoco_1_22.simple_humanoid_mdp"
+# mdps << "mujoco_1_22.humanoid_mdp"
 
 algos = []
-# erwr
-#
-#[1].each do |best_quantile|
-#   [5, 50].each do |max_opt_itr|
-#     algos << {
-#       _name: "erwr",
-#       max_opt_itr: max_opt_itr,
-#       best_quantile: best_quantile,
-#       positive_adv: true,
-#     }
-#   end
-# end
-# 
-# # trpo & ppo
-# [1, 0.1, 0.01].each do |ss|
-#   algos << {
-#     _name: "trpo",
-#     step_size: ss,
-#     backtrack_ratio: 0.8,
-#   }
-# end
-# [1, 0.1, 0.01].each do |ss|
-#   algos << {
-#     _name: "ppo",
-#     step_size: ss,
-#   }
-# end
-# # npg
-# [0.1, 0.01].each do |ss|
-#   [1e-2, 1e-1, 1e0].each do |lr|
-#     algos << {
-#       _name: "npg",
-#       step_size: ss,
-#       update_method: "sgd",
-#       learning_rate: lr,
-#     }
-#   end
-# end
-# # vpg
-# [1e-4, 1e-3, 1e-2, 1e-1].each do |lr|
-#   algos << {
-#     _name: "vpg",
-#     update_method: "adam",
-#     learning_rate: lr,
-#   }
-# end
-# cem
-[100, 200].each do |ns|
-  [0.15, 0.3].each do |best_frac|
-    [1, 2].each do |extra_std|
-      [500, 800].each do |extra_decay_time|
-        algos << {
-          _name: "cem",
-          n_samples: ns,
-          best_frac: best_frac,
-          extra_std: extra_std,
-          extra_decay_time: extra_decay_time,
-        }
-      end
+
+# # cem
+[0.1].each do |best_frac|
+  [ 0.001, 0.1, ].each do |extra_std|
+    [itrs*0.5, ].each do |extra_decay_time|
+      algos << {
+        _name: "cem",
+        # n_samples: (batch_size*1.0/horizon).to_i,
+        best_frac: best_frac,
+        extra_std: extra_std,
+        extra_decay_time: extra_decay_time.to_i,
+      }
     end
   end
 end
 
+
 hss = []
-hss << []
-hss << [32, 32]
+hss << [100, 50, 25]
 
 inc = 0
 hss.each do |hidden_sizes|
   seeds.each do |seed|
     mdps.each do |mdp|
       algos.each do |algo|
-        exp_name = "cem_tweak_0131_basics_#{inc = inc + 1}"
+        exp_name = "basics_eval_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
         params = {
           mdp: {
             _name: mdp,
@@ -107,7 +70,7 @@ hss.each do |hidden_sizes|
             n_itr: itrs,
             discount: discount,
             # plot: true,
-          }.merge(algo),
+          }.merge(algo).merge({batch_size: batch_size}),
           n_parallel: 8,
           snapshot_mode: "last",
           seed: seed,
@@ -116,6 +79,10 @@ hss.each do |hidden_sizes|
         command = to_command(params)
         # puts command
         # system(command)
+        # command = "LD_LIBRARY_PATH=/root/workspace/rllab/private/mujoco/binaries/1_22/linux #{command}"
+  # --device /dev/nvidia0:/dev/nvidia0 \
+  # --device /dev/nvidiactl:/dev/nvidiactl \
+  # --device /dev/nvidia-uvm:/dev/nvidia-uvm \
         dockerified = """docker run \
   -v ~/.bash_history:/root/.bash_history \
   -v /slave/theano_cache_docker:/root/.theano \
@@ -128,10 +95,8 @@ hss.each do |hidden_sizes|
   -v /home/ubuntu/data:/root/workspace/data \
   -v /slave/workspace:/root/workspace \
   -v `pwd`/rllab:/root/workspace/rllab \
-  --device /dev/nvidia0:/dev/nvidia0 \
-  --device /dev/nvidiactl:/dev/nvidiactl \
-  --device /dev/nvidia-uvm:/dev/nvidia-uvm \
-  dementrock/starcluster:new #{command}"""
+  --env LD_LIBRARY_PATH=/root/workspace/rllab/private/mujoco/binaries/1_22/linux:/usr/local/cuda/lib64 \
+  dementrock/starcluster:0131 #{command}"""
         # puts dockerified
         # system(dockerified)
         fname = "#{exp_name}.sh"
@@ -140,7 +105,11 @@ hss.each do |hidden_sizes|
         f.close
         system("chmod +x " + fname)
         system("qsub -V -b n -l mem_free=8G,h_vmem=14G -r y -cwd " + fname)
+        # if mdp =~ /parking/ or mdp =~ /\.double/
+        #     puts `~/qs.sh | grep #{exp_name} | /usr/local/sbin/kill.rb`
+        # end
       end
     end
   end
 end
+

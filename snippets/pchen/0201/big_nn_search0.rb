@@ -1,6 +1,6 @@
 require_relative '../../rocky/utils'
 
-itrs = 300
+itrs = 100
 batch_size = 50000
 horizon = 500
 discount = 0.99
@@ -8,21 +8,21 @@ seeds = (1..5).map do |i| i ** 2 * 5 + 23 end
 
 mdps = []
 # basics
-# mdps << "box2d.cartpole_mdp"
-# mdps << "box2d.mountain_car_mdp"
-# mdps << "box2d.cartpole_swingup_mdp"
+mdps << "box2d.cartpole_mdp"
+mdps << "box2d.mountain_car_mdp"
+mdps << "box2d.cartpole_swingup_mdp"
 mdps << "box2d.double_pendulum_mdp"
 mdps << "box2d.car_parking_mdp"
-# mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
+mdps << "mujoco_1_22.inverted_double_pendulum_mdp"
 # 
 # # loco
-# mdps << "mujoco_1_22.swimmer_mdp"
-# mdps << "mujoco_1_22.hopper_mdp"
-# mdps << "mujoco_1_22.walker2d_mdp"
-# mdps << "mujoco_1_22.half_cheetah_mdp"
-# mdps << "mujoco_1_22.ant_mdp"
-# mdps << "mujoco_1_22.simple_humanoid_mdp"
-# mdps << "mujoco_1_22.humanoid_mdp"
+mdps << "mujoco_1_22.swimmer_mdp"
+mdps << "mujoco_1_22.hopper_mdp"
+mdps << "mujoco_1_22.walker2d_mdp"
+mdps << "mujoco_1_22.half_cheetah_mdp"
+mdps << "mujoco_1_22.ant_mdp"
+mdps << "mujoco_1_22.simple_humanoid_mdp"
+mdps << "mujoco_1_22.humanoid_mdp"
 
 algos = []
 
@@ -84,19 +84,19 @@ end
 
 # # algos = []
 # # cem
-# [0.05, 0.15].each do |best_frac|
-#   [0.5, 1].each do |extra_std|
-#     [itrs*0.8, itrs*0.5].each do |extra_decay_time|
-#       algos << {
-#         _name: "cem",
-#         n_samples: (batch_size*1.0/horizon).to_i,
-#         best_frac: best_frac,
-#         extra_std: extra_std,
-#         extra_decay_time: extra_decay_time.to_i,
-#       }
-#     end
-#   end
-# end
+[0.05, 0.15].each do |best_frac|
+  [0.5, 1].each do |extra_std|
+    [itrs*0.8, itrs*0.5].each do |extra_decay_time|
+      algos << {
+        _name: "cem",
+        n_samples: (batch_size*1.0/horizon).to_i,
+        best_frac: best_frac,
+        extra_std: extra_std,
+        extra_decay_time: extra_decay_time.to_i,
+      }
+    end
+  end
+end
 
 
 hss = []
@@ -107,7 +107,7 @@ hss.each do |hidden_sizes|
   seeds.each do |seed|
     mdps.each do |mdp|
       algos.each do |algo|
-        exp_name = "bsf_big_nn_0131_all_#{inc = inc + 1}_fixed_double_parking"
+        exp_name = "real_big_search_0_#{inc = inc + 1}_#{seed}_#{mdp}_#{algo[:_name]}"
         params = {
           mdp: {
             _name: mdp,
@@ -126,9 +126,8 @@ hss.each do |hidden_sizes|
             max_path_length: horizon,
             n_itr: itrs,
             discount: discount,
-            batch_size: batch_size,
             # plot: true,
-          }.merge(algo),
+          }.merge(algo).merge(algo[:_name] == "cem" ? {} : {batch_size: batch_size}),
           n_parallel: 8,
           snapshot_mode: "last",
           seed: seed,

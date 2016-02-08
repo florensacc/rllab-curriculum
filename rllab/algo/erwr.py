@@ -38,6 +38,7 @@ class ERWR(BatchPolopt):
             max_opt_itr=50,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
             **kwargs):
+        assert best_quantile == 1., "not implemented"
         self.best_quantile = best_quantile
         self.max_opt_itr = max_opt_itr
         self.optimizer = locate(optimizer)
@@ -81,9 +82,20 @@ class ERWR(BatchPolopt):
             )
         )
 
+        old_pdist_var = TT.matrix('old_pdist')
+        pdist_var = policy.get_pdist_sym(input_var)
+        kl = policy.kl(old_pdist_var, pdist_var)
+        mean_kl = TT.mean(kl)
+        max_kl = TT.max(kl)
+        f_kl = compile_function(
+            inputs=input_list + [old_pdist_var],
+            outputs=[mean_kl, max_kl],
+        )
+
         return dict(
             f_lb=f_lb,
             f_opt=f_opt,
+            f_kl=f_kl,
         )
 
     @overrides
@@ -109,6 +121,11 @@ class ERWR(BatchPolopt):
         policy.set_param_values(opt_params, trainable=True)
         logger.record_tabular('LossAfter', loss_after)
         logger.record_tabular('dLoss', loss_before - loss_after)
+
+        mean_kl, max_kl = opt_info['f_kl'](*(list(full_len_input_values) + [samples_data['pdists']]))
+        logger.record_tabular('MeanKL', mean_kl)
+        logger.record_tabular('MaxKL', max_kl)
+
         return opt_info
 
     @overrides

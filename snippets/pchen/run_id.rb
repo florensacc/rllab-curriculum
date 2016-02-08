@@ -5,8 +5,8 @@ seed = 1
 
 params = {
   mdp: {
-    # _name: "box2d.cartpole_swingup_mdp",
-    _name: "box2d.double_pendulum_mdp",
+    _name: "box2d.cartpole_swingup_mdp",
+    # _name: "box2d.double_pendulum_mdp",
   },
   normalize_mdp: true,
   # random_mdp: true,
@@ -24,16 +24,17 @@ params = {
     # # _name: "recurrent.rppo",
     # step_size: 0.1,
     # binary_search_penalty: false,
-    _name: "vpg",
-    learning_rate: 1,
-    batch_size: 5000,
+    # _name: "erwr",
+    # batch_size: 5000jj0,
 
-    # _name: "trpo",
-    # step_size: 0.1,
-    # backtrack_ratio: 0.7,
-    # max_backtracks: 15,
-    # cg_iters: 10,
-    # batch_size: 10000,
+    _name: "trpo",
+    trpo_stepsize: true,
+    maybe_aggressive: true,
+    step_size: 0.1,
+    backtrack_ratio: 0.7,
+    max_backtracks: 15,
+    cg_iters: 10,
+    batch_size: 1000,
 
 
     # _name: "cem",
