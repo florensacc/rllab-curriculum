@@ -74,7 +74,8 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
             actions = [np.zeros(2)]
             from rllab.mdp.mujoco_1_22.mujoco_mdp import MujocoMDP
             from rllab.mdp.mujoco_1_22.gather.gather_mdp import GatherMDP
-            if isinstance(mdp, (MujocoMDP, GatherMDP)):
+            from rllab.mdp.mujoco_1_22.maze_mdp import MazeMDP
+            if isinstance(mdp, (MujocoMDP, GatherMDP, MazeMDP)):
                 from rllab.mjcapi.rocky_mjc_1_22 import glfw
 
                 def cb(window, key, scancode, action, mods):
