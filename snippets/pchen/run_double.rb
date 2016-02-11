@@ -6,8 +6,8 @@ seed = 1
 params = {
   mdp: {
     # _name: "box2d.double_pendulum_mdp",
-    # _name: "box2d.car_parking_mdp",
-    _name: "box2d.cartpole_mdp",
+    _name: "box2d.car_parking_mdp",
+    # _name: "box2d.cartpole_mdp",
     # trig_angle: false,
     # frame_skip: 2,
   },
@@ -23,8 +23,7 @@ params = {
   },
   exp_name: "ppo_double_skip2_pendulum_seed_#{seed}",
   algo: {
-    _name: "ppo",
-    binary_search_penalty: false,
+    _name: "trpo",
     whole_paths: true,
     # # quantile: quantile,
 
@@ -33,7 +32,7 @@ params = {
     max_path_length: 100,
     n_itr: 500,
     plot: true,
-    # step_size: 0.1,
+    step_size: 0.01,
 
   },
   n_parallel: 1,

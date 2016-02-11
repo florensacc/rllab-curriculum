@@ -68,10 +68,15 @@ def worker_init_opt(opt):
     advantage_var = TT.vector('advantage')
     action_var = TT.matrix('action', dtype=mdp.action_dtype)
 
-    log_prob = policy.get_log_prob_sym(input_var, action_var)
+    # log_prob = policy.get_log_prob_sym(obs_var, action_var)
+    old_pdist_var = TT.matrix('old_pdist')
+    pdist_var = policy.get_pdist_sym(input_var)
+    mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
+    lr = policy.likelihood_ratio(old_pdist_var, pdist_var, action_var)
+
     # formulate as a minimization problem
     # The gradient of the surrogate objective is the policy gradient
-    surr_obj = - TT.mean(log_prob * advantage_var)
+    surr_obj = - TT.mean(lr * advantage_var)
     # We would need to calculate the empirical fisher information matrix
     # This can be done as follows (though probably not the most efficient
     # way):
@@ -79,9 +84,6 @@ def worker_init_opt(opt):
     #                  (evaluated at theta' = theta),
     # we can get I(theta) by calculating the hessian of
     # KL(p(theta)||p(theta'))
-    old_pdist_var = TT.matrix('old_pdist')
-    pdist_var = policy.get_pdist_sym(input_var)
-    mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
     grads = theano.grad(surr_obj, wrt=policy.get_params(trainable=True))
     flat_grad = flatten_tensor_variables(grads)
 
