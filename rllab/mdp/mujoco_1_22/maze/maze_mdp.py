@@ -90,6 +90,31 @@ class MazeMDP(ProxyMDP, ControlMDP, Serializable):
         Serializable.quick_init(self, locals())
 
     def get_current_obs(self):
+        robot_x, robot_y = self._mdp.get_body_com("torso")[:2]
+        ori = self._mdp.model.data.qpos[self.__class__.ORI_IND]
+        
+        structure = self.__class__.MAZE_STRUCTURE
+        size_scaling = self.__class__.MAZE_SIZE_SCALING
+
+        for i in range(len(structure)):
+            for j in range(len(structure[0])):
+                cx = j * size_scaling
+                cy = i * size_scaling
+                x1 = cx - 0.5 * size_scaling
+                x2 = cx + 0.5 * size_scaling
+                y1 = cy - 0.5 * size_scaling
+                y2 = cy + 0.5 * size_scaling
+                thetas = [
+                    np.atan2(y1 - robot_y, x1 - robot_x),
+                    np.atan2(y2 - robot_y, x1 - robot_x),
+                    np.atan2(y1 - robot_y, x2 - robot_x),
+                    np.atan2(y2 - robot_y, x2 - robot_x),
+                ]
+                
+
+                pass
+
+
         return np.concatenate([
             self._mdp.model.data.qpos.flat,
             self._mdp.model.data.qvel.flat,
