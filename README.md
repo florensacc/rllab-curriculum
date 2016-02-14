@@ -2,34 +2,18 @@
 
 ## Setup Instructions
 
-- Install pip libraries:
+- We recommend using `virtualenv`:
 
-  ```
-  pip install joblib pyprind python-dateutil
-  ```
+    ```
+virtualenv .env
+source .env/bin/activate
+    ```
 
-- Install pygame:
+- Install python libraries:
 
-  If using Anaconda, run the following:
-
-  ```
-  # linux
-  conda install -c https://conda.binstar.org/tlatorre pygame
-  # mac
-  conda install -c https://conda.anaconda.org/quasiben pygame
-  ```
-
-  Otherwise, follow the official instructions.
-
-- Install box2d:
-
-  If using Anaconda, run the following:
-
-  ```
-  conda install -c https://conda.anaconda.org/kne pybox2d
-  ```
-
-  Otherwise, follow the official instructions.
+    ```
+pip install -r requirements.txt
+    ```
 
 ## Running Experiments
 

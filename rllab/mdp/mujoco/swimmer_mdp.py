@@ -2,8 +2,6 @@ from rllab.misc.overrides import overrides
 from .mujoco_mdp import MujocoMDP
 import numpy as np
 from rllab.core.serializable import Serializable
-from rllab.sampler import parallel_sampler
-from rllab.misc.ext import extract
 from rllab.misc import logger
 from rllab.misc import autoargs
 
@@ -42,28 +40,12 @@ class SwimmerMDP(MujocoMDP, Serializable):
         return next_obs, reward, done
 
     @overrides
-    def log_extra(self):
-        stats = parallel_sampler.run_map(_worker_collect_stats)
-        mean_progs, max_progs, min_progs, std_progs = extract(
-            stats,
-            "mean_prog", "max_prog", "min_prog", "std_prog"
-        )
-        logger.record_tabular('AverageForwardProgress', np.mean(mean_progs))
-        logger.record_tabular('MaxForwardProgress', np.max(max_progs))
-        logger.record_tabular('MinForwardProgress', np.min(min_progs))
-        logger.record_tabular('StdForwardProgress', np.mean(std_progs))
-
-
-def _worker_collect_stats():
-    PG = parallel_sampler.G
-    paths = PG.paths
-    progs = [
-        path["observations"][-1][-3] - path["observations"][0][-3]
-        for path in paths
-    ]
-    return dict(
-        mean_prog=np.mean(progs),
-        max_prog=np.max(progs),
-        min_prog=np.min(progs),
-        std_prog=np.std(progs),
-    )
+    def log_extra(self, paths):
+        progs = [
+            path["observations"][-1][-3] - path["observations"][0][-3]
+            for path in paths
+        ]
+        logger.record_tabular('AverageForwardProgress', np.mean(progs))
+        logger.record_tabular('MaxForwardProgress', np.max(progs))
+        logger.record_tabular('MinForwardProgress', np.min(progs))
+        logger.record_tabular('StdForwardProgress', np.std(progs))
