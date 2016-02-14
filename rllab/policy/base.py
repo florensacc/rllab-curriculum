@@ -72,12 +72,6 @@ class Policy(Parameterized):
         return False
 
 
-class DeterministicPolicy(Policy):
-
-    def get_action_sym(self, input_var, train=False):
-        raise NotImplementedError
-
-
 class StochasticPolicy(Policy):
 
     def __init__(self, mdp):

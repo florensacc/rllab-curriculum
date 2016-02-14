@@ -50,7 +50,7 @@ class MountainCarMDP(Box2DMDP, Serializable):
         low, high = bounds
         xvel = np.random.uniform(low, high)
         self.cart.linearVelocity = (xvel, self.cart.linearVelocity[1])
-        return self.get_state(), self.get_current_obs()
+        return self.get_current_obs()
 
     @overrides
     def action_from_keys(self, keys):
@@ -60,4 +60,3 @@ class MountainCarMDP(Box2DMDP, Serializable):
             return np.asarray([+1])
         else:
             return np.asarray([0])
-
