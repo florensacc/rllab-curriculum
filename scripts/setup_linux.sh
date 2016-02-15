@@ -12,8 +12,8 @@ hash virtualenv 2>/dev/null || {
   sudo pip install virtualenv
 }
 
-# Make sure that we're under the directory of the script
-cd "$(dirname "$0")"
+# Make sure that we're under the directory of the project
+cd "$(dirname "$0")/.."
 # Ensure .env
 
 if [ ! -d ".env" ]; then
