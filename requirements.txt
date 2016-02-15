@@ -7,7 +7,8 @@ python-dateutil==2.4.2
 joblib==0.9.4
 pyprind==2.9.4
 mako==1.0.3
+ipdb==0.8.1
 -e git://github.com/dementrock/Theano.git@62df345c9f13a6baf07129e6cc3f7feecfbb19c4#egg=Theano
 -e git://github.com/Lasagne/Lasagne.git@19b9d958507e7300e355d7cd1a6bbff2c7726c07#egg=Lasagne
 -e git://github.com/pybox2d/pybox2d.git@8825b16c98a144af53bac9514727c77976a2372c#egg=box2d
-hg+http://bitbucket.org/pygame/pygame
+-e git://github.com/dementrock/pygame.git@482d1bb24667cdecaebe70b1619817d116c0a407#egg=pygame

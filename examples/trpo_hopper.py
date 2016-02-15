@@ -21,7 +21,7 @@ params = dict(
         step_size=0.01,
         plot=True,
     ),
-    n_parallel=4,
+    n_parallel=1,
     snapshot_mode="last",
     seed=1,
     plot=True,

@@ -5,13 +5,13 @@ from mjtypes import *
 
 osp = os.path
 if sys.platform.startswith("darwin"):
-    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/osx/libmujoco.dylib"))
-    addn_libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/osx/libmjc122.dylib"))
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco/libmujoco.dylib"))
+    addn_libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../private/mujoco/binaries/1_22/osx/libmjc122.dylib"))
 elif sys.platform.startswith("linux"):
-    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/linux/libmujoco.so"))
-    addn_libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/linux/libmjc122.so"))
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../private/mujoco/binaries/1_22/linux/libmujoco.so"))
+    addn_libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../private/mujoco/binaries/1_22/linux/libmjc122.so"))
 elif sys.platform.startswith("win"):
-    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../../private/mujoco/binaries/1_22/win/mujoco.lib"))
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../private/mujoco/binaries/1_22/win/mujoco.lib"))
 else:
     raise RuntimeError("unrecognized platform %s"%sys.platform)
 
@@ -179,8 +179,8 @@ mjlib.mj_deleteData.restype = None
 #mjlib.mj_mulM.restype = None
 #mjlib.mj_applyFT.argtypes = [POINTER(MJMODEL), POINTER(MJDATA), POINTER(c_double), POINTER(c_double), POINTER(c_double), c_int, POINTER(c_double)]
 #mjlib.mj_applyFT.restype = None
-#mjlib.mj_objectVelocity.argtypes = [POINTER(MJMODEL), POINTER(MJDATA), c_int, c_int, POINTER(c_double), mjtByte]
-#mjlib.mj_objectVelocity.restype = None
+mjlib.mj_objectVelocity.argtypes = [POINTER(MJMODEL), POINTER(MJDATA), c_int, c_int, POINTER(c_double), c_ubyte]
+mjlib.mj_objectVelocity.restype = None
 #mjlib.mj_objectAcceleration.argtypes = [POINTER(MJMODEL), POINTER(MJDATA), c_int, c_int, POINTER(c_double), mjtByte]
 #mjlib.mj_objectAcceleration.restype = None
 #mjlib.mj_contactForce.argtypes = [POINTER(MJMODEL), POINTER(MJDATA), c_int, POINTER(c_double)]

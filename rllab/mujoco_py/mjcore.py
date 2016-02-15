@@ -1,14 +1,14 @@
-from ctypes import Structure, c_int, POINTER, cdll, c_char_p, create_string_buffer, pointer
+from ctypes import POINTER, create_string_buffer, pointer
 import numpy as np
-from numpy.ctypeslib import as_ctypes
-import os
 from mjtypes import *
-from mjlib import mjlib, addn_lib
+from mjlib import mjlib
 from util import *
+import mjconstants as C
 
 
 class MjError(Exception):
     pass
+
 
 def register_license(file_path):
     result = mjlib.mj_activate(file_path)
@@ -18,6 +18,7 @@ def register_license(file_path):
         raise MjError('could not register license')
     else:
         raise MjError("I don't know wth happene")
+
 
 class MjModel(MjModelWrapper):
 
@@ -31,21 +32,43 @@ class MjModel(MjModelWrapper):
         data_ptr = mjlib.mj_makeData(model_ptr)
         data = MjData(data_ptr, self)
         self.data = data
-        self.body_coms = np.zeros((self.nbody, 3))
-        self.body_comvels = np.zeros((self.nbody, 3))
-        self.body_momentums = np.zeros((self.nbody, 6))
+        self._body_comvels = None
         self.forward()
 
-    # This is like updating the state of mujoco. I'm not really sure what it's updating though
     def forward(self):
         mjlib.mj_forward(self.ptr, self.data.ptr)
-        addn_lib.mj_subtree(
-            self.ptr,
-            self.data.ptr,
-            self.body_coms.ctypes.data_as(POINTER(c_int)),
-            self.body_comvels.ctypes.data_as(POINTER(c_int)),
-            self.body_momentums.ctypes.data_as(POINTER(c_int)),
-        )
+        self._body_comvels = None
+
+    @property
+    def body_comvels(self):
+        if self._body_comvels is None:
+            self._body_comvels = self._compute_subtree()
+        return self._body_comvels
+
+    def _compute_subtree(self):
+        body_vels = np.zeros((self.nbody, 6))
+        # bodywise quantities
+        mass = self.body_mass.flatten()
+        for i in xrange(self.nbody):
+            # body velocity
+            mjlib.mj_objectVelocity(
+                self.ptr, self.data.ptr, C.mjOBJ_BODY, i,
+                body_vels[i].ctypes.data_as(POINTER(c_double)), 0
+            )
+            # body linear momentum
+        lin_moms = body_vels[:, 3:] * mass.reshape((-1, 1))
+
+        # init subtree mass
+        body_parentid = self.body_parentid
+        # subtree com and com_vel
+        for i in xrange(self.nbody - 1, -1, -1):
+            if i > 0:
+                parent = body_parentid[i]
+                # add scaled velocities
+                lin_moms[parent] += lin_moms[i]
+                # accumulate mass
+                mass[parent] += mass[i]
+        return lin_moms / mass.reshape((-1, 1))
 
     def step(self):
         mjlib.mj_step(self.ptr, self.data.ptr)
@@ -96,7 +119,7 @@ class MjData(MjDataWrapper):
 
     def __init__(self, wrapped, size_src=None):
         super(MjData, self).__init__(wrapped, size_src)
-        
+
     def __del__(self):
         if self._wrapped is not None:
             mjlib.mj_deleteData(self._wrapped)
