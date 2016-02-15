@@ -19,12 +19,12 @@ params = dict(
         n_itr=40,
         discount=0.99,
         step_size=0.01,
-        plot=True,
+        # plot=True,
     ),
     n_parallel=4,
     snapshot_mode="last",
     seed=1,
-    plot=True,
+    # plot=True,
 )
 
 run_experiment(params)
