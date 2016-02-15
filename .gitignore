@@ -26,3 +26,4 @@ MUJOCO_LOG.TXT
 snippets
 vendor/mujoco
 private
+lua
