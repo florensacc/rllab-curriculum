@@ -113,14 +113,17 @@ def run_experiment(argv):
         #     pickle.dump(sys.argv[1:], f)
 
         classes = dict()
-        classes['mdp'] = load_class(args.mdp, MDP, ["rllab", "mdp"])
+        if args.mdp:
+            classes['mdp'] = load_class(args.mdp, MDP, ["rllab", "mdp"])
         if args.policy:
             classes['policy'] = load_class(
                 args.policy, Policy, ["rllab", "policy"])
         if args.baseline:
             classes['baseline'] = load_class(
                 args.baseline, Baseline, ["rllab", "baseline"])
-        classes['algo'] = load_class(args.algo, Algorithm, ["rllab", "algo"])
+        if args.algo:
+            classes['algo'] = load_class(
+                args.algo, Algorithm, ["rllab", "algo"])
 
         for cls in classes.values():
             cls.add_args(parser)
@@ -128,6 +131,9 @@ def run_experiment(argv):
         if args.more_help:
             parser.print_help()
             sys.exit(0)
+        else:
+            assert 'mdp' in classes, 'mdp must be provided'
+            assert 'algo' in classes, 'algo must be provided'
 
         more_args = parser.parse_args(argv[1:])
 

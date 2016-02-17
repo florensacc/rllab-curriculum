@@ -20,22 +20,22 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
     # step ahead with all-zero action
     if mode == 'noop':
         action = np.zeros(mdp.action_dim)
-        state = mdp.reset()[0]
+        mdp.reset()
         mdp.plot()
         for _ in xrange(max_steps):
-            state, _, _, done = mdp.step(state, action)
+            _, _, done = mdp.step(action)
             mdp.plot()
             time.sleep(mdp.timestep / speedup)
             if done:
-                state = mdp.reset()[0]
+                mdp.reset()
     elif mode == 'random':
-        state = mdp.reset()[0]
+        mdp.reset()
         lb, ub = mdp.action_bounds
         totrew = 0
         mdp.plot()
         for i in xrange(max_steps):
             action = sample_action(lb, ub)
-            state, _, rew, done = mdp.step(state, action)
+            _, rew, done = mdp.step(action)
             # if i % 10 == 0:
             mdp.plot()
             # import time as ttime
@@ -43,7 +43,7 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
             totrew += rew
             if done:
                 totrew = 0
-                state = mdp.reset()[0]
+                mdp.reset()
         if not done:
             totrew = 0
     elif mode == 'static':
@@ -52,7 +52,7 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
             mdp.plot()
             time.sleep(mdp.timestep / speedup)
     elif mode == 'human':
-        state = mdp.reset()[0]
+        mdp.reset()
         mdp.plot()
         tr = 0.
         from rllab.mdp.box2d.box2d_mdp import Box2DMDP
@@ -61,15 +61,14 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
                 pygame.event.pump()
                 keys = pygame.key.get_pressed()
                 action = mdp.action_from_keys(keys)
-                state, ob, r, done = mdp.step(state, action)
+                ob, r, done = mdp.step(action)
                 tr += r
                 mdp.plot()
                 time.sleep(mdp.timestep / speedup)
                 if done:
                     tr = 0.
-                    state = mdp.reset()[0]
+                    mdp.reset()
         else:
-            states = [state]
             trs = [tr]
             actions = [np.zeros(2)]
             from rllab.mdp.mujoco_1_22.mujoco_mdp import MujocoMDP
@@ -86,14 +85,13 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
                         actions[0] = np.zeros(2)
                         glfw.poll_events()
                         # if np.linalg.norm(actions[0]) > 0:
-                        states[0], ob, r, done = mdp.step(
-                            states[0], actions[0])
+                        ob, r, done = mdp.step(actions[0])
                         trs[0] += r
                         mdp.plot()
                         time.sleep(mdp.timestep / speedup)
                         if done:
                             trs[0] = 0.
-                            states[0] = mdp.reset()[0]
+                            mdp.reset()
                     except Exception as e:
                         print e
     else:
