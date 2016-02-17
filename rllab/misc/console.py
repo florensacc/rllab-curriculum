@@ -224,12 +224,12 @@ def to_command(params):
         if isinstance(v, dict):
             for nk, nv in v.iteritems():
                 if str(nk) == "_name":
-                    command += " \\\n" + "  --%s %s" % (k, _to_param_val(nv))
+                    command += "  --%s %s" % (k, _to_param_val(nv))
                 else:
-                    command += " \\\n" + \
+                    command += \
                         "  --%s_%s %s" % (k, nk, _to_param_val(nv))
         else:
-            command += " \\\n" + "  --%s %s" % (k, _to_param_val(v))
+            command += "  --%s %s" % (k, _to_param_val(v))
     return command
 
 

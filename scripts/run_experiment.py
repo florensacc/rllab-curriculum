@@ -1,4 +1,6 @@
 from __future__ import print_function
+import sys
+sys.path.append(".")
 
 from rllab.misc.ext import is_iterable, set_seed
 from rllab.misc.resolve import load_class
@@ -6,7 +8,6 @@ from rllab.misc.console import colorize
 from rllab import config
 import rllab.misc.logger as logger
 import argparse
-import sys
 import os.path as osp
 import datetime
 import dateutil.tz

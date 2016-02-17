@@ -1,3 +1,6 @@
+import sys
+sys.path.append(".")
+
 from rllab.misc.console import run_experiment
 
 params = dict(
