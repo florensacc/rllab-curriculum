@@ -130,12 +130,14 @@ def get_all_parameters(cls, parsed_args):
     if prefix is None or len(prefix) == 0:
         raise ValueError('Cannot retrieve parameters without prefix')
     info = _get_info(cls)
-    spec = inspect.getargspec(cls.__init__)
-    if spec.defaults is None:
-        arg_defaults = {}
+    if inspect.ismethod(cls.__init__):
+        spec = inspect.getargspec(cls.__init__)
+        if spec.defaults is None:
+            arg_defaults = {}
+        else:
+            arg_defaults = dict(zip(spec.args[::-1], spec.defaults[::-1]))
     else:
-        arg_defaults = dict(zip(spec.args[::-1], spec.defaults[::-1]))
-    # print arg_defaults
+        arg_defaults = {}
     all_params = {}
     for arg_name, arg_info in info.iteritems():
         prefixed_name = prefix + arg_name

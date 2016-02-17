@@ -22,5 +22,4 @@ class ZeroBaseline(Baseline):
 
     @overrides
     def predict(self, path):
-        return np.zeros_like(path["returns"])
-
+        return np.zeros_like(path["rewards"])
