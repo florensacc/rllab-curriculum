@@ -27,3 +27,4 @@ snippets
 vendor/mujoco
 private
 lua
+iterate.dat
