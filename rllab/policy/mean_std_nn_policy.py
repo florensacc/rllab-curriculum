@@ -1,3 +1,4 @@
+import joblib
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne
@@ -49,6 +50,10 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                        'of tanh, sigmoid')
     @autoargs.arg('bn', type=bool,
                   help='whether to apply batch normalization to hidden layers')
+    @autoargs.arg('load_params', type=str,
+                  help='path to previous policy.pkl')
+    @autoargs.arg('load_params_masks', type=bool, nargs='*',
+                  help='slices params')
     # pylint: disable=dangerous-default-value
     def __init__(
             self,
@@ -60,6 +65,8 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             nonlinearity='lasagne.nonlinearities.tanh',
             output_nl='None',
             bn=False,
+            load_params=None,
+            load_params_masks=None,
             ):
         Serializable.__init__(
             self, mdp=mdp, hidden_sizes=hidden_sizes, std_sizes=std_sizes,
@@ -127,6 +134,21 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         super(MeanStdNNPolicy, self).__init__(mdp)
         LasagnePowered.__init__(self, [mean_layer, log_std_layer])
+
+        if load_params:
+            data = joblib.load(load_params)
+            old_policy = data['policy']
+            old_params = old_policy.get_params_internal()
+            new_params = self.get_params_internal()
+            if load_params_masks is None:
+                load_params_masks = [True for _ in old_params]
+            for mask, old, new in zip(load_params_masks, old_params, new_params):
+                if mask:
+                    new.set_value(old.get_value())
+                    logger.log("Loading for %s" % new)
+                else:
+                    logger.log("Skipping %s" % new)
+
 
     def get_pdist_sym(self, input_var):
         mean_var = L.get_output(self._mean_layer, input_var)
