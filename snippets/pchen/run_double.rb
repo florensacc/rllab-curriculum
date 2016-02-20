@@ -16,8 +16,9 @@ params = {
     _name: "mean_std_nn_policy",
     hidden_sizes: [100, 50, 25],
     load_params: "data/ppo_double_skip2_pendulum_seed_1/itr_1.pkl",
-    load_params_masks: [true, true, true, true, false, false,
-                        false, false, false],
+    load_params_masks: (haha=[true, true, true, true, false, false,
+                        false, false, false]),
+    trainable_masks: haha.map(&:!),
   },
   baseline: {
     _name: "linear_feature_baseline",

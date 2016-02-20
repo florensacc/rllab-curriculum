@@ -10,6 +10,7 @@ from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
 # from rllab.core.lasagne_layers import batch_norm
 from rllab.core.serializable import Serializable
+from rllab.misc.ext import flatten
 from rllab.policy.base import StochasticPolicy
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
@@ -54,6 +55,8 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                   help='path to previous policy.pkl')
     @autoargs.arg('load_params_masks', type=bool, nargs='*',
                   help='slices params')
+    @autoargs.arg('trainable_masks', type=bool, nargs='*',
+                  help='slices params')
     # pylint: disable=dangerous-default-value
     def __init__(
             self,
@@ -67,6 +70,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             bn=False,
             load_params=None,
             load_params_masks=None,
+            trainable_masks=None,
             ):
         Serializable.__init__(
             self, mdp=mdp, hidden_sizes=hidden_sizes, std_sizes=std_sizes,
@@ -142,12 +146,24 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             new_params = self.get_params_internal()
             if load_params_masks is None:
                 load_params_masks = [True for _ in old_params]
+            if trainable_masks is None:
+                trainable_masks = [True for _ in old_params]
+            assert len(load_params_masks) == len(old_params)
+            assert len(trainable_masks) == len(old_params)
             for mask, old, new in zip(load_params_masks, old_params, new_params):
                 if mask:
                     new.set_value(old.get_value())
                     logger.log("Loading for %s" % new)
                 else:
                     logger.log("Skipping %s" % new)
+            for tags, trainable in zip(
+                flatten([l.params.values() for l in L.get_all_layers(self._output_layers)[1:]]),
+                trainable_masks
+            ):
+                if not trainable:
+                    tags.remove('trainable')
+                else:
+                    assert 'trainable' in tags
 
 
     def get_pdist_sym(self, input_var):
