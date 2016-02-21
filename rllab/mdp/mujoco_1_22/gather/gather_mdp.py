@@ -225,22 +225,29 @@ class GatherMDP(ControlMDP, Serializable):
     def reset(self):
         # super(GatherMDP, self).reset()
         self.objects = []
+        existing = set()
         while len(self.objects) < self.n_apples:
             x = np.random.randint(-self.activity_range/2, self.activity_range/2) * 2
             y = np.random.randint(-self.activity_range/2, self.activity_range/2) * 2
             # regenerate, since it is too close to the robot's initial position
             if x**2 + y**2 < self.robot_object_spacing**2:
                 continue
+            if (x, y) in existing:
+                continue
             typ = APPLE
             self.objects.append((x, y, typ))
+            existing.add((x, y))
         while len(self.objects) < self.n_apples + self.n_bombs:
             x = np.random.randint(-self.activity_range/2, self.activity_range/2) * 2
             y = np.random.randint(-self.activity_range/2, self.activity_range/2) * 2
             # regenerate, since it is too close to the robot's initial position
             if x**2 + y**2 < self.robot_object_spacing**2:
                 continue
+            if (x, y) in existing:
+                continue
             typ = BOMB
             self.objects.append((x, y, typ))
+            existing.add((x, y))
 
         self.inner_mdp.reset()
         return self.inner_mdp.get_current_state(), self.get_current_obs()

@@ -64,3 +64,9 @@ class ProxyMDP(MDP):
     def get_current_obs(self):
         return self._mdp.get_current_obs()
 
+    @property
+    def viewer(self):
+        return self._mdp.viewer
+
+    def action_from_key(self, key):
+        return self._mdp.action_from_key(key)

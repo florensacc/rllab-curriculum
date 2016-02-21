@@ -15,6 +15,8 @@ if __name__ == "__main__":
                         help='Max length of rollout')
     parser.add_argument('--speedup', type=int, default=1,
                         help='Speedup')
+    parser.add_argument('--loop', type=int, default=1,
+                        help='# of loops')
     args = parser.parse_args()
 
     policy = None
@@ -44,5 +46,7 @@ if __name__ == "__main__":
                            animated=True, speedup=args.speedup)
             mdp.stop_viewer()
         # print 'Total reward: ', sum(path["rewards"])
+        args.loop -= 1
         if ':' not in args.file:
-            break
+            if args.loop <= 0:
+                break

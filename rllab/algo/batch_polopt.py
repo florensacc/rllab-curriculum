@@ -120,7 +120,7 @@ def worker_process_paths(opt):
 class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
-    This include various policy gradient methods like vpg, npg, ppo, trpo, etc.
+    This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
     """
 
     @autoargs.arg("n_itr", type=int,

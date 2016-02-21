@@ -65,3 +65,21 @@
     %>
     ${' '.join(map(str, robot_pos))}
 </%def>
+
+<%def name="encode_map(structure, size_scaling)">
+    <%
+        data = []
+        data.append(len(structure))
+        data.append(len(structure[0]))
+        data.append(size_scaling)
+        for i in xrange(len(structure)):
+            for j in xrange(len(structure[0])):
+                if structure[i][j] == 1:
+                    data.append(1)
+                elif structure[i][j] == 'g':
+                    data.append(2)
+                else:
+                    data.append(0)
+    %>
+    ${' '.join(map(str, data))}
+</%def>
