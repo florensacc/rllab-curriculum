@@ -10,7 +10,12 @@ from pydoc import locate
 
 class REPS(BatchPolopt):
     """
-    Relative Entropy Policy Search (REPS).
+    Relative Entropy Policy Search (REPS)
+
+    References
+    ----------
+    [1] J. Peters, K. Mülling, and Y. Altün, “Relative Entropy Policy Search,” Artif. Intell., pp. 1607–1612, 2008.
+
     """
 
     @autoargs.inherit(BatchPolopt.__init__)
@@ -25,16 +30,10 @@ class REPS(BatchPolopt):
     @autoargs.arg("optimizer", type=str,
                   help="Module path to the optimizer. It must support the "
                   "same interface as scipy.optimize.fmin_l_bfgs_b")
-#    cartpole
-#    baseline_hidden_size = ''
-#     epsilon=0.5,
-#     L2_reg_dual=1e-5,
-#     L2_reg_loss=1e-5,
-#     max_opt_itr=500,
     def __init__(
             self,
             epsilon=0.5,
-            L2_reg_dual=0.,#1e-5,
+            L2_reg_dual=0.,  # 1e-5,
             L2_reg_loss=0.,
             max_opt_itr=50,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
@@ -63,6 +62,9 @@ class REPS(BatchPolopt):
         action_var = TT.matrix('action', dtype=mdp.action_dtype)
         rewards = TT.vector('rewards',
                             dtype=TT.config.floatX)  # @UndefinedVariable
+        # Feature difference variable representing the difference in feature
+        # value of the next observation and the current observation \phi(s') -
+        # \phi(s).
         feat_diff = TT.matrix('feat_diff',
                               dtype=TT.config.floatX)  # @UndefinedVariable
         param_v = TT.vector('param_v',
@@ -70,7 +72,7 @@ class REPS(BatchPolopt):
         param_eta = TT.scalar('eta',
                               dtype=TT.config.floatX)  # @UndefinedVariable
 
-        # Policy stuff
+        # Policy-related symbolics
         # log of the policy dist
         log_prob = policy.get_log_prob_sym(observations, action_var)
 
@@ -111,14 +113,8 @@ class REPS(BatchPolopt):
             outputs=mean_kl,
         )
 
-        # Dual stuff
+        # Dual-related symbolics
         # Symbolic dual
-        dual = param_eta * self.epsilon + param_eta * \
-            TT.log(
-                TT.mean(
-                    TT.exp(
-                        delta_v / param_eta - TT.max(delta_v / param_eta)
-                    ))) + param_eta * TT.max(delta_v / param_eta)
         dual = param_eta * self.epsilon + param_eta * \
             TT.log(
                 TT.mean(
@@ -127,7 +123,7 @@ class REPS(BatchPolopt):
                     ))) + param_eta * TT.max(delta_v / param_eta)
         # Add L2 regularization.
         dual += self.L2_reg_dual * \
-            (param_eta**2 + (1 / param_eta)**2)
+            (TT.square(param_eta) + TT.square(1 / param_eta))
 
         # Symbolic dual gradient
         dual_grad = TT.grad(cost=dual, wrt=[param_eta, param_v])
