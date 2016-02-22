@@ -10,7 +10,7 @@ echo "Installing system dependencies"
 echo "You will probably be asked for your sudo password."
 
 sudo easy_install pip
-brew install sdl sdl_image sdl_mixer sdl_ttf portmidi
+brew install swig sdl sdl_image sdl_mixer sdl_ttf portmidi
 # Make sure that virtualenv is available
 hash virtualenv 2>/dev/null || {
   echo "Installing virtualenv"
