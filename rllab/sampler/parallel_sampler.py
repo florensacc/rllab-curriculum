@@ -55,11 +55,11 @@ def worker_init(mdp, policy, seed_inc):
 
 def pool_rollout(args):
     try:
-        policy_params, max_samples, max_path_length, queue, record_states, whole_paths = \
+        policy_params, max_samples, max_path_length, queue, whole_paths = \
             extract(
                 args,
                 "policy_params", "max_samples", "max_path_length", "queue",
-                "record_states", "whole_paths"
+                "whole_paths"
             )
         G.policy.set_param_values(policy_params)
         n_samples = 0
@@ -76,7 +76,6 @@ def pool_rollout(args):
                 G.mdp,
                 G.policy,
                 max_rollout_length,
-                record_states
             )
             G.paths.append(path)
             n_new_samples = len(path["rewards"])
@@ -148,7 +147,8 @@ def master_collect_mean(worker_f, *args, **kwargs):
     try:
         results = run_map(worker_f, *args, **kwargs)
         if isinstance(results[0], (list, tuple)):
-            # returning a list / tuple of results, compute the mean of each of them
+            # returning a list / tuple of results, compute the mean of each of
+            # them
             n_results = len(results[0])
             ret = [np.mean(np.array([np.array(x[i]) for x in results]), axis=0)
                    for i in range(n_results)]
@@ -160,7 +160,8 @@ def master_collect_mean(worker_f, *args, **kwargs):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        import ipdb; ipdb.set_trace()
+        import ipdb
+        ipdb.set_trace()
 
 
 def worker_set_param_values(params, **tags):
@@ -186,8 +187,7 @@ def request_samples(
         policy_params,
         max_samples,
         max_path_length=np.inf,
-        whole_paths=True,
-        record_states=False):
+        whole_paths=True):
     if G.n_parallel > 1:
         manager = Manager()
         # pylint: disable=no-member
@@ -200,7 +200,6 @@ def request_samples(
             max_path_length=max_path_length,
             queue=queue,
             whole_paths=whole_paths,
-            record_states=record_states
         )
         paths_per_pool = G.pool.map_async(pool_rollout, [args] * G.n_parallel)
         pbar = ProgBarCounter(max_samples)
@@ -210,11 +209,6 @@ def request_samples(
                 pbar.inc(queue.get_nowait())
         pbar.stop()
         paths_per_pool.get()
-        # sanity check
-        # print [[p1['states'].shape == p2['states'].shape and \
-        #   np.allclose(p1['states'], p2['states']) \
-        #     for p1,p2 in zip(paths1, paths2)] for paths1, paths2 in \
-        #      zip(ps[1:], ps[:-1])]
     else:
         args = dict(
             policy_params=policy_params,
@@ -222,13 +216,14 @@ def request_samples(
             max_path_length=max_path_length,
             queue=None,
             whole_paths=whole_paths,
-            record_states=record_states
         )
         pool_rollout(args)
 
+
 def dispatch(inps):
     f, args = inps
-    return f(*([G.mdp, G.policy]+list(args)))
+    return f(*([G.mdp, G.policy] + list(args)))
+
 
 def pool_map(f, args_lst):
     go_args = [[f, args] for args in args_lst]
@@ -236,4 +231,3 @@ def pool_map(f, args_lst):
         return G.pool.map(dispatch, go_args)
     else:
         return map(dispatch, go_args)
-

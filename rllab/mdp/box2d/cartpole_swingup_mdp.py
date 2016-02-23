@@ -39,7 +39,7 @@ class CartpoleSwingupMDP(Box2DMDP, Serializable):
         self.cart.linearVelocity = (xvel, self.cart.linearVelocity[1])
         self.pole.angle = apos
         self.pole.angularVelocity = avel
-        return self.get_state(), self.get_current_obs()
+        return self.get_current_obs()
 
     @overrides
     def compute_reward(self, action):

@@ -1,14 +1,7 @@
 from rllab.misc import autoargs
 
 
-class Options(object):
-    pass
-
-
 class Algorithm(object):
-
-    def __init__(self):
-        self.opt = Options()
 
     @classmethod
     @autoargs.add_args

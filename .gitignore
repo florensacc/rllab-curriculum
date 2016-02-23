@@ -22,5 +22,10 @@ MUJOCO_LOG.TXT
 .project
 .pydevproject
 *.pdf
+.env
+snippets
+vendor/mujoco
+private
+lua
 iterate.dat
 .env

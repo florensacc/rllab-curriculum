@@ -37,7 +37,7 @@ class DoublePendulumMDP(Box2DMDP, Serializable):
         self.link2.angle = pos2
         self.link1.angularVelocity = v1
         self.link2.angularVelocity = v2
-        return self.get_state(), self.get_current_obs()
+        return self.get_current_obs()
 
     def get_tip_pos(self):
         cur_center_pos = self.link2.position

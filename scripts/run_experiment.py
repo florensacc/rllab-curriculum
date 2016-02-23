@@ -1,4 +1,6 @@
 from __future__ import print_function
+import sys
+sys.path.append(".")
 
 from rllab.misc.ext import is_iterable, set_seed
 from rllab.misc.resolve import load_class
@@ -6,7 +8,6 @@ from rllab.misc.console import colorize
 from rllab import config
 import rllab.misc.logger as logger
 import argparse
-import sys
 import os.path as osp
 import datetime
 import dateutil.tz
@@ -51,8 +52,8 @@ def run_experiment(argv):
                              "value between -1 and 1")
     parser.add_argument('--random_mdp', type=ast.literal_eval,
                         default=False,
-                        help="Whether to reinit the mdp from random physical model every"
-                             "episode")
+                        help="Whether to reinit the mdp from random physical "
+                             "model every episode")
     parser.add_argument('--action_delay', type=int,
                         default=0,
                         help="Time steps delayed injected into MDP")
@@ -62,16 +63,8 @@ def run_experiment(argv):
     # These are optional, depending on the algorithm selected
     parser.add_argument('--policy', type=str, metavar='POLICY_PATH',
                         help='module path to the policy')
-    parser.add_argument('--vf', type=str,
-                        help='module path to the value function')
     parser.add_argument('--baseline', type=str,
                         help='module path to the baseline')
-    parser.add_argument('--qf', type=str,
-                        help='module path to the Q function')
-    parser.add_argument('--es', type=str,
-                        help='module path to the exploration strategy')
-    parser.add_argument('--model', type=str,
-                        help='module path to the fitted model')
     parser.add_argument('--more_help', action='store_true',
                         help='whether to show more help depending on the '
                              'classes chosen')
@@ -109,13 +102,9 @@ def run_experiment(argv):
             plotter.init_worker()
 
         from rllab.mdp.base import MDP
-        from rllab.vf.base import ValueFunction
         from rllab.baseline.base import Baseline
         from rllab.policy.base import Policy
-        from rllab.qf.base import QFunction
         from rllab.algo.base import Algorithm
-        from rllab.es.base import ExplorationStrategy
-        from rllab.model.base import Model
 
         if args.seed is not None:
             set_seed(args.seed)
@@ -125,26 +114,17 @@ def run_experiment(argv):
         #     pickle.dump(sys.argv[1:], f)
 
         classes = dict()
-        classes['mdp'] = load_class(args.mdp, MDP, ["rllab", "mdp"])
+        if args.mdp:
+            classes['mdp'] = load_class(args.mdp, MDP, ["rllab", "mdp"])
         if args.policy:
             classes['policy'] = load_class(
                 args.policy, Policy, ["rllab", "policy"])
-        if args.qf:
-            classes['qf'] = load_class(
-                args.qf, QFunction, ["rllab", "qf"])
-        if args.es:
-            classes['es'] = load_class(
-                args.es, ExplorationStrategy, ["rllab", "es"])
-        if args.model:
-            classes['model'] = load_class(
-                args.model, Model, ["rllab", "model"])
         if args.baseline:
             classes['baseline'] = load_class(
                 args.baseline, Baseline, ["rllab", "baseline"])
-        if args.vf:
-            classes['vf'] = load_class(
-                args.vf, ValueFunction, ["rllab", "vf"])
-        classes['algo'] = load_class(args.algo, Algorithm, ["rllab", "algo"])
+        if args.algo:
+            classes['algo'] = load_class(
+                args.algo, Algorithm, ["rllab", "algo"])
 
         for cls in classes.values():
             cls.add_args(parser)
@@ -152,42 +132,35 @@ def run_experiment(argv):
         if args.more_help:
             parser.print_help()
             sys.exit(0)
+        else:
+            assert 'mdp' in classes, 'mdp must be provided'
+            assert 'algo' in classes, 'algo must be provided'
 
         more_args = parser.parse_args(argv[1:])
 
         instances = dict()
         if args.random_mdp:
-            from rllab.mdp.identification_mdp import IdentificationControlMDP
-            instances['mdp'] = IdentificationControlMDP(classes['mdp'], more_args)
+            from rllab.mdp.identification_mdp import IdentificationMDP
+            instances['mdp'] = IdentificationMDP(classes['mdp'], more_args)
         else:
             instances['mdp'] = instantiate(more_args, classes['mdp'])
         if args.normalize_mdp:
             from rllab.mdp.normalized_mdp import normalize
             instances['mdp'] = normalize(instances['mdp'])
         if args.action_delay != 0:
-            from rllab.mdp.noisy_mdp import DelayedActionControlMDP
-            instances['mdp'] = DelayedActionControlMDP(instances['mdp'], args.action_delay)
+            from rllab.mdp.noisy_mdp import DelayedActionMDP
+            instances['mdp'] = DelayedActionMDP(
+                instances['mdp'], args.action_delay)
         if args.obs_noise != 0:
-            from rllab.mdp.noisy_mdp import NoisyObservationControlMDP
-            instances['mdp'] = NoisyObservationControlMDP(instances['mdp'], args.obs_noise)
+            from rllab.mdp.noisy_mdp import NoisyObservationMDP
+            instances['mdp'] = NoisyObservationMDP(
+                instances['mdp'], args.obs_noise)
         if args.policy:
             instances['policy'] = instantiate(
                 more_args, classes['policy'], instances['mdp'])
-        if args.qf:
-            instances['qf'] = instantiate(
-                more_args, classes['qf'], instances['mdp'])
-        if args.es:
-            instances['es'] = instantiate(
-                more_args, classes['es'], instances['mdp'])
-        if args.model:
-            instances['model'] = instantiate(
-                more_args, classes['model'], instances['mdp'])
         if args.baseline:
             instances['baseline'] = instantiate(
                 more_args, classes['baseline'], instances['mdp'])
-        if args.vf:
-            instances['vf'] = instantiate(
-                more_args, classes['vf'], instances['mdp'])
         algo = instantiate(more_args, classes['algo'])
 
         log_dir = args.log_dir.format(PROJECT_PATH=config.PROJECT_PATH)

@@ -1,6 +1,7 @@
 from rllab.misc.overrides import overrides
 from .base import MDP
 
+
 class ProxyMDP(MDP):
 
     def __init__(self, mdp):
@@ -30,17 +31,13 @@ class ProxyMDP(MDP):
         return self._mdp.observation_dtype
 
     @property
-    def state_shape(self):
-        return self._mdp.state_shape
-
-    @property
     @overrides
     def observation_shape(self):
         return self._mdp.observation_shape
 
     @overrides
-    def step(self, state, action):
-        return self._mdp.step(state, action)
+    def step(self, action):
+        return self._mdp.step(action)
 
     @overrides
     def start_viewer(self):
