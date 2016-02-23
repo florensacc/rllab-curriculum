@@ -22,3 +22,5 @@ MUJOCO_LOG.TXT
 .project
 .pydevproject
 *.pdf
+iterate.dat
+.env
