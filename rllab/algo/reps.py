@@ -14,7 +14,7 @@ class REPS(BatchPolopt):
 
     References
     ----------
-    [1] J. Peters, K. Mülling, and Y. Altün, “Relative Entropy Policy Search,” Artif. Intell., pp. 1607–1612, 2008.
+    [1] J. Peters, K. Mulling, and Y. Altun, "Relative Entropy Policy Search," Artif. Intell., pp. 1607-1612, 2008.
 
     """
 
