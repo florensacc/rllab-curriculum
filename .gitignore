@@ -25,3 +25,4 @@ MUJOCO_LOG.TXT
 iterate.dat
 .env
 src/
+.settings
