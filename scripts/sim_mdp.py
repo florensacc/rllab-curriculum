@@ -16,6 +16,12 @@ def sample_action(lb, ub):
     return np.random.rand(Du) * (ub - lb) + lb
 
 
+def to_onehot(ind, dim):
+    ret = np.zeros(dim)
+    ret[ind] = 1
+    return ret
+
+
 def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
     # step ahead with all-zero action
     if mode == 'noop':
@@ -30,11 +36,16 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
                 mdp.reset()
     elif mode == 'random':
         mdp.reset()
-        lb, ub = mdp.action_bounds
+        if np.dtype(mdp.action_dtype).kind in ['i', 'u']:
+            sampler = lambda: to_onehot(
+                np.random.choice(mdp.action_dim), mdp.action_dim)
+        else:
+            lb, ub = mdp.action_bounds
+            sampler = lambda: sample_action(lb, ub)
         totrew = 0
         mdp.plot()
         for i in xrange(max_steps):
-            action = sample_action(lb, ub)
+            action = sampler()
             _, rew, done = mdp.step(action)
             # if i % 10 == 0:
             mdp.plot()
@@ -100,7 +111,7 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--mdp', type=str, required=True,
+    parser.add_argument('mdp', type=str,
                         help='module path to the mdp class')
     parser.add_argument('--mode', type=str, default='static',
                         choices=['noop', 'random', 'static', 'human'],

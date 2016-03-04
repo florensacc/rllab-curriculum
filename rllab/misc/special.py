@@ -44,6 +44,16 @@ def explained_variance_1d(ypred, y):
     return np.nan if vary == 0 else 1 - np.var(y - ypred) / vary
 
 
+def to_onehot(ind, dim):
+    ret = np.zeros(dim)
+    ret[ind] = 1
+    return ret
+
+
+def from_onehot(v):
+    return np.nonzero(v)[0]
+
+
 def normalize_updates(old_mean, old_std, new_mean, new_std, old_W, old_b):
     """
     Compute the updates for normalizing the last (linear) layer of a neural
