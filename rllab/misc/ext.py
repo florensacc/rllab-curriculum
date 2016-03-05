@@ -9,6 +9,7 @@ from rllab.misc.console import colorize, Message
 from collections import OrderedDict
 
 import numpy as np
+import operator
 
 sys.setrecursionlimit(50000)
 
@@ -281,6 +282,10 @@ def flatten_hessian(cost, wrt, consider_constant=None,
 def flatten_tensor_variables(ts):
     import theano.tensor as TT
     return TT.concatenate(map(TT.flatten, ts))
+
+
+def flatten_shape_dim(shape):
+    return reduce(operator.mul, shape, 1)
 
 
 def print_lasagne_layer(layer, prefix=""):

@@ -6,6 +6,10 @@ import shlex
 import pydoc
 import inspect
 import re
+import cPickle as pickle
+import subprocess
+import base64
+from rllab.core.serializable import Serializable
 
 color2num = dict(
     gray=30,
@@ -218,8 +222,8 @@ def _to_param_val(v):
         return _shellquote(str(v))
 
 
-def to_command(params):
-    command = "python scripts/run_experiment.py"
+def to_command(params, script='scripts/run_experiment.py'):
+    command = "python " + script
     for k, v in params.iteritems():
         if isinstance(v, dict):
             for nk, nv in v.iteritems():
@@ -233,6 +237,67 @@ def to_command(params):
     return command
 
 
-def run_experiment(params):
-    command = to_command(params)
-    os.system(command)
+def run_experiment(params, script='scripts/run_experiment.py'):
+    command = to_command(params, script)
+    try:
+        subprocess.call(command, shell=True)
+    except Exception as e:
+        if isinstance(e, KeyboardInterrupt):
+            raise
+
+
+class StubMethod(object):
+
+    def __init__(self, obj, method_name):
+        self.obj = obj
+        self.method_name = method_name
+
+    def __call__(self, *args, **kwargs):
+        return StubMethodCall(self.obj, self.method_name, args, kwargs)
+
+
+class StubMethodCall(Serializable):
+
+    def __init__(self, obj, method_name, args, kwargs):
+        Serializable.quick_init(self, locals())
+        self.obj = obj
+        self.method_name = method_name
+        self.args = args
+        self.kwargs = kwargs
+
+
+class StubClass(object):
+
+    def __init__(self, __proxy_class, *args, **kwargs):
+        self.proxy_class = __proxy_class
+        self.args = args
+        self.kwargs = kwargs
+
+    def __getstate__(self):
+        return dict(args=self.args, kwargs=self.kwargs, proxy_class=self.proxy_class)
+
+    def __setstate__(self, dict):
+        self.args = dict["args"]
+        self.kwargs = dict["kwargs"]
+        self.proxy_class = dict["proxy_class"]
+
+    def __getattr__(self, item):
+        if hasattr(self.proxy_class, item):
+            return StubMethod(self, item)
+        raise AttributeError
+
+
+def stub(glbs):
+    # replace the __init__ method in all classes
+    # hacky!!!
+    for k, v in glbs.items():
+        if isinstance(v, type) and v != StubClass:
+            glbs[k] = (lambda v_local: lambda *args, **kwargs: StubClass(v_local, *args, **kwargs))(v)
+
+
+def run_experiment_lite(stub_method_call, **kwargs):
+    data = pickle.dumps(stub_method_call)
+    run_experiment(
+        params=dict(kwargs.items() + [("args_data", data)]),
+        script="scripts/run_experiment_lite.py"
+    )

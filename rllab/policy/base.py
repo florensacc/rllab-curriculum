@@ -56,7 +56,7 @@ class Policy(Parameterized):
         # of each episode
         pass
 
-    def log_extra(self):
+    def log_extra(self, paths):
         """
         Log extra information per iteration based on the collected paths
         """

@@ -1,7 +1,6 @@
-from rl.envs.atari import AtariEnv
+from rl.envs.atari import AtariEnv, OBS_RAM, OBS_IMAGE
 from rllab.mdp.base import MDP
 from rllab.misc import autoargs
-from rllab.misc.special import from_onehot
 from rllab.core.serializable import Serializable
 import theano
 
@@ -20,16 +19,21 @@ class AtariMDP(MDP, Serializable):
                   help="How many frames to skip between each step.")
     def __init__(self, rom_name="pong", obs_type="ram", frame_skip=4):
         Serializable.quick_init(self, locals())
-        self._mdp = AtariEnv()
+        int_obs_type = OBS_RAM if obs_type == "ram" else OBS_IMAGE
+        self._mdp = AtariEnv(
+            rom_name=rom_name,
+            obs_type=int_obs_type,
+            frame_skip=frame_skip
+        )
 
     def reset(self):
-        raw_obs = self._mdp.reset()
+        raw_obs = self._mdp.reset().flatten()
         return self._normalize_obs(raw_obs)
 
     def step(self, action):
-        a = from_onehot(action)
-        ret = self._mdp.step(a)
-        return self._normalize_obs(ret.observation), ret.reward, ret.done
+        ret = self._mdp.step(action)
+        return self._normalize_obs(ret.observation.flatten()), \
+            ret.reward, ret.done
 
     def _normalize_obs(self, obs):
         return (obs / 255.0) * 2 - 1.0

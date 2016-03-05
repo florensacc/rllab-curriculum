@@ -43,7 +43,6 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                        'of tanh, sigmoid')
     @autoargs.arg('bn', type=bool,
                   help='whether to apply batch normalization to hidden layers')
-    # pylint: disable=dangerous-default-value
     def __init__(
             self,
             mdp,
@@ -59,7 +58,6 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             self, mdp=mdp, hidden_sizes=hidden_sizes, std_sizes=std_sizes,
             initial_std=initial_std, std_trainable=std_trainable,
             nonlinearity=nonlinearity, output_nl=output_nl, bn=bn)
-        # pylint: enable=dangerous-default-value
         # create network
         if isinstance(nonlinearity, str):
             nonlinearity = locate(nonlinearity)

@@ -51,7 +51,7 @@ def to_onehot(ind, dim):
 
 
 def from_onehot(v):
-    return np.nonzero(v)[0]
+    return np.nonzero(v)[0][0]
 
 
 def normalize_updates(old_mean, old_std, new_mean, new_std, old_W, old_b):
