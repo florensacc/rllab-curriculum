@@ -1,6 +1,7 @@
 from rl.envs.atari import AtariEnv, OBS_RAM, OBS_IMAGE
 from rllab.mdp.base import MDP
 from rllab.misc import autoargs
+from rllab.misc.special import from_onehot
 from rllab.core.serializable import Serializable
 import theano
 
@@ -31,7 +32,7 @@ class AtariMDP(MDP, Serializable):
         return self._normalize_obs(raw_obs)
 
     def step(self, action):
-        ret = self._mdp.step(action)
+        ret = self._mdp.step(from_onehot(action))
         return self._normalize_obs(ret.observation.flatten()), \
             ret.reward, ret.done
 

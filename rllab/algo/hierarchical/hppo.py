@@ -6,34 +6,28 @@ from rllab.misc.overrides import overrides
 
 class HPPO(BatchPolopt):
 
-    @autoargs.inherit(PPO.__init__)
-    def __init__(
-            self,
-            **kwargs):
-        self._high_ppo = PPO(
-            **kwargs
-        )
-        self._low_ppo = PPO(
-            **kwargs
-        )
+    def __init__(self, high_algo, low_algo, **kwargs):
+        self._high_algo = high_algo
+        self._low_algo = low_algo
         super(HPPO, self).__init__(**kwargs)
 
     @overrides
     def init_opt(self, mdp, policy, baseline, **kwargs):
         high_opt_info = \
-            self._high_ppo.init_opt(policy.high_mdp, policy.high_policy, baseline.high_baseline)
+            self._high_algo.init_opt(mdp=policy.high_mdp, policy=policy.high_policy, baseline=baseline.high_baseline)
         low_opt_info = \
-            self._low_ppo.init_opt(policy.low_mdp, policy.low_policy, baseline.low_baseline)
+            self._low_algo.init_opt(mdp=policy.low_mdp, policy=policy.low_policy, baseline=baseline.low_baseline)
         return dict(
             high=high_opt_info,
             low=low_opt_info
         )
 
     def optimize_policy(self, itr, policy, samples_data, opt_info):
-        opt_info["high"] = self._high_ppo.optimize_policy(
-            itr, policy.high_policy, high_samples_data, opt_info["high"])
-        opt_info["low"] = self._low_ppo.optimize_policy(
-            itr, policy.high_policy, low_samples_data, opt_info["low"])
+        import ipdb; ipdb.set_trace()
+        opt_info["high"] = self._high_opt.optimize_policy(
+            itr, policy.high_policy, samples_data["high"], opt_info["high"])
+        opt_info["low"] = self._low_opt.optimize_policy(
+            itr, policy.high_policy, samples_data["low"], opt_info["low"])
         return opt_info
 
     @overrides

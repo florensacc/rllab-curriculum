@@ -1,6 +1,7 @@
 from pydoc import locate
 
 from rllab.core.lasagne_powered import LasagnePowered
+from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.serializable import Serializable
 from rllab.core.network import MLP
 from rllab.misc import autoargs
@@ -9,53 +10,50 @@ from rllab.misc.ext import compile_function
 from rllab.misc.tensor_utils import flatten_tensors
 from rllab.baseline.base import Baseline
 from rllab.misc.overrides import overrides
-from rllab.optim import locate_optimizer
+from rllab.optim.penalty_lbfgs import PenaltyLbfgs
 import rllab.misc.logger as logger
 import numpy as np
 import theano
 import theano.tensor as TT
 import lasagne.layers as L
+import lasagne.nonlinearities as NL
 import lasagne
 
 
 class GaussianMLPBaseline(Baseline, LasagnePowered, Serializable):
 
-    @autoargs.arg('hidden_sizes', type=int, nargs='*',
-                  help='list of sizes for the fully-connected hidden layers')
-    @autoargs.arg('nonlinearity', type=str,
-                  help='nonlinearity used for each hidden layer, can be one '
-                       'of tanh, sigmoid')
-    @autoargs.arg("optimizer", type=str,
-                  help="Module path to the optimizer. It must support the "
-                       "same interface as scipy.optimize.fmin_l_bfgs_b")
-    @autoargs.arg("max_opt_itr", type=int,
-                  help="Maximum number of batch optimization iterations.")
     def __init__(
             self,
             mdp,
             hidden_sizes=(32, 32),
-            nonlinearity='lasagne.nonlinearities.tanh',
-            optimizer='theano_penalty_lbfgs',
-            max_opt_itr=20,
+            nonlinearity=NL.tanh,
+            optimizer=None,
             step_size=0.01,
+            max_penalty_itr=1,
+            max_opt_itr=20,
     ):
         Serializable.quick_init(self, locals())
         super(GaussianMLPBaseline, self).__init__(mdp)
 
-        self._optimizer = locate_optimizer(optimizer)(
-            max_opt_itr=max_opt_itr,
-        )
+        if optimizer is None:
+            optimizer = PenaltyLbfgs(
+                max_penalty_itr=max_penalty_itr,
+                max_opt_itr=max_opt_itr
+            )
+
+        self._optimizer = optimizer
 
         mean_network = MLP(
             input_shape=mdp.observation_shape,
             output_dim=1,
+            hidden_sizes=hidden_sizes,
             nonlinearity=nonlinearity,
             output_nl=None,
         )
 
         l_mean = mean_network.l_out
 
-        l_log_std = L.ParamLayer(
+        l_log_std = ParamLayer(
             mean_network.l_in,
             num_units=1,
             param=lasagne.init.Constant(0.),
@@ -76,7 +74,7 @@ class GaussianMLPBaseline(Baseline, LasagnePowered, Serializable):
             old_means_var, old_log_stds_var, means_var, log_stds_var))
 
         loss = - TT.mean(normal_dist.log_likelihood_sym(
-            returns_var, l_mean.output_var, l_log_std.output_var))
+            returns_var, means_var, log_stds_var))
 
         self._optimizer.update_opt(
             loss=loss,

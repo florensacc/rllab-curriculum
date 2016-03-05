@@ -5,7 +5,7 @@ from pydoc import locate
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
-from rllab.misc.special import weighted_sample
+from rllab.misc.special import weighted_sample, to_onehot
 from rllab.misc.ext import compile_function
 from rllab.misc import autoargs
 from rllab.policy.base import StochasticPolicy
@@ -80,4 +80,4 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def get_action(self, observation):
         prob = self._f_prob([observation])[0]
         action = weighted_sample(prob, xrange(self.action_dim))
-        return action, prob
+        return to_onehot(action, self.action_dim), prob

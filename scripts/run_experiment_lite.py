@@ -3,7 +3,7 @@ import sys
 sys.path.append(".")
 
 from rllab.misc.ext import is_iterable, set_seed
-from rllab.misc.console import StubClass, StubMethodCall
+from rllab.misc.console import StubClass, StubObject, StubAttr, StubMethodCall
 from rllab import config
 import rllab.misc.logger as logger
 import argparse
@@ -17,16 +17,26 @@ import cPickle as pickle
 
 def concretize(maybe_stub):
     if isinstance(maybe_stub, StubMethodCall):
+        # print(maybe_stub, maybe_stub.obj, maybe_stub.method_name, maybe_stub.args, maybe_stub.kwargs)
         obj = concretize(maybe_stub.obj)
         method = getattr(obj, maybe_stub.method_name)
         args = map(concretize, maybe_stub.args)
         kwargs = dict([(k, concretize(v)) for k, v in maybe_stub.kwargs.iteritems()])
         return method(*args, **kwargs)
     elif isinstance(maybe_stub, StubClass):
+        return maybe_stub.proxy_class
+    elif isinstance(maybe_stub, StubAttr):
+        return getattr(concretize(maybe_stub.obj), maybe_stub.attr_name)
+    elif isinstance(maybe_stub, StubObject):
+        # print(maybe_stub, maybe_stub.proxy_class, maybe_stub.args, maybe_stub.kwargs)
         if not hasattr(maybe_stub, "__stub_cache"):
             args = map(concretize, maybe_stub.args)
             kwargs = dict([(k, concretize(v)) for k, v in maybe_stub.kwargs.iteritems()])
-            maybe_stub.__stub_cache = maybe_stub.proxy_class(*args, **kwargs)
+            try:
+                maybe_stub.__stub_cache = maybe_stub.proxy_class(*args, **kwargs)
+            except Exception as e:
+                import traceback; traceback.print_exc()
+                import ipdb; ipdb.set_trace()
         return maybe_stub.__stub_cache
     else:
         return maybe_stub

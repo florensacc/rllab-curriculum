@@ -9,6 +9,7 @@ import re
 import cPickle as pickle
 import subprocess
 import base64
+import types
 from rllab.core.serializable import Serializable
 
 color2num = dict(
@@ -246,14 +247,22 @@ def run_experiment(params, script='scripts/run_experiment.py'):
             raise
 
 
-class StubMethod(object):
+class StubAttr(object):
 
-    def __init__(self, obj, method_name):
-        self.obj = obj
-        self.method_name = method_name
+    def __init__(self, obj, attr_name):
+        self._obj = obj
+        self._attr_name = attr_name
+
+    @property
+    def obj(self):
+        return self._obj
+
+    @property
+    def attr_name(self):
+        return self._attr_name
 
     def __call__(self, *args, **kwargs):
-        return StubMethodCall(self.obj, self.method_name, args, kwargs)
+        return StubMethodCall(self.obj, self.attr_name, args, kwargs)
 
 
 class StubMethodCall(Serializable):
@@ -267,6 +276,27 @@ class StubMethodCall(Serializable):
 
 
 class StubClass(object):
+
+    def __init__(self, proxy_class):
+        self.proxy_class = proxy_class
+
+    def __call__(self, *args, **kwargs):
+        return StubObject(self.proxy_class, *args, **kwargs)
+
+
+    def __getstate__(self):
+        return dict(proxy_class=self.proxy_class)
+
+    def __setstate__(self, dict):
+        self.proxy_class = dict["proxy_class"]
+
+    def __getattr__(self, item):
+        if hasattr(self.proxy_class, item):
+            return StubAttr(self, item)
+        raise AttributeError
+
+
+class StubObject(object):
 
     def __init__(self, __proxy_class, *args, **kwargs):
         self.proxy_class = __proxy_class
@@ -283,16 +313,18 @@ class StubClass(object):
 
     def __getattr__(self, item):
         if hasattr(self.proxy_class, item):
-            return StubMethod(self, item)
+            return StubAttr(self, item)
         raise AttributeError
-
 
 def stub(glbs):
     # replace the __init__ method in all classes
     # hacky!!!
     for k, v in glbs.items():
         if isinstance(v, type) and v != StubClass:
-            glbs[k] = (lambda v_local: lambda *args, **kwargs: StubClass(v_local, *args, **kwargs))(v)
+            glbs[k] = StubClass(v)
+            #mkstub = (lambda v_local: lambda *args, **kwargs: StubClass(v_local, *args, **kwargs))(v)
+            #glbs[k].__new__ = types.MethodType(mkstub, glbs[k])
+            #glbs[k].__init__ = types.MethodType(lambda *args: None, glbs[k])
 
 
 def run_experiment_lite(stub_method_call, **kwargs):
