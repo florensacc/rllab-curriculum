@@ -13,39 +13,20 @@ import dateutil.tz
 import ast
 import uuid
 import cPickle as pickle
-import inspect
 
 
-def infer_name(obj, prefix):
-    if prefix and len(prefix) > 0:
-        return prefix
-    return "algo"
-
-
-def prepend(a, b):
-    if a and len(a) > 0:
-        return a + "." + b
-    return b
-
-
-def concretize(maybe_stub, cls_set, prefix=""):
+def concretize(maybe_stub):
     if isinstance(maybe_stub, StubMethodCall):
-        obj = concretize(maybe_stub.obj, cls_set)
+        obj = concretize(maybe_stub.obj)
         method = getattr(obj, maybe_stub.method_name)
-        arg_names = inspect.getargspec(method).args[1:]
-        args = [concretize(x, cls_set, prepend(prefix, name)) for x, name in zip(maybe_stub.args, arg_names)]
-        kwargs = dict([(k, concretize(v, cls_set, prepend(prefix, k))) for k, v in maybe_stub.kwargs.iteritems()])
-        return lambda: method(*args, **kwargs)
+        args = map(concretize, maybe_stub.args)
+        kwargs = dict([(k, concretize(v)) for k, v in maybe_stub.kwargs.iteritems()])
+        return method(*args, **kwargs)
     elif isinstance(maybe_stub, StubClass):
         if not hasattr(maybe_stub, "__stub_cache"):
-            arg_names = inspect.getargspec(maybe_stub.proxy_class.__init__).args[1:]
-            args = [concretize(x, cls_set, prepend(prefix, name)) for x, name in zip(maybe_stub.args, arg_names)]
-            kwargs = dict([(k, concretize(v, cls_set, prepend(prefix, k))) for k, v in maybe_stub.kwargs.iteritems()])
+            args = map(concretize, maybe_stub.args)
+            kwargs = dict([(k, concretize(v)) for k, v in maybe_stub.kwargs.iteritems()])
             maybe_stub.__stub_cache = maybe_stub.proxy_class(*args, **kwargs)
-        cls_set.add((
-            maybe_stub.__stub_cache,
-            infer_name(maybe_stub.__stub_cache, prefix)
-        ))
         return maybe_stub.__stub_cache
     else:
         return maybe_stub
@@ -121,6 +102,7 @@ def run_experiment(argv):
     text_log_file = osp.join(exp_dir, args.text_log_file)
     params_log_file = osp.join(exp_dir, args.params_log_file)
 
+    logger.log_parameters_lite(params_log_file, args)
     logger.add_text_output(text_log_file)
     logger.add_tabular_output(tabular_log_file)
     prev_snapshot_dir = logger.get_snapshot_dir()
@@ -129,17 +111,7 @@ def run_experiment(argv):
     logger.set_snapshot_mode(args.snapshot_mode)
     logger.push_prefix("[%s] " % args.exp_name)
 
-    cls_set = set()
-    f_call = concretize(data, cls_set)
-
-    top_cls = {}
-    for cls, name in sorted(cls_set, key=lambda x: len(x[1].split('.'))):
-        if cls not in top_cls.values():
-            top_cls[name] = cls
-
-    logger.log_parameters_lite(params_log_file, args, data)
-
-    maybe_iter = f_call()
+    maybe_iter = concretize(data)
     if is_iterable(maybe_iter):
         for _ in maybe_iter:
             pass
