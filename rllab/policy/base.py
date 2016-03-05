@@ -110,3 +110,7 @@ class StochasticPolicy(Policy):
 
     def get_pdist_sym(self, input_var, train=False):
         raise NotImplementedError
+
+    @property
+    def pdist_dim(self):
+        raise NotImplementedError

@@ -72,6 +72,11 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def compute_entropy(self, pdist):
         return np.mean(categorical_dist.entropy(pdist))
 
+    @property
+    @overrides
+    def pdist_dim(self):
+        return self.action_dim
+
     # The return value is a pair. The first item is a matrix (N, A), where each
     # entry corresponds to the action value taken. The second item is a vector
     # of length N, where each entry is the density value for that action, under

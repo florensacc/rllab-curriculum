@@ -86,7 +86,8 @@ class BatchPolopt(RLAlgorithm):
         opt_info = self.init_opt(mdp, policy, baseline)
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
-            samples_data = self.obtain_samples(itr, mdp, policy, baseline)
+            paths = self.obtain_samples(itr, mdp, policy)
+            samples_data = self.process_samples(itr, paths, mdp, policy, baseline)
             opt_info = self.optimize_policy(
                 itr, policy, samples_data, opt_info)
             logger.log("saving snapshot...")
@@ -127,7 +128,7 @@ class BatchPolopt(RLAlgorithm):
         if self.plot:
             plotter.update_plot(policy, self.max_path_length)
 
-    def obtain_samples(self, itr, mdp, policy, baseline):
+    def obtain_samples(self, itr, mdp, policy):
         cur_params = policy.get_param_values()
 
         parallel_sampler.request_samples(
@@ -137,7 +138,9 @@ class BatchPolopt(RLAlgorithm):
             whole_paths=self.whole_paths,
         )
 
-        paths = parallel_sampler.collect_paths()
+        return parallel_sampler.collect_paths()
+
+    def process_samples(self, itr, paths, mdp, policy, baseline):
 
         baselines = []
         returns = []

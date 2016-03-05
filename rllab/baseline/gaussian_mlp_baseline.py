@@ -74,7 +74,10 @@ class GaussianMLPBaseline(Baseline, LasagnePowered, Serializable):
             old_means_var, old_log_stds_var, means_var, log_stds_var))
 
         loss = - TT.mean(normal_dist.log_likelihood_sym(
-            returns_var, means_var, log_stds_var))
+            returns_var.reshape((-1, 1)), means_var, log_stds_var))
+
+        self._f_predict = compile_function([obs_var], means_var)
+        self._f_pdists = compile_function([obs_var], [means_var, log_stds_var])
 
         self._optimizer.update_opt(
             loss=loss,
@@ -87,7 +90,7 @@ class GaussianMLPBaseline(Baseline, LasagnePowered, Serializable):
     def fit(self, paths):
         observations = np.concatenate([p["observations"] for p in paths])
         returns = np.concatenate([p["returns"] for p in paths])
-        old_means, old_log_stds = self._f_pdist(observations)
+        old_means, old_log_stds = self._f_pdists(observations)
 
         inputs = [observations, returns, old_means, old_log_stds]
 
@@ -131,7 +134,7 @@ class GaussianMLPBaseline(Baseline, LasagnePowered, Serializable):
 
     @overrides
     def predict(self, path):
-        return self._f_value(self._features(path))
+        return self._f_predict(path["observations"]).flatten()
 
     @overrides
     def get_param_values(self, **tags):

@@ -34,7 +34,12 @@ class SubgoalPolicy(StochasticPolicy, LasagnePowered, Serializable):
             observation.flatten(),
             subgoal.flatten(),
         ]))
-        return action, np.concatenate([high_pdist, low_pdist])
+        return action, np.concatenate([high_pdist, low_pdist, subgoal])
 
     def compute_entropy(self, pdist):
         return np.nan
+
+    def split_pdists(self, pdists):
+        high_pdist_dim = self.high_policy.pdist_dim
+        low_pdist_dim = self.low_policy.pdist_dim
+        return np.split(pdists, [high_pdist_dim, high_pdist_dim + low_pdist_dim], axis=1)

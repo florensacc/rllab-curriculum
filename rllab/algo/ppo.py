@@ -130,7 +130,7 @@ class PPO(BatchPolopt):
             "observations", "advantages", "pdists", "actions"
         ))
 
-        cur_params = policy.get_param_values(trainable=True)
+        cur_params = policy.get_param_values(trainable=True).astype(np.float64)
 
         def evaluate_cost(penalty):
             def evaluate(params):

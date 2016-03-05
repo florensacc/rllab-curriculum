@@ -17,7 +17,7 @@ stub(globals())
 
 mdp = SubgoalMDP(
     AtariMDP(rom_name="pong", obs_type="ram", frame_skip=4),
-    n_goals=5,
+    n_subgoals=5,
 )
 
 algo = BatchHRL(
@@ -45,7 +45,7 @@ policy = SubgoalPolicy(
         hidden_sizes=[32, 32],
         nonlinearity=NL.rectify,
     ),
-    low_policy=MeanStdNNPolicy(
+    low_policy=CategoricalMLPPolicy(
         mdp=mdp.low_mdp,
         hidden_sizes=[32, 32],
         nonlinearity=NL.rectify,

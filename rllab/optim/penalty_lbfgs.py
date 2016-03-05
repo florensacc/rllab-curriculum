@@ -59,7 +59,7 @@ class PenaltyLbfgs(Serializable):
 
         def get_opt_output():
             flat_grad = flatten_tensor_variables(theano.grad(loss, target.get_params(trainable=True)))
-            return [loss.astype('float'), flat_grad.astype('float')]
+            return [loss.astype('float64'), flat_grad.astype('float64')]
 
         self._opt_fun = lazydict(
             f_loss=lambda: compile_function(inputs, loss),
@@ -92,7 +92,7 @@ class PenaltyLbfgs(Serializable):
                 return f_opt(*(inputs + (penalty,)))
             return f
 
-        cur_params = self._target.get_param_values(trainable=True)
+        cur_params = self._target.get_param_values(trainable=True).astype('float64')
 
         for penalty_itr in range(self._max_penalty_itr):
             logger.log('trying penalty=%.3f...' % try_penalty)

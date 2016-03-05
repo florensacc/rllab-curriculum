@@ -2,6 +2,7 @@ from __future__ import print_function
 from rllab.misc.tabulate import tabulate
 from rllab.misc.console import mkdir_p
 from rllab.misc.autoargs import get_all_parameters
+from contextlib import contextmanager
 import os
 import os.path as osp
 import sys
@@ -13,6 +14,10 @@ import json
 
 _prefixes = []
 _prefix_str = ''
+
+_tabular_prefixes = []
+_tabular_prefix_str = ''
+
 _tabular = []
 
 _text_outputs = []
@@ -98,7 +103,33 @@ def log(s, with_prefix=True, with_timestamp=True):
 
 
 def record_tabular(key, val):
-    _tabular.append((str(key), str(val)))
+    _tabular.append((_tabular_prefix_str + str(key), str(val)))
+
+
+def push_tabular_prefix(key):
+    _tabular_prefixes.append(key)
+    global _tabular_prefix_str
+    _tabular_prefix_str = ''.join(_tabular_prefixes)
+
+
+def pop_tabular_prefix():
+    del _tabular_prefixes[-1]
+    global _tabular_prefix_str
+    _tabular_prefix_str = ''.join(_tabular_prefixes)
+
+
+@contextmanager
+def prefix(key):
+    push_prefix(key)
+    yield
+    pop_prefix()
+
+
+@contextmanager
+def tabular_prefix(key):
+    push_tabular_prefix(key)
+    yield
+    pop_tabular_prefix()
 
 
 def dump_tabular(*args, **kwargs):

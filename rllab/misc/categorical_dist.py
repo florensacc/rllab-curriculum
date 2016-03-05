@@ -2,6 +2,10 @@ import theano.tensor as TT
 import numpy as np
 
 
+def from_onehot_sym(x_var):
+    return TT.nonzero(x_var)[1]
+
+
 def kl_sym(old_prob_var, new_prob_var):
     """
     Compute the KL divergence of two categorical distributions
@@ -14,8 +18,8 @@ def kl_sym(old_prob_var, new_prob_var):
 
 def likelihood_ratio_sym(x_var, old_prob_var, new_prob_var):
     N = old_prob_var.shape[0]
-    return new_prob_var[TT.arange(N), x_var.reshape((-1,))] / \
-        old_prob_var[TT.arange(N), x_var.reshape((-1,))]
+    x_inds = from_onehot_sym(x_var)
+    return new_prob_var[TT.arange(N), x_inds] / old_prob_var[TT.arange(N), x_inds]
 
 
 def entropy(probs):
@@ -24,4 +28,4 @@ def entropy(probs):
 
 def log_prob_sym(xs, probs):
     N = probs.shape[0]
-    return TT.log(probs[TT.arange(N), xs.reshape((-1,))])
+    return TT.log(probs[TT.arange(N), from_onehot_sym(xs)])

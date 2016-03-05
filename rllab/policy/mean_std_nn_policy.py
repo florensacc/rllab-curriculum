@@ -161,6 +161,11 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         _, log_std = self._split_pdist(pdist)
         return np.mean(np.sum(log_std + np.log(np.sqrt(2*np.pi*np.e)), axis=1))
 
+    @property
+    @overrides
+    def pdist_dim(self):
+        return self.action_dim * 2
+
     # The return value is a pair. The first item is a matrix (N, A), where each
     # entry corresponds to the action value taken. The second item is a vector
     # of length N, where each entry is the density value for that action, under
