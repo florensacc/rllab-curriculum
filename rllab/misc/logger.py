@@ -139,16 +139,20 @@ def save_itr_params(itr, params):
             raise NotImplementedError
 
 
-def log_parameters(log_file, args, classes):
+def log_parameters(log_file, args, classes_or_objects):
     log_params = {}
     for param_name, param_value in args.__dict__.iteritems():
-        if any([param_name.startswith(x) for x in classes.keys()]):
+        if any([param_name.startswith(x) for x in classes_or_objects.keys()]):
             continue
         log_params[param_name] = param_value
-    for name, cls in classes.iteritems():
-        params = get_all_parameters(cls, args)
-        params["_name"] = getattr(args, name)
-        log_params[name] = params
+    for name, cls_or_obj in classes_or_objects.iteritems():
+        if isinstance(cls_or_obj, type):
+            params = get_all_parameters(cls_or_obj, args)
+            params["_name"] = getattr(args, name)
+            log_params[name] = params
+        else:
+            log_params[name] = getattr(cls_or_obj, "__kwargs", dict())
+            log_params[name]["_name"] = cls_or_obj.__module__ + "." + cls_or_obj.__class__.__name__
     mkdir_p(os.path.dirname(log_file))
     with open(log_file, "w") as f:
         json.dump(log_params, f, indent=2, sort_keys=True)

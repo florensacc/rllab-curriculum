@@ -26,9 +26,9 @@ baseline = LinearFeatureBaseline(
 )
 
 run_experiment_lite(
-    algo.train(mdp, policy, baseline),
+    algo.train(mdp=mdp, policy=policy, baseline=baseline),
     exp_name="ppo_atari",
-    n_parallel=4,
+    n_parallel=1,
     snapshot_mode="last",
     seed=1,
 )
