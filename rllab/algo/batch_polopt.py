@@ -86,13 +86,13 @@ class BatchPolopt(RLAlgorithm):
         opt_info = self.init_opt(mdp, policy, baseline)
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
-            paths = self.obtain_samples(itr, mdp, policy)
-            samples_data = self.process_samples(itr, paths, mdp, policy, baseline)
+            paths = self.obtain_samples(itr, mdp, policy, **kwargs)
+            samples_data = self.process_samples(itr, paths, mdp, policy, baseline, **kwargs)
             opt_info = self.optimize_policy(
-                itr, policy, samples_data, opt_info)
+                itr, policy, samples_data, opt_info, **kwargs)
             logger.log("saving snapshot...")
             params = self.get_itr_snapshot(
-                itr, mdp, policy, baseline, samples_data, opt_info)
+                itr, mdp, policy, baseline, samples_data, opt_info, **kwargs)
             if self.store_paths:
                 params["paths"] = samples_data["paths"]
             logger.save_itr_params(itr, params)
@@ -114,7 +114,7 @@ class BatchPolopt(RLAlgorithm):
         raise NotImplementedError
 
     def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data,
-                         opt_info):
+                         opt_info, **kwargs):
         """
         Returns all the data that should be saved in the snapshot for this
         iteration.
@@ -128,7 +128,7 @@ class BatchPolopt(RLAlgorithm):
         if self.plot:
             plotter.update_plot(policy, self.max_path_length)
 
-    def obtain_samples(self, itr, mdp, policy):
+    def obtain_samples(self, itr, mdp, policy, **kwargs):
         cur_params = policy.get_param_values()
 
         parallel_sampler.request_samples(
@@ -140,7 +140,7 @@ class BatchPolopt(RLAlgorithm):
 
         return parallel_sampler.collect_paths()
 
-    def process_samples(self, itr, paths, mdp, policy, baseline):
+    def process_samples(self, itr, paths, mdp, policy, baseline, **kwargs):
 
         baselines = []
         returns = []

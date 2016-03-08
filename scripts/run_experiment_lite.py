@@ -45,7 +45,7 @@ def concretize(maybe_stub):
 
 def run_experiment(argv):
 
-    default_log_dir = config.DEFAULT_LOG_DIR
+    default_log_dir = config.LOG_DIR
     now = datetime.datetime.now(dateutil.tz.tzlocal())
 
     # avoid name clashes when running distributed jobs
@@ -70,7 +70,7 @@ def run_experiment(argv):
                         help="Guassian noise added to obs")
     parser.add_argument('--n_parallel', type=int, default=1,
                         help='Number of parallel workers to perform rollouts.')
-    parser.add_argument('--exp_name', type=str, default=default_exp_name, 'Name of the experiment.')
+    parser.add_argument('--exp_name', type=str, default=default_exp_name, help='Name of the experiment.')
     parser.add_argument('--log_dir', type=str, default=default_log_dir,
                         help='Path to save the log and iteration snapshot.')
     parser.add_argument('--snapshot_mode', type=str, default='all',

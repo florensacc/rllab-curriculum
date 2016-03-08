@@ -18,9 +18,8 @@ class SubgoalMDP(ProxyMDP, Serializable):
             action_dim=n_subgoals,
             action_dtype='uint8',
         )
-        obs_dim = flatten_shape_dim(mdp.observation_shape)
         self._low_mdp = MDPSpec(
-            observation_shape=(obs_dim + n_subgoals,),
+            observation_shape=(mdp.observation_dim + n_subgoals,),
             observation_dtype=mdp.observation_dtype,
             action_dim=mdp.action_dim,
             action_dtype=mdp.action_dtype,

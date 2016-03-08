@@ -7,7 +7,7 @@ import numpy as np
 import scipy.optimize
 
 
-class PenaltyLbfgs(Serializable):
+class PenaltyLbfgsOptimizer(Serializable):
     """
     Performs constrained optimization via penalized L-BFGS. The penalty term is adaptively adjusted to make sure that
     the constraint is satisfied.
@@ -31,7 +31,6 @@ class PenaltyLbfgs(Serializable):
         self._max_penalty = max_penalty
         self._increase_penalty_factor = increase_penalty_factor
         self._decrease_penalty_factor = decrease_penalty_factor
-        self._max_opt_itr = max_opt_itr
         self._max_penalty_itr = max_penalty_itr
         self._adapt_penalty = adapt_penalty
 
@@ -58,15 +57,15 @@ class PenaltyLbfgs(Serializable):
         self._constraint_name = constraint_name
 
         def get_opt_output():
-            flat_grad = flatten_tensor_variables(theano.grad(loss, target.get_params(trainable=True)))
-            return [loss.astype('float64'), flat_grad.astype('float64')]
+            flat_grad = flatten_tensor_variables(theano.grad(penalized_loss, target.get_params(trainable=True)))
+            return [penalized_loss.astype('float64'), flat_grad.astype('float64')]
 
         self._opt_fun = lazydict(
             f_loss=lambda: compile_function(inputs, loss),
             f_constraint=lambda: compile_function(inputs, constraint_term),
             f_penalized_loss=lambda: compile_function(
                 inputs=inputs + [penalty_var],
-                outputs=[loss, constraint_term, penalized_loss]
+                outputs=[penalized_loss, loss, constraint_term]
             ),
             f_opt=lambda: compile_function(
                 inputs=inputs + [penalty_var],
@@ -88,7 +87,7 @@ class PenaltyLbfgs(Serializable):
 
         def gen_f_opt(penalty):
             def f(flat_params):
-                self._target.set_param_values(flat_params)
+                self._target.set_param_values(flat_params, trainable=True)
                 return f_opt(*(inputs + (penalty,)))
             return f
 
@@ -110,7 +109,6 @@ class PenaltyLbfgs(Serializable):
             if try_constraint_val < self._max_constraint_val or \
                     (penalty_itr == self._max_penalty_itr - 1 and opt_params is None):
                 opt_params = itr_opt_params
-                self._penalty = try_penalty
 
             if not self._adapt_penalty:
                 break
@@ -131,8 +129,5 @@ class PenaltyLbfgs(Serializable):
                         try_constraint_val >= self._max_constraint_val:
                     break
             try_penalty *= penalty_scale_factor
-            if try_penalty < self._min_penalty or \
-                    try_penalty > self._max_penalty:
-                try_penalty = np.clip(
-                    try_penalty, self._min_penalty, self._max_penalty)
-                self._penalty = try_penalty
+            try_penalty = np.clip(try_penalty, self._min_penalty, self._max_penalty)
+            self._penalty = try_penalty

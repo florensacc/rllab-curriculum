@@ -1,5 +1,6 @@
 from rllab.misc import autoargs
 import numpy as np
+from rllab.misc.ext import flatten_shape_dim
 
 
 class MDP(object):
@@ -27,6 +28,10 @@ class MDP(object):
     @property
     def action_bounds(self):
         raise NotImplementedError
+
+    @property
+    def observation_dim(self):
+        return flatten_shape_dim(self.observation_shape)
 
     @property
     def observation_dtype(self):

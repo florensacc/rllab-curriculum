@@ -3,13 +3,13 @@ os.environ["THEANO_FLAGS"] = "device=cpu"
 from rllab.mdp.openai_atari_mdp import AtariMDP
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
-from rllab.algo.hierarchical.hppo import HPPO
-from rllab.misc.console import stub, run_experiment_lite
+from rllab.algo.ppo import PPO
+from rllab.misc.instrument import stub, run_experiment_lite
 
 stub(globals())
 
 mdp = AtariMDP(rom_name="pong", obs_type="ram", frame_skip=4)
-algo = HPPO(
+algo = PPO(
     batch_size=10000,
     whole_paths=True,
     max_path_length=4500,
@@ -28,7 +28,7 @@ baseline = LinearFeatureBaseline(
 
 run_experiment_lite(
     algo.train(mdp=mdp, policy=policy, baseline=baseline),
-    exp_name="ppo_atari",
+    exp_prefix="ppo_atari",
     n_parallel=4,
     snapshot_mode="last",
     seed=1,

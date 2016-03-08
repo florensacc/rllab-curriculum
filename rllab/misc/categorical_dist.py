@@ -8,10 +8,20 @@ def from_onehot_sym(x_var):
 
 def kl_sym(old_prob_var, new_prob_var):
     """
-    Compute the KL divergence of two categorical distributions
+    Compute the symbolic KL divergence of two categorical distributions
     """
     return TT.sum(
         old_prob_var * (TT.log(old_prob_var) - TT.log(new_prob_var)),
+        axis=1
+    )
+
+
+def kl(old_prob, new_prob):
+    """
+    Compute the KL divergence of two categorical distributions
+    """
+    return np.sum(
+        old_prob * (np.log(old_prob) - np.log(new_prob)),
         axis=1
     )
 

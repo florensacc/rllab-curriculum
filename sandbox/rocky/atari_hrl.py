@@ -9,6 +9,8 @@ from rllab.baseline.subgoal_baseline import SubgoalBaseline
 from rllab.algo.ppo import PPO
 from rllab.algo.batch_hrl import BatchHRL
 from rllab.misc.instrument import stub, run_experiment_lite
+from sandbox.rocky.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
+from sandbox.rocky.zero_bonus_evaluator import ZeroBonusEvaluator
 import lasagne.nonlinearities as NL
 
 stub(globals())
@@ -16,19 +18,19 @@ stub(globals())
 
 mdp = SubgoalMDP(
     AtariMDP(rom_name="pong", obs_type="ram", frame_skip=4),
-    n_subgoals=5,
+    n_subgoals=1,
 )
 
 algo = BatchHRL(
     high_algo=PPO(
         discount=0.99,
         step_size=0.01,
-        max_penalty_itr=1,
+        max_penalty_itr=3,
     ),
     low_algo=PPO(
         discount=0.99,
         step_size=0.01,
-        max_penalty_itr=1,
+        max_penalty_itr=3,
     ),
     batch_size=10000,
     whole_paths=True,
@@ -55,12 +57,26 @@ baseline = SubgoalBaseline(
     mdp=mdp,
     high_baseline=GaussianMLPBaseline(
         mdp=mdp.high_mdp,
-        hidden_sizes=[32, 32],
-        nonlinearity=NL.rectify,
-        step_size=0.06,
+        regressor_args=dict(
+            hidden_sizes=[32, 32],
+            nonlinearity=NL.rectify,
+            step_size=0.06,
+        ),
     ),
     low_baseline=GaussianMLPBaseline(
         mdp=mdp.low_mdp,
+        regressor_args=dict(
+            hidden_sizes=[32, 32],
+            nonlinearity=NL.rectify,
+            step_size=0.06,
+        ),
+    ),
+)
+
+# bonus_evaluator = ZeroBonusEvaluator()
+bonus_evaluator = StateGivenGoalMIEvaluator(
+    mdp=mdp,
+    regressor_args=dict(
         hidden_sizes=[32, 32],
         nonlinearity=NL.rectify,
         step_size=0.06,
@@ -68,11 +84,9 @@ baseline = SubgoalBaseline(
 )
 
 run_experiment_lite(
-    algo.train(mdp=mdp, policy=policy, baseline=baseline),
+    algo.train(mdp=mdp, policy=policy, baseline=baseline, bonus_evaluator=bonus_evaluator),
     exp_prefix="ppo_atari",
     n_parallel=4,
     snapshot_mode="last",
     seed=1,
-    mode="openai_kube",
-    #dry=True
 )

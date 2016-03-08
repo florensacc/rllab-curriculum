@@ -39,5 +39,12 @@ def log_likelihood_sym(xs, means, log_stds):
         0.5 * means.shape[1] * np.log(2 * np.pi)
 
 
+def log_likelihood(xs, means, log_stds):
+    zs = (xs - means) / np.exp(log_stds)
+    return - np.sum(log_stds, axis=1) - \
+        0.5 * np.sum(np.square(zs), axis=1) - \
+        0.5 * means.shape[1] * np.log(2 * np.pi)
+
+
 def entropy(means, log_stds):
     return np.sum(log_stds + np.log(np.sqrt(2 * np.pi * np.e)), axis=1)

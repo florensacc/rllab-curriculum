@@ -72,6 +72,9 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def compute_entropy(self, pdist):
         return np.mean(categorical_dist.entropy(pdist))
 
+    def get_pdists(self, observations):
+        return self._f_prob(observations)
+
     @property
     @overrides
     def pdist_dim(self):

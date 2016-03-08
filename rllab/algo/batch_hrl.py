@@ -2,16 +2,25 @@ from rllab.algo.batch_polopt import BatchPolopt
 from rllab.misc.overrides import overrides
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
+from rllab.misc.special import to_onehot
+from rllab.misc import categorical_dist
+from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
 import numpy as np
 
 
 class BatchHRL(BatchPolopt, Serializable):
 
-    def __init__(self, high_algo, low_algo, **kwargs):
+    def __init__(
+            self,
+            high_algo,
+            low_algo,
+            mi_coeff=0.1,
+            **kwargs):
         super(BatchHRL, self).__init__(**kwargs)
         Serializable.quick_init(self, locals())
         self._high_algo = high_algo
         self._low_algo = low_algo
+        self._mi_coeff = mi_coeff
 
     @property
     def high_algo(self):
@@ -52,13 +61,19 @@ class BatchHRL(BatchPolopt, Serializable):
             mdp=mdp,
         )
 
-    def process_samples(self, itr, paths, mdp, policy, baseline):
+    def process_samples(self, itr, paths, mdp, policy, baseline, bonus_evaluator, **kwargs):
         """
         Transform paths to high_paths and low_paths, and dispatch them to the high-level and low-level algorithms
         respectively.
+
+        Also compute some diagnostic information:
+        - I(a,g) = E_{s,g}[D_KL(p(a|g,s) || p(a|s))
+                 = E_{s} [sum_g p(g|s) D_KL(p(a|g,s) || p(a|s))]
         """
         high_paths = []
         low_paths = []
+        bonus_returns = []
+        # Process the raw trajectories into appropriate high-level and low-level trajectories
         for path in paths:
             pdists = path['pdists']
             observations = path['observations']
@@ -72,20 +87,66 @@ class BatchHRL(BatchPolopt, Serializable):
                 actions=subgoals,
                 observations=observations,
             )
+            # Right now the implementation assumes that high_pdists are given as probabilities of a categorical
+            # distribution.
+            # Need to be careful when this does not hold.
+            assert isinstance(policy.high_policy, CategoricalMLPPolicy)
+            # fill in information needed by bonus_evaluator
+            path['subgoals'] = subgoals
+            path['high_pdists'] = high_pdists
+            bonuses = bonus_evaluator.predict(path)
+            # TODO normalize these two terms
+            # path['bonuses'] = bonuses
+            low_rewards = rewards + self._mi_coeff * bonuses
+            bonus_returns.append(np.sum(bonuses))
             low_path = dict(
-                rewards=rewards,
+                rewards=low_rewards,
                 pdists=low_pdists,
                 actions=actions,
                 observations=np.concatenate([flat_observations, subgoals], axis=1)
             )
             high_paths.append(high_path)
             low_paths.append(low_path)
+        logger.record_tabular("AverageBonuseReturn", np.mean(bonus_returns))
         with logger.tabular_prefix('Hi_'), logger.prefix('Hi | '):
             high_samples_data = self.high_algo.process_samples(
                 itr, high_paths, mdp.high_mdp, policy.high_policy, baseline.high_baseline)
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
             low_samples_data = self.low_algo.process_samples(
                 itr, low_paths, mdp.low_mdp, policy.low_policy, baseline.low_baseline)
+
+        # Compute the mutual information I(a,g)
+        # This is the component I'm still uncertain about how to abstract away yet
+        high_observations = high_samples_data["observations"]
+        # p(g|s)
+        goal_probs = policy.high_policy.get_pdists(high_observations)
+        # p(a|g,s)
+        action_given_goal_pdists = []
+        # p(a|s) = sum_g p(g|s) p(a|g,s)
+        action_pdists = 0
+        # Actually compute p(a|g,s) and p(a|s)
+        N = high_observations.shape[0]
+        for goal in range(mdp.n_subgoals):
+            goal_onehot = np.tile(
+                to_onehot(goal, mdp.n_subgoals).reshape((1, -1)),
+                (N, 1)
+            )
+            low_observations = np.concatenate([high_observations, goal_onehot], axis=1)
+            action_given_goal_pdist = policy.low_policy.get_pdists(low_observations)
+            action_given_goal_pdists.append(action_given_goal_pdist)
+            action_pdists += goal_probs[:, [goal]] * action_given_goal_pdist
+        # The mutual information between actions and goals
+        mi_action_goal = 0
+        for goal in range(mdp.n_subgoals):
+            mi_action_goal += np.mean(goal_probs[:, goal] * categorical_dist.kl(
+                action_given_goal_pdists[goal],
+                action_pdists
+            ))
+        # Log the mutual information
+        logger.record_tabular("I(action,goal|state)", mi_action_goal)
+        # We need to train the predictor for p(s'|g, s)
+        with logger.prefix("MI | "), logger.tabular_prefix("MI_"):
+            bonus_evaluator.fit(paths)
         return dict(
             high=high_samples_data,
             low=low_samples_data

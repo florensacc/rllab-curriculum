@@ -198,6 +198,7 @@ class PPO(BatchPolopt):
                     search_succeeded = True
                     break
             try_penalty *= penalty_scale_factor
+            penalty = try_penalty
             if try_penalty < self.min_penalty or \
                     try_penalty > self.max_penalty:
                 try_penalty = np.clip(
