@@ -4,12 +4,11 @@ from rllab.mdp.openai_atari_mdp import AtariMDP
 from rllab.mdp.subgoal_mdp import SubgoalMDP
 from rllab.policy.subgoal_policy import SubgoalPolicy
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.policy.mean_std_nn_policy import MeanStdNNPolicy
 from rllab.baseline.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.baseline.subgoal_baseline import SubgoalBaseline
 from rllab.algo.ppo import PPO
 from rllab.algo.batch_hrl import BatchHRL
-from rllab.misc.console import stub, run_experiment_lite
+from rllab.misc.instrument import stub, run_experiment_lite
 import lasagne.nonlinearities as NL
 
 stub(globals())
@@ -70,8 +69,10 @@ baseline = SubgoalBaseline(
 
 run_experiment_lite(
     algo.train(mdp=mdp, policy=policy, baseline=baseline),
-    exp_name="ppo_atari",
+    exp_prefix="ppo_atari",
     n_parallel=4,
     snapshot_mode="last",
     seed=1,
+    mode="openai_kube",
+    #dry=True
 )

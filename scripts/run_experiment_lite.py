@@ -3,7 +3,7 @@ import sys
 sys.path.append(".")
 
 from rllab.misc.ext import is_iterable, set_seed
-from rllab.misc.console import StubClass, StubObject, StubAttr, StubMethodCall
+from rllab.misc.instrument import StubClass, StubObject, StubAttr, StubMethodCall
 from rllab import config
 import rllab.misc.logger as logger
 import argparse
@@ -13,6 +13,7 @@ import dateutil.tz
 import ast
 import uuid
 import cPickle as pickle
+import base64
 
 
 def concretize(maybe_stub):
@@ -44,7 +45,7 @@ def concretize(maybe_stub):
 
 def run_experiment(argv):
 
-    default_log_dir = "{PROJECT_PATH}/data"
+    default_log_dir = config.DEFAULT_LOG_DIR
     now = datetime.datetime.now(dateutil.tz.tzlocal())
 
     # avoid name clashes when running distributed jobs
@@ -69,8 +70,7 @@ def run_experiment(argv):
                         help="Guassian noise added to obs")
     parser.add_argument('--n_parallel', type=int, default=1,
                         help='Number of parallel workers to perform rollouts.')
-    parser.add_argument('--exp_name', type=str, default=default_exp_name,
-                        help='Name of the experiment.')
+    parser.add_argument('--exp_name', type=str, default=default_exp_name, 'Name of the experiment.')
     parser.add_argument('--log_dir', type=str, default=default_log_dir,
                         help='Path to save the log and iteration snapshot.')
     parser.add_argument('--snapshot_mode', type=str, default='all',
@@ -93,7 +93,6 @@ def run_experiment(argv):
 
     args = parser.parse_args(argv[1:])
 
-
     from rllab.sampler import parallel_sampler
     parallel_sampler.config_parallel_sampler(args.n_parallel, args.seed)
     if args.plot:
@@ -101,23 +100,23 @@ def run_experiment(argv):
         plotter.init_worker()
 
     # read from stdin
-    data = pickle.loads(args.args_data)
+    data = pickle.loads(base64.b64decode(args.args_data))
 
     if args.seed is not None:
         set_seed(args.seed)
 
-    log_dir = args.log_dir.format(PROJECT_PATH=config.PROJECT_PATH)
-    exp_dir = osp.join(log_dir, args.exp_name)
-    tabular_log_file = osp.join(exp_dir, args.tabular_log_file)
-    text_log_file = osp.join(exp_dir, args.text_log_file)
-    params_log_file = osp.join(exp_dir, args.params_log_file)
+    log_dir = args.log_dir
+    # exp_dir = osp.join(log_dir, args.exp_name)
+    tabular_log_file = osp.join(log_dir, args.tabular_log_file)
+    text_log_file = osp.join(log_dir, args.text_log_file)
+    params_log_file = osp.join(log_dir, args.params_log_file)
 
     logger.log_parameters_lite(params_log_file, args)
     logger.add_text_output(text_log_file)
     logger.add_tabular_output(tabular_log_file)
     prev_snapshot_dir = logger.get_snapshot_dir()
     prev_mode = logger.get_snapshot_mode()
-    logger.set_snapshot_dir(exp_dir)
+    logger.set_snapshot_dir(log_dir)
     logger.set_snapshot_mode(args.snapshot_mode)
     logger.push_prefix("[%s] " % args.exp_name)
 
