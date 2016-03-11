@@ -11,6 +11,7 @@ import theano.tensor as TT
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import lasagne
+import numpy as np
 
 NONE = list()
 
@@ -31,6 +32,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             use_trust_region=True,
             step_size=0.01,
             learn_std=True,
+            init_std=1.0,
             adaptive_std=False,
             std_share_network=False,
             std_hidden_sizes=None,
@@ -92,7 +94,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             l_log_std = ParamLayer(
                 mean_network.l_in,
                 num_units=output_dim,
-                param=lasagne.init.Constant(0.),
+                param=lasagne.init.Constant(np.log(init_std)),
                 name="output_log_std",
                 trainable=learn_std,
             )
@@ -137,14 +139,14 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             inputs = [xs, ys, old_means, old_log_stds]
         else:
             inputs = [xs, ys]
-        loss_before = self._optimizer.loss(*inputs)
+        loss_before = self._optimizer.loss(inputs)
         if self._name:
             prefix = self._name + "_"
         else:
             prefix = ""
         logger.record_tabular(prefix + 'LossBefore', loss_before)
-        self._optimizer.optimize(*inputs)
-        loss_after = self._optimizer.loss(*inputs)
+        self._optimizer.optimize(inputs)
+        loss_after = self._optimizer.loss(inputs)
         logger.record_tabular(prefix + 'LossAfter', loss_after)
         logger.record_tabular(prefix + 'dLoss', loss_before - loss_after)
 
