@@ -34,26 +34,26 @@ class Globals(object):
 G = Globals()
 
 
-def pool_init_theano():
+def _pool_init_theano():
     import os
     os.environ['THEANO_FLAGS'] = 'device=cpu'
 
 
-def processor_init(queue):
-    pool_init_theano()
+def _processor_init(queue):
+    _pool_init_theano()
     args = queue.get()
-    worker_init(*args)
+    _worker_init(*args)
 
 
-def worker_init(mdp, policy, seed_inc):
+def _worker_init(mdp, policy, seed_inc):
     set_seed(seed_inc + G.base_seed)
-    pool_init_theano()
+    _pool_init_theano()
     G.mdp, G.policy = mdp, policy
     if G.worker_queue:
         G.worker_queue.put(None)
 
 
-def pool_rollout(args):
+def _pool_rollout(args):
     try:
         policy_params, max_samples, max_path_length, queue, whole_paths = \
             extract(
@@ -101,7 +101,7 @@ def config_parallel_sampler(n_parallel, base_seed):
 
         G.pool = MemmapingPool(
             G.n_parallel,
-            initializer=processor_init,
+            initializer=_processor_init,
             initargs=[G.queue]
         )
 
@@ -119,10 +119,10 @@ def populate_task(mdp, policy):
         for i in xrange(G.n_parallel):
             G.worker_queue.get()
     else:
-        worker_init(mdp, policy, 0)
+        _worker_init(mdp, policy, 0)
 
 
-def worker_run_task(all_args):
+def _worker_run_task(all_args):
     runner, args, kwargs = all_args
     # signals to the master that this task is up and running
     G.worker_queue.put(None)
@@ -134,7 +134,7 @@ def worker_run_task(all_args):
 def run_map(runner, *args, **kwargs):
     if G.n_parallel > 1:
         results = G.pool.map_async(
-            worker_run_task, [(runner, args, kwargs)] * G.n_parallel)
+            _worker_run_task, [(runner, args, kwargs)] * G.n_parallel)
         for i in range(G.n_parallel):
             G.worker_queue.get()
         for i in range(G.n_parallel):
@@ -164,21 +164,21 @@ def master_collect_mean(worker_f, *args, **kwargs):
         ipdb.set_trace()
 
 
-def worker_set_param_values(params, **tags):
+def _worker_set_param_values(params, **tags):
     G.policy.set_param_values(params, **tags)
 
 
 def master_set_param_values(params, **tags):
-    run_map(worker_set_param_values, params, **tags)
+    run_map(_worker_set_param_values, params, **tags)
 
 
-def worker_collect_paths():
+def _worker_collect_paths():
     return G.paths
 
 
 def collect_paths():
     if G.n_parallel > 1:
-        return sum(run_map(worker_collect_paths), [])
+        return sum(run_map(_worker_collect_paths), [])
     else:
         return G.paths
 
@@ -201,7 +201,7 @@ def request_samples(
             queue=queue,
             whole_paths=whole_paths,
         )
-        paths_per_pool = G.pool.map_async(pool_rollout, [args] * G.n_parallel)
+        paths_per_pool = G.pool.map_async(_pool_rollout, [args] * G.n_parallel)
         pbar = ProgBarCounter(max_samples)
         while not paths_per_pool.ready():
             paths_per_pool.wait(0.1)
@@ -217,10 +217,10 @@ def request_samples(
             queue=None,
             whole_paths=whole_paths,
         )
-        pool_rollout(args)
+        _pool_rollout(args)
 
 
-def dispatch(inps):
+def _dispatch(inps):
     f, args = inps
     return f(*([G.mdp, G.policy] + list(args)))
 
@@ -228,6 +228,6 @@ def dispatch(inps):
 def pool_map(f, args_lst):
     go_args = [[f, args] for args in args_lst]
     if G.n_parallel > 1:
-        return G.pool.map(dispatch, go_args)
+        return G.pool.map(_dispatch, go_args)
     else:
-        return map(dispatch, go_args)
+        return map(_dispatch, go_args)
