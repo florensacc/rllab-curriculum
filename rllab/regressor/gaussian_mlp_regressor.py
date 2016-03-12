@@ -115,11 +115,12 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         loss = - TT.mean(normal_dist.log_likelihood_sym(ys_var, means_var, log_stds_var))
 
         self._f_predict = compile_function([xs_var], means_var)
-        self._f_pdists = compile_function([xs_var], [means_var, log_stds_var])
+        self._f_pdists = compile_function([xs_var], [means_var, TT.exp(log_stds_var)])
 
         optimizer_args = dict(
             loss=loss,
             target=self,
+            network_outputs=[means_var, log_stds_var],
         )
 
         if use_trust_region:

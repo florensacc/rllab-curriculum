@@ -39,7 +39,7 @@ class PenaltyLbfgsOptimizer(Serializable):
         self._max_constraint_val = None
         self._constraint_name = None
 
-    def update_opt(self, loss, target, leq_constraint, inputs, constraint_name="constraint"):
+    def update_opt(self, loss, target, leq_constraint, inputs, constraint_name="constraint", *args, **kwargs):
         """
         :param loss: Symbolic expression for the loss function.
         :param target: A parameterized object to optimize over. It should implement methods of the

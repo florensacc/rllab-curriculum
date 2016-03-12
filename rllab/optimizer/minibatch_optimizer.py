@@ -1,9 +1,8 @@
 from rllab.misc.ext import compile_function, lazydict, flatten_tensor_variables
 from rllab.core.serializable import Serializable
 from rllab.algo.first_order_method import parse_update_method
-import theano
+from rllab.optimizer.minibatch_dataset import MinibatchDataset
 import time
-import numpy as np
 
 
 class MinibatchOptimizer(Serializable):
@@ -11,7 +10,7 @@ class MinibatchOptimizer(Serializable):
     Performs stochastic gradient descent, possibly using fancier methods like adam etc.
     """
 
-    def __init__(self, max_epochs=1000, tolerance=1e-6, update_method='sgd', batch_size=32, shuffle_per_epoch=True, callback=None, **kwargs):
+    def __init__(self, max_epochs=1000, tolerance=1e-6, update_method='sgd', batch_size=32, callback=None, **kwargs):
         Serializable.quick_init(self, locals())
         self._opt_fun = None
         self._target = None
@@ -20,7 +19,6 @@ class MinibatchOptimizer(Serializable):
         self._max_epochs = max_epochs
         self._tolerance = tolerance
         self._batch_size = batch_size
-        self._shuffle_per_epoch = shuffle_per_epoch
 
     def update_opt(self, loss, target, inputs, extra_inputs=None):
         """
@@ -69,19 +67,12 @@ class MinibatchOptimizer(Serializable):
 
         start_time = time.time()
 
-        total_size = inputs[0].shape[0]
-
-        itrs_per_epoch = int(np.ceil(total_size * 1.0 / self._batch_size))
+        dataset = MinibatchDataset(inputs, self._batch_size, extra_inputs=extra_inputs)
 
         for epoch in xrange(self._max_epochs):
-            ids = np.arange(total_size)
-            if self._shuffle_per_epoch:
-                np.random.shuffle(ids)
-            for epoch_itr in xrange(itrs_per_epoch):
-                batch_start = epoch_itr * self._batch_size
-                batch_end = (epoch_itr + 1) * self._batch_size
-                batch = [d[batch_start:batch_end] for d in inputs]
-                f_opt(*(batch + extra_inputs))
+            for batch in dataset.iterate(update=True):
+                f_opt(*batch)
+
             new_loss = f_loss(*(inputs + extra_inputs))
 
             if self._callback:

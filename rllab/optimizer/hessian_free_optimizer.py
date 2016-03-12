@@ -1,47 +1,48 @@
-from rllab.misc.ext import compile_function, lazydict, flatten_tensor_variables
+from rllab.misc.ext import compile_function, lazydict
 from rllab.core.serializable import Serializable
-import theano
-import scipy.optimize
+from rllab.optimizer.hf import hf_optimizer
 import time
+from rllab.optimizer.minibatch_dataset import MinibatchDataset
 
 
-class LbfgsOptimizer(Serializable):
+class HessianFreeOptimizer(Serializable):
     """
-    Performs unconstrained optimization via L-BFGS.
+    Performs unconstrained optimization via Hessian-Free Optimization
     """
 
-    def __init__(self, max_opt_itr=20, callback=None):
+    def __init__(self, max_opt_itr=20, batch_size=32, cg_batch_size=100, callback=None):
         Serializable.quick_init(self, locals())
         self._max_opt_itr = max_opt_itr
         self._opt_fun = None
         self._target = None
+        self._batch_size = batch_size
+        self._cg_batch_size = cg_batch_size
+        self._hf_optimizer = None
         self._callback = callback
 
-    def update_opt(self, loss, target, inputs, extra_inputs=None, *args, **kwargs):
+    def update_opt(self, loss, target, inputs, network_outputs, extra_inputs=None):
         """
         :param loss: Symbolic expression for the loss function.
         :param target: A parameterized object to optimize over. It should implement methods of the
         :class:`rllab.core.paramerized.Parameterized` class.
-        :param leq_constraint: A constraint provided as a tuple (f, epsilon), of the form f(*inputs) <= epsilon.
         :param inputs: A list of symbolic variables as inputs
         :return: No return value.
         """
 
         self._target = target
 
-        def get_opt_output():
-            flat_grad = flatten_tensor_variables(theano.grad(loss, target.get_params(trainable=True)))
-            return [loss.astype('float64'), flat_grad.astype('float64')]
-
         if extra_inputs is None:
             extra_inputs = list()
 
+        self._hf_optimizer = hf_optimizer(
+            p=target.get_params(trainable=True),
+            inputs=(inputs + extra_inputs),
+            s=network_outputs,
+            costs=[loss],
+        )
+
         self._opt_fun = lazydict(
             f_loss=lambda: compile_function(inputs + extra_inputs, loss),
-            f_opt=lambda: compile_function(
-                inputs=inputs + extra_inputs,
-                outputs=get_opt_output(),
-            )
         )
 
     def loss(self, inputs, extra_inputs=None):
@@ -50,25 +51,23 @@ class LbfgsOptimizer(Serializable):
         return self._opt_fun["f_loss"](*(inputs + extra_inputs))
 
     def optimize(self, inputs, extra_inputs=None):
-        f_opt = self._opt_fun["f_opt"]
 
         if extra_inputs is None:
             extra_inputs = list()
 
-        def f_opt_wrapper(flat_params):
-            self._target.set_param_values(flat_params, trainable=True)
-            return f_opt(*inputs)
+        dataset = MinibatchDataset(inputs=inputs, batch_size=self._batch_size, extra_inputs=extra_inputs)
+        cg_dataset = MinibatchDataset(inputs=inputs, batch_size=self._cg_batch_size, extra_inputs=extra_inputs)
 
         itr = [0]
         start_time = time.time()
 
         if self._callback:
-            def opt_callback(params):
+            def opt_callback():
                 loss = self._opt_fun["f_loss"](*(inputs + extra_inputs))
                 elapsed = time.time() - start_time
                 self._callback(dict(
                     loss=loss,
-                    params=params,
+                    params=self._target.get_param_values(trainable=True),
                     itr=itr[0],
                     elapsed=elapsed,
                 ))
@@ -76,7 +75,11 @@ class LbfgsOptimizer(Serializable):
         else:
             opt_callback = None
 
-        scipy.optimize.fmin_l_bfgs_b(
-            func=f_opt_wrapper, x0=self._target.get_param_values(trainable=True),
-            maxiter=self._max_opt_itr, callback=opt_callback,
+        self._hf_optimizer.train(
+            gradient_dataset=dataset,
+            cg_dataset=cg_dataset,
+            itr_callback=opt_callback,
+            num_updates=self._max_opt_itr,
+            preconditioner=True,
+            verbose=False
         )
