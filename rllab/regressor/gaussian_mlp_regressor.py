@@ -7,6 +7,7 @@ from rllab.misc.ext import compile_function
 from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from rllab.optimizer.lbfgs_optimizer import LbfgsOptimizer
 from rllab.misc import logger
+import theano
 import theano.tensor as TT
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
@@ -38,6 +39,8 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             std_hidden_sizes=None,
             # We can't use None here since None is actually a valid value!
             std_nonlinearity=NONE,
+            normalize_inputs=True,
+            normalize_outputs=True,
             name=None,
     ):
         """
@@ -106,21 +109,52 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         old_means_var = TT.matrix("old_means")
         old_log_stds_var = TT.matrix("old_log_stds")
 
-        means_var = L.get_output(l_mean)
-        log_stds_var = L.get_output(l_log_std)
+        x_mean_var = theano.shared(
+            np.zeros((1,) + input_shape),
+            name="x_mean",
+            broadcastable=(True,) + (False, ) * len(input_shape)
+        )
+        x_std_var = theano.shared(
+            np.ones((1,) + input_shape),
+            name="x_std",
+            broadcastable=(True,) + (False, ) * len(input_shape)
+        )
+        y_mean_var = theano.shared(
+            np.zeros((1, output_dim)),
+            name="y_mean",
+            broadcastable=(True, False)
+        )
+        y_std_var = theano.shared(
+            np.ones((1, output_dim)),
+            name="y_std",
+            broadcastable=(True, False)
+        )
+
+        normalized_xs_var = (xs_var - x_mean_var) / x_std_var
+        normalized_ys_var = (ys_var - y_mean_var) / y_std_var
+
+        normalized_means_var = L.get_output(l_mean, {mean_network.l_in: normalized_xs_var})
+        normalized_log_stds_var = L.get_output(l_log_std, {mean_network.l_in: normalized_xs_var})
+
+        means_var = normalized_means_var * y_std_var + y_mean_var
+        log_stds_var = normalized_log_stds_var + TT.log(y_std_var)
+
+        normalized_old_means_var = (old_means_var - y_mean_var) / y_std_var
+        normalized_old_log_stds_var = old_log_stds_var - TT.log(y_std_var)
 
         mean_kl = TT.mean(normal_dist.kl_sym(
-            old_means_var, old_log_stds_var, means_var, log_stds_var))
+            normalized_old_means_var, normalized_old_log_stds_var, normalized_means_var, normalized_log_stds_var))
 
-        loss = - TT.mean(normal_dist.log_likelihood_sym(ys_var, means_var, log_stds_var))
+        loss = - TT.mean(normal_dist.log_likelihood_sym(normalized_ys_var, normalized_means_var,
+                                                        normalized_log_stds_var))
 
         self._f_predict = compile_function([xs_var], means_var)
-        self._f_pdists = compile_function([xs_var], [means_var, TT.exp(log_stds_var)])
+        self._f_pdists = compile_function([xs_var], [means_var, log_stds_var])
 
         optimizer_args = dict(
             loss=loss,
             target=self,
-            network_outputs=[means_var, log_stds_var],
+            network_outputs=[normalized_means_var, normalized_log_stds_var],
         )
 
         if use_trust_region:
@@ -134,7 +168,22 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         self._use_trust_region = use_trust_region
         self._name = name
 
+        self._normalize_inputs = normalize_inputs
+        self._normalize_outputs = normalize_outputs
+        self._x_mean_var = x_mean_var
+        self._x_std_var = x_std_var
+        self._y_mean_var = y_mean_var
+        self._y_std_var = y_std_var
+
     def fit(self, xs, ys):
+        if self._normalize_inputs:
+            # recompute normalizing constants for inputs
+            self._x_mean_var.set_value(np.mean(xs, axis=0, keepdims=True))
+            self._x_std_var.set_value(np.std(xs, axis=0, keepdims=True) + 1e-8)
+        if self._normalize_outputs:
+            # recompute normalizing constants for outputs
+            self._y_mean_var.set_value(np.mean(ys, axis=0, keepdims=True))
+            self._y_std_var.set_value(np.std(ys, axis=0, keepdims=True) + 1e-8)
         if self._use_trust_region:
             old_means, old_log_stds = self._f_pdists(xs)
             inputs = [xs, ys, old_means, old_log_stds]
