@@ -87,7 +87,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
                 std_nonlinearity = nonlinearity
             l_log_std = MLP(
                 input_shape=input_shape,
-                input_var=mean_network.l_in,
+                input_var=mean_network.l_in.input_var,
                 output_dim=output_dim,
                 hidden_sizes=std_hidden_sizes,
                 nonlinearity=std_nonlinearity,
