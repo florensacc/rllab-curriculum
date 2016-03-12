@@ -92,7 +92,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
                 hidden_sizes=std_hidden_sizes,
                 nonlinearity=std_nonlinearity,
                 output_nl=None,
-            )
+            ).l_out
         else:
             l_log_std = ParamLayer(
                 mean_network.l_in,
