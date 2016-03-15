@@ -7,6 +7,7 @@ from rllab.core.serializable import Serializable
 from rllab import config
 from rllab.misc.console import mkdir_p
 from rllab.misc.ext import merge_dict
+from StringIO import StringIO
 import datetime
 import dateutil.tz
 import json
@@ -108,15 +109,30 @@ now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
 
 
-def run_experiment_lite(stub_method_call, **kwargs):
+def run_experiment_lite(
+        stub_method_call,
+        exp_prefix,
+        script="scripts/run_experiment_lite.py",
+        mode="local",
+        dry=False,
+        docker_image=None,
+        aws_config=None,
+        **kwargs):
+    """
+    Serialize the stubbed method call and run the experiment using the specified mode.
+    :param stub_method_call: A stubbed method call.
+    :param script: The name of the entrance point python script
+    :param mode: Where & how to run the experiment. Should be one of "local", "local_docker", "ec2",
+    and "openai_kube" (must have OpenAI VPN set up).
+    :param dry: Whether to do a dry-run, which only prints the commands without executing them.
+    :param exp_prefix: Name prefix for the experiments
+    :param docker_image: name of the docker image. Ignored if using local mode.
+    :param kwargs: All other parameters will be passed directly to the entrance python script.
+    """
     data = base64.b64encode(pickle.dumps(stub_method_call))
-    script = kwargs.pop("script", "scripts/run_experiment_lite.py")
-    mode = kwargs.pop("mode", "local")
-    dry = kwargs.pop("dry", False)
-    exp_prefix = kwargs.pop("exp_prefix")
     global exp_count
     exp_count += 1
-    exp_name = "%s_%d" % (exp_prefix, exp_count)#, timestamp)
+    exp_name = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
     kwargs["exp_name"] = exp_name
     kwargs["log_dir"] = config.LOG_DIR + "/" + exp_name
     if mode == "local":
@@ -131,7 +147,8 @@ def run_experiment_lite(stub_method_call, **kwargs):
             if isinstance(e, KeyboardInterrupt):
                 raise
     elif mode == "local_docker":
-        docker_image = kwargs.pop("docker_image", config.LOCAL_DOCKER_IMAGE)
+        if docker_image is None:
+            docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
         command = to_docker_command(params, docker_image=docker_image, script=script)
         print(command)
@@ -143,9 +160,13 @@ def run_experiment_lite(stub_method_call, **kwargs):
             if isinstance(e, KeyboardInterrupt):
                 raise
     elif mode == "ec2":
-        pass
+        if docker_image is None:
+            docker_image = config.DOCKER_IMAGE
+        params = dict(kwargs.items() + [("args_data", data)])
+        launch_ec2(params, exp_prefix=exp_prefix, docker_image=docker_image, script=script, aws_config=aws_config, dry=dry)
     elif mode == "openai_kube":
-        docker_image = kwargs.pop("docker_image", config.OPENAI_KUBE_DOCKER_IMAGE)
+        if docker_image is None:
+            docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
         pod_dict = to_openai_kube_pod(params, docker_image=docker_image, script=script)
         pod_str = json.dumps(pod_dict, indent=1)
@@ -212,7 +233,8 @@ def to_local_command(params, script='scripts/run_experiment.py'):
     return command
 
 
-def to_docker_command(params, docker_image, script='scripts/run_experiment.py', pre_commands=None, post_commands=None):
+def to_docker_command(params, docker_image, script='scripts/run_experiment.py', pre_commands=None,
+                      post_commands=None, dry=False):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
     docker volume mapping to make sure that the logging files are created at the correct locations
@@ -221,7 +243,8 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     :return:
     """
     log_dir = params.get("log_dir")
-    mkdir_p(log_dir)
+    if not dry:
+        mkdir_p(log_dir)
     # create volume for logging directory
     command_prefix = "docker run"
     docker_log_dir = config.DOCKER_LOG_DIR
@@ -237,6 +260,124 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
         command_list.extend(post_commands)
     return command_prefix + "'" + "; ".join(command_list) + "'"
 
+
+def dedent(s):
+    lines = [l.strip() for l in s.split('\n')]
+    return '\n'.join(lines)
+
+
+def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.py', aws_config=None, dry=False):
+    log_dir = params.get("log_dir")
+
+    default_config = dict(
+        image_id=config.AWS_IMAGE_ID,
+        instance_type=config.AWS_INSTANCE_TYPE,
+        key_name=config.AWS_KEY_NAME,
+        spot=config.AWS_SPOT,
+        spot_price=config.AWS_SPOT_PRICE,
+        iam_instance_profile_name=config.AWS_IAM_INSTANCE_PROFILE_NAME,
+        security_groups=config.AWS_SECURITY_GROUPS,
+    )
+
+    if aws_config is None:
+        aws_config = dict()
+    aws_config = merge_dict(default_config, aws_config)
+
+    sio = StringIO()
+    sio.write("#!/bin/bash\n")
+    sio.write("{\n")
+    sio.write("""
+        die() { status=$1; shift; echo "FATAL: $*"; exit $status; }
+    """)
+    sio.write("""
+        EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id`"
+    """)
+    sio.write("""
+        aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value=%s --region %s
+    """ % (params.get("exp_name"), config.AWS_REGION_NAME))
+    sio.write("""
+        service docker start
+    """)
+    sio.write("""
+        DOCKER_HOST=\"tcp://localhost:4243\" docker --config /home/ubuntu/.docker pull %s
+    """ % docker_image)
+    sio.write("""
+        mkdir -p %s
+    """ % log_dir)
+    sio.write("""
+        DOCKER_HOST=\"tcp://localhost:4243\" %s
+    """ % to_docker_command(params, docker_image, script))
+    sio.write("""
+        aws s3 cp --recursive %s %s --region %s
+    """ % (log_dir, osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), params.get("exp_name")),
+           config.AWS_REGION_NAME))
+    sio.write("""
+        aws s3 cp /home/ubuntu/user_data.log %s --region %s
+    """ % (osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), params.get("exp_name")), config.AWS_REGION_NAME))
+    sio.write("""
+        EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
+        aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region %s
+    """ % config.AWS_REGION_NAME)
+    sio.write("} >> /home/ubuntu/user_data.log 2>&1\n")
+
+    import boto3
+    if aws_config["spot"]:
+        ec2 = boto3.client(
+            "ec2",
+            region_name=config.AWS_REGION_NAME,
+            aws_access_key_id=config.AWS_ACCESS_KEY,
+            aws_secret_access_key=config.AWS_ACCESS_SECRET,
+        )
+    else:
+        ec2 = boto3.resource(
+            "ec2",
+            region_name=config.AWS_REGION_NAME,
+            aws_access_key_id=config.AWS_ACCESS_KEY,
+            aws_secret_access_key=config.AWS_ACCESS_SECRET,
+        )
+    instance_args = dict(
+        ImageId=aws_config["image_id"],
+        KeyName=aws_config["key_name"],
+        UserData=dedent(sio.getvalue()),
+        InstanceType=aws_config["instance_type"],
+        EbsOptimized=True,
+        SecurityGroups=aws_config["security_groups"],
+        IamInstanceProfile=dict(
+            Name=aws_config["iam_instance_profile_name"],
+        ),
+    )
+    if not aws_config["spot"]:
+        instance_args["MinCount"] = 1
+        instance_args["MaxCount"] = 1
+    print "************************************************************"
+    print instance_args["UserData"]
+    print "************************************************************"
+    if aws_config["spot"]:
+        instance_args["UserData"] = base64.b64encode(instance_args["UserData"])
+        spot_args = dict(
+            DryRun=dry,
+            InstanceCount=1,
+            LaunchSpecification=instance_args,
+            SpotPrice=aws_config["spot_price"],
+            ClientToken=params["exp_name"],
+        )
+        import pprint
+        pprint.pprint(spot_args)
+        if not dry:
+            response = ec2.request_spot_instances(**spot_args)
+            print response
+            spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
+            ec2.create_tags(
+                Resources=[spot_request_id],
+                Tags=[{'Key': 'Name', 'Value': params["exp_name"]}],
+            )
+    else:
+        import pprint
+        pprint.pprint(instance_args)
+        ec2.create_instances(
+            DryRun=dry,
+            **instance_args
+        )
 
 def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py'):
     """
@@ -258,8 +399,8 @@ def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py')
         'echo "aws_secret_access_key = $(cat /etc/rocky-s3-credentials/access-secret)" >> ~/.aws/credentials')
     # copy the file to s3 after execution
     post_commands = list()
-    post_commands.append('aws s3 cp --recursive %s %s' % (config.DOCKER_LOG_DIR, osp.join(config.S3_PATH, params.get(
-        "exp_name"))))
+    post_commands.append('aws s3 cp --recursive %s %s' %
+                         (config.DOCKER_LOG_DIR, osp.join(config.AWS_S3_PATH, params.get("exp_name"))))
     command = to_docker_command(params, docker_image=docker_image, script=script, pre_commands=pre_commands,
                                 post_commands=post_commands)
     pod_name = config.KUBE_PREFIX + params["exp_name"]
@@ -307,3 +448,6 @@ def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py')
             }
         }
     }
+
+
+
