@@ -47,6 +47,8 @@ class StubClass(object):
         self.proxy_class = proxy_class
 
     def __call__(self, *args, **kwargs):
+        if len(args) > 0:
+            raise NotImplementedError
         return StubObject(self.proxy_class, *args, **kwargs)
 
 
@@ -65,6 +67,8 @@ class StubClass(object):
 class StubObject(object):
 
     def __init__(self, __proxy_class, *args, **kwargs):
+        if len(args) > 0:
+            raise NotImplementedError
         self.proxy_class = __proxy_class
         self.args = args
         self.kwargs = kwargs
@@ -134,8 +138,9 @@ def run_experiment_lite(
     exp_count += 1
     exp_name = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
     kwargs["exp_name"] = exp_name
-    kwargs["log_dir"] = config.LOG_DIR + "/" + exp_name
+    kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
     if mode == "local":
+        # kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
         params = dict(kwargs.items() + [("args_data", data)])
         command = to_local_command(params, script=script)
         print(command)
@@ -312,7 +317,7 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
     """ % (log_dir, osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), params.get("exp_name")),
            config.AWS_REGION_NAME))
     sio.write("""
-        aws s3 cp /home/ubuntu/user_data.log %s --region %s
+        aws s3 cp /home/ubuntu/user_data.log %s/stdout.log --region %s
     """ % (osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), params.get("exp_name")), config.AWS_REGION_NAME))
     sio.write("""
         EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
@@ -321,6 +326,7 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
     sio.write("} >> /home/ubuntu/user_data.log 2>&1\n")
 
     import boto3
+    import botocore
     if aws_config["spot"]:
         ec2 = boto3.client(
             "ec2",
@@ -367,10 +373,15 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
             response = ec2.request_spot_instances(**spot_args)
             print response
             spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
-            ec2.create_tags(
-                Resources=[spot_request_id],
-                Tags=[{'Key': 'Name', 'Value': params["exp_name"]}],
-            )
+            for _ in range(10):
+                try:
+                    ec2.create_tags(
+                        Resources=[spot_request_id],
+                        Tags=[{'Key': 'Name', 'Value': params["exp_name"]}],
+                    )
+                    break
+                except botocore.exceptions.ClientError:
+                    continue
     else:
         import pprint
         pprint.pprint(instance_args)
