@@ -11,7 +11,7 @@ def kl_sym(old_prob_var, new_prob_var):
     Compute the symbolic KL divergence of two categorical distributions
     """
     return TT.sum(
-        old_prob_var * (TT.log(old_prob_var) - TT.log(new_prob_var)),
+        old_prob_var * (TT.log(old_prob_var + 1e-8) - TT.log(new_prob_var + 1e-8)),
         axis=1
     )
 
