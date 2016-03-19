@@ -29,3 +29,5 @@ private
 lua
 iterate.dat
 .env
+src/
+.settings
