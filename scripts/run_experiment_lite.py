@@ -37,7 +37,7 @@ def concretize(maybe_stub):
                 maybe_stub.__stub_cache = maybe_stub.proxy_class(*args, **kwargs)
             except Exception as e:
                 import traceback; traceback.print_exc()
-                import ipdb; ipdb.set_trace()
+                # import ipdb; ipdb.set_trace()
         return maybe_stub.__stub_cache
     else:
         return maybe_stub

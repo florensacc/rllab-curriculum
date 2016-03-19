@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flask Template Example</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="http://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css" rel="stylesheet" media="screen">
+    <link href="/static/css/dropdowns-enhancement.min.css" rel="stylesheet" media="screen">
+    <style type="text/css">
+        .container {
+            padding-top: 100px;
+        }
+    </style>
+
+</head>
+<body>
+<div class="container">
+    <div class="btn-group">
+        <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">{{ plot_key }}<span
+                class="caret"></span></button>
+        <ul class="dropdown-menu">
+            {% for plottable_key in plottable_keys %}
+                <li>
+                    <input type="radio" id="plot_key_{{ loop.index0 }}" name="plot_key"
+                           value="{{ loop.index0 }}"
+                            {% if plottable_key == plot_key %}
+                           checked
+                            {% endif %}
+                            />
+                    <label for="plot_key_{{ loop.index0 }}">{{ plottable_key }}</label>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div id="plot_wrapper">
+        {{ plot_div|safe }}
+    </div>
+</div>
+<script src="http://code.jquery.com/jquery-1.10.2.min.js"></script>
+<script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.0/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="/static/js/dropdowns-enhancement.js"></script>
+<script type="text/javascript">
+    var plottableKeys = {{ plottable_keys|tojson|safe }};
+    $(function () {
+        $("input[type=radio][name=plot_key]").change(function () {
+            var newKey = plottableKeys[$(this).val()];
+            $.get("/plot_div", {"plot_key": newKey}, function (data) {
+                $("#plot_wrapper").html(data);
+            });
+        });
+    });
+</script>
+
+</body>
+</html>

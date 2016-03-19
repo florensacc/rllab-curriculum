@@ -160,8 +160,8 @@ def master_collect_mean(worker_f, *args, **kwargs):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        import ipdb
-        ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
 
 
 def _worker_set_param_values(params, **tags):
