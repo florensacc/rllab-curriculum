@@ -4,7 +4,7 @@
     <title>Flask Template Example</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="http://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css" rel="stylesheet" media="screen">
-    <link href="/static/css/dropdowns-enhancement.min.css" rel="stylesheet" media="screen">
+    <link href="/static/css/dropdowns-enhancement.css" rel="stylesheet" media="screen">
     <style type="text/css">
         .container {
             padding-top: 100px;
@@ -14,22 +14,45 @@
 </head>
 <body>
 <div class="container">
-    <div class="btn-group">
-        <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">{{ plot_key }}<span
-                class="caret"></span></button>
-        <ul class="dropdown-menu">
-            {% for plottable_key in plottable_keys %}
+    <div class="control-panel">
+        Plot Attribute:
+        <div class="btn-group">
+            <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">{{ plot_key }}<span
+                    class="caret"></span></button>
+            <ul class="dropdown-menu">
+                {% for plottable_key in plottable_keys %}
+                    <li>
+                        <input type="radio" id="plot_key_{{ loop.index0 }}" name="plot_key"
+                               value="{{ loop.index0 }}"
+                                {% if plottable_key == plot_key %}
+                               checked
+                                {% endif %}
+                                />
+                        <label for="plot_key_{{ loop.index0 }}">{{ plottable_key }}</label>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <br/>
+        Split by:
+        <div class="btn-group">
+            <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">(None)<span
+                    class="caret"></span></button>
+            <ul class="dropdown-menu">
                 <li>
-                    <input type="radio" id="plot_key_{{ loop.index0 }}" name="plot_key"
-                           value="{{ loop.index0 }}"
-                            {% if plottable_key == plot_key %}
-                           checked
-                            {% endif %}
-                            />
-                    <label for="plot_key_{{ loop.index0 }}">{{ plottable_key }}</label>
+                    <input type="radio" id="split_key_0" name="split_key"
+                           value="0" checked/>
+                    <label for="split_key_0">(None)</label>
                 </li>
-            {% endfor %}
-        </ul>
+                {% for key in distinct_param_keys %}
+                    <li>
+                        <input type="radio" id="split_key_{{ loop.index }}" name="split_key"
+                               value="{{ loop.index }}" />
+                        <label for="split_key_{{ loop.index }}">{{ key }}</label>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
     </div>
     <div id="plot_wrapper">
         {{ plot_div|safe }}
@@ -38,15 +61,30 @@
 <script src="http://code.jquery.com/jquery-1.10.2.min.js"></script>
 <script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.0/js/bootstrap.min.js"></script>
 <script type="text/javascript" src="/static/js/dropdowns-enhancement.js"></script>
+<script type="text/javascript" src="/static/js/jquery.loadTemplate-1.5.6.js"></script>
+
 <script type="text/javascript">
     var plottableKeys = {{ plottable_keys|tojson|safe }};
-    $(function () {
-        $("input[type=radio][name=plot_key]").change(function () {
-            var newKey = plottableKeys[$(this).val()];
-            $.get("/plot_div", {"plot_key": newKey}, function (data) {
-                $("#plot_wrapper").html(data);
-            });
+    var distinctParamKeys = {{ distinct_param_keys|tojson|safe }};
+    function updatePlot() {
+        var $controlPanel = $(this).closest(".control-panel");
+        var plotIndex = $controlPanel.find("input[name=plot_key]:checked").val();
+        var plotKey = plottableKeys[plotIndex];
+        var splitIndex = $controlPanel.find("input[type=radio][name=split_key]:checked").val();
+        var splitKey;
+        if (splitIndex == 0) {
+            splitKey = null;
+        } else {
+            splitKey = distinctParamKeys[splitIndex - 1];
+        }
+        $.get("/plot_div", {"plot_key": plotKey, "split_key": splitKey}, function (data) {
+
+            $("#plot_wrapper").empty().append(data);
         });
+    }
+    $(function () {
+        $("input[type=radio][name=plot_key]").change(updatePlot);
+        $("input[type=radio][name=split_key]").change(updatePlot);
     });
 </script>
 

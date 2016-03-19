@@ -20,15 +20,11 @@ distinct_params = None
 def send_js(path):
     return flask.send_from_directory('js', path)
 
+
 @app.route('/css/<path:path>')
 def send_css(path):
     return flask.send_from_directory('css', path)
-# exp_data = Nonecached_data = dict()
-#
-#
-# def load_data(exp_folder_path):
-#     if exp_folder_path not in cached_data:
-#         cached_data[exp_folder_path] = core.load_exps_data(exp_folder_path)
+
 
 def make_plot(plot_list):
     data = []
@@ -53,36 +49,66 @@ def make_plot(plot_list):
             y=y,
             name=plt.legend,
             legendgroup=plt.legend,
-            line=dict(color=core.hex_to_rgb(color))
+            line=dict(color=core.hex_to_rgb(color)),
         ))
-    return po.plot(data, output_type='div')
 
-def get_plot_instruction(plot_key, exp_filter):
-    k, vs = exp_filter
+    layout = go.Layout(
+        legend=dict(
+            xanchor="auto",
+            yanchor="bottom",
+        )
+    )
+    fig = go.Figure(data=data, layout=layout)
+    return po.plot(fig, output_type='div')
+
+
+def get_plot_instruction(plot_key, split_key=None, group_key=None):
     selector = core.Selector(exps_data)
-    to_plot = []
-    for v in vs:
-        filtered_data = selector.where(k, v).extract()
-        returns = [exp.progress[plot_key] for exp in filtered_data]
-        sizes = map(len, returns)
-        max_size = max(sizes)
-        # for exp, retlen in zip(filtered_data, sizes):
-        #     if retlen < max_size:
-        #         log("Excluding {exp_name} since the trajectory is shorter: {thislen} vs. {maxlen}".format(
-        #             exp_name=exp.params["exp_name"], thislen=retlen, maxlen=max_size))
-        returns = [ret for ret in returns if len(ret) == max_size]
-        mean_returns = np.mean(returns, axis=0)
-        std_returns = np.std(returns, axis=0)
-        # self._plot_sequence.append((''))
-        to_plot.append(ext.AttrDict(means=mean_returns, stds=std_returns, legend=str(v)))
-    return make_plot(to_plot)
+    if split_key is not None:
+        vs = [vs for k, vs in distinct_params if k == split_key][0]
+        split_selectors = [selector.where(k, v) for v in vs]
+        split_legends = map(str, vs)
+    else:
+        split_selectors = [selector]
+        split_legends = ["Plot"]
+    plots = []
+    for split_selector, split_legend in zip(split_selectors, split_legends):
+        if group_key:
+            vs = [vs for k, vs in distinct_params if k == group_key][0]
+            group_selectors = [split_selector.where(k, v) for v in vs]
+            group_legends = map(str, vs)
+        else:
+            group_selectors = [split_selector]
+            group_legends = [split_legend]
+        to_plot = []
+        for group_selector, group_legend in zip(group_selectors, group_legends):
+            filtered_data = group_selector.extract()
+            if len(filtered_data) > 0:
+                progresses = [exp.progress[plot_key] for exp in filtered_data]
+                sizes = map(len, progresses)
+                max_size = max(sizes)
+                progresses = [ps for ps in progresses if len(ps) == max_size]
+                means = np.mean(progresses, axis=0)
+                stds = np.std(progresses, axis=0)
+                to_plot.append(ext.AttrDict(means=means, stds=stds, legend=group_legend))
+        if len(to_plot) > 0:
+            plots.append(make_plot(to_plot))
+    return "\n".join(plots)
+
 
 @app.route("/plot_div")
 def plot_div():
-    plot_key = flask.request.args.get("plot_key")
-    exp_filter = distinct_params[0]
-    plot_div = get_plot_instruction(plot_key, exp_filter)
+    args = flask.request.args
+    plot_key = args.get("plot_key")
+    split_key = args.get("split_key", None)
+    if len(split_key) == 0:
+        split_key = None
+    group_key = distinct_params[0][0]
+    # print split_key
+    # exp_filter = distinct_params[0]
+    plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, group_key=group_key)
     return plot_div
+
 
 @app.route("/")
 def index():
@@ -90,16 +116,15 @@ def index():
     # _load_data(exp_folder_path)
     # exp_json = json.dumps(exp_data)
     plot_key = "AverageReturn"
-    exp_filter = distinct_params[0]
-
-    plot_div = get_plot_instruction(plot_key, exp_filter)
+    group_key = distinct_params[0][0]
+    plot_div = get_plot_instruction(plot_key=plot_key, split_key=None, group_key=group_key)
     return flask.render_template(
         "main.html",
         plot_div=plot_div,
         plot_key=plot_key,
-        plottable_keys=plottable_keys
-    )#exp_json=exp_json)
-    # return "Hello World!"
+        plottable_keys=plottable_keys,
+        distinct_param_keys=[k for k, v in distinct_params]
+    )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
