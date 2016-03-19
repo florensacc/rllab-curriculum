@@ -288,8 +288,11 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
         aws_config = dict()
     aws_config = merge_dict(default_config, aws_config)
 
+    remote_log_dir = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), params.get("exp_name"))
+
     sio = StringIO()
     sio.write("#!/bin/bash\n")
+    sio.write("rm /home/ubuntu/user_data.log")
     sio.write("{\n")
     sio.write("""
         die() { status=$1; shift; echo "FATAL: $*"; exit $status; }
@@ -298,31 +301,36 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
         EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id`"
     """)
     sio.write("""
-        aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value=%s --region %s
-    """ % (params.get("exp_name"), config.AWS_REGION_NAME))
+        aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={exp_name} --region {aws_region}
+    """.format(exp_name=params.get("exp_name"), aws_region=config.AWS_REGION_NAME))
     sio.write("""
         service docker start
     """)
     sio.write("""
-        DOCKER_HOST=\"tcp://localhost:4243\" docker --config /home/ubuntu/.docker pull %s
-    """ % docker_image)
+        DOCKER_HOST=\"tcp://localhost:4243\" docker --config /home/ubuntu/.docker pull {docker_image}
+    """.format(docker_image=docker_image))
     sio.write("""
-        mkdir -p %s
-    """ % log_dir)
+        mkdir -p {log_dir}
+    """.format(log_dir=log_dir))
     sio.write("""
-        DOCKER_HOST=\"tcp://localhost:4243\" %s
-    """ % to_docker_command(params, docker_image, script))
+        while /bin/true; do
+            aws s3 sync --exclude *.pkl --exclude *.log {log_dir} {remote_log_dir} --region {aws_region}
+            sleep 1
+        done &
+    """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
     sio.write("""
-        aws s3 cp --recursive %s %s --region %s
-    """ % (log_dir, osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), params.get("exp_name")),
-           config.AWS_REGION_NAME))
+        DOCKER_HOST=\"tcp://localhost:4243\" {command}
+    """.format(command=to_docker_command(params, docker_image, script)))
     sio.write("""
-        aws s3 cp /home/ubuntu/user_data.log %s/stdout.log --region %s
-    """ % (osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), params.get("exp_name")), config.AWS_REGION_NAME))
+        aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
+    """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
+    sio.write("""
+        aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
+    """.format(remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
     sio.write("""
         EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
-        aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region %s
-    """ % config.AWS_REGION_NAME)
+        aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {aws_region}
+    """.format(aws_region=config.AWS_REGION_NAME))
     sio.write("} >> /home/ubuntu/user_data.log 2>&1\n")
 
     import boto3

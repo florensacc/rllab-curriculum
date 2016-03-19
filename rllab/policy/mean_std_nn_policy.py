@@ -54,10 +54,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             output_nl='None',
             bn=False,
             ):
-        Serializable.__init__(
-            self, mdp=mdp, hidden_sizes=hidden_sizes, std_sizes=std_sizes,
-            initial_std=initial_std, std_trainable=std_trainable,
-            nonlinearity=nonlinearity, output_nl=output_nl, bn=bn)
+        Serializable.quick_init(self, locals())
         # create network
         if isinstance(nonlinearity, str):
             nonlinearity = locate(nonlinearity)

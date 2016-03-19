@@ -1,31 +1,40 @@
 from rllab.misc import autoargs
 import numpy as np
 from rllab.misc.ext import flatten_shape_dim
+from abc import ABCMeta, abstractmethod
 
 
 class MDP(object):
 
+    __metaclass__ = ABCMeta
+
     timestep = 0.05
 
+    @abstractmethod
     def step(self, action):
         raise NotImplementedError
 
+    @abstractmethod
     def reset(self):
         raise NotImplementedError
 
     @property
+    @abstractmethod
     def action_dim(self):
         raise NotImplementedError
 
     @property
+    @abstractmethod
     def observation_shape(self):
         raise NotImplementedError
 
     @property
+    @abstractmethod
     def action_dtype(self):
         raise NotImplementedError
 
     @property
+    @abstractmethod
     def action_bounds(self):
         raise NotImplementedError
 
@@ -34,6 +43,7 @@ class MDP(object):
         return flatten_shape_dim(self.observation_shape)
 
     @property
+    @abstractmethod
     def observation_dtype(self):
         raise NotImplementedError
 
@@ -43,6 +53,7 @@ class MDP(object):
     def stop_viewer(self):
         pass
 
+    @abstractmethod
     def plot(self, states=None, actions=None, pause=False):
         raise NotImplementedError
 
