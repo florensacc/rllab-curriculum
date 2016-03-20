@@ -29,7 +29,7 @@ class MLP(object):
             l_hid,
             num_units=output_dim,
             nonlinearity=output_nl,
-            name="%soutput" % (prefix)
+            name="%soutput" % (prefix,)
         )
         self._l_in = l_in
         self._l_out = l_out

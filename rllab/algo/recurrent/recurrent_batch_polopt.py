@@ -19,9 +19,9 @@ class RecurrentBatchPolopt(BatchPolopt):
     def __init__(self, **kwargs):
         super(RecurrentBatchPolopt, self).__init__(**kwargs)
 
-    def obtain_samples(self, itr, mdp, policy, baseline):
+    def obtain_samples(self, itr, mdp, policy, **kwargs):
         samples_data = super(RecurrentBatchPolopt, self).obtain_samples(
-            itr, mdp, policy, baseline)
+            itr, mdp, policy, **kwargs)
         paths = samples_data["paths"]
 
         max_path_length = max([len(path["advantages"]) for path in paths])
@@ -30,7 +30,7 @@ class RecurrentBatchPolopt(BatchPolopt):
         obs = [path["observations"] for path in paths]
         obs = [pad_tensor(ob, max_path_length, ob[0]) for ob in obs]
 
-        if self.opt.center_adv:
+        if self.center_adv:
             raw_adv = np.concatenate([path["advantages"] for path in paths])
             adv_mean = np.mean(raw_adv)
             adv_std = np.std(raw_adv) + 1e-8

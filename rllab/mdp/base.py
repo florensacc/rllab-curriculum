@@ -1,6 +1,7 @@
 from rllab.misc import autoargs
 import numpy as np
 from rllab.misc.ext import flatten_shape_dim
+from rllab.mdp.mdp_spec import MDPSpec
 from abc import ABCMeta, abstractmethod
 
 
@@ -72,6 +73,15 @@ class MDP(object):
         Log extra information per iteration based on the collected paths
         """
         pass
+
+    @property
+    def spec(self):
+        return MDPSpec(
+            observation_shape=self.observation_shape,
+            observation_dtype=self.observation_dtype,
+            action_dim=self.action_dim,
+            action_dtype=self.action_dtype,
+        )
 
     def print_stats(self):
         print "MDP:\t%s" % self.__class__.__name__

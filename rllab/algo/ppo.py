@@ -1,13 +1,8 @@
-from rllab.misc.tensor_utils import flatten_tensors
-from rllab.misc.ext import merge_dict, compile_function, extract, new_tensor
-from rllab.misc import autoargs
+from rllab.misc import ext
 from rllab.misc.overrides import overrides
 from rllab.algo.batch_polopt import BatchPolopt
 import rllab.misc.logger as logger
-import theano
 import theano.tensor as TT
-from pydoc import locate
-import numpy as np
 from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 
 
@@ -29,7 +24,7 @@ class PPO(BatchPolopt):
 
     @overrides
     def init_opt(self, mdp, policy, baseline):
-        input_var = new_tensor(
+        input_var = ext.new_tensor(
             'input',
             ndim=1+len(mdp.observation_shape),
             dtype=mdp.observation_dtype
@@ -63,7 +58,7 @@ class PPO(BatchPolopt):
 
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
-        all_input_values = tuple(extract(
+        all_input_values = tuple(ext.extract(
             samples_data,
             "observations", "advantages", "pdists", "actions"
         ))
@@ -77,7 +72,7 @@ class PPO(BatchPolopt):
         return dict()
 
     @overrides
-    def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data, opt_info):
+    def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data, opt_info, **kwargs):
         return dict(
             itr=itr,
             policy=policy,

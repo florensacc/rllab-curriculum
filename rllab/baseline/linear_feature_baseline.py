@@ -4,7 +4,7 @@ import numpy as np
 
 class LinearFeatureBaseline(Baseline):
 
-    def __init__(self, mdp):
+    def __init__(self, mdp_spec):
         self.coeffs = None
 
     @overrides

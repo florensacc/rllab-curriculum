@@ -1,7 +1,6 @@
-from rllab.mdp.base import MDP
 from rllab.core.serializable import Serializable
 
-class MDPSpec(MDP, Serializable):
+class MDPSpec(Serializable):
     """
     This is a temporary solution until a better abstraction exists. It provides the necessary information to bootstraps
     a policy / baseline etc.

@@ -24,6 +24,10 @@ mdp = CompoundActionSequenceMDP(
         [0, 0, 0],
         [2, 1, 0],
         [3, 3, 3],
+        # [0],
+        # [1],
+        # [2],
+        # [3],
     ]
 )
 algo = PPO(
@@ -38,11 +42,11 @@ algo = PPO(
     )
 )
 policy = CategoricalMLPPolicy(
-    mdp=mdp,
+    mdp_spec=mdp.spec,
     hidden_sizes=(32,),
 )
 baseline = LinearFeatureBaseline(
-    mdp=mdp
+    mdp_spec=mdp.spec
 )
 run_experiment_lite(
     algo.train(mdp=mdp, policy=policy, baseline=baseline),
