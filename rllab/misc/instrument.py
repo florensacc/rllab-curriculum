@@ -1,9 +1,12 @@
+import os
 import re
 import subprocess
 import base64
 import os.path as osp
 import cPickle as pickle
 from contextlib import contextmanager
+
+import errno
 
 from rllab.core.serializable import Serializable
 from rllab import config
@@ -202,9 +205,10 @@ def run_experiment_lite(
         pod_str = json.dumps(pod_dict, indent=1)
         if dry:
             print(pod_str)
-        fname = "{pod_dir}/{exp_prefix}/{exp_name}.json".format(
-            pod_dir=config.POD_DIR,
-            exp_prefix=exp_prefix,
+        dir = "{pod_dir}/{exp_prefix}".format(pod_dir=config.POD_DIR, exp_prefix=exp_prefix)
+        ensure_dir(dir)
+        fname = "dir/{exp_name}.json".format(
+            dir=dir,
             exp_name=exp_name
         )
         with open(fname, "w") as fh:
@@ -224,6 +228,15 @@ def run_experiment_lite(
 
 _find_unsafe = re.compile(r'[a-zA-Z0-9_^@%+=:,./-]').search
 
+def ensure_dir(dirname):
+    """
+    Ensure that a named directory exists; if it does not, attempt to create it.
+    """
+    try:
+        os.makedirs(dirname)
+    except OSError, e:
+        if e.errno != errno.EEXIST:
+            raise
 
 def _shellquote(s):
     """Return a shell-escaped version of the string *s*."""
@@ -518,12 +531,11 @@ def s3_sync_code(config, dry=False):
     )
     full_path = "%s/%s" % (base, code_path)
     cmds = ["aws", "s3", "sync"] + \
-            flatten(["--exclude", "\"%s\"" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+            flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
             [".", full_path]
+    print cmds
     if not dry:
         subprocess.check_call(cmds)
-    else:
-        print cmds
     return full_path
 
 def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_experiment.py'):

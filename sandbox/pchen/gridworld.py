@@ -44,5 +44,5 @@ run_experiment_lite(
     snapshot_mode="last",
     seed=1,
     mode="lab_kube",
-    dry=True,
+    dry=False,
 )
