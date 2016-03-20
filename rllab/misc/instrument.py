@@ -3,6 +3,8 @@ import subprocess
 import base64
 import os.path as osp
 import cPickle as pickle
+from contextlib import contextmanager
+
 from rllab.core.serializable import Serializable
 from rllab import config
 from rllab.misc.console import mkdir_p
@@ -12,9 +14,10 @@ import datetime
 import dateutil.tz
 import json
 
+from rllab.viskit.core import flatten
+
 
 class StubAttr(object):
-
     def __init__(self, obj, attr_name):
         self._obj = obj
         self._attr_name = attr_name
@@ -32,7 +35,6 @@ class StubAttr(object):
 
 
 class StubMethodCall(Serializable):
-
     def __init__(self, obj, method_name, args, kwargs):
         Serializable.quick_init(self, locals())
         self.obj = obj
@@ -42,7 +44,6 @@ class StubMethodCall(Serializable):
 
 
 class StubClass(object):
-
     def __init__(self, proxy_class):
         self.proxy_class = proxy_class
 
@@ -50,7 +51,6 @@ class StubClass(object):
         if len(args) > 0:
             raise NotImplementedError
         return StubObject(self.proxy_class, *args, **kwargs)
-
 
     def __getstate__(self):
         return dict(proxy_class=self.proxy_class)
@@ -65,7 +65,6 @@ class StubClass(object):
 
 
 class StubObject(object):
-
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
             raise NotImplementedError
@@ -87,16 +86,15 @@ class StubObject(object):
         raise AttributeError
 
 
-
 def stub(glbs):
     # replace the __init__ method in all classes
     # hacky!!!
     for k, v in glbs.items():
         if isinstance(v, type) and v != StubClass:
             glbs[k] = StubClass(v)
-            #mkstub = (lambda v_local: lambda *args, **kwargs: StubClass(v_local, *args, **kwargs))(v)
-            #glbs[k].__new__ = types.MethodType(mkstub, glbs[k])
-            #glbs[k].__init__ = types.MethodType(lambda *args: None, glbs[k])
+            # mkstub = (lambda v_local: lambda *args, **kwargs: StubClass(v_local, *args, **kwargs))(v)
+            # glbs[k].__new__ = types.MethodType(mkstub, glbs[k])
+            # glbs[k].__init__ = types.MethodType(lambda *args: None, glbs[k])
 
 
 # def run_experiment(params, script='scripts/run_experiment.py'):
@@ -160,7 +158,7 @@ def run_experiment_lite(
         if dry:
             return
         try:
-             subprocess.call(command, shell=True)
+            subprocess.call(command, shell=True)
         except Exception as e:
             if isinstance(e, KeyboardInterrupt):
                 raise
@@ -168,7 +166,8 @@ def run_experiment_lite(
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
-        launch_ec2(params, exp_prefix=exp_prefix, docker_image=docker_image, script=script, aws_config=aws_config, dry=dry)
+        launch_ec2(params, exp_prefix=exp_prefix, docker_image=docker_image, script=script,
+                   aws_config=aws_config, dry=dry)
     elif mode == "openai_kube":
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
@@ -195,11 +194,11 @@ def run_experiment_lite(
                 raise
     elif mode == "lab_kube":
         # first send code folder to s3
-        s3_code_path = s3_sync_code(config)
+        s3_code_path = s3_sync_code(config, dry=dry)
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
-        pod_dict = to_openai_kube_pod(params, docker_image=docker_image, script=script)
+        pod_dict = to_lab_kube_pod(params, code_full_path=s3_code_path, docker_image=docker_image, script=script)
         pod_str = json.dumps(pod_dict, indent=1)
         if dry:
             print(pod_str)
@@ -279,7 +278,8 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     # create volume for logging directory
     command_prefix = "docker run"
     docker_log_dir = config.DOCKER_LOG_DIR
-    command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir, docker_log_dir=docker_log_dir)
+    command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
+                                                                    docker_log_dir=docker_log_dir)
     params = merge_dict(params, dict(log_dir=docker_log_dir))
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
@@ -297,7 +297,8 @@ def dedent(s):
     return '\n'.join(lines)
 
 
-def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.py', aws_config=None, dry=False):
+def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.py',
+               aws_config=None, dry=False):
     log_dir = params.get("log_dir")
 
     default_config = dict(
@@ -314,7 +315,8 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
         aws_config = dict()
     aws_config = merge_dict(default_config, aws_config)
 
-    remote_log_dir = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), params.get("exp_name"))
+    remote_log_dir = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
+                              params.get("exp_name"))
 
     sio = StringIO()
     sio.write("#!/bin/bash\n")
@@ -424,6 +426,7 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
             **instance_args
         )
 
+
 def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py'):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
@@ -445,8 +448,10 @@ def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py')
     # copy the file to s3 after execution
     post_commands = list()
     post_commands.append('aws s3 cp --recursive %s %s' %
-                         (config.DOCKER_LOG_DIR, osp.join(config.AWS_S3_PATH, params.get("exp_name"))))
-    command = to_docker_command(params, docker_image=docker_image, script=script, pre_commands=pre_commands,
+                         (config.DOCKER_LOG_DIR,
+                          osp.join(config.AWS_S3_PATH, params.get("exp_name"))))
+    command = to_docker_command(params, docker_image=docker_image, script=script,
+                                pre_commands=pre_commands,
                                 post_commands=post_commands)
     pod_name = config.KUBE_PREFIX + params["exp_name"]
     # underscore is not allowed in pod names
@@ -495,7 +500,89 @@ def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py')
     }
 
 
-def s3_sync_code(config):
+def s3_sync_code(config, dry=False):
     base = config.AWS_CODE_SYNC_S3_PATH
+    has_git = True
+    try:
+        current_commit = subprocess.check_output(["git", "rev-parse", "HEAD"])
+        clean_state = len(
+            subprocess.check_output(["git", "status", "--porcelain"])) == 0
+    except subprocess.CalledProcessError as _:
+        print "Warning: failed to execute git commands"
+        has_git = False
+    dir_hash = base64.b64encode(subprocess.check_output(["pwd"]))
+    code_path = "%s_%s" % (
+        dir_hash,
+        (current_commit if clean_state else "%s_dirty_%s" % (current_commit, timestamp)) if
+            has_git else timestamp
+    )
+    full_path = "%s/%s" % (base, code_path)
+    cmds = ["aws", "s3", "sync"] + \
+            flatten(["--exclude", "\"%s\"" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+            [".", full_path]
+    if not dry:
+        subprocess.check_call(cmds)
+    else:
+        print cmds
+    return full_path
 
-
+def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_experiment.py'):
+    """
+    :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
+    docker volume mapping to make sure that the logging files are created at the correct locations
+    :param docker_image: docker image to run the command on
+    :param script: script command for running experiment
+    :return:
+    """
+    log_dir = params.get("log_dir")
+    mkdir_p(log_dir)
+    pre_commands = list()
+    pre_commands.append('mkdir -p ~/.aws')
+    # fetch credentials from the kubernetes secret file
+    pre_commands.append('echo "[default]" >> ~/.aws/credentials')
+    pre_commands.append(
+        "echo \"aws_access_key_id = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_KEY)
+    pre_commands.append(
+        "echo \"aws_secret_access_key = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_SECRET)
+    pre_commands.append('aws s3 cp --recursive %s %s' %
+                         (code_full_path, config.DOCKER_CODE_DIR))
+    # copy the file to s3 after execution
+    post_commands = list()
+    post_commands.append('aws s3 cp --recursive %s %s' %
+                         (config.DOCKER_LOG_DIR,
+                          osp.join(config.AWS_S3_PATH, params.get("exp_name"))))
+    command = to_docker_command(params, docker_image=docker_image, script=script,
+                                pre_commands=pre_commands,
+                                post_commands=post_commands)
+    pod_name = config.KUBE_PREFIX + params["exp_name"]
+    # underscore is not allowed in pod names
+    pod_name = pod_name.replace("_", "-")
+    return {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {
+            "name": pod_name,
+            "labels": {
+                "expt": pod_name,
+            },
+        },
+        "spec": {
+            "containers": [
+                {
+                    "name": "foo",
+                    "image": docker_image,
+                    "command": ["/bin/bash", "-c", command],
+                    "resources": {
+                        "limits": {
+                            "cpu": "4"
+                        },
+                    },
+                    "imagePullPolicy": "Always",
+                }
+            ],
+            "restartPolicy": "Never",
+            "nodeSelector": {
+                "aws/type": "m4.xlarge",
+            }
+        }
+    }

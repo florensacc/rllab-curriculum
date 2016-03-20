@@ -43,5 +43,6 @@ run_experiment_lite(
     n_parallel=1,
     snapshot_mode="last",
     seed=1,
-    mode="local",
+    mode="lab_kube",
+    dry=True,
 )
