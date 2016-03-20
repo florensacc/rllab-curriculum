@@ -127,7 +127,7 @@ def run_experiment_lite(
     :param stub_method_call: A stubbed method call.
     :param script: The name of the entrance point python script
     :param mode: Where & how to run the experiment. Should be one of "local", "local_docker", "ec2",
-    and "openai_kube" (must have OpenAI VPN set up).
+    "lab_kube" and "openai_kube" (must have OpenAI VPN set up).
     :param dry: Whether to do a dry-run, which only prints the commands without executing them.
     :param exp_prefix: Name prefix for the experiments
     :param docker_image: name of the docker image. Ignored if using local mode.
@@ -170,6 +170,32 @@ def run_experiment_lite(
         params = dict(kwargs.items() + [("args_data", data)])
         launch_ec2(params, exp_prefix=exp_prefix, docker_image=docker_image, script=script, aws_config=aws_config, dry=dry)
     elif mode == "openai_kube":
+        if docker_image is None:
+            docker_image = config.DOCKER_IMAGE
+        params = dict(kwargs.items() + [("args_data", data)])
+        pod_dict = to_openai_kube_pod(params, docker_image=docker_image, script=script)
+        pod_str = json.dumps(pod_dict, indent=1)
+        if dry:
+            print(pod_str)
+        fname = "{pod_dir}/{exp_prefix}/{exp_name}.json".format(
+            pod_dir=config.POD_DIR,
+            exp_prefix=exp_prefix,
+            exp_name=exp_name
+        )
+        with open(fname, "w") as fh:
+            fh.write(pod_str)
+        kubecmd = "kubectl create -f %s" % fname
+        print(kubecmd)
+        if dry:
+            return
+        try:
+            subprocess.call(kubecmd, shell=True)
+        except Exception as e:
+            if isinstance(e, KeyboardInterrupt):
+                raise
+    elif mode == "lab_kube":
+        # first send code folder to s3
+        s3_code_path = s3_sync_code(config)
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
@@ -468,5 +494,8 @@ def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py')
         }
     }
 
+
+def s3_sync_code(config):
+    base = config.AWS_CODE_SYNC_S3_PATH
 
 
