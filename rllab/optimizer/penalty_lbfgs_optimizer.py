@@ -73,10 +73,13 @@ class PenaltyLbfgsOptimizer(Serializable):
             )
         )
 
-    def loss(self, *inputs):
+    def loss(self, inputs):
         return self._opt_fun["f_loss"](*inputs)
 
-    def optimize(self, *inputs):
+    def constraint_val(self, inputs):
+        return self._opt_fun["f_constraint"](*inputs)
+
+    def optimize(self, inputs):
         try_penalty = np.clip(
             self._penalty, self._min_penalty, self._max_penalty)
 

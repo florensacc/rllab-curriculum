@@ -5,6 +5,7 @@ from rllab.mdp.grid_world_mdp import GridWorldMDP
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
 from rllab.algo.ppo import PPO
+from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from rllab.misc.instrument import stub, run_experiment_lite
 
 stub(globals())
@@ -32,7 +33,9 @@ algo = PPO(
     n_itr=100,
     discount=0.99,
     step_size=0.01,
-    max_penalty_itr=5,
+    optimizer=PenaltyLbfgsOptimizer(
+        max_penalty_itr=5,
+    )
 )
 policy = CategoricalMLPPolicy(
     mdp=mdp,
