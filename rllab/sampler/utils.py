@@ -1,5 +1,6 @@
 import numpy as np
 import pyprind
+from rllab.misc import logger
 
 
 def rollout(mdp, policy, max_length=np.inf, animated=False, speedup=1):
@@ -8,7 +9,7 @@ def rollout(mdp, policy, max_length=np.inf, animated=False, speedup=1):
     rewards = []
     pdists = []
     o = mdp.reset()
-    policy.episode_reset()
+    policy.reset()
     path_length = 0
     while path_length < max_length:
         a, pdist = policy.get_action(o)
@@ -40,14 +41,19 @@ class ProgBarCounter(object):
         self.max_progress = 1000000
         self.cur_progress = 0
         self.cur_count = 0
-        self.pbar = pyprind.ProgBar(self.max_progress)
+        if not logger.get_log_tabular_only():
+            self.pbar = pyprind.ProgBar(self.max_progress)
+        else:
+            self.pbar = None
 
     def inc(self, increment):
-        self.cur_count += increment
-        new_progress = self.cur_count * self.max_progress / self.total_count
-        if new_progress < self.max_progress:
-            self.pbar.update(new_progress - self.cur_progress)
-        self.cur_progress = new_progress
+        if not logger.get_log_tabular_only():
+            self.cur_count += increment
+            new_progress = self.cur_count * self.max_progress / self.total_count
+            if new_progress < self.max_progress:
+                self.pbar.update(new_progress - self.cur_progress)
+            self.cur_progress = new_progress
 
     def stop(self):
-        self.pbar.stop()
+        if not logger.get_log_tabular_only():
+            self.pbar.stop()

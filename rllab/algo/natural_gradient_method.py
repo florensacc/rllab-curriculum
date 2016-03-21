@@ -8,11 +8,7 @@ from numpy.linalg import LinAlgError
 
 from rllab.misc import logger, autoargs
 from rllab.misc.krylov import cg
-from rllab.misc.overrides import overrides
-from rllab.misc.ext import extract, compile_function, flatten_hessian, new_tensor, new_tensor_like, \
-    flatten_tensor_variables, lazydict, cached_function
-from rllab.algo.batch_polopt import BatchPolopt
-from rllab.algo.first_order_method import FirstOrderMethod
+from rllab.misc import ext
 
 
 class NaturalGradientMethod(object):
@@ -62,22 +58,46 @@ class NaturalGradientMethod(object):
         self.subsample_factor = subsample_factor
 
     def init_opt(self, mdp, policy, baseline):
-        obs_var = new_tensor(
-            'input',
-            ndim=1+len(mdp.observation_shape),
+        is_recurrent = int(policy.is_recurrent)
+        obs_var = ext.new_tensor(
+            'obs',
+            ndim=1+len(mdp.observation_shape)+is_recurrent,
             dtype=mdp.observation_dtype
         )
-        advantage_var = TT.vector('advantage')
-        action_var = TT.matrix('action', dtype=mdp.action_dtype)
+        advantage_var = ext.new_tensor(
+            'advantage',
+            ndim=1+is_recurrent,
+            dtype=theano.config.floatX
+        )
+        action_var = ext.new_tensor(
+            'action',
+            ndim=2+is_recurrent,
+            dtype=mdp.action_dtype
+        )
 
         # log_prob = policy.get_log_prob_sym(obs_var, action_var)
-        old_pdist_var = TT.matrix('old_pdist')
-        pdist_var = policy.get_pdist_sym(obs_var)
-        mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
+        old_pdist_var = ext.new_tensor(
+            'old_pdist',
+            ndim=2+is_recurrent,
+            dtype=theano.config.floatX
+        )
+
+        if is_recurrent:
+            valid_var = TT.matrix('valid')
+        else:
+            valid_var = None
+        pdist_var = policy.get_pdist_sym(obs_var, action_var)
+        if is_recurrent:
+            mean_kl = TT.sum(policy.kl(old_pdist_var, pdist_var) * valid_var) / TT.sum(valid_var)
+        else:
+            mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
         lr = policy.likelihood_ratio(old_pdist_var, pdist_var, action_var)
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
-        surr_obj = - TT.mean(lr * advantage_var)
+        if is_recurrent:
+            surr_obj = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
+        else:
+            surr_obj = - TT.mean(lr * advantage_var)
         # We would need to calculate the empirical fisher information matrix
         # This can be done as follows (though probably not the most efficient
         # way):
@@ -86,12 +106,12 @@ class NaturalGradientMethod(object):
         # we can get I(theta) by calculating the hessian of
         # KL(p(theta)||p(theta'))
         grads = theano.grad(surr_obj, wrt=policy.get_params(trainable=True))
-        flat_grad = flatten_tensor_variables(grads)
+        flat_grad = ext.flatten_tensor_variables(grads)
 
         kl_grads = theano.grad(mean_kl, wrt=policy.get_params(trainable=True))
         # kl_flat_grad = flatten_tensor_variables(kl_grads)
         xs = [
-            new_tensor_like("%s x" % p.name, p)
+            ext.new_tensor_like("%s x" % p.name, p)
             for p in policy.get_params(trainable=True)
             ]
         # many Ops don't have Rop implemented so this is not that useful
@@ -103,11 +123,13 @@ class NaturalGradientMethod(object):
         Hx_plain = TT.concatenate([s.flatten() for s in Hx_plain_splits])
 
         input_list = [obs_var, advantage_var, old_pdist_var, action_var]
-        f_loss = compile_function(
+        if is_recurrent:
+            input_list.append(valid_var)
+        f_loss = ext.compile_function(
             inputs=input_list,
             outputs=surr_obj,
         )
-        f_grad = compile_function(
+        f_grad = ext.compile_function(
             inputs=input_list,
             outputs=[surr_obj, flat_grad],
         )
@@ -115,25 +137,25 @@ class NaturalGradientMethod(object):
         # follwoing information is computed to TRPO
         max_kl = TT.max(policy.kl(old_pdist_var, pdist_var))
 
-        return lazydict(
+        return ext.lazydict(
             f_loss=lambda: f_loss,
             f_grad=lambda: f_grad,
             f_fisher=lambda:
-            compile_function(
+            ext.compile_function(
                 inputs=input_list,
                 outputs=[
                     surr_obj,
                     flat_grad,
-                    flatten_hessian(mean_kl, wrt=policy.get_params(trainable=True), block_diagonal=False)
+                    ext.flatten_hessian(mean_kl, wrt=policy.get_params(trainable=True), block_diagonal=False)
                 ],
             ),
             f_Hx_plain=lambda:
-            compile_function(
+            ext.compile_function(
                 inputs=input_list + xs,
                 outputs=Hx_plain,
             ),
             f_trpo_info=lambda:
-            compile_function(
+            ext.compile_function(
                 inputs=input_list,
                 outputs=[surr_obj, mean_kl, max_kl]
             ),
@@ -142,10 +164,12 @@ class NaturalGradientMethod(object):
     @contextmanager
     def optimization_setup(self, itr, policy, samples_data, opt_info):
         logger.log("optimizing policy")
-        inputs = list(extract(
+        inputs = list(ext.extract(
             samples_data,
             "observations", "advantages", "pdists", "actions"
         ))
+        if policy.is_recurrent:
+            inputs.append(samples_data["valids"])
         if self.subsample_factor < 1:
             n_samples = len(inputs[0])
             inds = np.random.choice(

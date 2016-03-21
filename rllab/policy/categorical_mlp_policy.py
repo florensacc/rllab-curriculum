@@ -17,7 +17,7 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             self,
             mdp_spec,
             hidden_sizes=(32, 32),
-            nonlinearity='lasagne.nonlinearities.rectify'):
+            nonlinearity=NL.rectify):
         """
         :param mdp_spec: A spec for the mdp.
         :param hidden_sizes: list of sizes for the fully connected hidden layers
@@ -31,18 +31,18 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             output_dim=mdp_spec.action_dim,
             hidden_sizes=hidden_sizes,
             nonlinearity=nonlinearity,
-            output_nl=NL.softmax,
+            output_nonlinearity=NL.softmax,
         )
 
-        self._l_prob = prob_network.l_out
-        self._l_obs = prob_network.l_in
-        self._f_prob = compile_function([prob_network.input_var], L.get_output(prob_network.l_out))
+        self._l_prob = prob_network.output_layer
+        self._l_obs = prob_network.input_layer
+        self._f_prob = compile_function([prob_network.input_layer.input_var], L.get_output(prob_network.output_layer))
 
         super(CategoricalMLPPolicy, self).__init__(mdp_spec)
-        LasagnePowered.__init__(self, [prob_network.l_out])
+        LasagnePowered.__init__(self, [prob_network.output_layer])
 
     @overrides
-    def get_pdist_sym(self, obs_var):
+    def get_pdist_sym(self, obs_var, action_var):
         return L.get_output(self._l_prob, {self._l_obs: obs_var})
 
     @overrides

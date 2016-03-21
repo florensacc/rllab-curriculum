@@ -5,7 +5,7 @@ from rllab.misc.overrides import overrides
 
 class ZeroBaseline(Baseline):
 
-    def __init__(self, mdp):
+    def __init__(self, mdp_spec):
         pass
 
     @overrides

@@ -121,6 +121,7 @@ def run_experiment_lite(
         dry=False,
         docker_image=None,
         aws_config=None,
+        env=None,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -131,6 +132,8 @@ def run_experiment_lite(
     :param dry: Whether to do a dry-run, which only prints the commands without executing them.
     :param exp_prefix: Name prefix for the experiments
     :param docker_image: name of the docker image. Ignored if using local mode.
+    :param aws_config: configuration for AWS. Only used under EC2 mode
+    :param env: extra environment variables
     :param kwargs: All other parameters will be passed directly to the entrance python script.
     """
     data = base64.b64encode(pickle.dumps(stub_method_call))
@@ -147,7 +150,7 @@ def run_experiment_lite(
         if dry:
             return
         try:
-            subprocess.call(command, shell=True)
+            subprocess.call(command, shell=True, env=env)
         except Exception as e:
             if isinstance(e, KeyboardInterrupt):
                 raise

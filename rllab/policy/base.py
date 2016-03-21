@@ -7,11 +7,8 @@ import theano.tensor as TT
 
 class Policy(Parameterized):
 
-    def __init__(self, mdp):
-        self._observation_shape = mdp.observation_shape
-        self._observation_dtype = mdp.observation_dtype
-        self._action_dim = mdp.action_dim
-        self._action_dtype = mdp.action_dtype
+    def __init__(self, mdp_spec):
+        self._mdp_spec = mdp_spec
 
     # Should be implemented by all policies
 
@@ -24,19 +21,27 @@ class Policy(Parameterized):
 
     @property
     def observation_shape(self):
-        return self._observation_shape
+        return self._mdp_spec.observation_shape
+
+    @property
+    def observation_dim(self):
+        return self._mdp_spec.observation_dim
 
     @property
     def observation_dtype(self):
-        return self._observation_dtype
+        return self._mdp_spec.observation_dtype
 
     @property
     def action_dim(self):
-        return self._action_dim
+        return self._mdp_spec.action_dim
 
     @property
     def action_dtype(self):
-        return self._action_dtype
+        return self._mdp_spec.action_dtype
+
+    @property
+    def is_recurrent(self):
+        return False
 
     @classmethod
     @autoargs.add_args
@@ -48,7 +53,7 @@ class Policy(Parameterized):
     def new_from_args(cls, args, mdp):
         pass
 
-    def episode_reset(self):
+    def reset(self):
         # This is a dummy method that allows for
         # random initializations before each episode.
         # A potential usage is for mixture policies, where one
@@ -78,18 +83,17 @@ class StochasticPolicy(Policy):
         super(StochasticPolicy, self).__init__(mdp)
         self._f_log_prob = None
 
-    def kl(self, old_pdist_var, new_pdist_var, train=False):
+    def kl(self, old_pdist_var, new_pdist_var):
         raise NotImplementedError
 
-    def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var,
-                         train=False):
+    def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var):
         raise NotImplementedError
 
     def compute_entropy(self, pdist):
         raise NotImplementedError
 
     # Only needed for vanilla policy gradient & guided policy search
-    def get_log_prob(self, observations, actions, train=False):
+    def get_log_prob(self, observations, actions):
         if self._f_log_prob is None:
             input_var = new_tensor(
                 'input',
@@ -105,10 +109,10 @@ class StochasticPolicy(Policy):
             )
         return self._f_log_prob(observations, actions)
 
-    def get_log_prob_sym(self, input_var, action_var, train=False):
+    def get_log_prob_sym(self, obs_var, action_var):
         raise NotImplementedError
 
-    def get_pdist_sym(self, input_var, train=False):
+    def get_pdist_sym(self, obs_var, action_var):
         raise NotImplementedError
 
     @property

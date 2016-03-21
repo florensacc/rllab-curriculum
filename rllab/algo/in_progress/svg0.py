@@ -124,7 +124,7 @@ class SVG0(RLAlgorithm):
                     # last state and observation will be ignored and not added
                     # to the replay pool
                     state, observation = mdp.reset()
-                    policy.episode_reset()
+                    policy.reset()
                 action, pdist = policy.get_action(observation)
 
                 next_state, next_observation, reward, terminal = \

@@ -57,7 +57,9 @@ class PenaltyLbfgsOptimizer(Serializable):
         self._constraint_name = constraint_name
 
         def get_opt_output():
-            flat_grad = flatten_tensor_variables(theano.grad(penalized_loss, target.get_params(trainable=True)))
+            flat_grad = flatten_tensor_variables(theano.grad(
+                penalized_loss, target.get_params(trainable=True), disconnected_inputs='ignore'
+            ))
             return [penalized_loss.astype('float64'), flat_grad.astype('float64')]
 
         self._opt_fun = lazydict(

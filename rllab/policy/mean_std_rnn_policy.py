@@ -171,7 +171,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self._l_prev_action = l_prev_action
         self._cur_hid = None
         self._cur_cell = None
-        self.episode_reset()
+        self.reset()
 
         LasagnePowered.__init__(self, [l_mean, l_log_std])
         Serializable.quick_init(self, locals())
@@ -226,7 +226,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         return TT.exp(TT.sum(logli_new - logli_old, axis=-1))
 
     @overrides
-    def episode_reset(self):
+    def reset(self):
         self._cur_hid = np.zeros((1, self._n_hidden))
         self._cur_cell = np.zeros((1, self._n_hidden))
         self._prev_action = np.zeros((self.action_dim,))
@@ -269,3 +269,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         pdists = np.vstack([path["pdists"] for path in paths])
         means, log_stds = self._split_pdist(pdists)
         logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
+
+    @property
+    def is_recurrent(self):
+        return True

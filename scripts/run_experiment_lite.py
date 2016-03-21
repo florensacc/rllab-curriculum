@@ -54,20 +54,6 @@ def run_experiment(argv):
 
     default_exp_name = 'experiment_%s_%s' % (timestamp, rand_id)
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--normalize_mdp', type=ast.literal_eval,
-    #                     default=True,
-    #                     help="Whether to normalize the mdp's actions to take "
-    #                          "value between -1 and 1")
-    # parser.add_argument('--random_mdp', type=ast.literal_eval,
-    #                     default=False,
-    #                     help="Whether to reinit the mdp from random physical "
-    #                          "model every episode")
-    # parser.add_argument('--action_delay', type=int,
-    #                     default=0,
-    #                     help="Time steps delayed injected into MDP")
-    # parser.add_argument('--obs_noise', type=float,
-    #                     default=0,
-    #                     help="Guassian noise added to obs")
     parser.add_argument('--n_parallel', type=int, default=1,
                         help='Number of parallel workers to perform rollouts.')
     parser.add_argument('--exp_name', type=str, default=default_exp_name, help='Name of the experiment.')
@@ -86,6 +72,8 @@ def run_experiment(argv):
                         help='Name of the parameter log file (in json).')
     parser.add_argument('--plot', type=ast.literal_eval, default=False,
                         help='Whether to plot the iteration results')
+    parser.add_argument('--log_tabular_only', type=ast.literal_eval, default=False,
+                        help='Whether to only print the tabular log information (in a horizontal format)')
     parser.add_argument('--seed', type=int,
                         help='Random seed for numpy')
     parser.add_argument('--args_data', type=str,
@@ -118,6 +106,7 @@ def run_experiment(argv):
     prev_mode = logger.get_snapshot_mode()
     logger.set_snapshot_dir(log_dir)
     logger.set_snapshot_mode(args.snapshot_mode)
+    logger.set_log_tabular_only(args.log_tabular_only)
     logger.push_prefix("[%s] " % args.exp_name)
 
     maybe_iter = concretize(data)

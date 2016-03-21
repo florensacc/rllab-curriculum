@@ -1,4 +1,5 @@
 from rllab.core.serializable import Serializable
+from rllab.misc import ext
 
 class MDPSpec(Serializable):
     """
@@ -21,6 +22,10 @@ class MDPSpec(Serializable):
     @property
     def observation_shape(self):
         return self._observation_shape
+
+    @property
+    def observation_dim(self):
+        return ext.flatten_shape_dim(self._observation_shape)
 
     @property
     def observation_dtype(self):

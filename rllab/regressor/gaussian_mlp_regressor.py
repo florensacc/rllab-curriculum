@@ -75,10 +75,10 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             output_dim=output_dim,
             hidden_sizes=hidden_sizes,
             nonlinearity=nonlinearity,
-            output_nl=None,
+            output_nonlinearity=None,
         )
 
-        l_mean = mean_network.l_out
+        l_mean = mean_network.output_layer
 
         if adaptive_std:
             if std_hidden_sizes is None:
@@ -87,15 +87,15 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
                 std_nonlinearity = nonlinearity
             l_log_std = MLP(
                 input_shape=input_shape,
-                input_var=mean_network.l_in.input_var,
+                input_var=mean_network.input_layer.input_var,
                 output_dim=output_dim,
                 hidden_sizes=std_hidden_sizes,
                 nonlinearity=std_nonlinearity,
-                output_nl=None,
-            ).l_out
+                output_nonlinearity=None,
+            ).output_layer
         else:
             l_log_std = ParamLayer(
-                mean_network.l_in,
+                mean_network.input_layer,
                 num_units=output_dim,
                 param=lasagne.init.Constant(np.log(init_std)),
                 name="output_log_std",
@@ -133,8 +133,8 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         normalized_xs_var = (xs_var - x_mean_var) / x_std_var
         normalized_ys_var = (ys_var - y_mean_var) / y_std_var
 
-        normalized_means_var = L.get_output(l_mean, {mean_network.l_in: normalized_xs_var})
-        normalized_log_stds_var = L.get_output(l_log_std, {mean_network.l_in: normalized_xs_var})
+        normalized_means_var = L.get_output(l_mean, {mean_network.input_layer: normalized_xs_var})
+        normalized_log_stds_var = L.get_output(l_log_std, {mean_network.input_layer: normalized_xs_var})
 
         means_var = normalized_means_var * y_std_var + y_mean_var
         log_stds_var = normalized_log_stds_var + TT.log(y_std_var)

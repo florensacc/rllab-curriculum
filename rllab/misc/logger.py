@@ -30,6 +30,9 @@ _tabular_header_written = set()
 _snapshot_dir = None
 _snapshot_mode = 'all'
 
+_log_tabular_only = False
+_header_printed = False
+
 
 def _add_output(file_name, arr, fds, mode='a'):
     if file_name not in arr:
@@ -86,6 +89,15 @@ def set_snapshot_mode(mode):
     _snapshot_mode = mode
 
 
+def set_log_tabular_only(log_tabular_only):
+    global _log_tabular_only
+    _log_tabular_only = log_tabular_only
+
+
+def get_log_tabular_only():
+    return _log_tabular_only
+
+
 def log(s, with_prefix=True, with_timestamp=True):
     out = s
     if with_prefix:
@@ -94,12 +106,13 @@ def log(s, with_prefix=True, with_timestamp=True):
         now = datetime.datetime.now(dateutil.tz.tzlocal())
         timestamp = now.strftime('%Y-%m-%d %H:%M:%S.%f %Z')
         out = "%s | %s" % (timestamp, out)
-    # Also log to stdout
-    print(out)
-    for fd in _text_fds.values():
-        fd.write(out + '\n')
-        fd.flush()
-    sys.stdout.flush()
+    if not _log_tabular_only:
+        # Also log to stdout
+        print(out)
+        for fd in _text_fds.values():
+            fd.write(out + '\n')
+            fd.flush()
+        sys.stdout.flush()
 
 
 def record_tabular(key, val):
@@ -132,10 +145,37 @@ def tabular_prefix(key):
     pop_tabular_prefix()
 
 
+class TerminalTablePrinter(object):
+
+    def __init__(self):
+        self.headers = None
+        self.tabulars = []
+
+    def print_tabular(self, new_tabular):
+        if self.headers is None:
+            self.headers = [x[0] for x in new_tabular]
+        else:
+            assert len(self.headers) == len(new_tabular)
+        self.tabulars.append([x[1] for x in new_tabular])
+        self.refresh()
+
+    def refresh(self):
+        import os
+        rows, columns = os.popen('stty size', 'r').read().split()
+        tabulars = self.tabulars[-(int(rows)-3):]
+        sys.stdout.write("\x1b[2J\x1b[H")
+        sys.stdout.write(tabulate(tabulars, self.headers))
+
+table_printer = TerminalTablePrinter()
+
+
 def dump_tabular(*args, **kwargs):
     if len(_tabular) > 0:
-        for line in tabulate(_tabular).split('\n'):
-            log(line, *args, **kwargs)
+        if _log_tabular_only:
+            table_printer.print_tabular(_tabular)
+        else:
+            for line in tabulate(_tabular).split('\n'):
+                log(line, *args, **kwargs)
         tabular_dict = dict(_tabular)
         # Also write to the csv files
         # This assumes that the keys in each iteration won't change!

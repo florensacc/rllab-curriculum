@@ -231,8 +231,8 @@ class DPG(RLAlgorithm):
                     # last state and observation will be ignored and not added
                     # to the replay pool
                     state, observation = mdp.reset()
-                    es.episode_reset()
-                    policy.episode_reset()
+                    es.reset()
+                    policy.reset()
                     self.es_path_returns.append(path_return)
                     path_length = 0
                     path_return = 0

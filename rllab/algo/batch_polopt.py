@@ -2,8 +2,9 @@ import numpy as np
 from rllab.algo.base import RLAlgorithm
 from rllab.sampler import parallel_sampler
 from rllab.misc import autoargs
-from rllab.misc.special import explained_variance_1d, discount_cumsum
-from rllab.algo.util import center_advantages, shift_advantages_to_positive
+from rllab.misc import special #import explained_variance_1d, discount_cumsum
+from rllab.misc import tensor_utils #import explained_variance_1d, discount_cumsum
+from rllab.algo import util# import center_advantages, shift_advantages_to_positive
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 
@@ -14,36 +15,6 @@ class BatchPolopt(RLAlgorithm):
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
     """
 
-    @autoargs.arg("n_itr", type=int,
-                  help="Number of iterations.")
-    @autoargs.arg("start_itr", type=int,
-                  help="Starting iteration.")
-    @autoargs.arg("batch_size", type=int,
-                  help="Number of samples per iteration.")
-    @autoargs.arg("max_path_length", type=int,
-                  help="Maximum length of a single rollout.")
-    @autoargs.arg("whole_paths", type=bool,
-                  help="Make sure that the samples contain whole "
-                       "trajectories, even if the actual batch size is "
-                       "slightly larger than the specified batch_size.")
-    @autoargs.arg("discount", type=float,
-                  help="Discount.")
-    @autoargs.arg("gae_lambda", type=float,
-                  help="Lambda used for generalized advantage estimation.")
-    @autoargs.arg("center_adv", type=bool,
-                  help="Whether to rescale the advantages so that they have "
-                       "mean 0 and standard deviation 1")
-    @autoargs.arg("positive_adv", type=bool,
-                  help="Whether to shift the advantages so that they are "
-                       "always positive. When used in conjunction with "
-                       "center_adv the advantages will be standardized before "
-                       "shifting")
-    @autoargs.arg("store_paths", type=bool,
-                  help="Whether to save all paths data to the snapshot")
-    @autoargs.arg("plot", type=bool,
-                  help="Plot evaluation run after each iteration")
-    @autoargs.arg("pause_for_plot", type=bool,
-                  help="Plot evaluation run after each iteration")
     def __init__(
             self,
             n_itr=500,
@@ -60,6 +31,23 @@ class BatchPolopt(RLAlgorithm):
             store_paths=False,
             **kwargs
     ):
+        """
+        :param n_itr: Number of iterations.
+        :param start_itr: Starting iteration.
+        :param batch_size: Number of samples per iteration.
+        :param max_path_length: Maximum length of a single rollout.
+        :param discount: Discount.
+        :param gae_lambda: Lambda used for generalized advantage estimation.
+        :param plot: Plot evaluation run after each iteration.
+        :param pause_for_plot: Whether to pause before contiuing when plotting.
+        :param whole_paths: Make sure that the samples contain whole trajectories, even if the actual batch size is
+        slightly larger than the specified batch_size.
+        :param center_adv: Whether to rescale the advantages so that they have mean 0 and standard deviation 1.
+        :param positive_adv: Whether to shift the advantages so that they are always positive. When used in
+        conjunction with center_adv the advantages will be standardized before shifting.
+        :param store_paths: Whether to save all paths data to the snapshot.
+        :return:
+        """
         self.n_itr = n_itr
         self.start_itr = start_itr
         self.batch_size = batch_size
@@ -149,9 +137,9 @@ class BatchPolopt(RLAlgorithm):
             deltas = path["rewards"] + \
                 self.discount*path_baselines[1:] - \
                 path_baselines[:-1]
-            path["advantages"] = discount_cumsum(
+            path["advantages"] = special.discount_cumsum(
                 deltas, self.discount*self.gae_lambda)
-            path["returns"] = discount_cumsum(path["rewards"], self.discount)
+            path["returns"] = special.discount_cumsum(path["rewards"], self.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
 
@@ -161,10 +149,10 @@ class BatchPolopt(RLAlgorithm):
         advantages = np.concatenate([path["advantages"] for path in paths])
 
         if self.center_adv:
-            advantages = center_advantages(advantages)
+            advantages = util.center_advantages(advantages)
 
         if self.positive_adv:
-            advantages = shift_advantages_to_positive(advantages)
+            advantages = util.shift_advantages_to_positive(advantages)
 
         average_discounted_return = \
             np.mean([path["returns"][0] for path in paths])
@@ -173,7 +161,7 @@ class BatchPolopt(RLAlgorithm):
 
         ent = policy.compute_entropy(pdists)
 
-        ev = explained_variance_1d(
+        ev = special.explained_variance_1d(
             np.concatenate(baselines),
             np.concatenate(returns)
         )
@@ -183,16 +171,16 @@ class BatchPolopt(RLAlgorithm):
         logger.log("fitted")
 
         logger.record_tabular('Iteration', itr)
+        logger.record_tabular('AverageDiscountedReturn',
+                              average_discounted_return)
+        logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
+        logger.record_tabular('ExplainedVariance', ev)
+        logger.record_tabular('NumTrajs', len(paths))
         logger.record_tabular('Entropy', ent)
         logger.record_tabular('Perplexity', np.exp(ent))
-        logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
         logger.record_tabular('StdReturn', np.std(undiscounted_returns))
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
-        logger.record_tabular('AverageDiscountedReturn',
-                              average_discounted_return)
-        logger.record_tabular('NumTrajs', len(paths))
-        logger.record_tabular('ExplainedVariance', ev)
 
         mdp.log_extra(paths)
         policy.log_extra(paths)
@@ -200,15 +188,55 @@ class BatchPolopt(RLAlgorithm):
 
         # numerical check
         check_param = policy.get_param_values()
-        if np.any(np.isnan(check_param)):
-            raise ArithmeticError("NaN in params")
-        elif np.any(np.isinf(check_param)):
-            raise ArithmeticError("InF in params")
+        # if np.any(np.isnan(check_param)):
+        #     raise ArithmeticError("NaN in params")
+        # elif np.any(np.isinf(check_param)):
+        #     raise ArithmeticError("InF in params")
 
-        return dict(
+        samples_data = dict(
             observations=observations,
             pdists=pdists,
             actions=actions,
             advantages=advantages,
             paths=paths,
         )
+
+        if policy.is_recurrent:
+            return self.recurrent_postprocess_samples(samples_data)
+        else:
+            return samples_data
+
+    def recurrent_postprocess_samples(self, samples_data):
+        paths = samples_data["paths"]
+
+        max_path_length = max([len(path["advantages"]) for path in paths])
+
+        # make all paths the same length (pad extra advantages with 0)
+        obs = [path["observations"] for path in paths]
+        obs = [tensor_utils.pad_tensor(ob, max_path_length, ob[0]) for ob in obs]
+
+        if self.center_adv:
+            raw_adv = np.concatenate([path["advantages"] for path in paths])
+            adv_mean = np.mean(raw_adv)
+            adv_std = np.std(raw_adv) + 1e-8
+            adv = [(path["advantages"] - adv_mean) / adv_std for path in paths]
+        else:
+            adv = [path["advantages"] for path in paths]
+        adv = [tensor_utils.pad_tensor(a, max_path_length, 0) for a in adv]
+
+        actions = [path["actions"] for path in paths]
+        actions = [tensor_utils.pad_tensor(a, max_path_length, a[0]) for a in actions]
+        pdists = [path["pdists"] for path in paths]
+        pdists = [tensor_utils.pad_tensor(p, max_path_length, p[0]) for p in pdists]
+
+        valids = [np.ones_like(path["returns"]) for path in paths]
+        valids = [tensor_utils.pad_tensor(v, max_path_length, 0) for v in valids]
+
+        samples_data["observations"] = np.asarray(obs)
+        samples_data["advantages"] = np.asarray(adv)
+        samples_data["actions"] = np.asarray(actions)
+        samples_data["valids"] = np.asarray(valids)
+        samples_data["pdists"] = np.asarray(pdists)
+
+        return samples_data
+
