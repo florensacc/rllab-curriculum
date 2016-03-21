@@ -2,6 +2,7 @@ import numpy as np
 import scipy
 import theano.tensor.nnet
 import theano.tensor as TT
+import theano.tensor.extra_ops
 from collections import OrderedDict
 
 
@@ -48,6 +49,11 @@ def to_onehot(ind, dim):
     ret = np.zeros(dim)
     ret[ind] = 1
     return ret
+
+
+def to_onehot_sym(ind, dim):
+    assert ind.ndim == 1
+    return theano.tensor.extra_ops.to_one_hot(ind, dim)
 
 
 def from_onehot(v):

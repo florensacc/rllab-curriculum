@@ -104,7 +104,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
 
         LasagnePowered.__init__(self, [l_mean, l_log_std])
 
-        xs_var = mean_network.input_var
+        xs_var = mean_network.input_layer.input_var
         ys_var = TT.matrix("ys")
         old_means_var = TT.matrix("old_means")
         old_log_stds_var = TT.matrix("old_log_stds")
@@ -150,6 +150,8 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
 
         self._f_predict = compile_function([xs_var], means_var)
         self._f_pdists = compile_function([xs_var], [means_var, log_stds_var])
+        self._l_mean = l_mean
+        self._l_log_std = l_log_std
 
         optimizer_args = dict(
             loss=loss,

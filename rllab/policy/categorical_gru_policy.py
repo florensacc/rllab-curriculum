@@ -2,6 +2,7 @@ import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import numpy as np
 import theano.tensor as TT
+import theano.tensor.nnet
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import GRUNetwork
 from rllab.core.serializable import Serializable
@@ -36,25 +37,25 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         else:
             input_shape = (mdp_spec.observation_dim,)
 
-        prob_network = GRUNetwork(
+        log_prob_network = GRUNetwork(
             input_shape=input_shape,
             output_dim=mdp_spec.action_dim,
             hidden_dim=hidden_sizes[0],
             nonlinearity=nonlinearity,
-            output_nonlinearity=NL.softmax,
+            output_nonlinearity=theano.tensor.nnet.logsoftmax,
         )
 
-        self._prob_network = prob_network
+        self._log_prob_network = log_prob_network
         self._include_action = include_action
 
-        self._f_prob = ext.compile_function(
+        self._f_log_prob = ext.compile_function(
             [
-                prob_network.step_input_layer.input_var,
-                prob_network.step_prev_hidden_layer.input_var
+                log_prob_network.step_input_layer.input_var,
+                log_prob_network.step_prev_hidden_layer.input_var
             ],
             L.get_output([
-                prob_network.step_output_layer,
-                prob_network.step_hidden_layer
+                log_prob_network.step_output_layer,
+                log_prob_network.step_hidden_layer
             ])
         )
 
@@ -64,7 +65,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         self.reset()
 
-        LasagnePowered.__init__(self, [prob_network.output_layer])
+        LasagnePowered.__init__(self, [log_prob_network.output_layer])
 
     def _get_prev_action_var(self, action_var):
         n_batches = action_var.shape[0]
@@ -87,18 +88,18 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         else:
             all_input_var = obs_var
         return L.get_output(
-            self._prob_network.output_layer,
-            {self._prob_network.input_layer: all_input_var}
+            self._log_prob_network.output_layer,
+            {self._log_prob_network.input_layer: all_input_var}
         )
 
     @overrides
-    def kl(self, old_prob_var, new_prob_var):
-        return categorical_dist.kl_sym(old_prob_var, new_prob_var)
+    def kl(self, old_log_prob_var, new_log_prob_var):
+        return categorical_dist.kl_sym(old_log_prob_var, new_log_prob_var)
 
     @overrides
-    def likelihood_ratio(self, old_prob_var, new_prob_var, action_var):
+    def likelihood_ratio(self, old_log_prob_var, new_log_prob_var, action_var):
         return categorical_dist.likelihood_ratio_sym(
-            action_var, old_prob_var, new_prob_var)
+            action_var, old_log_prob_var, new_log_prob_var)
 
     @overrides
     def compute_entropy(self, pdist):
@@ -111,7 +112,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     def reset(self):
         self._prev_action = np.zeros((self.action_dim,))
-        self._prev_hidden = self._prob_network.hid_init_param.get_value()##np.zeros((self._hidden_sizes[0],))
+        self._prev_hidden = self._log_prob_network.hid_init_param.get_value()
 
     # The return value is a pair. The first item is a matrix (N, A), where each
     # entry corresponds to the action value taken. The second item is a vector
@@ -123,12 +124,12 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             all_input = np.concatenate([observation.flatten(), self._prev_action])
         else:
             all_input = observation.flatten()
-        prob, hidden_vec = [x[0] for x in self._f_prob([all_input], [self._prev_hidden])]
-        action = special.weighted_sample(prob, xrange(self.action_dim))
+        log_prob, hidden_vec = [x[0] for x in self._f_log_prob([all_input], [self._prev_hidden])]
+        action = special.weighted_sample(np.exp(log_prob), xrange(self.action_dim))
         action_vec = special.to_onehot(action, self.action_dim)
         self._prev_action = action_vec
         self._prev_hidden = hidden_vec
-        return action_vec, prob
+        return action_vec, log_prob
 
     @property
     @overrides

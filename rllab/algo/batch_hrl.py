@@ -15,12 +15,14 @@ class BatchHRL(BatchPolopt, Serializable):
             high_algo,
             low_algo,
             mi_coeff=0.1,
+            subgoal_interval=3,
             **kwargs):
         super(BatchHRL, self).__init__(**kwargs)
         Serializable.quick_init(self, locals())
         self._high_algo = high_algo
         self._low_algo = low_algo
         self._mi_coeff = mi_coeff
+        self._subgoal_interval = subgoal_interval
 
     @property
     def high_algo(self):
@@ -31,13 +33,15 @@ class BatchHRL(BatchPolopt, Serializable):
         return self._low_algo
 
     @overrides
-    def init_opt(self, mdp, policy, baseline, **kwargs):
+    def init_opt(self, mdp_spec, policy, baseline, **kwargs):
         with logger.tabular_prefix('Hi_'), logger.prefix('Hi | '):
             high_opt_info = \
-                self.high_algo.init_opt(mdp=mdp.high_mdp, policy=policy.high_policy, baseline=baseline.high_baseline)
+                self.high_algo.init_opt(mdp_spec=mdp_spec.high_mdp_spec, policy=policy.high_policy,
+                                        baseline=baseline.high_baseline)
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
             low_opt_info = \
-                self.low_algo.init_opt(mdp=mdp.low_mdp, policy=policy.low_policy, baseline=baseline.low_baseline)
+                self.low_algo.init_opt(mdp_spec=mdp_spec.low_mdp_spec, policy=policy.low_policy,
+                                       baseline=baseline.low_baseline)
         return dict(
             high=high_opt_info,
             low=low_opt_info
@@ -61,7 +65,7 @@ class BatchHRL(BatchPolopt, Serializable):
             mdp=mdp,
         )
 
-    def process_samples(self, itr, paths, mdp, policy, baseline, bonus_evaluator, **kwargs):
+    def process_samples(self, itr, paths, mdp_spec, policy, baseline, bonus_evaluator, **kwargs):
         """
         Transform paths to high_paths and low_paths, and dispatch them to the high-level and low-level algorithms
         respectively.
@@ -95,6 +99,8 @@ class BatchHRL(BatchPolopt, Serializable):
             path['subgoals'] = subgoals
             path['high_pdists'] = high_pdists
             bonuses = bonus_evaluator.predict(path)
+            if np.any(np.isnan(bonuses)) or np.any(np.isinf(bonuses)):
+                import ipdb; ipdb.set_trace()
             # TODO normalize these two terms
             # path['bonuses'] = bonuses
             low_rewards = rewards + self._mi_coeff * bonuses
@@ -107,13 +113,13 @@ class BatchHRL(BatchPolopt, Serializable):
             )
             high_paths.append(high_path)
             low_paths.append(low_path)
-        logger.record_tabular("AverageBonuseReturn", np.mean(bonus_returns))
+        logger.record_tabular("AverageBonusReturn", np.mean(bonus_returns))
         with logger.tabular_prefix('Hi_'), logger.prefix('Hi | '):
             high_samples_data = self.high_algo.process_samples(
-                itr, high_paths, mdp.high_mdp, policy.high_policy, baseline.high_baseline)
+                itr, high_paths, mdp_spec.high_mdp_spec, policy.high_policy, baseline.high_baseline)
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
             low_samples_data = self.low_algo.process_samples(
-                itr, low_paths, mdp.low_mdp, policy.low_policy, baseline.low_baseline)
+                itr, low_paths, mdp_spec.low_mdp_spec, policy.low_policy, baseline.low_baseline)
 
         # Compute the mutual information I(a,g)
         # This is the component I'm still uncertain about how to abstract away yet
@@ -126,9 +132,9 @@ class BatchHRL(BatchPolopt, Serializable):
         action_pdists = 0
         # Actually compute p(a|g,s) and p(a|s)
         N = high_observations.shape[0]
-        for goal in range(mdp.n_subgoals):
+        for goal in range(mdp_spec.n_subgoals):
             goal_onehot = np.tile(
-                to_onehot(goal, mdp.n_subgoals).reshape((1, -1)),
+                to_onehot(goal, mdp_spec.n_subgoals).reshape((1, -1)),
                 (N, 1)
             )
             low_observations = np.concatenate([high_observations, goal_onehot], axis=1)
@@ -137,7 +143,7 @@ class BatchHRL(BatchPolopt, Serializable):
             action_pdists += goal_probs[:, [goal]] * action_given_goal_pdist
         # The mutual information between actions and goals
         mi_action_goal = 0
-        for goal in range(mdp.n_subgoals):
+        for goal in range(mdp_spec.n_subgoals):
             mi_action_goal += np.mean(goal_probs[:, goal] * categorical_dist.kl(
                 action_given_goal_pdists[goal],
                 action_pdists

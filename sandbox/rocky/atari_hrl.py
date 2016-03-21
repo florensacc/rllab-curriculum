@@ -9,8 +9,7 @@ from rllab.baseline.subgoal_baseline import SubgoalBaseline
 from rllab.algo.ppo import PPO
 from rllab.algo.batch_hrl import BatchHRL
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rocky.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
-from sandbox.rocky.zero_bonus_evaluator import ZeroBonusEvaluator
+from rllab.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
 import lasagne.nonlinearities as NL
 
 stub(globals())

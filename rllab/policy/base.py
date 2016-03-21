@@ -79,10 +79,6 @@ class Policy(Parameterized):
 
 class StochasticPolicy(Policy):
 
-    def __init__(self, mdp):
-        super(StochasticPolicy, self).__init__(mdp)
-        self._f_log_prob = None
-
     def kl(self, old_pdist_var, new_pdist_var):
         raise NotImplementedError
 
@@ -91,23 +87,6 @@ class StochasticPolicy(Policy):
 
     def compute_entropy(self, pdist):
         raise NotImplementedError
-
-    # Only needed for vanilla policy gradient & guided policy search
-    def get_log_prob(self, observations, actions):
-        if self._f_log_prob is None:
-            input_var = new_tensor(
-                'input',
-                ndim=len(self.observation_shape) + 1,
-                dtype=self.observation_dtype
-            )
-            action_var = TT.matrix('actions', dtype=self.action_dtype)
-            self._f_log_prob = theano.function(
-                [input_var, action_var],
-                self.get_log_prob_sym(input_var, action_var),
-                allow_input_downcast=True,
-                on_unused_input='ignore'
-            )
-        return self._f_log_prob(observations, actions)
 
     def get_log_prob_sym(self, obs_var, action_var):
         raise NotImplementedError

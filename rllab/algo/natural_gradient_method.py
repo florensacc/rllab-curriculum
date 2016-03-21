@@ -57,12 +57,12 @@ class NaturalGradientMethod(object):
         self.reg_coeff = reg_coeff
         self.subsample_factor = subsample_factor
 
-    def init_opt(self, mdp, policy, baseline):
+    def init_opt(self, mdp_spec, policy, baseline):
         is_recurrent = int(policy.is_recurrent)
         obs_var = ext.new_tensor(
             'obs',
-            ndim=1+len(mdp.observation_shape)+is_recurrent,
-            dtype=mdp.observation_dtype
+            ndim=1+len(mdp_spec.observation_shape)+is_recurrent,
+            dtype=mdp_spec.observation_dtype
         )
         advantage_var = ext.new_tensor(
             'advantage',
@@ -72,7 +72,7 @@ class NaturalGradientMethod(object):
         action_var = ext.new_tensor(
             'action',
             ndim=2+is_recurrent,
-            dtype=mdp.action_dtype
+            dtype=mdp_spec.action_dtype
         )
 
         # log_prob = policy.get_log_prob_sym(obs_var, action_var)

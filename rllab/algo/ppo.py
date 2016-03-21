@@ -24,12 +24,12 @@ class PPO(BatchPolopt):
         super(PPO, self).__init__(**kwargs)
 
     @overrides
-    def init_opt(self, mdp, policy, baseline):
+    def init_opt(self, mdp_spec, policy, baseline):
         is_recurrent = int(policy.is_recurrent)
         obs_var = ext.new_tensor(
             'obs',
-            ndim=1+len(mdp.observation_shape)+is_recurrent,
-            dtype=mdp.observation_dtype
+            ndim=1+len(mdp_spec.observation_shape)+is_recurrent,
+            dtype=mdp_spec.observation_dtype
         )
         advantage_var = ext.new_tensor(
             'advantage',
@@ -44,7 +44,7 @@ class PPO(BatchPolopt):
         action_var = ext.new_tensor(
             'action',
             ndim=2+is_recurrent,
-            dtype=mdp.action_dtype
+            dtype=mdp_spec.action_dtype
         )
         if is_recurrent:
             valid_var = TT.matrix('valid')

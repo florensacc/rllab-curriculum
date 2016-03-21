@@ -12,9 +12,9 @@ class SubgoalPolicy(StochasticPolicy, LasagnePowered, Serializable):
     concatenated with the subgoal, and emits the actual control for the MDP.
     """
 
-    def __init__(self, mdp, high_policy, low_policy):
+    def __init__(self, mdp_spec, high_policy, low_policy):
         Serializable.quick_init(self, locals())
-        super(SubgoalPolicy, self).__init__(mdp)
+        super(SubgoalPolicy, self).__init__(mdp_spec)
         self._high_policy = high_policy
         self._low_policy = low_policy
         LasagnePowered.__init__(self, self._high_policy.output_layers + self._low_policy.output_layers)

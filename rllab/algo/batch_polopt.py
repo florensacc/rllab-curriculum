@@ -71,11 +71,14 @@ class BatchPolopt(RLAlgorithm):
 
     def train(self, mdp, policy, baseline, **kwargs):
         self.start_worker(mdp, policy, baseline)
-        opt_info = self.init_opt(mdp, policy, baseline)
+        opt_info = self.init_opt(mdp.spec, policy, baseline)
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
             paths = self.obtain_samples(itr, mdp, policy, **kwargs)
-            samples_data = self.process_samples(itr, paths, mdp, policy, baseline, **kwargs)
+            samples_data = self.process_samples(itr, paths, mdp.spec, policy, baseline, **kwargs)
+            mdp.log_extra(paths)
+            policy.log_extra(paths)
+            baseline.log_extra(paths)
             opt_info = self.optimize_policy(
                 itr, policy, samples_data, opt_info, **kwargs)
             logger.log("saving snapshot...")
@@ -94,7 +97,7 @@ class BatchPolopt(RLAlgorithm):
                               "continue...")
         self.shutdown_worker()
 
-    def init_opt(self, mdp, policy, baseline):
+    def init_opt(self, mdp_spec, policy, baseline):
         """
         Initialize the optimization procedure. If using theano / cgt, this may
         include declaring all the variables and compiling functions
@@ -128,7 +131,7 @@ class BatchPolopt(RLAlgorithm):
 
         return parallel_sampler.collect_paths()
 
-    def process_samples(self, itr, paths, mdp, policy, baseline, **kwargs):
+    def process_samples(self, itr, paths, mdp_spec, policy, baseline, **kwargs):
 
         baselines = []
         returns = []
@@ -182,9 +185,9 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
 
-        mdp.log_extra(paths)
-        policy.log_extra(paths)
-        baseline.log_extra(paths)
+        # mdp.log_extra(paths)
+        # policy.log_extra(paths)
+        # baseline.log_extra(paths)
 
         # numerical check
         check_param = policy.get_param_values()

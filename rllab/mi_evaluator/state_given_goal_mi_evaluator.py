@@ -1,6 +1,6 @@
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
-from rllab.mdp.subgoal_mdp import SubgoalMDP
+from rllab.mdp.subgoal_mdp import SubgoalMDP, SubgoalMDPSpec
 from rllab.regressor.gaussian_mlp_regressor import GaussianMLPRegressor
 from rllab.misc.special import to_onehot
 import numpy as np
@@ -18,21 +18,24 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
 
     def __init__(
             self,
-            mdp,
+            mdp_spec,
+            regressor_cls=None,
             regressor_args=None):
-        assert isinstance(mdp, SubgoalMDP)
+        assert isinstance(mdp_spec, SubgoalMDPSpec)
 
         Serializable.quick_init(self, locals())
+        if regressor_cls is None:
+            regressor_cls = GaussianMLPRegressor
         if regressor_args is None:
             regressor_args = dict()
 
-        self._regressor = GaussianMLPRegressor(
-            input_shape=(mdp.observation_dim + mdp.n_subgoals,),
-            output_dim=mdp.observation_dim,
-            name="sprime_given_g_s",
+        self._regressor = regressor_cls(
+            input_shape=(mdp_spec.observation_dim + mdp_spec.n_subgoals,),
+            output_dim=mdp_spec.observation_dim,
+            name="(s'|g,s)",
             **regressor_args
         )
-        self._n_subgoals = mdp.n_subgoals
+        self._n_subgoals = mdp_spec.n_subgoals
 
     def _get_relevant_data(self, paths):
         obs = np.concatenate([p["observations"][:-1] for p in paths])
@@ -59,4 +62,8 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
             goal_mat = np.tile(to_onehot(goal, self._n_subgoals), (N, 1))
             xs_goal = np.concatenate([flat_obs, goal_mat], axis=1)
             p_sprime_given_s += high_pdists[:-1, goal] * np.exp(self._regressor.predict_log_likelihood(xs_goal, ys))
+
+        ret = np.append(log_p_sprime_given_g_s - np.log(p_sprime_given_s), 0)
+        if np.any(np.isinf(ret)):
+            import ipdb; ipdb.set_trace()
         return np.append(log_p_sprime_given_g_s - np.log(p_sprime_given_s), 0)

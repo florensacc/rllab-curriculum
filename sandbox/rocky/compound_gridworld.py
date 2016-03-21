@@ -26,20 +26,20 @@ mdp = CompoundActionSequenceMDP(
         ]
     ),
     action_map=[
-        [0, 1, 2],
-        [0, 0, 0],
-        [2, 1, 0],
-        [3, 3, 3],
-        # [0],
-        # [1],
-        # [2],
-        # [3],
+        # [0, 1, 2],
+        # [0, 0, 0],
+        # [2, 1, 0],
+        # [3, 3, 3],
+        [0],
+        [1],
+        [2],
+        [3],
     ]
 )
 algo = TRPO(
-    batch_size=10000,
+    batch_size=1000,
     whole_paths=True,
-    max_path_length=500,
+    max_path_length=100,
     n_itr=100,
     discount=0.99,
     step_size=0.01,
@@ -67,5 +67,5 @@ run_experiment_lite(
     seed=1,
     mode="local",
     # log_tabular_only=True,
-    env=ext.merge_dict(os.environ, dict(THEANO_FLAGS="optimizer=None"))
+    # env=ext.merge_dict(os.environ, dict(THEANO_FLAGS="optimizer=None"))
 )
