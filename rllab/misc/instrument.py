@@ -140,6 +140,9 @@ def run_experiment_lite(
     exp_name = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
     kwargs["exp_name"] = exp_name
     kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
+    kwargs["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
+                              exp_name)
+
     if mode == "local":
         # kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
         params = dict(kwargs.items() + [("args_data", data)])
@@ -207,7 +210,7 @@ def run_experiment_lite(
             print(pod_str)
         dir = "{pod_dir}/{exp_prefix}".format(pod_dir=config.POD_DIR, exp_prefix=exp_prefix)
         ensure_dir(dir)
-        fname = "dir/{exp_name}.json".format(
+        fname = "{dir}/{exp_name}.json".format(
             dir=dir,
             exp_name=exp_name
         )
@@ -313,6 +316,8 @@ def dedent(s):
 def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.py',
                aws_config=None, dry=False):
     log_dir = params.get("log_dir")
+    remote_log_dir = params.pop("remote_log_dir")
+
 
     default_config = dict(
         image_id=config.AWS_IMAGE_ID,
@@ -327,9 +332,6 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
     if aws_config is None:
         aws_config = dict()
     aws_config = merge_dict(default_config, aws_config)
-
-    remote_log_dir = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
-                              params.get("exp_name"))
 
     sio = StringIO()
     sio.write("#!/bin/bash\n")
@@ -512,12 +514,15 @@ def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py')
         }
     }
 
-
+S3_CODE_PATH = None
 def s3_sync_code(config, dry=False):
+    global S3_CODE_PATH
+    if S3_CODE_PATH is not None:
+        return S3_CODE_PATH
     base = config.AWS_CODE_SYNC_S3_PATH
     has_git = True
     try:
-        current_commit = subprocess.check_output(["git", "rev-parse", "HEAD"])
+        current_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).strip()
         clean_state = len(
             subprocess.check_output(["git", "status", "--porcelain"])) == 0
     except subprocess.CalledProcessError as _:
@@ -530,12 +535,20 @@ def s3_sync_code(config, dry=False):
             has_git else timestamp
     )
     full_path = "%s/%s" % (base, code_path)
+    cache_path = "%s/%s" % (base, dir_hash)
+    cache_cmds = ["aws", "s3", "sync"] + \
+                 [cache_path, full_path]
     cmds = ["aws", "s3", "sync"] + \
-            flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
-            [".", full_path]
-    print cmds
+           flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+           [".", full_path]
+    caching_cmds = ["aws", "s3", "sync"] + \
+                   [full_path, cache_path]
+    print cache_cmds, cmds, caching_cmds
     if not dry:
+        subprocess.check_call(cache_cmds)
         subprocess.check_call(cmds)
+        subprocess.check_call(caching_cmds)
+    S3_CODE_PATH = full_path
     return full_path
 
 def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_experiment.py'):
@@ -547,6 +560,7 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
     :return:
     """
     log_dir = params.get("log_dir")
+    remote_log_dir = params.pop("remote_log_dir")
     mkdir_p(log_dir)
     pre_commands = list()
     pre_commands.append('mkdir -p ~/.aws')
@@ -558,14 +572,29 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
         "echo \"aws_secret_access_key = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_SECRET)
     pre_commands.append('aws s3 cp --recursive %s %s' %
                          (code_full_path, config.DOCKER_CODE_DIR))
+    pre_commands.append('cd %s' %
+                        (config.DOCKER_CODE_DIR))
+    pre_commands.append("""
+        while /bin/true; do
+            aws s3 sync --exclude *.pkl --exclude *.log {log_dir} {remote_log_dir} --region {aws_region}
+            sleep 5
+        done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
     # copy the file to s3 after execution
     post_commands = list()
     post_commands.append('aws s3 cp --recursive %s %s' %
-                         (config.DOCKER_LOG_DIR,
-                          osp.join(config.AWS_S3_PATH, params.get("exp_name"))))
-    command = to_docker_command(params, docker_image=docker_image, script=script,
-                                pre_commands=pre_commands,
-                                post_commands=post_commands)
+                         (log_dir,
+                          remote_log_dir))
+    # command = to_docker_command(params, docker_image=docker_image, script=script,
+    #                             pre_commands=pre_commands,
+    #                             post_commands=post_commands)
+    command_list = list()
+    if pre_commands is not None:
+        command_list.extend(pre_commands)
+    command_list.append("echo \"Running in docker\"")
+    command_list.append(to_local_command(params, script))
+    if post_commands is not None:
+        command_list.extend(post_commands)
+    command = "; ".join(command_list)
     pod_name = config.KUBE_PREFIX + params["exp_name"]
     # underscore is not allowed in pod names
     pod_name = pod_name.replace("_", "-")
@@ -585,9 +614,9 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
                     "image": docker_image,
                     "command": ["/bin/bash", "-c", command],
                     "resources": {
-                        "limits": {
-                            "cpu": "4"
-                        },
+                        "requests": {
+                            "cpu": 2,
+                        }
                     },
                     "imagePullPolicy": "Always",
                 }

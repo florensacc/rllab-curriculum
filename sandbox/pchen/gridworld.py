@@ -37,12 +37,13 @@ policy = CategoricalMLPPolicy(
 baseline = LinearFeatureBaseline(
     mdp_spec=mdp.spec
 )
-run_experiment_lite(
-    algo.train(mdp=mdp, policy=policy, baseline=baseline),
-    exp_prefix="gridworld",
-    n_parallel=1,
-    snapshot_mode="last",
-    seed=1,
-    mode="lab_kube",
-    dry=False,
-)
+for i in xrange(10):
+    run_experiment_lite(
+        algo.train(mdp=mdp, policy=policy, baseline=baseline),
+        exp_prefix="gridworld",
+        n_parallel=1,
+        snapshot_mode="last",
+        seed=i,
+        mode="lab_kube",
+        dry=False,
+    )
