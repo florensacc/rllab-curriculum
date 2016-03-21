@@ -69,9 +69,6 @@ class ConjugateGradientOptimizer(Serializable):
 
         constraint_grads = theano.grad(constraint_term, wrt=params)
         xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
-        # many Ops don't have Rop implemented so this is not that useful
-        # but the code implementing that is preserved for future reference
-        # Hx_rop = TT.sum(TT.Rop(kl_flat_grad, policy.params, xs), axis=0)
         Hx_plain_splits = TT.grad(
             TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
             wrt=params,
@@ -171,4 +168,3 @@ class ConjugateGradientOptimizer(Serializable):
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
         logger.log("optimization finished")
-

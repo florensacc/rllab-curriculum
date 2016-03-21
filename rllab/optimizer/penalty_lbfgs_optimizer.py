@@ -114,6 +114,8 @@ class PenaltyLbfgsOptimizer(Serializable):
             logger.log('penalty %f => loss %f, %s %f' %
                        (try_penalty, try_loss, self._constraint_name, try_constraint_val))
 
+            # Either constraint satisfied, or we are at the last iteration already and no alternative parameter
+            # satisfies the constraint
             if try_constraint_val < self._max_constraint_val or \
                     (penalty_itr == self._max_penalty_itr - 1 and opt_params is None):
                 opt_params = itr_opt_params
@@ -121,14 +123,15 @@ class PenaltyLbfgsOptimizer(Serializable):
             if not self._adapt_penalty:
                 break
 
-            # decide scale factor on the first iteration
+            # Decide scale factor on the first iteration, or if constraint violation yields numerical error
             if penalty_scale_factor is None or np.isnan(try_constraint_val):
+                # Increase penalty if constraint violated, or if constraint term is NAN
                 if try_constraint_val > self._max_constraint_val or np.isnan(try_constraint_val):
-                    # need to increase penalty
                     penalty_scale_factor = self._increase_penalty_factor
                 else:
-                    # can shrink penalty
+                    # Otherwise (i.e. constraint satisfied), shrink penalty
                     penalty_scale_factor = self._decrease_penalty_factor
+                    opt_params = itr_opt_params
             else:
                 if penalty_scale_factor > 1 and \
                         try_constraint_val <= self._max_constraint_val:
@@ -139,3 +142,5 @@ class PenaltyLbfgsOptimizer(Serializable):
             try_penalty *= penalty_scale_factor
             try_penalty = np.clip(try_penalty, self._min_penalty, self._max_penalty)
             self._penalty = try_penalty
+
+        self._target.set_param_values(opt_params, trainable=True)
