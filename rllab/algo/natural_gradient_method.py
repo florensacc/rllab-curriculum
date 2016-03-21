@@ -113,51 +113,51 @@ class NaturalGradientMethod(object):
         xs = [
             ext.new_tensor_like("%s x" % p.name, p)
             for p in policy.get_params(trainable=True)
-            ]
+        ]
         # many Ops don't have Rop implemented so this is not that useful
         # but the code implenting that is preserved for future reference
         # Hx_rop = TT.sum(TT.Rop(kl_flat_grad, policy.params, xs), axis=0)
         Hx_plain_splits = TT.grad(TT.sum([
-                                             TT.sum(g * x) for g, x in izip(kl_grads, xs)
-                                             ]), wrt=policy.get_params(trainable=True))
+            TT.sum(g * x) for g, x in izip(kl_grads, xs)
+        ]), wrt=policy.get_params(trainable=True))
         Hx_plain = TT.concatenate([s.flatten() for s in Hx_plain_splits])
 
         input_list = [obs_var, advantage_var, old_pdist_var, action_var]
         if is_recurrent:
             input_list.append(valid_var)
-        f_loss = ext.compile_function(
-            inputs=input_list,
-            outputs=surr_obj,
-        )
-        f_grad = ext.compile_function(
-            inputs=input_list,
-            outputs=[surr_obj, flat_grad],
-        )
 
         # follwoing information is computed to TRPO
         max_kl = TT.max(policy.kl(old_pdist_var, pdist_var))
 
         return ext.lazydict(
-            f_loss=lambda: f_loss,
-            f_grad=lambda: f_grad,
-            f_fisher=lambda:
-            ext.compile_function(
+            f_loss=lambda: ext.compile_function(
+                inputs=input_list,
+                outputs=surr_obj,
+                log_name="f_loss",
+            ),
+            f_grad=lambda: ext.compile_function(
+                inputs=input_list,
+                outputs=[surr_obj, flat_grad],
+                log_name="f_grad",
+            ),
+            f_fisher=lambda: ext.compile_function(
                 inputs=input_list,
                 outputs=[
                     surr_obj,
                     flat_grad,
                     ext.flatten_hessian(mean_kl, wrt=policy.get_params(trainable=True), block_diagonal=False)
                 ],
+                log_name="f_fisher",
             ),
-            f_Hx_plain=lambda:
-            ext.compile_function(
+            f_Hx_plain=lambda: ext.compile_function(
                 inputs=input_list + xs,
                 outputs=Hx_plain,
+                log_name="f_Hx_plain",
             ),
-            f_trpo_info=lambda:
-            ext.compile_function(
+            f_trpo_info=lambda: ext.compile_function(
                 inputs=input_list,
-                outputs=[surr_obj, mean_kl, max_kl]
+                outputs=[surr_obj, mean_kl, max_kl],
+                log_name="f_trpo_info"
             ),
         )
 
@@ -209,7 +209,9 @@ class NaturalGradientMethod(object):
 
         nat_step_size = 1. if self.step_size is None \
             else ((2 if self.trpo_stepsize else 1) * self.step_size * (
-            1. / (flat_g.T.dot(nat_direction) if not self.maybe_aggressive else nat_direction.dot(Hx(nat_direction)))
+            1. / (flat_g.T.dot(nat_direction) + 1e-8
+                  if not self.maybe_aggressive
+                  else nat_direction.dot(Hx(nat_direction)) + 1e-8)
         )) ** 0.5
         flat_descent_step = nat_step_size * nat_direction
         logger.log("descent direction computed")

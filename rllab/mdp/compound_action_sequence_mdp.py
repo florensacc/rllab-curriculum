@@ -14,13 +14,16 @@ class CompoundActionSequenceMDP(ProxyMDP, Serializable):
     original mdp, and perform exploration using these learned action sequence primitives (thus, a hierarchy).
     """
 
-    def __init__(self, mdp, action_map, action_dim=None):
+    def __init__(self, mdp, action_map, action_dim=None, reset_history=False):
         """
         Constructs a compound mdp.
-        :param mdp: the original mdp.
-        :param action_map: the map from each action in the original mdp to a sequence of actions, required to trigger
+        :param mdp: The original mdp.
+        :param action_map: The map from each action in the original mdp to a sequence of actions, required to trigger
         the corresponding action in the original mdp
-        :param action_dim: the action dimension of the compound mdp. By default this is the same as the original mdp
+        :param action_dim: The action dimension of the compound mdp. By default this is the same as the original mdp
+        :param reset_history: This only works if all the action sequences are of the same length. This flag controls
+        whether the history will be cleared after it reaches the action sequence length, whether it matches an
+        original action or not.
         :return:
         """
         Serializable.quick_init(self, locals())
@@ -32,6 +35,8 @@ class CompoundActionSequenceMDP(ProxyMDP, Serializable):
         # ensure that no action sequence is a prefix or suffix of the other
         assert not any([x.startswith(y) for x in action_strs for y in action_strs if x != y])
         assert not any([x.endswith(y) for x in action_strs for y in action_strs if x != y])
+        if reset_history:
+            assert len(set([len(x) for x in action_map])) == 1
         self._action_map = map(np.array, action_map)
         # self._action_strs = action_strs
         self._action_history = []
@@ -40,6 +45,7 @@ class CompoundActionSequenceMDP(ProxyMDP, Serializable):
         else:
             self._action_dim = action_dim
         self._obs = None
+        self._reset_history = reset_history
         self._mdp.reset()
 
     @property
@@ -69,4 +75,6 @@ class CompoundActionSequenceMDP(ProxyMDP, Serializable):
             next_obs = self._obs
             reward = 0
             done = False
+            if len(self._action_history) == len(self._action_map[0]):
+                self._action_history = []
         return next_obs, reward, done
