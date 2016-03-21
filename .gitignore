@@ -31,3 +31,4 @@ iterate.dat
 .env
 src/
 .settings
+.pods
