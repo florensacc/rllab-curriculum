@@ -74,6 +74,6 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     # the current policy
     @overrides
     def get_action(self, observation):
-        log_prob = self._f_log_prob([observation])
+        log_prob = self._f_log_prob([observation])[0]
         action = special.weighted_sample(np.exp(log_prob), xrange(self.action_dim))
         return special.to_onehot(action, self.action_dim), log_prob

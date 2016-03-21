@@ -61,9 +61,5 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
         for goal in range(self._n_subgoals):
             goal_mat = np.tile(to_onehot(goal, self._n_subgoals), (N, 1))
             xs_goal = np.concatenate([flat_obs, goal_mat], axis=1)
-            p_sprime_given_s += high_pdists[:-1, goal] * np.exp(self._regressor.predict_log_likelihood(xs_goal, ys))
-
-        ret = np.append(log_p_sprime_given_g_s - np.log(p_sprime_given_s), 0)
-        if np.any(np.isinf(ret)):
-            import ipdb; ipdb.set_trace()
-        return np.append(log_p_sprime_given_g_s - np.log(p_sprime_given_s), 0)
+            p_sprime_given_s += np.exp(high_pdists[:-1, goal]) * np.exp(self._regressor.predict_log_likelihood(xs_goal, ys))
+        return np.append(log_p_sprime_given_g_s - np.log(p_sprime_given_s + 1e-8), 0)

@@ -99,8 +99,6 @@ class BatchHRL(BatchPolopt, Serializable):
             path['subgoals'] = subgoals
             path['high_pdists'] = high_pdists
             bonuses = bonus_evaluator.predict(path)
-            if np.any(np.isnan(bonuses)) or np.any(np.isinf(bonuses)):
-                import ipdb; ipdb.set_trace()
             # TODO normalize these two terms
             # path['bonuses'] = bonuses
             low_rewards = rewards + self._mi_coeff * bonuses
@@ -125,7 +123,7 @@ class BatchHRL(BatchPolopt, Serializable):
         # This is the component I'm still uncertain about how to abstract away yet
         high_observations = high_samples_data["observations"]
         # p(g|s)
-        goal_probs = policy.high_policy.get_pdists(high_observations)
+        goal_probs = np.exp(policy.high_policy.get_pdists(high_observations))
         # p(a|g,s)
         action_given_goal_pdists = []
         # p(a|s) = sum_g p(g|s) p(a|g,s)

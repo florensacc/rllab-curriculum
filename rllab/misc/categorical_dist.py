@@ -6,6 +6,10 @@ def from_onehot_sym(x_var):
     return TT.nonzero(x_var)[1]
 
 
+def from_onehot(x_var):
+    return np.nonzero(x_var)[1]
+
+
 def kl_sym(old_log_prob_var, new_log_prob_var):
     """
     Compute the symbolic KL divergence of two categorical distributions
@@ -85,7 +89,7 @@ def log_likelihood(xs, log_probs):
     if log_probs.ndim == 2:
         # Assume layout is N * A
         N = log_probs.shape[0]
-        return log_probs[np.arange(N), from_onehot_sym(xs)]
+        return log_probs[np.arange(N), from_onehot(xs)]
     elif log_probs.ndim == 3:
         # Assume layout is N * T * A
         a_dim = xs.shape[-1]

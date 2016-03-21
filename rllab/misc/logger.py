@@ -165,6 +165,7 @@ class TerminalTablePrinter(object):
         tabulars = self.tabulars[-(int(rows)-3):]
         sys.stdout.write("\x1b[2J\x1b[H")
         sys.stdout.write(tabulate(tabulars, self.headers))
+        sys.stdout.write("\n")
 
 table_printer = TerminalTablePrinter()
 

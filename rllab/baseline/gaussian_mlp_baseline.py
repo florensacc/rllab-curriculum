@@ -12,15 +12,15 @@ class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
 
     def __init__(
             self,
-            mdp,
+            mdp_spec,
             regressor_args=None,
     ):
         Serializable.quick_init(self, locals())
-        super(GaussianMLPBaseline, self).__init__(mdp)
+        super(GaussianMLPBaseline, self).__init__(mdp_spec)
         if regressor_args is None:
             regressor_args = dict()
         self._regressor = GaussianMLPRegressor(
-            input_shape=mdp.observation_shape,
+            input_shape=mdp_spec.observation_shape,
             output_dim=1,
             name="vf",
             **regressor_args

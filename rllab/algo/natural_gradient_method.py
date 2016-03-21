@@ -61,24 +61,24 @@ class NaturalGradientMethod(object):
         is_recurrent = int(policy.is_recurrent)
         obs_var = ext.new_tensor(
             'obs',
-            ndim=1+len(mdp_spec.observation_shape)+is_recurrent,
+            ndim=1 + len(mdp_spec.observation_shape) + is_recurrent,
             dtype=mdp_spec.observation_dtype
         )
         advantage_var = ext.new_tensor(
             'advantage',
-            ndim=1+is_recurrent,
+            ndim=1 + is_recurrent,
             dtype=theano.config.floatX
         )
         action_var = ext.new_tensor(
             'action',
-            ndim=2+is_recurrent,
+            ndim=2 + is_recurrent,
             dtype=mdp_spec.action_dtype
         )
 
         # log_prob = policy.get_log_prob_sym(obs_var, action_var)
         old_pdist_var = ext.new_tensor(
             'old_pdist',
-            ndim=2+is_recurrent,
+            ndim=2 + is_recurrent,
             dtype=theano.config.floatX
         )
 
@@ -113,20 +113,20 @@ class NaturalGradientMethod(object):
         xs = [
             ext.new_tensor_like("%s x" % p.name, p)
             for p in policy.get_params(trainable=True)
-        ]
+            ]
         # many Ops don't have Rop implemented so this is not that useful
-        # but the code implenting that is preserved for future reference
+        # but the code implementing that is preserved for future reference
         # Hx_rop = TT.sum(TT.Rop(kl_flat_grad, policy.params, xs), axis=0)
         Hx_plain_splits = TT.grad(TT.sum([
-            TT.sum(g * x) for g, x in izip(kl_grads, xs)
-        ]), wrt=policy.get_params(trainable=True))
+                                             TT.sum(g * x) for g, x in izip(kl_grads, xs)
+                                             ]), wrt=policy.get_params(trainable=True))
         Hx_plain = TT.concatenate([s.flatten() for s in Hx_plain_splits])
 
         input_list = [obs_var, advantage_var, old_pdist_var, action_var]
         if is_recurrent:
             input_list.append(valid_var)
 
-        # follwoing information is computed to TRPO
+        # following information is computed to TRPO
         max_kl = TT.max(policy.kl(old_pdist_var, pdist_var))
 
         return ext.lazydict(
@@ -188,7 +188,7 @@ class NaturalGradientMethod(object):
             while True:
                 try:
                     nat_direction = np.linalg.solve(
-                        fisher_mat + self.reg_coeff*np.eye(fisher_mat.shape[0]), flat_g
+                        fisher_mat + self.reg_coeff * np.eye(fisher_mat.shape[0]), flat_g
                     )
                     break
                 except LinAlgError:
@@ -197,14 +197,16 @@ class NaturalGradientMethod(object):
         else:
             # CG approach
             _, flat_g = opt_info["f_grad"](*inputs)
+
             def Hx(x):
                 xs = policy.flat_to_params(x, trainable=True)
                 # with Message("rop"):
                 #     rop = f_Hx_rop(*(inputs + xs))
-                plain = opt_info["f_Hx_plain"](*(subsample_inputs + xs)) + self.reg_coeff*x
+                plain = opt_info["f_Hx_plain"](*(subsample_inputs + xs)) + self.reg_coeff * x
                 # assert np.allclose(rop, plain)
                 return plain
                 # alternatively we can do finite difference on flat_grad
+
             nat_direction = cg(Hx, flat_g, cg_iters=self.cg_iters)
 
         nat_step_size = 1. if self.step_size is None \
@@ -229,4 +231,3 @@ class NaturalGradientMethod(object):
             baseline=baseline,
             mdp=mdp,
         )
-

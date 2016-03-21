@@ -148,6 +148,7 @@ def run_experiment_lite(
 
     if mode == "local":
         # kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
+        del kwargs["remote_log_dir"]
         params = dict(kwargs.items() + [("args_data", data)])
         command = to_local_command(params, script=script)
         print(command)
