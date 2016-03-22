@@ -44,11 +44,11 @@ class Experiment(object):
         self.params = params
         self.flat_params = self._flatten_params(params)
 
-    def _flatten_params(self, params):
+    def _flatten_params(self, params, depth=2):
         flat_params = dict()
         for k, v in params.iteritems():
-            if isinstance(v, dict):
-                for subk, subv in v.iteritems():
+            if isinstance(v, dict) and depth != 0:
+                for subk, subv in self._flatten_params(v, depth=depth-1):
                     if subk == "_name":
                         flat_params[k] = subv
                     else:

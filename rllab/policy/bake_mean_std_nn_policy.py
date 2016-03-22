@@ -26,6 +26,12 @@ def log_normal_pdf(x, mean, log_std):
     return -0.5*TT.square(normalized) - np.log((2*np.pi)**0.5) - log_std
 
 
+def worker_collect_stats(action_dim):
+    pdists = PG.samples_data["pdists"]
+    log_stds = pdists[:, action_dim:]
+    return np.mean(np.exp(log_stds))
+
+
 class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     @autoargs.arg('hidden_sizes', type=int, nargs='*',
@@ -66,13 +72,21 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             load_params_masks=None,
             trainable_masks=None,
             ):
-        Serializable.quick_init(self, locals())
+        Serializable.__init__(
+            self, mdp=mdp, hidden_sizes=hidden_sizes, std_sizes=std_sizes,
+            initial_std=initial_std, std_trainable=std_trainable,
+            nonlinearity=nonlinearity, output_nl=output_nl, bn=bn)
+        # pylint: enable=dangerous-default-value
         # create network
         if isinstance(nonlinearity, str):
             nonlinearity = locate(nonlinearity)
         input_var = TT.matrix('input')
         l_input = L.InputLayer(shape=(None, mdp.observation_shape[0]),
                                input_var=input_var)
+        self.l_input = l_input
+        l_action_input = L.InputLayer(shape=(None, mdp.action_dim),
+                               input_var=input_var)
+        self.l_action_input = l_action_input
         l_hidden = l_input
         for idx, hidden_size in enumerate(hidden_sizes):
             l_hidden = L.DenseLayer(
@@ -83,6 +97,25 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 name="h%d" % idx)
             if bn:
                 l_hidden = L.batch_norm(l_hidden)
+            if idx == 1:
+                pred_fc0 = L.DenseLayer(
+                    L.concat([l_hidden, l_action_input]),
+                    num_units=50,
+                    nonlinearity=nonlinearity,
+                    W=lasagne.init.Normal(0.1),
+                )
+                pred_fc1 = L.DenseLayer(
+                    pred_fc0,
+                    num_units=25,
+                    nonlinearity=nonlinearity,
+                    W=lasagne.init.Normal(0.1),
+                )
+                pred_out = L.DenseLayer(
+                    pred_fc1,
+                    num_units=mdp.observation_shape[0],
+                    nonlinearity=None,
+                    W=lasagne.init.Normal(0.1),
+                )
         mean_layer = L.DenseLayer(
             l_hidden,
             num_units=mdp.action_dim,
@@ -120,6 +153,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         self._mean_layer = mean_layer
         self._log_std_layer = log_std_layer
+        self._pred_layer = pred_out
         self._compute_action_params = theano.function(
             [input_var],
             [mean_var, log_std_var],
@@ -155,6 +189,8 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 else:
                     assert 'trainable' in tags
 
+    def get_pred(self, input_var, action_var):
+        return L.get_output(self._pred_layer, {self.l_input: input_var, self.l_action_input: action_var})
 
     def get_pdist_sym(self, input_var):
         mean_var = L.get_output(self._mean_layer, input_var)
@@ -197,11 +233,6 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         _, log_std = self._split_pdist(pdist)
         return np.mean(np.sum(log_std + np.log(np.sqrt(2*np.pi*np.e)), axis=1))
 
-    @property
-    @overrides
-    def pdist_dim(self):
-        return self.action_dim * 2
-
     # The return value is a pair. The first item is a matrix (N, A), where each
     # entry corresponds to the action value taken. The second item is a vector
     # of length N, where each entry is the density value for that action, under
@@ -238,7 +269,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             0.5*TT.sum(TT.square(stdn), axis=1) - \
             0.5*self.action_dim*np.log(2*np.pi)
 
-    def log_extra(self, paths):
-        pdists = np.vstack([path["pdists"] for path in paths])
-        means, log_stds = self._split_pdist(pdists)
-        logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
+    def log_extra(self):
+        stds = parallel_sampler.run_map(worker_collect_stats, self.action_dim)
+        logger.record_tabular('AveragePolicyStd', np.mean(stds))
+

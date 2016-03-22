@@ -1,4 +1,6 @@
 import flask #import Flask, render_template, send_from_directory
+
+from rllab.misc.ext import flatten
 from rllab.viskit import core
 from rllab.misc import ext
 import sys
@@ -59,14 +61,15 @@ def make_plot(plot_list):
         )
     )
     fig = go.Figure(data=data, layout=layout)
-    return po.plot(fig, output_type='div')
+    return po.plot(fig, output_type='div', include_plotlyjs=False)
 
 
 def get_plot_instruction(plot_key, split_key=None, group_key=None):
+    print plot_key, split_key, group_key
     selector = core.Selector(exps_data)
     if split_key is not None:
         vs = [vs for k, vs in distinct_params if k == split_key][0]
-        split_selectors = [selector.where(k, v) for v in vs]
+        split_selectors = [selector.where(split_key, v) for v in vs]
         split_legends = map(str, vs)
     else:
         split_selectors = [selector]
@@ -75,16 +78,17 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None):
     for split_selector, split_legend in zip(split_selectors, split_legends):
         if group_key:
             vs = [vs for k, vs in distinct_params if k == group_key][0]
-            group_selectors = [split_selector.where(k, v) for v in vs]
+            group_selectors = [split_selector.where(group_key, v) for v in vs]
             group_legends = map(str, vs)
         else:
             group_selectors = [split_selector]
             group_legends = [split_legend]
         to_plot = []
         for group_selector, group_legend in zip(group_selectors, group_legends):
+            #import ipdb; ipdb.set_trace()
             filtered_data = group_selector.extract()
             if len(filtered_data) > 0:
-                progresses = [exp.progress[plot_key] for exp in filtered_data]
+                progresses = [exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
                 sizes = map(len, progresses)
                 max_size = max(sizes)
                 progresses = [ps for ps in progresses if len(ps) == max_size]
@@ -100,13 +104,17 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None):
 def plot_div():
     args = flask.request.args
     plot_key = args.get("plot_key")
-    split_key = args.get("split_key", None)
+    split_key = args.get("split_key", "")
+    group_key = args.get("group_key", "")
     if len(split_key) == 0:
         split_key = None
-    group_key = distinct_params[0][0]
+    if len(group_key) == 0:
+        group_key = None
+    # group_key = distinct_params[0][0]
     # print split_key
     # exp_filter = distinct_params[0]
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, group_key=group_key)
+    # print plot_div
     return plot_div
 
 
@@ -133,7 +141,7 @@ if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
     print("Importing data from {path}...".format(path=args.data_path))
     exps_data = core.load_exps_data(args.data_path)
-    plottable_keys = exps_data[0].progress.keys()
+    plottable_keys = list(set(flatten(exp.progress.keys() for exp in exps_data)))
     distinct_params = core.extract_distinct_params(exps_data)
     port = 5000
     url = "http://127.0.0.1:{0}".format(port)

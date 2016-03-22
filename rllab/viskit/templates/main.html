@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="http://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css" rel="stylesheet" media="screen">
     <link href="/static/css/dropdowns-enhancement.css" rel="stylesheet" media="screen">
+    <script type="text/javascript" src="/static/js/plotly-latest.min.js"></script>
     <style type="text/css">
         .container {
             padding-top: 100px;
@@ -34,7 +35,7 @@
             </ul>
         </div>
         <br/>
-        Split by:
+        (Figure) Split by:
         <div class="btn-group">
             <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">(None)<span
                     class="caret"></span></button>
@@ -53,6 +54,22 @@
                 {% endfor %}
             </ul>
         </div>
+        (Series) Split by:
+        <div class="btn-group">
+            <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">{{  distinct_param_keys[0] }}<span
+                    class="caret"></span></button>
+            <ul class="dropdown-menu">
+                {% for key in distinct_param_keys %}
+                    <li>
+                        <input type="radio" id="group_key_{{ loop.index }}" name="group_key"
+                               value="{{ loop.index }}" />
+                        <label for="group_key_{{ loop.index }}">{{ key }}</label>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <br />
+        <span id="status"></span>
     </div>
     <div id="plot_wrapper">
         {{ plot_div|safe }}
@@ -67,6 +84,8 @@
     var plottableKeys = {{ plottable_keys|tojson|safe }};
     var distinctParamKeys = {{ distinct_param_keys|tojson|safe }};
     function updatePlot() {
+        $("#status").html("Updating")
+
         var $controlPanel = $(this).closest(".control-panel");
         var plotIndex = $controlPanel.find("input[name=plot_key]:checked").val();
         var plotKey = plottableKeys[plotIndex];
@@ -77,15 +96,19 @@
         } else {
             splitKey = distinctParamKeys[splitIndex - 1];
         }
-        $.get("/plot_div", {"plot_key": plotKey, "split_key": splitKey}, function (data) {
-
+        var groupIndex = $controlPanel.find("input[type=radio][name=group_key]:checked").val();
+        var groupKey = distinctParamKeys[groupIndex - 1];
+        $.get("/plot_div", {"plot_key": plotKey, "split_key": splitKey, "group_key": groupKey}, function (data) {
             $("#plot_wrapper").empty().append(data);
+            $("#status").html("Updated")
         });
     }
     $(function () {
         $("input[type=radio][name=plot_key]").change(updatePlot);
         $("input[type=radio][name=split_key]").change(updatePlot);
+        $("input[type=radio][name=group_key]").change(updatePlot);
     });
+    $("#status").html("Ready")
 </script>
 
 </body>
