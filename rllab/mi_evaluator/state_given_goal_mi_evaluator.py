@@ -18,10 +18,10 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
 
     def __init__(
             self,
-            mdp_spec,
+            env_spec,
             regressor_cls=None,
             regressor_args=None):
-        assert isinstance(mdp_spec, SubgoalMDPSpec)
+        assert isinstance(env_spec, SubgoalMDPSpec)
 
         Serializable.quick_init(self, locals())
         if regressor_cls is None:
@@ -30,17 +30,17 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
             regressor_args = dict()
 
         self._regressor = regressor_cls(
-            input_shape=(mdp_spec.observation_dim + mdp_spec.n_subgoals,),
-            output_dim=mdp_spec.observation_dim,
+            input_shape=(env_spec.observation_dim + env_spec.n_subgoals,),
+            output_dim=env_spec.observation_dim,
             name="(s'|g,s)",
             **regressor_args
         )
-        self._n_subgoals = mdp_spec.n_subgoals
+        self._n_subgoals = env_spec.n_subgoals
 
     def _get_relevant_data(self, paths):
         obs = np.concatenate([p["observations"][:-1] for p in paths])
         next_obs = np.concatenate([p["observations"][1:] for p in paths])
-        subgoals = np.concatenate([p["subgoals"][:-1] for p in paths])
+        subgoals = np.concatenate([p["actions"][:-1] for p in paths])
         N = obs.shape[0]
         return obs.reshape((N, -1)), next_obs.reshape((N, -1)), subgoals
 
@@ -55,11 +55,14 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
         N = flat_obs.shape[0]
         xs = np.concatenate([flat_obs, subgoals], axis=1)
         ys = flat_next_obs
-        high_pdists = path["high_pdists"]
+        high_pdists = path["pdists"]
         log_p_sprime_given_g_s = self._regressor.predict_log_likelihood(xs, ys)
         p_sprime_given_s = 0.
         for goal in range(self._n_subgoals):
             goal_mat = np.tile(to_onehot(goal, self._n_subgoals), (N, 1))
             xs_goal = np.concatenate([flat_obs, goal_mat], axis=1)
             p_sprime_given_s += np.exp(high_pdists[:-1, goal]) * np.exp(self._regressor.predict_log_likelihood(xs_goal, ys))
-        return np.append(log_p_sprime_given_g_s - np.log(p_sprime_given_s + 1e-8), 0)
+        ret = np.append(log_p_sprime_given_g_s - np.log(p_sprime_given_s + 1e-8), 0)
+        if np.max(np.abs(ret)) > 1e3:
+            import ipdb; ipdb.set_trace()
+        return ret

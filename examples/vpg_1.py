@@ -64,7 +64,7 @@ for _ in xrange(n_itr):
             # summarizes the distribution of the actions in the case of a
             # stochastic policy. This information is useful when forming
             # importance sampling ratios. In our case it is not needed.
-            action, _ = policy.get_action(observation)
+            action, _ = policy.act(observation)
             next_observation, reward, terminal = mdp.step(action)
             observations.append(observation)
             actions.append(action)

@@ -1,10 +1,13 @@
-from rllab.mdp.proxy_mdp import ProxyMDP
+from .proxy_env import ProxyEnv
 from rllab.core.serializable import Serializable
+from rl_gym.spaces import Discrete
+from rl_gym.core import Step
+from rllab.spaces import Product
 import numpy as np
 from rllab.misc import special
 
 
-class CompoundActionSequenceMDP(ProxyMDP, Serializable):
+class CompoundActionSequenceEnv(ProxyEnv, Serializable):
 
     """
     Takes a discrete action mdp, and turns it into an mdp with compound actions so that each original action is
@@ -14,7 +17,7 @@ class CompoundActionSequenceMDP(ProxyMDP, Serializable):
     original mdp, and perform exploration using these learned action sequence primitives (thus, a hierarchy).
     """
 
-    def __init__(self, mdp, action_map, action_dim=None, reset_history=False, obs_include_actions=False):
+    def __init__(self, wrapped_env, action_map, action_dim=None, reset_history=False, obs_include_actions=False):
         """
         Constructs a compound mdp.
         :param mdp: The original mdp.
@@ -29,8 +32,9 @@ class CompoundActionSequenceMDP(ProxyMDP, Serializable):
         :return:
         """
         Serializable.quick_init(self, locals())
-        super(CompoundActionSequenceMDP, self).__init__(mdp)
-        assert len(action_map) == mdp.action_dim
+        super(CompoundActionSequenceEnv, self).__init__(wrapped_env)
+        assert isinstance(wrapped_env.action_space, Discrete)
+        assert len(action_map) == wrapped_env.action_space.n
         action_strs = [",".join(map(str, x)) for x in action_map]
         # ensure no duplicates
         assert len(set(action_strs)) == len(action_strs)
@@ -40,27 +44,26 @@ class CompoundActionSequenceMDP(ProxyMDP, Serializable):
         if reset_history or obs_include_actions:
             assert len(set([len(x) for x in action_map])) == 1
         self._action_map = map(np.array, action_map)
-        # self._action_strs = action_strs
         self._action_history = []
         if action_dim is None:
-            self._action_dim = self._mdp.action_dim
+            self._action_dim = wrapped_env.n
         else:
             self._action_dim = action_dim
         self._raw_obs = None
         self._reset_history = reset_history
         self._obs_include_actions = obs_include_actions
-        self._mdp.reset()
+        self.wrapped_env.reset()
 
     @property
-    def action_dim(self):
-        return self._action_dim
+    def action_shape(self):
+        return Discrete(self._action_dim)
 
     @property
     def _history_length(self):
         return len(self._action_map[0])
 
     def reset(self):
-        obs = self._mdp.reset()
+        obs = self.wrapped_env.reset()
         self._action_history = []
         self._raw_obs = obs
         return self._get_current_obs()
@@ -73,27 +76,23 @@ class CompoundActionSequenceMDP(ProxyMDP, Serializable):
             # If the action history is longer than history_length, then only the last few will be included
             included = self._action_history[::-1][:self._history_length]
             # make shape checking happy
-            if len(included) == 0:
-                one_hots = np.zeros((0, self._action_dim))
-            else:
-                one_hots = np.array([special.to_onehot(x, self._action_dim) for x in included])
-            padded = np.concatenate(
-                [one_hots, np.zeros((self._history_length - len(included), self._action_dim))],
-                axis=0
-            )
-            return np.concatenate([self._raw_obs.flatten(), padded.flatten()])
+            # one_hots = np.array([special.to_onehot(x, self._action_dim) for x in included])
+            padded = included + [0] * (self._history_length - len(included))
+            return (self._raw_obs,) + tuple(padded)
         else:
             return self._raw_obs
 
     @property
-    def observation_shape(self):
+    def observation_space(self):
         if self._obs_include_actions:
-            return (self._mdp.observation_dim + self._history_length * self._action_dim,)
+            return Product(
+                [self.wrapped_env.observation_space] + [Discrete(self._action_dim) for _ in xrange(self._action_dim)]
+            )
         else:
-            return self._mdp.observation_shape
+            return self.wrapped_env.observation_space
 
     def step(self, action):
-        self._action_history.append(special.from_onehot(action))
+        self._action_history.append(action)
         # check if the last few actions match any real action
         real_action = None
         for idx, action_list in enumerate(self._action_map):
@@ -101,14 +100,13 @@ class CompoundActionSequenceMDP(ProxyMDP, Serializable):
                 real_action = idx
                 break
         if real_action is not None:
-            next_raw_obs, reward, done = self._mdp.step(special.to_onehot(real_action, self._mdp.action_dim))
+            next_raw_obs, reward, done, _ = self.wrapped_env.step(real_action)
             self._raw_obs = next_raw_obs
             # clear the action history so far
             self._action_history = []
         else:
-            # next_obs = self._raw_obs
             reward = 0
             done = False
             if len(self._action_history) == len(self._action_map[0]):
                 self._action_history = []
-        return self._get_current_obs(), reward, done
+        return Step(observation=self._get_current_obs(), reward=reward, done=done)

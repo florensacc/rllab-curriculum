@@ -17,36 +17,36 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     def __init__(
             self,
-            mdp_spec,
+            env_spec,
             hidden_sizes=(32,),
-            include_action=True,
+            state_include_action=True,
             nonlinearity=NL.rectify):
         """
-        :param mdp_spec: A spec for the mdp.
+        :param env_spec: A spec for the env.
         :param hidden_sizes: list of sizes for the fully connected hidden layers
         :param nonlinearity: nonlinearity used for each hidden layer
         :return:
         """
         Serializable.quick_init(self, locals())
-        super(CategoricalGRUPolicy, self).__init__(mdp_spec)
+        super(CategoricalGRUPolicy, self).__init__(env_spec)
 
         assert len(hidden_sizes) == 1
 
-        if include_action:
-            input_shape = (mdp_spec.observation_dim + mdp_spec.action_dim,)
+        if state_include_action:
+            input_shape = (env_spec.observation_dim + env_spec.action_dim,)
         else:
-            input_shape = (mdp_spec.observation_dim,)
+            input_shape = (env_spec.observation_dim,)
 
         log_prob_network = GRUNetwork(
             input_shape=input_shape,
-            output_dim=mdp_spec.action_dim,
+            output_dim=env_spec.action_dim,
             hidden_dim=hidden_sizes[0],
             nonlinearity=nonlinearity,
             output_nonlinearity=theano.tensor.nnet.logsoftmax,
         )
 
         self._log_prob_network = log_prob_network
-        self._include_action = include_action
+        self._state_include_action = state_include_action
 
         self._f_log_prob = ext.compile_function(
             [
@@ -79,7 +79,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def get_pdist_sym(self, obs_var, action_var):
         n_batches, n_steps = obs_var.shape[:2]
         obs_var = obs_var.reshape((n_batches, n_steps, -1))
-        if self._include_action:
+        if self._state_include_action:
             prev_action_var = self._get_prev_action_var(action_var)
             all_input_var = TT.concatenate(
                 [obs_var, prev_action_var],
@@ -119,8 +119,8 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
     # of length N, where each entry is the density value for that action, under
     # the current policy
     @overrides
-    def get_action(self, observation):
-        if self._include_action:
+    def act(self, observation):
+        if self._state_include_action:
             all_input = np.concatenate([observation.flatten(), self._prev_action])
         else:
             all_input = observation.flatten()
@@ -135,3 +135,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @overrides
     def is_recurrent(self):
         return True
+
+    @property
+    def dist_family(self):
+        return categorical_dist

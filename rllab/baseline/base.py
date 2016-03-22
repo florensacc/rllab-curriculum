@@ -3,8 +3,8 @@ from rllab.misc import autoargs
 
 class Baseline(object):
 
-    def __init__(self, mdp_spec):
-        self._mdp_spec = mdp_spec
+    def __init__(self, env_spec):
+        self._mdp_spec = env_spec
 
     @property
     def algorithm_parallelized(self):

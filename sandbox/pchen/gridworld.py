@@ -31,11 +31,11 @@ algo = PPO(
     )
 )
 policy = CategoricalMLPPolicy(
-    mdp_spec=mdp.spec,
+    env_spec=mdp.spec,
     hidden_sizes=(32,),
 )
 baseline = LinearFeatureBaseline(
-    mdp_spec=mdp.spec
+    env_spec=mdp.spec
 )
 for i in xrange(10):
     run_experiment_lite(

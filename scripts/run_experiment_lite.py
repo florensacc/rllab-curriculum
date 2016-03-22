@@ -39,6 +39,9 @@ def concretize(maybe_stub):
                 import traceback; traceback.print_exc()
                 # import ipdb; ipdb.set_trace()
         return maybe_stub.__stub_cache
+    elif isinstance(maybe_stub, dict):
+        # make sure that there's no hidden caveat
+        return dict([(concretize(k), concretize(v)) for k, v in maybe_stub.iteritems()])
     else:
         return maybe_stub
 

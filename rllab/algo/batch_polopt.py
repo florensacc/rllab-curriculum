@@ -2,9 +2,9 @@ import numpy as np
 from rllab.algo.base import RLAlgorithm
 from rllab.sampler import parallel_sampler
 from rllab.misc import autoargs
-from rllab.misc import special #import explained_variance_1d, discount_cumsum
-from rllab.misc import tensor_utils #import explained_variance_1d, discount_cumsum
-from rllab.algo import util# import center_advantages, shift_advantages_to_positive
+from rllab.misc import special
+from rllab.misc import tensor_utils
+from rllab.algo import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 
@@ -61,29 +61,29 @@ class BatchPolopt(RLAlgorithm):
         self.positive_adv = positive_adv
         self.store_paths = store_paths
 
-    def start_worker(self, mdp, policy, baseline):
-        parallel_sampler.populate_task(mdp, policy)
+    def start_worker(self, env, policy, baseline):
+        parallel_sampler.populate_task(env, policy)
         if self.plot:
-            plotter.init_plot(mdp, policy)
+            plotter.init_plot(env, policy)
 
     def shutdown_worker(self):
         pass
 
-    def train(self, mdp, policy, baseline, **kwargs):
-        self.start_worker(mdp, policy, baseline)
-        opt_info = self.init_opt(mdp.spec, policy, baseline)
+    def train(self, env, policy, baseline, **kwargs):
+        self.start_worker(env, policy, baseline)
+        opt_info = self.init_opt(env.spec, policy, baseline)
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
-            paths = self.obtain_samples(itr, mdp, policy, **kwargs)
-            samples_data = self.process_samples(itr, paths, mdp.spec, policy, baseline, **kwargs)
-            mdp.log_extra(paths)
+            paths = self.obtain_samples(itr, env, policy, **kwargs)
+            samples_data = self.process_samples(itr, paths, env.spec, policy, baseline, **kwargs)
+            env.log_extra(paths)
             policy.log_extra(paths)
             baseline.log_extra(paths)
             opt_info = self.optimize_policy(
                 itr, policy, samples_data, opt_info, **kwargs)
             logger.log("saving snapshot...")
             params = self.get_itr_snapshot(
-                itr, mdp, policy, baseline, samples_data, opt_info, **kwargs)
+                itr, env, policy, baseline, samples_data, opt_info, **kwargs)
             if self.store_paths:
                 params["paths"] = samples_data["paths"]
             logger.save_itr_params(itr, params)
@@ -97,14 +97,14 @@ class BatchPolopt(RLAlgorithm):
                               "continue...")
         self.shutdown_worker()
 
-    def init_opt(self, mdp_spec, policy, baseline):
+    def init_opt(self, env_spec, policy, baseline):
         """
         Initialize the optimization procedure. If using theano / cgt, this may
         include declaring all the variables and compiling functions
         """
         raise NotImplementedError
 
-    def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data,
+    def get_itr_snapshot(self, itr, env, policy, baseline, samples_data,
                          opt_info, **kwargs):
         """
         Returns all the data that should be saved in the snapshot for this
@@ -119,7 +119,7 @@ class BatchPolopt(RLAlgorithm):
         if self.plot:
             plotter.update_plot(policy, self.max_path_length)
 
-    def obtain_samples(self, itr, mdp, policy, **kwargs):
+    def obtain_samples(self, itr, env, policy, **kwargs):
         cur_params = policy.get_param_values()
 
         parallel_sampler.request_samples(
@@ -131,7 +131,7 @@ class BatchPolopt(RLAlgorithm):
 
         return parallel_sampler.collect_paths()
 
-    def process_samples(self, itr, paths, mdp_spec, policy, baseline, **kwargs):
+    def process_samples(self, itr, paths, env_spec, policy, baseline, **kwargs):
 
         baselines = []
         returns = []
@@ -146,10 +146,11 @@ class BatchPolopt(RLAlgorithm):
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
 
-        observations = np.vstack([path["observations"] for path in paths])
-        pdists = np.vstack([path["pdists"] for path in paths])
-        actions = np.vstack([path["actions"] for path in paths])
-        advantages = np.concatenate([path["advantages"] for path in paths])
+        observations = tensor_utils.concat_tensors([path["observations"] for path in paths])
+        actions = tensor_utils.concat_tensors([path["actions"] for path in paths])
+        advantages = tensor_utils.concat_tensors([path["advantages"] for path in paths])
+        env_infos = tensor_utils.concat_tensor_dicts([path["env_infos"] for path in paths])
+        agent_infos = tensor_utils.concat_tensor_dicts([path["agent_infos"] for path in paths])
 
         if self.center_adv:
             advantages = util.center_advantages(advantages)
@@ -162,7 +163,7 @@ class BatchPolopt(RLAlgorithm):
 
         undiscounted_returns = [sum(path["rewards"]) for path in paths]
 
-        ent = policy.compute_entropy(pdists)
+        ent = policy.entropy(agent_infos)
 
         ev = special.explained_variance_1d(
             np.concatenate(baselines),
@@ -185,7 +186,10 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
 
-        # mdp.log_extra(paths)
+        # env.log_diagnostics(env_infos)
+        # policy.log_diagnostics(agent_infos)
+
+        # env.log_extra(paths)
         # policy.log_extra(paths)
         # baseline.log_extra(paths)
 
@@ -198,9 +202,10 @@ class BatchPolopt(RLAlgorithm):
 
         samples_data = dict(
             observations=observations,
-            pdists=pdists,
             actions=actions,
             advantages=advantages,
+            env_infos=env_infos,
+            agent_infos=agent_infos,
             paths=paths,
         )
 

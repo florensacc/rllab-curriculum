@@ -32,7 +32,7 @@ def rollout(policy, param_val, mdp, discount):
     #timestep = 5.0 / 1000
     rewards = []
     for _ in range(mdp.horizon):
-        action, action_prob = policy.get_action(obs)
+        action, action_prob = policy.act(obs)
         next_state, next_obs, reward, done = mdp.step(state, action)
         rewards.append(reward)
         if done:
@@ -59,7 +59,7 @@ def mk_eval_policy(policy, mdp, max_steps_per_traj, discount):
         rewards = []
         #mdp.start_viewer()
         for _ in range(max_steps_per_traj):
-            action, action_prob = policy.get_action(obs)
+            action, action_prob = policy.act(obs)
             next_state, next_obs, reward, done = mdp.step(state, action)
             #mdp.viewer.loop_once()
             rewards.append(reward)

@@ -3,9 +3,9 @@ from rllab.core.serializable import Serializable
 
 class SubgoalBaseline(ZeroBaseline, Serializable):
 
-    def __init__(self, mdp_spec, high_baseline, low_baseline):
+    def __init__(self, env_spec, high_baseline, low_baseline):
         Serializable.quick_init(self, locals())
-        super(SubgoalBaseline, self).__init__(mdp_spec)
+        super(SubgoalBaseline, self).__init__(env_spec)
         # TODO is there any way to avoid repeating this construction?
         self._high_baseline = high_baseline
         self._low_baseline = low_baseline

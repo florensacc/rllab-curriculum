@@ -12,16 +12,16 @@ class TRPO(NaturalGradientMethod, BatchPolopt):
     Trust Region Policy Optimization
     """
 
-    @autoargs.inherit(NaturalGradientMethod.__init__)
-    @autoargs.inherit(BatchPolopt.__init__)
-    @autoargs.arg("backtrack_ratio", type=float,
-                  help="The exponential backtrack factor")
-    @autoargs.arg("max_backtracks", type=int,
-                  help="The maximum number of exponential backtracks")
     def __init__(self,
                  backtrack_ratio=0.5,
                  max_backtracks=10,
                  **kwargs):
+        """
+        :param backtrack_ratio: The exponential backtrack factor.
+        :param max_backtracks: The maximum number of exponential backtracks.
+        :param kwargs:
+        :return:
+        """
         super(TRPO, self).__init__(**kwargs)
         BatchPolopt.__init__(self, **kwargs)
         self.backtrack_ratio = backtrack_ratio

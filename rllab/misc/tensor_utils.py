@@ -25,43 +25,22 @@ def high_res_normalize(probs):
     return map(lambda x: x / sum(map(float, probs)), map(float, probs))
 
 
-def cg(prod, b, x0, tolerance=1.0e-10, max_itr=100):
-    """
-    A function to solve [A]{x} = {b} linear equation system with the 
-    conjugate gradient method.
+def stack_tensors(tensors):
+    tensor_shape = np.array(tensors[0]).shape
+    if tensor_shape is tuple():
+        return np.array(tensors)
+    return np.vstack(tensors)
 
-    More at: http://en.wikipedia.org/wiki/Conjugate_gradient_method
 
-    ========== Parameters ==========
-    prod : a function that computes A*x given x
-    b : vector
-        The right hand side (RHS) vector of the system.
-    x0 : vector
-        The starting guess for the solution.
-    max_itr : integer
-        Maximum number of iterations. Iteration will stop after maxiter 
-        steps even if the specified tolerance has not been achieved.
-    tolerance : float
-        Tolerance to achieve. The algorithm will terminate when either 
-        the relative or the absolute residual is below TOLERANCE.
-    """
+def stack_tensor_dicts(tensor_dicts):
+    keys = tensor_dicts[0].keys()
+    return {k: stack_tensors([x[k] for x in tensor_dicts]) for k in keys}
 
-    #   Initializations    
-    x = x0
-    r0 = b - prod(x)
-    p = r0
 
-    #   Start iterations    
-    for i in xrange(max_itr):
-        a = float(np.dot(r0.T, r0)/np.dot(prod(p).T, p))#np.dot(p.T, A), p))
-        x = x + p*a
-        ri = r0 - a*prod(p)
+def concat_tensors(tensors):
+    return np.concatenate(tensors, axis=0)
 
-        #print i, np.linalg.norm(ri)
 
-        if np.linalg.norm(ri) < tolerance:
-            return x
-        b = float(np.dot(ri.T, ri)/np.dot(r0.T, r0))
-        p = ri + b * p
-        r0 = ri
-    return x
+def concat_tensor_dicts(tensor_dicts):
+    keys = tensor_dicts[0].keys()
+    return {k: concat_tensors([x[k] for x in tensor_dicts]) for k in keys}

@@ -11,6 +11,7 @@ from rllab.baseline.zero_baseline import ZeroBaseline
 from rllab.algo.ppo import PPO
 from rllab.algo.trpo import TRPO
 from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+from rllab.optimizer.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.misc import ext
 
@@ -26,37 +27,39 @@ mdp = CompoundActionSequenceMDP(
         ]
     ),
     action_map=[
-        # [0, 1, 2],
-        # [0, 0, 0],
-        # [2, 1, 0],
-        # [3, 3, 3],
-        [0],
-        [1],
-        [2],
-        [3],
-    ]
+        [0, 1, 2],
+        [0, 0, 0],
+        [2, 1, 0],
+        [3, 3, 3],
+        # [0],
+        # [1],
+        # [2],
+        # [3],
+    ],
+    obs_include_actions=True
 )
 algo = TRPO(
-    batch_size=1000,
+    batch_size=5000,
     whole_paths=True,
-    max_path_length=100,
+    max_path_length=500,
     n_itr=100,
     discount=0.99,
     step_size=0.01,
+    # optimizer=ConjugateGradientOptimizer(),
     # optimizer=PenaltyLbfgsOptimizer(
     #     max_penalty_itr=5,
     # )
 )
 # policy = CategoricalGRUPolicy(
 #     mdp_spec=mdp.spec,
-#     include_action=False,
+#     state_include_action=False,
 #     hidden_sizes=(32,),
 # )
 policy = CategoricalMLPPolicy(
-    mdp_spec=mdp.spec,
+    env_spec=mdp.spec,
     hidden_sizes=(32,),
 )
-baseline = ZeroBaseline(mdp_spec=mdp.spec)#LinearFeatureBaseline(
+baseline = ZeroBaseline(env_spec=mdp.spec)#LinearFeatureBaseline(
 #     mdp_spec=mdp.spec
 # )
 run_experiment_lite(
@@ -66,6 +69,6 @@ run_experiment_lite(
     snapshot_mode="last",
     seed=1,
     mode="local",
-    # log_tabular_only=True,
+    log_tabular_only=True,
     # env=ext.merge_dict(os.environ, dict(THEANO_FLAGS="optimizer=None"))
 )

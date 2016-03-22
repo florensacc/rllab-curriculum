@@ -13,6 +13,7 @@ from rllab.policy.base import StochasticPolicy
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 from rllab.misc import autoargs
+from rllab.misc import normal_dist
 from rllab.sampler import parallel_sampler
 
 
@@ -178,7 +179,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         return actions, pdists
 
     @overrides
-    def get_action(self, observation):
+    def act(self, observation):
         actions, pdists = self.get_actions([observation])
         return actions[0], pdists[0]
 
@@ -203,3 +204,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         pdists = np.vstack([path["pdists"] for path in paths])
         means, log_stds = self._split_pdist(pdists)
         logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
+
+    @property
+    def dist_family(self):
+        return normal_dist

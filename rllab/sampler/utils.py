@@ -1,36 +1,38 @@
 import numpy as np
 import pyprind
 from rllab.misc import logger
+from rllab.misc import tensor_utils
 
 
-def rollout(mdp, policy, max_length=np.inf, animated=False, speedup=1):
+def rollout(env, agent, max_length=np.inf, animated=False, speedup=1):
     observations = []
     actions = []
     rewards = []
-    pdists = []
-    o = mdp.reset()
-    policy.reset()
+    agent_infos = []
+    env_infos = []
+    o = env.reset()
+    agent.reset()
     path_length = 0
     while path_length < max_length:
-        a, pdist = policy.get_action(o)
-        next_o, r, d = mdp.step(a)
-        observations.append(o)
+        a, agent_info = agent.act(o)
+        next_o, r, d, env_info = env.step(a)
+        observations.append(env.observation_space.flatten(o))
         rewards.append(r)
-        actions.append(a)
-        pdists.append(pdist)
+        actions.append(env.action_space.flatten(a))
+        agent_infos.append(agent_info)
+        env_infos.append(env_info)
         path_length += 1
         if d:
             break
         o = next_o
         if animated:
-            mdp.plot()
-            import time
-            time.sleep(mdp.timestep / speedup)
+            env.render()
     return dict(
-        observations=np.vstack(observations),
-        actions=np.vstack(actions),
-        rewards=np.vstack(rewards).reshape(-1),
-        pdists=np.vstack(pdists)
+        observations=tensor_utils.stack_tensors(observations),
+        actions=tensor_utils.stack_tensors(actions),
+        rewards=tensor_utils.stack_tensors(rewards),
+        agent_infos=tensor_utils.stack_tensor_dicts(agent_infos),
+        env_infos=tensor_utils.stack_tensor_dicts(env_infos),
     )
 
 

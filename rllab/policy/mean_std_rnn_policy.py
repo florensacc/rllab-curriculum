@@ -13,6 +13,7 @@ from rllab.misc.ext import compile_function
 from rllab.policy.base import StochasticPolicy
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
+from rllab.misc import normal_dist
 from rllab.misc import autoargs
 from rllab.sampler import parallel_sampler
 
@@ -232,7 +233,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self._prev_action = np.zeros((self.action_dim,))
 
     @overrides
-    def get_action(self, observation):
+    def act(self, observation):
         mean, log_std, self._cur_hid, self._cur_cell = \
             [x[0] for x in
              self._f_forward(
@@ -273,3 +274,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @property
     def is_recurrent(self):
         return True
+
+    @property
+    def dist_family(self):
+        return normal_dist

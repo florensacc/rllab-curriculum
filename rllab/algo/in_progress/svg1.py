@@ -131,7 +131,7 @@ class SVG1(RLAlgorithm):
                     # to the replay pool
                     state, observation = mdp.reset()
                     policy.reset()
-                action, pdist = policy.get_action(observation)
+                action, pdist = policy.act(observation)
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)
@@ -323,7 +323,7 @@ class SVG1(RLAlgorithm):
         )))
 
         pdists = np.vstack([path["pdists"] for path in paths])
-        ent = policy.compute_entropy(pdists)
+        ent = policy.entropy(pdists)
 
         logger.record_tabular('Epoch', epoch)
         logger.record_tabular('Entropy', ent)

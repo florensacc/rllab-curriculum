@@ -1,75 +1,62 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.mdp.compound_action_sequence_mdp import CompoundActionSequenceMDP
-from rllab.mdp.grid_world_mdp import GridWorldMDP
+from rllab.env.compound_action_sequence_env import CompoundActionSequenceEnv
+from rllab.env.grid_world_env import GridWorldEnv
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.algo.batch_hrl import BatchHRL
-from rllab.mdp.subgoal_mdp import SubgoalMDP
+from rllab.spaces import Discrete
+from rllab.env.subgoal_env import SubgoalEnv
 from rllab.policy.subgoal_policy import SubgoalPolicy
+from rllab.regressor.categorical_mlp_regressor import CategoricalMLPRegressor
 from rllab.baseline.subgoal_baseline import SubgoalBaseline
+from rllab.baseline.gaussian_mlp_baseline import GaussianMLPBaseline
+from rllab.optimizer.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
-# from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-
-from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
-# from rllab.baseline.zero_baseline import ZeroBaseline
-from rllab.algo.ppo import PPO
 from rllab.algo.trpo import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.misc import ext
 
 stub(globals())
 
-mdp = SubgoalMDP(
-    mdp=CompoundActionSequenceMDP(
-        mdp=GridWorldMDP(
-            desc=[
-                "SFFF",
-                "FFFF",
-                "FFFF",
-                "FFFF"
-            ]
-        ),
-        reset_history=True,
-        action_map=[
-            [0, 1, 2],
-            [0, 0, 0],
-            [2, 1, 0],
-            [3, 3, 3],
-            # [0],
-            # [1],
-            # [2],
-            # [3],
-        ]
-    ),
-    n_subgoals=4
+
+env = GridWorldEnv(
+    desc=[
+        "SFFF",
+        "FFFF",
+        "FFFF",
+        "FFFF"
+    ]
 )
 
-# mdp = SubgoalMDP(
-#     mdp=mdp,
-#     n_subgoals=4,
-# )
+env = CompoundActionSequenceEnv(
+    wrapped_env=env,
+    reset_history=True,
+    obs_include_actions=True,
+    action_map=[
+        [0, 1, 2],
+        [0, 0, 0],
+        [2, 1, 0],
+        [3, 3, 3],
+        # [0],
+        # [1],
+        # [2],
+        # [3],
+    ]
+)
 
-# algo = TRPO(
-#     batch_size=10000,
-#     whole_paths=True,
-#     max_path_length=60,
-#     n_itr=100,
-#     discount=0.99,
-#     step_size=0.01,
-#     # optimizer=PenaltyLbfgsOptimizer(
-#     #     max_penalty_itr=5,
-#     # )
-# )
+env = SubgoalEnv(
+    wrapped_env=env,
+    subgoal_space=Discrete(4),
+)
+
 algo = BatchHRL(
     batch_size=10000,
     whole_paths=True,
     max_path_length=60,
     n_itr=100,
-    subgoal_interval=3,
     high_algo=TRPO(
         discount=0.99,
         step_size=0.01,
-        # optimizer=PenaltyL
     ),
     low_algo=TRPO(
         discount=0.99,
@@ -77,45 +64,47 @@ algo = BatchHRL(
     ),
 )
 
-# policy = CategoricalGRUPolicy(
-#     mdp_spec=mdp.spec,
-#     include_action=False,
-#     hidden_sizes=(32,),
-# )
-
 policy = SubgoalPolicy(
-    mdp_spec=mdp.spec,
+    env_spec=env.spec,
+    subgoal_interval=3,
     high_policy=CategoricalMLPPolicy(
-        mdp_spec=mdp.high_mdp_spec,
+        env_spec=env.spec.high_env_spec,
     ),
     low_policy=CategoricalMLPPolicy(
-        mdp_spec=mdp.low_mdp_spec,
+        env_spec=env.spec.low_env_spec,
     ),
 )
 
 baseline = SubgoalBaseline(
-    mdp_spec=mdp.spec,
-    high_baseline=LinearFeatureBaseline(mdp_spec=mdp.high_mdp_spec),
-    low_baseline=LinearFeatureBaseline(mdp_spec=mdp.low_mdp_spec),
+    env_spec=env.spec,
+    high_baseline=GaussianMLPBaseline(
+        env_spec=env.spec.high_env_spec,
+        regressor_args=dict(
+            optimizer=ConjugateGradientOptimizer(),
+        ),
+    ),
+    low_baseline=GaussianMLPBaseline(
+        env_spec=env.spec.low_env_spec,
+        regressor_args=dict(
+            optimizer=ConjugateGradientOptimizer(),
+        ),
+    ),
 )
 
-# policy = CategoricalMLPPolicy(
-#     mdp_spec=mdp.spec,
-#     hidden_sizes=(32,),
-# )
+evaluator = StateGivenGoalMIEvaluator(
+    env_spec=env.spec,
+    regressor_cls=CategoricalMLPRegressor,
+    regressor_args=dict(
+        optimizer=ConjugateGradientOptimizer(),
+    ),
+)
 
-# baseline = ZeroBaseline(mdp_spec=mdp.spec)#LinearFeatureBaseline(
-#     mdp_spec=mdp.spec
-# )
-
-evaluator = StateGivenGoalMIEvaluator(mdp_spec=mdp.spec)
 run_experiment_lite(
-    algo.train(mdp=mdp, policy=policy, baseline=baseline, bonus_evaluator=evaluator),
+    algo.train(env=env, policy=policy, baseline=baseline, bonus_evaluator=evaluator),
     exp_prefix="compound_gridworld_4x4_free_hrl",
     n_parallel=1,
     snapshot_mode="last",
     seed=1,
     mode="local",
-    # log_tabular_only=True,
-    env=ext.merge_dict(os.environ, dict(THEANO_FLAGS="optimizer=None"))
+    # env=ext.merge_dict(os.environ, dict(THEANO_FLAGS="optimizer=None"))
 )

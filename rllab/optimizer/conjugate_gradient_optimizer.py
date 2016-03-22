@@ -164,7 +164,4 @@ class ConjugateGradientOptimizer(Serializable):
             if loss < loss_before and constraint_val <= self._max_constraint_val:
                 break
         logger.log("computing loss after")
-        loss_after = self._opt_fun["f_loss"](*(inputs + extra_inputs))
-        logger.record_tabular("LossBefore", loss_before)
-        logger.record_tabular("LossAfter", loss_after)
         logger.log("optimization finished")

@@ -16,29 +16,6 @@ class NaturalGradientMethod(object):
     Natural Gradient Method infrastructure for NPG & TRPO. (and possibly more)
     """
 
-    @autoargs.arg("step_size", type=float,
-                  help="KL divergence constraint. When it's None"
-                       "only natural gradient direction is calculated")
-    @autoargs.arg("use_cg", type=bool,
-                  help="Directly estimate descent direction instead of inverting Fisher"
-                       "Information matrix")
-    @autoargs.arg("cg_iters", type=int,
-                  help="The number of CG iterations used to calculate H^-1 g")
-    @autoargs.arg("reg_coeff", type=float,
-                  help="A small value to add to Fisher Information Matrix's eigenvalue"
-                       "When CG is used, this value will not be changed but if we are"
-                       "directly using Hessian inverse method, this regularization will be"
-                       "adaptively increased should the regularized matrix still be singular"
-                       "(but it's unlikely)")
-    @autoargs.arg("subsample_factor", type=float,
-                  help="Subsampling factor to reduce samples when using "
-                       "conjugate gradient. Since the computation time for "
-                       "the descent direction dominates, this can greatly "
-                       "reduce the overall computation time.")
-    @autoargs.arg("trpo_stepsize", type=bool,
-                  help="hehe")
-    @autoargs.arg("maybe_aggressive", type=bool,
-                  help="hehe")
     def __init__(
             self,
             step_size=0.001,
@@ -49,6 +26,21 @@ class NaturalGradientMethod(object):
             trpo_stepsize=False,
             maybe_aggressive=False,
             **kwargs):
+        """
+
+        :param step_size: KL divergence constraint. When it's None only natural gradient direction is calculated.
+        :param use_cg: Directly estimate descent direction instead of inverting Fisher Information matrix
+        :param cg_iters: The number of CG iterations used to calculate H^-1 g
+        :param reg_coeff: A small value to add to Fisher Information Matrix's eigenvalue. When CG is used, this value
+        will not be changed but if we are directly using Hessian inverse method, this regularization will be
+        adaptively increased should the regularized matrix still be singular (but it's unlikely)
+        :param subsample_factor: Subsampling factor to reduce samples when using conjugate gradient. Since the
+        computation time for the descent direction dominates, this can greatly reduce the overall computation time.
+        :param trpo_stepsize: whether to use stepsize for trpo
+        :param maybe_aggressive: whether to be aggressive in descent direction estimate
+        :param kwargs:
+        :return:
+        """
         self.maybe_aggressive = maybe_aggressive
         self.trpo_stepsize = trpo_stepsize
         self.cg_iters = cg_iters
@@ -57,41 +49,41 @@ class NaturalGradientMethod(object):
         self.reg_coeff = reg_coeff
         self.subsample_factor = subsample_factor
 
-    def init_opt(self, mdp_spec, policy, baseline):
+    def init_opt(self, env_spec, policy, baseline):
         is_recurrent = int(policy.is_recurrent)
-        obs_var = ext.new_tensor(
+        obs_var = env_spec.observation_space.new_tensor_variable(
             'obs',
-            ndim=1 + len(mdp_spec.observation_shape) + is_recurrent,
-            dtype=mdp_spec.observation_dtype
+            extra_dims=1 + is_recurrent,
         )
         advantage_var = ext.new_tensor(
             'advantage',
             ndim=1 + is_recurrent,
             dtype=theano.config.floatX
         )
-        action_var = ext.new_tensor(
+        action_var = env_spec.action_space.new_tensor_variable(
             'action',
-            ndim=2 + is_recurrent,
-            dtype=mdp_spec.action_dtype
+            extra_dims=1 + is_recurrent,
         )
 
-        # log_prob = policy.get_log_prob_sym(obs_var, action_var)
-        old_pdist_var = ext.new_tensor(
-            'old_pdist',
-            ndim=2 + is_recurrent,
-            dtype=theano.config.floatX
-        )
+        old_info_vars = {
+            k: ext.new_tensor(
+                'old_%s' % k,
+                ndim=2 + is_recurrent,
+                dtype=theano.config.floatX
+            ) for k in policy.info_keys
+            }
+        old_info_vars_list = [old_info_vars[k] for k in policy.info_keys]
 
         if is_recurrent:
             valid_var = TT.matrix('valid')
         else:
             valid_var = None
-        pdist_var = policy.get_pdist_sym(obs_var, action_var)
+        info_vars = policy.info_sym(obs_var, action_var)
         if is_recurrent:
-            mean_kl = TT.sum(policy.kl(old_pdist_var, pdist_var) * valid_var) / TT.sum(valid_var)
+            mean_kl = TT.sum(policy.kl_sym(old_info_vars, info_vars) * valid_var) / TT.sum(valid_var)
         else:
-            mean_kl = TT.mean(policy.kl(old_pdist_var, pdist_var))
-        lr = policy.likelihood_ratio(old_pdist_var, pdist_var, action_var)
+            mean_kl = TT.mean(policy.kl_sym(old_info_vars, info_vars))
+        lr = policy.likelihood_ratio_sym(action_var, old_info_vars, info_vars)
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
         if is_recurrent:
@@ -122,12 +114,12 @@ class NaturalGradientMethod(object):
                                              ]), wrt=policy.get_params(trainable=True))
         Hx_plain = TT.concatenate([s.flatten() for s in Hx_plain_splits])
 
-        input_list = [obs_var, advantage_var, old_pdist_var, action_var]
+        input_list = [obs_var, action_var, advantage_var] + old_info_vars_list
         if is_recurrent:
             input_list.append(valid_var)
 
         # following information is computed to TRPO
-        max_kl = TT.max(policy.kl(old_pdist_var, pdist_var))
+        max_kl = TT.max(policy.kl_sym(old_info_vars, info_vars))
 
         return ext.lazydict(
             f_loss=lambda: ext.compile_function(
@@ -166,8 +158,11 @@ class NaturalGradientMethod(object):
         logger.log("optimizing policy")
         inputs = list(ext.extract(
             samples_data,
-            "observations", "advantages", "pdists", "actions"
+            "observations", "actions", "advantages"
         ))
+        agent_infos = samples_data["agent_infos"]
+        info_list = [agent_infos[k] for k in policy.info_keys]
+        inputs.extend(info_list)
         if policy.is_recurrent:
             inputs.append(samples_data["valids"])
         if self.subsample_factor < 1:
@@ -224,10 +219,10 @@ class NaturalGradientMethod(object):
         logger.record_tabular("LossAfter", loss_after)
         logger.log("optimization finished")
 
-    def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data, opt_info):
+    def get_itr_snapshot(self, itr, env, policy, baseline, samples_data, opt_info):
         return dict(
             itr=itr,
             policy=policy,
             baseline=baseline,
-            mdp=mdp,
+            env=env,
         )

@@ -236,7 +236,7 @@ class DPG(RLAlgorithm):
                     self.es_path_returns.append(path_return)
                     path_length = 0
                     path_return = 0
-                action = es.get_action(itr, observation, policy=sample_policy)#qf=qf)
+                action = es.act(itr, observation, policy=sample_policy)#qf=qf)
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)

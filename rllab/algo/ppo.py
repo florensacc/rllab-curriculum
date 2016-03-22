@@ -24,36 +24,39 @@ class PPO(BatchPolopt):
         super(PPO, self).__init__(**kwargs)
 
     @overrides
-    def init_opt(self, mdp_spec, policy, baseline):
+    def init_opt(self, env_spec, policy, baseline):
         is_recurrent = int(policy.is_recurrent)
-        obs_var = ext.new_tensor(
+        obs_var = env_spec.observation_space.new_tensor_variable(
             'obs',
-            ndim=1+len(mdp_spec.observation_shape)+is_recurrent,
-            dtype=mdp_spec.observation_dtype
+            extra_dims=1 + is_recurrent,
+        )
+        action_var = env_spec.action_space.new_tensor_variable(
+            'action',
+            extra_dims=1 + is_recurrent,
         )
         advantage_var = ext.new_tensor(
             'advantage',
-            ndim=1+is_recurrent,
+            ndim=1 + is_recurrent,
             dtype=theano.config.floatX
         )
-        old_pdist_var = ext.new_tensor(
-            'old_pdist',
-            ndim=2+is_recurrent,
-            dtype=theano.config.floatX
-        )
-        action_var = ext.new_tensor(
-            'action',
-            ndim=2+is_recurrent,
-            dtype=mdp_spec.action_dtype
-        )
+        old_info_vars = {
+            k: ext.new_tensor(
+                'old_%s' % k,
+                ndim=2 + is_recurrent,
+                dtype=theano.config.floatX
+            ) for k in policy.info_keys
+            }
+        old_info_vars_list = [old_info_vars[k] for k in policy.info_keys]
+
+
         if is_recurrent:
             valid_var = TT.matrix('valid')
         else:
             valid_var = None
 
-        pdist_var = policy.get_pdist_sym(obs_var, action_var)
-        kl = policy.kl(old_pdist_var, pdist_var)
-        lr = policy.likelihood_ratio(old_pdist_var, pdist_var, action_var)
+        info_vars = policy.info_sym(obs_var, action_var)
+        kl = policy.kl_sym(old_info_vars, info_vars)
+        lr = policy.likelihood_ratio_sym(action_var, old_info_vars, info_vars)
         if is_recurrent:
             mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
             surr_loss = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
@@ -62,11 +65,10 @@ class PPO(BatchPolopt):
             surr_loss = - TT.mean(lr * advantage_var)
 
         input_list = [
-            obs_var,
-            advantage_var,
-            old_pdist_var,
-            action_var,
-        ]
+                         obs_var,
+                         action_var,
+                         advantage_var,
+                     ] + old_info_vars_list
         if is_recurrent:
             input_list.append(valid_var)
 
@@ -83,10 +85,13 @@ class PPO(BatchPolopt):
     def optimize_policy(self, itr, policy, samples_data, opt_info):
         all_input_values = tuple(ext.extract(
             samples_data,
-            "observations", "advantages", "pdists", "actions"
+            "observations", "actions", "advantages"
         ))
+        agent_infos = samples_data["agent_infos"]
+        info_list = [agent_infos[k] for k in policy.info_keys]
+        all_input_values += tuple(info_list)
         if policy.is_recurrent:
-            all_input_values = all_input_values + (samples_data["valids"],)
+            all_input_values += (samples_data["valids"],)
         loss_before = self._optimizer.loss(all_input_values)
         self._optimizer.optimize(all_input_values)
         mean_kl = self._optimizer.constraint_val(all_input_values)
@@ -97,10 +102,10 @@ class PPO(BatchPolopt):
         return dict()
 
     @overrides
-    def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data, opt_info, **kwargs):
+    def get_itr_snapshot(self, itr, env, policy, baseline, samples_data, opt_info, **kwargs):
         return dict(
             itr=itr,
             policy=policy,
             baseline=baseline,
-            mdp=mdp,
+            env=env,
         )

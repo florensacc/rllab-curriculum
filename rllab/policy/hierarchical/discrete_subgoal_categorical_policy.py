@@ -78,11 +78,11 @@ class DiscreteSubgoalCategoricalPolicy(StochasticPolicy, LasagnePowered,
     def low_mdp(self):
         return self._low_mdp
 
-    def get_action(self, observation):
+    def act(self, observation):
         # First, sample a goal
-        goal, high_pdist = self._high_policy.get_action(observation)
+        goal, high_pdist = self._high_policy.act(observation)
         goal_onehot = to_onehot(goal, self._n_goals)
-        action, low_pdist = self._low_policy.get_action(np.concatenate([
+        action, low_pdist = self._low_policy.act(np.concatenate([
             observation.flatten(),
             goal_onehot
         ]))
