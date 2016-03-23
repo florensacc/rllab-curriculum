@@ -2253,14 +2253,14 @@ class MjDataWrapper(object):
     
     @property
     def act(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.act, dtype=np.double, count=(self._size_src.na*1)), (self._size_src.na, 1, ))
+        arr = np.reshape(np.fromiter(self._wrapped.contents.get_action, dtype=np.double, count=(self._size_src.na * 1)), (self._size_src.na, 1,))
         arr.setflags(write=False)
         return arr
     
     @act.setter
     def act(self, value):
         val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
-        memmove(self._wrapped.contents.act, val_ptr, self._size_src.na*1 * sizeof(c_double))
+        memmove(self._wrapped.contents.get_action, val_ptr, self._size_src.na * 1 * sizeof(c_double))
     
     @property
     def ctrl(self):

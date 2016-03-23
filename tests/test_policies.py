@@ -15,5 +15,5 @@ def test_categorical_mlp_policy():
     policy = CategoricalMLPPolicy(
         env_spec=env.spec,
     )
-    action = policy.act(env.reset())[0]
+    action = policy.get_action(env.reset())[0]
     assert env.observation_space.contains(action)

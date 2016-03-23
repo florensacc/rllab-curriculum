@@ -131,7 +131,7 @@ class SVG1(RLAlgorithm):
                     # to the replay pool
                     state, observation = mdp.reset()
                     policy.reset()
-                action, pdist = policy.act(observation)
+                action, pdist = policy.get_action(observation)
 
                 next_state, next_observation, reward, terminal = \
                     mdp.step(state, action)

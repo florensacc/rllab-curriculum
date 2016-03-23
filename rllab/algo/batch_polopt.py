@@ -146,11 +146,11 @@ class BatchPolopt(RLAlgorithm):
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
 
-        observations = tensor_utils.concat_tensors([path["observations"] for path in paths])
-        actions = tensor_utils.concat_tensors([path["actions"] for path in paths])
-        advantages = tensor_utils.concat_tensors([path["advantages"] for path in paths])
-        env_infos = tensor_utils.concat_tensor_dicts([path["env_infos"] for path in paths])
-        agent_infos = tensor_utils.concat_tensor_dicts([path["agent_infos"] for path in paths])
+        observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
+        actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
+        advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
+        env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
+        agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
 
         if self.center_adv:
             advantages = util.center_advantages(advantages)
@@ -209,7 +209,7 @@ class BatchPolopt(RLAlgorithm):
             paths=paths,
         )
 
-        if policy.is_recurrent:
+        if policy.recurrent:
             return self.recurrent_postprocess_samples(samples_data)
         else:
             return samples_data

@@ -22,14 +22,19 @@ class SubgoalPolicy(StochasticPolicy, LasagnePowered, Serializable):
         """
         Serializable.quick_init(self, locals())
         super(SubgoalPolicy, self).__init__(env_spec)
+        self._subgoal_space = env_spec.subgoal_space
         self._high_policy = high_policy
         self._low_policy = low_policy
         self._subgoal_interval = subgoal_interval
         self._interval_counter = 0
         self._subgoal = None
-        self._high_pdist = None
+        self._high_agent_info = None
         self.reset()
         LasagnePowered.__init__(self, self._high_policy.output_layers + self._low_policy.output_layers)
+
+    @property
+    def subgoal_space(self):
+        return self._subgoal_space
 
     @property
     def high_policy(self):
@@ -43,29 +48,34 @@ class SubgoalPolicy(StochasticPolicy, LasagnePowered, Serializable):
         # Set the counter so that the subgoal will be sampled on the first time step
         self._interval_counter = self._subgoal_interval - 1
         self._subgoal = None
-        self._high_pdist = None
+        self._high_agent_info = None
 
     @property
     def subgoal_interval(self):
         return self._subgoal_interval
 
-    def act(self, observation):
+    def get_action(self, observation):
         self._interval_counter += 1
+        high_obs = observation
         if self._interval_counter >= self._subgoal_interval:
             # update subgoal
-            self._subgoal, self._high_pdist = self._high_policy.act(observation)
+            self._subgoal, self._high_agent_info = self._high_policy.get_action(high_obs)
             # reset counter
             self._interval_counter = 0
-        action, low_pdist = self._low_policy.act(np.concatenate([
-            observation.flatten(),
-            self._subgoal.flatten(),
-        ]))
-        return action, np.concatenate([self._high_pdist, low_pdist, self._subgoal])
+        low_obs = (high_obs, self._subgoal)
+        action, low_agent_info = self._low_policy.get_action(low_obs)
+        return action, dict(
+            high=self._high_agent_info,
+            low=low_agent_info,
+            subgoal=self.subgoal_space.flatten(self._subgoal),
+            high_obs=self.high_policy.observation_space.flatten(high_obs),
+            low_obs=self.low_policy.observation_space.flatten(low_obs),
+        )
 
     def compute_entropy(self, pdist):
         return np.nan
 
-    def split_pdists(self, pdists):
-        high_pdist_dim = self.high_policy.pdist_dim
-        low_pdist_dim = self.low_policy.pdist_dim
-        return np.split(pdists, [high_pdist_dim, high_pdist_dim + low_pdist_dim], axis=1)
+    # def split_pdists(self, pdists):
+    #     high_pdist_dim = self.high_policy.pdist_dim
+    #     low_pdist_dim = self.low_policy.pdist_dim
+    #     return np.split(pdists, [high_pdist_dim, high_pdist_dim + low_pdist_dim], axis=1)

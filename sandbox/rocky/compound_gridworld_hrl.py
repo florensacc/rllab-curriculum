@@ -16,7 +16,7 @@ from rllab.algo.trpo import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.misc import ext
 
-stub(globals())
+# stub(globals())
 
 
 env = GridWorldEnv(
@@ -31,12 +31,19 @@ env = GridWorldEnv(
 env = CompoundActionSequenceEnv(
     wrapped_env=env,
     reset_history=True,
-    obs_include_actions=True,
+    # obs_include_actions=True,
     action_map=[
-        [0, 1, 2],
         [0, 0, 0],
-        [2, 1, 0],
+        [1, 1, 1],
+        [2, 2, 2],
         [3, 3, 3],
+
+        # [0, 1, 2],
+        # [0, 0, 0],
+        # [2, 1, 0],
+        # [3, 3, 3],
+
+
         # [0],
         # [1],
         # [2],
@@ -46,7 +53,8 @@ env = CompoundActionSequenceEnv(
 
 env = SubgoalEnv(
     wrapped_env=env,
-    subgoal_space=Discrete(4),
+    subgoal_space=Discrete(n=4),
+    # low_action_history_length=0,
 )
 
 algo = BatchHRL(
@@ -64,15 +72,19 @@ algo = BatchHRL(
     ),
 )
 
+high_policy = CategoricalMLPPolicy(
+    env_spec=env.spec.high_env_spec,
+)
+
+low_policy = CategoricalMLPPolicy(
+    env_spec=env.spec.low_env_spec,
+)
+
 policy = SubgoalPolicy(
     env_spec=env.spec,
     subgoal_interval=3,
-    high_policy=CategoricalMLPPolicy(
-        env_spec=env.spec.high_env_spec,
-    ),
-    low_policy=CategoricalMLPPolicy(
-        env_spec=env.spec.low_env_spec,
-    ),
+    high_policy=high_policy,
+    low_policy=low_policy,
 )
 
 baseline = SubgoalBaseline(
@@ -93,6 +105,8 @@ baseline = SubgoalBaseline(
 
 evaluator = StateGivenGoalMIEvaluator(
     env_spec=env.spec,
+    high_policy_dist_family=high_policy.distribution,
+    low_policy_dist_family=low_policy.distribution,
     regressor_cls=CategoricalMLPRegressor,
     regressor_args=dict(
         optimizer=ConjugateGradientOptimizer(),

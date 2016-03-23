@@ -9,21 +9,27 @@ class SubgoalEnv(ProxyEnv, Serializable):
     def __init__(
             self,
             wrapped_env,
-            subgoal_space):
+            subgoal_space,
+            low_obs_action_history=False,
+            low_action_history_length=0):
         super(SubgoalEnv, self).__init__(wrapped_env=wrapped_env)
         Serializable.quick_init(self, locals())
         self._subgoal_space = subgoal_space
+        self._low_obs_action_history = low_obs_action_history
+        self._low_action_history_length = low_action_history_length
 
     @property
     def subgoal_space(self):
-        return self.subgoal_space
+        return self._subgoal_space
 
     @property
     def spec(self):
         return SubgoalEnvSpec(
-            observation_space=self.wrapped_env.observation_space,
-            action_space=self.wrapped_env.action_space,
+            observation_space=self.observation_space,
+            action_space=self.action_space,
             subgoal_space=self.subgoal_space,
+            low_obs_action_history=self._low_obs_action_history,
+            low_action_history_length=self._low_action_history_length
         )
 
 
@@ -33,7 +39,9 @@ class SubgoalEnvSpec(EnvSpec):
             self,
             observation_space,
             action_space,
-            subgoal_space):
+            subgoal_space,
+            low_obs_action_history=False,
+            low_action_history_length=0):
         Serializable.quick_init(self, locals())
         super(SubgoalEnvSpec, self).__init__(
             observation_space=observation_space,

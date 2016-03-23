@@ -21,7 +21,7 @@ class Product(Space):
         return self._components
 
     def contains(self, x):
-        return all(c.contains(xi) for c, xi in zip(self._components, x))
+        return isinstance(x, tuple) and all(c.contains(xi) for c, xi in zip(self._components, x))
 
     def new_tensor_variable(self, name, extra_dims):
         return ext.new_tensor(

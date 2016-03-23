@@ -21,7 +21,7 @@ class VPG(BatchPolopt, FirstOrderMethod):
 
     @overrides
     def init_opt(self, env_spec, policy, baseline):
-        is_recurrent = int(policy.is_recurrent)
+        is_recurrent = int(policy.recurrent)
 
         obs_var = env_spec.observation_space.new_tensor_variable(
             'obs',
@@ -36,26 +36,27 @@ class VPG(BatchPolopt, FirstOrderMethod):
             ndim=1 + is_recurrent,
             dtype=theano.config.floatX
         )
-        old_info_vars = {
+        dist = policy.distribution
+        old_dist_info_vars = {
             k: ext.new_tensor(
                 'old_%s' % k,
                 ndim=2 + is_recurrent,
                 dtype=theano.config.floatX
-            ) for k in policy.info_keys
+            ) for k in dist.dist_info_keys
             }
-        old_info_vars_list = [old_info_vars[k] for k in policy.info_keys]
+        old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
 
         if is_recurrent:
             valid_var = TT.matrix('valid')
         else:
             valid_var = None
 
-        logli = policy.log_likelihood_sym(obs_var, action_var)
+        dist_info_vars = policy.dist_info_sym(obs_var, action_var)
+        logli = dist.log_likelihood_sym(dist_info_vars)
+        kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
+
         # formulate as a minimization problem
         # The gradient of the surrogate objective is the policy gradient
-        info_vars = policy.info_sym(obs_var, action_var)
-        kl = policy.kl_sym(old_info_vars, info_vars)
-
         if is_recurrent:
             surr_obj = - TT.sum(logli * advantage_var * valid_var) / TT.sum(valid_var)
             mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
@@ -82,7 +83,7 @@ class VPG(BatchPolopt, FirstOrderMethod):
             outputs=surr_obj,
         )
         f_kl = ext.compile_function(
-            inputs=input_list + old_info_vars_list,
+            inputs=input_list + old_dist_info_vars_list,
             outputs=[mean_kl, max_kl],
         )
         return dict(
@@ -101,14 +102,14 @@ class VPG(BatchPolopt, FirstOrderMethod):
             "observations", "actions", "advantages"
         )
         agent_infos = samples_data["agent_infos"]
-        info_list = [agent_infos[k] for k in policy.info_keys]
+        dist_info_list = [agent_infos[k] for k in policy.distribution.dist_info_keys]
         loss_before = f_loss(*inputs)
         f_update(*inputs)
         loss_after = f_loss(*inputs)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
 
-        mean_kl, max_kl = opt_info['f_kl'](*(list(inputs) + info_list))
+        mean_kl, max_kl = opt_info['f_kl'](*(list(inputs) + dist_info_list))
         logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('MaxKL', max_kl)
 

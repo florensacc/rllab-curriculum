@@ -2,20 +2,15 @@ from rllab.core.parameterized import Parameterized
 from rllab.agent.base import Agent
 
 
-class Policy(Parameterized, Agent):
+class Policy(Parameterized):
 
     def __init__(self, env_spec):
         self._env_spec = env_spec
 
     # Should be implemented by all policies
 
-    # def act(self, observation):
-    #     """
-    #     :param observation: The current observation
-    #     :return: A pair (action, action_info), where action should be a member of the action space for the
-    #     environment, and action_info should be a dictionary containing information about the distribution of actions
-    #     """
-    #     raise NotImplementedError
+    def get_action(self, observation):
+        raise NotImplementedError
 
     @property
     def observation_space(self):
@@ -26,60 +21,61 @@ class Policy(Parameterized, Agent):
         return self._env_spec.action_space
 
     @property
-    def is_recurrent(self):
+    def recurrent(self):
+        """
+        Indicates whether the policy is recurrent.
+        :return:
+        """
         return False
 
-
-    def log_extra(self, paths):
+    def log_diagnostics(self, paths):
         """
         Log extra information per iteration based on the collected paths
         """
         pass
 
-    @property
-    def recurrent(self):
-        """
-        Signals whether the policy is recurrent.
-        """
-        return False
+
+class StochasticPolicy(Policy):
+    # def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
+    #     return self.dist_family.kl_sym(old_dist_info_vars)
+    #     raise NotImplementedError
+    #
+    # def likelihood_ratio_sym(self, action_var, old_dist_info_vars, new_dist_info_vars):
+    #     raise NotImplementedError
+
+    # def entropy(self, dist_info):
+    #     raise NotImplementedError
+
+    # def log_likelihood_sym(self, obs_var, action_var):
+    #     raise NotImplementedError
 
     @property
-    def info_keys(self):
+    def distribution(self):
         """
-        List of keys that would be returned by calling get_action()
-        :return:
+        :rtype Distribution
         """
-        return list()
+        raise NotImplementedError
 
-    def info_sym(self, obs_var, action_var):
+    # @property
+    # def dist_info_keys(self):
+    #     """
+    #     List of keys in the agent_info object related to information about the action distribution given the
+    #     observations
+    #     :return:
+    #     """
+    #     return list()
+
+    def dist_info_sym(self, obs_var, action_var):
         """
-        Return the distribution information about the actions given the observations (and possibly past actions,
-        for recurrent policies).
+        Return the symbolic distribution information about the actions.
         :return:
         """
         return dict()
 
+    def dist_info(self, obs, actions):
+        """
+        Return the distribution information about the actions.
+        :return:
+        """
+        return dict()
 
-class StochasticPolicy(Policy):
-    def kl_sym(self, old_info_vars, new_info_vars):
-        raise NotImplementedError
-
-    def likelihood_ratio_sym(self, action_var, old_info_vars, new_info_vars):
-        raise NotImplementedError
-
-    def entropy(self, info):
-        raise NotImplementedError
-
-    def log_likelihood_sym(self, obs_var, action_var):
-        raise NotImplementedError
-
-    # def get_pdist_sym(self, obs_var, action_var):
-    #     raise NotImplementedError
-
-    # @property
-    # def pdist_dim(self):
-    #     raise NotImplementedError
-
-    @property
-    def dist_family(self):
-        raise NotImplementedError

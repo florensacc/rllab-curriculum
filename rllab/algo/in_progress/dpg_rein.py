@@ -135,7 +135,7 @@ class DDPG(RLAlgorithm):
                 es = OUStrategy(mdp, 0., 0.05, 0.05)
                 returns.append(_return)
 
-            action = es.act()
+            action = es.get_action()
             state_nxt, observation_nxt, reward, path_ended = mdp.step(
                 state, action)
             # Add to replay pool.

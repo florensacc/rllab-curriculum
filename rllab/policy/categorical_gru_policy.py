@@ -3,14 +3,15 @@ import lasagne.nonlinearities as NL
 import numpy as np
 import theano.tensor as TT
 import theano.tensor.nnet
+
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import GRUNetwork
 from rllab.core.serializable import Serializable
-from rllab.misc.overrides import overrides
-from rllab.misc import special
+from rllab.distributions import categorical_dist
 from rllab.misc import ext
+from rllab.misc import special
+from rllab.misc.overrides import overrides
 from rllab.policy.base import StochasticPolicy
-from rllab.misc import categorical_dist
 
 
 class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
@@ -37,7 +38,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         else:
             input_shape = (env_spec.observation_dim,)
 
-        log_prob_network = GRUNetwork(
+        prob_network = GRUNetwork(
             input_shape=input_shape,
             output_dim=env_spec.action_dim,
             hidden_dim=hidden_sizes[0],
@@ -45,17 +46,17 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             output_nonlinearity=theano.tensor.nnet.logsoftmax,
         )
 
-        self._log_prob_network = log_prob_network
+        self._prob_network = prob_network
         self._state_include_action = state_include_action
 
-        self._f_log_prob = ext.compile_function(
+        self._f_prob = ext.compile_function(
             [
-                log_prob_network.step_input_layer.input_var,
-                log_prob_network.step_prev_hidden_layer.input_var
+                prob_network.step_input_layer.input_var,
+                prob_network.step_prev_hidden_layer.input_var
             ],
             L.get_output([
-                log_prob_network.step_output_layer,
-                log_prob_network.step_hidden_layer
+                prob_network.step_output_layer,
+                prob_network.step_hidden_layer
             ])
         )
 
@@ -65,7 +66,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         self.reset()
 
-        LasagnePowered.__init__(self, [log_prob_network.output_layer])
+        LasagnePowered.__init__(self, [prob_network.output_layer])
 
     def _get_prev_action_var(self, action_var):
         n_batches = action_var.shape[0]
@@ -88,16 +89,16 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         else:
             all_input_var = obs_var
         return L.get_output(
-            self._log_prob_network.output_layer,
-            {self._log_prob_network.input_layer: all_input_var}
+            self._prob_network.output_layer,
+            {self._prob_network.input_layer: all_input_var}
         )
 
     @overrides
-    def kl(self, old_log_prob_var, new_log_prob_var):
-        return categorical_dist.kl_sym(old_log_prob_var, new_log_prob_var)
+    def kl(self, old_prob_var, new_prob_var):
+        return categorical_dist.kl_sym(old_prob_var, new_prob_var)
 
     @overrides
-    def likelihood_ratio(self, old_log_prob_var, new_log_prob_var, action_var):
+    def likelihood_ratio(self, old_prob_var, new_prob_var, action_var):
         return categorical_dist.likelihood_ratio_sym(
             action_var, old_log_prob_var, new_log_prob_var)
 
@@ -119,7 +120,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
     # of length N, where each entry is the density value for that action, under
     # the current policy
     @overrides
-    def act(self, observation):
+    def get_action(self, observation):
         if self._state_include_action:
             all_input = np.concatenate([observation.flatten(), self._prev_action])
         else:
@@ -133,9 +134,9 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     @property
     @overrides
-    def is_recurrent(self):
+    def recurrent(self):
         return True
 
     @property
-    def dist_family(self):
+    def distribution(self):
         return categorical_dist

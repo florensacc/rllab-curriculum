@@ -1,19 +1,18 @@
-from rllab.core.lasagne_powered import LasagnePowered
-from rllab.core.lasagne_layers import ParamLayer
-from rllab.core.serializable import Serializable
-from rllab.core.network import MLP
-from rllab.misc import categorical_dist
-from rllab.misc import ext
-from rllab.misc import special
-from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-from rllab.optimizer.lbfgs_optimizer import LbfgsOptimizer
-from rllab.misc import logger
-import theano
-import theano.tensor as TT
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
-import lasagne
 import numpy as np
+import theano
+import theano.tensor as TT
+
+from rllab.core.lasagne_powered import LasagnePowered
+from rllab.core.network import MLP
+from rllab.core.serializable import Serializable
+from rllab.distributions import categorical_dist
+from rllab.misc import ext
+from rllab.misc import logger
+from rllab.misc import special
+from rllab.optimizer.lbfgs_optimizer import LbfgsOptimizer
+from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 
 NONE = list()
 
@@ -56,21 +55,21 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
 
         self._optimizer = optimizer
 
-        log_prob_network = MLP(
+        prob_network = MLP(
             input_shape=input_shape,
             output_dim=output_dim,
             hidden_sizes=hidden_sizes,
             nonlinearity=nonlinearity,
-            output_nonlinearity=theano.tensor.nnet.logsoftmax
+            output_nonlinearity=NL.softmax,
         )
 
-        l_log_prob = log_prob_network.output_layer
+        l_prob = prob_network.output_layer
 
-        LasagnePowered.__init__(self, [l_log_prob])
+        LasagnePowered.__init__(self, [l_prob])
 
-        xs_var = log_prob_network.input_layer.input_var
+        xs_var = prob_network.input_layer.input_var
         ys_var = TT.matrix("ys")
-        old_log_prob_var = TT.matrix("old_log_prob")
+        old_prob_var = TT.matrix("old_prob")
 
         x_mean_var = theano.shared(
             np.zeros((1,) + input_shape),
@@ -85,27 +84,30 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
 
         normalized_xs_var = (xs_var - x_mean_var) / x_std_var
 
-        log_prob_var = L.get_output(l_log_prob, {log_prob_network.input_layer: normalized_xs_var})
+        prob_var = L.get_output(l_prob, {prob_network.input_layer: normalized_xs_var})
 
-        mean_kl = TT.mean(categorical_dist.kl_sym(old_log_prob_var, log_prob_var))
+        old_info_vars = dict(prob=old_prob_var)
+        info_vars = dict(prob=prob_var)
 
-        loss = - TT.mean(categorical_dist.log_likelihood_sym(ys_var, log_prob_var))
+        mean_kl = TT.mean(categorical_dist.kl_sym(old_info_vars, info_vars))
 
-        predicted = special.to_onehot_sym(TT.argmax(log_prob_var, axis=1), output_dim)
+        loss = - TT.mean(categorical_dist.log_likelihood_sym(ys_var, info_vars))
+
+        predicted = special.to_onehot_sym(TT.argmax(prob_var, axis=1), output_dim)
 
         self._f_predict = ext.compile_function([xs_var], predicted)
-        self._f_log_prob = ext.compile_function([xs_var], log_prob_var)
-        self._l_log_prob = l_log_prob
+        self._f_prob = ext.compile_function([xs_var], prob_var)
+        self._l_prob = l_prob
 
         optimizer_args = dict(
             loss=loss,
             target=self,
-            network_outputs=[log_prob_var],
+            network_outputs=[prob_var],
         )
 
         if use_trust_region:
             optimizer_args["leq_constraint"] = (mean_kl, step_size)
-            optimizer_args["inputs"] = [xs_var, ys_var, old_log_prob_var]
+            optimizer_args["inputs"] = [xs_var, ys_var, old_prob_var]
         else:
             optimizer_args["inputs"] = [xs_var, ys_var]
 
@@ -124,8 +126,8 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
             self._x_mean_var.set_value(np.mean(xs, axis=0, keepdims=True))
             self._x_std_var.set_value(np.std(xs, axis=0, keepdims=True) + 1e-8)
         if self._use_trust_region:
-            old_log_prob = self._f_log_prob(xs)
-            inputs = [xs, ys, old_log_prob]
+            old_prob = self._f_prob(xs)
+            inputs = [xs, ys, old_prob]
         else:
             inputs = [xs, ys]
         loss_before = self._optimizer.loss(inputs)
@@ -143,8 +145,10 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
         return self._f_predict(xs)
 
     def predict_log_likelihood(self, xs, ys):
-        log_prob = self._f_log_prob(xs)
-        return categorical_dist.log_likelihood(ys, log_prob)
+        prob = self._f_prob(xs)
+        # if np.any(np.abs(prob) > 1e3):
+        #     import ipdb; ipdb.set_trace()
+        return categorical_dist.log_likelihood(ys, dict(prob=prob))
 
     def get_param_values(self, **tags):
         return LasagnePowered.get_param_values(self, **tags)

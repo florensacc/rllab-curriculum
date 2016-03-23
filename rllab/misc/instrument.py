@@ -22,19 +22,31 @@ from rllab.viskit.core import flatten
 
 class StubAttr(object):
     def __init__(self, obj, attr_name):
-        self._obj = obj
-        self._attr_name = attr_name
+        self.__dict__["_obj"] = obj
+        self.__dict__["_attr_name"] = attr_name
 
     @property
     def obj(self):
-        return self._obj
+        return self.__dict__["_obj"]
 
     @property
     def attr_name(self):
-        return self._attr_name
+        return self.__dict__["_attr_name"]
 
     def __call__(self, *args, **kwargs):
         return StubMethodCall(self.obj, self.attr_name, args, kwargs)
+
+    def __getattr__(self, item):
+        print "getting attr for %s" % item
+        try:
+            return super(StubAttr, self).__getattribute__(item)
+        except AttributeError:
+            if item.startswith("__") and item.endswith("__"):
+                raise
+            return StubAttr(self, item)
+
+    def __str__(self):
+        return "StubAttr(%s, %s)" % (str(self.obj), str(self.attr_name))
 
 
 class StubMethodCall(Serializable):
@@ -44,6 +56,10 @@ class StubMethodCall(Serializable):
         self.method_name = method_name
         self.args = args
         self.kwargs = kwargs
+
+    def __str__(self):
+        return "StubMethodCall(%s, %s, %s, %s)" % (
+        str(self.obj), str(self.method_name), str(self.args), str(self.kwargs))
 
 
 class StubClass(object):
@@ -66,6 +82,9 @@ class StubClass(object):
             return StubAttr(self, item)
         raise AttributeError
 
+    def __str__(self):
+        return "StubClass(%s)" % self.proxy_class
+
 
 class StubObject(object):
     def __init__(self, __proxy_class, *args, **kwargs):
@@ -87,6 +106,9 @@ class StubObject(object):
         if hasattr(self.proxy_class, item):
             return StubAttr(self, item)
         raise AttributeError
+
+    def __str__(self):
+        return "StubObject(%s, *%s, **%s)" % (str(self.proxy_class), str(self.args), str(self.kwargs))
 
 
 def stub(glbs):
@@ -144,7 +166,7 @@ def run_experiment_lite(
     kwargs["exp_name"] = exp_name
     kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
     kwargs["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
-                              exp_name)
+                                        exp_name)
 
     if mode == "local":
         # kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
@@ -235,6 +257,7 @@ def run_experiment_lite(
 
 _find_unsafe = re.compile(r'[a-zA-Z0-9_^@%+=:,./-]').search
 
+
 def ensure_dir(dirname):
     """
     Ensure that a named directory exists; if it does not, attempt to create it.
@@ -244,6 +267,7 @@ def ensure_dir(dirname):
     except OSError, e:
         if e.errno != errno.EEXIST:
             raise
+
 
 def _shellquote(s):
     """Return a shell-escaped version of the string *s*."""
@@ -321,7 +345,6 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
                aws_config=None, dry=False):
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
-
 
     default_config = dict(
         image_id=config.AWS_IMAGE_ID,
@@ -518,7 +541,10 @@ def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py')
         }
     }
 
+
 S3_CODE_PATH = None
+
+
 def s3_sync_code(config, dry=False):
     global S3_CODE_PATH
     if S3_CODE_PATH is not None:
@@ -536,7 +562,7 @@ def s3_sync_code(config, dry=False):
     code_path = "%s_%s" % (
         dir_hash,
         (current_commit if clean_state else "%s_dirty_%s" % (current_commit, timestamp)) if
-            has_git else timestamp
+        has_git else timestamp
     )
     full_path = "%s/%s" % (base, code_path)
     cache_path = "%s/%s" % (base, dir_hash)
@@ -554,6 +580,7 @@ def s3_sync_code(config, dry=False):
         subprocess.check_call(caching_cmds)
     S3_CODE_PATH = full_path
     return full_path
+
 
 def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_experiment.py'):
     """
@@ -575,14 +602,15 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
     pre_commands.append(
         "echo \"aws_secret_access_key = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_SECRET)
     pre_commands.append('aws s3 cp --recursive %s %s' %
-                         (code_full_path, config.DOCKER_CODE_DIR))
+                        (code_full_path, config.DOCKER_CODE_DIR))
     pre_commands.append('cd %s' %
                         (config.DOCKER_CODE_DIR))
     pre_commands.append("""
         while /bin/true; do
             aws s3 sync --exclude *.pkl --exclude *.log {log_dir} {remote_log_dir} --region {aws_region}
             sleep 5
-        done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
+        done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                             aws_region=config.AWS_REGION_NAME))
     # copy the file to s3 after execution
     post_commands = list()
     post_commands.append('aws s3 cp --recursive %s %s' %

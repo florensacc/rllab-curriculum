@@ -50,7 +50,7 @@ class NaturalGradientMethod(object):
         self.subsample_factor = subsample_factor
 
     def init_opt(self, env_spec, policy, baseline):
-        is_recurrent = int(policy.is_recurrent)
+        is_recurrent = int(policy.recurrent)
         obs_var = env_spec.observation_space.new_tensor_variable(
             'obs',
             extra_dims=1 + is_recurrent,
@@ -70,15 +70,15 @@ class NaturalGradientMethod(object):
                 'old_%s' % k,
                 ndim=2 + is_recurrent,
                 dtype=theano.config.floatX
-            ) for k in policy.info_keys
+            ) for k in policy.dist_info_keys
             }
-        old_info_vars_list = [old_info_vars[k] for k in policy.info_keys]
+        old_info_vars_list = [old_info_vars[k] for k in policy.dist_info_keys]
 
         if is_recurrent:
             valid_var = TT.matrix('valid')
         else:
             valid_var = None
-        info_vars = policy.info_sym(obs_var, action_var)
+        info_vars = policy.dist_info_sym(obs_var, action_var)
         if is_recurrent:
             mean_kl = TT.sum(policy.kl_sym(old_info_vars, info_vars) * valid_var) / TT.sum(valid_var)
         else:
@@ -161,9 +161,9 @@ class NaturalGradientMethod(object):
             "observations", "actions", "advantages"
         ))
         agent_infos = samples_data["agent_infos"]
-        info_list = [agent_infos[k] for k in policy.info_keys]
+        info_list = [agent_infos[k] for k in policy.dist_info_keys]
         inputs.extend(info_list)
-        if policy.is_recurrent:
+        if policy.recurrent:
             inputs.append(samples_data["valids"])
         if self.subsample_factor < 1:
             n_samples = len(inputs[0])

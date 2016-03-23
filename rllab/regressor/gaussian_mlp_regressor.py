@@ -1,18 +1,19 @@
-from rllab.core.lasagne_powered import LasagnePowered
-from rllab.core.lasagne_layers import ParamLayer
-from rllab.core.serializable import Serializable
-from rllab.core.network import MLP
-from rllab.misc import normal_dist
-from rllab.misc.ext import compile_function
-from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-from rllab.optimizer.lbfgs_optimizer import LbfgsOptimizer
-from rllab.misc import logger
-import theano
-import theano.tensor as TT
+import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
-import lasagne
 import numpy as np
+import theano
+import theano.tensor as TT
+
+from rllab.core.lasagne_layers import ParamLayer
+from rllab.core.lasagne_powered import LasagnePowered
+from rllab.core.network import MLP
+from rllab.core.serializable import Serializable
+from rllab.distributions import normal_dist
+from rllab.misc import logger
+from rllab.misc.ext import compile_function
+from rllab.optimizer.lbfgs_optimizer import LbfgsOptimizer
+from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 
 NONE = list()
 

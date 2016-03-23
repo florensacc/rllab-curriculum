@@ -17,12 +17,16 @@ import base64
 
 
 def concretize(maybe_stub):
+    logger.log(str(maybe_stub))
     if isinstance(maybe_stub, StubMethodCall):
         # print(maybe_stub, maybe_stub.obj, maybe_stub.method_name, maybe_stub.args, maybe_stub.kwargs)
         obj = concretize(maybe_stub.obj)
         method = getattr(obj, maybe_stub.method_name)
-        args = map(concretize, maybe_stub.args)
-        kwargs = dict([(k, concretize(v)) for k, v in maybe_stub.kwargs.iteritems()])
+        logger.log("constructing arguments")
+        args = concretize(maybe_stub.args)#map(concretize, maybe_stub.args)
+        logger.log("constructing kwargs")
+        kwargs = concretize(maybe_stub.kwargs)#dict([(k, concretize(v)) for k, v in maybe_stub.kwargs.iteritems()])
+        logger.log("calling method")
         return method(*args, **kwargs)
     elif isinstance(maybe_stub, StubClass):
         return maybe_stub.proxy_class
@@ -31,17 +35,29 @@ def concretize(maybe_stub):
     elif isinstance(maybe_stub, StubObject):
         # print(maybe_stub, maybe_stub.proxy_class, maybe_stub.args, maybe_stub.kwargs)
         if not hasattr(maybe_stub, "__stub_cache"):
-            args = map(concretize, maybe_stub.args)
-            kwargs = dict([(k, concretize(v)) for k, v in maybe_stub.kwargs.iteritems()])
+            args = concretize(maybe_stub.args)
+            kwargs = concretize(maybe_stub.kwargs)
             try:
+                logger.log("instantiating %s" % maybe_stub.proxy_class)
                 maybe_stub.__stub_cache = maybe_stub.proxy_class(*args, **kwargs)
+                logger.log("instantiated")
             except Exception as e:
                 import traceback; traceback.print_exc()
                 # import ipdb; ipdb.set_trace()
-        return maybe_stub.__stub_cache
+        ret = maybe_stub.__stub_cache
+        logger.log("about to return")
+        return ret
     elif isinstance(maybe_stub, dict):
         # make sure that there's no hidden caveat
-        return dict([(concretize(k), concretize(v)) for k, v in maybe_stub.iteritems()])
+        ret = dict()
+        for k, v in maybe_stub.iteritems():
+            with logger.prefix("%s | " % k):#going through %s" % k):
+                logger.log("constructing")
+                ret[concretize(k)] = concretize(v)
+        logger.log("done")
+        return ret
+    elif isinstance(maybe_stub, list):
+        return map(concretize, maybe_stub)
     else:
         return maybe_stub
 
@@ -112,7 +128,9 @@ def run_experiment(argv):
     logger.set_log_tabular_only(args.log_tabular_only)
     logger.push_prefix("[%s] " % args.exp_name)
 
+    print("concretizing")
     maybe_iter = concretize(data)
+    print("concretized")
     if is_iterable(maybe_iter):
         for _ in maybe_iter:
             pass

@@ -26,16 +26,16 @@ def test_vpg():
     # _test_algo(VPG(n_itr=1), recurrent=True)
 
 
-def test_ppo():
-    _test_algo(PPO(n_itr=1))
-    # _test_algo(PPO(n_itr=1), recurrent=True)
-
-
-def test_trpo():
-    _test_algo(TRPO(n_itr=1))
-    # _test_algo(TRPO(n_itr=1), recurrent=True)
-
-
-def test_npg():
-    _test_algo(NPG(n_itr=1))
-    # _test_algo(NPG(n_itr=1), recurrent=True)
+# def test_ppo():
+#     _test_algo(PPO(n_itr=1))
+#     # _test_algo(PPO(n_itr=1), recurrent=True)
+#
+#
+# def test_trpo():
+#     _test_algo(TRPO(n_itr=1))
+#     # _test_algo(TRPO(n_itr=1), recurrent=True)
+#
+#
+# def test_npg():
+#     _test_algo(NPG(n_itr=1))
+#     # _test_algo(NPG(n_itr=1), recurrent=True)

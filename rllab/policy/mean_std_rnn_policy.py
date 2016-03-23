@@ -1,20 +1,20 @@
 import lasagne
 import lasagne.layers as L
-import rllab.core.lasagne_recurrent as LR
-import rllab.core.lasagne_helpers as LH
-import lasagne.nonlinearities as NL
 import numpy as np
 import theano
 import theano.tensor as TT
+
+import rllab.core.lasagne_helpers as LH
+import rllab.core.lasagne_recurrent as LR
 from rllab.core.lasagne_layers import ParamLayer, OpLayer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
-from rllab.misc.ext import compile_function
-from rllab.policy.base import StochasticPolicy
-from rllab.misc.overrides import overrides
-from rllab.misc import logger
-from rllab.misc import normal_dist
+from rllab.distributions import normal_dist
 from rllab.misc import autoargs
+from rllab.misc import logger
+from rllab.misc.ext import compile_function
+from rllab.misc.overrides import overrides
+from rllab.policy.base import StochasticPolicy
 from rllab.sampler import parallel_sampler
 
 PG = parallel_sampler.G
@@ -233,7 +233,7 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self._prev_action = np.zeros((self.action_dim,))
 
     @overrides
-    def act(self, observation):
+    def get_action(self, observation):
         mean, log_std, self._cur_hid, self._cur_cell = \
             [x[0] for x in
              self._f_forward(
@@ -272,9 +272,9 @@ class MeanStdRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
 
     @property
-    def is_recurrent(self):
+    def recurrent(self):
         return True
 
     @property
-    def dist_family(self):
+    def distribution(self):
         return normal_dist

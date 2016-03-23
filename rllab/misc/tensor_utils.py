@@ -8,6 +8,7 @@ def flatten_tensors(tensors):
     else:
         return np.asarray([])
 
+
 def unflatten_tensors(flattened, tensor_shapes):
     tensor_sizes = map(lambda shape: reduce(operator.mul, shape), tensor_shapes)
     indices = np.cumsum(tensor_sizes)[:-1]
@@ -25,22 +26,50 @@ def high_res_normalize(probs):
     return map(lambda x: x / sum(map(float, probs)), map(float, probs))
 
 
-def stack_tensors(tensors):
-    tensor_shape = np.array(tensors[0]).shape
+def stack_tensor_list(tensor_list):
+    tensor_shape = np.array(tensor_list[0]).shape
     if tensor_shape is tuple():
-        return np.array(tensors)
-    return np.vstack(tensors)
+        return np.array(tensor_list)
+    return np.vstack(tensor_list)
 
 
-def stack_tensor_dicts(tensor_dicts):
-    keys = tensor_dicts[0].keys()
-    return {k: stack_tensors([x[k] for x in tensor_dicts]) for k in keys}
+def stack_tensor_dict_list(tensor_dict_list):
+    """
+    Stack a list of dictionaries of {tensors or dictionary of tensors}.
+    :param tensor_dict_list: a list of dictionaries of {tensors or dictionary of tensors}.
+    :return: a dictionary of {stacked tensors or dictionary of stacked tensors}
+    """
+    keys = tensor_dict_list[0].keys()
+    ret = dict()
+    for k in keys:
+        example = tensor_dict_list[0][k]
+        if isinstance(example, dict):
+            v = stack_tensor_dict_list([x[k] for x in tensor_dict_list])
+        else:
+            v = stack_tensor_list([x[k] for x in tensor_dict_list])
+        ret[k] = v
+    return ret
 
 
-def concat_tensors(tensors):
-    return np.concatenate(tensors, axis=0)
+def concat_tensor_list(tensor_list):
+    return np.concatenate(tensor_list, axis=0)
 
 
-def concat_tensor_dicts(tensor_dicts):
-    keys = tensor_dicts[0].keys()
-    return {k: concat_tensors([x[k] for x in tensor_dicts]) for k in keys}
+def concat_tensor_dict_list(tensor_dict_list):
+    keys = tensor_dict_list[0].keys()
+    return {k: concat_tensor_list([x[k] for x in tensor_dict_list]) for k in keys}
+
+
+def subsample_tensor_dict(tensor_dict, interval):
+    """
+    Given a dictionary of (tensors or dictionary of tensors), subsample each of the tensors according to the interval
+    :param tensor_dict: A dictionary of (tensors or dictionary of tensors)
+    :return: a dictionary with subsampled tensors
+    """
+    ret = dict()
+    for k, v in tensor_dict.iteritems():
+        if isinstance(v, dict):
+            ret[k] = subsample_tensor_dict(v, interval=interval)
+        else:
+            ret[k] = v[::interval]
+    return ret

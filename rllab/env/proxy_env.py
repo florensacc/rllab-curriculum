@@ -1,7 +1,7 @@
-from .base import LabEnv
+from .base import Env
 
 
-class ProxyEnv(LabEnv):
+class ProxyEnv(Env):
 
     def __init__(self, wrapped_env):
         self._wrapped_env = wrapped_env
@@ -19,7 +19,7 @@ class ProxyEnv(LabEnv):
 
     @property
     def observation_space(self):
-        return self._wrapped_env.action_space
+        return self._wrapped_env.observation_space
 
     def step(self, action):
         return self._wrapped_env.step(action)

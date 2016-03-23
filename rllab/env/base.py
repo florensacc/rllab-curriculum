@@ -2,33 +2,30 @@ from .env_spec import EnvSpec
 
 
 class Env(object):
-    """
-    Adopted from rl-gym, OpenAI.
-    """
 
     def step(self, action):
         """
-        Run one timestep of the environment's dynamics
-
+        Run one timestep of the environment's dynamics. When end of episode
+        is reached, the environment will automatically reset its internal state.
         Input
         -----
-        action : an array provided by the agent
-
+        action : an action provided by the environment
         Outputs
         -------
-        (observation, reward, done, info), a namedtuple
-
-        observation : array
-        reward : a float scalar
-        done : a boolean, indicating whether the episode has ended
-        info : a dictionary containing other diagnostic information from the step.
+        (observation, new, reward, info)
+        observation : agent's observation of the current environment
+        new : a boolean, indicating whether the episode has just reset
+        reward [Float] : amount of reward due to the previous action
+        info : a dictionary containing other diagnostic information from the previous action
         """
         raise NotImplementedError
 
     def reset(self):
         """
-        Reset the state of the environment.
-        Returns the initial observation.
+        Resets the state of the environment, returning an initial observation.
+        Outputs
+        -------
+        observation : the initial observation of the space. (Initial reward is assumed to be 0.)
         """
         raise NotImplementedError
 
@@ -47,9 +44,12 @@ class Env(object):
         raise NotImplementedError
 
     def render(self):
-        raise NotImplementedError
+        pass
 
-    def log_extra(self, paths):
+    def log_diagnostics(self, paths):
+        """
+        Log extra information per iteration based on the collected paths
+        """
         pass
 
     @property

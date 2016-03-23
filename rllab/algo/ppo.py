@@ -25,7 +25,7 @@ class PPO(BatchPolopt):
 
     @overrides
     def init_opt(self, env_spec, policy, baseline):
-        is_recurrent = int(policy.is_recurrent)
+        is_recurrent = int(policy.recurrent)
         obs_var = env_spec.observation_space.new_tensor_variable(
             'obs',
             extra_dims=1 + is_recurrent,
@@ -44,9 +44,9 @@ class PPO(BatchPolopt):
                 'old_%s' % k,
                 ndim=2 + is_recurrent,
                 dtype=theano.config.floatX
-            ) for k in policy.info_keys
+            ) for k in policy.dist_info_keys
             }
-        old_info_vars_list = [old_info_vars[k] for k in policy.info_keys]
+        old_info_vars_list = [old_info_vars[k] for k in policy.dist_info_keys]
 
 
         if is_recurrent:
@@ -54,7 +54,7 @@ class PPO(BatchPolopt):
         else:
             valid_var = None
 
-        info_vars = policy.info_sym(obs_var, action_var)
+        info_vars = policy.dist_info_sym(obs_var, action_var)
         kl = policy.kl_sym(old_info_vars, info_vars)
         lr = policy.likelihood_ratio_sym(action_var, old_info_vars, info_vars)
         if is_recurrent:
@@ -88,9 +88,9 @@ class PPO(BatchPolopt):
             "observations", "actions", "advantages"
         ))
         agent_infos = samples_data["agent_infos"]
-        info_list = [agent_infos[k] for k in policy.info_keys]
+        info_list = [agent_infos[k] for k in policy.dist_info_keys]
         all_input_values += tuple(info_list)
-        if policy.is_recurrent:
+        if policy.recurrent:
             all_input_values += (samples_data["valids"],)
         loss_before = self._optimizer.loss(all_input_values)
         self._optimizer.optimize(all_input_values)
