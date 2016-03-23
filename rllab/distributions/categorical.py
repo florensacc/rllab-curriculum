@@ -49,12 +49,12 @@ class Categorical(Distribution):
         probs = info["prob"]
         return -np.sum(probs * np.log(probs + TINY), axis=1)
 
-    def log_likelihood_sym(self, xs, dist_info_vars):
+    def log_likelihood_sym(self, x_var, dist_info_vars):
         probs = dist_info_vars["prob"]
         # Assume layout is N * A
-        xs = from_onehot_sym(xs)
+        x_var = from_onehot_sym(x_var)
         N = probs.shape[0]
-        return TT.log(probs[TT.arange(N), xs] + TINY)
+        return TT.log(probs[TT.arange(N), x_var] + TINY)
 
     def log_likelihood(self, xs, dist_info):
         probs = dist_info["prob"]

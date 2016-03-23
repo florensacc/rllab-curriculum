@@ -32,7 +32,7 @@ class Baseline(object):
     def new_from_args(cls, args, mdp):
         pass
 
-    def log_extra(self, paths):
+    def log_diagnostics(self, paths):
         """
         Log extra information per iteration based on the collected paths
         """

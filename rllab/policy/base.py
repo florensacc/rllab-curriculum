@@ -12,6 +12,9 @@ class Policy(Parameterized):
     def get_action(self, observation):
         raise NotImplementedError
 
+    def reset(self):
+        pass
+
     @property
     def observation_space(self):
         return self._env_spec.observation_space

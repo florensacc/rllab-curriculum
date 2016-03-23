@@ -28,4 +28,4 @@ class ProxyEnv(Env):
         return self._wrapped_env.render(*args, **kwargs)
 
     def log_extra(self, paths):
-        self._wrapped_env.log_extra(paths)
+        self._wrapped_env.log_diagnostics(paths)

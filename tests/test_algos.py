@@ -7,7 +7,7 @@ from rllab.algo.ppo import PPO
 from rllab.algo.trpo import TRPO
 from rllab.env.grid_world_env import GridWorldEnv
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.policy.categorical_gru_policy import CategoricalGRUPolicy
+# from rllab.policy.categorical_gru_policy import CategoricalGRUPolicy
 from rllab.baseline.zero_baseline import ZeroBaseline
 
 

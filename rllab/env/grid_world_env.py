@@ -1,7 +1,7 @@
 import numpy as np
 from .base import Env
 from rllab.spaces import Discrete
-from rl_gym.core import Step
+from rllab.env.base import Step
 from rllab.core.serializable import Serializable
 
 
@@ -82,10 +82,12 @@ class GridWorldEnv(Env, Serializable):
         if next_state_type == 'H':
             done = True
         elif next_state_type == 'W':
-            # print "Hid wall!"
             next_state = self._state
+            # Don't move
+            pass
         elif next_state_type == 'G':
             done = True
+            # self._state = self._start_state
             reward = 1
         self._state = next_state
         return Step(observation=self._get_current_obs(), reward=reward, done=done)

@@ -76,9 +76,9 @@ class BatchPolopt(RLAlgorithm):
             logger.push_prefix('itr #%d | ' % itr)
             paths = self.obtain_samples(itr, env, policy, **kwargs)
             samples_data = self.process_samples(itr, paths, env.spec, policy, baseline, **kwargs)
-            env.log_extra(paths)
-            policy.log_extra(paths)
-            baseline.log_extra(paths)
+            env.log_diagnostics(paths)
+            policy.log_diagnostics(paths)
+            baseline.log_diagnostics(paths)
             opt_info = self.optimize_policy(
                 itr, policy, samples_data, opt_info, **kwargs)
             logger.log("saving snapshot...")
@@ -163,7 +163,7 @@ class BatchPolopt(RLAlgorithm):
 
         undiscounted_returns = [sum(path["rewards"]) for path in paths]
 
-        ent = policy.entropy(agent_infos)
+        ent = np.mean(policy.distribution.entropy(agent_infos))
 
         ev = special.explained_variance_1d(
             np.concatenate(baselines),

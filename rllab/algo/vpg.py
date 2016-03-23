@@ -52,7 +52,7 @@ class VPG(BatchPolopt, FirstOrderMethod):
             valid_var = None
 
         dist_info_vars = policy.dist_info_sym(obs_var, action_var)
-        logli = dist.log_likelihood_sym(dist_info_vars)
+        logli = dist.log_likelihood_sym(action_var, dist_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
 
         # formulate as a minimization problem

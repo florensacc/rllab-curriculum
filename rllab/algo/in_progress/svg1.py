@@ -356,10 +356,10 @@ class SVG1(RLAlgorithm):
         logger.record_tabular('PolicyParamNorm',
                               np.linalg.norm(
                                   policy.get_trainable_param_values()))
-        mdp.log_extra(logger, paths)
-        vf.log_extra(logger, paths)
-        policy.log_extra(logger, paths)
-        model.log_extra(logger, paths)
+        mdp.log_diagnostics(logger, paths)
+        vf.log_diagnostics(logger, paths)
+        policy.log_diagnostics(logger, paths)
+        model.log_diagnostics(logger, paths)
         self._model_obs_losses = []
         self._model_reward_losses = []
         self._vf_losses = []

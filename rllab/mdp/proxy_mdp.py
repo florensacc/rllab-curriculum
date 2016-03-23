@@ -53,7 +53,7 @@ class ProxyMDP(MDP):
 
     @overrides
     def log_extra(self, *args, **kwargs):
-        self._mdp.log_extra(*args, **kwargs)
+        self._mdp.log_diagnostics(*args, **kwargs)
 
     def get_state(self):
         return self._mdp.get_state()

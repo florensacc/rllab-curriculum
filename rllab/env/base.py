@@ -1,21 +1,21 @@
 from .env_spec import EnvSpec
+import collections
 
 
 class Env(object):
-
     def step(self, action):
         """
         Run one timestep of the environment's dynamics. When end of episode
-        is reached, the environment will automatically reset its internal state.
+        is reached, reset() should be called to reset the environment's internal state.
         Input
         -----
         action : an action provided by the environment
         Outputs
         -------
-        (observation, new, reward, info)
+        (observation, reward, done, info)
         observation : agent's observation of the current environment
-        new : a boolean, indicating whether the episode has just reset
         reward [Float] : amount of reward due to the previous action
+        done : a boolean, indicating whether the episode has ended
         info : a dictionary containing other diagnostic information from the previous action
         """
         raise NotImplementedError
@@ -58,3 +58,15 @@ class Env(object):
             observation_space=self.observation_space,
             action_space=self.action_space,
         )
+
+
+_Step = collections.namedtuple("Step", ["observation", "reward", "done", "info"])
+
+
+def Step(observation, reward, done, **kwargs):
+    """
+    Convenience method creating a namedtuple with the results of the
+    environment.step method.
+    Put extra diagnostic info in the kwargs
+    """
+    return _Step(observation, reward, done, kwargs)

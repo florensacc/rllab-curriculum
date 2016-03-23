@@ -331,9 +331,9 @@ class SVG0(RLAlgorithm):
         logger.record_tabular('PolicyParamNorm',
                               np.linalg.norm(
                                   policy.get_trainable_param_values()))
-        mdp.log_extra(logger, paths)
-        qf.log_extra(logger, paths)
-        policy.log_extra(logger, paths)
+        mdp.log_diagnostics(logger, paths)
+        qf.log_diagnostics(logger, paths)
+        policy.log_diagnostics(logger, paths)
         self._qf_losses = []
         self._policy_objs = []
         return opt_info
