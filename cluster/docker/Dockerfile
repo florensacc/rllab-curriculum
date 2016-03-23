@@ -39,6 +39,7 @@ RUN pip install --upgrade pip
 # usual pip install pygame will fail
 RUN conda install --yes -c https://conda.anaconda.org/kne pybox2d
 RUN conda install --yes -c https://conda.binstar.org/tlatorre pygame
+RUN sudo apt-get build-dep -y python-pygame
 
 # ========== Add codebase stub ==========
 

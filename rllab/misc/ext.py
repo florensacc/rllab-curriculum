@@ -345,3 +345,7 @@ def sliced_fun(f, n_slices):
             ret_vals = tuple(ret_vals)
         return ret_vals
     return sliced_f
+
+
+def flatten(lst):
+    return sum(lst, [])

@@ -173,13 +173,15 @@ def mk_matcher(*args, **h):
 # different seeds will be grouped into same param
 import json
 from collections import defaultdict
-def group_by_params(rets, warn=False, key=lambda x: -x[-1]):
+def group_by_params(rets, warn=False, key=lambda x: -x[-1], trans=None):
     def conv(h):
         h = dict(h)
         if "seed" in h:
             del h["seed"]
         if "exp_name" in h:
             del h["exp_name"]
+        if trans:
+            h = trans(h)
         return json.dumps(h, sort_keys=True)
     seen = defaultdict(list)
     for filename, series in rets.items():
@@ -224,12 +226,13 @@ def factorize_params(lst_hash):
 def comp(pattern, **kwargs):
     kwargs["plot"] = kwargs.get("plot", False)
     mstd = kwargs.pop("mstd", False)
+    trans=kwargs.pop('trans')
     rets=plot_experiments(
         pattern,
         **kwargs
     )
     plt.figure()
-    groups=group_by_params(rets)
+    groups=group_by_params(rets, trans=trans)
     if mstd:
         # mean - std
         groups = sorted(groups, key=lambda group: -np.mean(group[1] - group[2]))
