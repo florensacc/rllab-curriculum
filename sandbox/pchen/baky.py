@@ -2,6 +2,7 @@ import os
 
 from rllab.algo.bake_ppo import BakePPO
 from rllab.algo.ppo import PPO
+from rllab.policy.bake_mean_std_nn_policy import BakeMeanStdNNPolicy
 
 os.environ["THEANO_FLAGS"] = "device=cpu"
 from rllab.mdp.mujoco.swimmer_mdp import SwimmerMDP
@@ -20,16 +21,16 @@ from rllab.misc.instrument import stub, run_experiment_lite
 stub(globals())
 
 mdp_classes = [
-    SwimmerMDP,
-    HopperMDP,
+    # SwimmerMDP,
+    # HopperMDP,
     Walker2DMDP,
     HalfCheetahMDP,
-    AntMDP,
-    SimpleHumanoidMDP,
-    HumanoidMDP,
+    # AntMDP,
+    # SimpleHumanoidMDP,
+    # HumanoidMDP,
 ]
 
-for ss in [0.005, 0.01, 0.05, 0.1]:
+for ss in [0.005, 0.01]:
     for mdp_class in mdp_classes:
         mdp = NormalizedMDP(mdp=mdp_class())
         algo = PPO(
@@ -53,21 +54,26 @@ for ss in [0.005, 0.01, 0.05, 0.1]:
             hidden_sizes=(100, 50, 25),
             # nonlinearity='lasagne.nonlinearities.rectified',
         )
+        bake_policy = BakeMeanStdNNPolicy(
+            mdp=mdp,
+            hidden_sizes=(100, 50, 25),
+            # nonlinearity='lasagne.nonlinearities.rectified',
+        )
         baseline = LinearFeatureBaseline(
             mdp_spec=mdp
         )
         for seed in [1,4,66,777,678]:
+            # run_experiment_lite(
+            #     algo.train(mdp=mdp, policy=policy, baseline=baseline),
+            #     exp_prefix="ppo_loco",
+            #     n_parallel=4,
+            #     snapshot_mode="last",
+            #     seed=seed,
+            #     mode="lab_kube",
+            # )
             run_experiment_lite(
-                algo.train(mdp=mdp, policy=policy, baseline=baseline),
+                bake_algo.train(mdp=mdp, policy=bake_policy, baseline=baseline),
                 exp_prefix="ppo_loco",
-                n_parallel=4,
-                snapshot_mode="last",
-                seed=seed,
-                mode="lab_kube",
-            )
-            run_experiment_lite(
-                bake_algo.train(mdp=mdp, policy=policy, baseline=baseline),
-                exp_prefix="bake_loco",
                 n_parallel=4,
                 snapshot_mode="last",
                 seed=seed,

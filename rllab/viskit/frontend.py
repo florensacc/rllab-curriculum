@@ -85,7 +85,6 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None):
             group_legends = [split_legend]
         to_plot = []
         for group_selector, group_legend in zip(group_selectors, group_legends):
-            #import ipdb; ipdb.set_trace()
             filtered_data = group_selector.extract()
             if len(filtered_data) > 0:
                 progresses = [exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
@@ -96,6 +95,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None):
                 stds = np.std(progresses, axis=0)
                 to_plot.append(ext.AttrDict(means=means, stds=stds, legend=group_legend))
         if len(to_plot) > 0:
+            plots.append("<div>%s: %s</div>" % (split_key, split_legend))
             plots.append(make_plot(to_plot))
     return "\n".join(plots)
 

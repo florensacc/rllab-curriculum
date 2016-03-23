@@ -32,7 +32,7 @@ def worker_collect_stats(action_dim):
     return np.mean(np.exp(log_stds))
 
 
-class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
+class BakeMeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     @autoargs.arg('hidden_sizes', type=int, nargs='*',
                   help='list of sizes for the fully-connected hidden layers')
@@ -160,7 +160,7 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             allow_input_downcast=True
         )
 
-        super(MeanStdNNPolicy, self).__init__(mdp)
+        super(BakeMeanStdNNPolicy, self).__init__(mdp)
         LasagnePowered.__init__(self, [mean_layer, log_std_layer])
 
         if load_params:
@@ -269,7 +269,8 @@ class MeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             0.5*TT.sum(TT.square(stdn), axis=1) - \
             0.5*self.action_dim*np.log(2*np.pi)
 
-    def log_extra(self):
-        stds = parallel_sampler.run_map(worker_collect_stats, self.action_dim)
-        logger.record_tabular('AveragePolicyStd', np.mean(stds))
+    def log_extra(self, paths):
+        pdists = np.vstack([path["pdists"] for path in paths])
+        means, log_stds = self._split_pdist(pdists)
+        logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
 
