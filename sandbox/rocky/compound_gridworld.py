@@ -1,19 +1,11 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.mdp.compound_action_sequence_mdp import CompoundActionSequenceMDP
-from rllab.mdp.grid_world_mdp import GridWorldMDP
-from rllab.mdp.box2d.cartpole_mdp import CartpoleMDP
+from rllab.env.compound_action_sequence_mdp import CompoundActionSequenceMDP
+from rllab.env.grid_world_mdp import GridWorldMDP
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.policy.categorical_gru_policy import CategoricalGRUPolicy
-from rllab.policy.mean_std_rnn_policy import MeanStdRNNPolicy
-from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
 from rllab.baseline.zero_baseline import ZeroBaseline
-from rllab.algo.ppo import PPO
 from rllab.algo.trpo import TRPO
-from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-from rllab.optimizer.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.misc.instrument import stub, run_experiment_lite
-from rllab.misc import ext
 
 stub(globals())
 

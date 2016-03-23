@@ -1,12 +1,12 @@
-import sys
 import argparse
+import sys
+import time
 
+import numpy as np
 import pygame
 
 from rllab.mdp.base import MDP
 from rllab.misc.resolve import load_class
-import time
-import numpy as np
 
 
 def sample_action(lb, ub):
@@ -66,8 +66,8 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
         mdp.reset()
         mdp.plot()
         tr = 0.
-        from rllab.mdp.box2d.box2d_mdp import Box2DMDP
-        if isinstance(mdp, Box2DMDP):
+        from rllab.env.box2d.box2d_mdp import Box2DEnv
+        if isinstance(mdp, Box2DEnv):
             for _ in xrange(max_steps):
                 pygame.event.pump()
                 keys = pygame.key.get_pressed()

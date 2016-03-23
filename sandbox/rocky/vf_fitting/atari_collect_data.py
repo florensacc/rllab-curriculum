@@ -1,7 +1,6 @@
 from rllab.sampler import parallel_sampler
 parallel_sampler.config_parallel_sampler(n_parallel=4, base_seed=0)
-import numpy as np
-from rllab.mdp.openai_atari_mdp import AtariMDP
+from rllab.env.openai_atari_mdp import AtariMDP
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.misc.special import discount_cumsum
 import joblib
