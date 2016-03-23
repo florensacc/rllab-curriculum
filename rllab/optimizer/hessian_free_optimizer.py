@@ -2,7 +2,7 @@ from rllab.misc.ext import compile_function, lazydict
 from rllab.core.serializable import Serializable
 from rllab.optimizer.hf import hf_optimizer
 import time
-from rllab.optimizer.minibatch_dataset import MinibatchDataset
+from rllab.optimizer.minibatch_dataset import BatchDataset
 
 
 class HessianFreeOptimizer(Serializable):
@@ -55,8 +55,8 @@ class HessianFreeOptimizer(Serializable):
         if extra_inputs is None:
             extra_inputs = list()
 
-        dataset = MinibatchDataset(inputs=inputs, batch_size=self._batch_size, extra_inputs=extra_inputs)
-        cg_dataset = MinibatchDataset(inputs=inputs, batch_size=self._cg_batch_size, extra_inputs=extra_inputs)
+        dataset = BatchDataset(inputs=inputs, batch_size=self._batch_size, extra_inputs=extra_inputs)
+        cg_dataset = BatchDataset(inputs=inputs, batch_size=self._cg_batch_size, extra_inputs=extra_inputs)
 
         itr = [0]
         start_time = time.time()

@@ -22,7 +22,8 @@ class PenaltyLbfgsOptimizer(Serializable):
             increase_penalty_factor=2,
             decrease_penalty_factor=0.5,
             max_penalty_itr=10,
-            adapt_penalty=True):
+            adapt_penalty=True,
+            **kwargs):
         Serializable.quick_init(self, locals())
         self._max_opt_itr = max_opt_itr
         self._penalty = initial_penalty

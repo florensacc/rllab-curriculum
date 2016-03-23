@@ -15,11 +15,22 @@ def unflatten_tensors(flattened, tensor_shapes):
     return map(lambda pair: np.reshape(pair[0], pair[1]), zip(np.split(flattened, indices), tensor_shapes))
 
 
-def pad_tensor(x, max_len, rep):
+def pad_tensor(x, max_len):
     return np.concatenate([
         x,
-        np.tile(rep, (max_len - len(x),) + (1,) * np.ndim(rep))
+        np.tile(np.zeros_like(x[0]), (max_len - len(x),) + (1,) * np.ndim(x[0]))
     ])
+
+
+def pad_tensor_dict(tensor_dict, max_len):
+    keys = tensor_dict.keys()
+    ret = dict()
+    for k in keys:
+        if isinstance(tensor_dict[k], dict):
+            ret[k] = pad_tensor_dict(tensor_dict[k], max_len)
+        else:
+            ret[k] = pad_tensor(tensor_dict[k], max_len)
+    return ret
 
 
 def high_res_normalize(probs):
@@ -27,10 +38,11 @@ def high_res_normalize(probs):
 
 
 def stack_tensor_list(tensor_list):
-    tensor_shape = np.array(tensor_list[0]).shape
-    if tensor_shape is tuple():
-        return np.array(tensor_list)
-    return np.vstack(tensor_list)
+    return np.array(tensor_list)
+    # tensor_shape = np.array(tensor_list[0]).shape
+    # if tensor_shape is tuple():
+    #     return np.array(tensor_list)
+    # return np.vstack(tensor_list)
 
 
 def stack_tensor_dict_list(tensor_dict_list):

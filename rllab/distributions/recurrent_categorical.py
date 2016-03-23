@@ -1,5 +1,6 @@
 import theano.tensor as TT
 import numpy as np
+import theano
 from rllab.distributions.categorical import Categorical
 from rllab.distributions.base import Distribution
 
@@ -53,6 +54,7 @@ class RecurrentCategorical(Distribution):
         probs = dist_info_vars["prob"]
         # Assume layout is N * T * A
         a_dim = probs.shape[-1]
+        # a_dim = TT.printing.Print("lala")(a_dim)
         flat_logli = self._cat.log_likelihood_sym(xs.reshape((-1, a_dim)), dict(prob=probs.reshape((-1, a_dim))))
         return flat_logli.reshape(probs.shape[:2])
 
@@ -62,3 +64,7 @@ class RecurrentCategorical(Distribution):
         a_dim = probs.shape[-1]
         flat_logli = self._cat.log_likelihood_sym(xs.reshape((-1, a_dim)), dict(prob=probs.reshape((-1, a_dim))))
         return flat_logli.reshape(probs.shape[:2])
+
+    @property
+    def dist_info_keys(self):
+        return ["prob"]

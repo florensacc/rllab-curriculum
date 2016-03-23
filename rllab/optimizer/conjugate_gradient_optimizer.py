@@ -21,7 +21,8 @@ class ConjugateGradientOptimizer(Serializable):
             reg_coeff=1e-5,
             subsample_factor=1,
             backtrack_ratio=0.5,
-            max_backtracks=10):
+            max_backtracks=10,
+            **kwargs):
         """
 
         :param cg_iters: The number of CG iterations used to calculate A^-1 g

@@ -1,16 +1,27 @@
-from rllab.misc.ext import compile_function, lazydict, flatten_tensor_variables
+from rllab.misc import ext
 from rllab.core.serializable import Serializable
 from rllab.algo.first_order_method import parse_update_method
-from rllab.optimizer.minibatch_dataset import MinibatchDataset
+from rllab.optimizer.minibatch_dataset import BatchDataset
+from collections import OrderedDict
 import time
 
 
-class MinibatchOptimizer(Serializable):
+class FirstOrderOptimizer(Serializable):
     """
-    Performs stochastic gradient descent, possibly using fancier methods like adam etc.
+    Performs (stochastic) gradient descent, possibly using fancier methods like adam etc.
     """
 
     def __init__(self, max_epochs=1000, tolerance=1e-6, update_method='sgd', batch_size=32, callback=None, **kwargs):
+        """
+
+        :param max_epochs:
+        :param tolerance:
+        :param update_method:
+        :param batch_size: None or an integer. If None the whole dataset will be used.
+        :param callback:
+        :param kwargs:
+        :return:
+        """
         Serializable.quick_init(self, locals())
         self._opt_fun = None
         self._target = None
@@ -33,13 +44,14 @@ class MinibatchOptimizer(Serializable):
         self._target = target
 
         updates = self._update_method(loss, target.get_params(trainable=True))
+        updates = OrderedDict([(k, v.astype(k.dtype)) for k, v in updates.iteritems()])
 
         if extra_inputs is None:
             extra_inputs = list()
 
-        self._opt_fun = lazydict(
-            f_loss=lambda: compile_function(inputs + extra_inputs, loss),
-            f_opt=lambda: compile_function(
+        self._opt_fun = ext.lazydict(
+            f_loss=lambda: ext.compile_function(inputs + extra_inputs, loss),
+            f_opt=lambda: ext.compile_function(
                 inputs=inputs + extra_inputs,
                 outputs=loss,
                 updates=updates,
@@ -48,8 +60,8 @@ class MinibatchOptimizer(Serializable):
 
     def loss(self, inputs, extra_inputs=None):
         if extra_inputs is None:
-            extra_inputs = list()
-        return self._opt_fun["f_loss"](*(inputs + extra_inputs))
+            extra_inputs = tuple()
+        return self._opt_fun["f_loss"](*(tuple(inputs) + extra_inputs))
 
     def optimize(self, inputs, extra_inputs=None):
 
@@ -61,19 +73,19 @@ class MinibatchOptimizer(Serializable):
         f_loss = self._opt_fun["f_loss"]
 
         if extra_inputs is None:
-            extra_inputs = list()
+            extra_inputs = tuple()
 
-        last_loss = f_loss(*(inputs + extra_inputs))
+        last_loss = f_loss(*(tuple(inputs) + extra_inputs))
 
         start_time = time.time()
 
-        dataset = MinibatchDataset(inputs, self._batch_size, extra_inputs=extra_inputs)
+        dataset = BatchDataset(inputs, self._batch_size, extra_inputs=extra_inputs)
 
         for epoch in xrange(self._max_epochs):
             for batch in dataset.iterate(update=True):
                 f_opt(*batch)
 
-            new_loss = f_loss(*(inputs + extra_inputs))
+            new_loss = f_loss(*(tuple(inputs) + extra_inputs))
 
             if self._callback:
                 elapsed = time.time() - start_time

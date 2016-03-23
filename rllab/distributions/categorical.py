@@ -6,11 +6,17 @@ TINY = 1e-8
 
 
 def from_onehot_sym(x_var):
-    return TT.nonzero(x_var)[1]
+    ret = TT.zeros((x_var.shape[0],), x_var.dtype)
+    nonzero_n, nonzero_a = TT.nonzero(x_var)[:2]
+    ret = TT.set_subtensor(ret[nonzero_n], nonzero_a)
+    return ret
 
 
 def from_onehot(x_var):
-    return np.nonzero(x_var)[1]
+    ret = np.zeros((x_var.shape[0],))
+    nonzero_n, nonzero_a = np.nonzero(x_var)
+    ret[nonzero_n] = nonzero_a
+    return ret
 
 
 class Categorical(Distribution):
@@ -65,3 +71,4 @@ class Categorical(Distribution):
     @property
     def dist_info_keys(self):
         return ["prob"]
+

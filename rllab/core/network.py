@@ -98,7 +98,7 @@ class GRULayer(L.Layer):
         u = self.gate_nonlinearity(x.dot(self.W_xu) + hprev.dot(self.W_hu) + self.b_u)
         c = self.nonlinearity(x.dot(self.W_xc) + r * (hprev.dot(self.W_hc)) + self.b_c)
         h = (1 - u) * hprev + u * c
-        return h
+        return h.astype(theano.config.floatX)
 
     def get_step_layer(self, l_in, l_prev_hidden):
         return GRUStepLayer(incomings=[l_in, l_prev_hidden], gru_layer=self)

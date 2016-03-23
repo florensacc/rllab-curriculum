@@ -43,8 +43,21 @@ class Discrete(Space):
         return special.weighted_sample(weights, xrange(self.n))
 
     def new_tensor_variable(self, name, extra_dims):
-        return ext.new_tensor(
-            name=name,
-            ndim=extra_dims+1,
-            dtype='int32'
-        )
+        if self.n <= 2 ** 8:
+            return ext.new_tensor(
+                name=name,
+                ndim=extra_dims+1,
+                dtype='uint8'
+            )
+        elif self.n <= 2 ** 16:
+            return ext.new_tensor(
+                name=name,
+                ndim=extra_dims+1,
+                dtype='uint16'
+            )
+        else:
+            return ext.new_tensor(
+                name=name,
+                ndim=extra_dims+1,
+                dtype='uint32'
+            )

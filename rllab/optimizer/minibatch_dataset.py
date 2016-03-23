@@ -1,10 +1,12 @@
 import numpy as np
 
 
-class MinibatchDataset(object):
+class BatchDataset(object):
 
     def __init__(self, inputs, batch_size, extra_inputs=None):
         self._inputs = inputs
+        if batch_size is None:
+            batch_size = inputs[0].shape[0]
         self._batch_size = batch_size
         self._extra_inputs = extra_inputs
         self._ids = np.arange(self._inputs[0].shape[0])
