@@ -1,14 +1,14 @@
 import numpy as np
 import pygame
-from rllab.mdp.box2d.parser import find_body
+from rllab.env.box2d.parser import find_body
 
 from rllab.core.serializable import Serializable
-from rllab.env.box2d.box2d_mdp import Box2DEnv
+from rllab.env.box2d.box2d_env import Box2DEnv
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 
 
-class MountainCarMDP(Box2DEnv, Serializable):
+class MountainCarEnv(Box2DEnv, Serializable):
 
     @autoargs.inherit(Box2DEnv.__init__)
     @autoargs.arg("height_bonus_coeff", type=float,
@@ -19,7 +19,7 @@ class MountainCarMDP(Box2DEnv, Serializable):
                  height_bonus=1.,
                  goal_cart_pos=0.6,
                  *args, **kwargs):
-        super(MountainCarMDP, self).__init__(
+        super(MountainCarEnv, self).__init__(
             self.model_path("mountain_car.xml.mako"),
             *args, **kwargs
         )
@@ -60,3 +60,4 @@ class MountainCarMDP(Box2DEnv, Serializable):
             return np.asarray([+1])
         else:
             return np.asarray([0])
+

@@ -1,17 +1,29 @@
 import numpy as np
 from nose2 import tools
 
+from rllab.env.box2d.car_parking_env import CarParkingEnv
 from rllab.env.box2d.cartpole_env import CartpoleEnv
+from rllab.env.box2d.cartpole_swingup_env import CartpoleSwingupEnv
+from rllab.env.box2d.double_pendulum_env import DoublePendulumEnv
+from rllab.env.box2d.mountain_car_env import MountainCarEnv
 from rllab.env.grid_world_env import GridWorldEnv
+from rllab.env.identification_env import IdentificationEnv
 from rllab.env.proxy_env import ProxyEnv
 
 simple_env_classes = [
     GridWorldEnv,
     CartpoleEnv,
+    CarParkingEnv,
+    CartpoleSwingupEnv,
+    DoublePendulumEnv,
+    MountainCarEnv,
 ]
 envs = [cls() for cls in simple_env_classes]
 envs.append(
     ProxyEnv(envs[0])
+)
+envs.append(
+    IdentificationEnv(CartpoleEnv, {})
 )
 
 
@@ -28,3 +40,4 @@ def test_env(env):
     assert ob_space.contains(res.observation)
     assert np.isscalar(res.reward)
     env.render()
+

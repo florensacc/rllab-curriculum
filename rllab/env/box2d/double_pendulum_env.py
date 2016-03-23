@@ -1,14 +1,14 @@
 import numpy as np
-from rllab.mdp.box2d.parser import find_body
+from rllab.env.box2d.parser import find_body
 
 from rllab.core.serializable import Serializable
-from rllab.env.box2d.box2d_mdp import Box2DEnv
+from rllab.env.box2d.box2d_env import Box2DEnv
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 
 
 # http://mlg.eng.cam.ac.uk/pilco/
-class DoublePendulumMDP(Box2DEnv, Serializable):
+class DoublePendulumEnv(Box2DEnv, Serializable):
 
     @autoargs.inherit(Box2DEnv.__init__)
     def __init__(self, *args, **kwargs):
@@ -20,7 +20,7 @@ class DoublePendulumMDP(Box2DEnv, Serializable):
             self.link_len = 1
         kwargs["template_args"] = kwargs.get("template_args", {})
         kwargs["template_args"]["link_len"] = self.link_len
-        super(DoublePendulumMDP, self).__init__(
+        super(DoublePendulumEnv, self).__init__(
             self.model_path("double_pendulum.xml.mako"),
             *args, **kwargs
         )
@@ -59,3 +59,4 @@ class DoublePendulumMDP(Box2DEnv, Serializable):
 
     def is_current_done(self):
         return False
+
