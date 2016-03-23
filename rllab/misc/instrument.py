@@ -637,6 +637,7 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
             "name": pod_name,
             "labels": {
                 "expt": pod_name,
+                "exp_time": timestamp,
             },
         },
         "spec": {
@@ -647,7 +648,7 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
                     "command": ["/bin/bash", "-c", command],
                     "resources": {
                         "requests": {
-                            "cpu": 2,
+                            "cpu": 1.5,
                         }
                     },
                     "imagePullPolicy": "Always",
