@@ -10,7 +10,10 @@ class TRPO(NPO):
     def __init__(
             self,
             optimizer=None,
+            optimizer_args=None,
             **kwargs):
         if optimizer is None:
-            optimizer = ConjugateGradientOptimizer(**kwargs)
+            if optimizer_args is None:
+                optimizer_args = dict()
+            optimizer = ConjugateGradientOptimizer(**optimizer_args)
         super(TRPO, self).__init__(optimizer=optimizer, **kwargs)

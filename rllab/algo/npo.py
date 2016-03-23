@@ -14,11 +14,14 @@ class NPO(BatchPolopt):
 
     def __init__(
             self,
-            optimizer,
+            optimizer=None,
+            optimizer_args=None,
             step_size=0.01,
             **kwargs):
         if optimizer is None:
-            optimizer = PenaltyLbfgsOptimizer()
+            if optimizer_args is None:
+                optimizer_args = dict()
+            optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
         self._optimizer = optimizer
         self._step_size = step_size
         super(NPO, self).__init__(**kwargs)

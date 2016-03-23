@@ -1,9 +1,11 @@
 from rllab.misc import ext
 from rllab.core.serializable import Serializable
-from rllab.algo.first_order_method import parse_update_method
+# from rllab.algo.first_order_method import parse_update_method
 from rllab.optimizer.minibatch_dataset import BatchDataset
 from collections import OrderedDict
 import time
+import lasagne.updates
+from functools import partial
 
 
 class FirstOrderOptimizer(Serializable):
@@ -11,7 +13,14 @@ class FirstOrderOptimizer(Serializable):
     Performs (stochastic) gradient descent, possibly using fancier methods like adam etc.
     """
 
-    def __init__(self, max_epochs=1000, tolerance=1e-6, update_method='sgd', batch_size=32, callback=None, **kwargs):
+    def __init__(
+            self,
+            update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
+            max_epochs=1000,
+            tolerance=1e-6,
+            batch_size=32,
+            callback=None,
+            **kwargs):
         """
 
         :param max_epochs:
@@ -26,7 +35,7 @@ class FirstOrderOptimizer(Serializable):
         self._opt_fun = None
         self._target = None
         self._callback = callback
-        self._update_method = parse_update_method(update_method, **kwargs)
+        self._update_method = update_method
         self._max_epochs = max_epochs
         self._tolerance = tolerance
         self._batch_size = batch_size

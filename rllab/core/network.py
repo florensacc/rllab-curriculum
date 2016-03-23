@@ -12,14 +12,14 @@ import numpy as np
 class MLP(object):
 
     def __init__(self, input_shape, output_dim, hidden_sizes, nonlinearity,
-                 output_nonlinearity, name=None):
+                 output_nonlinearity, name=None, input_var=None):
 
         if name is None:
             prefix = ""
         else:
             prefix = name + "_"
 
-        l_in = L.InputLayer(shape=(None,) + input_shape)
+        l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var)
         l_hid = l_in
         for idx, hidden_size in enumerate(hidden_sizes):
             l_hid = L.DenseLayer(
@@ -45,6 +45,10 @@ class MLP(object):
     @property
     def output_layer(self):
         return self._l_out
+
+    @property
+    def input_var(self):
+        return self._l_in.input_var
 
 
 class GRULayer(L.Layer):

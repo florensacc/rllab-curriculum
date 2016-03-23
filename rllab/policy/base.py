@@ -73,12 +73,12 @@ class StochasticPolicy(Policy):
         Return the symbolic distribution information about the actions.
         :return:
         """
-        return dict()
+        raise NotImplementedError
 
     def dist_info(self, obs, actions):
         """
         Return the distribution information about the actions.
         :return:
         """
-        return dict()
+        raise NotImplementedError
 

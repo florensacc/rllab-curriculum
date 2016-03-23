@@ -1,11 +1,15 @@
 from .base import Space
 import numpy as np
+from rllab.misc import ext
+import theano
+
 
 class Box(Space):
     """
     A box in R^n.
     I.e., each coordinate is bounded.
     """
+
     def __init__(self, low, high, shape=None):
         """
         Two kinds of valid input:
@@ -51,4 +55,11 @@ class Box(Space):
     def __eq__(self, other):
         return isinstance(other, Box) and np.allclose(self.low, other.low) and \
                np.allclose(self.high, other.high)
+
+    def new_tensor_variable(self, name, extra_dims):
+        return ext.new_tensor(
+            name=name,
+            ndim=extra_dims+1,
+            dtype=theano.config.floatX
+        )
 

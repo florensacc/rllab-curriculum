@@ -9,13 +9,10 @@ from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
 from rllab.core.serializable import Serializable
-from rllab.distributions import normal_dist
 from rllab.misc import logger
 from rllab.misc.ext import compile_function
 from rllab.optimizer.lbfgs_optimizer import LbfgsOptimizer
 from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-
-NONE = list()
 
 
 class GaussianMLPRegressor(LasagnePowered, Serializable):
@@ -37,9 +34,9 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             init_std=1.0,
             adaptive_std=False,
             std_share_network=False,
-            std_hidden_sizes=None,
+            std_hidden_sizes=(32, 32),
             # We can't use None here since None is actually a valid value!
-            std_nonlinearity=NONE,
+            std_nonlinearity=None,
             normalize_inputs=True,
             normalize_outputs=True,
             name=None,
@@ -82,10 +79,6 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         l_mean = mean_network.output_layer
 
         if adaptive_std:
-            if std_hidden_sizes is None:
-                std_hidden_sizes = hidden_sizes
-            if std_nonlinearity is NONE:
-                std_nonlinearity = nonlinearity
             l_log_std = MLP(
                 input_shape=input_shape,
                 input_var=mean_network.input_layer.input_var,

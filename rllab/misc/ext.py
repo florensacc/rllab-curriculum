@@ -33,6 +33,10 @@ def extract(x, *keys):
         raise NotImplementedError
 
 
+def extract_dict(x, *keys):
+    return {k: x[k] for k in keys if k in x}
+
+
 def compact(x):
     """
     For a dictionary this removes all None values, and for a list this removes
@@ -345,7 +349,3 @@ def sliced_fun(f, n_slices):
             ret_vals = tuple(ret_vals)
         return ret_vals
     return sliced_f
-
-
-def flatten(lst):
-    return sum(lst, [])

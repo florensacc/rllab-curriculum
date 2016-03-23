@@ -10,7 +10,10 @@ class PPO(NPO):
     def __init__(
             self,
             optimizer=None,
+            optimizer_args=None,
             **kwargs):
         if optimizer is None:
-            optimizer = PenaltyLbfgsOptimizer(**kwargs)
-            super(PPO, self).__init__(optimizer=optimizer, **kwargs)
+            if optimizer_args is None:
+                optimizer_args = dict()
+            optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
+        super(PPO, self).__init__(optimizer=optimizer, **kwargs)
