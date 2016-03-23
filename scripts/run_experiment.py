@@ -1,5 +1,7 @@
 from __future__ import print_function
+
 import sys
+
 sys.path.append(".")
 
 from rllab.misc.ext import is_iterable, set_seed
@@ -140,19 +142,19 @@ def run_experiment(argv):
 
         instances = dict()
         if args.random_mdp:
-            from rllab.mdp.identification_mdp import IdentificationMDP
+            from rllab.env.identification_mdp import IdentificationMDP
             instances['mdp'] = IdentificationMDP(classes['mdp'], more_args)
         else:
             instances['mdp'] = instantiate(more_args, classes['mdp'])
         if args.normalize_mdp:
-            from rllab.mdp.normalized_mdp import normalize
+            from rllab.env.normalized_mdp import normalize
             instances['mdp'] = normalize(instances['mdp'])
         if args.action_delay != 0:
-            from rllab.mdp.noisy_mdp import DelayedActionMDP
+            from rllab.env.noisy_mdp import DelayedActionMDP
             instances['mdp'] = DelayedActionMDP(
                 instances['mdp'], args.action_delay)
         if args.obs_noise != 0:
-            from rllab.mdp.noisy_mdp import NoisyObservationMDP
+            from rllab.env.noisy_mdp import NoisyObservationMDP
             instances['mdp'] = NoisyObservationMDP(
                 instances['mdp'], args.obs_noise)
         if args.policy:

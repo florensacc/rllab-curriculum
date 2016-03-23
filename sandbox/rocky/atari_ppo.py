@@ -1,6 +1,6 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.mdp.openai_atari_mdp import AtariMDP
+from rllab.env.openai_atari_mdp import AtariMDP
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
 from rllab.algo.ppo import PPO

@@ -1,7 +1,6 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.mdp.compound_action_sequence_mdp import CompoundActionSequenceMDP
-from rllab.mdp.grid_world_mdp import GridWorldMDP
+from rllab.env.grid_world_mdp import GridWorldMDP
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
 from rllab.algo.ppo import PPO

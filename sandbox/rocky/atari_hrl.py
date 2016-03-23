@@ -1,7 +1,7 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.mdp.openai_atari_mdp import AtariMDP
-from rllab.mdp.subgoal_mdp import SubgoalMDP
+from rllab.env.openai_atari_mdp import AtariMDP
+from rllab.env.subgoal_mdp import SubgoalMDP
 from rllab.policy.subgoal_policy import SubgoalPolicy
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.baseline.gaussian_mlp_baseline import GaussianMLPBaseline
