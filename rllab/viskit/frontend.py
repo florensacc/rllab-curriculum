@@ -64,9 +64,12 @@ def make_plot(plot_list):
     return po.plot(fig, output_type='div', include_plotlyjs=False)
 
 
-def get_plot_instruction(plot_key, split_key=None, group_key=None):
-    print plot_key, split_key, group_key
+def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
+    print plot_key, split_key, group_key, filters
     selector = core.Selector(exps_data)
+    for k, v in filters.iteritems():
+        selector = selector.where(k, str(v))
+    # print selector._filters
     if split_key is not None:
         vs = [vs for k, vs in distinct_params if k == split_key][0]
         split_selectors = [selector.where(split_key, v) for v in vs]
@@ -85,6 +88,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None):
             group_legends = [split_legend]
         to_plot = []
         for group_selector, group_legend in zip(group_selectors, group_legends):
+            # print group_selector._filters
             filtered_data = group_selector.extract()
             if len(filtered_data) > 0:
                 progresses = [exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
@@ -106,6 +110,8 @@ def plot_div():
     plot_key = args.get("plot_key")
     split_key = args.get("split_key", "")
     group_key = args.get("group_key", "")
+    filters_json = args.get("filters", "{}")
+    filters = json.loads(filters_json)
     if len(split_key) == 0:
         split_key = None
     if len(group_key) == 0:
@@ -113,7 +119,8 @@ def plot_div():
     # group_key = distinct_params[0][0]
     # print split_key
     # exp_filter = distinct_params[0]
-    plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, group_key=group_key)
+    plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key,
+                                    group_key=group_key, filters=filters)
     # print plot_div
     return plot_div
 
@@ -131,7 +138,8 @@ def index():
         plot_div=plot_div,
         plot_key=plot_key,
         plottable_keys=plottable_keys,
-        distinct_param_keys=[k for k, v in distinct_params]
+        distinct_param_keys=[k for k, v in distinct_params],
+        distinct_params=dict(distinct_params),
     )
 
 if __name__ == "__main__":

@@ -16,6 +16,19 @@
 <body>
 <div class="container">
     <div class="control-panel">
+        Filters:
+        <form>
+            <div class="filter current">
+                <select class="target">
+                    {% for key in distinct_param_keys %}
+                        <option>{{ key }}</option>
+                    {% endfor %}
+                </select>
+                <select class="filter">
+                </select>
+                <br />
+            </div>
+        </form>
         Plot Attribute:
         <div class="btn-group">
             <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">{{ plot_key }}<span
@@ -69,6 +82,8 @@
             </ul>
         </div>
         <br />
+        <button class="update">Update</button>
+        <br />
         <span id="status"></span>
     </div>
     <div id="plot_wrapper">
@@ -83,8 +98,9 @@
 <script type="text/javascript">
     var plottableKeys = {{ plottable_keys|tojson|safe }};
     var distinctParamKeys = {{ distinct_param_keys|tojson|safe }};
+    var distinctParams = {{ distinct_params|tojson|safe }};
     function updatePlot() {
-        $("#status").html("Updating")
+        $("#status").html("Updating");
 
         var $controlPanel = $(this).closest(".control-panel");
         var plotIndex = $controlPanel.find("input[name=plot_key]:checked").val();
@@ -98,7 +114,17 @@
         }
         var groupIndex = $controlPanel.find("input[type=radio][name=group_key]:checked").val();
         var groupKey = distinctParamKeys[groupIndex - 1];
-        $.get("/plot_div", {"plot_key": plotKey, "split_key": splitKey, "group_key": groupKey}, function (data) {
+        var filters = {};
+        $.each($("div.filter"), function(itr, div) {
+            var val = $(div).find(".filter").val();
+            if (val && val.length != 0) {
+                filters[$(div).find(".target").val()] = val;
+            }
+        });
+        $.get("/plot_div",
+              {"plot_key": plotKey, "split_key": splitKey,
+                  "group_key": groupKey, "filters": JSON.stringify(filters)},
+              function (data) {
             $("#plot_wrapper").empty().append(data);
             $("#status").html("Updated")
         });
@@ -107,8 +133,35 @@
         $("input[type=radio][name=plot_key]").change(updatePlot);
         $("input[type=radio][name=split_key]").change(updatePlot);
         $("input[type=radio][name=group_key]").change(updatePlot);
+        $("button.update").click(updatePlot);
     });
-    $("#status").html("Ready")
+    function updateFilterSelections() {
+        var key = $(this).val();
+        var select$ = $(this).parent().find("select.filter");
+        select$.empty();
+        $.each([""].concat(distinctParams[key]), function(itr, v) {
+            select$.append(
+                    $("<option />")
+                            .attr("value", v)
+                            .text(v)
+            );
+        });
+    }
+    $("select.target").change(updateFilterSelections);
+    var cleanFilter;
+    function addFilter() {
+        var parent$ = $(this).parent();
+        if (parent$.hasClass("current")) {
+            parent$.after(cleanFilter.clone(true, true));
+            parent$.removeClass("current");
+        }
+    }
+    $("select.filter").change(addFilter);
+    $(document).ready(function() {
+        updateFilterSelections.call($("select.target"));
+        cleanFilter = $(".filter.current").clone(true, true);
+        $("#status").html("Ready")
+    });
 </script>
 
 </body>
