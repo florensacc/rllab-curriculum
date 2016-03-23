@@ -63,8 +63,11 @@ class BakePPO(BatchPolopt):
             bs_kl_tolerance=1e-3,
             adapt_penalty=True,
             optimizer='scipy.optimize.fmin_l_bfgs_b',
+            bake_step_size=None,
             **kwargs):
         self.step_size = step_size
+        self.true_step_size = step_size
+        self.bake_step_size = step_size if bake_step_size is None else self.step_size
         self.initial_penalty = initial_penalty
         self.min_penalty = min_penalty
         self.max_penalty = max_penalty
@@ -263,10 +266,12 @@ class BakePPO(BatchPolopt):
     def optimize_policy(self, itr, policy, samples_data, opt_info):
         f_surr_kl = opt_info['pred_f_surr_kl']
         f_grads = opt_info['pred_f_grads']
+        self.step_size = self.bake_step_size
         self.go(itr,policy,samples_data,opt_info,f_surr_kl,f_grads)
         logger.log('pred opt finished')
         f_surr_kl = opt_info['f_surr_kl']
         f_grads = opt_info['f_grads']
+        self.step_size = self.true_step_size
         return self.go(itr,policy,samples_data,opt_info,f_surr_kl,f_grads)
 
     @overrides
