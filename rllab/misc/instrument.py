@@ -68,6 +68,7 @@ class StubClass(object):
 
     def __call__(self, *args, **kwargs):
         if len(args) > 0:
+            # Convert the positional arguments to keyword arguments
             raise NotImplementedError
         return StubObject(self.proxy_class, *args, **kwargs)
 

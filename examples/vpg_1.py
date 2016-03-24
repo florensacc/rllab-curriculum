@@ -1,7 +1,7 @@
 from __future__ import print_function
-from rllab.mdp.box2d.cartpole_mdp import CartpoleMDP
+from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.mdp.normalized_mdp import normalize
+from rllab.envs.normalized_env import normalize
 import numpy as np
 import theano
 import theano.tensor as TT
@@ -9,10 +9,10 @@ from lasagne.updates import adam
 
 # normalize() makes sure that the actions for the MDP lies within the range
 # [-1, 1]
-mdp = normalize(CartpoleMDP())
+env = normalize(CartpoleEnv())
 # Initialize a neural network policy with a single hidden layer of 32 hidden
 # units
-policy = GaussianMLPPolicy(mdp, hidden_sizes=[32])
+policy = GaussianMLPPolicy(env.spec, hidden_sizes=(32,))
 
 # We will collect 100 trajectories per iteration
 N = 100
@@ -35,8 +35,9 @@ returns_var = TT.vector('returns')
 # actions given the observations
 # Note that we negate the objective, since most optimizers assume a
 # minimization problem
-surr = - TT.mean(policy.get_log_prob_sym(observations_var,
-                                         actions_var) * returns_var)
+dist_info_vars = policy.dist_info_sym(observations_var, actions_var)
+dist = policy.distribution
+surr = - TT.mean(dist.log_likelihood_sym(actions_var, dist_info_vars) * returns_var)
 # Get the list of trainable parameters
 params = policy.get_params(trainable=True)
 grads = theano.grad(surr, params)
@@ -57,7 +58,7 @@ for _ in xrange(n_itr):
         actions = []
         rewards = []
 
-        observation = mdp.reset()
+        observation = env.reset()
 
         for _ in xrange(T):
             # policy.get_action() returns a pair of values. The second one
@@ -65,7 +66,7 @@ for _ in xrange(n_itr):
             # stochastic policy. This information is useful when forming
             # importance sampling ratios. In our case it is not needed.
             action, _ = policy.get_action(observation)
-            next_observation, reward, terminal = mdp.step(action)
+            next_observation, reward, terminal, _ = env.step(action)
             observations.append(observation)
             actions.append(action)
             rewards.append(reward)

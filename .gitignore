@@ -32,3 +32,4 @@ iterate.dat
 src/
 .settings
 .pods
+docs/_build
