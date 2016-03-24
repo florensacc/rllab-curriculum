@@ -29,7 +29,7 @@ class Categorical(Distribution):
         # Assume layout is N * A
         return TT.sum(
             old_prob_var * (TT.log(old_prob_var + TINY) - TT.log(new_prob_var + TINY)),
-            axis=1
+            axis=-1
         )
 
     def kl(self, old_dist_info, new_dist_info):
@@ -40,7 +40,7 @@ class Categorical(Distribution):
         new_prob = new_dist_info["prob"]
         return np.sum(
             old_prob * (np.log(old_prob + TINY) - np.log(new_prob + TINY)),
-            axis=1
+            axis=-1
         )
 
     def likelihood_ratio_sym(self, x_var, old_dist_info_vars, new_dist_info_vars):

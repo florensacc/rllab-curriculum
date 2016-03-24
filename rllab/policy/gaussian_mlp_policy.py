@@ -2,7 +2,6 @@ import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import numpy as np
-import theano.tensor as TT
 
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
@@ -45,7 +44,6 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             adaptive_std=False,
             std_share_network=False,
             std_hidden_sizes=(32, 32),
-            # We can't use None here since None is actually a valid value!
             std_nonlinearity=NL.rectify,
             nonlinearity=NL.rectify,
             output_nonlinearity=None,
@@ -105,85 +103,13 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
         return dict(mean=mean_var, log_std=log_std_var)
 
-    # Computes D_KL(p_old || p_new)
-    # @overrides
-    # def kl_sym(self, dold_pdist_var, new_pdist_var):
-    #     old_mean, old_log_std = self._split_pdist(old_pdist_var)
-    #     new_mean, new_log_std = self._split_pdist(new_pdist_var)
-    #     old_std = TT.exp(old_log_std)
-    #     new_std = TT.exp(new_log_std)
-    #     # mean: (N*A)
-    #     # std: (N*A)
-    #     # formula:
-    #     # { (\mu_1 - \mu_2)^2 + \sigma_1^2 - \sigma_2^2 } / (2\sigma_2^2) +
-    #     # ln(\sigma_2/\sigma_1)
-    #     numerator = TT.square(old_mean - new_mean) + \
-    #                 TT.square(old_std) - TT.square(new_std)
-    #     denominator = 2 * TT.square(new_std) + 1e-8
-    #     return TT.sum(
-    #         numerator / denominator + new_log_std - old_log_std, axis=1)
-    #
-    # @overrides
-    # def likelihood_ratio(self, old_pdist_var, new_pdist_var, action_var):
-    #     old_mean, old_log_std = self._split_pdist(old_pdist_var)
-    #     new_mean, new_log_std = self._split_pdist(new_pdist_var)
-    #     logli_new = log_normal_pdf(action_var, new_mean, new_log_std)
-    #     logli_old = log_normal_pdf(action_var, old_mean, old_log_std)
-    #     return TT.exp(TT.sum(logli_new - logli_old, axis=1))
-    #
-    # def _split_pdist(self, pdist):
-    #     mean = pdist[:, :self.action_dim]
-    #     log_std = pdist[:, self.action_dim:]
-    #     return mean, log_std
-    #
-    # @overrides
-    # def compute_entropy(self, pdist):
-    #     _, log_std = self._split_pdist(pdist)
-    #     return np.mean(np.sum(log_std + np.log(np.sqrt(2 * np.pi * np.e)), axis=1))
-
-    # @property
-    # @overrides
-    # def pdist_dim(self):
-    #     return self.action_dim * 2
-
-    # The return value is a pair. The first item is a matrix (N, A), where each
-    # entry corresponds to the action value taken. The second item is a vector
-    # of length N, where each entry is the density value for that action, under
-    # the current policy
-    # @overrides
-    # def get_actions(self, observations):
-    #     means, log_stds = self._compute_action_params(observations)
-    #     # first get standard normal samples
-    #     rnd = np.random.randn(*means.shape)
-    #     pdists = np.concatenate([means, log_stds], axis=1)
-    #     # transform back to the true distribution
-    #     actions = rnd * np.exp(log_stds) + means
-    #     return actions, pdists
-
     @overrides
     def get_action(self, observation):
         mean, log_std = [x[0] for x in self._f_dist([observation])]
-        rnd = np.random.randn(len(mean))#*means.shape)
+        rnd = np.random.randn(len(mean))
         action = rnd * np.exp(log_std) + mean
         return action, dict(mean=mean, log_std=log_std)
 
-    # def get_reparam_action_sym(self, obs_var, eta_var):
-    #     means, log_stds = self._split_pdist(self.get_pdist_sym(obs_var))
-    #     return eta_var * TT.exp(log_stds) + means
-    #
-    # def infer_eta(self, pdists, actions):
-    #     means, log_stds = self._split_pdist(pdists)
-    #     return (actions - means) / np.exp(log_stds)
-    #
-    # def get_log_prob_sym(self, input_var, action_var):
-    #     mean_var = L.get_output(self._mean_layer, input_var)
-    #     log_std_var = L.get_output(self._log_std_layer, input_var)
-    #     stdn = (action_var - mean_var)
-    #     stdn /= TT.exp(log_std_var)
-    #     return - TT.sum(log_std_var, axis=1) - \
-    #            0.5 * TT.sum(TT.square(stdn), axis=1) - \
-    #            0.5 * self.action_dim * np.log(2 * np.pi)
-    #
     def log_diagnostics(self, paths):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])
         logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))

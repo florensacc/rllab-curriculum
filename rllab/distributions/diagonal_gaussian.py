@@ -24,7 +24,7 @@ class DiagonalGaussian(Distribution):
                     TT.square(old_std) - TT.square(new_std)
         denominator = 2 * TT.square(new_std) + 1e-8
         return TT.sum(
-            numerator / denominator + new_log_stds - old_log_stds, axis=1)
+            numerator / denominator + new_log_stds - old_log_stds, axis=-1)
 
     def likelihood_ratio_sym(self, x_var, old_dist_info_vars, new_dist_info_vars):
         logli_new = self.log_likelihood_sym(x_var, new_dist_info_vars)
@@ -35,21 +35,21 @@ class DiagonalGaussian(Distribution):
         means = dist_info_vars["mean"]
         log_stds = dist_info_vars["log_std"]
         zs = (x_var - means) / TT.exp(log_stds)
-        return - TT.sum(log_stds, axis=1) - \
-               0.5 * TT.sum(TT.square(zs), axis=1) - \
-               0.5 * means.shape[1] * np.log(2 * np.pi)
+        return - TT.sum(log_stds, axis=-1) - \
+               0.5 * TT.sum(TT.square(zs), axis=-1) - \
+               0.5 * means.shape[-1] * np.log(2 * np.pi)
 
     def log_likelihood(self, xs, dist_info):
         means = dist_info["mean"]
         log_stds = dist_info["log_std"]
         zs = (xs - means) / np.exp(log_stds)
-        return - np.sum(log_stds, axis=1) - \
-               0.5 * np.sum(np.square(zs), axis=1) - \
-               0.5 * means.shape[1] * np.log(2 * np.pi)
+        return - np.sum(log_stds, axis=-1) - \
+               0.5 * np.sum(np.square(zs), axis=-1) - \
+               0.5 * means.shape[-1] * np.log(2 * np.pi)
 
     def entropy(self, dist_info):
         log_stds = dist_info["log_std"]
-        return np.sum(log_stds + np.log(np.sqrt(2 * np.pi * np.e)), axis=1)
+        return np.sum(log_stds + np.log(np.sqrt(2 * np.pi * np.e)), axis=-1)
 
     @property
     def dist_info_keys(self):

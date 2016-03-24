@@ -35,7 +35,6 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             adaptive_std=False,
             std_share_network=False,
             std_hidden_sizes=(32, 32),
-            # We can't use None here since None is actually a valid value!
             std_nonlinearity=None,
             normalize_inputs=True,
             normalize_outputs=True,

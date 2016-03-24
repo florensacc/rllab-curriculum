@@ -11,81 +11,53 @@ from rllab.env.box2d.cartpole_env import CartpoleEnv
 from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.policy.categorical_gru_policy import CategoricalGRUPolicy
 from rllab.policy.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.policy.gaussian_gru_policy import GaussianGRUPolicy
 from rllab.baseline.zero_baseline import ZeroBaseline
 from rllab.misc import ext
+from nose2 import tools
 
-TEST_RECURRENT = False  # True
 
-algo_args = dict(
+common_algo_args = dict(
     n_itr=1,
     batch_size=1000,
     max_path_length=100,
 )
 
+algo_args = {
+    VPG: dict(),
+    TNPG: dict(
+        optimizer_args=dict(
+            cg_iters=1,
+        ),
+    ),
+    TRPO: dict(
+        optimizer_args=dict(
+            cg_iters=1,
+        ),
+    ),
+    PPO: dict(
+        optimizer_args=dict(
+            max_penalty_itr=1,
+            max_opt_itr=1
+        ),
+    ),
+}
 
-def _test_algo(algo):
-    env_policy = [
-        (GridWorldEnv, CategoricalMLPPolicy),
-        (CartpoleEnv, GaussianMLPPolicy)
-        # (GridWorldEnv, CategoricalGRUPolicy),
-    ]
-    if TEST_RECURRENT:
-        env_policy.append(
-            (GridWorldEnv, CategoricalGRUPolicy),
-        )
-    for env_cls, policy_cls in env_policy:
-        print "Testing %s with %s" % (str(env_cls), str(policy_cls))
-        env = env_cls()
-        policy = policy_cls(env_spec=env.spec, hidden_sizes=(6,))
-        baseline = ZeroBaseline(env_spec=env.spec)
-        algo.train(env=env, policy=policy, baseline=baseline)
-
-
-def test_vpg():
-    args = ext.merge_dict(
-        algo_args,
-        dict(
-            optimizer_args=dict(
-                max_penalty_itr=1,
-                max_opt_itr=1
-            )
-        )
-    )
-    _test_algo(VPG(**args))
+cases = []
+for algo in [VPG, TNPG, PPO, TRPO]:
+    cases.extend([
+        (algo, GridWorldEnv, CategoricalMLPPolicy),
+        (algo, CartpoleEnv, GaussianMLPPolicy),
+        (algo, GridWorldEnv, CategoricalGRUPolicy),
+        (algo, CartpoleEnv, GaussianGRUPolicy),
+    ])
 
 
-def test_ppo():
-    args = ext.merge_dict(
-        algo_args,
-        dict(
-            optimizer_args=dict(
-                max_penalty_itr=1,
-                max_opt_itr=1
-            )
-        )
-    )
-    _test_algo(PPO(**args))
-
-
-def test_trpo():
-    args = ext.merge_dict(
-        algo_args,
-        dict(
-            optimizer_args=dict(
-                cg_iters=1,
-            )
-        )
-    )
-    _test_algo(TRPO(**args))
-
-
-def test_tnpg():
-    args = ext.merge_dict(
-        algo_args,
-        dict(
-            optimizer_args=dict(
-                cg_iters=1,
-            )
-        )
-    )
-    _test_algo(TNPG(**args))
+@tools.params(*cases)
+def test_algo(algo_cls, env_cls, policy_cls):
+    print "Testing %s, %s, %s" % (algo_cls.__name__, env_cls.__name__, policy_cls.__name__)
+    algo = algo_cls(**ext.merge_dict(common_algo_args, algo_args.get(algo_cls, dict())))
+    env = env_cls()
+    policy = policy_cls(env_spec=env, hidden_sizes=(6,))
+    baseline = ZeroBaseline(env_spec=env.spec)
+    algo.train(env=env, policy=policy, baseline=baseline)
