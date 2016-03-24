@@ -1,0 +1,4 @@
+FROM neocxi/rllab
+
+ADD . /root/code/rllab
+WORKDIR /root/code/rllab
