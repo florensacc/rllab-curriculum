@@ -1,16 +1,16 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.env.mujoco import SwimmerMDP
-from rllab.env.normalized_mdp import NormalizedMDP
-from rllab.env.mujoco import HopperMDP
-from rllab.env.mujoco import Walker2DMDP
-from rllab.env.mujoco.half_cheetah_env import HalfCheetahEnv
-from rllab.env.mujoco import AntMDP
-from rllab.env.mujoco import SimpleHumanoidMDP
-from rllab.env.mujoco.humanoid_env import HumanoidEnv
-from rllab.policy.mean_std_nn_policy import MeanStdNNPolicy
-from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
-from rllab.algo.trpo import TRPO
+from rllab.envs.mujoco import SwimmerMDP
+from rllab.envs.normalized_mdp import NormalizedMDP
+from rllab.envs.mujoco import HopperMDP
+from rllab.envs.mujoco import Walker2DMDP
+from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
+from rllab.envs.mujoco import AntMDP
+from rllab.envs.mujoco import SimpleHumanoidMDP
+from rllab.envs.mujoco.humanoid_env import HumanoidEnv
+from rllab.policies.mean_std_nn_policy import MeanStdNNPolicy
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.algos.trpo import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 
 stub(globals())

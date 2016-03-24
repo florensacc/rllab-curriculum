@@ -1,10 +1,10 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.env.grid_world_mdp import GridWorldMDP
-from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
-from rllab.algo.ppo import PPO
-from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+from rllab.envs.grid_world_mdp import GridWorldMDP
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.algos.ppo import PPO
+from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from rllab.misc.instrument import stub, run_experiment_lite
 
 stub(globals())

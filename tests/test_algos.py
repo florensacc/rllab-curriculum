@@ -2,17 +2,17 @@ import os
 
 os.environ['THEANO_FLAGS'] = 'device=cpu,mode=FAST_COMPILE,optimizer=None'
 
-from rllab.algo.vpg import VPG
-from rllab.algo.tnpg import TNPG
-from rllab.algo.ppo import PPO
-from rllab.algo.trpo import TRPO
-from rllab.env.grid_world_env import GridWorldEnv
-from rllab.env.box2d.cartpole_env import CartpoleEnv
-from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.policy.categorical_gru_policy import CategoricalGRUPolicy
-from rllab.policy.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.policy.gaussian_gru_policy import GaussianGRUPolicy
-from rllab.baseline.zero_baseline import ZeroBaseline
+from rllab.algos.vpg import VPG
+from rllab.algos.tnpg import TNPG
+from rllab.algos.ppo import PPO
+from rllab.algos.trpo import TRPO
+from rllab.envs.grid_world_env import GridWorldEnv
+from rllab.envs.box2d.cartpole_env import CartpoleEnv
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from rllab.policies.categorical_gru_policy import CategoricalGRUPolicy
+from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
+from rllab.baselines.zero_baseline import ZeroBaseline
 from rllab.misc import ext
 from nose2 import tools
 

@@ -1,10 +1,10 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.env.compound_action_sequence_mdp import CompoundActionSequenceMDP
-from rllab.env.grid_world_mdp import GridWorldMDP
-from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.baseline.zero_baseline import ZeroBaseline
-from rllab.algo.trpo import TRPO
+from rllab.envs.compound_action_sequence_mdp import CompoundActionSequenceMDP
+from rllab.envs.grid_world_mdp import GridWorldMDP
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from rllab.baselines.zero_baseline import ZeroBaseline
+from rllab.algos.trpo import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 
 stub(globals())

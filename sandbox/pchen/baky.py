@@ -1,16 +1,16 @@
 import os
 
-from rllab.algo.bake_ppo import BakePPO
-from rllab.algo.ppo import PPO
-from rllab.policy.bake_mean_std_nn_policy import BakeMeanStdNNPolicy
+from rllab.algos.bake_ppo import BakePPO
+from rllab.algos.ppo import PPO
+from rllab.policies.bake_mean_std_nn_policy import BakeMeanStdNNPolicy
 
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.env.mujoco import SwimmerMDP
-from rllab.env.normalized_mdp import NormalizedMDP
-from rllab.env.mujoco import Walker2DMDP
-from rllab.env.mujoco.half_cheetah_env import HalfCheetahEnv
-from rllab.policy.mean_std_nn_policy import MeanStdNNPolicy
-from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
+from rllab.envs.mujoco import SwimmerMDP
+from rllab.envs.normalized_mdp import NormalizedMDP
+from rllab.envs.mujoco import Walker2DMDP
+from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
+from rllab.policies.mean_std_nn_policy import MeanStdNNPolicy
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 
 stub(globals())

@@ -3,9 +3,9 @@ import numpy as np
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.distributions import categorical_dist
-from rllab.env.subgoal_env import SubgoalEnvSpec
+from rllab.envs.subgoal_env import SubgoalEnvSpec
 from rllab.misc.special import to_onehot
-from rllab.regressor.gaussian_mlp_regressor import GaussianMLPRegressor
+from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from rllab.spaces.discrete import Discrete
 
 

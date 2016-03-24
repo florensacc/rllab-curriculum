@@ -2,7 +2,7 @@ from abc import ABCMeta, abstractmethod
 
 import numpy as np
 
-from rllab.env.mdp_spec import MDPSpec
+from rllab.envs.mdp_spec import MDPSpec
 from rllab.misc import autoargs
 from rllab.misc.ext import flatten_shape_dim
 

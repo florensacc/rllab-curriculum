@@ -1,6 +1,6 @@
 from __future__ import print_function
 from rllab.mdp.box2d.cartpole_mdp import CartpoleMDP
-from rllab.policy.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.mdp.normalized_mdp import normalize
 import numpy as np
 import theano

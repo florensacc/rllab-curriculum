@@ -1,13 +1,13 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.env.openai_atari_mdp import AtariMDP
-from rllab.env.subgoal_mdp import SubgoalMDP
-from rllab.policy.subgoal_policy import SubgoalPolicy
-from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.baseline.gaussian_mlp_baseline import GaussianMLPBaseline
-from rllab.baseline.subgoal_baseline import SubgoalBaseline
-from rllab.algo.ppo import PPO
-from rllab.algo.batch_hrl import BatchHRL
+from rllab.envs.openai_atari_mdp import AtariMDP
+from rllab.envs.subgoal_mdp import SubgoalMDP
+from rllab.policies.subgoal_policy import SubgoalPolicy
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from rllab.baselines.subgoal_baseline import SubgoalBaseline
+from rllab.algos.ppo import PPO
+from rllab.algos.batch_hrl import BatchHRL
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
 import lasagne.nonlinearities as NL

@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pygame
 
-from rllab.env.base import Env
+from rllab.envs.base import Env
 from rllab.mdp.base import MDP
 from rllab.misc.resolve import load_class
 
@@ -67,7 +67,7 @@ def visualize_env(mdp, mode, max_steps=sys.maxint, speedup=1):
         mdp.reset()
         mdp.render()
         tr = 0.
-        from rllab.env.box2d.box2d_env import Box2DEnv
+        from rllab.envs.box2d.box2d_env import Box2DEnv
         if isinstance(mdp, Box2DEnv):
             for _ in xrange(max_steps):
                 pygame.event.pump()
@@ -83,7 +83,7 @@ def visualize_env(mdp, mode, max_steps=sys.maxint, speedup=1):
         else:
             trs = [tr]
             actions = [np.zeros(2)]
-            from rllab.env.mujoco.mujoco_env import MujocoEnv
+            from rllab.envs.mujoco.mujoco_env import MujocoEnv
             # from rllab.mdp.mujoco_1_22.gather.gather_mdp import GatherMDP
             # from rllab.mdp.mujoco_1_22.maze_mdp import MazeMDP
             if isinstance(mdp, (MujocoEnv)):#, GatherMDP, MazeMDP)):

@@ -104,9 +104,9 @@ def run_experiment(argv):
             plotter.init_worker()
 
         from rllab.mdp.base import MDP
-        from rllab.baseline.base import Baseline
-        from rllab.policy.base import Policy
-        from rllab.algo.base import Algorithm
+        from rllab.baselines.base import Baseline
+        from rllab.policies.base import Policy
+        from rllab.algos.base import Algorithm
 
         if args.seed is not None:
             set_seed(args.seed)
@@ -142,19 +142,19 @@ def run_experiment(argv):
 
         instances = dict()
         if args.random_mdp:
-            from rllab.env.identification_mdp import IdentificationMDP
+            from rllab.envs.identification_mdp import IdentificationMDP
             instances['mdp'] = IdentificationMDP(classes['mdp'], more_args)
         else:
             instances['mdp'] = instantiate(more_args, classes['mdp'])
         if args.normalize_mdp:
-            from rllab.env.normalized_mdp import normalize
+            from rllab.envs.normalized_mdp import normalize
             instances['mdp'] = normalize(instances['mdp'])
         if args.action_delay != 0:
-            from rllab.env.noisy_mdp import DelayedActionMDP
+            from rllab.envs.noisy_mdp import DelayedActionMDP
             instances['mdp'] = DelayedActionMDP(
                 instances['mdp'], args.action_delay)
         if args.obs_noise != 0:
-            from rllab.env.noisy_mdp import NoisyObservationMDP
+            from rllab.envs.noisy_mdp import NoisyObservationMDP
             instances['mdp'] = NoisyObservationMDP(
                 instances['mdp'], args.obs_noise)
         if args.policy:

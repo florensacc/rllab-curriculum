@@ -4,8 +4,8 @@ from nose2 import tools
 
 # TODO: to be fixed by rocky
 def test_compound_action_sequence_env():
-    from rllab.env.grid_world_env import GridWorldEnv
-    from rllab.env.compound_action_sequence_env import CompoundActionSequenceEnv
+    from rllab.envs.grid_world_env import GridWorldEnv
+    from rllab.envs.compound_action_sequence_env import CompoundActionSequenceEnv
     mdp = GridWorldEnv(desc=[
         "SFFF",
         "FFFF",

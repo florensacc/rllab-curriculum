@@ -1,18 +1,18 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.env.compound_action_sequence_env import CompoundActionSequenceEnv
-from rllab.env.grid_world_env import GridWorldEnv
-from rllab.policy.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.algo.batch_hrl import BatchHRL
+from rllab.envs.compound_action_sequence_env import CompoundActionSequenceEnv
+from rllab.envs.grid_world_env import GridWorldEnv
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from rllab.algos.batch_hrl import BatchHRL
 from rllab.spaces import Discrete
-from rllab.env.subgoal_env import SubgoalEnv
-from rllab.policy.subgoal_policy import SubgoalPolicy
-from rllab.regressor.categorical_mlp_regressor import CategoricalMLPRegressor
-from rllab.baseline.subgoal_baseline import SubgoalBaseline
-from rllab.baseline.gaussian_mlp_baseline import GaussianMLPBaseline
-from rllab.optimizer.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from rllab.envs.subgoal_env import SubgoalEnv
+from rllab.policies.subgoal_policy import SubgoalPolicy
+from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
+from rllab.baselines.subgoal_baseline import SubgoalBaseline
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
-from rllab.algo.trpo import TRPO
+from rllab.algos.trpo import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.misc import ext
 

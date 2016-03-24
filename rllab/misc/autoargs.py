@@ -32,9 +32,9 @@ def prefix(prefix_):
 
 def _get_prefix(cls):
     from rllab.mdp.base import MDP
-    from rllab.policy.base import Policy
-    from rllab.baseline.base import Baseline
-    from rllab.algo.base import Algorithm
+    from rllab.policies.base import Policy
+    from rllab.baselines.base import Baseline
+    from rllab.algos.base import Algorithm
 
     if hasattr(cls.__init__, '_autoargs_prefix'):
         return cls.__init__._autoargs_prefix
