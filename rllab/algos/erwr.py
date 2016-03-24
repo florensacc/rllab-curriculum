@@ -31,10 +31,15 @@ class ERWR(VPG):
             self,
             optimizer=None,
             optimizer_args=None,
+            positive_adv=None,
             **kwargs):
         if optimizer is None:
             if optimizer_args is None:
                 optimizer_args = dict()
             optimizer = LbfgsOptimizer(**optimizer_args)
-        super(ERWR, self).__init__(optimizer=optimizer, **kwargs)
+        super(ERWR, self).__init__(
+            optimizer=optimizer,
+            positive_adv=True if positive_adv is None else positive_adv,
+            **kwargs
+        )
 
