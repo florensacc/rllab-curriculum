@@ -1,23 +1,34 @@
 import theano.tensor as TT
 import theano
-from collections import OrderedDict
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
 from rllab.misc import ext
 from rllab.algo.batch_polopt import BatchPolopt
-from rllab.algo.first_order_method import FirstOrderMethod
+from rllab.optimizer.first_order_optimizer import FirstOrderOptimizer
 
 
-class VPG(BatchPolopt, FirstOrderMethod):
+class VPG(BatchPolopt):
     """
     Vanilla Policy Gradient.
     """
 
     def __init__(
             self,
+            optimizer=None,
+            optimizer_args=None,
             **kwargs):
+        if optimizer is None:
+            default_args = dict(
+                batch_size=None,
+                max_epochs=1,
+            )
+            if optimizer_args is None:
+                optimizer_args = default_args
+            else:
+                optimizer_args = ext.merge_dict(default_args, optimizer_args)
+            optimizer = FirstOrderOptimizer(**optimizer_args)
+        self._optimizer = optimizer
         super(VPG, self).__init__(**kwargs)
-        FirstOrderMethod.__init__(self, **kwargs)
 
     @overrides
     def init_opt(self, env_spec, policy, baseline):
@@ -66,46 +77,34 @@ class VPG(BatchPolopt, FirstOrderMethod):
             mean_kl = TT.mean(kl)
             max_kl = TT.max(kl)
 
-        updates = self.update_method(
-            surr_obj, policy.get_params(trainable=True))
-        assert isinstance(updates, OrderedDict)
-
-        updates = OrderedDict([(k, v.astype(k.dtype)) for k, v in updates.iteritems()])
         input_list = [obs_var, action_var, advantage_var]
+        if is_recurrent:
+            input_list.append(valid_var)
 
-        f_update = ext.compile_function(
-            inputs=input_list,
-            outputs=None,
-            updates=updates,
-        )
-        f_loss = ext.compile_function(
-            inputs=input_list,
-            outputs=surr_obj,
-        )
+        self._optimizer.update_opt(surr_obj, target=policy, inputs=input_list)
+
         f_kl = ext.compile_function(
             inputs=input_list + old_dist_info_vars_list,
             outputs=[mean_kl, max_kl],
         )
         return dict(
-            f_update=f_update,
-            f_loss=f_loss,
             f_kl=f_kl,
         )
 
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
         logger.log("optimizing policy")
-        f_update = opt_info["f_update"]
-        f_loss = opt_info["f_loss"]
         inputs = ext.extract(
             samples_data,
             "observations", "actions", "advantages"
         )
+        if policy.recurrent:
+            inputs += (samples_data["valids"],)
         agent_infos = samples_data["agent_infos"]
         dist_info_list = [agent_infos[k] for k in policy.distribution.dist_info_keys]
-        loss_before = f_loss(*inputs)
-        f_update(*inputs)
-        loss_after = f_loss(*inputs)
+        loss_before = self._optimizer.loss(inputs)
+        self._optimizer.optimize(inputs)
+        loss_after = self._optimizer.loss(inputs)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
 

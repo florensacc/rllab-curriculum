@@ -1,5 +1,4 @@
 from rllab.core.parameterized import Parameterized
-from rllab.agent.base import Agent
 
 
 class Policy(Parameterized):
@@ -73,12 +72,12 @@ class StochasticPolicy(Policy):
         Return the symbolic distribution information about the actions.
         :return:
         """
-        return dict()
+        raise NotImplementedError
 
     def dist_info(self, obs, actions):
         """
         Return the distribution information about the actions.
         :return:
         """
-        return dict()
+        raise NotImplementedError
 

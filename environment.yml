@@ -2,11 +2,12 @@ name: rllab
 channels:
     - https://conda.anaconda.org/kne 
     - https://conda.binstar.org/tlatorre 
+    - https://conda.anaconda.org/cjs14
 dependencies:
     - python==2.7.10
     - numpy
     - scipy
-    - nose
+    - nose2
     - path.py
     - python-dateutil
     - joblib

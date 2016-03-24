@@ -1,73 +1,99 @@
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
+import lasagne.init
 import numpy as np
 import theano.tensor as TT
 
+from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import GRUNetwork
 from rllab.core.serializable import Serializable
-from rllab.distributions.recurrent_categorical import RecurrentCategorical
+from rllab.distributions.recurrent_diagonal_gaussian import RecurrentDiagonalGaussian
 from rllab.misc import ext
 from rllab.spaces import Discrete
-from rllab.misc import special
 from rllab.misc.overrides import overrides
 from rllab.policy.base import StochasticPolicy
 
 
-class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
+class GaussianGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def __init__(
             self,
             env_spec,
             hidden_sizes=(32,),
             state_include_action=True,
-            nonlinearity=NL.rectify):
+            nonlinearity=NL.rectify,
+            learn_std=True,
+            init_std=1.0,
+            output_nonlinearity=None,
+    ):
         """
         :param env_spec: A spec for the env.
         :param hidden_sizes: list of sizes for the fully connected hidden layers
         :param nonlinearity: nonlinearity used for each hidden layer
         :return:
         """
-        assert isinstance(env_spec.action_space, Discrete)
         Serializable.quick_init(self, locals())
-        super(CategoricalGRUPolicy, self).__init__(env_spec)
+        super(GaussianGRUPolicy, self).__init__(env_spec)
 
         assert len(hidden_sizes) == 1
 
         if state_include_action:
-            input_shape = (env_spec.observation_space.flat_dim + env_spec.action_space.flat_dim,)
+            obs_dim = env_spec.observation_space.flat_dim + env_spec.action_space.flat_dim
         else:
-            input_shape = (env_spec.observation_space.flat_dim,)
+            obs_dim = env_spec.observation_space.flat_dim
+        action_dim = env_spec.action_space.flat_dim
 
-        prob_network = GRUNetwork(
-            input_shape=input_shape,
-            output_dim=env_spec.action_space.n,
+        mean_network = GRUNetwork(
+            input_shape=(obs_dim,),
+            output_dim=action_dim,
             hidden_dim=hidden_sizes[0],
             nonlinearity=nonlinearity,
             output_nonlinearity=NL.softmax,
         )
 
-        self._prob_network = prob_network
+        l_mean = mean_network.output_layer
+        obs_var = mean_network.input_var
+
+        l_log_std = ParamLayer(
+            mean_network.input_layer,
+            num_units=action_dim,
+            param=lasagne.init.Constant(np.log(init_std)),
+            name="output_log_std",
+            trainable=learn_std,
+        )
+
+        l_step_log_std = ParamLayer(
+            mean_network.step_input_layer,
+            num_units=action_dim,
+            param=l_log_std.param,
+            name="step_output_log_std",
+            trainable=learn_std,
+        )
+
+        self._mean_network = mean_network
+        self._l_log_std = l_log_std
         self._state_include_action = state_include_action
 
-        self._f_step_prob = ext.compile_function(
+        self._f_step_mean_std = ext.compile_function(
             [
-                prob_network.step_input_layer.input_var,
-                prob_network.step_prev_hidden_layer.input_var
+                mean_network.step_input_layer.input_var,
+                mean_network.step_prev_hidden_layer.input_var
             ],
             L.get_output([
-                prob_network.step_output_layer,
-                prob_network.step_hidden_layer
+                mean_network.step_output_layer,
+                l_step_log_std,
+                mean_network.step_hidden_layer
             ])
         )
 
         self._prev_action = None
         self._prev_hidden = None
         self._hidden_sizes = hidden_sizes
-        self._dist = RecurrentCategorical()
+        self._dist = RecurrentDiagonalGaussian()
 
         self.reset()
 
-        LasagnePowered.__init__(self, [prob_network.output_layer])
+        LasagnePowered.__init__(self, [mean_network.output_layer, l_log_std])
 
     def _get_prev_action_var(self, action_var):
         n_batches = action_var.shape[0]
@@ -89,21 +115,12 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             )
         else:
             all_input_var = obs_var
-        return dict(
-            prob=L.get_output(
-                self._prob_network.output_layer,
-                {self._prob_network.input_layer: all_input_var}
-            )
-        )
-
-    # @overrides
-    # def dist_info(self, obs, actions):
-    #     raise NotImplementedError
-    #     # pass
+        means, log_stds = L.get_output([self._mean_network.output_layer, self._l_log_std], all_input_var)
+        return dict(mean=means, log_std=log_stds)
 
     def reset(self):
         self._prev_action = None
-        self._prev_hidden = self._prob_network.hid_init_param.get_value()
+        self._prev_hidden = self._mean_network.hid_init_param.get_value()
 
     # The return value is a pair. The first item is a matrix (N, A), where each
     # entry corresponds to the action value taken. The second item is a vector
@@ -124,11 +141,12 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 ])
         else:
             all_input = self.observation_space.flatten(observation)
-        probs, hidden_vec = [x[0] for x in self._f_step_prob([all_input], [self._prev_hidden])]
-        action = special.weighted_sample(probs, xrange(self.action_space.n))
+        mean, log_std, hidden_vec = [x[0] for x in self._f_step_mean_std([all_input], [self._prev_hidden])]
+        rnd = np.random.randn(len(mean))
+        action = rnd * np.exp(log_std) + mean
         self._prev_action = action
         self._prev_hidden = hidden_vec
-        return action, dict(prob=probs)
+        return action, dict(mean=mean, log_std=log_std)
 
     @property
     @overrides

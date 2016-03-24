@@ -72,8 +72,8 @@ class SubgoalPolicy(StochasticPolicy, LasagnePowered, Serializable):
             low_obs=self.low_policy.observation_space.flatten(low_obs),
         )
 
-    def compute_entropy(self, pdist):
-        return np.nan
+    # def compute_entropy(self, pdist):
+    #     return np.nan
 
     # def split_pdists(self, pdists):
     #     high_pdist_dim = self.high_policy.pdist_dim

@@ -1,5 +1,6 @@
 from nose.tools import assert_equal
 
+
 def test_gru_network():
     from rllab.core.network import GRUNetwork
     import lasagne.layers as L

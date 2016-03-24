@@ -2,7 +2,7 @@ import numpy as np
 
 from rllab.algo.batch_polopt import BatchPolopt
 from rllab.algo.natural_gradient_method import NaturalGradientMethod
-from rllab.algo.npg import NPG
+from rllab.algo.npg import TNPG
 from rllab.misc import autoargs
 from rllab.misc.ext import extract
 from rllab.misc.overrides import overrides

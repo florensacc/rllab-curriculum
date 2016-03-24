@@ -1,21 +1,19 @@
 from __future__ import print_function
-
+from rllab.mdp.box2d.cartpole_mdp import CartpoleMDP
+from rllab.policy.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
+from rllab.mdp.normalized_mdp import normalize
 import numpy as np
 import theano
 import theano.tensor as TT
 from lasagne.updates import adam
-
-from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
-from rllab.env.box2d import CartpoleMDP
-from rllab.env.normalized_mdp import normalize
-from rllab.policy.mean_std_nn_policy import MeanStdNNPolicy
 
 # normalize() makes sure that the actions for the MDP lies within the range
 # [-1, 1]
 mdp = normalize(CartpoleMDP())
 # Initialize a neural network policy with a single hidden layer of 32 hidden
 # units
-policy = MeanStdNNPolicy(mdp, hidden_sizes=[32])
+policy = GaussianMLPPolicy(mdp, hidden_sizes=[32])
 # Initialize a linear baseline estimator using state features
 baseline = LinearFeatureBaseline(mdp)
 

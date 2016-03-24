@@ -35,7 +35,7 @@ for mdp_class in mdp_classes:
         discount=0.99,
         step_size=0.01,
     )
-    policy = MeanStdNNPolicy(
+    policy = GaussianMLPPolicy(
         mdp=mdp,
         hidden_sizes=(100, 50, 25),
         # nonlinearity='lasagne.nonlinearities.rectified',

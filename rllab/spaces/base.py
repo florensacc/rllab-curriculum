@@ -23,6 +23,13 @@ class Space(object):
         """
         raise NotImplementedError
 
+    def flatten(self, x):
+        raise NotImplementedError
+
+    def unflatten(self, x):
+        raise NotImplementedError
+
+
     # def from_tensors(self, x):
     #     """
     #     Given a member of the space, convert it to a tensor representation
@@ -31,14 +38,14 @@ class Space(object):
     #     """
     #     raise NotImplementedError
     #
-    @property
-    def tensor_shapes(self):
-        """
-        The shape(s) of the tensor representation. A valid return value is either a single tuple, or a list of valid
-        return values
-        :return: the shape(s) of the tensor representation
-        """
-        raise NotImplementedError
+    # @property
+    # def tensor_shapes(self):
+    #     """
+    #     The shape(s) of the tensor representation. A valid return value is either a single tuple, or a list of valid
+    #     return values
+    #     :return: the shape(s) of the tensor representation
+    #     """
+    #     raise NotImplementedError
 
     @property
     def flat_dim(self):

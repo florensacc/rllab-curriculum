@@ -9,17 +9,14 @@ from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
 from rllab.core.serializable import Serializable
-from rllab.distributions import normal_dist
 from rllab.misc import logger
 from rllab.misc.ext import compile_function
 from rllab.optimizer.lbfgs_optimizer import LbfgsOptimizer
 from rllab.optimizer.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-
-NONE = list()
+from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 
 
 class GaussianMLPRegressor(LasagnePowered, Serializable):
-
     """
     A class for performing regression by fitting a Gaussian distribution to the outputs.
     """
@@ -37,9 +34,8 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             init_std=1.0,
             adaptive_std=False,
             std_share_network=False,
-            std_hidden_sizes=None,
-            # We can't use None here since None is actually a valid value!
-            std_nonlinearity=NONE,
+            std_hidden_sizes=(32, 32),
+            std_nonlinearity=None,
             normalize_inputs=True,
             normalize_outputs=True,
             name=None,
@@ -82,10 +78,6 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         l_mean = mean_network.output_layer
 
         if adaptive_std:
-            if std_hidden_sizes is None:
-                std_hidden_sizes = hidden_sizes
-            if std_nonlinearity is NONE:
-                std_nonlinearity = nonlinearity
             l_log_std = MLP(
                 input_shape=input_shape,
                 input_var=mean_network.input_layer.input_var,
@@ -113,12 +105,12 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         x_mean_var = theano.shared(
             np.zeros((1,) + input_shape),
             name="x_mean",
-            broadcastable=(True,) + (False, ) * len(input_shape)
+            broadcastable=(True,) + (False,) * len(input_shape)
         )
         x_std_var = theano.shared(
             np.ones((1,) + input_shape),
             name="x_std",
-            broadcastable=(True,) + (False, ) * len(input_shape)
+            broadcastable=(True,) + (False,) * len(input_shape)
         )
         y_mean_var = theano.shared(
             np.zeros((1, output_dim)),
@@ -143,11 +135,16 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         normalized_old_means_var = (old_means_var - y_mean_var) / y_std_var
         normalized_old_log_stds_var = old_log_stds_var - TT.log(y_std_var)
 
-        mean_kl = TT.mean(normal_dist.kl_sym(
-            normalized_old_means_var, normalized_old_log_stds_var, normalized_means_var, normalized_log_stds_var))
+        dist = self._dist = DiagonalGaussian()
 
-        loss = - TT.mean(normal_dist.log_likelihood_sym(normalized_ys_var, normalized_means_var,
-                                                        normalized_log_stds_var))
+        normalized_dist_info_vars = dict(mean=normalized_means_var, log_std=normalized_log_stds_var)
+
+        mean_kl = TT.mean(dist.kl_sym(
+            dict(mean=normalized_old_means_var, log_std=normalized_old_log_stds_var),
+            normalized_dist_info_vars,
+        ))
+
+        loss = - TT.mean(dist.log_likelihood_sym(normalized_ys_var, normalized_dist_info_vars))
 
         self._f_predict = compile_function([xs_var], means_var)
         self._f_pdists = compile_function([xs_var], [means_var, log_stds_var])
@@ -208,7 +205,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
 
     def predict_log_likelihood(self, xs, ys):
         means, log_stds = self._f_pdists(xs)
-        return normal_dist.log_likelihood(ys, means, log_stds)
+        return self._dist.log_likelihood(ys, dict(mean=means, log_std=log_stds))
 
     def get_param_values(self, **tags):
         return LasagnePowered.get_param_values(self, **tags)

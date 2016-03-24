@@ -12,14 +12,14 @@ import numpy as np
 class MLP(object):
 
     def __init__(self, input_shape, output_dim, hidden_sizes, nonlinearity,
-                 output_nonlinearity, name=None):
+                 output_nonlinearity, name=None, input_var=None):
 
         if name is None:
             prefix = ""
         else:
             prefix = name + "_"
 
-        l_in = L.InputLayer(shape=(None,) + input_shape)
+        l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var)
         l_hid = l_in
         for idx, hidden_size in enumerate(hidden_sizes):
             l_hid = L.DenseLayer(
@@ -45,6 +45,10 @@ class MLP(object):
     @property
     def output_layer(self):
         return self._l_out
+
+    @property
+    def input_var(self):
+        return self._l_in.input_var
 
 
 class GRULayer(L.Layer):
@@ -98,7 +102,7 @@ class GRULayer(L.Layer):
         u = self.gate_nonlinearity(x.dot(self.W_xu) + hprev.dot(self.W_hu) + self.b_u)
         c = self.nonlinearity(x.dot(self.W_xc) + r * (hprev.dot(self.W_hc)) + self.b_c)
         h = (1 - u) * hprev + u * c
-        return h
+        return h.astype(theano.config.floatX)
 
     def get_step_layer(self, l_in, l_prev_hidden):
         return GRUStepLayer(incomings=[l_in, l_prev_hidden], gru_layer=self)
@@ -142,8 +146,8 @@ class GRUStepLayer(L.MergeLayer):
 class GRUNetwork(object):
 
     def __init__(self, input_shape, output_dim, hidden_dim, nonlinearity=LN.rectify,
-                 output_nonlinearity=None, name=None):
-        l_in = L.InputLayer(shape=(None, None) + input_shape)
+                 output_nonlinearity=None, name=None, input_var=None):
+        l_in = L.InputLayer(shape=(None, None) + input_shape, input_var=input_var)
         l_step_input = L.InputLayer(shape=(None,) + input_shape)
         l_step_prev_hidden = L.InputLayer(shape=(None, hidden_dim))
         l_gru = GRULayer(l_in, num_units=hidden_dim, nonlinearity=nonlinearity, hidden_init_trainable=False)
@@ -184,6 +188,10 @@ class GRUNetwork(object):
     @property
     def input_layer(self):
         return self._l_in
+
+    @property
+    def input_var(self):
+        return self._l_in.input_var
 
     @property
     def output_layer(self):
