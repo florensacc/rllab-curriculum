@@ -15,6 +15,13 @@ from rllab.envs.mujoco.point_env import PointEnv
 from rllab.envs.mujoco.simple_humanoid_env import SimpleHumanoidEnv
 from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab.envs.mujoco.walker2d_env import Walker2DEnv
+from rllab.envs.mujoco.gather.point_gather_env import PointGatherEnv
+from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
+from rllab.envs.mujoco.gather.ant_gather_env import AntGatherEnv
+from rllab.envs.mujoco.maze.point_maze_env import PointMazeEnv
+from rllab.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
+from rllab.envs.mujoco.maze.ant_maze_env import AntMazeEnv
+
 from rllab.envs.noisy_env import NoisyObservationEnv, DelayedActionEnv
 from rllab.envs.normalized_env import NormalizedEnv
 from rllab.envs.proxy_env import ProxyEnv
@@ -33,6 +40,12 @@ simple_env_classes = [
     InvertedDoublePendulumEnv,
     HopperEnv,
     HalfCheetahEnv,
+    PointGatherEnv,
+    SwimmerGatherEnv,
+    AntGatherEnv,
+    PointMazeEnv,
+    SwimmerMazeEnv,
+    AntMazeEnv,
 ]
 envs = [cls() for cls in simple_env_classes]
 envs.append(

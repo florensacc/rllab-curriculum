@@ -62,7 +62,7 @@ def test_algo(algo_cls, env_cls, policy_cls):
     print "Testing %s, %s, %s" % (algo_cls.__name__, env_cls.__name__, policy_cls.__name__)
     algo = algo_cls(**ext.merge_dict(common_algo_args, algo_args.get(algo_cls, dict())))
     env = env_cls()
-    policy = policy_cls(env_spec=env, hidden_sizes=(6,))
+    policy = policy_cls(env_spec=env.spec, hidden_sizes=(6,))
     baseline = ZeroBaseline(env_spec=env.spec)
     algo.train(env=env, policy=policy, baseline=baseline)
 

@@ -6,10 +6,6 @@ from rllab.envs.proxy_env import ProxyEnv
 from rllab.misc.overrides import overrides
 
 
-def normalize(mdp):
-    return NormalizedEnv(mdp)
-
-
 class NormalizedEnv(ProxyEnv, Serializable):
 
     def __init__(self, mdp):
@@ -29,3 +25,4 @@ class NormalizedEnv(ProxyEnv, Serializable):
         scaled_action = np.clip(scaled_action, lb, ub)
         return self._wrapped_env.step(scaled_action)
 
+normalize = NormalizedEnv

@@ -137,8 +137,6 @@ class BatchPolopt(RLAlgorithm):
         returns = []
         for path in paths:
             path_baselines = np.append(baseline.predict(path), 0)
-            if np.max(np.abs(path_baselines)) > 1e3:
-                import ipdb; ipdb.set_trace()
             deltas = path["rewards"] + \
                      self._discount * path_baselines[1:] - \
                      path_baselines[:-1]
