@@ -8,6 +8,11 @@ from rllab.env.box2d.double_pendulum_env import DoublePendulumEnv
 from rllab.env.box2d.mountain_car_env import MountainCarEnv
 from rllab.env.grid_world_env import GridWorldEnv
 from rllab.env.identification_env import IdentificationEnv
+from rllab.env.mujoco.ant_env import AntEnv
+from rllab.env.mujoco.gather.ant_gather_mdp import AntGatherEnv
+from rllab.env.mujoco.gather.gather_env import GatherEnv
+from rllab.env.mujoco.gather.point_gather_env import PointGatherEnv
+from rllab.env.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
 from rllab.env.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.env.mujoco.hopper_env import HopperEnv
 from rllab.env.mujoco.inverted_double_pendulum_env import InvertedDoublePendulumEnv
@@ -18,6 +23,8 @@ from rllab.env.mujoco.walker2d_env import Walker2DEnv
 from rllab.env.noisy_env import NoisyObservationEnv, DelayedActionEnv
 from rllab.env.normalized_env import NormalizedEnv
 from rllab.env.proxy_env import ProxyEnv
+
+
 
 simple_env_classes = [
     GridWorldEnv,
@@ -32,7 +39,11 @@ simple_env_classes = [
     SimpleHumanoidEnv,
     InvertedDoublePendulumEnv,
     HopperEnv,
+    AntEnv,
     HalfCheetahEnv,
+    PointGatherEnv,
+    SwimmerGatherEnv,
+    AntGatherEnv,
 ]
 envs = [cls() for cls in simple_env_classes]
 envs.append(

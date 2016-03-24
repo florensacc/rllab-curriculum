@@ -1,8 +1,8 @@
-from rllab.env.mujoco import AntMDP
-from rllab.env.mujoco import GatherMDP
+from rllab.env.mujoco.gather.gather_env import GatherEnv
+from rllab.env.mujoco.ant_env import AntEnv
 
 
-class AntGatherMDP(GatherMDP):
+class AntGatherEnv(GatherEnv):
 
-    MODEL_CLASS = AntMDP
+    MODEL_CLASS = AntEnv
     ORI_IND = 6

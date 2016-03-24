@@ -7,12 +7,14 @@ from ctypes import byref
 import numpy as np
 import theano
 
+from rllab import spaces
 from rllab.core.serializable import Serializable
-from rllab.env.mujoco import EmbeddedViewer
-from rllab.env.mujoco import MODEL_DIR
-from rllab.mdp.base import MDP
+from rllab.env.base import Env, Step
+from rllab.env.mujoco.gather.embedded_viewer import EmbeddedViewer
+from rllab.env.mujoco.mujoco_env import MODEL_DIR, BIG
 from rllab.misc import autoargs
 from rllab.misc.ext import merge_dict
+from rllab.misc.overrides import overrides
 from rllab.mujoco_py import MjViewer, MjModel, mjcore, mjlib, \
     mjextra, glfw
 
@@ -85,7 +87,10 @@ class GatherViewer(MjViewer):
         mjlib.mjlib.mjr_render(0, self.get_rect(), byref(tmpobjects), byref(
             self.ropt), byref(self.cam.pose), byref(self.con))
 
-        import OpenGL.GL as GL
+        try:
+            import OpenGL.GL as GL
+        except:
+            return
 
         def draw_rect(x, y, width, height):
             # start drawing a rectangle
@@ -128,7 +133,7 @@ class GatherViewer(MjViewer):
                 draw_rect(20 * (idx + 1), 60, 5, 50)
 
 
-class GatherMDP(MDP, Serializable):
+class GatherEnv(Env, Serializable):
 
     MODEL_CLASS = None
     ORI_IND = None
@@ -172,7 +177,7 @@ class GatherMDP(MDP, Serializable):
         self.sensor_range = sensor_range
         self.sensor_span = sensor_span
         self.objects = []
-        super(GatherMDP, self).__init__(*args, **kwargs)
+        super(GatherEnv, self).__init__(*args, **kwargs)
         model_cls = self.__class__.MODEL_CLASS
         if model_cls is None:
             raise "MODEL_CLASS unspecified!"
@@ -250,7 +255,7 @@ class GatherMDP(MDP, Serializable):
         return self.get_current_obs()
 
     def step(self, action):
-        _, _, done = self.inner_mdp.step(action)
+        _, _, done, info = self.inner_mdp.step(action)
         if done:
             return self.get_current_obs(), -10, done
         com = self.inner_mdp.get_body_com("torso")
@@ -269,7 +274,7 @@ class GatherMDP(MDP, Serializable):
                 new_objs.append(obj)
         self.objects = new_objs
         done = len(self.objects) == 0
-        return self.get_current_obs(), reward, done
+        return Step(self.get_current_obs(), reward, done, **info)
 
     def get_readings(self):
         # compute sensor readings
@@ -328,33 +333,30 @@ class GatherMDP(MDP, Serializable):
         return self.inner_mdp.viewer
 
     @property
+    @overrides
+    def action_space(self):
+        return self.inner_mdp.action_space
+
+    @property
     def action_bounds(self):
         return self.inner_mdp.action_bounds
-
-    @property
-    def action_dim(self):
-        return self.inner_mdp.action_dim
-
-    @property
-    def action_dtype(self):
-        return self.inner_mdp.action_dtype
 
     @property
     def viewer(self):
         return self.inner_mdp.viewer
 
     @property
-    def observation_shape(self):
-        shp = self.inner_mdp.observation_shape[0]
-        return (shp + self.n_bins * 2,)
-
-    @property
-    def observation_dtype(self):
-        return theano.config.floatX
+    @overrides
+    def observation_space(self):
+        dim = self.inner_mdp.observation_space.flat_dim
+        newdim = dim + self.n_bins * 2
+        ub = BIG * np.ones(newdim)
+        return spaces.Box(ub*-1, ub)
 
     def action_from_key(self, key):
         return self.inner_mdp.action_from_key(key)
 
-    def plot(self):
+    def render(self):
         self.get_viewer()
-        self.inner_mdp.plot()
+        self.inner_mdp.render()
+
