@@ -1,5 +1,4 @@
 from rllab.core.parameterized import Parameterized
-from rllab.agent.base import Agent
 
 
 class Policy(Parameterized):
