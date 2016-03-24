@@ -2253,14 +2253,14 @@ class MjDataWrapper(object):
     
     @property
     def act(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.get_action, dtype=np.double, count=(self._size_src.na * 1)), (self._size_src.na, 1,))
+        arr = np.reshape(np.fromiter(self._wrapped.contents.act, dtype=np.double, count=(self._size_src.na*1)), (self._size_src.na, 1, ))
         arr.setflags(write=False)
         return arr
     
     @act.setter
     def act(self, value):
         val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
-        memmove(self._wrapped.contents.get_action, val_ptr, self._size_src.na * 1 * sizeof(c_double))
+        memmove(self._wrapped.contents.act, val_ptr, self._size_src.na*1 * sizeof(c_double))
     
     @property
     def ctrl(self):
@@ -2605,25 +2605,25 @@ class MjDataWrapper(object):
     
     @property
     def wrap_obj(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.wrap_obj, dtype=np.int, count=(self._size_src.nwrap*2*1)), (self._size_src.nwrap*2, 1, ))
+        arr = np.reshape(np.fromiter(self._wrapped.contents.wrap_obj, dtype=np.int, count=(self._size_src.nwrap*2)), (self._size_src.nwrap, 2, ))
         arr.setflags(write=False)
         return arr
     
     @wrap_obj.setter
     def wrap_obj(self, value):
         val_ptr = np.array(value).ctypes.data_as(POINTER(c_int))
-        memmove(self._wrapped.contents.wrap_obj, val_ptr, self._size_src.nwrap*2*1 * sizeof(c_int))
+        memmove(self._wrapped.contents.wrap_obj, val_ptr, self._size_src.nwrap*2 * sizeof(c_int))
     
     @property
     def wrap_xpos(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.wrap_xpos, dtype=np.double, count=(self._size_src.nwrap*2*3)), (self._size_src.nwrap*2, 3, ))
+        arr = np.reshape(np.fromiter(self._wrapped.contents.wrap_xpos, dtype=np.double, count=(self._size_src.nwrap*6)), (self._size_src.nwrap, 6, ))
         arr.setflags(write=False)
         return arr
     
     @wrap_xpos.setter
     def wrap_xpos(self, value):
         val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
-        memmove(self._wrapped.contents.wrap_xpos, val_ptr, self._size_src.nwrap*2*3 * sizeof(c_double))
+        memmove(self._wrapped.contents.wrap_xpos, val_ptr, self._size_src.nwrap*6 * sizeof(c_double))
     
     @property
     def actuator_length(self):
@@ -5396,25 +5396,25 @@ class MjModelWrapper(object):
     
     @property
     def actuator_dynprm(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_dynprm, dtype=np.double, count=(self.nu*10)), (self.nu, 10, ))
+        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_dynprm, dtype=np.double, count=(self.nu*3)), (self.nu, 3, ))
         arr.setflags(write=False)
         return arr
     
     @actuator_dynprm.setter
     def actuator_dynprm(self, value):
         val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
-        memmove(self._wrapped.contents.actuator_dynprm, val_ptr, self.nu*10 * sizeof(c_double))
+        memmove(self._wrapped.contents.actuator_dynprm, val_ptr, self.nu*3 * sizeof(c_double))
     
     @property
     def actuator_gainprm(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_gainprm, dtype=np.double, count=(self.nu*5)), (self.nu, 5, ))
+        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_gainprm, dtype=np.double, count=(self.nu*3)), (self.nu, 3, ))
         arr.setflags(write=False)
         return arr
     
     @actuator_gainprm.setter
     def actuator_gainprm(self, value):
         val_ptr = np.array(value).ctypes.data_as(POINTER(c_double))
-        memmove(self._wrapped.contents.actuator_gainprm, val_ptr, self.nu*5 * sizeof(c_double))
+        memmove(self._wrapped.contents.actuator_gainprm, val_ptr, self.nu*3 * sizeof(c_double))
     
     @property
     def actuator_biasprm(self):

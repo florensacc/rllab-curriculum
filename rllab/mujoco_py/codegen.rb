@@ -19,13 +19,13 @@ CTYPES_PTR_MAP = {
 DEDEF_MAP = {
   'mjtNum' => 'double',
   'mjtByte' => 'unsigned char',
-  'mjNREF' => '2',
-  'mjNDYN' => '10',
-  'mjNGAIN' => '5',
-  'mjNBIAS' => '3',
-  'mjNIMP' => '3',
-  'mjNEQDATA' => '7',
-  'mjNTRN' => '1',
+  # 'mjNREF' => '2',
+  # 'mjNDYN' => '3',
+  # 'mjNGAIN' => '3',
+  # 'mjNBIAS' => '3',
+  # 'mjNIMP' => '3',
+  # 'mjNEQDATA' => '7',
+  # 'mjNTRN' => '1',
 }
 
 NP_DTYPE_MAP = {
@@ -50,6 +50,15 @@ def dedef(type)
   DEDEF_MAP[type] || type
 end
 
+def process_dedefs(source)
+  def_lines = source.lines.map(&:strip).select{|x| x =~ /^#define \w+\s+\d+/}
+  defs = def_lines.map {|x|
+    x, y = x.gsub(/\/\/.*/, "").gsub(/^#define/, "").split.map(&:strip)
+    [x, y.to_i]
+  }
+  DEDEF_MAP.merge!(Hash[defs])
+end
+
 class String
   def blank_or_comment?
     self.strip.size == 0 || self.strip =~ /^\/\//
@@ -64,18 +73,20 @@ def anon_struct_regex
   /struct(.*?)\{(.*?)\}(.*?);/ms
 end
 
-def parse_struct(source, name)
+def parse_struct(source, name, hints)
   source =~ struct_regex(name)
   content = $2
   subs = []
   # note that this won't work in general; luckily for us, the _mjVisual struct
   # only has anonymous struct fields and nothing else
   subprops = []
+  hint_name = "#{name[1..-1].upcase}_POINTERS"
+  struct_hint = hints[hint_name] || {}
   content.scan(anon_struct_regex) {
     subcontent = $2
     subname = $3
     subs << {
-      props: subcontent.lines.map(&:strip).reject(&:blank_or_comment?).map{|x| parse_struct_line(source, x)},
+      props: subcontent.lines.map(&:strip).reject(&:blank_or_comment?).map{|x| parse_struct_line(source, x, struct_hint)},
       name: "ANON_#{subname.strip.gsub(/^_/,'').upcase}",
       source: source
     }
@@ -87,7 +98,7 @@ def parse_struct(source, name)
   }
   rest = content.gsub(anon_struct_regex, '')
   rest = rest.lines.map(&:strip).reject(&:blank_or_comment?)
-  parsed = rest.map {|x| parse_struct_line(source, x)}
+  parsed = rest.map {|x| parse_struct_line(source, x, struct_hint)}
   {
     props: subprops + parsed,
     name: dereserve(name),
@@ -96,7 +107,7 @@ def parse_struct(source, name)
   }
 end
 
-def parse_struct_line(source, line)
+def parse_struct_line(source, line, hints)
   if line =~ /^(\w+)\s+(\w+)\s+(\w+);/
     {
       kind: :value,
@@ -119,13 +130,21 @@ def parse_struct_line(source, line)
     if ret[:name] == "buffer" && ret[:type] == "void"
       ret[:type] = "unsigned char"
     end
-    if line =~ /\/\/.*\((\w+)\s+(\w+)\)$/ # size hint
-      $stderr.puts line
-      ret[:hint] = [dedef($1)]
-    elsif line =~ /\/\/.*\(([\w\*]+)\s+x\s+(\w+)\)$/ # size hint
-      ret[:hint] = [dedef($1), dedef($2)]
-    elsif line =~ /\/\/.*\((\w+)\)$/ # size hint
-      ret[:hint] = [dedef($1)]
+    if hints.size > 0
+      match = hints.find{|x| x[1] == $2}
+      if match 
+        ret[:hint] = match[2..-1].map{|x| dedef(x)}
+        # binding.pry
+      end
+    end
+    unless ret[:hint]
+      if line =~ /\/\/.*\((\w+)\s+(\w+)\)$/ # size hint
+        ret[:hint] = [dedef($1)]
+      elsif line =~ /\/\/.*\(([\w\*]+)\s+x\s+(\w+)\)$/ # size hint
+        ret[:hint] = [dedef($1), dedef($2)]
+      elsif line =~ /\/\/.*\((\w+)\)$/ # size hint
+        ret[:hint] = [dedef($1)]
+      end
     end
     ret
   elsif line =~ /(\w+)\s+(\w+)\[\s*(\w+)\s*\];/
@@ -162,6 +181,9 @@ def parse_struct_line(source, line)
 end
 
 def resolve_id_value(source, id)
+  if DEDEF_MAP.include?(id)
+    return DEDEF_MAP[id]
+  end
   source =~ /enum\s+.*\{(.*?)\s+#{id}\s+(.*?)\}/ms
   if $1.nil?
     if source =~ /#define\s+#{id}\s+(\d+)/
@@ -215,7 +237,8 @@ end
 def gen_wrapper_src(source, struct)
 
   def to_size_factor(source, struct, hint_elem)
-    if hint_elem != hint_elem.downcase && hint_elem.size > 3
+    hint_elem = hint_elem.to_s
+    if hint_elem.to_s != hint_elem.to_s.downcase && hint_elem.to_s.size > 3
       if source =~ /#define\s+#{hint_elem}\s+(\d+)/
         $1.to_i
       else
@@ -304,8 +327,8 @@ def #{prop[:name]}(self):
     return self._wrapped.contents.#{prop[:name]}
 }
       elsif prop[:kind] == :pointer && prop[:type] == 'mjContact'
-        count = prop[:hint].map{|hint_elem| to_size_factor(source, struct, hint_elem)}.join("*")
-        binding.pry
+        # count = prop[:hint].map{|hint_elem| to_size_factor(source, struct, hint_elem)}.join("*")
+        # binding.pry
       else
         # move on
         # binding.pry
@@ -314,7 +337,36 @@ def #{prop[:name]}(self):
 }
 end
 
+
+def parse_hints(hint_source)
+  defs = []
+  in_def = false
+  cur_def = nil
+  cur_def_name = nil
+  hint_source.lines.each do |line|
+    if line.strip =~ /^#define (\w+)/
+      in_def = true
+      cur_def_name = $1
+      cur_def = [cur_def_name, []]
+    elsif in_def
+      filtered = line.strip.gsub(/^X\(/, "").gsub(/\)$/, "").gsub(/\)\s*\\$/, "")
+      parts = filtered.split(",").map(&:strip)
+      cur_def[1] << parts
+      if line.strip[-1] != '\\'
+        defs << cur_def
+        in_def = false
+      end
+    end
+  end
+  Hash[defs]
+end
+
 source = open(ARGV.first, 'r').read
+dim_hint_source = open(ARGV[1], 'r').read
+
+process_dedefs(source)
+
+hints = parse_hints(dim_hint_source)
 
 source = source.gsub(/\r/, '')
 source = source.gsub(/\/\*.*?\*\//, '')
@@ -325,7 +377,7 @@ from ctypes import *
 import numpy as np
 }
 
-structs = %w[_mjContact _mjrRect _mjvCameraPose _mjrOption _mjrContext _mjvCamera _mjvOption _mjvGeom _mjvLight _mjvObjects _mjOption _mjVisual _mjStatistic _mjData _mjModel].map{|x| parse_struct(source, x) }
+structs = %w[_mjContact _mjrRect _mjvCameraPose _mjrOption _mjrContext _mjvCamera _mjvOption _mjvGeom _mjvLight _mjvObjects _mjOption _mjVisual _mjStatistic _mjData _mjModel].map{|x| parse_struct(source, x, hints) }
 
 structs.each {|s| puts gen_ctypes_src(source, s) }
 structs.each {|s| puts gen_wrapper_src(source, s) }
