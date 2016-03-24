@@ -1,6 +1,6 @@
 import os
 
-os.environ['THEANO_FLAGS'] = 'mode=FAST_COMPILE,optimizer=None'
+os.environ['THEANO_FLAGS'] = 'device=cpu,mode=FAST_COMPILE,optimizer=None'
 
 from rllab.algo.vpg import VPG
 from rllab.algo.tnpg import TNPG
