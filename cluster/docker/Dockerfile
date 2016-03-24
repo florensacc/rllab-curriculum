@@ -2,6 +2,7 @@ FROM ubuntu:14.04
 
 # ========== Anaconda ==========
 
+ADD environment.yml /root/code/environment.yml
 # https://github.com/ContinuumIO/docker-images/blob/master/anaconda/Dockerfile
 RUN apt-get update --fix-missing && apt-get install -y wget bzip2 ca-certificates \
     libglib2.0-0 libxext6 libsm6 libxrender1 \
@@ -33,19 +34,21 @@ RUN apt-get -y install zlib1g-dev
 RUN apt-get -y build-dep glfw
 RUN apt-get -y install libxrandr2 libxinerama-dev libxi6 libxcursor-dev
 # copied from requirements.txt
-RUN pip install imageio tabulate nose
+#RUN pip install imageio tabulate nose
 RUN apt-get install -y vim ack-grep
 RUN pip install --upgrade pip
 # usual pip install pygame will fail
-RUN conda install --yes -c https://conda.anaconda.org/kne pybox2d
-RUN conda install --yes -c https://conda.binstar.org/tlatorre pygame
+#RUN conda install --yes -c https://conda.anaconda.org/kne pybox2d
+#RUN conda install --yes -c https://conda.binstar.org/tlatorre pygame
 RUN sudo apt-get build-dep -y python-pygame
 
 # ========== Add codebase stub ==========
 
 CMD mkdir /root/code
-ADD requirements.txt /root/code/requirements.txt
-RUN pip install -r /root/code/requirements.txt
+ADD environment.yml /root/code/environment.yml
+RUN conda env create -f /root/code/environment.yml
 
 ENV PYTHONPATH /root/code/rllab:$PYTHONPATH
+ADD . /root/code/rllab
+RUN echo "source activate rllab" >> /root/.bashrc
 WORKDIR /root/code

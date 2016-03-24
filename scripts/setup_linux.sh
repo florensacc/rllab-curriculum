@@ -1,5 +1,11 @@
 #!/bin/bash
-# Make sure that pip is available
+# Make sure that conda is available
+hash conda 2>/dev/null || {
+    echo "Please install conda before continuing. How to install:"
+    echo "https://docs.continuum.io/anaconda/install"
+    exit 0
+}
+
 echo "Installing system dependencies"
 echo "You will probably be asked for your sudo password."
 sudo apt-get update

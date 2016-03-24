@@ -19,10 +19,6 @@ hash virtualenv 2>/dev/null || {
 
 # Make sure that we're under the directory of the project
 cd "$(dirname "$0")/.."
-# Ensure .env
+conda env create -f /root/code/environment.yml
+source activate rllab
 
-if [ ! -d ".env" ]; then
-  virtualenv .env
-fi
-source .env/bin/activate
-pip install -r requirements.txt
