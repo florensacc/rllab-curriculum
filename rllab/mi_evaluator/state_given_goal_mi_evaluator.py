@@ -2,7 +2,7 @@ import numpy as np
 
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
-from rllab.distributions import categorical_dist
+from rllab.distributions.categorical import Categorical
 from rllab.envs.subgoal_env import SubgoalEnvSpec
 from rllab.misc.special import to_onehot
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
@@ -22,14 +22,14 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
     def __init__(
             self,
             env_spec,
-            high_policy_dist_family,
-            low_policy_dist_family,
+            high_policy_distribution,
+            low_policy_distribution,
             regressor_cls=None,
             regressor_args=None):
         assert isinstance(env_spec, SubgoalEnvSpec)
         assert isinstance(env_spec.subgoal_space, Discrete)
-        assert high_policy_dist_family == categorical_dist
-        assert low_policy_dist_family == categorical_dist
+        assert isinstance(high_policy_distribution, Categorical)
+        assert isinstance(low_policy_distribution, Categorical)
 
         Serializable.quick_init(self, locals())
         if regressor_cls is None:

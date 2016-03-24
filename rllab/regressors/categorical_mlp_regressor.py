@@ -7,7 +7,7 @@ import theano.tensor as TT
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
 from rllab.core.serializable import Serializable
-from rllab.distributions import categorical_dist
+from rllab.distributions.categorical import Categorical
 from rllab.misc import ext
 from rllab.misc import logger
 from rllab.misc import special
@@ -68,7 +68,7 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
         LasagnePowered.__init__(self, [l_prob])
 
         xs_var = prob_network.input_layer.input_var
-        ys_var = TT.matrix("ys")
+        ys_var = TT.imatrix("ys")
         old_prob_var = TT.matrix("old_prob")
 
         x_mean_var = theano.shared(
@@ -89,9 +89,11 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
         old_info_vars = dict(prob=old_prob_var)
         info_vars = dict(prob=prob_var)
 
-        mean_kl = TT.mean(categorical_dist.kl_sym(old_info_vars, info_vars))
+        dist = self._dist = Categorical()
 
-        loss = - TT.mean(categorical_dist.log_likelihood_sym(ys_var, info_vars))
+        mean_kl = TT.mean(dist.kl_sym(old_info_vars, info_vars))
+
+        loss = - TT.mean(dist.log_likelihood_sym(ys_var, info_vars))
 
         predicted = special.to_onehot_sym(TT.argmax(prob_var, axis=1), output_dim)
 
@@ -148,7 +150,7 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
         prob = self._f_prob(xs)
         # if np.any(np.abs(prob) > 1e3):
         #     import ipdb; ipdb.set_trace()
-        return categorical_dist.log_likelihood(ys, dict(prob=prob))
+        return self._dist.log_likelihood(ys, dict(prob=prob))
 
     def get_param_values(self, **tags):
         return LasagnePowered.get_param_values(self, **tags)

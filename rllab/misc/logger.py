@@ -67,7 +67,8 @@ def add_tabular_output(file_name):
 
 
 def remove_tabular_output(file_name):
-    _tabular_header_written.remove(_tabular_fds[file_name])
+    if _tabular_fds[file_name] in _tabular_header_written:
+        _tabular_header_written.remove(_tabular_fds[file_name])
     _remove_output(file_name, _tabular_outputs, _tabular_fds)
 
 

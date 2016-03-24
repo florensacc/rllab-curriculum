@@ -10,6 +10,7 @@ from rllab.policies.subgoal_policy import SubgoalPolicy
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from rllab.baselines.subgoal_baseline import SubgoalBaseline
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
 from rllab.algos.trpo import TRPO
@@ -89,24 +90,32 @@ policy = SubgoalPolicy(
 
 baseline = SubgoalBaseline(
     env_spec=env.spec,
-    high_baseline=GaussianMLPBaseline(
+    high_baseline=LinearFeatureBaseline(
         env_spec=env.spec.high_env_spec,
-        regressor_args=dict(
-            optimizer=ConjugateGradientOptimizer(),
-        ),
     ),
-    low_baseline=GaussianMLPBaseline(
+    low_baseline=LinearFeatureBaseline(
         env_spec=env.spec.low_env_spec,
-        regressor_args=dict(
-            optimizer=ConjugateGradientOptimizer(),
-        ),
     ),
+    # high_baseline=GaussianMLPBaseline(
+    #     env_spec=env.spec.high_env_spec,
+    #     regressor_args=dict(
+    #         learn_std=False,
+    #         optimizer=ConjugateGradientOptimizer(),
+    #     ),
+    # ),
+    # low_baseline=GaussianMLPBaseline(
+    #     env_spec=env.spec.low_env_spec,
+    #     regressor_args=dict(
+    #         learn_std=False,
+    #         optimizer=ConjugateGradientOptimizer(),
+    #     ),
+    # ),
 )
 
 evaluator = StateGivenGoalMIEvaluator(
     env_spec=env.spec,
-    high_policy_dist_family=high_policy.distribution,
-    low_policy_dist_family=low_policy.distribution,
+    high_policy_distribution=high_policy.distribution,
+    low_policy_distribution=low_policy.distribution,
     regressor_cls=CategoricalMLPRegressor,
     regressor_args=dict(
         optimizer=ConjugateGradientOptimizer(),

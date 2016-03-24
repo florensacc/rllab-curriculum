@@ -2,7 +2,7 @@ import numpy as np
 
 from rllab.algos.batch_polopt import BatchPolopt
 from rllab.core.serializable import Serializable
-from rllab.distributions import categorical_dist
+from rllab.distributions.categorical import Categorical
 from rllab.misc import logger
 from rllab.misc import tensor_utils
 from rllab.misc.overrides import overrides
@@ -165,6 +165,9 @@ class BatchHRL(BatchPolopt, Serializable):
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
             low_samples_data = self.low_algo.process_samples(
                 itr, low_paths, env_spec.low_env_spec, policy.low_policy, baseline.low_baseline)
+            for path in low_samples_data['paths']:
+                if np.max(abs(baseline.low_baseline.predict(path))) > 1e3:
+                    import ipdb; ipdb.set_trace()
 
         mi_action_goal = self._compute_mi_action_goal(env_spec, policy, high_samples_data, low_samples_data)
         logger.record_tabular("I(action,goal|state)", mi_action_goal)
@@ -179,10 +182,12 @@ class BatchHRL(BatchPolopt, Serializable):
 
     @staticmethod
     def _compute_mi_action_goal(env_spec, policy, high_samples_data, low_samples_data):
-        if policy.high_policy.distribution is categorical_dist \
-                and policy.low_policy.distribution is categorical_dist \
+        if isinstance(policy.high_policy.distribution, Categorical) \
+                and isinstance(policy.low_policy.distribution, Categorical) \
                 and not policy.high_policy.recurrent \
                 and not policy.low_policy.recurrent:
+
+            dist = Categorical()
 
             # Compute the mutual information I(a,g)
             # This is the component I'm still uncertain about how to abstract away yet
@@ -214,7 +219,7 @@ class BatchHRL(BatchPolopt, Serializable):
             # The mutual information between actions and goals
             mi_action_goal = 0
             for goal in range(n_subgoals):
-                mi_action_goal += np.mean(goal_probs[:, goal] * categorical_dist.kl(
+                mi_action_goal += np.mean(goal_probs[:, goal] * dist.kl(
                     dict(prob=action_given_goal_pdists[goal]),
                     dict(prob=action_pdists)
                 ))

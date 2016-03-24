@@ -13,7 +13,7 @@ def from_onehot_sym(x_var):
 
 
 def from_onehot(x_var):
-    ret = np.zeros((x_var.shape[0],))
+    ret = np.zeros((x_var.shape[0],), 'int32')
     nonzero_n, nonzero_a = np.nonzero(x_var)
     ret[nonzero_n] = nonzero_a
     return ret
