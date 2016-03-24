@@ -13,12 +13,12 @@ import rllab.plotter as plotter
 import cma_es_lib
 
 
-def sample_return(mdp, policy, params, max_path_length, discount):
-    # mdp, policy, params, max_path_length, discount = args
+def sample_return(env, policy, params, max_path_length, discount):
+    # env, policy, params, max_path_length, discount = args
     # of course we make the strong assumption that there is no race condition
     policy.set_param_values(params)
     path = rollout(
-        mdp,
+        env,
         policy,
         max_path_length,
     )
@@ -146,6 +146,7 @@ class CMAES(RLAlgorithm):
             logger.dump_tabular(with_prefix=False)
             if self.plot:
                 plotter.update_plot(policy, self.max_path_length)
+            logger.pop_prefix()
             # Update iteration.
             itr += 1
 

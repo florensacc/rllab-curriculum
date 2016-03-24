@@ -1,6 +1,3 @@
-from nose.tools import assert_equal
-
-
 def test_gru_network():
     from rllab.core.network import GRUNetwork
     import lasagne.layers as L
@@ -15,4 +12,4 @@ def test_gru_network():
         inputs=[network.input_layer.input_var],
         outputs=L.get_output(network.output_layer)
     )
-    assert_equal(f_output(np.zeros((6, 8, 2, 3))).shape, (6, 8, 5))
+    assert f_output(np.zeros((6, 8, 2, 3))).shape == (6, 8, 5)
