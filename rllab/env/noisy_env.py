@@ -1,12 +1,13 @@
 import numpy as np
 
 from rllab.core.serializable import Serializable
-from rllab.env.proxy_mdp import ProxyMDP
+from rllab.env.base import Step
+from rllab.env.proxy_env import ProxyEnv
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 
 
-class NoisyObservationMDP(ProxyMDP, Serializable):
+class NoisyObservationEnv(ProxyEnv, Serializable):
 
     @autoargs.arg('obs_noise', type=float,
                   help='Noise added to the observations (note: this makes the '
@@ -15,7 +16,7 @@ class NoisyObservationMDP(ProxyMDP, Serializable):
                  mdp,
                  obs_noise=1e-1,
                  ):
-        super(NoisyObservationMDP, self).__init__(mdp)
+        super(NoisyObservationEnv, self).__init__(mdp)
         Serializable.quick_init(self, locals())
         self.obs_noise = obs_noise
 
@@ -33,20 +34,20 @@ class NoisyObservationMDP(ProxyMDP, Serializable):
         return obs + noise
 
     def get_current_obs(self):
-        return self.inject_obs_noise(self._mdp.get_current_obs())
+        return self.inject_obs_noise(self._wrapped_env.get_current_obs())
 
     @overrides
     def reset(self):
-        obs = self._mdp.reset()
+        obs = self._wrapped_env.reset()
         return self.inject_obs_noise(obs)
 
     @overrides
     def step(self, action):
-        next_obs, reward, done = self._mdp.step(action)
-        return self.inject_obs_noise(next_obs), reward, done
+        next_obs, reward, done, info = self._wrapped_env.step(action)
+        return Step(self.inject_obs_noise(next_obs), reward, done, **info)
 
 
-class DelayedActionMDP(ProxyMDP, Serializable):
+class DelayedActionEnv(ProxyEnv, Serializable):
 
     @autoargs.arg('action_delay', type=int,
                   help='Time steps before action is realized')
@@ -55,26 +56,24 @@ class DelayedActionMDP(ProxyMDP, Serializable):
                  action_delay=3,
                  ):
         assert action_delay > 0, "Should not use this mdp transformer"
-        super(DelayedActionMDP, self).__init__(mdp)
+        super(DelayedActionEnv, self).__init__(mdp)
         Serializable.quick_init(self, locals())
         self.action_delay = action_delay
         self._queued_actions = None
 
     @overrides
     def reset(self):
-        self._mdp.reset()
+        obs = self._wrapped_env.reset()
         self._queued_actions = np.zeros(self.action_delay * self.action_dim)
-        return self.get_current_obs()
+        return obs
 
     @overrides
     def step(self, action):
-        # original_state = self.delayed_state[:self.original_state_len]
-        # queued_action = state[self.original_state_len:][:self.action_dim]
-        # import pdb; pdb.set_trace()
         queued_action = self._queued_actions[:self.action_dim]
-        next_obs, reward, done = self._mdp.step(queued_action)
+        next_obs, reward, done, info = self._wrapped_env.step(queued_action)
         self._queued_actions = np.concatenate([
             self._queued_actions[self.action_dim:],
             action
         ])
-        return next_obs, reward, done
+        return Step(next_obs, reward, done, **info)
+

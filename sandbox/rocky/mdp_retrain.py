@@ -1,14 +1,14 @@
 import os
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.mdp.mujoco.swimmer_mdp import SwimmerMDP
-from rllab.mdp.normalized_mdp import NormalizedMDP
-from rllab.mdp.mujoco.hopper_mdp import HopperMDP
-from rllab.mdp.mujoco.walker2d_mdp import Walker2DMDP
-from rllab.mdp.mujoco.half_cheetah_mdp import HalfCheetahMDP
-from rllab.mdp.mujoco.ant_mdp import AntMDP
-from rllab.mdp.mujoco.simple_humanoid_mdp import SimpleHumanoidMDP
-from rllab.mdp.mujoco.humanoid_mdp import HumanoidMDP
-from rllab.policy.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.env.mujoco import SwimmerMDP
+from rllab.env.normalized_mdp import NormalizedMDP
+from rllab.env.mujoco import HopperMDP
+from rllab.env.mujoco import Walker2DMDP
+from rllab.env.mujoco.half_cheetah_env import HalfCheetahEnv
+from rllab.env.mujoco import AntMDP
+from rllab.env.mujoco import SimpleHumanoidMDP
+from rllab.env.mujoco.humanoid_mdp import HumanoidMDP
+from rllab.policy.mean_std_nn_policy import MeanStdNNPolicy
 from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
 from rllab.algo.trpo import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
@@ -19,7 +19,7 @@ mdp_classes = [
     SwimmerMDP,
     HopperMDP,
     Walker2DMDP,
-    HalfCheetahMDP,
+    HalfCheetahEnv,
     AntMDP,
     SimpleHumanoidMDP,
     HumanoidMDP,

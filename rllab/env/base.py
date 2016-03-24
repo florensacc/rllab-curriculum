@@ -43,6 +43,11 @@ class Env(object):
         """
         raise NotImplementedError
 
+    # Helpers that derive from Spaces
+    @property
+    def action_dim(self):
+        return self.action_space.flat_dim
+
     def render(self):
         pass
 

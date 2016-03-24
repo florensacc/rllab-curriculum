@@ -1,6 +1,8 @@
 import numpy as np
 import os.path as osp
-from rllab.mdp.base import MDP
+
+from rllab import spaces
+from rllab.env.base import Env
 from rllab.mujoco_py import MjModel, MjViewer
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
@@ -18,8 +20,8 @@ MODEL_DIR = osp.abspath(
     )
 )
 
-
-class MujocoMDP(MDP):
+BIG = 1e6
+class MujocoEnv(Env):
 
     FILE = None
 
@@ -72,35 +74,26 @@ class MujocoMDP(MDP):
         self.dcom = None
         self.current_com = None
         self.reset()
-        super(MujocoMDP, self).__init__()
+        super(MujocoEnv, self).__init__()
 
     @property
     @overrides
-    def observation_shape(self):
-        return self.get_current_obs().shape
-
-    @property
-    @overrides
-    def observation_dtype(self):
-        return theano.config.floatX
-
-    @property
-    @overrides
-    def action_dim(self):
-        return len(self.model.data.ctrl)
-
-    @property
-    @overrides
-    def action_dtype(self):
-        return theano.config.floatX
-
-    @property
-    @overrides
-    def action_bounds(self):
+    def action_space(self):
         bounds = self.model.actuator_ctrlrange
         lb = bounds[:, 0]
         ub = bounds[:, 1]
-        return lb, ub
+        return spaces.Box(lb, ub)
+
+    @property
+    @overrides
+    def observation_space(self):
+        shp = self.get_current_obs().shape
+        ub = BIG * np.ones(shp)
+        return spaces.Box(ub*-1, ub)
+
+    @property
+    def action_bounds(self):
+        return self.action_space.bounds
 
     def reset_mujoco(self):
         self.model.data.qpos = self.init_qpos + \
@@ -175,7 +168,7 @@ class MujocoMDP(MDP):
             self.viewer.set_model(self.model)
         return self.viewer
 
-    def plot(self):
+    def render(self):
         viewer = self.get_viewer()
         viewer.loop_once()
 
@@ -207,7 +200,7 @@ class MujocoMDP(MDP):
         return self.model.body_comvels[idx]
 
     def print_stats(self):
-        super(MujocoMDP, self).print_stats()
+        super(MujocoEnv, self).print_stats()
         print "qpos dim:\t%d" % len(self.model.data.qpos)
 
     def action_from_key(self, key):

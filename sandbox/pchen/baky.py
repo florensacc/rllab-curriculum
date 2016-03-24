@@ -8,7 +8,7 @@ os.environ["THEANO_FLAGS"] = "device=cpu"
 from rllab.env.mujoco import SwimmerMDP
 from rllab.env.normalized_mdp import NormalizedMDP
 from rllab.env.mujoco import Walker2DMDP
-from rllab.env.mujoco.half_cheetah_mdp import HalfCheetahMDP
+from rllab.env.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.policy.mean_std_nn_policy import MeanStdNNPolicy
 from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
@@ -19,7 +19,7 @@ mdp_classes = [
     SwimmerMDP,
     # HopperMDP,
     Walker2DMDP,
-    HalfCheetahMDP,
+    HalfCheetahEnv,
     # AntMDP,
     # SimpleHumanoidMDP,
     # HumanoidMDP,

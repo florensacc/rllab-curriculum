@@ -1,7 +1,7 @@
-from .simple_humanoid_mdp import SimpleHumanoidMDP
+from .simple_humanoid_env import SimpleHumanoidEnv
 
 
 # Taken from Wojciech's code
-class HumanoidMDP(SimpleHumanoidMDP):
+class HumanoidMDP(SimpleHumanoidEnv):
 
     FILE = 'humanoid.xml'

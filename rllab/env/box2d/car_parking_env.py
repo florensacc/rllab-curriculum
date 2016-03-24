@@ -58,12 +58,12 @@ class CarParkingEnv(Box2DEnv, Serializable):
     @property
     @overrides
     def action_dim(self):
-        return super(CarParkingMDP, self).action_dim + 1
+        return super(CarParkingEnv, self).action_dim + 1
 
     @property
     @overrides
     def action_bounds(self):
-        lb, ub = super(CarParkingMDP, self).action_bounds
+        lb, ub = super(CarParkingEnv, self).action_bounds
         return np.append(lb, -self.max_deg), np.append(ub, self.max_deg)
 
     @overrides
@@ -113,3 +113,4 @@ class CarParkingEnv(Box2DEnv, Serializable):
         if keys[pygame.K_DOWN]:
             go[0] = -10
         return go
+

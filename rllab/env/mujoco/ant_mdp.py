@@ -1,16 +1,16 @@
-from mujoco_mdp import MujocoMDP
+from mujoco_env import MujocoEnv
 from rllab.core.serializable import Serializable
 import numpy as np
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 
 
-class AntMDP(MujocoMDP, Serializable):
+class AntEnv(MujocoEnv, Serializable):
 
     FILE = 'ant.xml'
 
     def __init__(self, *args, **kwargs):
-        super(AntMDP, self).__init__(*args, **kwargs)
+        super(AntEnv, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)
 
     def get_current_obs(self):

@@ -5,6 +5,7 @@ import time
 import numpy as np
 import pygame
 
+from rllab.env.base import Env
 from rllab.mdp.base import MDP
 from rllab.misc.resolve import load_class
 
@@ -22,15 +23,15 @@ def to_onehot(ind, dim):
     return ret
 
 
-def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
+def visualize_env(mdp, mode, max_steps=sys.maxint, speedup=1):
     # step ahead with all-zero action
     if mode == 'noop':
         action = np.zeros(mdp.action_dim)
         mdp.reset()
-        mdp.plot()
+        mdp.render()
         for _ in xrange(max_steps):
             _, _, done = mdp.step(action)
-            mdp.plot()
+            mdp.render()
             time.sleep(mdp.timestep / speedup)
             if done:
                 mdp.reset()
@@ -43,12 +44,12 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
             lb, ub = mdp.action_bounds
             sampler = lambda: sample_action(lb, ub)
         totrew = 0
-        mdp.plot()
+        mdp.render()
         for i in xrange(max_steps):
             action = sampler()
             _, rew, done = mdp.step(action)
             # if i % 10 == 0:
-            mdp.plot()
+            mdp.render()
             # import time as ttime
             time.sleep(mdp.timestep / speedup)
             totrew += rew
@@ -60,13 +61,13 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
     elif mode == 'static':
         mdp.reset()
         while True:
-            mdp.plot()
+            mdp.render()
             time.sleep(mdp.timestep / speedup)
     elif mode == 'human':
         mdp.reset()
-        mdp.plot()
+        mdp.render()
         tr = 0.
-        from rllab.env.box2d.box2d_mdp import Box2DEnv
+        from rllab.env.box2d.box2d_env import Box2DEnv
         if isinstance(mdp, Box2DEnv):
             for _ in xrange(max_steps):
                 pygame.event.pump()
@@ -74,7 +75,7 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
                 action = mdp.action_from_keys(keys)
                 ob, r, done = mdp.step(action)
                 tr += r
-                mdp.plot()
+                mdp.render()
                 time.sleep(mdp.timestep / speedup)
                 if done:
                     tr = 0.
@@ -82,11 +83,12 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
         else:
             trs = [tr]
             actions = [np.zeros(2)]
-            from rllab.mdp.mujoco_1_22.mujoco_mdp import MujocoMDP
-            from rllab.mdp.mujoco_1_22.gather.gather_mdp import GatherMDP
-            from rllab.mdp.mujoco_1_22.maze_mdp import MazeMDP
-            if isinstance(mdp, (MujocoMDP, GatherMDP, MazeMDP)):
-                from rllab.mjcapi.rocky_mjc_1_22 import glfw
+            from rllab.env.mujoco.mujoco_env import MujocoEnv
+            # from rllab.mdp.mujoco_1_22.gather.gather_mdp import GatherMDP
+            # from rllab.mdp.mujoco_1_22.maze_mdp import MazeMDP
+            if isinstance(mdp, (MujocoEnv)):#, GatherMDP, MazeMDP)):
+                # from rllab.mjcapi.rocky_mjc_1_22 import glfw
+                from rllab.mujoco_py import glfw
 
                 def cb(window, key, scancode, action, mods):
                     actions[0] = mdp.action_from_key(key)
@@ -96,10 +98,11 @@ def visualize_mdp(mdp, mode, max_steps=sys.maxint, speedup=1):
                         actions[0] = np.zeros(2)
                         glfw.poll_events()
                         # if np.linalg.norm(actions[0]) > 0:
-                        ob, r, done = mdp.step(actions[0])
+                        ob, r, done, info = mdp.step(actions[0])
                         trs[0] += r
-                        mdp.plot()
-                        time.sleep(mdp.timestep / speedup)
+                        mdp.render()
+                        # time.sleep(mdp.timestep / speedup)
+                        time.sleep(0.01 / speedup)
                         if done:
                             trs[0] = 0.
                             mdp.reset()
@@ -120,6 +123,6 @@ if __name__ == "__main__":
     parser.add_argument('--max_steps', type=int,
                         default=sys.maxint, help='max steps')
     args = parser.parse_args()
-    mdp = load_class(args.mdp, MDP, ["rllab", "mdp"])()
-    visualize_mdp(mdp, mode=args.mode, max_steps=args.max_steps,
+    mdp = load_class(args.mdp, Env, ["rllab", "env"])()
+    visualize_env(mdp, mode=args.mode, max_steps=args.max_steps,
                   speedup=args.speedup)

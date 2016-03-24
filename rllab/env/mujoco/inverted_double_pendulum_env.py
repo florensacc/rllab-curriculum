@@ -1,12 +1,13 @@
 import numpy as np
 
 from rllab.core.serializable import Serializable
-from rllab.env.mujoco import MujocoMDP
+from rllab.env.base import Step
+from rllab.env.mujoco.mujoco_env import MujocoEnv
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 
 
-class InvertedDoublePendulum(MujocoMDP, Serializable):
+class InvertedDoublePendulumEnv(MujocoEnv, Serializable):
 
     FILE = 'inverted_double_pendulum.xml.mako'
 
@@ -18,7 +19,7 @@ class InvertedDoublePendulum(MujocoMDP, Serializable):
             self,
             *args, **kwargs):
         self.random_start = kwargs.get("random_start", True)
-        super(InvertedDoublePendulum, self).__init__(*args, **kwargs)
+        super(InvertedDoublePendulumEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
     @overrides
@@ -32,7 +33,7 @@ class InvertedDoublePendulum(MujocoMDP, Serializable):
         ]).reshape(-1)
 
     @overrides
-    def step(self, state, action):
+    def step(self, action):
         self.forward_dynamics(action)
         next_obs = self.get_current_obs()
         x, _, y = self.model.data.site_xpos[0]
@@ -40,9 +41,9 @@ class InvertedDoublePendulum(MujocoMDP, Serializable):
         v1, v2 = self.model.data.qvel[1:3]
         vel_penalty = 1e-3 * v1**2 + 5e-3 * v2**2
         alive_bonus = 10
-        r = alive_bonus - dist_penalty - vel_penalty
+        r = float(alive_bonus - dist_penalty - vel_penalty)
         done = y <= 1
-        return next_obs, r, done
+        return Step(next_obs, r, done)
 
     @overrides
     def reset_mujoco(self):
@@ -53,3 +54,4 @@ class InvertedDoublePendulum(MujocoMDP, Serializable):
         self.model.data.qvel = self.init_qvel
         self.model.data.qacc = self.init_qacc
         self.model.data.ctrl = self.init_ctrl
+

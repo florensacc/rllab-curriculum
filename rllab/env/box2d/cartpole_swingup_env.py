@@ -1,9 +1,9 @@
 import numpy as np
 import pygame
-from rllab.mdp.box2d.parser import find_body
+from rllab.env.box2d.parser import find_body
 
 from rllab.core.serializable import Serializable
-from rllab.env.box2d.box2d_mdp import Box2DEnv
+from rllab.env.box2d.box2d_env import Box2DEnv
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 
@@ -11,11 +11,11 @@ from rllab.misc.overrides import overrides
 # Tornio, Matti, and Tapani Raiko. "Variational Bayesian approach for
 # nonlinear identification and control." Proc. of the IFAC Workshop on
 # Nonlinear Model Predictive Control for Fast Systems, NMPC FS06. 2006.
-class CartpoleSwingupMDP(Box2DEnv, Serializable):
+class CartpoleSwingupEnv(Box2DEnv, Serializable):
 
     @autoargs.inherit(Box2DEnv.__init__)
     def __init__(self, *args, **kwargs):
-        super(CartpoleSwingupMDP, self).__init__(
+        super(CartpoleSwingupEnv, self).__init__(
             self.model_path("cartpole.xml.mako"),
             *args, **kwargs
         )
@@ -64,3 +64,4 @@ class CartpoleSwingupMDP(Box2DEnv, Serializable):
             return np.asarray([+10])
         else:
             return np.asarray([0])
+
