@@ -3,13 +3,17 @@ import tempfile
 import xml.etree.ElementTree as ET
 
 import numpy as np
-from rllab.env.proxy_mdp import ProxyMDP
+
+from rllab import spaces
+from rllab.env.base import Step
+from rllab.env.proxy_env import ProxyEnv
 
 from rllab.core.serializable import Serializable
-from rllab.env.mujoco import MODEL_DIR
+from rllab.env.mujoco.mujoco_env import MODEL_DIR, BIG
+from rllab.misc.overrides import overrides
 
 
-class MazeMDP(ProxyMDP, Serializable):
+class MazeEnv(ProxyEnv, Serializable):
 
     MODEL_CLASS = None
     ORI_IND = None
@@ -87,40 +91,47 @@ class MazeMDP(ProxyMDP, Serializable):
         self._goal_range = self._find_goal_range()
 
         inner_mdp = model_cls(*args, file_path=file_path, **kwargs)
-        ProxyMDP.__init__(self, inner_mdp)
+        ProxyEnv.__init__(self, inner_mdp)
         Serializable.quick_init(self, locals())
 
     def get_current_obs(self):
-        robot_x, robot_y = self._mdp.get_body_com("torso")[:2]
-        ori = self._mdp.model.data.qpos[self.__class__.ORI_IND]
-        
-        structure = self.__class__.MAZE_STRUCTURE
-        size_scaling = self.__class__.MAZE_SIZE_SCALING
+        # robot_x, robot_y = self._wrapped_env.get_body_com("torso")[:2]
+        # ori = self._wrapped_env.model.data.qpos[self.__class__.ORI_IND]
+        #
+        # structure = self.__class__.MAZE_STRUCTURE
+        # size_scaling = self.__class__.MAZE_SIZE_SCALING
 
-        for i in range(len(structure)):
-            for j in range(len(structure[0])):
-                cx = j * size_scaling
-                cy = i * size_scaling
-                x1 = cx - 0.5 * size_scaling
-                x2 = cx + 0.5 * size_scaling
-                y1 = cy - 0.5 * size_scaling
-                y2 = cy + 0.5 * size_scaling
-                thetas = [
-                    np.atan2(y1 - robot_y, x1 - robot_x),
-                    np.atan2(y2 - robot_y, x1 - robot_x),
-                    np.atan2(y1 - robot_y, x2 - robot_x),
-                    np.atan2(y2 - robot_y, x2 - robot_x),
-                ]
-                
-
-                pass
+        # for i in range(len(structure)):
+        #     for j in range(len(structure[0])):
+        #         cx = j * size_scaling
+        #         cy = i * size_scaling
+        #         x1 = cx - 0.5 * size_scaling
+        #         x2 = cx + 0.5 * size_scaling
+        #         y1 = cy - 0.5 * size_scaling
+        #         y2 = cy + 0.5 * size_scaling
+        #         thetas = [
+        #             np.atan2(y1 - robot_y, x1 - robot_x),
+        #             np.atan2(y2 - robot_y, x1 - robot_x),
+        #             np.atan2(y1 - robot_y, x2 - robot_x),
+        #             np.atan2(y2 - robot_y, x2 - robot_x),
+        #         ]
+        #
+        #
+        #         pass
 
 
         return np.concatenate([
-            self._mdp.model.data.qpos.flat,
-            self._mdp.model.data.qvel.flat,
-            self._mdp.get_body_com("torso").flat,
+            self._wrapped_env.model.data.qpos.flat,
+            self._wrapped_env.model.data.qvel.flat,
+            self._wrapped_env.get_body_com("torso").flat,
         ])
+
+    @property
+    @overrides
+    def observation_space(self):
+        shp = self.get_current_obs().shape
+        ub = BIG * np.ones(shp)
+        return spaces.Box(ub*-1, ub)
 
     def _find_robot(self):
         structure = self.__class__.MAZE_STRUCTURE
@@ -142,13 +153,14 @@ class MazeMDP(ProxyMDP, Serializable):
                     maxy = i*size_scaling+size_scaling*0.5
                     return minx, maxx, miny, maxy
 
-    def step(self, state, action):
-        next_state, _, _, done = self._mdp.step(state, action)
+    def step(self, action):
+        _, _, done, info = self._wrapped_env.step(action)
         next_obs = self.get_current_obs()
-        x, y = self._mdp.get_body_com("torso")[:2]
+        x, y = self._wrapped_env.get_body_com("torso")[:2]
         reward = 0
         minx, maxx, miny, maxy = self._goal_range
         if minx <= x and x <= maxx and miny <= y and y <= maxy:
             done = True
             reward = 1
-        return next_state, next_obs, reward, done
+        return Step(next_obs, reward, done, **info)
+

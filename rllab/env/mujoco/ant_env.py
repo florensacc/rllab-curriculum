@@ -1,6 +1,8 @@
 from mujoco_env import MujocoEnv
 from rllab.core.serializable import Serializable
 import numpy as np
+
+from rllab.env.base import Step
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 
@@ -38,10 +40,10 @@ class AntEnv(MujocoEnv, Serializable):
             and state[2] >= 0.2 and state[2] <= 1.0
         done = not notdone
         ob = self.get_current_obs()
-        return ob, reward, done
+        return Step(ob, float(reward), done)
 
     @overrides
-    def log_extra(self, paths):
+    def log_diagnostics(self, paths):
         progs = [
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths
@@ -50,3 +52,4 @@ class AntEnv(MujocoEnv, Serializable):
         logger.record_tabular('MaxForwardProgress', np.max(progs))
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
+
