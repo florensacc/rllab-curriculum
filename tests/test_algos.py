@@ -1,5 +1,9 @@
 import os
 
+from rllab.algos.cem import CEM
+from rllab.algos.cma_es import CMAES
+from rllab.algos.erwr import ERWR
+
 os.environ['THEANO_FLAGS'] = 'device=cpu,mode=FAST_COMPILE,optimizer=None'
 
 from rllab.algos.vpg import VPG
@@ -48,7 +52,7 @@ algo_args = {
 }
 
 cases = []
-for algo in [REPS]:#VPG, TNPG, PPO, TRPO, REPS]:
+for algo in [VPG, TNPG, PPO, TRPO, CEM, CMAES, ERWR, REPS]:
     cases.extend([
         (algo, GridWorldEnv, CategoricalMLPPolicy),
         (algo, CartpoleEnv, GaussianMLPPolicy),
@@ -65,3 +69,4 @@ def test_algo(algo_cls, env_cls, policy_cls):
     policy = policy_cls(env_spec=env.spec, hidden_sizes=(6,))
     baseline = ZeroBaseline(env_spec=env.spec)
     algo.train(env=env, policy=policy, baseline=baseline)
+

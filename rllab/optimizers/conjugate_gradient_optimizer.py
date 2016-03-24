@@ -165,3 +165,4 @@ class ConjugateGradientOptimizer(Serializable):
                 break
         logger.log("computing loss after")
         logger.log("optimization finished")
+

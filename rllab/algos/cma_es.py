@@ -32,22 +32,6 @@ def sample_return(mdp, policy, params, max_path_length, discount):
 
 class CMAES(RLAlgorithm):
 
-    @autoargs.arg("n_itr", type=int,
-                  help="Number of iterations.")
-    @autoargs.arg("max_path_length", type=int,
-                  help="Maximum length of a single rollout.")
-    @autoargs.arg("discount", type=float,
-                  help="Discount.")
-    @autoargs.arg("whole_paths", type=bool,
-                  help="Make sure that the samples contain whole "
-                       "trajectories, even if the actual batch size is "
-                       "slightly larger than the specified batch_size.")
-    @autoargs.arg("batch_size", type=int,
-                  help="# of samples from trajs from param distribution.")
-    @autoargs.arg("sigma0", type=float,
-                  help="Initial std for param distribution.")
-    @autoargs.arg("plot", type=bool,
-                  help="Plot evaluation run after each iteration")
     def __init__(
             self,
             n_itr=500,
@@ -56,11 +40,21 @@ class CMAES(RLAlgorithm):
             whole_paths=True,
             sigma0=1.,
             batch_size=None,
-            extra_std=1.,
-            extra_decay_time=100,
             plot=False,
             **kwargs
     ):
+        """
+        :param n_itr: Number of iterations.
+        :param max_path_length: Maximum length of a single rollout.
+        :param batch_size: # of samples from trajs from param distribution, when this
+        is set, n_samples is ignored
+        :param discount: Discount.
+        :param whole_paths: Make sure that the samples contain whole trajectories, even if the actual batch size is
+        slightly larger than the specified batch_size.
+        :param plot: Plot evaluation run after each iteration.
+        :param sigma0: Initial std for param dist
+        :return:
+        """
         super(CMAES, self).__init__(**kwargs)
         self.plot = plot
         self.sigma0 = sigma0
@@ -70,16 +64,16 @@ class CMAES(RLAlgorithm):
         self.n_itr = n_itr
         self.batch_size = batch_size
 
-    def train(self, mdp, policy, **kwargs):
+    def train(self, env, policy, **kwargs):
 
         cur_std = self.sigma0
         cur_mean = policy.get_param_values()
         es = cma_es_lib.CMAEvolutionStrategy(
             cur_mean, cur_std)
 
-        parallel_sampler.populate_task(mdp, policy)
+        parallel_sampler.populate_task(env, policy)
         if self.plot:
-            plotter.init_plot(mdp, policy)
+            plotter.init_plot(env, policy)
 
         cur_std = self.sigma0
         cur_mean = policy.get_param_values()
@@ -147,7 +141,7 @@ class CMAES(RLAlgorithm):
             logger.save_itr_params(itr, dict(
                 itr=itr,
                 policy=policy,
-                mdp=mdp,
+                env=env,
             ))
             logger.dump_tabular(with_prefix=False)
             if self.plot:

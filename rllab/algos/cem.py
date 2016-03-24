@@ -29,31 +29,6 @@ def sample_return(mdp, policy, params, max_path_length, discount):
 
 
 class CEM(RLAlgorithm):
-    @autoargs.arg("n_itr", type=int,
-                  help="Number of iterations.")
-    @autoargs.arg("max_path_length", type=int,
-                  help="Maximum length of a single rollout.")
-    @autoargs.arg("discount", type=float,
-                  help="Discount.")
-    @autoargs.arg("whole_paths", type=bool,
-                  help="Make sure that the samples contain whole "
-                       "trajectories, even if the actual batch size is "
-                       "slightly larger than the specified batch_size.")
-    @autoargs.arg("init_std", type=float,
-                  help="Initial std for param distribution")
-    @autoargs.arg("extra_std", type=float,
-                  help="Decaying std added to param distribution at each iteration")
-    @autoargs.arg("extra_decay_time", type=int,
-                  help="Iterations that it takes to decay extra std")
-    @autoargs.arg("n_samples", type=int,
-                  help="# of samples from param distribution")
-    @autoargs.arg("batch_size", type=int,
-                  help="# of samples from trajs from param distribution, when"
-                       "this is set, n_samples is ignored")
-    @autoargs.arg("best_frac", type=float,
-                  help="Best fraction of the sampled params")
-    @autoargs.arg("plot", type=bool,
-                  help="Plot evaluation run after each iteration")
     def __init__(
             self,
             n_itr=500,
@@ -69,6 +44,22 @@ class CEM(RLAlgorithm):
             plot=False,
             **kwargs
     ):
+        """
+        :param n_itr: Number of iterations.
+        :param max_path_length: Maximum length of a single rollout.
+        :param batch_size: # of samples from trajs from param distribution, when this
+        is set, n_samples is ignored
+        :param discount: Discount.
+        :param whole_paths: Make sure that the samples contain whole trajectories, even if the actual batch size is
+        slightly larger than the specified batch_size.
+        :param plot: Plot evaluation run after each iteration.
+        :param init_std: Initial std for param distribution
+        :param extra_std: Decaying std added to param distribution at each iteration
+        :param extra_decay_time: Iterations that it takes to decay extra std
+        :param n_samples: #of samples from param distribution
+        :param best_frac: Best fraction of the sampled params
+        :return:
+        """
         super(CEM, self).__init__(**kwargs)
         self.batch_size = batch_size
         self.plot = plot
@@ -83,10 +74,10 @@ class CEM(RLAlgorithm):
         self.max_path_length = max_path_length
         self.n_itr = n_itr
 
-    def train(self, mdp, policy, **kwargs):
-        parallel_sampler.populate_task(mdp, policy)
+    def train(self, env, policy, **kwargs):
+        parallel_sampler.populate_task(env, policy)
         if self.plot:
-            plotter.init_plot(mdp, policy)
+            plotter.init_plot(env, policy)
 
         cur_std = self.init_std
         cur_mean = policy.get_param_values()
@@ -148,10 +139,11 @@ class CEM(RLAlgorithm):
             logger.save_itr_params(itr, dict(
                 itr=itr,
                 policy=policy,
-                mdp=mdp,
+                env=env,
                 cur_mean=cur_mean,
                 cur_std=cur_std,
             ))
             logger.dump_tabular(with_prefix=False)
             if self.plot:
                 plotter.update_plot(policy, self.max_path_length)
+
