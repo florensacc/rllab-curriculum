@@ -1,4 +1,5 @@
-from .mujoco_mdp import MujocoMDP
+from rllab.env.base import Step
+from .mujoco_env import MujocoEnv
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 import numpy as np
@@ -6,7 +7,7 @@ import math
 from rllab.mujoco_py import glfw
 
 
-class PointMDP(MujocoMDP, Serializable):
+class PointEnv(MujocoEnv, Serializable):
 
     """
     Use Left, Right, Up, Down, A (steer left), D (steer right)
@@ -15,7 +16,7 @@ class PointMDP(MujocoMDP, Serializable):
     FILE = 'point.xml'
 
     def __init__(self, *args, **kwargs):
-        super(PointMDP, self).__init__(*args, **kwargs)
+        super(PointEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
     def step(self, action):
@@ -31,7 +32,7 @@ class PointMDP(MujocoMDP, Serializable):
         self.model.data.qpos = qpos
         self.model.forward()
         next_obs = self.get_current_obs()
-        return next_obs, 0, False
+        return Step(next_obs, 0, False)
 
     @overrides
     def action_from_key(self, key):
@@ -46,3 +47,4 @@ class PointMDP(MujocoMDP, Serializable):
             return np.array([lb[1], 0])
         else:
             return np.array([0, 0])
+

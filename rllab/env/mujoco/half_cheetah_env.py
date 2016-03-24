@@ -1,7 +1,8 @@
 import numpy as np
 
 from rllab.core.serializable import Serializable
-from rllab.env.mujoco import MujocoMDP
+from rllab.env.base import Step
+from rllab.env.mujoco.mujoco_env import MujocoEnv
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
 
@@ -10,12 +11,12 @@ def smooth_abs(x, param):
     return np.sqrt(np.square(x) + np.square(param)) - param
 
 
-class HalfCheetahMDP(MujocoMDP, Serializable):
+class HalfCheetahEnv(MujocoEnv, Serializable):
 
     FILE = 'half_cheetah.xml'
 
     def __init__(self, *args, **kwargs):
-        super(HalfCheetahMDP, self).__init__(*args, **kwargs)
+        super(HalfCheetahEnv, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)
 
     def get_current_obs(self):
@@ -42,10 +43,10 @@ class HalfCheetahMDP(MujocoMDP, Serializable):
         cost = ctrl_cost + run_cost
         reward = -cost
         done = False
-        return next_obs, reward, done
+        return Step(next_obs, reward, done)
 
     @overrides
-    def log_extra(self, paths):
+    def log_diagnostics(self, paths):
         progs = [
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths

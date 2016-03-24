@@ -1,4 +1,5 @@
-from .mujoco_mdp import MujocoMDP
+from rllab.env.base import Step
+from .mujoco_env import MujocoEnv
 import numpy as np
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
@@ -6,7 +7,7 @@ from rllab.misc import logger
 from rllab.misc import autoargs
 
 
-class SimpleHumanoidMDP(MujocoMDP, Serializable):
+class SimpleHumanoidEnv(MujocoEnv, Serializable):
 
     FILE = 'simple_humanoid.xml'
 
@@ -29,7 +30,7 @@ class SimpleHumanoidMDP(MujocoMDP, Serializable):
         self.alive_bonus = alive_bonus
         self.ctrl_cost_coeff = ctrl_cost_coeff
         self.impact_cost_coeff = impact_cost_coeff
-        super(SimpleHumanoidMDP, self).__init__(*args, **kwargs)
+        super(SimpleHumanoidEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
     def get_current_obs(self):
@@ -69,10 +70,10 @@ class SimpleHumanoidMDP(MujocoMDP, Serializable):
             impact_cost - vel_deviation_cost
         done = data.qpos[2] < 0.8 or data.qpos[2] > 2.0
 
-        return next_obs, reward, done
+        return Step(next_obs, reward, done)
 
     @overrides
-    def log_extra(self, paths):
+    def log_diagnostics(self, paths):
         progs = [
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths

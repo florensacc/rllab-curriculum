@@ -112,11 +112,6 @@ class Box2DEnv(Env):
         ub = BIG * np.ones(d)
         return spaces.Box(ub*-1, ub)
 
-    # Helpers that derive from Spaces
-    @property
-    def action_dim(self):
-        return self.action_space.flat_dim
-
     @property
     def action_bounds(self):
         return self.action_space.bounds

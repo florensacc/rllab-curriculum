@@ -1,7 +1,8 @@
 import numpy as np
 
 from rllab.core.serializable import Serializable
-from rllab.env.mujoco import MujocoMDP
+from rllab.env.base import Step
+from rllab.env.mujoco.mujoco_env import MujocoEnv
 from rllab.misc import autoargs
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
@@ -15,7 +16,7 @@ from rllab.misc.overrides import overrides
 # 7: xvel (forward = +)
 
 
-class HopperMDP(MujocoMDP, Serializable):
+class HopperEnv(MujocoEnv, Serializable):
 
     FILE = 'hopper.xml'
 
@@ -30,7 +31,7 @@ class HopperMDP(MujocoMDP, Serializable):
             *args, **kwargs):
         self.alive_coeff = alive_coeff
         self.ctrl_cost_coeff = ctrl_cost_coeff
-        super(HopperMDP, self).__init__(*args, **kwargs)
+        super(HopperEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
     @overrides
@@ -57,10 +58,10 @@ class HopperMDP(MujocoMDP, Serializable):
             (np.abs(state[3:]) < 100).all() and (state[0] > .7) and \
             (abs(state[2]) < .2)
         done = not notdone
-        return next_obs, reward, done
+        return Step(next_obs, reward, done)
 
     @overrides
-    def log_extra(self, paths):
+    def log_diagnostics(self, paths):
         progs = [
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths

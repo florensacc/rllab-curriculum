@@ -4,7 +4,7 @@ from rllab.env.mujoco import SwimmerMDP
 from rllab.env.normalized_mdp import NormalizedMDP
 from rllab.env.mujoco import HopperMDP
 from rllab.env.mujoco import Walker2DMDP
-from rllab.env.mujoco.half_cheetah_mdp import HalfCheetahMDP
+from rllab.env.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.env.mujoco import AntMDP
 from rllab.env.mujoco import SimpleHumanoidMDP
 from rllab.env.mujoco.humanoid_mdp import HumanoidMDP
@@ -19,7 +19,7 @@ mdp_classes = [
     SwimmerMDP,
     HopperMDP,
     Walker2DMDP,
-    HalfCheetahMDP,
+    HalfCheetahEnv,
     AntMDP,
     SimpleHumanoidMDP,
     HumanoidMDP,
