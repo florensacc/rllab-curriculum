@@ -13,10 +13,10 @@ class NoisyObservationEnv(ProxyEnv, Serializable):
                   help='Noise added to the observations (note: this makes the '
                        'problem non-Markovian!)')
     def __init__(self,
-                 mdp,
+                 env,
                  obs_noise=1e-1,
                  ):
-        super(NoisyObservationEnv, self).__init__(mdp)
+        super(NoisyObservationEnv, self).__init__(env)
         Serializable.quick_init(self, locals())
         self.obs_noise = obs_noise
 
@@ -52,11 +52,11 @@ class DelayedActionEnv(ProxyEnv, Serializable):
     @autoargs.arg('action_delay', type=int,
                   help='Time steps before action is realized')
     def __init__(self,
-                 mdp,
+                 env,
                  action_delay=3,
                  ):
-        assert action_delay > 0, "Should not use this mdp transformer"
-        super(DelayedActionEnv, self).__init__(mdp)
+        assert action_delay > 0, "Should not use this env transformer"
+        super(DelayedActionEnv, self).__init__(env)
         Serializable.quick_init(self, locals())
         self.action_delay = action_delay
         self._queued_actions = None

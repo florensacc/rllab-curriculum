@@ -4,6 +4,7 @@ import subprocess
 import base64
 import os.path as osp
 import cPickle as pickle
+import inspect
 from contextlib import contextmanager
 
 import errno
@@ -11,7 +12,7 @@ import errno
 from rllab.core.serializable import Serializable
 from rllab import config
 from rllab.misc.console import mkdir_p
-from rllab.misc.ext import merge_dict
+from rllab.misc import ext
 from StringIO import StringIO
 import datetime
 import dateutil.tz
@@ -37,7 +38,6 @@ class StubAttr(object):
         return StubMethodCall(self.obj, self.attr_name, args, kwargs)
 
     def __getattr__(self, item):
-        print "getting attr for %s" % item
         try:
             return super(StubAttr, self).__getattribute__(item)
         except AttributeError:
@@ -59,7 +59,7 @@ class StubMethodCall(Serializable):
 
     def __str__(self):
         return "StubMethodCall(%s, %s, %s, %s)" % (
-        str(self.obj), str(self.method_name), str(self.args), str(self.kwargs))
+            str(self.obj), str(self.method_name), str(self.args), str(self.kwargs))
 
 
 class StubClass(object):
@@ -69,7 +69,9 @@ class StubClass(object):
     def __call__(self, *args, **kwargs):
         if len(args) > 0:
             # Convert the positional arguments to keyword arguments
-            raise NotImplementedError
+            spec = inspect.getargspec(self.proxy_class.__init__)
+            kwargs = ext.merge_dict(dict(zip(spec.args[1:], args)), kwargs)
+            args = tuple()
         return StubObject(self.proxy_class, *args, **kwargs)
 
     def __getstate__(self):
@@ -90,7 +92,9 @@ class StubClass(object):
 class StubObject(object):
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
-            raise NotImplementedError
+            spec = inspect.getargspec(__proxy_class.__init__)
+            kwargs = ext.merge_dict(dict(zip(spec.args[1:], args)), kwargs)
+            args = tuple()
         self.proxy_class = __proxy_class
         self.args = args
         self.kwargs = kwargs
@@ -139,7 +143,7 @@ timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
 
 def run_experiment_lite(
         stub_method_call,
-        exp_prefix,
+        exp_prefix="experiment",
         script="scripts/run_experiment_lite.py",
         mode="local",
         dry=False,
@@ -325,7 +329,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     docker_log_dir = config.DOCKER_LOG_DIR
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
                                                                     docker_log_dir=docker_log_dir)
-    params = merge_dict(params, dict(log_dir=docker_log_dir))
+    params = ext.merge_dict(params, dict(log_dir=docker_log_dir))
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
     if pre_commands is not None:
@@ -359,7 +363,7 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
 
     if aws_config is None:
         aws_config = dict()
-    aws_config = merge_dict(default_config, aws_config)
+    aws_config = ext.merge_dict(default_config, aws_config)
 
     sio = StringIO()
     sio.write("#!/bin/bash\n")
