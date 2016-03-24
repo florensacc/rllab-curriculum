@@ -23,9 +23,8 @@ BOMB = 1
 
 
 class GatherViewer(MjViewer):
-
-    def __init__(self, mdp):
-        self.mdp = mdp
+    def __init__(self, env):
+        self.env = env
         super(GatherViewer, self).__init__()
         green_ball_model = MjModel(osp.abspath(
             osp.join(
@@ -63,7 +62,7 @@ class GatherViewer(MjViewer):
         super(GatherViewer, self).render()
         tmpobjects = mjcore.MJVOBJECTS()
         mjlib.mjlib.mjv_makeObjects(byref(tmpobjects), 1000)
-        for obj in self.mdp.objects:
+        for obj in self.env.objects:
             x, y, typ = obj
             # print x, y
             qpos = np.zeros_like(self.green_ball_model.data.qpos)
@@ -122,7 +121,7 @@ class GatherViewer(MjViewer):
         GL.glColor4f(0.0, 0.0, 0.0, 0.8)
         draw_rect(10, 10, 300, 100)
 
-        apple_readings, bomb_readings = self.mdp.get_readings()
+        apple_readings, bomb_readings = self.env.get_readings()
         for idx, reading in enumerate(apple_readings):
             if reading > 0:
                 GL.glColor4f(0.0, 1.0, 0.0, reading)
@@ -134,7 +133,6 @@ class GatherViewer(MjViewer):
 
 
 class GatherEnv(Env, Serializable):
-
     MODEL_CLASS = None
     ORI_IND = None
 
@@ -215,9 +213,9 @@ class GatherEnv(Env, Serializable):
         _, file_path = tempfile.mkstemp(text=True)
         tree.write(file_path)
         # pylint: disable=not-callable
-        inner_mdp = model_cls(*args, file_path=file_path, **kwargs)
+        inner_env = model_cls(*args, file_path=file_path, **kwargs)
         # pylint: enable=not-callable
-        self.inner_mdp = inner_mdp
+        self.inner_env = inner_env
         Serializable.quick_init(self, locals())
 
     def reset(self):
@@ -230,7 +228,7 @@ class GatherEnv(Env, Serializable):
             y = np.random.randint(-self.activity_range / 2,
                                   self.activity_range / 2) * 2
             # regenerate, since it is too close to the robot's initial position
-            if x**2 + y**2 < self.robot_object_spacing**2:
+            if x ** 2 + y ** 2 < self.robot_object_spacing ** 2:
                 continue
             if (x, y) in existing:
                 continue
@@ -243,7 +241,7 @@ class GatherEnv(Env, Serializable):
             y = np.random.randint(-self.activity_range / 2,
                                   self.activity_range / 2) * 2
             # regenerate, since it is too close to the robot's initial position
-            if x**2 + y**2 < self.robot_object_spacing**2:
+            if x ** 2 + y ** 2 < self.robot_object_spacing ** 2:
                 continue
             if (x, y) in existing:
                 continue
@@ -251,21 +249,21 @@ class GatherEnv(Env, Serializable):
             self.objects.append((x, y, typ))
             existing.add((x, y))
 
-        self.inner_mdp.reset()
+        self.inner_env.reset()
         return self.get_current_obs()
 
     def step(self, action):
-        _, _, done, info = self.inner_mdp.step(action)
+        _, _, done, info = self.inner_env.step(action)
         if done:
             return self.get_current_obs(), -10, done
-        com = self.inner_mdp.get_body_com("torso")
+        com = self.inner_env.get_body_com("torso")
         x, y = com[:2]
         reward = 0
         new_objs = []
         for obj in self.objects:
             ox, oy, typ = obj
             # object within zone!
-            if (ox - x)**2 + (oy - y)**2 < self.catch_range**2:
+            if (ox - x) ** 2 + (oy - y) ** 2 < self.catch_range ** 2:
                 if typ == APPLE:
                     reward = reward + 1
                 else:
@@ -281,18 +279,18 @@ class GatherEnv(Env, Serializable):
         # first, obtain current orientation
         apple_readings = np.zeros(self.n_bins)
         bomb_readings = np.zeros(self.n_bins)
-        robot_x, robot_y = self.inner_mdp.get_body_com("torso")[:2]
+        robot_x, robot_y = self.inner_env.get_body_com("torso")[:2]
         # sort objects by distance to the robot, so that farther objects'
         # signals will be occluded by the closer ones'
         sorted_objects = sorted(
             self.objects, key=lambda o:
-            (o[0] - robot_x)**2 + (o[1] - robot_y)**2)[::-1]
+            (o[0] - robot_x) ** 2 + (o[1] - robot_y) ** 2)[::-1]
         # fill the readings
         bin_res = self.sensor_span / self.n_bins
-        ori = self.inner_mdp.model.data.qpos[self.__class__.ORI_IND]
+        ori = self.inner_env.model.data.qpos[self.__class__.ORI_IND]
         for ox, oy, typ in sorted_objects:
             # compute distance between object and robot
-            dist = ((oy - robot_y)**2 + (ox - robot_x)**2) ** 0.5
+            dist = ((oy - robot_y) ** 2 + (ox - robot_x) ** 2) ** 0.5
             # only include readings for objects within range
             if dist > self.sensor_range:
                 continue
@@ -321,42 +319,41 @@ class GatherEnv(Env, Serializable):
 
     def get_current_obs(self):
         # return sensor data along with data about itself
-        self_obs = self.inner_mdp.get_current_obs()
+        self_obs = self.inner_env.get_current_obs()
         apple_readings, bomb_readings = self.get_readings()
         return np.concatenate([self_obs, apple_readings, bomb_readings])
 
     def get_viewer(self):
-        if self.inner_mdp.viewer is None:
-            self.inner_mdp.viewer = GatherViewer(self)
-            self.inner_mdp.viewer.start()
-            self.inner_mdp.viewer.set_model(self.inner_mdp.model)
-        return self.inner_mdp.viewer
+        if self.inner_env.viewer is None:
+            self.inner_env.viewer = GatherViewer(self)
+            self.inner_env.viewer.start()
+            self.inner_env.viewer.set_model(self.inner_env.model)
+        return self.inner_env.viewer
 
     @property
     @overrides
     def action_space(self):
-        return self.inner_mdp.action_space
+        return self.inner_env.action_space
 
     @property
     def action_bounds(self):
-        return self.inner_mdp.action_bounds
+        return self.inner_env.action_bounds
 
     @property
     def viewer(self):
-        return self.inner_mdp.viewer
+        return self.inner_env.viewer
 
     @property
     @overrides
     def observation_space(self):
-        dim = self.inner_mdp.observation_space.flat_dim
+        dim = self.inner_env.observation_space.flat_dim
         newdim = dim + self.n_bins * 2
         ub = BIG * np.ones(newdim)
-        return spaces.Box(ub*-1, ub)
+        return spaces.Box(ub * -1, ub)
 
     def action_from_key(self, key):
-        return self.inner_mdp.action_from_key(key)
+        return self.inner_env.action_from_key(key)
 
     def render(self):
         self.get_viewer()
-        self.inner_mdp.render()
-
+        self.inner_env.render()

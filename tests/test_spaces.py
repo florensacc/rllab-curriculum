@@ -1,5 +1,5 @@
 from __future__ import print_function
-from nose.tools import assert_true, assert_equal
+from nose2.tools import assert_true, assert_equal
 import numpy as np
 
 
