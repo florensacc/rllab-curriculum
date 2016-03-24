@@ -2,6 +2,7 @@ import os
 
 from rllab.algos.cem import CEM
 from rllab.algos.cma_es import CMAES
+from rllab.algos.erwr import ERWR
 
 os.environ['THEANO_FLAGS'] = 'device=cpu,mode=FAST_COMPILE,optimizer=None'
 
@@ -47,7 +48,7 @@ algo_args = {
 }
 
 cases = []
-for algo in [CMAES]: #[VPG, TNPG, PPO, TRPO, CEM, CMAES]:
+for algo in [ERWR, VPG, TNPG, PPO, TRPO, CEM, CMAES]:
     cases.extend([
         (algo, GridWorldEnv, CategoricalMLPPolicy),
         (algo, CartpoleEnv, GaussianMLPPolicy),

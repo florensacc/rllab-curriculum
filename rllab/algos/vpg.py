@@ -54,7 +54,7 @@ class VPG(BatchPolopt):
                 ndim=2 + is_recurrent,
                 dtype=theano.config.floatX
             ) for k in dist.dist_info_keys
-            }
+        }
         old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
 
         if is_recurrent:

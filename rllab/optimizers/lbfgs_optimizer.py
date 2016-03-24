@@ -47,7 +47,7 @@ class LbfgsOptimizer(Serializable):
     def loss(self, inputs, extra_inputs=None):
         if extra_inputs is None:
             extra_inputs = list()
-        return self._opt_fun["f_loss"](*(inputs + extra_inputs))
+        return self._opt_fun["f_loss"](*(list(inputs) + list(extra_inputs)))
 
     def optimize(self, inputs, extra_inputs=None):
         f_opt = self._opt_fun["f_opt"]
