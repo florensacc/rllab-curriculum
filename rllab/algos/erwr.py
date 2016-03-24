@@ -1,16 +1,4 @@
 from rllab.algos.vpg import VPG
-from rllab.misc.tensor_utils import flatten_tensors
-from rllab.misc.ext import merge_dict, compile_function, extract, new_tensor, \
-    flatten_tensor_variables, unflatten_tensor_variables
-from rllab.misc import autoargs, ext
-from rllab.misc.overrides import overrides
-from rllab.algos.batch_polopt import BatchPolopt
-import rllab.misc.logger as logger
-import theano
-import theano.tensor as TT
-from pydoc import locate
-import numpy as np
-
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 
 
