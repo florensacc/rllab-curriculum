@@ -126,6 +126,10 @@ class MazeEnv(ProxyEnv, Serializable):
             self._wrapped_env.get_body_com("torso").flat,
         ])
 
+    def reset(self):
+        ret = self.wrapped_env.reset()
+        return self.get_current_obs()
+
     @property
     @overrides
     def observation_space(self):
