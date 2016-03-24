@@ -7,7 +7,7 @@ from rllab.env.mujoco import Walker2DMDP
 from rllab.env.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.env.mujoco import AntMDP
 from rllab.env.mujoco import SimpleHumanoidMDP
-from rllab.env.mujoco.humanoid_mdp import HumanoidMDP
+from rllab.env.mujoco.humanoid_env import HumanoidEnv
 from rllab.policy.mean_std_nn_policy import MeanStdNNPolicy
 from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
 from rllab.algo.trpo import TRPO
@@ -22,7 +22,7 @@ mdp_classes = [
     HalfCheetahEnv,
     AntMDP,
     SimpleHumanoidMDP,
-    HumanoidMDP,
+    HumanoidEnv,
 ]
 
 for mdp_class in mdp_classes:
