@@ -3,7 +3,7 @@ import numpy as np
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
-from rllab.envs.subgoal_env import SubgoalEnvSpec
+from rllab.policies.subgoal_policy import SubgoalPolicy
 from rllab.misc.special import to_onehot
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from rllab.spaces.discrete import Discrete
@@ -22,14 +22,13 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
     def __init__(
             self,
             env_spec,
-            high_policy_distribution,
-            low_policy_distribution,
+            policy,
             regressor_cls=None,
             regressor_args=None):
-        assert isinstance(env_spec, SubgoalEnvSpec)
-        assert isinstance(env_spec.subgoal_space, Discrete)
-        assert isinstance(high_policy_distribution, Categorical)
-        assert isinstance(low_policy_distribution, Categorical)
+        assert isinstance(policy, SubgoalPolicy)
+        assert isinstance(policy.subgoal_space, Discrete)
+        assert isinstance(policy.high_policy.distribution, Categorical)
+        assert isinstance(policy.low_policy.distribution, Categorical)
 
         Serializable.quick_init(self, locals())
         if regressor_cls is None:
@@ -38,12 +37,12 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
             regressor_args = dict()
 
         self._regressor = regressor_cls(
-            input_shape=(env_spec.observation_space.flat_dim + env_spec.subgoal_space.flat_dim,),
+            input_shape=(env_spec.observation_space.flat_dim + policy.subgoal_space.flat_dim,),
             output_dim=env_spec.observation_space.flat_dim,
             name="(s'|g,s)",
             **regressor_args
         )
-        self._subgoal_space = env_spec.subgoal_space
+        self._subgoal_space = policy.subgoal_space
 
     def _get_relevant_data(self, paths):
         obs = np.concatenate([p["observations"][:-1] for p in paths])
