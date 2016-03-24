@@ -194,8 +194,8 @@ class MazeEnv(ProxyEnv, Serializable):
         self._goal_range = self._find_goal_range()
         self._cached_segments = None
 
-        inner_mdp = model_cls(*args, file_path=file_path, **kwargs)
-        ProxyEnv.__init__(self, inner_mdp)
+        inner_env = model_cls(*args, file_path=file_path, **kwargs)
+        ProxyEnv.__init__(self, inner_env)
         Serializable.quick_init(self, locals())
 
     def get_current_obs(self):

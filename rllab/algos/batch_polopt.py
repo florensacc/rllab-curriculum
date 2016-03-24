@@ -149,6 +149,7 @@ class BatchPolopt(RLAlgorithm):
         if not policy.recurrent:
             observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
             actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
+            rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
             advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
             env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
             agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
@@ -174,6 +175,7 @@ class BatchPolopt(RLAlgorithm):
             samples_data = dict(
                 observations=observations,
                 actions=actions,
+                rewards=rewards,
                 advantages=advantages,
                 env_infos=env_infos,
                 agent_infos=agent_infos,
@@ -198,6 +200,9 @@ class BatchPolopt(RLAlgorithm):
 
             actions = [path["actions"] for path in paths]
             actions = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in actions])
+
+            rewards = [path["rewards"] for path in paths]
+            rewards = np.array([tensor_utils.pad_tensor(r, max_path_length) for r in rewards])
 
             agent_infos = [path["agent_infos"] for path in paths]
             agent_infos = tensor_utils.stack_tensor_dict_list(
@@ -225,12 +230,14 @@ class BatchPolopt(RLAlgorithm):
             )
 
             samples_data = dict(
-                observations=np.asarray(obs),
-                actions=np.asarray(actions),
-                advantages=np.asarray(adv),
-                valids=np.asarray(valids),
+                observations=obs,
+                actions=actions,
+                advantages=adv,
+                rewards=rewards,
+                valids=valids,
                 agent_infos=agent_infos,
-                env_infos=env_infos
+                env_infos=env_infos,
+                paths=paths,
             )
 
         logger.log("fitting baseline...")
@@ -250,69 +257,3 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
 
         return samples_data
-
-
-        # samples_data["observations"] = np.asarray(obs)
-        # samples_data["pdists"] = np.asarray(pdists)
-
-        # env.log_diagnostics(env_infos)
-        # policy.log_diagnostics(agent_infos)
-
-        # env.log_extra(paths)
-        # policy.log_extra(paths)
-        # baseline.log_extra(paths)
-
-        # numerical check
-        # check_param = policy.get_param_values()
-        # if np.any(np.isnan(check_param)):
-        #     raise ArithmeticError("NaN in params")
-        # elif np.any(np.isinf(check_param)):
-        #     raise ArithmeticError("InF in params")
-
-        # samples_data = dict(
-        #     observations=observations,
-        #     actions=actions,
-        #     advantages=advantages,
-        #     env_infos=env_infos,
-        #     agent_infos=agent_infos,
-        #     paths=paths,
-        # )
-        #
-        # if policy.recurrent:
-        #     return self.recurrent_postprocess_samples(samples_data)
-        # else:
-        #     return samples_data
-
-        # def recurrent_postprocess_samples(self, samples_data):
-        #     paths = samples_data["paths"]
-        #
-        #     max_path_length = max([len(path["advantages"]) for path in paths])
-        #
-        #     # make all paths the same length (pad extra advantages with 0)
-        #     obs = [path["observations"] for path in paths]
-        #     obs = [tensor_utils.pad_tensor(ob, max_path_length, ob[0]) for ob in obs]
-        #
-        #     if self._center_adv:
-        #         raw_adv = np.concatenate([path["advantages"] for path in paths])
-        #         adv_mean = np.mean(raw_adv)
-        #         adv_std = np.std(raw_adv) + 1e-8
-        #         adv = [(path["advantages"] - adv_mean) / adv_std for path in paths]
-        #     else:
-        #         adv = [path["advantages"] for path in paths]
-        #     adv = [tensor_utils.pad_tensor(a, max_path_length, 0) for a in adv]
-        #
-        #     actions = [path["actions"] for path in paths]
-        #     actions = [tensor_utils.pad_tensor(a, max_path_length, a[0]) for a in actions]
-        #     pdists = [path["pdists"] for path in paths]
-        #     pdists = [tensor_utils.pad_tensor(p, max_path_length, p[0]) for p in pdists]
-        #
-        #     valids = [np.ones_like(path["returns"]) for path in paths]
-        #     valids = [tensor_utils.pad_tensor(v, max_path_length, 0) for v in valids]
-        #
-        #     samples_data["observations"] = np.asarray(obs)
-        #     samples_data["advantages"] = np.asarray(adv)
-        #     samples_data["actions"] = np.asarray(actions)
-        #     samples_data["valids"] = np.asarray(valids)
-        #     samples_data["pdists"] = np.asarray(pdists)
-        #
-        #     return samples_data

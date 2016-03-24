@@ -8,8 +8,8 @@ from rllab.misc.overrides import overrides
 
 class NormalizedEnv(ProxyEnv, Serializable):
 
-    def __init__(self, mdp):
-        super(NormalizedEnv, self).__init__(mdp)
+    def __init__(self, env):
+        super(NormalizedEnv, self).__init__(env)
         Serializable.quick_init(self, locals())
 
     @property

@@ -10,6 +10,7 @@ from rllab.algos.vpg import VPG
 from rllab.algos.tnpg import TNPG
 from rllab.algos.ppo import PPO
 from rllab.algos.trpo import TRPO
+from rllab.algos.reps import REPS
 from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
@@ -45,10 +46,13 @@ algo_args = {
             max_opt_itr=1
         ),
     ),
+    REPS: dict(
+        max_opt_itr=1,
+    )
 }
 
 cases = []
-for algo in [ERWR, VPG, TNPG, PPO, TRPO, CEM, CMAES]:
+for algo in [VPG, TNPG, PPO, TRPO, CEM, CMAES, ERWR, REPS]:
     cases.extend([
         (algo, GridWorldEnv, CategoricalMLPPolicy),
         (algo, CartpoleEnv, GaussianMLPPolicy),
