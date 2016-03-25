@@ -26,7 +26,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             input_shape,
             output_dim,
             hidden_sizes=(32, 32),
-            nonlinearity=NL.rectify,
+            hidden_nonlinearity=NL.rectify,
             optimizer=None,
             use_trust_region=True,
             step_size=0.01,
@@ -44,7 +44,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         :param input_shape: Shape of the input data.
         :param output_dim: Dimension of output.
         :param hidden_sizes: Number of hidden units of each layer of the mean network.
-        :param nonlinearity: Non-linearity used for each layer of the mean network.
+        :param hidden_nonlinearity: Non-linearity used for each layer of the mean network.
         :param optimizer: Optimizer for minimizing the negative log-likelihood.
         :param use_trust_region: Whether to use trust region constraint.
         :param step_size: KL divergence constraint for each iteration
@@ -71,7 +71,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             input_shape=input_shape,
             output_dim=output_dim,
             hidden_sizes=hidden_sizes,
-            nonlinearity=nonlinearity,
+            hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=None,
         )
 
@@ -83,7 +83,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
                 input_var=mean_network.input_layer.input_var,
                 output_dim=output_dim,
                 hidden_sizes=std_hidden_sizes,
-                nonlinearity=std_nonlinearity,
+                hidden_nonlinearity=std_nonlinearity,
                 output_nonlinearity=None,
             ).output_layer
         else:

@@ -20,11 +20,11 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             env_spec,
             hidden_sizes=(32,),
             state_include_action=True,
-            nonlinearity=NL.rectify):
+            hidden_nonlinearity=NL.rectify):
         """
         :param env_spec: A spec for the env.
         :param hidden_sizes: list of sizes for the fully connected hidden layers
-        :param nonlinearity: nonlinearity used for each hidden layer
+        :param hidden_nonlinearity: nonlinearity used for each hidden layer
         :return:
         """
         assert isinstance(env_spec.action_space, Discrete)
@@ -42,7 +42,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             input_shape=input_shape,
             output_dim=env_spec.action_space.n,
             hidden_dim=hidden_sizes[0],
-            nonlinearity=nonlinearity,
+            hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=NL.softmax,
         )
 

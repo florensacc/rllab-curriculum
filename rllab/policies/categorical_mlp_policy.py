@@ -16,11 +16,11 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             self,
             env_spec,
             hidden_sizes=(32, 32),
-            nonlinearity=NL.rectify):
+            hidden_nonlinearity=NL.rectify):
         """
         :param env_spec: A spec for the mdp.
         :param hidden_sizes: list of sizes for the fully connected hidden layers
-        :param nonlinearity: nonlinearity used for each hidden layer
+        :param hidden_nonlinearity: nonlinearity used for each hidden layer
         :return:
         """
         Serializable.quick_init(self, locals())
@@ -31,7 +31,7 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             input_shape=(env_spec.observation_space.flat_dim,),
             output_dim=env_spec.action_space.n,
             hidden_sizes=hidden_sizes,
-            nonlinearity=nonlinearity,
+            hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=NL.softmax,
         )
 

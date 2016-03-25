@@ -44,8 +44,8 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             adaptive_std=False,
             std_share_network=False,
             std_hidden_sizes=(32, 32),
-            std_nonlinearity=NL.rectify,
-            nonlinearity=NL.rectify,
+            std_hidden_nonlinearity=NL.rectify,
+            hidden_nonlinearity=NL.rectify,
             output_nonlinearity=None,
     ):
         Serializable.quick_init(self, locals())
@@ -59,7 +59,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             input_shape=(obs_dim,),
             output_dim=action_dim,
             hidden_sizes=hidden_sizes,
-            nonlinearity=nonlinearity,
+            hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=output_nonlinearity,
         )
 
@@ -72,7 +72,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 input_var=obs_var,
                 output_dim=action_dim,
                 hidden_sizes=std_hidden_sizes,
-                nonlinearity=std_nonlinearity,
+                hidden_nonlinearity=std_hidden_nonlinearity,
                 output_nonlinearity=None,
             ).output_layer
         else:
