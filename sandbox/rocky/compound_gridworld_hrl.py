@@ -5,7 +5,6 @@ from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.algos.batch_hrl import BatchHRL
 from rllab.spaces import Discrete
-from rllab.envs.subgoal_env import SubgoalEnv
 from rllab.policies.subgoal_policy import SubgoalPolicy
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from rllab.baselines.subgoal_baseline import SubgoalBaseline
@@ -52,11 +51,11 @@ env = CompoundActionSequenceEnv(
     ]
 )
 
-env = SubgoalEnv(
-    wrapped_env=env,
-    subgoal_space=Discrete(n=4),
-    # low_action_history_length=0,
-)
+# env = SubgoalEnv(
+#     wrapped_env=env,
+#     subgoal_space=Discrete(n=4),
+#     # low_action_history_length=0,
+# )
 
 algo = BatchHRL(
     batch_size=10000,
@@ -73,28 +72,23 @@ algo = BatchHRL(
     ),
 )
 
-high_policy = CategoricalMLPPolicy(
-    env_spec=env.spec.high_env_spec,
-)
-
-low_policy = CategoricalMLPPolicy(
-    env_spec=env.spec.low_env_spec,
-)
-
 policy = SubgoalPolicy(
     env_spec=env.spec,
     subgoal_interval=3,
-    high_policy=high_policy,
-    low_policy=low_policy,
+    subgoal_space=Discrete(n=4),
+    high_policy_cls=CategoricalMLPPolicy,
+    high_policy_args=dict(),
+    low_policy_cls=CategoricalMLPPolicy,
+    low_policy_args=dict()
 )
 
 baseline = SubgoalBaseline(
     env_spec=env.spec,
     high_baseline=LinearFeatureBaseline(
-        env_spec=env.spec.high_env_spec,
+        env_spec=policy.high_env_spec,
     ),
     low_baseline=LinearFeatureBaseline(
-        env_spec=env.spec.low_env_spec,
+        env_spec=policy.low_env_spec,
     ),
     # high_baseline=GaussianMLPBaseline(
     #     env_spec=env.spec.high_env_spec,
@@ -114,8 +108,9 @@ baseline = SubgoalBaseline(
 
 evaluator = StateGivenGoalMIEvaluator(
     env_spec=env.spec,
-    high_policy_distribution=high_policy.distribution,
-    low_policy_distribution=low_policy.distribution,
+    policy=policy,
+    # high_policy_distribution=high_policy.distribution,
+    # low_policy_distribution=low_policy.distribution,
     regressor_cls=CategoricalMLPRegressor,
     regressor_args=dict(
         optimizer=ConjugateGradientOptimizer(),

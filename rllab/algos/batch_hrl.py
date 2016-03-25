@@ -36,11 +36,11 @@ class BatchHRL(BatchPolopt, Serializable):
     def init_opt(self, env_spec, policy, baseline, **kwargs):
         with logger.tabular_prefix('Hi_'), logger.prefix('Hi | '):
             high_opt_info = \
-                self.high_algo.init_opt(env_spec=env_spec.high_env_spec, policy=policy.high_policy,
+                self.high_algo.init_opt(env_spec=policy.high_env_spec, policy=policy.high_policy,
                                         baseline=baseline.high_baseline)
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
             low_opt_info = \
-                self.low_algo.init_opt(env_spec=env_spec.low_env_spec, policy=policy.low_policy,
+                self.low_algo.init_opt(env_spec=policy.low_env_spec, policy=policy.low_policy,
                                        baseline=baseline.low_baseline)
         return dict(
             high=high_opt_info,
@@ -161,10 +161,10 @@ class BatchHRL(BatchPolopt, Serializable):
         logger.record_tabular("AverageBonusReturn", np.mean(bonus_returns))
         with logger.tabular_prefix('Hi_'), logger.prefix('Hi | '):
             high_samples_data = self.high_algo.process_samples(
-                itr, high_paths, env_spec.high_env_spec, policy.high_policy, baseline.high_baseline)
+                itr, high_paths, policy.high_env_spec, policy.high_policy, baseline.high_baseline)
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
             low_samples_data = self.low_algo.process_samples(
-                itr, low_paths, env_spec.low_env_spec, policy.low_policy, baseline.low_baseline)
+                itr, low_paths, policy.low_env_spec, policy.low_policy, baseline.low_baseline)
             for path in low_samples_data['paths']:
                 if np.max(abs(baseline.low_baseline.predict(path))) > 1e3:
                     import ipdb; ipdb.set_trace()
@@ -191,12 +191,13 @@ class BatchHRL(BatchPolopt, Serializable):
 
             # Compute the mutual information I(a,g)
             # This is the component I'm still uncertain about how to abstract away yet
-            all_flat_observations = low_samples_data["observations"][:, :env_spec.observation_space.flat_dim]
+            all_flat_observations = low_samples_data["observations"][:, :(env_spec.observation_space.flat_dim +
+                                                                          policy.subgoal_interval)]
             high_observations = high_samples_data["observations"]
             # p(g|s)
             # shape: (N/subgoal_interval) * #subgoal
             chunked_goal_probs = policy.high_policy.dist_info(high_observations, None)["prob"]
-            n_subgoals = env_spec.subgoal_space.n
+            n_subgoals = policy.subgoal_space.n
             goal_probs = np.tile(
                 np.expand_dims(chunked_goal_probs, axis=1),
                 (1, policy.subgoal_interval, 1),
