@@ -3,12 +3,14 @@ import numpy as np
 from rllab import spaces
 from rllab.core.serializable import Serializable
 from rllab.envs.proxy_env import ProxyEnv
+from rllab.spaces import Box
 from rllab.misc.overrides import overrides
 
 
 class NormalizedEnv(ProxyEnv, Serializable):
 
     def __init__(self, env):
+        assert isinstance(env.action_space, Box)
         super(NormalizedEnv, self).__init__(env)
         Serializable.quick_init(self, locals())
 
