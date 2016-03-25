@@ -12,7 +12,9 @@ import numpy as np
 class MLP(object):
 
     def __init__(self, input_shape, output_dim, hidden_sizes, hidden_nonlinearity,
-                 output_nonlinearity, name=None, input_var=None):
+                 output_nonlinearity, hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
+                 output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
+                 name=None, input_var=None):
 
         if name is None:
             prefix = ""
@@ -26,13 +28,17 @@ class MLP(object):
                 l_hid,
                 num_units=hidden_size,
                 nonlinearity=hidden_nonlinearity,
-                name="%shidden_%d" % (prefix, idx)
+                name="%shidden_%d" % (prefix, idx),
+                W=hidden_W_init,
+                b=hidden_b_init,
             )
         l_out = L.DenseLayer(
             l_hid,
             num_units=output_dim,
             nonlinearity=output_nonlinearity,
-            name="%soutput" % (prefix,)
+            name="%soutput" % (prefix,),
+            W=output_W_init,
+            b=output_b_init,
         )
         self._l_in = l_in
         self._l_out = l_out
