@@ -15,6 +15,7 @@ dependencies:
     - flask
     - pybox2d
     - pygame
+    - matplotlib
     - pip:
         - pyprind
         - ipdb
