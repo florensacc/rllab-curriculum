@@ -19,6 +19,7 @@ dependencies:
     - pip:
         - pyprind
         - ipdb
+        - boto3
         - nose2
         - git+https://github.com/Theano/Theano.git@9d0c52b9254c0d30dacbf1e2a231112ee3e3b99a#egg=Theano
         - git+https://github.com/Lasagne/Lasagne.git@19b9d958507e7300e355d7cd1a6bbff2c7726c07#egg=Lasagne

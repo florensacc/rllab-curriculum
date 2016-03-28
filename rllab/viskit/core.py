@@ -89,12 +89,15 @@ def load_exps_data(exp_folder_path):
     exps = os.listdir(exp_folder_path)
     exps_data = []
     for exp in exps:
-        exp_path = os.path.join(exp_folder_path, exp)
-        params_json_path = os.path.join(exp_path, "params.json")
-        progress_csv_path = os.path.join(exp_path, "progress.csv")
-        progress = load_progress(progress_csv_path)
-        params = load_params(params_json_path)
-        exps_data.append(ext.AttrDict(progress=progress, params=params, flat_params=flatten_dict(params)))
+        try:
+            exp_path = os.path.join(exp_folder_path, exp)
+            params_json_path = os.path.join(exp_path, "params.json")
+            progress_csv_path = os.path.join(exp_path, "progress.csv")
+            progress = load_progress(progress_csv_path)
+            params = load_params(params_json_path)
+            exps_data.append(ext.AttrDict(progress=progress, params=params, flat_params=flatten_dict(params)))
+        except IOError as e:
+            print(e)
     return exps_data
 
 

@@ -367,7 +367,7 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
 
     sio = StringIO()
     sio.write("#!/bin/bash\n")
-    sio.write("rm /home/ubuntu/user_data.log")
+    # sio.write("rm /home/ubuntu/user_data.log")
     sio.write("{\n")
     sio.write("""
         die() { status=$1; shift; echo "FATAL: $*"; exit $status; }

@@ -37,6 +37,10 @@ def extract_dict(x, *keys):
     return {k: x[k] for k in keys if k in x}
 
 
+def flatten(xs):
+    return [x for y in xs for x in y]
+
+
 def compact(x):
     """
     For a dictionary this removes all None values, and for a list this removes

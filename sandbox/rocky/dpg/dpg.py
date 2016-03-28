@@ -112,6 +112,7 @@ class DPG(RLAlgorithm):
             normalize_qval=False,
             running_y_alpha=0.1,
             running_q_alpha=0.1,
+            scale_reward=1.0,
             plot=False):
         """
 
@@ -134,6 +135,7 @@ class DPG(RLAlgorithm):
         :param soft_target: Whether to use soft target updates.
         :param soft_target_tau: Interpolation parameter for doing the soft target update.
         :param n_updates_per_sample: Number of Q function and policy updates per new sample obtained
+        :param scale_reward: The scaling factor applied to the rewards when training
         :param plot: Whether to visualize the policy performance after each eval_interval.
         :return:
         """
@@ -175,6 +177,8 @@ class DPG(RLAlgorithm):
         self.paths = []
         self.es_path_returns = []
         self.paths_samples_cnt = 0
+
+        self._scale_reward = scale_reward
 
         self._normalize_yval = normalize_yval
         self._normalize_qval = normalize_qval
@@ -234,11 +238,11 @@ class DPG(RLAlgorithm):
                 if path_length >= self.max_path_length:
                     terminal = True
 
-                pool.add_sample(observation, action, reward, terminal)
+                pool.add_sample(observation, action, reward * self._scale_reward, terminal)
 
                 observation = next_observation
 
-                if pool.size >= self.min_pool_size:# and self._q_stats_computed:
+                if pool.size >= self.min_pool_size:
                     for update_itr in xrange(self.n_updates_per_sample):
                         # Train policy
                         batch = pool.random_batch(self.batch_size)

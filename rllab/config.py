@@ -13,9 +13,9 @@ DOCKER_LOG_DIR = "/tmp/expt"
 
 POD_DIR = PROJECT_PATH + "/.pods"
 
-AWS_S3_PATH = "s3://pchen/experiments"
+AWS_S3_PATH = None
 
-AWS_IMAGE_ID = "ami-bf4849d5"
+AWS_IMAGE_ID = None
 
 AWS_INSTANCE_TYPE = "m4.2xlarge"
 
@@ -34,8 +34,6 @@ AWS_IAM_INSTANCE_PROFILE_NAME = "rllab"
 AWS_SECURITY_GROUPS = ["rllab"]
 
 AWS_REGION_NAME = "us-east-1"
-
-AWS_CODE_SYNC_S3_PATH = "s3://pchen/code"
 
 CODE_SYNC_IGNORES = ["*.git/*", "*data/*"]
 

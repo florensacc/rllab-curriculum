@@ -2,16 +2,9 @@ from rllab.misc.overrides import overrides
 from rllab.misc.ext import AttrDict
 from rllab.core.serializable import Serializable
 from rllab.spaces.box import Box
+from sandbox.rocky.dpg.exploration_strategy import ExplorationStrategy
 import numpy as np
 import numpy.random as nr
-
-
-class ExplorationStrategy(object):
-    def get_action(self, t, observation, **kwargs):
-        raise NotImplementedError
-
-    def reset(self):
-        pass
 
 
 class OUStrategy(ExplorationStrategy, Serializable):
@@ -57,7 +50,7 @@ class OUStrategy(ExplorationStrategy, Serializable):
     def get_action(self, t, observation, policy, **kwargs):
         action, _ = policy.get_action(observation)
         ou_state = self.evolve_state()
-        return np.clip(action + ou_state, self.action_space.low, self.action_space.high)
+        return np.clip(action + np.random.normal(size=len(action)), self.action_space.low, self.action_space.high)
 
 
 if __name__ == "__main__":
