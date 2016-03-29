@@ -5,6 +5,9 @@ import theano
 import cPickle as pickle
 from collections import OrderedDict
 from rllab.misc import logger
+from sandbox.rocky.dpg.continuous_mlp_policy import ContinuousMLPPolicy
+from sandbox.rocky.dpg.continuous_mlp_q_function import ContinuousMLPQFunction
+from sandbox.rocky.dpg.ou_strategy import OUStrategy
 
 
 # from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
@@ -171,31 +174,31 @@ class CartpoleEnv(object):
 class Policy(object):
     def __init__(self, obs_dim, action_dim, h1_size=400, h2_size=300):
         W1 = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(obs_dim, h1_size)) / np.sqrt(obs_dim),
+            np.random.uniform(low=-1, high=1, size=(obs_dim, h1_size)) / np.sqrt(obs_dim),# * np.sqrt(3),
             "W1",
         )
         b1 = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(1, h1_size)) / np.sqrt(obs_dim),
+            np.zeros((1, h1_size)),
             "b1",
             broadcastable=(True, False),
         )
 
         W2 = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(h1_size, h2_size)) / np.sqrt(h1_size),
+            np.random.uniform(low=-1, high=1, size=(h1_size, h2_size)) / np.sqrt(h1_size),# * np.sqrt(3),
             "W2",
         )
         b2 = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(1, h2_size)) / np.sqrt(h1_size),
+            np.zeros((1, h2_size)),
             "b2",
             broadcastable=(True, False),
         )
 
         W3 = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(h2_size, action_dim)) / np.sqrt(h2_size),
+            np.random.uniform(low=-1, high=1, size=(h2_size, action_dim)) * 3e-3,
             "W3",
         )
         b3 = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(1, action_dim)) / np.sqrt(h2_size),
+            np.random.uniform(low=-1, high=1, size=(1, action_dim)) * 3e-3,
             "b3",
             broadcastable=(True, False),
         )
@@ -247,41 +250,41 @@ class Policy(object):
 class QFunction(object):
     def __init__(self, obs_dim, action_dim, h1_size=400, h2_size=300):
         W1 = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(obs_dim, h1_size)) / np.sqrt(obs_dim),
+            np.random.normal(low=-1, high=1, size=(obs_dim, h1_size)) / np.sqrt(obs_dim),# * np.sqrt(3),
             "W1",
         )
         b1 = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(1, h1_size)) / np.sqrt(obs_dim),
+            np.zeros((1, h1_size)),
             "b1",
             broadcastable=(True, False),
         )
 
         W2_obs = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(h1_size, h2_size)) / np.sqrt(h1_size),
+            np.random.uniform(low=-1, high=1, size=(h1_size, h2_size)) / np.sqrt(h1_size) * np.sqrt(3),
             "W2_obs",
         )
         b2_obs = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(1, h2_size)) / np.sqrt(h1_size),
+            np.zeros((1, h2_size)),
             "b2_obs",
             broadcastable=(True, False),
         )
 
         W2_action = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(action_dim, h2_size)) / np.sqrt(action_dim),
+            np.random.uniform(low=-1, high=1, size=(action_dim, h2_size)) / np.sqrt(action_dim),# * np.sqrt(3),
             "W2_action",
         )
         b2_action = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(1, h2_size)) / np.sqrt(action_dim),
+            np.zeros((1, h2_size)),
             "b2_action",
             broadcastable=(True, False),
         )
 
         W3 = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(h2_size, 1)) / np.sqrt(h2_size),
+            np.random.uniform(low=-1, high=1, size=(h2_size, 1)) * 3e-3,
             "W3",
         )
         b3 = theano.shared(
-            np.random.uniform(low=-1, high=1, size=(1, 1)) / np.sqrt(h2_size),
+            np.random.uniform(low=-1, high=1, size=(1, 1)) * 3e-3,
             "b3",
             broadcastable=(True, False),
         )
@@ -362,68 +365,68 @@ class ReplayPool(object):
         return self._size
 
 
-class OUStrategy(object):
-    def __init__(self, action_dim, mu=0, theta=0.15, sigma=0.2, dt=1.):
-        self._action_dim = action_dim
-        self._mu = mu
-        self._theta = theta
-        self._sigma = sigma
-        self._dt = dt
-        self._state = None
-        self.reset()
-
-    def reset(self):
-        self._state = np.zeros(self._action_dim)
-
-    def evolve_state(self):
-        dx = self._theta * (self._mu - self._state) * self._dt + \
-             self._sigma * np.random.normal(size=(self._action_dim,)) * self._dt
-        self._state += dx
-        return self._state
-
-    def get_action(self, observation, policy):
-        # return np.random.uniform(-1, 1, (self._action_dim,))
-        return np.clip(policy.get_action(observation)[0] + self.evolve_state(), -1., 1.), dict()
-
-
-class EpsilonGreedyStrategy(object):
-    def __init__(self, action_dim, epsilon=0.1):
-        self._action_dim = action_dim
-        self._epsilon = epsilon
-
-    def reset(self):
-        pass
-
-    def get_action(self, observation, policy):
-        if np.random.uniform() < self._epsilon:
-            return np.random.uniform(low=-1, high=1, size=self._action_dim), dict()
-        else:
-            return policy.get_action(observation)
-
-
-class GaussianStrategy(object):
-    def __init__(self, action_dim, epsilon=0.1):
-        self._action_dim = action_dim
-        self._epsilon = epsilon
-
-    def reset(self):
-        pass
-
-    def get_action(self, observation, policy):
-        if np.random.uniform() < self._epsilon:
-            return np.random.uniform(low=-1, high=1, size=self._action_dim), dict()
-        else:
-            return policy.get_action(observation)
-
-
-def test_ou_strategy():
-    ou = OUStrategy(action_dim=1, mu=0, theta=0.15, sigma=0.2)
-    states = []
-    for i in range(1000):
-        states.append(ou.evolve_state()[0])
-    import matplotlib.pyplot as plt
-    plt.plot(states)
-    plt.show()
+# class OUStrategy(object):
+#     def __init__(self, action_dim, mu=0, theta=0.15, sigma=0.2, dt=1.):
+#         self._action_dim = action_dim
+#         self._mu = mu
+#         self._theta = theta
+#         self._sigma = sigma
+#         self._dt = dt
+#         self._state = None
+#         self.reset()
+#
+#     def reset(self):
+#         self._state = np.zeros(self._action_dim)
+#
+#     def evolve_state(self):
+#         dx = self._theta * (self._mu - self._state) * self._dt + \
+#              self._sigma * np.random.normal(size=(self._action_dim,)) * self._dt
+#         self._state += dx
+#         return self._state
+#
+#     def get_action(self, observation, policy):
+#         # return np.random.uniform(-1, 1, (self._action_dim,))
+#         return np.clip(policy.get_action(observation)[0] + self.evolve_state(), -1., 1.), dict()
+#
+#
+# class EpsilonGreedyStrategy(object):
+#     def __init__(self, action_dim, epsilon=0.1):
+#         self._action_dim = action_dim
+#         self._epsilon = epsilon
+#
+#     def reset(self):
+#         pass
+#
+#     def get_action(self, observation, policy):
+#         if np.random.uniform() < self._epsilon:
+#             return np.random.uniform(low=-1, high=1, size=self._action_dim), dict()
+#         else:
+#             return policy.get_action(observation)
+#
+#
+# class GaussianStrategy(object):
+#     def __init__(self, action_dim, epsilon=0.1):
+#         self._action_dim = action_dim
+#         self._epsilon = epsilon
+#
+#     def reset(self):
+#         pass
+#
+#     def get_action(self, observation, policy):
+#         if np.random.uniform() < self._epsilon:
+#             return np.random.uniform(low=-1, high=1, size=self._action_dim), dict()
+#         else:
+#             return policy.get_action(observation)
+#
+#
+# def test_ou_strategy():
+#     ou = OUStrategy(action_dim=1, mu=0, theta=0.15, sigma=0.2)
+#     states = []
+#     for i in range(1000):
+#         states.append(ou.evolve_state()[0])
+#     import matplotlib.pyplot as plt
+#     plt.plot(states)
+#     plt.show()
 
 
 class DPGExperiment(object):
@@ -469,6 +472,12 @@ class DPGExperiment(object):
     def run(self, env):
         obs_dim = env.observation_space.flat_dim
         action_dim = env.action_space.flat_dim
+
+        policy = ContinuousMLPPolicy(
+            env_spec=env.spec,
+            hidden_sizes=self.policy_hidden_sizes,
+        )
+
         policy = Policy(
             obs_dim=obs_dim,
             action_dim=action_dim,
@@ -499,7 +508,7 @@ class DPGExperiment(object):
         #     theta=0.15,
         #     sigma=0.3
         # )  # , dt=0.05)
-        es = EpsilonGreedyStrategy(action_dim=action_dim, epsilon=0.1)
+        es = OUStrategy(env_spec=env.spec, theta=0.15, sigma=0.3)
         pool = ReplayPool(
             max_pool_size=self.max_pool_size,
             obs_dim=obs_dim,
@@ -550,19 +559,21 @@ class DPGExperiment(object):
             q_losses = []
             policy_losses = []
             for epoch_itr in xrange(self.n_epoch_itrs):
-                if terminal or t > self.max_path_length:
+                if terminal:# or t > self.max_path_length:
                     es.reset()
                     obs = env.reset()
                     t = 0
 
-                action, _ = es.get_action(obs, policy)
+                action = es.get_action(0, obs, policy)
                 next_obs, reward, terminal, _ = env.step(action)
                 t += 1
 
                 if t >= self.max_path_length:
                     terminal = True
-                else:
-                    pool.add_sample(obs, action, next_obs, reward * self.reward_scaling, terminal)
+
+                pool.add_sample(obs, action, next_obs, reward * self.reward_scaling, terminal)
+
+                obs = next_obs
 
                 if pool.size >= self.min_pool_size:
                     # train policy
@@ -584,7 +595,7 @@ class DPGExperiment(object):
 
             paths = []
             eval_env = pickle.loads(pickle.dumps(env))
-            eval_env._normalize_reward = False
+            # eval_env._normalize_reward = False
             for _ in xrange(self.n_eval_trajs):
                 path = rollout(
                     eval_env,

@@ -85,10 +85,10 @@ class NormalizedEnv(ProxyEnv, Serializable):
             reward = self._apply_normalize_reward(reward)
         return Step(next_obs, reward * self._scale_reward, done, **info)
 
-    def log_diagnostics(self, paths):
-        print "Obs mean:", self._obs_mean
-        print "Obs std:", np.sqrt(self._obs_var)
-        print "Reward mean:", self._reward_mean
-        print "Reward std:", np.sqrt(self._reward_var)
+    # def log_diagnostics(self, paths):
+    #     print "Obs mean:", self._obs_mean
+    #     print "Obs std:", np.sqrt(self._obs_var)
+    #     print "Reward mean:", self._reward_mean
+    #     print "Reward std:", np.sqrt(self._reward_var)
 
 normalize = NormalizedEnv

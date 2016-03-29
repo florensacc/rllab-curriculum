@@ -21,7 +21,7 @@ exp = DPGExperiment(
     policy_learning_rate=1e-4,
     qf_learning_rate=1e-3,
     reward_scaling=0.1,
-    max_path_length=1000,
+    max_path_length=100,
     qf_soft_target_tau=1e-3,
     policy_soft_target_tau=1e-3,
     qf_weight_decay=0,#.01,
@@ -33,7 +33,7 @@ env = normalize(CartpoleEnv())#, normalize_obs=True, normalize_reward=True)
 run_experiment_lite(
     exp.run(env),
     # exp_prefix="new_dpg_search_cheetah_2",
-    seed=0,
+    # seed=1,
     # mode="ec2",
     # dry=True,
 )
