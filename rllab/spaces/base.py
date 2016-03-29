@@ -29,39 +29,12 @@ class Space(object):
     def unflatten(self, x):
         raise NotImplementedError
 
-
-    # def from_tensors(self, x):
-    #     """
-    #     Given a member of the space, convert it to a tensor representation
-    #     :param x: a member of the space
-    #     :return: a flat vector representation of x
-    #     """
-    #     raise NotImplementedError
-    #
-    # @property
-    # def tensor_shapes(self):
-    #     """
-    #     The shape(s) of the tensor representation. A valid return value is either a single tuple, or a list of valid
-    #     return values
-    #     :return: the shape(s) of the tensor representation
-    #     """
-    #     raise NotImplementedError
-
     @property
     def flat_dim(self):
         """
         The dimension of the flattened vector of the tensor representation
         """
         raise NotImplementedError
-
-    #
-    # def untensorize(self, x):
-    #     """
-    #     Given a numpy tensor, convert it to a ordinary member of the space
-    #     :param x: a flattened vector
-    #     :return: a member of the space corresponding to x
-    #     """
-    #     raise NotImplementedError
 
     def new_tensor_variables(self, name, extra_dims):
         """

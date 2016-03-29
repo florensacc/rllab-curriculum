@@ -5,6 +5,7 @@ import base64
 import os.path as osp
 import cPickle as pickle
 import inspect
+import sys
 from contextlib import contextmanager
 
 import errno
@@ -116,29 +117,129 @@ class StubObject(object):
         return "StubObject(%s, *%s, **%s)" % (str(self.proxy_class), str(self.args), str(self.kwargs))
 
 
+class VariantGenerator(object):
+    """
+    Usage:
+
+    vg = VariantGenerator()
+    vg.add("param1", [1, 2, 3])
+    vg.add("param2", ['x', 'y'])
+    vg.variants() => # all combinations of [1,2,3] x ['x','y']
+
+    Supports noncyclic dependency among parameters:
+    vg = VariantGenerator()
+    vg.add("param1", [1, 2, 3])
+    vg.add("param2", lambda param1: [param1+1, param1+2])
+    vg.variants() => # ..
+    """
+
+    def __init__(self):
+        self._variants = []
+
+    def add(self, key, vals):
+        self._variants.append((key, vals))
+
+    def variants(self):
+        return list(self.ivariants())
+
+    def ivariants(self):
+        dependencies = list()
+        for key, vals in self._variants:
+            if hasattr(vals, "__call__"):
+                args = inspect.getargspec(vals).args
+                dependencies.append((key, set(args)))
+            else:
+                dependencies.append((key, set()))
+        sorted_keys = []
+        # topo sort all nodes
+        while len(sorted_keys) < len(self._variants):
+            # get all nodes with zero in-degree
+            free_nodes = [k for k, v in dependencies if len(v) == 0]
+            if len(free_nodes) == 0:
+                error_msg = "Invalid parameter dependency: \n"
+                for k, v in dependencies:
+                    if len(v) > 0:
+                        error_msg += k + " depends on " + " & ".join(v) + "\n"
+                raise ValueError(error_msg)
+            dependencies = [(k, v) for k, v in dependencies if k not in free_nodes]
+            # remove the free nodes from the remaining dependencies
+            for _, v in dependencies:
+                v.difference_update(free_nodes)
+            sorted_keys += free_nodes
+        return self._ivariants_sorted(sorted_keys)
+
+    def _ivariants_sorted(self, sorted_keys):
+        if len(sorted_keys) == 0:
+            yield dict()
+        elif len(sorted_keys) == 1:
+            key = sorted_keys[0]
+            vals = [v for k, v in self._variants if k == key][0]
+            for val in vals:
+                yield {key: val}
+        else:
+            first_keys = sorted_keys[:-1]
+            first_variants = self._ivariants_sorted(first_keys)
+            last_key = sorted_keys[-1]
+            last_vals = [v for k, v in self._variants if k == last_key][0]
+            if hasattr(last_vals, "__call__"):
+                last_val_keys = inspect.getargspec(last_vals).args
+            else:
+                last_val_keys = None
+            for variant in first_variants:
+                if hasattr(last_vals, "__call__"):
+                    last_variants = last_vals(**{k: variant[k] for k in last_val_keys})
+                    for last_choice in last_variants:
+                        yield ext.merge_dict(variant, {last_key: last_choice})
+                else:
+                    for last_choice in last_vals:
+                        yield ext.merge_dict(variant, {last_key: last_choice})
+
+
 def stub(glbs):
     # replace the __init__ method in all classes
     # hacky!!!
     for k, v in glbs.items():
         if isinstance(v, type) and v != StubClass:
             glbs[k] = StubClass(v)
-            # mkstub = (lambda v_local: lambda *args, **kwargs: StubClass(v_local, *args, **kwargs))(v)
-            # glbs[k].__new__ = types.MethodType(mkstub, glbs[k])
-            # glbs[k].__init__ = types.MethodType(lambda *args: None, glbs[k])
 
 
-# def run_experiment(params, script='scripts/run_experiment.py'):
-#     command = to_command(params, script)
-#     try:
-#         subprocess.call(command, shell=True)
-#     except Exception as e:
-#         if isinstance(e, KeyboardInterrupt):
-#             raise
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is True for "yes" or False for "no".
+    """
+    valid = {"yes": True, "y": True, "ye": True,
+             "no": False, "n": False}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = raw_input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "
+                             "(or 'y' or 'n').\n")
 
 
 exp_count = 0
 now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
+remote_confirmed = False
 
 
 def run_experiment_lite(
@@ -150,6 +251,7 @@ def run_experiment_lite(
         docker_image=None,
         aws_config=None,
         env=None,
+        confirm_remote=True,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -166,15 +268,19 @@ def run_experiment_lite(
     """
     data = base64.b64encode(pickle.dumps(stub_method_call))
     global exp_count
+    global remote_confirmed
     exp_count += 1
     exp_name = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
     kwargs["exp_name"] = exp_name
     kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
     kwargs["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
                                         exp_name)
+    if mode not in ["local", "local_docker"] and not remote_confirmed and not dry:
+        remote_confirmed = query_yes_no("Running in (non-dry) mode %s. Confirm?" % mode)
+        if not remote_confirmed:
+            sys.exit(1)
 
     if mode == "local":
-        # kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
         del kwargs["remote_log_dir"]
         params = dict(kwargs.items() + [("args_data", data)])
         command = to_local_command(params, script=script)

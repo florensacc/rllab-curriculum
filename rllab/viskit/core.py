@@ -36,6 +36,7 @@ def load_progress(progress_csv_path):
 
 def to_json(stub_object):
     from rllab.misc.instrument import StubObject
+    from rllab.misc.instrument import StubAttr
     if isinstance(stub_object, StubObject):
         assert len(stub_object.args) == 0
         data = dict()
@@ -43,6 +44,11 @@ def to_json(stub_object):
             data[k] = to_json(v)
         data["_name"] = stub_object.proxy_class.__module__ + "." + stub_object.proxy_class.__name__
         return data
+    elif isinstance(stub_object, StubAttr):
+        return dict(
+            obj=to_json(stub_object.obj),
+            attr=to_json(stub_object.attr_name)
+        )
     return stub_object
 
 
@@ -124,7 +130,7 @@ class Selector(object):
         return Selector(self._exps_data, self._filters + ((k, v),))
 
     def _check_exp(self, exp):
-        return all((repr(exp.flat_params.get(k, None)) == repr(v) for k, v in self._filters))
+        return all((str(exp.flat_params.get(k, None)) == str(v) for k, v in self._filters))
 
     def extract(self):
         return filter(self._check_exp, self._exps_data)

@@ -93,9 +93,10 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
             if len(filtered_data) > 0:
                 progresses = [exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
                 sizes = map(len, progresses)
+                # more intelligent:
                 max_size = max(sizes)
-                progresses = [ps for ps in progresses if len(ps) == max_size]
-                means = np.mean(progresses, axis=0)
+                progresses = [np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
+                means = np.nanmean(progresses, axis=0)
                 stds = np.std(progresses, axis=0)
                 to_plot.append(ext.AttrDict(means=means, stds=stds, legend=group_legend))
         if len(to_plot) > 0:
@@ -138,8 +139,8 @@ def index():
         plot_div=plot_div,
         plot_key=plot_key,
         plottable_keys=plottable_keys,
-        distinct_param_keys=[k for k, v in distinct_params],
-        distinct_params=dict(distinct_params),
+        distinct_param_keys=[str(k) for k, v in distinct_params],
+        distinct_params=dict([(str(k), map(str, v)) for k, v in distinct_params]),
     )
 
 if __name__ == "__main__":

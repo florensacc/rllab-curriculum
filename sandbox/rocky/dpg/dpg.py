@@ -422,6 +422,11 @@ class DPG(RLAlgorithm):
         self.q_averages.append(qval)
         self.y_averages.append(ys)
 
+        # print len(self.q_averages), len(self.y_averages)
+        # if len(self.q_averages) != len(self.y_averages):
+        #     import ipdb; ipdb.set_trace()
+
+
         return opt_info
 
     def evaluate(self, epoch, qf, policy, opt_info, env, pool):
@@ -510,8 +515,11 @@ class DPG(RLAlgorithm):
         logger.record_tabular('YMean', self._y_mean.get_value())
         logger.record_tabular('YStd', self._y_std.get_value())
 
+        env.log_diagnostics(paths)
+
         self.qf_loss_averages = []
         self.policy_surr_averages = []
+
         self.q_averages = []
         self.y_averages = []
         self.es_path_returns = []

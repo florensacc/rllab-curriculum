@@ -121,6 +121,7 @@
                 filters[$(div).find(".target").val()] = val;
             }
         });
+        console.log("updating");
         $.get("/plot_div",
               {"plot_key": plotKey, "split_key": splitKey,
                   "group_key": groupKey, "filters": JSON.stringify(filters)},

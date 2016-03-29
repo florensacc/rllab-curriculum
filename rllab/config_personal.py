@@ -17,7 +17,7 @@ AWS_S3_PATH = "s3://rocky-rllab-data/experiments"
 
 AWS_IMAGE_ID = "ami-19343d73"
 
-AWS_INSTANCE_TYPE = "m4.large"
+AWS_INSTANCE_TYPE = "m4.2xlarge"
 
 AWS_KEY_NAME = "research_virginia"
 
