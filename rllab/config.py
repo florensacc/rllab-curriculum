@@ -5,9 +5,9 @@ PROJECT_PATH = osp.abspath(osp.join(osp.dirname(__file__), '..'))
 
 LOG_DIR = PROJECT_PATH + "/data"
 
-DOCKER_IMAGE = "quay.io/openai/rocky-sandbox"
+DOCKER_IMAGE = "DOCKER_IMAGE"
 
-KUBE_PREFIX = "rocky_"
+KUBE_PREFIX = "rllab_"
 
 DOCKER_LOG_DIR = "/tmp/expt"
 
@@ -19,7 +19,7 @@ AWS_IMAGE_ID = None
 
 AWS_INSTANCE_TYPE = "m4.2xlarge"
 
-AWS_KEY_NAME = "research_virginia"
+AWS_KEY_NAME = "AWS_KEY_NAME"
 
 AWS_SPOT = True
 

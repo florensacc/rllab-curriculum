@@ -1,17 +1,18 @@
 from __future__ import print_function
-import numpy as np
-import theano.tensor as TT
-import theano
+
 import cPickle as pickle
 from collections import OrderedDict
+
+import numpy as np
+import theano
+import theano.tensor as TT
+
+from rllab.exploration_strategies.ou_strategy import OUStrategy
 from rllab.misc import logger
-from sandbox.rocky.dpg.continuous_mlp_policy import ContinuousMLPPolicy
-from sandbox.rocky.dpg.continuous_mlp_q_function import ContinuousMLPQFunction
-from sandbox.rocky.dpg.ou_strategy import OUStrategy
+from rllab.policies.deterministic_mlp_policy import DeterministicMLPPolicy
 
 
 # from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
-from rllab.envs.normalized_env import normalize
 
 
 def extract(x, *keys):
@@ -473,7 +474,7 @@ class DPGExperiment(object):
         obs_dim = env.observation_space.flat_dim
         action_dim = env.action_space.flat_dim
 
-        policy = ContinuousMLPPolicy(
+        policy = DeterministicMLPPolicy(
             env_spec=env.spec,
             hidden_sizes=self.policy_hidden_sizes,
         )

@@ -9,7 +9,7 @@ from rllab.misc import ext
 from rllab.policies.base import Policy
 
 
-class ContinuousMLPPolicy(Policy, LasagnePowered, Serializable):
+class DeterministicMLPPolicy(Policy, LasagnePowered, Serializable):
     def __init__(
             self,
             env_spec,
@@ -59,7 +59,7 @@ class ContinuousMLPPolicy(Policy, LasagnePowered, Serializable):
 
         self._f_actions = ext.compile_function([l_obs.input_var], action_var)
 
-        super(ContinuousMLPPolicy, self).__init__(env_spec)
+        super(DeterministicMLPPolicy, self).__init__(env_spec)
         LasagnePowered.__init__(self, [l_output])
 
     def get_action(self, observation):

@@ -14,7 +14,7 @@ import theano
 import lasagne
 
 
-def parse_update_method(update_method, config=None, **kwargs):
+def parse_update_method(update_method, **kwargs):
     if update_method == 'adam':
         return partial(lasagne.updates.adam, **ext.compact(kwargs))
     elif update_method == 'sgd':
@@ -113,6 +113,7 @@ class DPG(RLAlgorithm):
             running_y_alpha=0.1,
             running_q_alpha=0.1,
             scale_reward=1.0,
+            include_horizon_terminal_transitions=False,
             plot=False):
         """
 
@@ -136,6 +137,8 @@ class DPG(RLAlgorithm):
         :param soft_target_tau: Interpolation parameter for doing the soft target update.
         :param n_updates_per_sample: Number of Q function and policy updates per new sample obtained
         :param scale_reward: The scaling factor applied to the rewards when training
+        :param include_horizon_terminal_transitions: whether to include transitions with terminal=True because the
+        horizon was reached. This might make the Q value back up less stable for certain tasks.
         :param plot: Whether to visualize the policy performance after each eval_interval.
         :return:
         """
@@ -166,6 +169,7 @@ class DPG(RLAlgorithm):
         self.soft_target_tau = soft_target_tau
         self.hard_target_interval = hard_target_interval
         self.n_updates_per_sample = n_updates_per_sample
+        self._include_horizon_terminal_transitions = include_horizon_terminal_transitions
         self.plot = plot
 
         self.qf_loss_averages = []
@@ -235,10 +239,13 @@ class DPG(RLAlgorithm):
                 path_length += 1
                 path_return += reward
 
-                if path_length >= self.max_path_length:
+                if not terminal and path_length >= self.max_path_length:
                     terminal = True
-
-                pool.add_sample(observation, action, reward * self._scale_reward, terminal)
+                    # only include the terminal transition in this case if the flag was set
+                    if self._include_horizon_terminal_transitions:
+                        pool.add_sample(observation, action, reward * self._scale_reward, terminal)
+                else:
+                    pool.add_sample(observation, action, reward * self._scale_reward, terminal)
 
                 observation = next_observation
 
@@ -433,12 +440,16 @@ class DPG(RLAlgorithm):
 
         logger.log("Collecting samples for evaluation")
 
-        parallel_sampler.request_samples(
-            policy_params=policy.get_param_values(),
-            max_samples=self.eval_samples,
-            max_path_length=self.max_path_length,
-            whole_paths=self.eval_whole_paths,
-        )
+        try:
+            parallel_sampler.request_samples(
+                policy_params=policy.get_param_values(),
+                max_samples=self.eval_samples,
+                max_path_length=self.max_path_length,
+                whole_paths=self.eval_whole_paths,
+            )
+        except Exception as e:
+            print e
+            import ipdb; ipdb.set_trace()
 
         paths = parallel_sampler.collect_paths()
 
@@ -524,9 +535,9 @@ class DPG(RLAlgorithm):
         self.y_averages = []
         self.es_path_returns = []
 
-        return ext.merge_dict(opt_info, dict(
-            eval_paths=paths,
-        ))
+        return opt_info#ext.merge_dict(opt_info, dict(
+        #    eval_paths=paths,
+        #))
 
     def get_epoch_snapshot(self, epoch, env, qf, policy, es, opt_info):
         return dict(

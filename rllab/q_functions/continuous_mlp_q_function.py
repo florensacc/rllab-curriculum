@@ -1,21 +1,13 @@
 import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
-# Needed for eval to work
 import lasagne.init
 import theano.tensor as TT
-import itertools
-import theano
-import numpy as np
-from collections import OrderedDict
 # from rllab.qf.base import ContinuousQFunction
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.lasagne_layers import batch_norm
-from rllab.core.network import MLP
 from rllab.core.serializable import Serializable
-from rllab.misc import autoargs
 from rllab.misc import ext
-from rllab.misc.overrides import overrides
 
 
 class ContinuousMLPQFunction(LasagnePowered, Serializable):

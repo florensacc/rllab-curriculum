@@ -1,11 +1,13 @@
 from __future__ import print_function
-from rllab.envs.box2d.cartpole_env import CartpoleEnv
-from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.envs.normalized_env import normalize
+
 import numpy as np
 import theano
 import theano.tensor as TT
 from lasagne.updates import adam
+
+from rllab.envs.box2d.cartpole_env import CartpoleEnv
+from rllab.envs.normalized_env import normalize
+from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 # normalize() makes sure that the actions for the MDP lies within the range
 # [-1, 1]

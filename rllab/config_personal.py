@@ -1,10 +1,6 @@
 import os.path as osp
 import os
 
-PROJECT_PATH = osp.abspath(osp.join(osp.dirname(__file__), '..'))
-
-LOG_DIR = PROJECT_PATH + "/data"
-
 DOCKER_IMAGE = "quay.io/openai/rocky-sandbox"
 
 KUBE_PREFIX = "rocky_"

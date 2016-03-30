@@ -102,7 +102,8 @@ def config_parallel_sampler(n_parallel, base_seed):
         G.pool = MemmapingPool(
             G.n_parallel,
             initializer=_processor_init,
-            initargs=[G.queue]
+            initargs=[G.queue],
+            temp_folder="/tmp",
         )
 
 

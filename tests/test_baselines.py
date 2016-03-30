@@ -8,7 +8,6 @@ from rllab.baselines.zero_baseline import ZeroBaseline
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.misc import ext
 from nose2 import tools
 
 algo = VPG(n_itr=1, batch_size=1000, max_path_length=100)

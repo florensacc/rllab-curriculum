@@ -1,9 +1,8 @@
-from rllab.misc.instrument import stub, run_experiment_lite
-from rllab.envs.grid_world_env import GridWorldEnv
-from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.baselines.zero_baseline import ZeroBaseline
 from rllab.algos.vpg import VPG
-
+from rllab.baselines.zero_baseline import ZeroBaseline
+from rllab.envs.grid_world_env import GridWorldEnv
+from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 
 stub(globals())
 

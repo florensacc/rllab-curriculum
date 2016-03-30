@@ -1,6 +1,6 @@
 from rllab.core.serializable import Serializable
 from rllab.spaces.box import Box
-from sandbox.rocky.dpg.exploration_strategy import ExplorationStrategy
+from rllab.exploration_strategies.base import ExplorationStrategy
 import numpy as np
 
 

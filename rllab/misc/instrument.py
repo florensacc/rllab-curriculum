@@ -252,13 +252,14 @@ def run_experiment_lite(
         aws_config=None,
         env=None,
         confirm_remote=True,
+        terminate_machine=True,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
     :param stub_method_call: A stubbed method call.
     :param script: The name of the entrance point python script
     :param mode: Where & how to run the experiment. Should be one of "local", "local_docker", "ec2",
-    "lab_kube" and "openai_kube" (must have OpenAI VPN set up).
+    and "lab_kube".
     :param dry: Whether to do a dry-run, which only prints the commands without executing them.
     :param exp_prefix: Name prefix for the experiments
     :param docker_image: name of the docker image. Ignored if using local mode.
@@ -275,7 +276,7 @@ def run_experiment_lite(
     kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
     kwargs["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
                                         exp_name)
-    if mode not in ["local", "local_docker"] and not remote_confirmed and not dry:
+    if mode not in ["local", "local_docker"] and not remote_confirmed and not dry and confirm_remote:
         remote_confirmed = query_yes_no("Running in (non-dry) mode %s. Confirm?" % mode)
         if not remote_confirmed:
             sys.exit(1)
@@ -310,31 +311,7 @@ def run_experiment_lite(
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
         launch_ec2(params, exp_prefix=exp_prefix, docker_image=docker_image, script=script,
-                   aws_config=aws_config, dry=dry)
-    elif mode == "openai_kube":
-        if docker_image is None:
-            docker_image = config.DOCKER_IMAGE
-        params = dict(kwargs.items() + [("args_data", data)])
-        pod_dict = to_openai_kube_pod(params, docker_image=docker_image, script=script)
-        pod_str = json.dumps(pod_dict, indent=1)
-        if dry:
-            print(pod_str)
-        fname = "{pod_dir}/{exp_prefix}/{exp_name}.json".format(
-            pod_dir=config.POD_DIR,
-            exp_prefix=exp_prefix,
-            exp_name=exp_name
-        )
-        with open(fname, "w") as fh:
-            fh.write(pod_str)
-        kubecmd = "kubectl create -f %s" % fname
-        print(kubecmd)
-        if dry:
-            return
-        try:
-            subprocess.call(kubecmd, shell=True)
-        except Exception as e:
-            if isinstance(e, KeyboardInterrupt):
-                raise
+                   aws_config=aws_config, dry=dry, terminate_machine=terminate_machine)
     elif mode == "lab_kube":
         # first send code folder to s3
         s3_code_path = s3_sync_code(config, dry=dry)
@@ -453,7 +430,7 @@ def dedent(s):
 
 
 def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.py',
-               aws_config=None, dry=False):
+               aws_config=None, dry=False, terminate_machine=True):
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
 
@@ -508,10 +485,11 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
     sio.write("""
         aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
     """.format(remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
-    sio.write("""
-        EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
-        aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {aws_region}
-    """.format(aws_region=config.AWS_REGION_NAME))
+    if terminate_machine:
+        sio.write("""
+            EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
+            aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {aws_region}
+        """.format(aws_region=config.AWS_REGION_NAME))
     sio.write("} >> /home/ubuntu/user_data.log 2>&1\n")
 
     import boto3
@@ -579,78 +557,6 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
             **instance_args
         )
 
-
-def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py'):
-    """
-    :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
-    docker volume mapping to make sure that the logging files are created at the correct locations
-    :param docker_image: docker image to run the command on
-    :param script: script command for running experiment
-    :return:
-    """
-    log_dir = params.get("log_dir")
-    mkdir_p(log_dir)
-    pre_commands = list()
-    pre_commands.append('mkdir -p ~/.aws')
-    # fetch credentials from the kubernetes secret file
-    pre_commands.append('echo "[default]" >> ~/.aws/credentials')
-    pre_commands.append(
-        'echo "aws_access_key_id = $(cat /etc/rocky-s3-credentials/access-key)" >> ~/.aws/credentials')
-    pre_commands.append(
-        'echo "aws_secret_access_key = $(cat /etc/rocky-s3-credentials/access-secret)" >> ~/.aws/credentials')
-    # copy the file to s3 after execution
-    post_commands = list()
-    post_commands.append('aws s3 cp --recursive %s %s' %
-                         (config.DOCKER_LOG_DIR,
-                          osp.join(config.AWS_S3_PATH, params.get("exp_name"))))
-    command = to_docker_command(params, docker_image=docker_image, script=script,
-                                pre_commands=pre_commands,
-                                post_commands=post_commands)
-    pod_name = config.KUBE_PREFIX + params["exp_name"]
-    # underscore is not allowed in pod names
-    pod_name = pod_name.replace("_", "-")
-    return {
-        "apiVersion": "v1",
-        "kind": "Pod",
-        "metadata": {
-            "name": pod_name,
-            "labels": {
-                "expt": pod_name,
-            },
-        },
-        "spec": {
-            "containers": [
-                {
-                    "name": "foo",
-                    "image": docker_image,
-                    "command": ["/bin/bash", "-c", command],
-                    "resources": {
-                        "limits": {
-                            "cpu": "4"
-                        },
-                    },
-                    "imagePullPolicy": "Always",
-                    "volumeMounts": [{
-                        "name": "rocky-s3-credentials",
-                        "mountPath": "/etc/rocky-s3-credentials",
-                        "readOnly": True
-                    }],
-                }
-            ],
-            "volumes": [{
-                "name": "rocky-s3-credentials",
-                "secret": {
-                    "secretName": "rocky-s3-credentials"
-                },
-            }],
-            "imagePullSecrets": [{"name": "quay-login-secret"}],
-            "restartPolicy": "Never",
-            "nodeSelector": {
-                "aws/class": "m",
-                "aws/type": "m4.xlarge",
-            }
-        }
-    }
 
 
 S3_CODE_PATH = None
