@@ -27,7 +27,7 @@ ENTRYPOINT [ "/usr/bin/tini", "--" ]
 
 # ========== Special Deps ==========
 RUN apt-get -y install git make cmake unzip
-RUN pip install awscli
+#RUN pip install awscli
 # ALE requires zlib
 RUN apt-get -y install zlib1g-dev
 # MUJOCO requires graphics stuff (Why?)

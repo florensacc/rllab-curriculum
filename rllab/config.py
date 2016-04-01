@@ -39,4 +39,6 @@ CODE_SYNC_IGNORES = ["*.git/*", "*data/*"]
 
 DOCKER_CODE_DIR = "/root/code/rllab"
 
+AWS_CODE_SYNC_S3_PATH = "s3://to/be/overriden/in/personal"
+
 from config_personal import *
