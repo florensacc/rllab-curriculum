@@ -12,9 +12,9 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
 from rllab.algos.trpo import TRPO
-from rllab.misc.instrument import run_experiment_lite
+from rllab.misc.instrument import stub, run_experiment_lite
 
-# stub(globals())
+stub(globals())
 
 
 env = GridWorldEnv(
@@ -26,34 +26,46 @@ env = GridWorldEnv(
     ]
 )
 
+
+level = "hrl_level0"
+
+
+level_configs = dict(
+    hrl_level0=dict(
+        subgoal_interval=1,
+        action_map=[
+            [0],
+            [1],
+            [2],
+            [3],
+        ],
+    ),
+    hrl_level1=dict(
+        subgoal_interval=3,
+        action_map=[
+            [0, 0, 0],
+            [1, 1, 1],
+            [2, 2, 2],
+            [3, 3, 3],
+        ],
+    ),
+    hrl_level2=dict(
+        subgoal_interval=3,
+        action_map=[
+            [0, 1, 2],
+            [0, 0, 0],
+            [2, 1, 0],
+            [3, 3, 3],
+        ],
+    ),
+)
+
 env = CompoundActionSequenceEnv(
     wrapped_env=env,
     reset_history=True,
     # obs_include_actions=True,
-    action_map=[
-        [0, 0, 0],
-        [1, 1, 1],
-        [2, 2, 2],
-        [3, 3, 3],
-
-        # [0, 1, 2],
-        # [0, 0, 0],
-        # [2, 1, 0],
-        # [3, 3, 3],
-
-
-        # [0],
-        # [1],
-        # [2],
-        # [3],
-    ]
+    action_map=level_configs[level]["action_map"],
 )
-
-# env = SubgoalEnv(
-#     wrapped_env=env,
-#     subgoal_space=Discrete(n=4),
-#     # low_action_history_length=0,
-# )
 
 algo = BatchHRL(
     batch_size=10000,
@@ -72,7 +84,7 @@ algo = BatchHRL(
 
 policy = SubgoalPolicy(
     env_spec=env.spec,
-    subgoal_interval=3,
+    subgoal_interval=level_configs[level]["subgoal_interval"],
     subgoal_space=Discrete(n=4),
     high_policy_cls=CategoricalMLPPolicy,
     high_policy_args=dict(),
@@ -117,7 +129,7 @@ evaluator = StateGivenGoalMIEvaluator(
 
 run_experiment_lite(
     algo.train(env=env, policy=policy, baseline=baseline, bonus_evaluator=evaluator),
-    exp_prefix="compound_gridworld_4x4_free_hrl",
+    exp_prefix=level,
     n_parallel=1,
     snapshot_mode="last",
     seed=1,

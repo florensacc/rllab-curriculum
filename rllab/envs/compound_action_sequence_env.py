@@ -104,6 +104,6 @@ class CompoundActionSequenceEnv(ProxyEnv, Serializable):
         else:
             reward = 0
             done = False
-            if len(self._action_history) == len(self._action_map[0]):
+            if len(self._action_history) >= len(self._action_map[0]) and self._reset_history:
                 self._action_history = []
         return Step(observation=self._get_current_obs(), reward=reward, done=done)

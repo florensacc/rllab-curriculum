@@ -66,6 +66,8 @@ class SubgoalPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self._interval_counter = self._subgoal_interval - 1
         self._subgoal = None
         self._high_agent_info = None
+        self._high_policy.reset()
+        self._low_policy.reset()
 
     @property
     def subgoal_interval(self):

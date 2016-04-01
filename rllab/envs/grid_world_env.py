@@ -55,6 +55,14 @@ class GridWorldEnv(Env, Serializable):
         self._state = None
         self._domain_fig = None
 
+    @property
+    def n_row(self):
+        return self._n_row
+
+    @property
+    def n_col(self):
+        return self._n_col
+
     def reset(self):
         self._state = self._start_state
         return self._get_current_obs()
@@ -62,10 +70,10 @@ class GridWorldEnv(Env, Serializable):
     def step(self, action):
         """
         action map:
-        0: up
-        1: right
-        2: down
-        3: left
+        0: left
+        1: down
+        2: right
+        3: up
         :param action: should be a one-hot vector encoding the action
         :return:
         """

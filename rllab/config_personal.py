@@ -29,8 +29,4 @@ AWS_SECURITY_GROUPS = ["rllab"]
 
 AWS_REGION_NAME = "us-east-1"
 
-# AWS_CODE_SYNC_S3_PATH = "s3://pchen/code"
-
 CODE_SYNC_IGNORES = ["*.git/*", "*data/*"]
-
-# DOCKER_CODE_DIR = "/root/code/rllab"
