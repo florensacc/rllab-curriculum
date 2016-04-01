@@ -3,7 +3,6 @@ from rllab.algos.base import RLAlgorithm
 import theano.tensor as TT
 import numpy as np
 
-from rllab.misc import autoargs
 from rllab.misc.special import discount_cumsum
 from rllab.sampler import parallel_sampler
 from rllab.sampler.parallel_sampler import pool_map, G
@@ -34,6 +33,8 @@ class CMAES(RLAlgorithm):
 
     def __init__(
             self,
+            env,
+            policy,
             n_itr=500,
             max_path_length=500,
             discount=0.99,
@@ -55,7 +56,8 @@ class CMAES(RLAlgorithm):
         :param sigma0: Initial std for param dist
         :return:
         """
-        super(CMAES, self).__init__(**kwargs)
+        self.env = env
+        self.policy = policy
         self.plot = plot
         self.sigma0 = sigma0
         self.whole_paths = whole_paths
@@ -64,19 +66,19 @@ class CMAES(RLAlgorithm):
         self.n_itr = n_itr
         self.batch_size = batch_size
 
-    def train(self, env, policy, **kwargs):
+    def train(self):
 
         cur_std = self.sigma0
-        cur_mean = policy.get_param_values()
+        cur_mean = self.policy.get_param_values()
         es = cma_es_lib.CMAEvolutionStrategy(
             cur_mean, cur_std)
 
-        parallel_sampler.populate_task(env, policy)
+        parallel_sampler.populate_task(self.env, self.policy)
         if self.plot:
-            plotter.init_plot(env, policy)
+            plotter.init_plot(self.env, self.policy)
 
         cur_std = self.sigma0
-        cur_mean = policy.get_param_values()
+        cur_mean = self.policy.get_param_values()
 
         itr = 0
         while itr < self.n_itr and not es.stop():
@@ -140,16 +142,16 @@ class CMAES(RLAlgorithm):
 
             logger.save_itr_params(itr, dict(
                 itr=itr,
-                policy=policy,
-                env=env,
+                policy=self.policy,
+                env=self.env,
             ))
             logger.dump_tabular(with_prefix=False)
             if self.plot:
-                plotter.update_plot(policy, self.max_path_length)
+                plotter.update_plot(self.policy, self.max_path_length)
             logger.pop_prefix()
             # Update iteration.
             itr += 1
 
         # Set final params.
-        policy.set_param_values(es.result()[0])
+        self.policy.set_param_values(es.result()[0])
 

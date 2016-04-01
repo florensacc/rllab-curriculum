@@ -14,6 +14,9 @@ class VPG(BatchPolopt):
 
     def __init__(
             self,
+            env,
+            policy,
+            baseline,
             optimizer=None,
             optimizer_args=None,
             **kwargs):
@@ -27,18 +30,19 @@ class VPG(BatchPolopt):
             else:
                 optimizer_args = ext.merge_dict(default_args, optimizer_args)
             optimizer = FirstOrderOptimizer(**optimizer_args)
-        self._optimizer = optimizer
-        super(VPG, self).__init__(**kwargs)
+        self.optimizer = optimizer
+        self.opt_info = None
+        super(VPG, self).__init__(env=env, policy=policy, baseline=baseline, **kwargs)
 
     @overrides
-    def init_opt(self, env_spec, policy, baseline):
-        is_recurrent = int(policy.recurrent)
+    def init_opt(self):
+        is_recurrent = int(self.policy.recurrent)
 
-        obs_var = env_spec.observation_space.new_tensor_variable(
+        obs_var = self.env.observation_space.new_tensor_variable(
             'obs',
             extra_dims=1 + is_recurrent,
         )
-        action_var = env_spec.action_space.new_tensor_variable(
+        action_var = self.env.action_space.new_tensor_variable(
             'action',
             extra_dims=1 + is_recurrent,
         )
@@ -47,14 +51,14 @@ class VPG(BatchPolopt):
             ndim=1 + is_recurrent,
             dtype=theano.config.floatX
         )
-        dist = policy.distribution
+        dist = self.policy.distribution
         old_dist_info_vars = {
             k: ext.new_tensor(
                 'old_%s' % k,
                 ndim=2 + is_recurrent,
                 dtype=theano.config.floatX
             ) for k in dist.dist_info_keys
-        }
+            }
         old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
 
         if is_recurrent:
@@ -62,7 +66,7 @@ class VPG(BatchPolopt):
         else:
             valid_var = None
 
-        dist_info_vars = policy.dist_info_sym(obs_var, action_var)
+        dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)
         logli = dist.log_likelihood_sym(action_var, dist_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
 
@@ -81,45 +85,42 @@ class VPG(BatchPolopt):
         if is_recurrent:
             input_list.append(valid_var)
 
-        self._optimizer.update_opt(surr_obj, target=policy, inputs=input_list)
+        self.optimizer.update_opt(surr_obj, target=self.policy, inputs=input_list)
 
         f_kl = ext.compile_function(
             inputs=input_list + old_dist_info_vars_list,
             outputs=[mean_kl, max_kl],
         )
-        return dict(
+        self.opt_info = dict(
             f_kl=f_kl,
         )
 
     @overrides
-    def optimize_policy(self, itr, policy, samples_data, opt_info):
+    def optimize_policy(self, itr, samples_data):
         logger.log("optimizing policy")
         inputs = ext.extract(
             samples_data,
             "observations", "actions", "advantages"
         )
-        if policy.recurrent:
+        if self.policy.recurrent:
             inputs += (samples_data["valids"],)
         agent_infos = samples_data["agent_infos"]
-        dist_info_list = [agent_infos[k] for k in policy.distribution.dist_info_keys]
-        loss_before = self._optimizer.loss(inputs)
-        self._optimizer.optimize(inputs)
-        loss_after = self._optimizer.loss(inputs)
+        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
+        loss_before = self.optimizer.loss(inputs)
+        self.optimizer.optimize(inputs)
+        loss_after = self.optimizer.loss(inputs)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
 
-        mean_kl, max_kl = opt_info['f_kl'](*(list(inputs) + dist_info_list))
+        mean_kl, max_kl = self.opt_info['f_kl'](*(list(inputs) + dist_info_list))
         logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('MaxKL', max_kl)
 
-        return opt_info
-
     @overrides
-    def get_itr_snapshot(self, itr, env, policy, baseline, samples_data,
-                         opt_info):
+    def get_itr_snapshot(self, itr, samples_data):
         return dict(
             itr=itr,
-            policy=policy,
-            baseline=baseline,
-            env=env,
+            policy=self.policy,
+            baseline=self.baseline,
+            env=self.env,
         )

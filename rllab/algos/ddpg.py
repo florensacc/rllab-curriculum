@@ -10,7 +10,6 @@ import theano.tensor as TT
 import cPickle as pickle
 import numpy as np
 import pyprind
-import theano
 import lasagne
 
 
@@ -82,13 +81,17 @@ class SimpleReplayPool(object):
         return self._size
 
 
-class DPG(RLAlgorithm):
+class DDPG(RLAlgorithm):
     """
-    Deterministic Policy Gradient.
+    Deep Deterministic Policy Gradient.
     """
 
     def __init__(
             self,
+            env,
+            policy,
+            qf,
+            es,
             batch_size=32,
             n_epochs=200,
             epoch_length=1000,
@@ -106,17 +109,15 @@ class DPG(RLAlgorithm):
             eval_whole_paths=True,
             soft_target=True,
             soft_target_tau=0.001,
-            hard_target_interval=1000,
             n_updates_per_sample=1,
-            normalize_yval=False,
-            normalize_qval=False,
-            running_y_alpha=0.1,
-            running_q_alpha=0.1,
             scale_reward=1.0,
             include_horizon_terminal_transitions=False,
             plot=False):
         """
-
+        :param env: Environment
+        :param policy: Policy
+        :param qf: Q function
+        :param es: Exploration strategy
         :param batch_size: Number of samples for each minibatch.
         :param n_epochs: Number of epochs. Policy will be evaluated after each epoch.
         :param epoch_length: How many timesteps for each epoch.
@@ -133,7 +134,6 @@ class DPG(RLAlgorithm):
         :param eval_samples: Number of samples (timesteps) for evaluating the policy.
         :param eval_whole_paths: Whether to make sure that all trajectories are executed until the terminal state or
         the max_path_length, even at the expense of possibly more samples for evaluation.
-        :param soft_target: Whether to use soft target updates.
         :param soft_target_tau: Interpolation parameter for doing the soft target update.
         :param n_updates_per_sample: Number of Q function and policy updates per new sample obtained
         :param scale_reward: The scaling factor applied to the rewards when training
@@ -142,6 +142,10 @@ class DPG(RLAlgorithm):
         :param plot: Whether to visualize the policy performance after each eval_interval.
         :return:
         """
+        self.env = env
+        self.policy = policy
+        self.qf = qf
+        self.es = es
         self.batch_size = batch_size
         self.n_epochs = n_epochs
         self.epoch_length = epoch_length
@@ -165,58 +169,46 @@ class DPG(RLAlgorithm):
         self.policy_learning_rate = policy_learning_rate
         self.eval_samples = eval_samples
         self.eval_whole_paths = eval_whole_paths
-        self.soft_target = soft_target
         self.soft_target_tau = soft_target_tau
-        self.hard_target_interval = hard_target_interval
         self.n_updates_per_sample = n_updates_per_sample
-        self._include_horizon_terminal_transitions = include_horizon_terminal_transitions
+        self.include_horizon_terminal_transitions = include_horizon_terminal_transitions
         self.plot = plot
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []
-        # self.obses = []
-        # self.actions = []
         self.q_averages = []
         self.y_averages = []
         self.paths = []
         self.es_path_returns = []
         self.paths_samples_cnt = 0
 
-        self._scale_reward = scale_reward
+        self.scale_reward = scale_reward
 
-        self._normalize_yval = normalize_yval
-        self._normalize_qval = normalize_qval
-        self._q_mean = theano.shared(0., "q_mean")
-        self._q_std = theano.shared(10000., "q_std")
-        self._y_mean = theano.shared(0., "y_mean")
-        self._y_std = theano.shared(10000., "y_std")
-        # self._q_stats_computed = False
-        self._running_q_alpha = running_q_alpha
-        self._running_y_alpha = running_y_alpha
+        self.opt_info = None
 
-    def start_worker(self, env, policy):
-        parallel_sampler.populate_task(env, policy)
+    def start_worker(self):
+        parallel_sampler.populate_task(self.env, self.policy)
         if self.plot:
-            plotter.init_plot(env, policy)
+            plotter.init_plot(self.env, self.policy)
 
     @overrides
-    def train(self, env, policy, qf, es, **kwargs):
+    def train(self):
         # This seems like a rather sequential method
         pool = SimpleReplayPool(
             max_pool_size=self.replay_pool_size,
-            observation_dim=env.observation_space.flat_dim,
-            action_dim=env.action_space.flat_dim,
+            observation_dim=self.env.observation_space.flat_dim,
+            action_dim=self.env.action_space.flat_dim,
         )
-        self.start_worker(env, policy)
+        self.start_worker()
 
-        opt_info = self.init_opt(env, policy, qf)
+        self.init_opt()
         itr = 0
         path_length = 0
         path_return = 0
         terminal = False
-        observation = env.reset()
+        observation = self.env.reset()
 
-        sample_policy = pickle.loads(pickle.dumps(policy))
+        sample_policy = pickle.loads(pickle.dumps(self.policy))
 
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
@@ -227,25 +219,25 @@ class DPG(RLAlgorithm):
                     # Note that if the last time step ends an episode, the very
                     # last state and observation will be ignored and not added
                     # to the replay pool
-                    observation = env.reset()
-                    es.reset()
+                    observation = self.env.reset()
+                    self.es.reset()
                     sample_policy.reset()
                     self.es_path_returns.append(path_return)
                     path_length = 0
                     path_return = 0
-                action = es.get_action(itr, observation, policy=sample_policy)  # qf=qf)
+                action = self.es.get_action(itr, observation, policy=sample_policy)  # qf=qf)
 
-                next_observation, reward, terminal, _ = env.step(action)
+                next_observation, reward, terminal, _ = self.env.step(action)
                 path_length += 1
                 path_return += reward
 
                 if not terminal and path_length >= self.max_path_length:
                     terminal = True
                     # only include the terminal transition in this case if the flag was set
-                    if self._include_horizon_terminal_transitions:
-                        pool.add_sample(observation, action, reward * self._scale_reward, terminal)
+                    if self.include_horizon_terminal_transitions:
+                        pool.add_sample(observation, action, reward * self.scale_reward, terminal)
                 else:
-                    pool.add_sample(observation, action, reward * self._scale_reward, terminal)
+                    pool.add_sample(observation, action, reward * self.scale_reward, terminal)
 
                 observation = next_observation
 
@@ -253,45 +245,34 @@ class DPG(RLAlgorithm):
                     for update_itr in xrange(self.n_updates_per_sample):
                         # Train policy
                         batch = pool.random_batch(self.batch_size)
-                        opt_info = self.do_training(
-                            itr, batch, qf, policy, opt_info)
-                    sample_policy.set_param_values(policy.get_param_values())
+                        self.do_training(itr, batch)
+                    sample_policy.set_param_values(self.policy.get_param_values())
 
                 itr += 1
 
             logger.log("Training finished")
             if pool.size >= self.min_pool_size:
-                opt_info = self.evaluate(epoch, qf, policy, opt_info, env, pool)
-                yield opt_info
-                params = self.get_epoch_snapshot(
-                    epoch, env, qf, policy, es, opt_info)
+                self.evaluate(epoch, pool)
+                params = self.get_epoch_snapshot(epoch)
                 logger.save_itr_params(epoch, params)
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
 
-    def init_opt(self, env, policy, qf):
+    def init_opt(self):
 
         # First, create "target" policy and Q functions
-        target_policy = pickle.loads(pickle.dumps(policy))
-        target_qf = pickle.loads(pickle.dumps(qf))
+        target_policy = pickle.loads(pickle.dumps(self.policy))
+        target_qf = pickle.loads(pickle.dumps(self.qf))
 
         # y need to be computed first
-        obs = env.observation_space.new_tensor_variable(
+        obs = self.env.observation_space.new_tensor_variable(
             'obs',
             extra_dims=1,
         )
-        # next_obs = new_tensor(
-        #    'next_obs',
-        #    ndim=1+len(env.observation_shape),
-        #    dtype=env.observation_dtype
-        # )
-
-        # rewards = TT.vector('rewards')
-        # terminals = TT.vector('terminals')
 
         # The yi values are computed separately as above and then passed to
         # the training functions below
-        action = env.action_space.new_tensor_variable(
+        action = self.env.action_space.new_tensor_variable(
             'action',
             extra_dims=1,
         )
@@ -299,32 +280,28 @@ class DPG(RLAlgorithm):
 
         qf_weight_decay_term = 0.5 * self.qf_weight_decay * \
                                sum([TT.sum(TT.square(param)) for param in
-                                    qf.get_params(regularizable=True)])
+                                    self.qf.get_params(regularizable=True)])
 
-        qval = qf.get_qval_sym(obs, action)
+        qval = self.qf.get_qval_sym(obs, action)
 
         qf_loss = TT.mean(TT.square(yvar - qval))
-        if self._normalize_yval:
-            qf_loss = qf_loss / (self._y_std ** 2)
         qf_reg_loss = qf_loss + qf_weight_decay_term
 
         policy_weight_decay_term = 0.5 * self.policy_weight_decay * \
                                    sum([TT.sum(TT.square(param))
-                                        for param in policy.get_params(regularizable=True)])
-        policy_qval = qf.get_qval_sym(
-            obs, policy.get_action_sym(obs),
+                                        for param in self.policy.get_params(regularizable=True)])
+        policy_qval = self.qf.get_qval_sym(
+            obs, self.policy.get_action_sym(obs),
             deterministic=True
         )
-        if self._normalize_qval:
-            policy_qval = (policy_qval - self._q_mean) / self._q_std
         policy_surr = -TT.mean(policy_qval)
 
         policy_reg_surr = policy_surr + policy_weight_decay_term
 
         qf_updates = self.qf_update_method(
-            qf_reg_loss, qf.get_params(trainable=True))
+            qf_reg_loss, self.qf.get_params(trainable=True))
         policy_updates = self.policy_update_method(
-            policy_reg_surr, policy.get_params(trainable=True))
+            policy_reg_surr, self.policy.get_params(trainable=True))
 
         f_train_qf = ext.compile_function(
             inputs=[yvar, obs, action],
@@ -338,32 +315,14 @@ class DPG(RLAlgorithm):
             updates=policy_updates
         )
 
-        # target_updates = []
-        # for p, tp in zip(
-        #        qf.get_params() + policy.get_params(),
-        #        target_qf.get_params() + target_policy.get_params()):
-        #    if self.soft_target:
-        #        target_updates.append((tp, self.soft_target_tau * p +
-        #                               (1 - self.soft_target_tau) * tp))
-        #    else:
-        #        target_updates.append((tp, p))
-
-        # f_update_targets = compile_function(
-        #    inputs=[],
-        #    outputs=[],
-        #    updates=target_updates,
-        # )
-
-        return dict(
-            # f_y=f_y,
+        self.opt_info = dict(
             f_train_qf=f_train_qf,
             f_train_policy=f_train_policy,
-            # f_update_targets=f_update_targets,
             target_qf=target_qf,
             target_policy=target_policy,
         )
 
-    def do_training(self, itr, batch, qf, policy, opt_info):
+    def do_training(self, itr, batch):
 
         obs, actions, rewards, next_obs, terminals = ext.extract(
             batch,
@@ -372,94 +331,43 @@ class DPG(RLAlgorithm):
         )
 
         # compute the on-policy y values
-        target_qf = opt_info["target_qf"]
-        target_policy = opt_info["target_policy"]
+        target_qf = self.opt_info["target_qf"]
+        target_policy = self.opt_info["target_policy"]
 
         next_actions, _ = target_policy.get_actions(next_obs)
         next_qvals = target_qf.get_qval(next_obs, next_actions)
 
-        ys = rewards + (1 - terminals) * self.discount * next_qvals
+        ys = rewards + (1. - terminals) * self.discount * next_qvals
 
-        batch_y_mean = np.mean(ys)
-        batch_y_std = np.std(ys)
-        self._y_mean.set_value(self._y_mean.get_value() * (1 - self._running_y_alpha) + batch_y_mean *
-                               self._running_y_alpha)
-        self._y_std.set_value(self._y_std.get_value() * (1 - self._running_y_alpha) + batch_y_std *
-                              self._running_y_alpha)
-
-        if self._normalize_yval:
-            ys = (ys - self._y_mean.get_value()) / self._y_std.get_value()
-
-        # print sum(terminals)
-
-        # if itr % 100 == 0:
-        #    import ipdb; ipdb.set_trace()
-
-        f_train_qf = opt_info["f_train_qf"]
-        f_train_policy = opt_info["f_train_policy"]
-        # f_update_targets = opt_info["f_update_targets"]
+        f_train_qf = self.opt_info["f_train_qf"]
+        f_train_policy = self.opt_info["f_train_policy"]
 
         qf_loss, qval = f_train_qf(ys, obs, actions)
 
-        batch_q_mean = np.mean(qval)
-        batch_q_std = np.std(qval)
-        self._q_mean.set_value(self._q_mean.get_value() * (1 - self._running_q_alpha) + batch_q_mean *
-                               self._running_q_alpha)
-        self._q_std.set_value(self._q_std.get_value() * (1 - self._running_q_alpha) + batch_q_std *
-                              self._running_q_alpha)
-
         policy_surr = f_train_policy(obs)
 
-        if self.soft_target:
-            target_policy.set_param_values(
-                target_policy.get_param_values() * (1.0 - self.soft_target_tau) +
-                policy.get_param_values() * self.soft_target_tau)
-            target_qf.set_param_values(
-                target_qf.get_param_values() * (1.0 - self.soft_target_tau) +
-                qf.get_param_values() * self.soft_target_tau)
-
-        elif itr % self.hard_target_interval == 0:
-            raise NotImplementedError
-            # f_update_targets()
+        target_policy.set_param_values(
+            target_policy.get_param_values() * (1.0 - self.soft_target_tau) +
+            self.policy.get_param_values() * self.soft_target_tau)
+        target_qf.set_param_values(
+            target_qf.get_param_values() * (1.0 - self.soft_target_tau) +
+            self.qf.get_param_values() * self.soft_target_tau)
 
         self.qf_loss_averages.append(qf_loss)
         self.policy_surr_averages.append(policy_surr)
-        # self.obses.append(obs)
-        # self.actions.append(actions)
         self.q_averages.append(qval)
         self.y_averages.append(ys)
 
-        # print len(self.q_averages), len(self.y_averages)
-        # if len(self.q_averages) != len(self.y_averages):
-        #     import ipdb; ipdb.set_trace()
-
-
-        return opt_info
-
-    def evaluate(self, epoch, qf, policy, opt_info, env, pool):
-
+    def evaluate(self, epoch, pool):
         logger.log("Collecting samples for evaluation")
-
-        try:
-            parallel_sampler.request_samples(
-                policy_params=policy.get_param_values(),
-                max_samples=self.eval_samples,
-                max_path_length=self.max_path_length,
-                whole_paths=self.eval_whole_paths,
-            )
-        except Exception as e:
-            print e
-            import ipdb; ipdb.set_trace()
+        parallel_sampler.request_samples(
+            policy_params=self.policy.get_param_values(),
+            max_samples=self.eval_samples,
+            max_path_length=self.max_path_length,
+            whole_paths=self.eval_whole_paths,
+        )
 
         paths = parallel_sampler.collect_paths()
-
-        # obs = np.vstack([p["observations"] for p in paths])
-        # actions = np.vstack([p["actions"] for p in paths])
-
-        # qvals = qf.get_qval(obs, actions)
-        # self._q_mean.set_value(np.mean(qvals))
-        # self._q_std.set_value(np.std(qvals))
-        # self._q_stats_computed = True
 
         average_discounted_return = np.mean(
             [special.discount_return(path["rewards"], self.discount) for path in paths]
@@ -467,12 +375,8 @@ class DPG(RLAlgorithm):
 
         returns = [sum(path["rewards"]) for path in paths]
 
-        # if len(self.q_averages) > 0:
         all_qs = np.concatenate(self.q_averages)
         all_ys = np.concatenate(self.y_averages)
-        # else:
-        #     all_qs = np.array([])
-        #     all_ys = np.array([])
 
         average_q_loss = np.mean(self.qf_loss_averages)
         average_policy_surr = np.mean(self.policy_surr_averages)
@@ -481,10 +385,10 @@ class DPG(RLAlgorithm):
         )))
 
         policy_reg_param_norm = np.linalg.norm(
-            policy.get_param_values(regularizable=True)
+            self.policy.get_param_values(regularizable=True)
         )
         qfun_reg_param_norm = np.linalg.norm(
-            qf.get_param_values(regularizable=True)
+            self.qf.get_param_values(regularizable=True)
         )
 
         logger.record_tabular('Epoch', epoch)
@@ -521,12 +425,9 @@ class DPG(RLAlgorithm):
                               policy_reg_param_norm)
         logger.record_tabular('QFunRegParamNorm',
                               qfun_reg_param_norm)
-        logger.record_tabular('QMean', self._q_mean.get_value())
-        logger.record_tabular('QStd', self._q_std.get_value())
-        logger.record_tabular('YMean', self._y_mean.get_value())
-        logger.record_tabular('YStd', self._y_std.get_value())
 
-        env.log_diagnostics(paths)
+        self.env.log_diagnostics(paths)
+        self.policy.log_diagnostics(paths)
 
         self.qf_loss_averages = []
         self.policy_surr_averages = []
@@ -535,17 +436,13 @@ class DPG(RLAlgorithm):
         self.y_averages = []
         self.es_path_returns = []
 
-        return opt_info#ext.merge_dict(opt_info, dict(
-        #    eval_paths=paths,
-        #))
-
-    def get_epoch_snapshot(self, epoch, env, qf, policy, es, opt_info):
+    def get_epoch_snapshot(self, epoch):
         return dict(
-            env=env,
+            env=self.env,
             epoch=epoch,
-            qf=qf,
-            policy=policy,
-            target_qf=opt_info["target_qf"],
-            target_policy=opt_info["target_policy"],
-            es=es,
+            qf=self.qf,
+            policy=self.policy,
+            target_qf=self.opt_info["target_qf"],
+            target_policy=self.opt_info["target_policy"],
+            es=self.es,
         )

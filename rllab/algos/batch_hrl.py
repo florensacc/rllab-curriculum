@@ -12,6 +12,10 @@ from rllab.misc.special import to_onehot
 class BatchHRL(BatchPolopt, Serializable):
     def __init__(
             self,
+            env,
+            policy,
+            baseline,
+            bonus_evaluator,
             high_algo,
             low_algo,
             mi_coeff=0.1,
@@ -19,50 +23,35 @@ class BatchHRL(BatchPolopt, Serializable):
             **kwargs):
         super(BatchHRL, self).__init__(**kwargs)
         Serializable.quick_init(self, locals())
-        self._high_algo = high_algo
-        self._low_algo = low_algo
-        self._mi_coeff = mi_coeff
-        self._subgoal_interval = subgoal_interval
-
-    @property
-    def high_algo(self):
-        return self._high_algo
-
-    @property
-    def low_algo(self):
-        return self._low_algo
+        self.env = env
+        self.policy = policy
+        self.baseline = baseline
+        self.bonus_evaluator = bonus_evaluator
+        self.high_algo = high_algo
+        self.low_algo = low_algo
+        self.mi_coeff = mi_coeff
+        self.subgoal_interval = subgoal_interval
 
     @overrides
-    def init_opt(self, env_spec, policy, baseline, **kwargs):
+    def init_opt(self):
         with logger.tabular_prefix('Hi_'), logger.prefix('Hi | '):
-            high_opt_info = \
-                self.high_algo.init_opt(env_spec=policy.high_env_spec, policy=policy.high_policy,
-                                        baseline=baseline.high_baseline)
+            self.high_algo.init_opt()
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
-            low_opt_info = \
-                self.low_algo.init_opt(env_spec=policy.low_env_spec, policy=policy.low_policy,
-                                       baseline=baseline.low_baseline)
-        return dict(
-            high=high_opt_info,
-            low=low_opt_info
-        )
+            self.low_algo.init_opt()
 
-    def optimize_policy(self, itr, policy, samples_data, opt_info, **kwargs):
+    def optimize_policy(self, itr, samples_data):
         with logger.tabular_prefix('Hi_'), logger.prefix('Hi | '):
-            opt_info["high"] = self.high_algo.optimize_policy(
-                itr, policy.high_policy, samples_data["high"], opt_info["high"])
+            self.high_algo.optimize_policy(itr, samples_data["high"])
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
-            opt_info["low"] = self.low_algo.optimize_policy(
-                itr, policy.low_policy, samples_data["low"], opt_info["low"])
-        return opt_info
+            self.low_algo.optimize_policy(itr, samples_data["low"])
 
     @overrides
-    def get_itr_snapshot(self, itr, env, policy, baseline, samples_data, opt_info, **kwargs):
+    def get_itr_snapshot(self, itr, samples_data):
         return dict(
             itr=itr,
-            policy=policy,
-            baseline=baseline,
-            env=env,
+            policy=self.policy,
+            baseline=self.baseline,
+            env=self.env,
         )
 
     def _subsample_path(self, path, interval):
@@ -89,7 +78,7 @@ class BatchHRL(BatchPolopt, Serializable):
             rewards=chunked_rewards,
         )
 
-    def process_samples(self, itr, paths, env_spec, policy, baseline, bonus_evaluator, **kwargs):
+    def process_samples(self, itr, paths):
         """
         Transform paths to high_paths and low_paths, and dispatch them to the high-level and low-level algorithms
         respectively.
@@ -122,7 +111,7 @@ class BatchHRL(BatchPolopt, Serializable):
                 agent_infos=high_agent_infos,
                 rewards=rewards,
             )
-            chunked_high_path = self._subsample_path(high_path, policy.subgoal_interval)
+            chunked_high_path = self._subsample_path(high_path, self.policy.subgoal_interval)
             # The high-level trajectory should be splitted according to the subgoal_interval parameter
 
             # high_path = dict(
@@ -138,14 +127,14 @@ class BatchHRL(BatchPolopt, Serializable):
             # fill in information needed by bonus_evaluator
             # path['subgoals'] = subgoals#chunked_subgoals#subgoals
             # path['high_pdists'] = high_pdists#chunked_high_pdists#high_pdists
-            chunked_bonuses = bonus_evaluator.predict(chunked_high_path)
+            chunked_bonuses = self.bonus_evaluator.predict(chunked_high_path)
             bonuses = np.tile(
                 np.expand_dims(chunked_bonuses, axis=1),
-                (1, policy.subgoal_interval)
+                (1, self.policy.subgoal_interval)
             ).flatten()[:path_length]
             # TODO normalize these two terms
             # path['bonuses'] = bonuses
-            low_rewards = rewards + self._mi_coeff * bonuses
+            low_rewards = rewards + self.mi_coeff * bonuses
             if np.max(np.abs(bonuses)) > 1e3:
                 import ipdb; ipdb.set_trace()
             bonus_returns.append(np.sum(bonuses))
@@ -161,19 +150,19 @@ class BatchHRL(BatchPolopt, Serializable):
         logger.record_tabular("AverageBonusReturn", np.mean(bonus_returns))
         with logger.tabular_prefix('Hi_'), logger.prefix('Hi | '):
             high_samples_data = self.high_algo.process_samples(
-                itr, high_paths, policy.high_env_spec, policy.high_policy, baseline.high_baseline)
+                itr, high_paths, self.policy.high_env_spec, self.policy.high_policy, self.baseline.high_baseline)
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
             low_samples_data = self.low_algo.process_samples(
-                itr, low_paths, policy.low_env_spec, policy.low_policy, baseline.low_baseline)
+                itr, low_paths, self.policy.low_env_spec, self.policy.low_policy, self.baseline.low_baseline)
             for path in low_samples_data['paths']:
-                if np.max(abs(baseline.low_baseline.predict(path))) > 1e3:
+                if np.max(abs(self.baseline.low_baseline.predict(path))) > 1e3:
                     import ipdb; ipdb.set_trace()
 
-        mi_action_goal = self._compute_mi_action_goal(env_spec, policy, high_samples_data, low_samples_data)
+        mi_action_goal = self._compute_mi_action_goal(self.env.spec, self.policy, high_samples_data, low_samples_data)
         logger.record_tabular("I(action,goal|state)", mi_action_goal)
         # We need to train the predictor for p(s'|g, s)
         with logger.prefix("MI | "), logger.tabular_prefix("MI_"):
-            bonus_evaluator.fit(high_paths)
+            self.bonus_evaluator.fit(high_paths)
 
         return dict(
             high=high_samples_data,

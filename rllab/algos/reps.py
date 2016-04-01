@@ -1,13 +1,12 @@
 import theano.tensor as TT
 import theano
+import scipy.optimize
 from rllab.misc import logger
-from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 from rllab.misc import ext
 from rllab.algos.batch_polopt import BatchPolopt
 import numpy as np
 from rllab.misc import tensor_utils
-from pydoc import locate
 
 
 class REPS(BatchPolopt):
@@ -20,57 +19,50 @@ class REPS(BatchPolopt):
 
     """
 
-    @autoargs.inherit(BatchPolopt.__init__)
-    @autoargs.arg("epsilon", type=float,
-                  help="Max KL divergence between new policy and old policy.")
-    @autoargs.arg("L2_reg_dual", type=float,
-                  help="Dual regularization")
-    @autoargs.arg("L2_reg_loss", type=float,
-                  help="Loss regularization")
-    @autoargs.arg("max_opt_itr", type=int,
-                  help="Maximum number of batch optimization iterations.")
-    @autoargs.arg("optimizer", type=str,
-                  help="Module path to the optimizer. It must support the "
-                       "same interface as scipy.optimize.fmin_l_bfgs_b")
     def __init__(
             self,
             epsilon=0.5,
             L2_reg_dual=0.,  # 1e-5,
             L2_reg_loss=0.,
             max_opt_itr=50,
-            optimizer='scipy.optimize.fmin_l_bfgs_b',
+            optimizer=scipy.optimize.fmin_l_bfgs_b,
             **kwargs):
+        """
+
+        :param epsilon: Max KL divergence between new policy and old policy.
+        :param L2_reg_dual: Dual regularization
+        :param L2_reg_loss: Loss regularization
+        :param max_opt_itr: Maximum number of batch optimization iterations.
+        :param optimizer: Module path to the optimizer. It must support the same interface as
+        scipy.optimize.fmin_l_bfgs_b.
+        :return:
+        """
         super(REPS, self).__init__(**kwargs)
         self.epsilon = epsilon
         self.L2_reg_dual = L2_reg_dual
         self.L2_reg_loss = L2_reg_loss
         self.max_opt_itr = max_opt_itr
-        self.optimizer = locate(optimizer)
+        self.optimizer = optimizer
+        self.opt_info = None
 
     @overrides
-    def init_opt(self, env_spec, policy, baseline):
-        is_recurrent = int(policy.recurrent)
+    def init_opt(self):
+        is_recurrent = int(self.policy.recurrent)
 
         # Init dual param values
         self.param_eta = 15.
         # Adjust for linear feature vector.
-        self.param_v = np.random.rand(env_spec.observation_space.flat_dim * 2 + 4)
+        self.param_v = np.random.rand(self.env.observation_space.flat_dim * 2 + 4)
 
         # Theano vars
-        obs_var = env_spec.observation_space.new_tensor_variable(
+        obs_var = self.env.observation_space.new_tensor_variable(
             'obs',
             extra_dims=1 + is_recurrent,
         )
-        action_var = env_spec.action_space.new_tensor_variable(
+        action_var = self.env.action_space.new_tensor_variable(
             'action',
             extra_dims=1 + is_recurrent,
         )
-        # observations = new_tensor(
-        #     'observations',
-        #     ndim=1 + len(env.observation_shape),
-        #     dtype=env.observation_dtype
-        # )
-        # action_var = TT.matrix('action', dtype=env.action_dtype)
         rewards = ext.new_tensor(
             'rewards',
             ndim=1 + is_recurrent,
@@ -90,8 +82,8 @@ class REPS(BatchPolopt):
         valid_var = TT.matrix('valid')
 
         # Policy-related symbolics
-        dist_info_vars = policy.dist_info_sym(obs_var, action_var)
-        dist = policy.distribution
+        dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)
+        dist = self.policy.distribution
         # log of the policy dist
         logli = dist.log_likelihood_sym(action_var, dist_info_vars)
 
@@ -109,14 +101,14 @@ class REPS(BatchPolopt):
             ))
 
         # Add regularization to loss.
-        reg_params = policy.get_params(regularizable=True)
+        reg_params = self.policy.get_params(regularizable=True)
         loss += self.L2_reg_loss * TT.sum(
             [TT.mean(TT.square(param)) for param in reg_params]
         ) / len(reg_params)
 
         # Policy loss gradient.
         loss_grad = TT.grad(
-            loss, policy.get_params(trainable=True))
+            loss, self.policy.get_params(trainable=True))
 
         if is_recurrent:
             recurrent_vars = [valid_var]
@@ -193,7 +185,7 @@ class REPS(BatchPolopt):
             outputs=dual_grad
         )
 
-        return dict(
+        self.opt_info = dict(
             f_loss_grad=f_loss_grad,
             f_loss=f_loss,
             f_dual=f_dual,
@@ -208,12 +200,12 @@ class REPS(BatchPolopt):
         return np.concatenate([o, o ** 2, al, al ** 2, al ** 3, np.ones((l, 1))], axis=1)
 
     @overrides
-    def optimize_policy(self, itr, policy, samples_data, opt_info):
+    def optimize_policy(self, itr, samples_data):
         # Init vars
         rewards = samples_data['rewards']
         actions = samples_data['actions']
         observations = samples_data['observations']
-        if policy.recurrent:
+        if self.policy.recurrent:
             recurrent_vals = [samples_data["valids"]]
         else:
             recurrent_vals = []
@@ -223,7 +215,7 @@ class REPS(BatchPolopt):
             feats = self._features(path)
             feats = np.vstack([feats, np.zeros(feats.shape[1])])
             feat_diff.append(feats[1:] - feats[:-1])
-        if policy.recurrent:
+        if self.policy.recurrent:
             max_path_length = max([len(path["advantages"]) for path in samples_data["paths"]])
             # pad feature diffs
             feat_diff = np.array([tensor_utils.pad_tensor(fd, max_path_length) for fd in feat_diff])
@@ -237,8 +229,8 @@ class REPS(BatchPolopt):
         # Here we need to optimize dual through BFGS in order to obtain \eta
         # value. Initialize dual function g(\theta, v). \eta > 0
         # First eval delta_v
-        f_dual = opt_info['f_dual']
-        f_dual_grad = opt_info['f_dual_grad']
+        f_dual = self.opt_info['f_dual']
+        f_dual_grad = self.opt_info['f_dual_grad']
 
         # Set BFGS eval function
         def eval_dual(input):
@@ -283,21 +275,21 @@ class REPS(BatchPolopt):
         ###################
         # Optimize policy #
         ###################
-        cur_params = policy.get_param_values(trainable=True)
-        f_loss = opt_info["f_loss"]
-        f_loss_grad = opt_info['f_loss_grad']
+        cur_params = self.policy.get_param_values(trainable=True)
+        f_loss = self.opt_info["f_loss"]
+        f_loss_grad = self.opt_info['f_loss_grad']
         input = [rewards, observations, feat_diff,
                  actions] + recurrent_vals + [self.param_eta, self.param_v]
 
         # Set loss eval function
         def eval_loss(params):
-            policy.set_param_values(params, trainable=True)
+            self.policy.set_param_values(params, trainable=True)
             val = f_loss(*input)
             return val.astype(np.float64)
 
         # Set loss gradient eval function
         def eval_loss_grad(params):
-            policy.set_param_values(params, trainable=True)
+            self.policy.set_param_values(params, trainable=True)
             grad = f_loss_grad(*input)
             flattened_grad = tensor_utils.flatten_tensors(map(np.asarray, grad))
             return flattened_grad.astype(np.float64)
@@ -312,9 +304,9 @@ class REPS(BatchPolopt):
         )
         loss_after = eval_loss(params_ast)
 
-        f_kl = opt_info['f_kl']
+        f_kl = self.opt_info['f_kl']
         agent_infos = samples_data["agent_infos"]
-        dist_info_list = [agent_infos[k] for k in policy.distribution.dist_info_keys]
+        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
         mean_kl = f_kl(*([observations, actions] + dist_info_list + recurrent_vals)).astype(np.float64)
 
         logger.log('eta %f -> %f' % (eta_before, self.param_eta))
@@ -325,14 +317,11 @@ class REPS(BatchPolopt):
         logger.record_tabular('DualAfter', dual_after)
         logger.record_tabular('MeanKL', mean_kl)
 
-        return opt_info
-
     @overrides
-    def get_itr_snapshot(self, itr, env, policy, baseline, samples_data,
-                         opt_info):
+    def get_itr_snapshot(self, itr, samples_data):
         return dict(
             itr=itr,
-            policy=policy,
-            baseline=baseline,
-            env=env,
+            policy=self.policy,
+            baseline=self.baseline,
+            env=self.env,
         )

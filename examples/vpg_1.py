@@ -27,6 +27,10 @@ learning_rate = 0.01
 # Construct the computation graph
 
 # Create a Theano variable for storing the observations
+# We could have simply written `observations_var = TT.matrix('observations')` instead for this example. However,
+# doing it in a slightly more abstract way allows us to delegate to the environment for handling the correct data
+# type for the variable. For instance, for an environment with discrete observations, we might want to use integer
+# types if the observations are represented as one-hot vectors.
 observations_var = env.observation_space.new_tensor_variable(
     'observations',
     # It should have 1 extra dimension since we want to represent a list of observations
