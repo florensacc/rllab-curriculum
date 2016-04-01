@@ -11,6 +11,8 @@ import dateutil.tz
 import csv
 import joblib
 import json
+import cPickle as pickle
+import base64
 
 _prefixes = []
 _prefix_str = ''
@@ -147,7 +149,6 @@ def tabular_prefix(key):
 
 
 class TerminalTablePrinter(object):
-
     def __init__(self):
         self.headers = None
         self.tabulars = []
@@ -163,10 +164,11 @@ class TerminalTablePrinter(object):
     def refresh(self):
         import os
         rows, columns = os.popen('stty size', 'r').read().split()
-        tabulars = self.tabulars[-(int(rows)-3):]
+        tabulars = self.tabulars[-(int(rows) - 3):]
         sys.stdout.write("\x1b[2J\x1b[H")
         sys.stdout.write(tabulate(tabulars, self.headers))
         sys.stdout.write("\n")
+
 
 table_printer = TerminalTablePrinter()
 
@@ -231,10 +233,35 @@ def log_parameters(log_file, args, classes):
         json.dump(log_params, f, indent=2, sort_keys=True)
 
 
+def stub_to_json(stub_sth):
+    from rllab.misc.instrument import StubObject
+    from rllab.misc.instrument import StubAttr
+    if isinstance(stub_sth, StubObject):
+        assert len(stub_sth.args) == 0
+        data = dict()
+        for k, v in stub_sth.kwargs.iteritems():
+            data[k] = stub_to_json(v)
+        data["_name"] = stub_sth.proxy_class.__module__ + "." + stub_sth.proxy_class.__name__
+        return data
+    elif isinstance(stub_sth, StubAttr):
+        return dict(
+            obj=stub_to_json(stub_sth.obj),
+            attr=stub_to_json(stub_sth.attr_name)
+        )
+    return stub_sth
+
+
 def log_parameters_lite(log_file, args):
     log_params = {}
     for param_name, param_value in args.__dict__.iteritems():
         log_params[param_name] = param_value
+    if args.args_data is not None:
+        stub_method = pickle.loads(base64.b64decode(args.args_data))
+        method_args = stub_method.kwargs
+        log_params["json_args"] = dict()
+        for k, v in method_args.items():
+            log_params["json_args"][k] = stub_to_json(v)
+        log_params["json_args"]["algo"] = stub_to_json(stub_method.obj)
     mkdir_p(os.path.dirname(log_file))
     with open(log_file, "w") as f:
         json.dump(log_params, f, indent=2, sort_keys=True)

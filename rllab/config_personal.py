@@ -7,8 +7,6 @@ KUBE_PREFIX = "rocky_"
 
 DOCKER_LOG_DIR = "/tmp/expt"
 
-POD_DIR = PROJECT_PATH + "/.pods"
-
 AWS_S3_PATH = "s3://rocky-rllab-data/experiments"
 
 AWS_IMAGE_ID = "ami-19343d73"
