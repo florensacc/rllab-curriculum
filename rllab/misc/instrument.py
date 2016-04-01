@@ -318,6 +318,9 @@ def run_experiment_lite(
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
+        params["resources"] = params.get("resouces", config.KUBE_DEFAULT_RESOURCES)
+        params["node_selector"] = params.get("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
+        params["exp_prefix"] = exp_prefix
         pod_dict = to_lab_kube_pod(params, code_full_path=s3_code_path, docker_image=docker_image, script=script)
         pod_str = json.dumps(pod_dict, indent=1)
         if dry:
@@ -609,6 +612,9 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
     """
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
+    resources = params.pop("resources")
+    node_selector = params.pop("node_selector")
+    exp_prefix = params.pop("exp_prefix")
     mkdir_p(log_dir)
     pre_commands = list()
     pre_commands.append('mkdir -p ~/.aws')
@@ -655,6 +661,7 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
             "labels": {
                 "expt": pod_name,
                 "exp_time": timestamp,
+                "exp_prefix": exp_prefix,
             },
         },
         "spec": {
@@ -666,19 +673,13 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
                         "/bin/bash",
                         "-c",
                         "-li", # to load conda env file
-                        command
+                        command,
                     ],
-                    "resources": {
-                        "requests": {
-                            "cpu": 1.5,
-                        }
-                    },
+                    "resources": resources,
                     "imagePullPolicy": "Always",
                 }
             ],
             "restartPolicy": "Never",
-            "nodeSelector": {
-                "aws/type": "m4.xlarge",
-            }
+            "nodeSelector": node_selector,
         }
     }
