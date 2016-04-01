@@ -1,8 +1,6 @@
 FROM ubuntu:14.04
 
 # ========== Anaconda ==========
-
-ADD environment.yml /root/code/environment.yml
 # https://github.com/ContinuumIO/docker-images/blob/master/anaconda/Dockerfile
 RUN apt-get update --fix-missing && apt-get install -y wget bzip2 ca-certificates \
     libglib2.0-0 libxext6 libsm6 libxrender1 \
@@ -49,6 +47,6 @@ ADD environment.yml /root/code/environment.yml
 RUN conda env create -f /root/code/environment.yml
 
 ENV PYTHONPATH /root/code/rllab:$PYTHONPATH
-ADD . /root/code/rllab
 RUN echo "source activate rllab" >> /root/.bashrc
+ENV BASH_ENV /root/.bashrc
 WORKDIR /root/code
