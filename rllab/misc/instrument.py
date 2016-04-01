@@ -662,7 +662,12 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
                 {
                     "name": "foo",
                     "image": docker_image,
-                    "command": ["/bin/bash", "-c", command],
+                    "command": [
+                        "/bin/bash",
+                        "-c",
+                        "-li", # to load conda env file
+                        command
+                    ],
                     "resources": {
                         "requests": {
                             "cpu": 1.5,
