@@ -8,6 +8,10 @@ env = normalize(PointEnv())
 policy = GaussianMLPPolicy(
     env_spec=env.spec,
 )
-algo = TRPO()
 baseline = LinearFeatureBaseline(env_spec=env.spec)
-algo.train(env=env, policy=policy, baseline=baseline)
+algo = TRPO(
+    env=env,
+    policy=policy,
+    baseline=baseline,
+)
+algo.train()
