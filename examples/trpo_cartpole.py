@@ -11,7 +11,13 @@ policy = GaussianMLPPolicy(
     # The neural network policy should have two hidden layers, each with 32 hidden units.
     hidden_sizes=(32, 32)
 )
+
+baseline = LinearFeatureBaseline(env_spec=env.spec)
+
 algo = TRPO(
+    env=env,
+    policy=policy,
+    baseline=baseline,
     batch_size=4000,
     whole_paths=True,
     max_path_length=100,
@@ -19,6 +25,4 @@ algo = TRPO(
     discount=0.99,
     step_size=0.01,
 )
-baseline = LinearFeatureBaseline(env_spec=env.spec)
-
-algo.train(env=env, policy=policy, baseline=baseline)
+algo.train()
