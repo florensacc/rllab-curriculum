@@ -59,7 +59,12 @@ class HrlAnalyzer(object):
     ]
 
     def __init__(self, file_name):
+        print "loading"
+        import sys
+        sys.stdout.flush()
         params = joblib.load(file_name)
+        print "loaded"
+        sys.stdout.flush()
         self._env = env = params["env"]
         self._policy = policy = params["policy"]
         self._n_row = env.wrapped_env.n_row
@@ -135,7 +140,7 @@ class HrlAnalyzer(object):
         for _ in xrange(50):
             paths.append(rollout(env=self._env, agent=self._policy, max_length=200))
         states = np.vstack([p["observations"] for p in paths])
-        print np.array_str(np.sum(states, axis=0).reshape((4, 4)))
+        print np.array_str(np.mean(states, axis=0).reshape((4, 4)))
 
     def rollout(self, max_length=100):
         path = rollout(env=self._env, agent=self._policy, max_length=max_length)

@@ -24,7 +24,8 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
             env_spec,
             policy,
             regressor_cls=None,
-            regressor_args=None):
+            regressor_args=None,
+            logger_delegate=None):
         assert isinstance(policy, SubgoalPolicy)
         assert isinstance(policy.subgoal_space, Discrete)
         assert isinstance(policy.high_policy.distribution, Categorical)
@@ -43,6 +44,7 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
             **regressor_args
         )
         self._subgoal_space = policy.subgoal_space
+        self._logger_delegate = logger_delegate
 
     def _get_relevant_data(self, paths):
         obs = np.concatenate([p["observations"][:-1] for p in paths])
@@ -56,6 +58,12 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
         xs = np.concatenate([flat_obs, subgoals], axis=1)
         ys = flat_next_obs
         self._regressor.fit(xs, ys)
+        if self._logger_delegate:
+            self._logger_delegate.fit(paths)
+
+    def log_diagnostics(self, paths):
+        if self._logger_delegate:
+            self._logger_delegate.log_diagnostics(paths)
 
     def predict(self, path):
         flat_obs, flat_next_obs, subgoals = self._get_relevant_data([path])

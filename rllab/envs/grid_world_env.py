@@ -55,6 +55,18 @@ class GridWorldEnv(Env, Serializable):
         self._state = None
         self._domain_fig = None
 
+    def reset(self):
+        self._state = self._start_state
+        return self._get_current_obs()
+
+    def set_state(self, state):
+        x = state / self._n_col
+        y = state % self._n_col
+        self._state = np.array([x, y])
+
+    def get_state(self):
+        return self._get_current_obs()
+
     @property
     def n_row(self):
         return self._n_row
@@ -62,10 +74,6 @@ class GridWorldEnv(Env, Serializable):
     @property
     def n_col(self):
         return self._n_col
-
-    def reset(self):
-        self._state = self._start_state
-        return self._get_current_obs()
 
     def step(self, action):
         """

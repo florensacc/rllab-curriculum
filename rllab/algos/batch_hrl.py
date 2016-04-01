@@ -21,7 +21,7 @@ class BatchHRL(BatchPolopt, Serializable):
             mi_coeff=0.1,
             subgoal_interval=1,
             **kwargs):
-        super(BatchHRL, self).__init__(**kwargs)
+        super(BatchHRL, self).__init__(env=env, policy=policy, baseline=baseline, **kwargs)
         Serializable.quick_init(self, locals())
         self.env = env
         self.policy = policy
@@ -53,6 +53,10 @@ class BatchHRL(BatchPolopt, Serializable):
             baseline=self.baseline,
             env=self.env,
         )
+
+    def log_diagnostics(self, paths):
+        super(BatchHRL, self).log_diagnostics(paths)
+        self.bonus_evaluator.log_diagnostics(paths)
 
     def _subsample_path(self, path, interval):
         observations = path['observations']
@@ -149,11 +153,9 @@ class BatchHRL(BatchPolopt, Serializable):
             low_paths.append(low_path)
         logger.record_tabular("AverageBonusReturn", np.mean(bonus_returns))
         with logger.tabular_prefix('Hi_'), logger.prefix('Hi | '):
-            high_samples_data = self.high_algo.process_samples(
-                itr, high_paths, self.policy.high_env_spec, self.policy.high_policy, self.baseline.high_baseline)
+            high_samples_data = self.high_algo.process_samples(itr, high_paths)
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
-            low_samples_data = self.low_algo.process_samples(
-                itr, low_paths, self.policy.low_env_spec, self.policy.low_policy, self.baseline.low_baseline)
+            low_samples_data = self.low_algo.process_samples(itr, low_paths)
             for path in low_samples_data['paths']:
                 if np.max(abs(self.baseline.low_baseline.predict(path))) > 1e3:
                     import ipdb; ipdb.set_trace()

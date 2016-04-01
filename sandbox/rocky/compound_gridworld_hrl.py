@@ -1,4 +1,5 @@
 import os
+
 os.environ["THEANO_FLAGS"] = "device=cpu"
 from rllab.envs.compound_action_sequence_env import CompoundActionSequenceEnv
 from rllab.envs.grid_world_env import GridWorldEnv
@@ -11,11 +12,11 @@ from rllab.baselines.subgoal_baseline import SubgoalBaseline
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
+from rllab.mi_evaluator.exact_state_given_goal_mi_evaluator import ExactStateGivenGoalMIEvaluator
 from rllab.algos.trpo import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 
 stub(globals())
-
 
 env = GridWorldEnv(
     desc=[
@@ -26,9 +27,7 @@ env = GridWorldEnv(
     ]
 )
 
-
-level = "hrl_level0"
-
+level = "hrl_level2"
 
 level_configs = dict(
     hrl_level0=dict(
@@ -67,21 +66,6 @@ env = CompoundActionSequenceEnv(
     action_map=level_configs[level]["action_map"],
 )
 
-algo = BatchHRL(
-    batch_size=10000,
-    whole_paths=True,
-    max_path_length=60,
-    n_itr=100,
-    high_algo=TRPO(
-        discount=0.99,
-        step_size=0.01,
-    ),
-    low_algo=TRPO(
-        discount=0.99,
-        step_size=0.01,
-    ),
-)
-
 policy = SubgoalPolicy(
     env_spec=env.spec,
     subgoal_interval=level_configs[level]["subgoal_interval"],
@@ -116,7 +100,12 @@ baseline = SubgoalBaseline(
     # ),
 )
 
-evaluator = StateGivenGoalMIEvaluator(
+exact_evaluator = ExactStateGivenGoalMIEvaluator(
+    env=env,
+    policy=policy,
+)
+
+approx_evaluator = StateGivenGoalMIEvaluator(
     env_spec=env.spec,
     policy=policy,
     # high_policy_distribution=high_policy.distribution,
@@ -125,14 +114,43 @@ evaluator = StateGivenGoalMIEvaluator(
     regressor_args=dict(
         optimizer=ConjugateGradientOptimizer(),
     ),
+    logger_delegate=exact_evaluator,
 )
 
-run_experiment_lite(
-    algo.train(env=env, policy=policy, baseline=baseline, bonus_evaluator=evaluator),
-    exp_prefix=level,
-    n_parallel=1,
-    snapshot_mode="last",
-    seed=1,
-    mode="local",
-    # env=ext.merge_dict(os.environ, dict(THEANO_FLAGS="optimizer=None"))
-)
+evaluators = [approx_evaluator, exact_evaluator]
+
+for evaluator in evaluators:
+    algo = BatchHRL(
+        env=env,
+        policy=policy,
+        baseline=baseline,
+        bonus_evaluator=evaluator,
+        batch_size=10000,
+        whole_paths=True,
+        max_path_length=60,
+        n_itr=100,
+        high_algo=TRPO(
+            env=env,
+            policy=policy.high_policy,
+            baseline=baseline.high_baseline,
+            discount=0.99,
+            step_size=0.01,
+        ),
+        low_algo=TRPO(
+            env=env,
+            policy=policy.low_policy,
+            baseline=baseline.low_baseline,
+            discount=0.99,
+            step_size=0.01,
+        ),
+    )
+
+    run_experiment_lite(
+        algo.train(),
+        exp_prefix=level + "_approx_exact_cmp",
+        n_parallel=4,
+        snapshot_mode="last",
+        seed=111,
+        mode="local",
+        # env=ext.merge_dict(os.environ, dict(THEANO_FLAGS="optimizer=None"))
+    )

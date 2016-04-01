@@ -236,6 +236,7 @@ def log_parameters(log_file, args, classes):
 def stub_to_json(stub_sth):
     from rllab.misc.instrument import StubObject
     from rllab.misc.instrument import StubAttr
+    from rllab.misc.instrument import StubClass
     if isinstance(stub_sth, StubObject):
         assert len(stub_sth.args) == 0
         data = dict()
@@ -248,6 +249,12 @@ def stub_to_json(stub_sth):
             obj=stub_to_json(stub_sth.obj),
             attr=stub_to_json(stub_sth.attr_name)
         )
+    elif isinstance(stub_sth, StubClass):
+        return stub_sth.proxy_class.__module__ + "." + stub_sth.proxy_class.__name__
+    elif isinstance(stub_sth, dict):
+        return {stub_to_json(k): stub_to_json(v) for k, v in stub_sth.iteritems()}
+    elif isinstance(stub_sth, (list, tuple)):
+        return map(stub_to_json, stub_sth)
     return stub_sth
 
 

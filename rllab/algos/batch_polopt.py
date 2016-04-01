@@ -84,9 +84,7 @@ class BatchPolopt(RLAlgorithm):
             logger.push_prefix('itr #%d | ' % itr)
             paths = self.obtain_samples(itr)
             samples_data = self.process_samples(itr, paths)
-            self.env.log_diagnostics(paths)
-            self.policy.log_diagnostics(paths)
-            self.baseline.log_diagnostics(paths)
+            self.log_diagnostics(paths)
             self.optimize_policy(itr, samples_data)
             logger.log("saving snapshot...")
             params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
@@ -102,6 +100,11 @@ class BatchPolopt(RLAlgorithm):
                     raw_input("Plotting evaluation run: Press Enter to "
                               "continue...")
         self.shutdown_worker()
+
+    def log_diagnostics(self, paths):
+        self.env.log_diagnostics(paths)
+        self.policy.log_diagnostics(paths)
+        self.baseline.log_diagnostics(paths)
 
     def init_opt(self):
         """
