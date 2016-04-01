@@ -41,4 +41,14 @@ DOCKER_CODE_DIR = "/root/code/rllab"
 
 AWS_CODE_SYNC_S3_PATH = "s3://to/be/overriden/in/personal"
 
+KUBE_DEFAULT_RESOURCES = {
+    "requests": {
+        "cpu": 1.5,
+    }
+}
+
+KUBE_DEFAULT_NODE_SELECTOR = {
+    "aws/type": "m4.xlarge",
+}
+
 from config_personal import *

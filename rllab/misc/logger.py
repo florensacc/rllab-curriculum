@@ -261,7 +261,12 @@ def log_parameters_lite(log_file, args):
         log_params["json_args"] = dict()
         for k, v in method_args.items():
             log_params["json_args"][k] = stub_to_json(v)
+        kwargs = stub_method.obj.kwargs
+        for k in ["baseline", "env", "policy"]:
+            if k in kwargs:
+                log_params["json_args"][k] = stub_to_json(kwargs.pop(k))
         log_params["json_args"]["algo"] = stub_to_json(stub_method.obj)
     mkdir_p(os.path.dirname(log_file))
     with open(log_file, "w") as f:
         json.dump(log_params, f, indent=2, sort_keys=True)
+
