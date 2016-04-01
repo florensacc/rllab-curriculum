@@ -306,7 +306,7 @@ def #{prop[:name]}(self):
 
 @#{prop[:name]}.setter
 def #{prop[:name]}(self, value):
-    val_ptr = np.array(value).ctypes.data_as(POINTER(#{ctype_type}))
+    val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(#{ctype_type}))
     memmove(self._wrapped.contents.#{prop[:name]}, val_ptr, #{count} * sizeof(#{ctype_type}))
 }
 
