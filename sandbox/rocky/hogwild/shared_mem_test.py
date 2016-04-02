@@ -17,7 +17,8 @@ def new_shared_mem_array(init_val):
 def init_worker(x):
     global x_
     x_ = x
-    x_var = theano.shared(x_, borrow=True)
+    x_var = theano.shared(np.zeros_like(x), borrow=True)
+    x_var.set_value(x_, borrow=True)
     global f_update
     f_update = theano.function(
         inputs=[],
