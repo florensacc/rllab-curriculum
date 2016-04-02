@@ -11,6 +11,7 @@ from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from rllab.baselines.subgoal_baseline import SubgoalBaseline
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
 from rllab.mi_evaluator.exact_state_given_goal_mi_evaluator import ExactStateGivenGoalMIEvaluator
 from rllab.algos.trpo import TRPO
@@ -112,12 +113,13 @@ approx_evaluator = StateGivenGoalMIEvaluator(
     # low_policy_distribution=low_policy.distribution,
     regressor_cls=CategoricalMLPRegressor,
     regressor_args=dict(
-        optimizer=ConjugateGradientOptimizer(),
+        use_trust_region=False,
+        optimizer=LbfgsOptimizer(),
     ),
     logger_delegate=exact_evaluator,
 )
 
-evaluators = [approx_evaluator, exact_evaluator]
+evaluators = [approx_evaluator]#, exact_evaluator]
 
 for evaluator in evaluators:
     algo = BatchHRL(
@@ -147,8 +149,8 @@ for evaluator in evaluators:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix=level + "_approx_exact_cmp",
-        n_parallel=4,
+        exp_prefix=level,# + "_approx_exact_cmp",
+        n_parallel=1,
         snapshot_mode="last",
         seed=111,
         mode="local",
