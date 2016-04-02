@@ -1,5 +1,5 @@
 from sandbox.rocky.hogwild.shared_policy import SharedPolicy
-from sandbox.rocky.hogwild.shared_qf import
+from sandbox.rocky.hogwild.shared_q_function import
 from sandbox.rocky.hogwild.async_ddpg import AsyncDDPG
 from rllab.policies.deterministic_mlp_policy import DeterministicMLPPolicy
 from rllab.q_functions.continuous_mlp_q_function import ContinuousMLPQFunction

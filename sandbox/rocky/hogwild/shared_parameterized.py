@@ -39,3 +39,14 @@ class SharedParameterized(Parameterized):
 
     def get_params(self, **tags):
         return self.wrapped_obj.get_params(**tags)
+
+    def new_mem_copy(self):
+        """
+        Create a clone of the current object, with its own shared parameters
+        :return:
+        """
+        clone = pickle.loads(pickle.dumps(self))
+        for param in clone.get_params():
+            param.set_value(new_shared_mem_array(param.get_value()), borrow=True)
+        return clone
+
