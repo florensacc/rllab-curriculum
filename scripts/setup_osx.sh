@@ -6,19 +6,21 @@ hash brew 2>/dev/null || {
     exit 0
 }
 
+hash conda 2>/dev/null || {
+    echo "Please install anaconda before continuing. You can download it at https://www.continuum.io/downloads. Please use the Python 2.7 installer."
+    exit 0
+}
+
+
 echo "Installing system dependencies"
 echo "You will probably be asked for your sudo password."
 
-sudo easy_install pip
 brew install swig sdl sdl_image sdl_mixer sdl_ttf portmidi
-# Make sure that virtualenv is available
-hash virtualenv 2>/dev/null || {
-  echo "Installing virtualenv"
-  sudo pip install virtualenv
-}
 
 # Make sure that we're under the directory of the project
 cd "$(dirname "$0")/.."
-conda env create -f /root/code/environment.yml
-source activate rllab
+echo "Creating conda environment..."
+conda env create -f environment.yml
+conda env update
 
+echo "Conda environment created! Make sure to run \`source activate rllab\` whenever you open a new terminal and want to run programs under rllab."

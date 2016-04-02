@@ -5,21 +5,21 @@ PROJECT_PATH = osp.abspath(osp.join(osp.dirname(__file__), '..'))
 
 LOG_DIR = PROJECT_PATH + "/data"
 
-DOCKER_IMAGE = "quay.io/openai/rocky-sandbox"
+DOCKER_IMAGE = "DOCKER_IMAGE"
 
-KUBE_PREFIX = "rocky_"
+KUBE_PREFIX = "rllab_"
 
 DOCKER_LOG_DIR = "/tmp/expt"
 
 POD_DIR = PROJECT_PATH + "/.pods"
 
-AWS_S3_PATH = "s3://pchen/experiments"
+AWS_S3_PATH = None
 
-AWS_IMAGE_ID = "ami-bf4849d5"
+AWS_IMAGE_ID = None
 
 AWS_INSTANCE_TYPE = "m4.2xlarge"
 
-AWS_KEY_NAME = "research_virginia"
+AWS_KEY_NAME = "AWS_KEY_NAME"
 
 AWS_SPOT = True
 
@@ -35,10 +35,20 @@ AWS_SECURITY_GROUPS = ["rllab"]
 
 AWS_REGION_NAME = "us-east-1"
 
-AWS_CODE_SYNC_S3_PATH = "s3://pchen/code"
-
 CODE_SYNC_IGNORES = ["*.git/*", "*data/*"]
 
 DOCKER_CODE_DIR = "/root/code/rllab"
+
+AWS_CODE_SYNC_S3_PATH = "s3://to/be/overriden/in/personal"
+
+KUBE_DEFAULT_RESOURCES = {
+    "requests": {
+        "cpu": 1.5,
+    }
+}
+
+KUBE_DEFAULT_NODE_SELECTOR = {
+    "aws/type": "m4.xlarge",
+}
 
 from config_personal import *

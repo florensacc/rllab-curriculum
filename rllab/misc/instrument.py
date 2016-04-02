@@ -5,6 +5,7 @@ import base64
 import os.path as osp
 import cPickle as pickle
 import inspect
+import sys
 from contextlib import contextmanager
 
 import errno
@@ -116,29 +117,129 @@ class StubObject(object):
         return "StubObject(%s, *%s, **%s)" % (str(self.proxy_class), str(self.args), str(self.kwargs))
 
 
+class VariantGenerator(object):
+    """
+    Usage:
+
+    vg = VariantGenerator()
+    vg.add("param1", [1, 2, 3])
+    vg.add("param2", ['x', 'y'])
+    vg.variants() => # all combinations of [1,2,3] x ['x','y']
+
+    Supports noncyclic dependency among parameters:
+    vg = VariantGenerator()
+    vg.add("param1", [1, 2, 3])
+    vg.add("param2", lambda param1: [param1+1, param1+2])
+    vg.variants() => # ..
+    """
+
+    def __init__(self):
+        self._variants = []
+
+    def add(self, key, vals):
+        self._variants.append((key, vals))
+
+    def variants(self):
+        return list(self.ivariants())
+
+    def ivariants(self):
+        dependencies = list()
+        for key, vals in self._variants:
+            if hasattr(vals, "__call__"):
+                args = inspect.getargspec(vals).args
+                dependencies.append((key, set(args)))
+            else:
+                dependencies.append((key, set()))
+        sorted_keys = []
+        # topo sort all nodes
+        while len(sorted_keys) < len(self._variants):
+            # get all nodes with zero in-degree
+            free_nodes = [k for k, v in dependencies if len(v) == 0]
+            if len(free_nodes) == 0:
+                error_msg = "Invalid parameter dependency: \n"
+                for k, v in dependencies:
+                    if len(v) > 0:
+                        error_msg += k + " depends on " + " & ".join(v) + "\n"
+                raise ValueError(error_msg)
+            dependencies = [(k, v) for k, v in dependencies if k not in free_nodes]
+            # remove the free nodes from the remaining dependencies
+            for _, v in dependencies:
+                v.difference_update(free_nodes)
+            sorted_keys += free_nodes
+        return self._ivariants_sorted(sorted_keys)
+
+    def _ivariants_sorted(self, sorted_keys):
+        if len(sorted_keys) == 0:
+            yield dict()
+        elif len(sorted_keys) == 1:
+            key = sorted_keys[0]
+            vals = [v for k, v in self._variants if k == key][0]
+            for val in vals:
+                yield {key: val}
+        else:
+            first_keys = sorted_keys[:-1]
+            first_variants = self._ivariants_sorted(first_keys)
+            last_key = sorted_keys[-1]
+            last_vals = [v for k, v in self._variants if k == last_key][0]
+            if hasattr(last_vals, "__call__"):
+                last_val_keys = inspect.getargspec(last_vals).args
+            else:
+                last_val_keys = None
+            for variant in first_variants:
+                if hasattr(last_vals, "__call__"):
+                    last_variants = last_vals(**{k: variant[k] for k in last_val_keys})
+                    for last_choice in last_variants:
+                        yield ext.merge_dict(variant, {last_key: last_choice})
+                else:
+                    for last_choice in last_vals:
+                        yield ext.merge_dict(variant, {last_key: last_choice})
+
+
 def stub(glbs):
     # replace the __init__ method in all classes
     # hacky!!!
     for k, v in glbs.items():
         if isinstance(v, type) and v != StubClass:
             glbs[k] = StubClass(v)
-            # mkstub = (lambda v_local: lambda *args, **kwargs: StubClass(v_local, *args, **kwargs))(v)
-            # glbs[k].__new__ = types.MethodType(mkstub, glbs[k])
-            # glbs[k].__init__ = types.MethodType(lambda *args: None, glbs[k])
 
 
-# def run_experiment(params, script='scripts/run_experiment.py'):
-#     command = to_command(params, script)
-#     try:
-#         subprocess.call(command, shell=True)
-#     except Exception as e:
-#         if isinstance(e, KeyboardInterrupt):
-#             raise
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is True for "yes" or False for "no".
+    """
+    valid = {"yes": True, "y": True, "ye": True,
+             "no": False, "n": False}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = raw_input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "
+                             "(or 'y' or 'n').\n")
 
 
 exp_count = 0
 now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
+remote_confirmed = False
 
 
 def run_experiment_lite(
@@ -150,13 +251,15 @@ def run_experiment_lite(
         docker_image=None,
         aws_config=None,
         env=None,
+        confirm_remote=True,
+        terminate_machine=True,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
     :param stub_method_call: A stubbed method call.
     :param script: The name of the entrance point python script
     :param mode: Where & how to run the experiment. Should be one of "local", "local_docker", "ec2",
-    "lab_kube" and "openai_kube" (must have OpenAI VPN set up).
+    and "lab_kube".
     :param dry: Whether to do a dry-run, which only prints the commands without executing them.
     :param exp_prefix: Name prefix for the experiments
     :param docker_image: name of the docker image. Ignored if using local mode.
@@ -166,15 +269,19 @@ def run_experiment_lite(
     """
     data = base64.b64encode(pickle.dumps(stub_method_call))
     global exp_count
+    global remote_confirmed
     exp_count += 1
     exp_name = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
     kwargs["exp_name"] = exp_name
     kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
     kwargs["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
                                         exp_name)
+    if mode not in ["local", "local_docker"] and not remote_confirmed and not dry and confirm_remote:
+        remote_confirmed = query_yes_no("Running in (non-dry) mode %s. Confirm?" % mode)
+        if not remote_confirmed:
+            sys.exit(1)
 
     if mode == "local":
-        # kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
         del kwargs["remote_log_dir"]
         params = dict(kwargs.items() + [("args_data", data)])
         command = to_local_command(params, script=script)
@@ -204,37 +311,16 @@ def run_experiment_lite(
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
         launch_ec2(params, exp_prefix=exp_prefix, docker_image=docker_image, script=script,
-                   aws_config=aws_config, dry=dry)
-    elif mode == "openai_kube":
-        if docker_image is None:
-            docker_image = config.DOCKER_IMAGE
-        params = dict(kwargs.items() + [("args_data", data)])
-        pod_dict = to_openai_kube_pod(params, docker_image=docker_image, script=script)
-        pod_str = json.dumps(pod_dict, indent=1)
-        if dry:
-            print(pod_str)
-        fname = "{pod_dir}/{exp_prefix}/{exp_name}.json".format(
-            pod_dir=config.POD_DIR,
-            exp_prefix=exp_prefix,
-            exp_name=exp_name
-        )
-        with open(fname, "w") as fh:
-            fh.write(pod_str)
-        kubecmd = "kubectl create -f %s" % fname
-        print(kubecmd)
-        if dry:
-            return
-        try:
-            subprocess.call(kubecmd, shell=True)
-        except Exception as e:
-            if isinstance(e, KeyboardInterrupt):
-                raise
+                   aws_config=aws_config, dry=dry, terminate_machine=terminate_machine)
     elif mode == "lab_kube":
         # first send code folder to s3
         s3_code_path = s3_sync_code(config, dry=dry)
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
+        params["resources"] = params.get("resouces", config.KUBE_DEFAULT_RESOURCES)
+        params["node_selector"] = params.get("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
+        params["exp_prefix"] = exp_prefix
         pod_dict = to_lab_kube_pod(params, code_full_path=s3_code_path, docker_image=docker_image, script=script)
         pod_str = json.dumps(pod_dict, indent=1)
         if dry:
@@ -347,7 +433,7 @@ def dedent(s):
 
 
 def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.py',
-               aws_config=None, dry=False):
+               aws_config=None, dry=False, terminate_machine=True):
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
 
@@ -367,7 +453,7 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
 
     sio = StringIO()
     sio.write("#!/bin/bash\n")
-    sio.write("rm /home/ubuntu/user_data.log")
+    # sio.write("rm /home/ubuntu/user_data.log")
     sio.write("{\n")
     sio.write("""
         die() { status=$1; shift; echo "FATAL: $*"; exit $status; }
@@ -402,10 +488,11 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
     sio.write("""
         aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
     """.format(remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
-    sio.write("""
-        EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
-        aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {aws_region}
-    """.format(aws_region=config.AWS_REGION_NAME))
+    if terminate_machine:
+        sio.write("""
+            EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
+            aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {aws_region}
+        """.format(aws_region=config.AWS_REGION_NAME))
     sio.write("} >> /home/ubuntu/user_data.log 2>&1\n")
 
     import boto3
@@ -474,78 +561,6 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
         )
 
 
-def to_openai_kube_pod(params, docker_image, script='scripts/run_experiment.py'):
-    """
-    :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
-    docker volume mapping to make sure that the logging files are created at the correct locations
-    :param docker_image: docker image to run the command on
-    :param script: script command for running experiment
-    :return:
-    """
-    log_dir = params.get("log_dir")
-    mkdir_p(log_dir)
-    pre_commands = list()
-    pre_commands.append('mkdir -p ~/.aws')
-    # fetch credentials from the kubernetes secret file
-    pre_commands.append('echo "[default]" >> ~/.aws/credentials')
-    pre_commands.append(
-        'echo "aws_access_key_id = $(cat /etc/rocky-s3-credentials/access-key)" >> ~/.aws/credentials')
-    pre_commands.append(
-        'echo "aws_secret_access_key = $(cat /etc/rocky-s3-credentials/access-secret)" >> ~/.aws/credentials')
-    # copy the file to s3 after execution
-    post_commands = list()
-    post_commands.append('aws s3 cp --recursive %s %s' %
-                         (config.DOCKER_LOG_DIR,
-                          osp.join(config.AWS_S3_PATH, params.get("exp_name"))))
-    command = to_docker_command(params, docker_image=docker_image, script=script,
-                                pre_commands=pre_commands,
-                                post_commands=post_commands)
-    pod_name = config.KUBE_PREFIX + params["exp_name"]
-    # underscore is not allowed in pod names
-    pod_name = pod_name.replace("_", "-")
-    return {
-        "apiVersion": "v1",
-        "kind": "Pod",
-        "metadata": {
-            "name": pod_name,
-            "labels": {
-                "expt": pod_name,
-            },
-        },
-        "spec": {
-            "containers": [
-                {
-                    "name": "foo",
-                    "image": docker_image,
-                    "command": ["/bin/bash", "-c", command],
-                    "resources": {
-                        "limits": {
-                            "cpu": "4"
-                        },
-                    },
-                    "imagePullPolicy": "Always",
-                    "volumeMounts": [{
-                        "name": "rocky-s3-credentials",
-                        "mountPath": "/etc/rocky-s3-credentials",
-                        "readOnly": True
-                    }],
-                }
-            ],
-            "volumes": [{
-                "name": "rocky-s3-credentials",
-                "secret": {
-                    "secretName": "rocky-s3-credentials"
-                },
-            }],
-            "imagePullSecrets": [{"name": "quay-login-secret"}],
-            "restartPolicy": "Never",
-            "nodeSelector": {
-                "aws/class": "m",
-                "aws/type": "m4.xlarge",
-            }
-        }
-    }
-
 
 S3_CODE_PATH = None
 
@@ -597,6 +612,9 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
     """
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
+    resources = params.pop("resources")
+    node_selector = params.pop("node_selector")
+    exp_prefix = params.pop("exp_prefix")
     mkdir_p(log_dir)
     pre_commands = list()
     pre_commands.append('mkdir -p ~/.aws')
@@ -643,6 +661,7 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
             "labels": {
                 "expt": pod_name,
                 "exp_time": timestamp,
+                "exp_prefix": exp_prefix,
             },
         },
         "spec": {
@@ -650,18 +669,17 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
                 {
                     "name": "foo",
                     "image": docker_image,
-                    "command": ["/bin/bash", "-c", command],
-                    "resources": {
-                        "requests": {
-                            "cpu": 1.5,
-                        }
-                    },
+                    "command": [
+                        "/bin/bash",
+                        "-c",
+                        "-li", # to load conda env file
+                        command,
+                    ],
+                    "resources": resources,
                     "imagePullPolicy": "Always",
                 }
             ],
             "restartPolicy": "Never",
-            "nodeSelector": {
-                "aws/type": "m4.xlarge",
-            }
+            "nodeSelector": node_selector,
         }
     }

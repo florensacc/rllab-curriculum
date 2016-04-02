@@ -18,7 +18,7 @@ if [ ! -f vendor/mujoco/$mujoco_file ]; then
         echo "No file found at $path"
         exit 0
     fi
-    dir=`mktemp -d`
+    dir=`mktemp -d /tmp/mujoco`
     unzip $path -d $dir
     if [ ! -f $dir/mjpro/$mujoco_file ]; then
         echo "mjpro/$mujoco_file not found. Make sure you have the correct file (most likely named $zip_file)"

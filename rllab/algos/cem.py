@@ -32,6 +32,8 @@ def sample_return(env, policy, params, max_path_length, discount):
 class CEM(RLAlgorithm):
     def __init__(
             self,
+            env,
+            policy,
             n_itr=500,
             max_path_length=500,
             discount=0.99,
@@ -61,7 +63,8 @@ class CEM(RLAlgorithm):
         :param best_frac: Best fraction of the sampled params
         :return:
         """
-        super(CEM, self).__init__(**kwargs)
+        self.env = env
+        self.policy = policy
         self.batch_size = batch_size
         self.plot = plot
         self.extra_decay_time = extra_decay_time
@@ -75,13 +78,13 @@ class CEM(RLAlgorithm):
         self.max_path_length = max_path_length
         self.n_itr = n_itr
 
-    def train(self, env, policy, **kwargs):
-        parallel_sampler.populate_task(env, policy)
+    def train(self):
+        parallel_sampler.populate_task(self.env, self.policy)
         if self.plot:
-            plotter.init_plot(env, policy)
+            plotter.init_plot(self.env, self.policy)
 
         cur_std = self.init_std
-        cur_mean = policy.get_param_values()
+        cur_mean = self.policy.get_param_values()
         K = cur_mean.size
         n_best = int(self.n_samples * self.best_frac)
 
@@ -135,15 +138,15 @@ class CEM(RLAlgorithm):
                                   np.mean([len(info['returns']) for info in infos]))
             logger.record_tabular('NumTrajs',
                                   len(infos))
-            policy.set_param_values(best_x)
+            self.policy.set_param_values(best_x)
             logger.save_itr_params(itr, dict(
                 itr=itr,
-                policy=policy,
-                env=env,
+                policy=self.policy,
+                env=self.env,
                 cur_mean=cur_mean,
                 cur_std=cur_std,
             ))
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
             if self.plot:
-                plotter.update_plot(policy, self.max_path_length)
+                plotter.update_plot(self.policy, self.max_path_length)

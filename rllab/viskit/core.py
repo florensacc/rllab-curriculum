@@ -36,6 +36,7 @@ def load_progress(progress_csv_path):
 
 def to_json(stub_object):
     from rllab.misc.instrument import StubObject
+    from rllab.misc.instrument import StubAttr
     if isinstance(stub_object, StubObject):
         assert len(stub_object.args) == 0
         data = dict()
@@ -43,6 +44,11 @@ def to_json(stub_object):
             data[k] = to_json(v)
         data["_name"] = stub_object.proxy_class.__module__ + "." + stub_object.proxy_class.__name__
         return data
+    elif isinstance(stub_object, StubAttr):
+        return dict(
+            obj=to_json(stub_object.obj),
+            attr=to_json(stub_object.attr_name)
+        )
     return stub_object
 
 
@@ -89,12 +95,15 @@ def load_exps_data(exp_folder_path):
     exps = os.listdir(exp_folder_path)
     exps_data = []
     for exp in exps:
-        exp_path = os.path.join(exp_folder_path, exp)
-        params_json_path = os.path.join(exp_path, "params.json")
-        progress_csv_path = os.path.join(exp_path, "progress.csv")
-        progress = load_progress(progress_csv_path)
-        params = load_params(params_json_path)
-        exps_data.append(ext.AttrDict(progress=progress, params=params, flat_params=flatten_dict(params)))
+        try:
+            exp_path = os.path.join(exp_folder_path, exp)
+            params_json_path = os.path.join(exp_path, "params.json")
+            progress_csv_path = os.path.join(exp_path, "progress.csv")
+            progress = load_progress(progress_csv_path)
+            params = load_params(params_json_path)
+            exps_data.append(ext.AttrDict(progress=progress, params=params, flat_params=flatten_dict(params)))
+        except IOError as e:
+            print(e)
     return exps_data
 
 
@@ -121,7 +130,7 @@ class Selector(object):
         return Selector(self._exps_data, self._filters + ((k, v),))
 
     def _check_exp(self, exp):
-        return all((repr(exp.flat_params.get(k, None)) == repr(v) for k, v in self._filters))
+        return all((str(exp.flat_params.get(k, None)) == str(v) for k, v in self._filters))
 
     def extract(self):
         return filter(self._check_exp, self._exps_data)

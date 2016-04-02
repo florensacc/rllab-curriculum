@@ -3,8 +3,8 @@ import numpy as np
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
-from rllab.policies.subgoal_policy import SubgoalPolicy
 from rllab.misc.special import to_onehot
+from rllab.policies.subgoal_policy import SubgoalPolicy
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from rllab.spaces.discrete import Discrete
 

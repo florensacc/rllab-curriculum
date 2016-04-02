@@ -1,20 +1,19 @@
 from __future__ import print_function
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
-from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import normalize
 import numpy as np
 import theano
 import theano.tensor as TT
 from lasagne.updates import adam
 
-# normalize() makes sure that the actions for the MDP lies within the range
-# [-1, 1]
+# normalize() makes sure that the actions for the environment lies
+# within the range [-1, 1] (only works for environments with continuous actions)
 env = normalize(CartpoleEnv())
-# Initialize a neural network policy with a single hidden layer of 32 hidden
-# units
-policy = GaussianMLPPolicy(env.spec, hidden_sizes=(32,))
-# Initialize a linear baseline estimator using state features
+# Initialize a neural network policy with a single hidden layer of 8 hidden units
+policy = GaussianMLPPolicy(env.spec, hidden_sizes=(8,))
+# Initialize a linear baseline estimator using default hand-crafted features
 baseline = LinearFeatureBaseline(env.spec)
 
 # We will collect 100 trajectories per iteration
@@ -30,18 +29,37 @@ learning_rate = 0.1
 
 # Construct the computation graph
 
-observations_var = TT.matrix('observations')
-actions_var = TT.matrix('actions')
+# Create a Theano variable for storing the observations
+# We could have simply written `observations_var = TT.matrix('observations')` instead for this example. However,
+# doing it in a slightly more abstract way allows us to delegate to the environment for handling the correct data
+# type for the variable. For instance, for an environment with discrete observations, we might want to use integer
+# types if the observations are represented as one-hot vectors.
+observations_var = env.observation_space.new_tensor_variable(
+    'observations',
+    # It should have 1 extra dimension since we want to represent a list of observations
+    extra_dims=1
+)
+actions_var = env.action_space.new_tensor_variable(
+    'actions',
+    extra_dims=1
+)
 advantages_var = TT.vector('advantages')
 
-# policy.get_log_prob_sym computes the symbolic log probability of the
-# actions given the observations
+# policy.dist_info_sym returns a dictionary, whose values are symbolic expressions for quantities related to the
+# distribution of the actions. For a Gaussian policy, it contains the mean and (log) standard deviation.
+dist_info_vars = policy.dist_info_sym(observations_var, actions_var)
+
+# policy.distribution returns a distribution object under rllab.distributions. It contains many utilities for computing
+# distribution-related quantities, given the computed dist_info_vars. Below we use dist.log_likelihood_sym to compute
+# the symbolic log-likelihood. For this example, the corresponding distribution is an instance of the class
+# rllab.distributions.DiagonalGaussian
+dist = policy.distribution
+
 # Note that we negate the objective, since most optimizers assume a
 # minimization problem
-dist_info_vars = policy.dist_info_sym(observations_var, actions_var)
-dist = policy.distribution
 surr = - TT.mean(dist.log_likelihood_sym(actions_var, dist_info_vars) * advantages_var)
-# Get the list of trainable parameters
+
+# Get the list of trainable parameters.
 params = policy.get_params(trainable=True)
 grads = theano.grad(surr, params)
 
@@ -64,17 +82,21 @@ for _ in xrange(n_itr):
         observation = env.reset()
 
         for _ in xrange(T):
-            # policy.get_action() returns a pair of values. The second one
-            # summarizes the distribution of the actions in the case of a
-            # stochastic policy. This information is useful when forming
-            # importance sampling ratios. In our case it is not needed.
+            # policy.get_action() returns a pair of values. The second one returns a dictionary, whose values contains
+            # sufficient statistics for the action distribution. It should at least contain entries that would be
+            # returned by calling policy.dist_info(), which is the non-symbolic analog of policy.dist_info_sym().
+            # Storing these statistics is useful, e.g., when forming importance sampling ratios. In our case it is
+            # not needed.
             action, _ = policy.get_action(observation)
+            # Recall that the last entry of the tuple stores diagnostic information about the environment. In our
+            # case it is not needed.
             next_observation, reward, terminal, _ = env.step(action)
             observations.append(observation)
             actions.append(action)
             rewards.append(reward)
             observation = next_observation
             if terminal:
+                # Finish rollout if terminal state reached
                 break
 
         # We need to compute the empirical return for each time step along the
@@ -84,7 +106,6 @@ for _ in xrange(n_itr):
             actions=np.array(actions),
             rewards=np.array(rewards),
         )
-
         path_baseline = baseline.predict(path)
         advantages = []
         return_so_far = 0

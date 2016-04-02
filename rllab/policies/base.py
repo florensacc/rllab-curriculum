@@ -2,7 +2,6 @@ from rllab.core.parameterized import Parameterized
 
 
 class Policy(Parameterized):
-
     def __init__(self, env_spec):
         self._env_spec = env_spec
 
@@ -80,4 +79,3 @@ class StochasticPolicy(Policy):
         :return:
         """
         raise NotImplementedError
-

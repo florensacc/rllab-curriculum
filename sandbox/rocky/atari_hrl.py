@@ -43,12 +43,12 @@ policy = SubgoalPolicy(
     high_policy=CategoricalMLPPolicy(
         mdp=mdp.high_mdp,
         hidden_sizes=[32, 32],
-        nonlinearity=NL.rectify,
+        hidden_nonlinearity=NL.rectify,
     ),
     low_policy=CategoricalMLPPolicy(
         mdp=mdp.low_mdp,
         hidden_sizes=[32, 32],
-        nonlinearity=NL.rectify,
+        hidden_nonlinearity=NL.rectify,
     ),
 )
 

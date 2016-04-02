@@ -11,8 +11,10 @@ import numpy as np
 
 class MLP(object):
 
-    def __init__(self, input_shape, output_dim, hidden_sizes, nonlinearity,
-                 output_nonlinearity, name=None, input_var=None):
+    def __init__(self, input_shape, output_dim, hidden_sizes, hidden_nonlinearity,
+                 output_nonlinearity, hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
+                 output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
+                 name=None, input_var=None):
 
         if name is None:
             prefix = ""
@@ -25,14 +27,18 @@ class MLP(object):
             l_hid = L.DenseLayer(
                 l_hid,
                 num_units=hidden_size,
-                nonlinearity=nonlinearity,
-                name="%shidden_%d" % (prefix, idx)
+                nonlinearity=hidden_nonlinearity,
+                name="%shidden_%d" % (prefix, idx),
+                W=hidden_W_init,
+                b=hidden_b_init,
             )
         l_out = L.DenseLayer(
             l_hid,
             num_units=output_dim,
             nonlinearity=output_nonlinearity,
-            name="%soutput" % (prefix,)
+            name="%soutput" % (prefix,),
+            W=output_W_init,
+            b=output_b_init,
         )
         self._l_in = l_in
         self._l_out = l_out
@@ -61,13 +67,13 @@ class GRULayer(L.Layer):
     New hidden state:  h(t) = (1 - u(t)) * h(t-1) + u_t * c(t)
     Note that the reset, update, and cell vectors must have the same dimension as the hidden state
     """
-    def __init__(self, incoming, num_units, nonlinearity,
+    def __init__(self, incoming, num_units, hidden_nonlinearity,
                  gate_nonlinearity=LN.sigmoid, name=None,
                  W_init=LI.HeUniform(), b_init=LI.Constant(0.),
                  hidden_init=LI.Constant(0.), hidden_init_trainable=True):
 
-        if nonlinearity is None:
-            nonlinearity = LN.identity
+        if hidden_nonlinearity is None:
+            hidden_nonlinearity = LN.identity
 
         if gate_nonlinearity is None:
             gate_nonlinearity = LN.identity
@@ -95,7 +101,7 @@ class GRULayer(L.Layer):
         self.b_c = self.add_param(b_init, (num_units,), name="b_c", regularizable=False)
         self.gate_nonlinearity = gate_nonlinearity
         self.num_units = num_units
-        self.nonlinearity = nonlinearity
+        self.nonlinearity = hidden_nonlinearity
 
     def step(self, x, hprev):
         r = self.gate_nonlinearity(x.dot(self.W_xr) + hprev.dot(self.W_hr) + self.b_r)
@@ -145,12 +151,12 @@ class GRUStepLayer(L.MergeLayer):
 
 class GRUNetwork(object):
 
-    def __init__(self, input_shape, output_dim, hidden_dim, nonlinearity=LN.rectify,
+    def __init__(self, input_shape, output_dim, hidden_dim, hidden_nonlinearity=LN.rectify,
                  output_nonlinearity=None, name=None, input_var=None):
         l_in = L.InputLayer(shape=(None, None) + input_shape, input_var=input_var)
         l_step_input = L.InputLayer(shape=(None,) + input_shape)
         l_step_prev_hidden = L.InputLayer(shape=(None, hidden_dim))
-        l_gru = GRULayer(l_in, num_units=hidden_dim, nonlinearity=nonlinearity, hidden_init_trainable=False)
+        l_gru = GRULayer(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity, hidden_init_trainable=False)
         l_gru_flat = L.ReshapeLayer(
             l_gru, shape=(-1, hidden_dim)
         )

@@ -46,7 +46,7 @@ def concretize(maybe_stub):
         for k, v in maybe_stub.iteritems():
             ret[concretize(k)] = concretize(v)
         return ret
-    elif isinstance(maybe_stub, list):
+    elif isinstance(maybe_stub, (list, tuple)):
         return map(concretize, maybe_stub)
     else:
         return maybe_stub

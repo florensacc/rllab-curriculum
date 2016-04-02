@@ -1,7 +1,6 @@
 import numpy as np
 from rllab.algos.base import RLAlgorithm
 from rllab.sampler import parallel_sampler
-from rllab.misc import autoargs
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
@@ -17,6 +16,9 @@ class BatchPolopt(RLAlgorithm):
 
     def __init__(
             self,
+            env,
+            policy,
+            baseline,
             n_itr=500,
             start_itr=0,
             batch_size=5000,
@@ -32,6 +34,9 @@ class BatchPolopt(RLAlgorithm):
             **kwargs
     ):
         """
+        :param env: Environment
+        :param policy: Policy
+        :param baseline: Baseline
         :param n_itr: Number of iterations.
         :param start_itr: Starting iteration.
         :param batch_size: Number of samples per iteration.
@@ -48,105 +53,105 @@ class BatchPolopt(RLAlgorithm):
         :param store_paths: Whether to save all paths data to the snapshot.
         :return:
         """
-        self._n_itr = n_itr
-        self._start_itr = start_itr
-        self._batch_size = batch_size
-        self._max_path_length = max_path_length
-        self._discount = discount
-        self._gae_lambda = gae_lambda
-        self._plot = plot
-        self._pause_for_plot = pause_for_plot
-        self._whole_paths = whole_paths
-        self._center_adv = center_adv
-        self._positive_adv = positive_adv
-        self._store_paths = store_paths
+        self.env = env
+        self.policy = policy
+        self.baseline = baseline
+        self.n_itr = n_itr
+        self.start_itr = start_itr
+        self.batch_size = batch_size
+        self.max_path_length = max_path_length
+        self.discount = discount
+        self.gae_lambda = gae_lambda
+        self.plot = plot
+        self.pause_for_plot = pause_for_plot
+        self.whole_paths = whole_paths
+        self.center_adv = center_adv
+        self.positive_adv = positive_adv
+        self.store_paths = store_paths
 
-    def start_worker(self, env, policy, baseline):
-        parallel_sampler.populate_task(env, policy)
-        if self._plot:
-            plotter.init_plot(env, policy)
+    def start_worker(self):
+        parallel_sampler.populate_task(self.env, self.policy)
+        if self.plot:
+            plotter.init_plot(self.env, self.policy)
 
     def shutdown_worker(self):
         pass
 
-    def train(self, env, policy, baseline, **kwargs):
-        self.start_worker(env, policy, baseline)
-        opt_info = self.init_opt(env.spec, policy, baseline)
-        for itr in xrange(self._start_itr, self._n_itr):
+    def train(self):
+        self.start_worker()
+        self.init_opt()
+        for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
-            paths = self.obtain_samples(itr, env, policy, **kwargs)
-            samples_data = self.process_samples(itr, paths, env.spec, policy, baseline, **kwargs)
-            env.log_diagnostics(paths)
-            policy.log_diagnostics(paths)
-            baseline.log_diagnostics(paths)
-            opt_info = self.optimize_policy(
-                itr, policy, samples_data, opt_info, **kwargs)
+            paths = self.obtain_samples(itr)
+            samples_data = self.process_samples(itr, paths)
+            self.env.log_diagnostics(paths)
+            self.policy.log_diagnostics(paths)
+            self.baseline.log_diagnostics(paths)
+            self.optimize_policy(itr, samples_data)
             logger.log("saving snapshot...")
-            params = self.get_itr_snapshot(
-                itr, env, policy, baseline, samples_data, opt_info, **kwargs)
-            if self._store_paths:
+            params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
+            if self.store_paths:
                 params["paths"] = samples_data["paths"]
             logger.save_itr_params(itr, params)
             logger.log("saved")
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
-            if self._plot:
-                self.update_plot(policy)
-                if self._pause_for_plot:
+            if self.plot:
+                self.update_plot()
+                if self.pause_for_plot:
                     raw_input("Plotting evaluation run: Press Enter to "
                               "continue...")
         self.shutdown_worker()
 
-    def init_opt(self, env_spec, policy, baseline):
+    def init_opt(self):
         """
         Initialize the optimization procedure. If using theano / cgt, this may
         include declaring all the variables and compiling functions
         """
         raise NotImplementedError
 
-    def get_itr_snapshot(self, itr, env, policy, baseline, samples_data,
-                         opt_info, **kwargs):
+    def get_itr_snapshot(self, itr, samples_data):
         """
         Returns all the data that should be saved in the snapshot for this
         iteration.
         """
         raise NotImplementedError
 
-    def optimize_policy(self, itr, policy, samples_data, opt_info):
+    def optimize_policy(self, itr, samples_data):
         raise NotImplementedError
 
-    def update_plot(self, policy):
-        if self._plot:
-            plotter.update_plot(policy, self._max_path_length)
+    def update_plot(self):
+        if self.plot:
+            plotter.update_plot(self.policy, self.max_path_length)
 
-    def obtain_samples(self, itr, env, policy, **kwargs):
-        cur_params = policy.get_param_values()
+    def obtain_samples(self, itr):
+        cur_params = self.policy.get_param_values()
 
         parallel_sampler.request_samples(
             policy_params=cur_params,
-            max_samples=self._batch_size,
-            max_path_length=self._max_path_length,
-            whole_paths=self._whole_paths,
+            max_samples=self.batch_size,
+            max_path_length=self.max_path_length,
+            whole_paths=self.whole_paths,
         )
 
         return parallel_sampler.collect_paths()
 
-    def process_samples(self, itr, paths, env_spec, policy, baseline, **kwargs):
+    def process_samples(self, itr, paths):
 
         baselines = []
         returns = []
         for path in paths:
-            path_baselines = np.append(baseline.predict(path), 0)
+            path_baselines = np.append(self.baseline.predict(path), 0)
             deltas = path["rewards"] + \
-                     self._discount * path_baselines[1:] - \
+                     self.discount * path_baselines[1:] - \
                      path_baselines[:-1]
             path["advantages"] = special.discount_cumsum(
-                deltas, self._discount * self._gae_lambda)
-            path["returns"] = special.discount_cumsum(path["rewards"], self._discount)
+                deltas, self.discount * self.gae_lambda)
+            path["returns"] = special.discount_cumsum(path["rewards"], self.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
 
-        if not policy.recurrent:
+        if not self.policy.recurrent:
             observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
             actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
             rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
@@ -154,10 +159,10 @@ class BatchPolopt(RLAlgorithm):
             env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
             agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
 
-            if self._center_adv:
+            if self.center_adv:
                 advantages = util.center_advantages(advantages)
 
-            if self._positive_adv:
+            if self.positive_adv:
                 advantages = util.shift_advantages_to_positive(advantages)
 
             average_discounted_return = \
@@ -165,7 +170,7 @@ class BatchPolopt(RLAlgorithm):
 
             undiscounted_returns = [sum(path["rewards"]) for path in paths]
 
-            ent = np.mean(policy.distribution.entropy(agent_infos))
+            ent = np.mean(self.policy.distribution.entropy(agent_infos))
 
             ev = special.explained_variance_1d(
                 np.concatenate(baselines),
@@ -188,7 +193,7 @@ class BatchPolopt(RLAlgorithm):
             obs = [path["observations"] for path in paths]
             obs = np.array([tensor_utils.pad_tensor(ob, max_path_length) for ob in obs])
 
-            if self._center_adv:
+            if self.center_adv:
                 raw_adv = np.concatenate([path["advantages"] for path in paths])
                 adv_mean = np.mean(raw_adv)
                 adv_std = np.std(raw_adv) + 1e-8
@@ -222,7 +227,7 @@ class BatchPolopt(RLAlgorithm):
 
             undiscounted_returns = [sum(path["rewards"]) for path in paths]
 
-            ent = np.mean(policy.distribution.entropy(agent_infos))
+            ent = np.mean(self.policy.distribution.entropy(agent_infos))
 
             ev = special.explained_variance_1d(
                 np.concatenate(baselines),
@@ -241,7 +246,7 @@ class BatchPolopt(RLAlgorithm):
             )
 
         logger.log("fitting baseline...")
-        baseline.fit(paths)
+        self.baseline.fit(paths)
         logger.log("fitted")
 
         logger.record_tabular('Iteration', itr)

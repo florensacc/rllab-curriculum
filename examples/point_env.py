@@ -3,13 +3,11 @@ from rllab.spaces import Box
 from rllab.envs.base import Step
 import numpy as np
 
-BIG = 50000
-
 
 class PointEnv(Env):
     @property
     def observation_space(self):
-        return Box(low=-BIG, high=BIG, shape=(2,))
+        return Box(low=-np.inf, high=np.inf, shape=(2,))
 
     @property
     def action_space(self):
