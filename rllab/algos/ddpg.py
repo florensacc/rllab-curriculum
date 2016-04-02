@@ -104,7 +104,7 @@ class DDPG(RLAlgorithm):
             qf_learning_rate=1e-3,
             policy_weight_decay=0,
             policy_update_method='adam',
-            policy_learning_rate=1e-3,
+            policy_learning_rate=1e-4,
             eval_samples=10000,
             eval_whole_paths=True,
             soft_target=True,
