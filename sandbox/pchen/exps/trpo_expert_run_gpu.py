@@ -40,19 +40,27 @@ for mdp_class in mdp_classes:
         batch_size=50000,
         whole_paths=True,
         max_path_length=500,
-        n_itr=2,
+        n_itr=500,
         discount=0.99,
         step_size=5e-2,
         store_paths=True,
     )
-    for seed in [1, 42]:
+    for seed in [89, 123, 893]:
         run_experiment_lite(
             algo.train(),
-            exp_prefix="trpo_expert_run",
+            exp_prefix="gpu_trpo_expert_run",
             n_parallel=4,
-            snapshot_mode="all",
-            seed=1,
+            # snapshot_mode="all",
+            seed=seed,
+            # mode="local",
             mode="lab_kube",
+            resouces=dict(
+                requests=dict(
+                    cpu=8
+                )
+            ),
+            node_selector={
+                "aws/type": "g2.2xlarge"
+            }
         )
-        break
-    break
+        raise "ok"

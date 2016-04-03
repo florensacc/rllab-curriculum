@@ -318,8 +318,8 @@ def run_experiment_lite(
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
-        params["resources"] = params.get("resouces", config.KUBE_DEFAULT_RESOURCES)
-        params["node_selector"] = params.get("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
+        params["resources"] = params.pop("resouces", config.KUBE_DEFAULT_RESOURCES)
+        params["node_selector"] = params.pop("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
         params["exp_prefix"] = exp_prefix
         pod_dict = to_lab_kube_pod(params, code_full_path=s3_code_path, docker_image=docker_image, script=script)
         pod_str = json.dumps(pod_dict, indent=1)
@@ -653,6 +653,36 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
     pod_name = config.KUBE_PREFIX + params["exp_name"]
     # underscore is not allowed in pod names
     pod_name = pod_name.replace("_", "-")
+    # return {
+    #     "apiVersion": "v1",
+    #     "kind": "Pod",
+    #     "metadata": {
+    #         "name": pod_name,
+    #         "labels": {
+    #             "expt": pod_name,
+    #             "exp_time": timestamp,
+    #             "exp_prefix": exp_prefix,
+    #         },
+    #     },
+    #     "spec": {
+    #         "containers": [
+    #             {
+    #                 "name": "foo",
+    #                 "image": docker_image,
+    #                 "command": [
+    #                     "/bin/bash",
+    #                     "-c",
+    #                     "-li", # to load conda env file
+    #                     command,
+    #                 ],
+    #                 "resources": resources,
+    #                 "imagePullPolicy": "Always",
+    #             }
+    #         ],
+    #         "restartPolicy": "Never",
+    #         "nodeSelector": node_selector,
+    #     }
+    # }
     return {
         "apiVersion": "v1",
         "kind": "Pod",
@@ -668,7 +698,7 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
             "containers": [
                 {
                     "name": "foo",
-                    "image": docker_image,
+                    "image": "%s:gpu" % docker_image,
                     "command": [
                         "/bin/bash",
                         "-c",
@@ -677,6 +707,25 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
                     ],
                     "resources": resources,
                     "imagePullPolicy": "Always",
+                    # gpu specific
+                    "volumeMounts": [
+                        {
+                            "name": "nvidia",
+                            "mountPath": "/usr/local/nvidia",
+                            "readOnly": True,
+                        }
+                    ],
+                    "securityContext": {
+                        "privileged": True,
+                    }
+                }
+            ],
+            "volumes": [
+                {
+                    "name": "nvidia",
+                    "hostPath": {
+                        "path": "/var/lib/docker/volumes/nvidia_driver_352.63/_data",
+                    }
                 }
             ],
             "restartPolicy": "Never",

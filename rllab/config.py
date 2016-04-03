@@ -35,7 +35,7 @@ AWS_SECURITY_GROUPS = ["rllab"]
 
 AWS_REGION_NAME = "us-east-1"
 
-CODE_SYNC_IGNORES = ["*.git/*", "*data/*"]
+CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*.pod/*"]
 
 DOCKER_CODE_DIR = "/root/code/rllab"
 
