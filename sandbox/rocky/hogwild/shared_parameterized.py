@@ -9,6 +9,7 @@ def new_shared_mem_array(init_val):
     arr = mp.Array(typecode, np.prod(init_val.shape))
     nparr = np.frombuffer(arr.get_obj(), dtype=init_val.dtype)
     nparr.shape = init_val.shape
+    np.copyto(nparr, init_val)
     return nparr
 
 
