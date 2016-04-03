@@ -255,7 +255,7 @@ class GatherEnv(Env, Serializable):
     def step(self, action):
         _, _, done, info = self.inner_env.step(action)
         if done:
-            return self.get_current_obs(), -10, done
+            return Step(self.get_current_obs(), -10, done, **info)
         com = self.inner_env.get_body_com("torso")
         x, y = com[:2]
         reward = 0

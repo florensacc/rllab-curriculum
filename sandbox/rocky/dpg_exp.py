@@ -29,9 +29,9 @@ vg = instrument.VariantGenerator()
 vg.add("seed", [1, 11, 21, 31, 41])
 vg.add("env", map(normalize, [
     AntGatherEnv(),
-    SwimmerGatherEnv(),
-    AntMazeEnv(),
-    SwimmerMazeEnv(),
+    # SwimmerGatherEnv(),
+    # AntMazeEnv(),
+    # SwimmerMazeEnv(),
 
     # CartpoleEnv(),
     # CartpoleSwingupEnv(),
