@@ -251,6 +251,7 @@ def run_experiment_lite(
         docker_image=None,
         aws_config=None,
         env=None,
+        use_gpu=False,
         confirm_remote=True,
         terminate_machine=True,
         **kwargs):
@@ -284,7 +285,7 @@ def run_experiment_lite(
     if mode == "local":
         del kwargs["remote_log_dir"]
         params = dict(kwargs.items() + [("args_data", data)])
-        command = to_local_command(params, script=script)
+        command = to_local_command(params, script=script, use_gpu=use_gpu)
         print(command)
         if dry:
             return
@@ -311,7 +312,7 @@ def run_experiment_lite(
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
         launch_ec2(params, exp_prefix=exp_prefix, docker_image=docker_image, script=script,
-                   aws_config=aws_config, dry=dry, terminate_machine=terminate_machine)
+                   aws_config=aws_config, dry=dry, terminate_machine=terminate_machine, use_gpu=use_gpu)
     elif mode == "lab_kube":
         # first send code folder to s3
         s3_code_path = s3_sync_code(config, dry=dry)
@@ -383,8 +384,10 @@ def _to_param_val(v):
         return _shellquote(str(v))
 
 
-def to_local_command(params, script='scripts/run_experiment.py'):
+def to_local_command(params, script='scripts/run_experiment.py', use_gpu=False):
     command = "python " + script
+    if use_gpu:
+        command = "THEANO_FLAGS='device=gpu' " + command
     for k, v in params.iteritems():
         if isinstance(v, dict):
             for nk, nv in v.iteritems():
@@ -399,7 +402,7 @@ def to_local_command(params, script='scripts/run_experiment.py'):
 
 
 def to_docker_command(params, docker_image, script='scripts/run_experiment.py', pre_commands=None,
-                      post_commands=None, dry=False):
+                      post_commands=None, dry=False, use_gpu=False):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
     docker volume mapping to make sure that the logging files are created at the correct locations
@@ -411,7 +414,10 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     if not dry:
         mkdir_p(log_dir)
     # create volume for logging directory
-    command_prefix = "docker run"
+    if use_gpu:
+        command_prefix = "nvidia-docker run"
+    else:
+        command_prefix = "docker run"
     docker_log_dir = config.DOCKER_LOG_DIR
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
                                                                     docker_log_dir=docker_log_dir)
@@ -421,7 +427,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
-    command_list.append(to_local_command(params, script))
+    command_list.append(to_local_command(params, script, use_gpu=use_gpu))
     if post_commands is not None:
         command_list.extend(post_commands)
     return command_prefix + "'" + "; ".join(command_list) + "'"
@@ -433,7 +439,7 @@ def dedent(s):
 
 
 def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.py',
-               aws_config=None, dry=False, terminate_machine=True):
+               aws_config=None, dry=False, terminate_machine=True, use_gpu=False):
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
 
@@ -468,7 +474,7 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
         service docker start
     """)
     sio.write("""
-        DOCKER_HOST=\"tcp://localhost:4243\" docker --config /home/ubuntu/.docker pull {docker_image}
+        docker --config /home/ubuntu/.docker pull {docker_image}
     """.format(docker_image=docker_image))
     sio.write("""
         mkdir -p {log_dir}
@@ -480,8 +486,8 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
         done &
     """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
     sio.write("""
-        DOCKER_HOST=\"tcp://localhost:4243\" {command}
-    """.format(command=to_docker_command(params, docker_image, script)))
+        {command}
+    """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu)))
     sio.write("""
         aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
     """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))

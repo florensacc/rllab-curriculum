@@ -11,6 +11,12 @@ from rllab.envs.mujoco.inverted_double_pendulum_env import InvertedDoublePendulu
 from rllab.envs.mujoco.simple_humanoid_env import SimpleHumanoidEnv
 from rllab.envs.mujoco.humanoid_env import HumanoidEnv
 from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
+
+from rllab.envs.mujoco.gather.ant_gather_env import AntGatherEnv
+from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
+from rllab.envs.mujoco.maze.ant_maze_env import AntMazeEnv
+from rllab.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
+
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from rllab.misc import instrument
@@ -22,18 +28,23 @@ instrument.stub(globals())
 vg = instrument.VariantGenerator()
 vg.add("seed", [1, 11, 21, 31, 41])
 vg.add("env", map(normalize, [
-    CartpoleEnv(),
-    CartpoleSwingupEnv(),
-    MountainCarEnv(),
-    DoublePendulumEnv(),
-    SwimmerEnv(),
-    HopperEnv(),
-    Walker2DEnv(),
-    HalfCheetahEnv(),
-    AntEnv(),
-    InvertedDoublePendulumEnv(),
-    SimpleHumanoidEnv(),
-    HumanoidEnv(),
+    AntGatherEnv(),
+    SwimmerGatherEnv(),
+    AntMazeEnv(),
+    SwimmerMazeEnv(),
+
+    # CartpoleEnv(),
+    # CartpoleSwingupEnv(),
+    # MountainCarEnv(),
+    # DoublePendulumEnv(),
+    # SwimmerEnv(),
+    # HopperEnv(),
+    # Walker2DEnv(),
+    # HalfCheetahEnv(),
+    # AntEnv(),
+    # InvertedDoublePendulumEnv(),
+    # SimpleHumanoidEnv(),
+    # HumanoidEnv(),
 ]))
 vg.add("es", lambda env: [OUStrategy(env_spec=env.spec, theta=0.15, sigma=0.3)])
 vg.add("qf_weight_decay", [0.])  # , 0.01])
@@ -79,6 +90,8 @@ for variant in vg.variants():
         snapshot_mode="last",
         seed=variant["seed"],
         mode="ec2",
+        # use_gpu=True,
+        # env=dict(OMP_NUM_THREADS=1),
         # terminate_machine=False,
         # dry=True,
     )
