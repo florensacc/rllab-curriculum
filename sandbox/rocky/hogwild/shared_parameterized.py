@@ -8,7 +8,6 @@ def new_shared_mem_array(init_val):
     typecode = init_val.dtype.char
     arr = mp.Array(typecode, np.prod(init_val.shape))
     nparr = np.frombuffer(arr.get_obj(), dtype=init_val.dtype)
-    print nparr.shape, init_val.shape
     nparr.shape = init_val.shape
     return nparr
 
@@ -33,9 +32,12 @@ class SharedParameterized(Parameterized):
     def __setstate__(self, d):
         cls = d["obj_class"]
         obj_state = d["obj_state"]
-        wrapped_policy = cls(*obj_state["__args"], **obj_state["__kwargs"])
-        for param, param_value in zip(wrapped_policy.get_params(), d["param_values"]):
+        self.wrapped_obj = wrapped_obj = cls(*obj_state["__args"], **obj_state["__kwargs"])
+        for param, param_value in zip(wrapped_obj.get_params(), d["param_values"]):
             param.set_value(param_value, borrow=True)
+
+    def __getattr__(self, item):
+        return getattr(self.wrapped_obj, item)
 
     def get_params(self, **tags):
         return self.wrapped_obj.get_params(**tags)

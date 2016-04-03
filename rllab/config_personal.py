@@ -1,7 +1,7 @@
 import os.path as osp
 import os
 
-DOCKER_IMAGE = "quay.io/openai/rocky-sandbox"
+DOCKER_IMAGE = "quay.io/openai/rocky-sandbox:20160402a"
 
 KUBE_PREFIX = "rocky_"
 
