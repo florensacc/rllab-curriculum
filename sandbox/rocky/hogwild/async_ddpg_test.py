@@ -11,7 +11,7 @@ env = CartpoleEnv()
 policy = DeterministicMLPPolicy(env_spec=env.spec)
 qf = ContinuousMLPQFunction(env_spec=env.spec)
 es = OUStrategy(env_spec=env.spec)
-algo = AsyncDDPG(env=env, policy=policy, qf=qf, es=es)
+algo = AsyncDDPG(env=env, policy=policy, qf=qf, es=es, n_workers=4)
 
 run_experiment_lite(
     algo.train(),

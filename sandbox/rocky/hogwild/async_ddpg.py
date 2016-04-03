@@ -132,18 +132,29 @@ class AsyncDDPG(RLAlgorithm, Serializable):
         """
         Start the training procedure on the master process. It launches several worker processes.
         """
+        eval_policy = self.policy.new_mem_copy()
+        eval_env = self.
 
         processes = []
+        pipes = []
         shared_T = mp.Value('i', 0)
-        pipe = mp.Pipe()
         # if self.n_workers == 1:
         #     start_worker(self, 0, shared_T, pipe)
         # else:
         for id in xrange(self.n_workers):
+            pipe = mp.Pipe()
             p = mp.Process(target=start_worker, args=(self, id, shared_T, pipe))
             p.start()
             processes.append(p)
+            pipes.append(pipe)
         try:
+            while True:
+                for p, pipe in zip(processes, pipes):
+                    parent_conn = pipe[0]
+                    parent_conn.
+                print shared_T.value
+                import time
+                time.sleep(1)
             for p in processes:
                 p.join()
         except KeyboardInterrupt:
@@ -211,7 +222,7 @@ class AsyncDDPG(RLAlgorithm, Serializable):
 
         # Each worker needs to compile their own functions
         logger.push_prefix("[Worker %d] | " % worker_id)
-        logger.log("Initializing")
+        # logger.log("Initializing")
         self.worker_init_opt()
         terminal = True
         obs = None
@@ -246,7 +257,6 @@ class AsyncDDPG(RLAlgorithm, Serializable):
             obs = next_obs
 
             if len(observations) >= self.batch_size:
-                logger.log("Updating")
                 # compute an update
                 observations = np.array(observations)
                 next_observations = np.array(next_observations)
@@ -257,7 +267,6 @@ class AsyncDDPG(RLAlgorithm, Serializable):
                 next_actions, _ = self.target_policy.get_actions(next_observations)
                 next_qvals = self.target_qf.get_qval(next_observations, next_actions)
                 ys = rewards + (1. - terminals) * self.discount * next_qvals
-                logger.log("computing gradients")
                 qf_grads = self.f_qf_grads(ys, observations, actions)
                 policy_grads = self.f_policy_grads(observations)
 
@@ -270,4 +279,3 @@ class AsyncDDPG(RLAlgorithm, Serializable):
                 actions = []
                 rewards = []
                 terminals = []
-                logger.log("Update finished")
