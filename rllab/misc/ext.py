@@ -155,6 +155,7 @@ def new_tensor(name, ndim, dtype):
     import theano.tensor as TT
     return TT.TensorType(dtype, (False,) * ndim)(name)
 
+
 def new_tensor_like(name, arr_like):
     return new_tensor(name, arr_like.ndim, arr_like.dtype)
 
@@ -167,6 +168,7 @@ class AttrDict(dict):
 
 def is_iterable(obj):
     return isinstance(obj, basestring) or getattr(obj, '__iter__', False)
+
 
 # cut the path for any time >= t
 def truncate_path(p, t):
@@ -191,7 +193,13 @@ def shuffled(sequence):
         deck.pop()  # remove top card
         yield card
 
+
+seed_ = None
+
+
 def set_seed(seed):
+    global seed_
+    seed_ = seed
     import numpy as np
     import lasagne
     random.seed(seed)
@@ -204,8 +212,13 @@ def set_seed(seed):
         )
     )
 
+
+def get_seed():
+    return seed_
+
+
 def flatten_hessian(cost, wrt, consider_constant=None,
-            disconnected_inputs='raise', block_diagonal=True):
+                    disconnected_inputs='raise', block_diagonal=True):
     """
     :type cost: Scalar (0-dimensional) Variable.
     :type wrt: Vector (1-dimensional tensor) 'Variable' or list of
@@ -251,10 +264,10 @@ def flatten_hessian(cost, wrt, consider_constant=None,
     hessians = []
     if not block_diagonal:
         expr = TT.concatenate([
-            grad(cost, input, consider_constant=consider_constant,
-                    disconnected_inputs=disconnected_inputs).flatten()
-            for input in wrt
-        ])
+                                  grad(cost, input, consider_constant=consider_constant,
+                                       disconnected_inputs=disconnected_inputs).flatten()
+                                  for input in wrt
+                                  ])
 
     for input in wrt:
         assert isinstance(input, Variable), \
@@ -318,7 +331,7 @@ def unflatten_tensor_variables(flatarr, shapes, symb_arrs):
     n = 0
     for (shape, symb_arr) in zip(shapes, symb_arrs):
         size = np.prod(list(shape))
-        arr = flatarr[n:n+size].reshape(shape)
+        arr = flatarr[n:n + size].reshape(shape)
         if arr.type.broadcastable != symb_arr.type.broadcastable:
             arr = TT.patternbroadcast(arr, symb_arr.type.broadcastable)
         arrs.append(arr)
@@ -335,21 +348,22 @@ def sliced_fun(f, n_slices):
         slice_size = max(1, n_paths / n_slices)
         ret_vals = None
         for start in range(0, n_paths, slice_size):
-            inputs_slice = [v[start:start+slice_size] for v in sliced_inputs]
+            inputs_slice = [v[start:start + slice_size] for v in sliced_inputs]
             slice_ret_vals = f(*(inputs_slice + non_sliced_inputs))
             if not isinstance(slice_ret_vals, (tuple, list)):
                 slice_ret_vals_as_list = [slice_ret_vals]
             else:
                 slice_ret_vals_as_list = slice_ret_vals
-            scaled_ret_vals = [np.asarray(v)*len(inputs_slice[0]) for v in slice_ret_vals_as_list]
+            scaled_ret_vals = [np.asarray(v) * len(inputs_slice[0]) for v in slice_ret_vals_as_list]
             if ret_vals is None:
                 ret_vals = scaled_ret_vals
             else:
-                ret_vals = [x+y for x, y in zip(ret_vals, scaled_ret_vals)]
+                ret_vals = [x + y for x, y in zip(ret_vals, scaled_ret_vals)]
         ret_vals = [v / n_paths for v in ret_vals]
         if not isinstance(slice_ret_vals, (tuple, list)):
             ret_vals = ret_vals[0]
         elif isinstance(slice_ret_vals, tuple):
             ret_vals = tuple(ret_vals)
         return ret_vals
+
     return sliced_f
