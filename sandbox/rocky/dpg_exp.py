@@ -1,10 +1,11 @@
-from rllab.algos.dpg import DPG
+from rllab.algos.ddpg import DDPG
 from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from rllab.misc import instrument
 from rllab.policies.deterministic_mlp_policy import DeterministicMLPPolicy
 from rllab.q_functions.continuous_mlp_q_function import ContinuousMLPQFunction
+from lasagne.init import HeUniform, Constant
 
 instrument.stub(globals())
 
@@ -34,38 +35,43 @@ vg.add("bn", [False])
 
 print "#Experiments:", len(vg.variants())
 for variant in vg.variants():
-    algo = DPG(
+    policy = DeterministicMLPPolicy(
+        env_spec=variant["env"].spec,
+        hidden_sizes=(32, 32),
+        bn=variant["bn"],
+        output_W_init=HeUniform(),
+        output_b_init=Constant(0.),
+    )
+    qf = ContinuousMLPQFunction(
+        env_spec=variant["env"].spec,
+        hidden_sizes=(32, 32),
+        bn=variant["bn"],
+        output_W_init=HeUniform(),
+        output_b_init=Constant(0.),
+    )
+    algo = DDPG(
+        env=variant["env"], policy=policy, qf=qf, es=variant["es"],
         qf_learning_rate=variant["qf_lr"],
         qf_weight_decay=variant["qf_weight_decay"],
         policy_learning_rate=variant["policy_lr"],
         max_path_length=100,
-        min_pool_size=100,
-        epoch_length=100,
+        min_pool_size=10000,
+        epoch_length=10000,
         n_epochs=2500,
         scale_reward=variant["scale_reward"],
         soft_target_tau=variant["soft_target_tau"],
-        eval_samples=100,
+        eval_samples=1000,
         # n_epochs=50,
     )
-    policy = DeterministicMLPPolicy(
-        env_spec=variant["env"].spec,
-        hidden_sizes=(8,),
-        bn=variant["bn"],
-    )
-    qf = ContinuousMLPQFunction(
-        env_spec=variant["env"].spec,
-        hidden_sizes=(8,),
-        bn=variant["bn"],
-    )
     instrument.run_experiment_lite(
-        algo.train(env=variant["env"], policy=policy, qf=qf, es=variant["es"]),
-        exp_prefix="dpg_all_search_fixed_single_test",
-        n_parallel=4,
+        algo.train(),
+        exp_prefix="dpg_cmp",
+        n_parallel=1,
         snapshot_mode="last",
         seed=variant["seed"],
         # mode="ec2",
         # terminate_machine=False,
         # dry=True,
     )
-    break
+    # break
     # break

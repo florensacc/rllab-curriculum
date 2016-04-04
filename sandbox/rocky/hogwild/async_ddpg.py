@@ -10,6 +10,7 @@ from rllab.misc import special
 from sandbox.rocky.hogwild.shared_parameterized import new_shared_mem_array
 import multiprocessing as mp
 import lasagne
+import lasagne.updates
 import theano.tensor as TT
 import numpy as np
 import cPickle as pickle
@@ -79,7 +80,7 @@ def apply_target_update(param_obj, target_param_obj, soft_target_tau):
     for param, target_param in zip(param_obj.get_params(), target_param_obj.get_params()):
         target_val = target_param.get_value(borrow=True)
         param_val = param.get_value(borrow=True)
-        np.copyto(target_val, target_val * (1 - soft_target_tau) + param_val * soft_target_tau)
+        np.copyto(target_val, target_val * (1. - soft_target_tau) + param_val * soft_target_tau)
 
 
 class SimpleReplayPool(object):
@@ -152,10 +153,15 @@ class AsyncDDPG(RLAlgorithm, Serializable):
             policy,
             qf,
             es,
+            manager=None,
             target_policy=None,
             target_qf=None,
             policy_adam_state=None,
             qf_adam_state=None,
+            qf_loss_averages=None,
+            policy_surr_averages=None,
+            q_averages=None,
+            y_averages=None,
             n_workers=1,
             discount=0.99,
             scale_reward=1.,
@@ -176,6 +182,8 @@ class AsyncDDPG(RLAlgorithm, Serializable):
             batch_size=32,
     ):
         # Make sure all variables are properly initialized when serialized to worker copies
+        if manager is None:
+            manager = mp.Manager()
         if not isinstance(policy, SharedParameterized):
             policy = SharedParameterized(policy)
         if not isinstance(qf, SharedParameterized):
@@ -188,6 +196,14 @@ class AsyncDDPG(RLAlgorithm, Serializable):
             policy_adam_state = new_adam_state(policy)
         if qf_adam_state is None:
             qf_adam_state = new_adam_state(qf)
+        if qf_loss_averages is None:
+            qf_loss_averages = manager.list()
+        if policy_surr_averages is None:
+            policy_surr_averages = manager.list()
+        if q_averages is None:
+            q_averages = manager.list()
+        if y_averages is None:
+            y_averages = manager.list()
         Serializable.quick_init(self, locals())
         self.env = env
         self.policy = policy
@@ -214,6 +230,11 @@ class AsyncDDPG(RLAlgorithm, Serializable):
         self.policy_weight_decay = policy_weight_decay
         self.policy_learning_rate = policy_learning_rate
         self.policy_adam_state = policy_adam_state
+
+        self.qf_loss_averages = qf_loss_averages
+        self.policy_surr_averages = policy_surr_averages
+        self.q_averages = q_averages
+        self.y_averages = y_averages
 
         self.batch_size = batch_size
 
@@ -271,6 +292,34 @@ class AsyncDDPG(RLAlgorithm, Serializable):
         average_action = np.mean(np.square(np.concatenate(
             [path["actions"] for path in paths]
         )))
+        policy_reg_param_norm = np.linalg.norm(
+            self.policy.get_param_values(regularizable=True)
+        )
+        qfun_reg_param_norm = np.linalg.norm(
+            self.qf.get_param_values(regularizable=True)
+        )
+
+        if len(self.q_averages) > 0:
+            all_qs = np.concatenate(self.q_averages)
+        else:
+            all_qs = []
+        if len(self.y_averages) > 0:
+            all_ys = np.concatenate(self.y_averages)
+        else:
+            all_ys = []
+
+        # if len(self.qf_loss_averages) > 0:
+        #     all_qf_losses = np.array(self.qf_loss_averages)
+        # else:
+        #     all_qf_losses = []
+        # if len(self.policy_surr_averages) > 0:
+        #     all_policy_surr = np.concatenate(self.policy_surr_averages)
+        # else:
+        #     all_policy_surr = []
+
+        average_q_loss = np.mean(list(self.qf_loss_averages))
+        average_policy_surr = np.mean(list(self.policy_surr_averages))
+
         logger.record_tabular('NSamples', T)
         logger.record_tabular('AverageReturn',
                               np.mean(returns))
@@ -282,8 +331,28 @@ class AsyncDDPG(RLAlgorithm, Serializable):
                               np.min(returns))
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
+        logger.record_tabular('AverageQLoss', average_q_loss)
+        logger.record_tabular('AveragePolicySurr', average_policy_surr)
+        logger.record_tabular('AverageQ', np.mean(all_qs))
+        logger.record_tabular('AverageAbsQ', np.mean(np.abs(all_qs)))
+        logger.record_tabular('AverageY', np.mean(all_ys))
+        logger.record_tabular('AverageAbsY', np.mean(np.abs(all_ys)))
+        # logger.record_tabular('AverageAbsQYDiff',
+        #                       np.mean(np.abs(all_qs - all_ys)))
         logger.record_tabular('AverageAction', average_action)
+        logger.record_tabular('PolicyRegParamNorm',
+                              policy_reg_param_norm)
+        logger.record_tabular('QFunRegParamNorm',
+                              qfun_reg_param_norm)
+        eval_env.log_diagnostics(paths)
+        eval_policy.log_diagnostics(paths)
         logger.dump_tabular()
+
+        del self.qf_loss_averages[:]
+        del self.policy_surr_averages[:]
+
+        del self.q_averages[:]
+        del self.y_averages[:]
 
     def worker_init_opt(self):
         """
@@ -326,6 +395,26 @@ class AsyncDDPG(RLAlgorithm, Serializable):
         qf_grads = TT.grad(qf_reg_loss, self.qf.get_params(trainable=True))
         policy_grads = TT.grad(policy_reg_surr, self.policy.get_params(trainable=True))
 
+        qf_updates = lasagne.updates.adam(qf_reg_loss, self.qf.get_params(trainable=True),
+                                          learning_rate=self.qf_learning_rate)
+            # qf_reg_loss, self.qf.get_params(trainable=True))
+        policy_updates = lasagne.updates.adam(policy_reg_surr, self.policy.get_params(
+            trainable=True), learning_rate=self.policy_learning_rate)
+        # self.policy_update_method(
+        #     policy_reg_surr, self.policy.get_params(trainable=True))
+
+        self.f_train_qf = ext.compile_function(
+            inputs=[yvar, obs, action],
+            outputs=[qf_loss, qval],
+            updates=qf_updates
+        )
+
+        self.f_train_policy = ext.compile_function(
+            inputs=[obs],
+            outputs=policy_surr,
+            updates=policy_updates
+        )
+
         self.f_qf_grads = ext.compile_function(
             inputs=[yvar, obs, action],
             outputs=qf_grads,
@@ -341,15 +430,15 @@ class AsyncDDPG(RLAlgorithm, Serializable):
         Training procedure on worker processes
         :param worker_id: ID assigned to the worker for logging purposes
         :param shared_T: a shared counter for the global time step
-        :param pipe: a multiprocessing.Pipe object for communicating with the master process
+
         """
 
         # Each worker needs to compile their own functions
         logger.push_prefix("[Worker %d] | " % worker_id)
         # logger.log("Initializing")
         self.worker_init_opt()
-        terminal = True
-        obs = None
+        terminal = False
+        obs = self.env.reset()
         t = 0
 
         if self.use_replay_pool:
@@ -370,7 +459,6 @@ class AsyncDDPG(RLAlgorithm, Serializable):
                 t = 0
                 self.es.reset()
 
-            t += 1
             # increment global counter
             current_shared_T = None
             with shared_T.get_lock():
@@ -380,6 +468,7 @@ class AsyncDDPG(RLAlgorithm, Serializable):
 
             action = self.es.get_action(current_shared_T, obs, self.policy)
             next_obs, reward, terminal, _ = self.env.step(action)
+            t += 1
 
             if not terminal and t >= self.max_path_length:
                 terminal = True
@@ -415,14 +504,29 @@ class AsyncDDPG(RLAlgorithm, Serializable):
                 next_actions, _ = self.target_policy.get_actions(next_observations)
                 next_qvals = self.target_qf.get_qval(next_observations, next_actions)
                 ys = rewards + (1. - terminals) * self.discount * next_qvals
-                qf_grads = self.f_qf_grads(ys, observations, actions)
-                policy_grads = self.f_policy_grads(observations)
+                # qf_grads = self.f_qf_grads(ys, observations, actions)
+                # policy_grads = self.f_policy_grads(observations)
 
-                apply_adam_update(self.qf, qf_grads, self.qf_adam_state, learning_rate=self.qf_learning_rate)
-                apply_adam_update(self.policy, policy_grads, self.policy_adam_state,
-                                  learning_rate=self.policy_learning_rate)
-                apply_target_update(self.qf, self.target_qf, self.soft_target_tau)# / self.n_workers)
-                apply_target_update(self.policy, self.target_policy, self.soft_target_tau)# / self.n_workers)
+                # apply_adam_update(self.qf, qf_grads, self.qf_adam_state, learning_rate=self.qf_learning_rate)
+                # apply_adam_update(self.policy, policy_grads, self.policy_adam_state,
+                #                   learning_rate=self.policy_learning_rate)
+
+                qf_loss, qval = self.f_train_qf(ys, observations, actions)
+                policy_surr = self.f_train_policy(observations)
+                # apply_target_update(self.qf, self.target_qf, self.soft_target_tau)# / self.n_workers)
+                # apply_target_update(self.policy, self.target_policy, self.soft_target_tau)# / self.n_workers)
+
+                self.target_policy.set_param_values(
+                    self.target_policy.get_param_values() * (1.0 - self.soft_target_tau) +
+                    self.policy.get_param_values() * self.soft_target_tau)
+                self.target_qf.set_param_values(
+                    self.target_qf.get_param_values() * (1.0 - self.soft_target_tau) +
+                    self.qf.get_param_values() * self.soft_target_tau)
+
+                self.qf_loss_averages.append(qf_loss)
+                self.policy_surr_averages.append(policy_surr)
+                self.q_averages.append(qval)
+                self.y_averages.append(ys)
 
                 if not self.use_replay_pool:
                     observations = []
