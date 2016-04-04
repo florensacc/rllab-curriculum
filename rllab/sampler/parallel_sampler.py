@@ -105,6 +105,8 @@ def config_parallel_sampler(n_parallel, base_seed):
             initargs=[G.queue],
             temp_folder="/tmp",
         )
+    else:
+        G.base_seed = base_seed if base_seed else random.getrandbits(32)
 
 
 def reset():

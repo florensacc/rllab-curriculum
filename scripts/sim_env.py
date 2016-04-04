@@ -24,45 +24,29 @@ def to_onehot(ind, dim):
 
 
 def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
+    timestep = 0.05
     # step ahead with all-zero action
     if mode == 'noop':
-        action = np.zeros(env.action_dim)
-        env.reset()
-        env.render()
         for _ in xrange(max_steps):
-            _, _, done = env.step(action)
             env.render()
-            time.sleep(env.timestep / speedup)
-            if done:
-                env.reset()
+            time.sleep(timestep / speedup)
     elif mode == 'random':
         env.reset()
-        if np.dtype(env.action_dtype).kind in ['i', 'u']:
-            sampler = lambda: to_onehot(
-                np.random.choice(env.action_dim), env.action_dim)
-        else:
-            lb, ub = env.action_bounds
-            sampler = lambda: sample_action(lb, ub)
-        totrew = 0
         env.render()
         for i in xrange(max_steps):
-            action = sampler()
-            _, rew, done = env.step(action)
+            action = env.action_space.sample()
+            _, _, done, _ = env.step(action)
             # if i % 10 == 0:
             env.render()
             # import time as ttime
-            time.sleep(0.05)#env.timestep / speedup)
-            totrew += rew
+            time.sleep(timestep / speedup)
             if done:
-                totrew = 0
                 env.reset()
-        if not done:
-            totrew = 0
     elif mode == 'static':
         env.reset()
         while True:
             env.render()
-            time.sleep(0.05)#env.timestep / speedup)
+            time.sleep(timestep / speedup)
     elif mode == 'human':
         env.reset()
         env.render()
@@ -76,7 +60,7 @@ def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
                 ob, r, done = env.step(action)
                 tr += r
                 env.render()
-                time.sleep(0.05)#env.timestep / speedup)
+                time.sleep(timestep / speedup)
                 if done:
                     tr = 0.
                     env.reset()
@@ -86,13 +70,14 @@ def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
             from rllab.envs.mujoco.mujoco_env import MujocoEnv
             # from rllab.env.mujoco_1_22.gather.gather_env import GatherMDP
             from rllab.envs.mujoco.maze.maze_env import MazeEnv
-            if isinstance(env, (MujocoEnv, MazeEnv)):#, GatherMDP, MazeMDP)):
+            if isinstance(env, (MujocoEnv, MazeEnv)):  # , GatherMDP, MazeMDP)):
                 print "is mujoco"
                 # from rllab.mjcapi.rocky_mjc_1_22 import glfw
                 from rllab.mujoco_py import glfw
 
                 def cb(window, key, scancode, action, mods):
                     actions[0] = env.action_from_key(key)
+
                 glfw.set_key_callback(env.viewer.window, cb)
                 while True:
                     try:
@@ -103,7 +88,7 @@ def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
                         trs[0] += r
                         env.render()
                         # time.sleep(env.timestep / speedup)
-                        time.sleep(0.05)#env.timestep / speedup)
+                        time.sleep(env.timestep / speedup)
                         if done:
                             trs[0] = 0.
                             env.reset()
@@ -111,7 +96,8 @@ def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
                         print e
     else:
         raise ValueError('Unsupported mode: %s' % mode)
-    # env.stop_viewer()
+        # env.stop_viewer()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

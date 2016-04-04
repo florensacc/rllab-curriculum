@@ -25,15 +25,6 @@ mdp_classes = [
 
 for mdp_class in mdp_classes:
     mdp = NormalizedEnv(env=mdp_class())
-    algo = TRPO(
-        batch_size=50000,
-        whole_paths=True,
-        max_path_length=500,
-        n_itr=500,
-        discount=0.99,
-        step_size=5e-2,
-        store_paths=True,
-    )
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
         hidden_sizes=(100, 50, 25),
@@ -42,9 +33,21 @@ for mdp_class in mdp_classes:
     baseline = LinearFeatureBaseline(
         mdp.spec
     )
+    algo = TRPO(
+        env=mdp,
+        policy=policy,
+        baseline=baseline,
+        batch_size=50000,
+        whole_paths=True,
+        max_path_length=500,
+        n_itr=2,
+        discount=0.99,
+        step_size=5e-2,
+        store_paths=True,
+    )
     for seed in [1, 42]:
         run_experiment_lite(
-            algo.train(env=mdp, policy=policy, baseline=baseline),
+            algo.train(),
             exp_prefix="trpo_expert_run",
             n_parallel=4,
             snapshot_mode="all",
@@ -52,3 +55,4 @@ for mdp_class in mdp_classes:
             mode="lab_kube",
         )
         break
+    break
