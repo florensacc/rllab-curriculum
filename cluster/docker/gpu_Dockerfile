@@ -1,4 +1,4 @@
-FROM ubuntu:14.04
+FROM nvidia/cuda:7.5-cudnn4-devel-ubuntu14.04
 
 # ========== Anaconda ==========
 # https://github.com/ContinuumIO/docker-images/blob/master/anaconda/Dockerfile
@@ -49,4 +49,8 @@ RUN conda env create -f /root/code/environment.yml
 ENV PYTHONPATH /root/code/rllab:$PYTHONPATH
 RUN echo "source activate rllab" >> /root/.bashrc
 ENV BASH_ENV /root/.bashrc
+
+# gpu theanno
+ENV THEANO_FLAGS mode=FAST_RUN,device=gpu,floatX=float32
+
 WORKDIR /root/code
