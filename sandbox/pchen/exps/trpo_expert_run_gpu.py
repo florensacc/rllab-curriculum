@@ -45,10 +45,10 @@ for mdp_class in mdp_classes:
         step_size=5e-2,
         store_paths=True,
     )
-    for seed in [89, 123, 893]:
+    for seed in [90, 123, 893]:
         run_experiment_lite(
             algo.train(),
-            exp_prefix="gpu_trpo_expert_run",
+            exp_prefix="trpo_expert_run",
             n_parallel=4,
             # snapshot_mode="all",
             seed=seed,
@@ -63,4 +63,3 @@ for mdp_class in mdp_classes:
                 "aws/type": "g2.2xlarge"
             }
         )
-        raise "ok"

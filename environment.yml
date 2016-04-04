@@ -17,7 +17,9 @@ dependencies:
     - pygame
     - h5py
     - matplotlib
+    - opencv
     - pip:
+        - atari-py
         - pyprind
         - ipdb
         - boto3
