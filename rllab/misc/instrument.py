@@ -628,9 +628,11 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
                         (code_full_path, config.DOCKER_CODE_DIR))
     pre_commands.append('cd %s' %
                         (config.DOCKER_CODE_DIR))
+    pre_commands.append('mkdir -p %s' %
+                        (log_dir))
     pre_commands.append("""
         while /bin/true; do
-            aws s3 sync --exclude *.pkl --exclude *.log {log_dir} {remote_log_dir} --region {aws_region}
+            aws s3 sync --exclude *.pkl {log_dir} {remote_log_dir} --region {aws_region}
             sleep 5
         done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
                                              aws_region=config.AWS_REGION_NAME))
@@ -646,43 +648,51 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
-    command_list.append(to_local_command(params, script))
+    command_list.append(
+        "%s 2>&1 | tee -a %s" % (
+            to_local_command(params, script),
+            "%s/stdouterr.log" % log_dir
+        )
+    )
     if post_commands is not None:
         command_list.extend(post_commands)
     command = "; ".join(command_list)
     pod_name = config.KUBE_PREFIX + params["exp_name"]
     # underscore is not allowed in pod names
     pod_name = pod_name.replace("_", "-")
-    # return {
-    #     "apiVersion": "v1",
-    #     "kind": "Pod",
-    #     "metadata": {
-    #         "name": pod_name,
-    #         "labels": {
-    #             "expt": pod_name,
-    #             "exp_time": timestamp,
-    #             "exp_prefix": exp_prefix,
-    #         },
-    #     },
-    #     "spec": {
-    #         "containers": [
-    #             {
-    #                 "name": "foo",
-    #                 "image": docker_image,
-    #                 "command": [
-    #                     "/bin/bash",
-    #                     "-c",
-    #                     "-li", # to load conda env file
-    #                     command,
-    #                 ],
-    #                 "resources": resources,
-    #                 "imagePullPolicy": "Always",
-    #             }
-    #         ],
-    #         "restartPolicy": "Never",
-    #         "nodeSelector": node_selector,
-    #     }
-    # }
+    is_gpu = docker_image.find("gpu") != -1
+    print "Is gpu: ", is_gpu
+    if not is_gpu:
+        return {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "name": pod_name,
+                "labels": {
+                    "expt": pod_name,
+                    "exp_time": timestamp,
+                    "exp_prefix": exp_prefix,
+                },
+            },
+            "spec": {
+                "containers": [
+                    {
+                        "name": "foo",
+                        "image": docker_image,
+                        "command": [
+                            "/bin/bash",
+                            "-c",
+                            "-li", # to load conda env file
+                            command,
+                        ],
+                        "resources": resources,
+                        "imagePullPolicy": "Always",
+                    }
+                ],
+                "restartPolicy": "Never",
+                "nodeSelector": node_selector,
+            }
+        }
     return {
         "apiVersion": "v1",
         "kind": "Pod",
@@ -698,7 +708,7 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
             "containers": [
                 {
                     "name": "foo",
-                    "image": "%s:gpu" % docker_image,
+                    "image": docker_image,
                     "command": [
                         "/bin/bash",
                         "-c",

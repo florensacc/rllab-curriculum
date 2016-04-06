@@ -56,7 +56,7 @@ def to_ram(ale):
 
 class AtariEnv(Env, Serializable):
     def __init__(self, game="pong", obs_type="ram", frame_skip=4):
-        Serializable.quick_init(locals())
+        Serializable.quick_init(self, locals())
         assert obs_type in ("ram", "image")
         game_path = atari_py.get_game_path(game)
         if not os.path.exists(game_path):

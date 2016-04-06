@@ -8,7 +8,7 @@ TINY = 1e-8
 def from_onehot_sym(x_var):
     ret = TT.zeros((x_var.shape[0],), x_var.dtype)
     nonzero_n, nonzero_a = TT.nonzero(x_var)[:2]
-    ret = TT.set_subtensor(ret[nonzero_n], nonzero_a)
+    ret = TT.set_subtensor(ret[nonzero_n], nonzero_a.astype('uint8'))
     return ret
 
 

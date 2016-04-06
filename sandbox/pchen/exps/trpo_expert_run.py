@@ -49,13 +49,15 @@ for mdp_class in mdp_classes:
         run_experiment_lite(
             algo.train(),
             exp_prefix="trpo_expert_run",
-            n_parallel=4,
+            n_parallel=2,
             snapshot_mode="all",
             seed=seed,
-            mode="lab_kube",
-            resouces=dict(
-                requests=dict(
-                    cpu=3.4
-                )
-            )
+            mode="local",
+            # mode="lab_kube",
+            # resouces=dict(
+            #     requests=dict(
+            #         cpu=3.4
+            #     )
+            # )
         )
+        import sys; sys.exit(0)
