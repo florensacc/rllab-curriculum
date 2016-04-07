@@ -1,4 +1,5 @@
 import argparse
+import types
 from collections import defaultdict
 from functools import partial
 
@@ -23,6 +24,7 @@ from rllab.misc.ext import stdize
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 from rllab.optimizers.hessian_free_optimizer import HessianFreeOptimizer
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
+from rllab.sampler import parallel_sampler
 
 
 class Bakery(Algorithm, LasagnePowered):
@@ -34,16 +36,35 @@ class Bakery(Algorithm, LasagnePowered):
             paths,
             optimizer,
             eval_optimizer,
-            ul_obj="passive_dynamics",
             data_size=None,
+            ul_obj="passive_dynamics",
             train_portion=0.8,
             eval="expert_mimic",
             test_paths=False,
+            fixed_encoder=False,
+            max_path_length=100,
+            whole_paths=True,
             **kwargs
     ):
         old_pi = policy
         with suppress_params_loading():
             new_pi = pickle.loads(pickle.dumps(policy))
+
+        cur_ds = sum(p["observations"].shape[0] for p in paths)
+        print "cur data size", cur_ds
+        if data_size and data_size > cur_ds:
+            diff_ds = data_size - cur_ds
+            cur_params = policy.get_param_values()
+            parallel_sampler.populate_task(env, policy)
+            parallel_sampler.request_samples(
+                policy_params=cur_params,
+                max_samples=diff_ds,
+                max_path_length=max_path_length,
+                whole_paths=whole_paths,
+            )
+            paths = paths + parallel_sampler.collect_paths()
+
+        print "env", env
 
         layers = new_pi._mean_network.layers
         assert len(layers) == (1+3+1)
@@ -111,17 +132,26 @@ class Bakery(Algorithm, LasagnePowered):
 
             LasagnePowered.__init__(self, [bake_layers[-1]])
             optimizer.update_opt(loss, self, input_vars, network_outputs=predictions)
+            info = locals()
+            info.pop("self")
+            self.bake(**info)
 
-        info = locals()
-        info.pop("self")
-        self.bake(**info)
-
+        if fixed_encoder:
+            def get_params(self, **tags):
+                params = super(type(self), self).get_params(**tags)
+                # print params
+                # print "returning", params[4:]
+                return params[4:]
+            new_pi.get_params = types.MethodType(get_params, new_pi)
         expert_actions_var = TT.matrix("expert_actions")
         input_vars = [new_pi._mean_network.input_var, expert_actions_var]
         loss = TT.mean(
             LO.squared_error(new_pi._mean_var, expert_actions_var)
         ) + 0*TT.mean(new_pi._log_std_var)
         eval_optimizer.update_opt(loss, new_pi, input_vars, network_outputs=new_pi._mean_network.output)
+
+        info = locals()
+        info.pop("self")
         self.eval(**info)
 
     def eval(
@@ -131,37 +161,51 @@ class Bakery(Algorithm, LasagnePowered):
             eval_optimizer,
             input_vars,
             train_portion,
+            test_paths,
             **kwargs
     ):
         optimizer = eval_optimizer
-        data = [[] for _ in input_vars]
-        for path in paths:
-            data[0].append(path["observations"][:-1])
-            data[1].append(path["agent_infos"]["mean"][:-1])
+        def prep_data(paths):
+            data = [[] for _ in input_vars]
+            for path in paths:
+                data[0].append(path["observations"][:-1])
+                data[1].append(path["agent_infos"]["mean"][:-1])
+            data = [
+                (np.concatenate(ins)) for ins in data
+            ]
+            data[0] = stdize(data[0])
+            data[1] = stdize(data[1])
+            return data
 
-        data = [
-            (np.concatenate(ins)) for ins in data
-            ]
-        data[0] = stdize(data[0])
-        data[1] = stdize(data[1])
-        ds = data[0].shape[0]
-        shuffled_idx = np.arange(ds)
-        train_idx = shuffled_idx[:int(train_portion*ds)]
-        test_idx = shuffled_idx[int(train_portion*ds):]
-        train_data = [
-            inp[train_idx] for inp in data
-            ]
-        test_data = [
-            inp[test_idx] for inp in data
-            ]
+        if test_paths:
+            cutoff = int(len(paths) * (train_portion if test_paths else 1))
+            train_data = prep_data(paths[:cutoff])
+            test_data = prep_data(paths[cutoff:])
+        else:
+            data = prep_data(paths)
+            ds = data[0].shape[0]
+            shuffled_idx = np.arange(ds)
+            train_idx = shuffled_idx[:int(train_portion*ds)]
+            test_idx = shuffled_idx[int(train_portion*ds):]
+            train_data = [
+                inp[train_idx] for inp in data
+                ]
+            test_data = [
+                inp[test_idx] for inp in data
+                ]
 
         loss = optimizer._opt_fun["f_loss"](*train_data)
         logger.log("initial train loss %s" % loss)
         def print_loss(loss, elapsed, itr, **kwargs):
-            logger.log("eval itr %s ..." % itr)
-            logger.log("train loss %s" % loss)
+            # logger.log("eval itr %s ..." % itr)
+            # logger.log("train loss %s" % loss)
             test_loss = optimizer._opt_fun["f_loss"](*test_data)
-            logger.log("test loss %s" % test_loss)
+            # logger.log("test loss %s" % test_loss)
+            logger.push_prefix('eval itr #%d | ' % itr)
+            logger.record_tabular('TrainLoss', loss)
+            logger.record_tabular('EvalLoss', test_loss)
+            logger.dump_tabular(with_prefix=True)
+            logger.pop_prefix()
         optimizer._callback = lambda params: print_loss(**params)
         optimizer.optimize(
             train_data,
@@ -175,44 +219,58 @@ class Bakery(Algorithm, LasagnePowered):
             optimizer,
             input_vars,
             train_portion,
+            test_paths,
             **kwargs
     ):
         if ul_obj == "nop":
             return
 
-        data = [[] for _ in input_vars]
-        for path in paths:
-            data[0].append(path["observations"][:-1])
-            if ul_obj in ["passive_dynamics", "active_dynamics"]:
-                data[1].append(path["observations"][1:])
-            elif ul_obj == "baseline":
-                data[1].append(path["returns"][:-1])
-            if ul_obj in ["active_dynamics"]:
-                data[2].append(path["actions"][:-1])
+        def prep_data(paths):
+            data = [[] for _ in input_vars]
+            for path in paths:
+                data[0].append(path["observations"][:-1])
+                if ul_obj in ["passive_dynamics", "active_dynamics"]:
+                    data[1].append(path["observations"][1:])
+                elif ul_obj == "baseline":
+                    data[1].append(path["returns"][:-1])
+                if ul_obj in ["active_dynamics"]:
+                    data[2].append(path["actions"][:-1])
+            data = [
+                (np.concatenate(ins)) for ins in data
+                ]
+            data[0] = stdize(data[0])
+            data[1] = stdize(data[1])
+            return data
 
-        data = [
-            (np.concatenate(ins)) for ins in data
-            ]
-        data[0] = stdize(data[0])
-        data[1] = stdize(data[1])
-        ds = data[0].shape[0]
-        shuffled_idx = np.arange(ds)
-        train_idx = shuffled_idx[:int(train_portion*ds)]
-        test_idx = shuffled_idx[int(train_portion*ds):]
-        train_data = [
-            inp[train_idx] for inp in data
-            ]
-        test_data = [
-            inp[test_idx] for inp in data
-            ]
+        if test_paths:
+            cutoff = int(len(paths) * (train_portion if test_paths else 1))
+            train_data = prep_data(paths[:cutoff])
+            test_data = prep_data(paths[cutoff:])
+        else:
+            data = prep_data(paths)
+            ds = data[0].shape[0]
+            shuffled_idx = np.arange(ds)
+            train_idx = shuffled_idx[:int(train_portion*ds)]
+            test_idx = shuffled_idx[int(train_portion*ds):]
+            train_data = [
+                inp[train_idx] for inp in data
+                ]
+            test_data = [
+                inp[test_idx] for inp in data
+                ]
 
         loss = optimizer._opt_fun["f_loss"](*train_data)
         logger.log("initial train loss %s" % loss)
         def print_loss(loss, elapsed, itr, **kwargs):
-            logger.log("bake itr %s ..." % itr)
-            logger.log("train loss %s" % loss)
+            # logger.log("bake itr %s ..." % itr)
+            # logger.log("train loss %s" % loss)
             test_loss = optimizer._opt_fun["f_loss"](*test_data)
-            logger.log("test loss %s" % test_loss)
+            # logger.log("test loss %s" % test_loss)
+            logger.push_prefix('bake itr #%d | ' % itr)
+            logger.record_tabular('TrainLoss', loss)
+            logger.record_tabular('EvalLoss', test_loss)
+            logger.dump_tabular(with_prefix=True)
+            logger.pop_prefix()
         optimizer._callback = lambda params: print_loss(**params)
         optimizer.optimize(
             train_data,
@@ -234,30 +292,37 @@ if __name__ == "__main__":
     policy = data['policy']
     env = data['env']
     paths = data.get('paths', None)
+
+    parallel_sampler.config_parallel_sampler(3, 42)
     Bakery(
         policy=policy,
         env=env,
         paths=paths,
-        ul_obj="passive_dynamics",
         test_paths=True,
+        # fixed_encoder=True,
+        # ul_obj="passive_dynamics",
         # ul_obj="active_dynamics",
         # ul_obj="baseline",
-        # ul_obj="nop",
+        ul_obj="nop",
         # optimizer=LbfgsOptimizer(
         #     max_opt_itr=2000,
         # )
         # optimizer=HessianFreeOptimizer(
         #     max_opt_itr=300,
         # )
+        data_size=100000,
         optimizer=FirstOrderOptimizer(
             update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
             # update_method=partial(lasagne.updates.adadelta),
             max_epochs=10,
         ),
-        eval_optimizer=FirstOrderOptimizer(
-            update_method=partial(lasagne.updates.adam, learning_rate=1e-4),
-            # update_method=partial(lasagne.updates.adadelta),
-            max_epochs=50,
-        )
+        eval_optimizer=LbfgsOptimizer(
+            max_opt_itr=500,
+        ),
+        # eval_optimizer=FirstOrderOptimizer(
+        #     update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
+        #     # update_method=partial(lasagne.updates.adadelta),
+        #     max_epochs=100,
+        # )
     )
 
