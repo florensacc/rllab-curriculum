@@ -62,6 +62,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=output_nonlinearity,
         )
+        self._mean_network = mean_network
 
         l_mean = mean_network.output_layer
         obs_var = mean_network.input_var
@@ -85,6 +86,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             )
 
         mean_var, log_std_var = L.get_output([l_mean, l_log_std])
+        self._mean_var, self._log_std_var = mean_var, log_std_var
 
         self._l_mean = l_mean
         self._l_log_std = l_log_std

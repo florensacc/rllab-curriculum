@@ -40,7 +40,7 @@ class FirstOrderOptimizer(Serializable):
         self._tolerance = tolerance
         self._batch_size = batch_size
 
-    def update_opt(self, loss, target, inputs, extra_inputs=None):
+    def update_opt(self, loss, target, inputs, extra_inputs=None, **kwargs):
         """
         :param loss: Symbolic expression for the loss function.
         :param target: A parameterized object to optimize over. It should implement methods of the
@@ -72,7 +72,7 @@ class FirstOrderOptimizer(Serializable):
             extra_inputs = tuple()
         return self._opt_fun["f_loss"](*(tuple(inputs) + extra_inputs))
 
-    def optimize(self, inputs, extra_inputs=None):
+    def optimize(self, inputs, extra_inputs=None, callback=None):
 
         if len(inputs) == 0:
             # Assumes that we should always sample mini-batches
@@ -96,14 +96,18 @@ class FirstOrderOptimizer(Serializable):
 
             new_loss = f_loss(*(tuple(inputs) + extra_inputs))
 
-            if self._callback:
+            if self._callback or callback:
                 elapsed = time.time() - start_time
-                self._callback(dict(
+                callback_args = dict(
                     loss=new_loss,
-                    params=self._target.get_param_values(trainable=True),
+                    params=self._target.get_param_values(trainable=True) if self._target else None,
                     itr=epoch,
                     elapsed=elapsed,
-                ))
+                )
+                if self._callback:
+                    self._callback(callback_args)
+                if callback:
+                    callback(**callback_args)
 
             if abs(last_loss - new_loss) < self._tolerance:
                 break

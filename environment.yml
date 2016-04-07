@@ -5,7 +5,7 @@ channels:
     - https://conda.anaconda.org/cjs14
 dependencies:
     - python==2.7.10
-    - numpy
+    - numpy==1.10.4
     - scipy
     - path.py
     - python-dateutil

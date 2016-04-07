@@ -40,7 +40,9 @@ class MLP(object):
         else:
             prefix = name + "_"
 
+
         l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var)
+        self._layers = [l_in]
         l_hid = l_in
         for idx, hidden_size in enumerate(hidden_sizes):
             l_hid = L.DenseLayer(
@@ -51,6 +53,7 @@ class MLP(object):
                 W=hidden_W_init,
                 b=hidden_b_init,
             )
+            self._layers.append(l_hid)
         l_out = L.DenseLayer(
             l_hid,
             num_units=output_dim,
@@ -59,9 +62,11 @@ class MLP(object):
             W=output_W_init,
             b=output_b_init,
         )
+        self._layers.append(l_out)
         self._l_in = l_in
         self._l_out = l_out
         self._input_var = l_in.input_var
+        self._output = L.get_output(l_out)
 
     @property
     def input_layer(self):
@@ -75,6 +80,13 @@ class MLP(object):
     def input_var(self):
         return self._l_in.input_var
 
+    @property
+    def layers(self):
+        return self._layers
+
+    @property
+    def output(self):
+        return self._output
 
 class GRULayer(L.Layer):
 

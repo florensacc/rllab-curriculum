@@ -1,6 +1,16 @@
+from contextlib import contextmanager
+
 from rllab.core.serializable import Serializable
 from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
 
+load_params = True
+
+@contextmanager
+def suppress_params_loading():
+    global load_params
+    load_params = False
+    yield
+    load_params = True
 
 class Parameterized(object):
 
@@ -69,5 +79,7 @@ class Parameterized(object):
 
     def __setstate__(self, d):
         Serializable.__setstate__(self, d)
-        self.set_param_values(d["params"])
+        global load_params
+        if load_params:
+            self.set_param_values(d["params"])
 
