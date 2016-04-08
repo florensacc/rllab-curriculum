@@ -80,6 +80,8 @@ class BatchPolopt(RLAlgorithm):
     def train(self):
         self.start_worker()
         self.init_opt()
+        episode_rewards = []
+        episode_lengths = []
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
             paths = self.obtain_samples(itr)
@@ -89,9 +91,15 @@ class BatchPolopt(RLAlgorithm):
             self.baseline.log_diagnostics(paths)
             self.optimize_policy(itr, samples_data)
             logger.log("saving snapshot...")
-            params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
+            params = self.get_itr_snapshot(itr, samples_data)
+            paths = samples_data["paths"]
             if self.store_paths:
-                params["paths"] = samples_data["paths"]
+                params["paths"] = paths
+            episode_rewards.extend(sum(p["rewards"]) for p in paths)
+            episode_lengths.extend(len(p["rewards"]) for p in paths)
+            params["episode_rewards"] = np.array(episode_rewards)
+            params["episode_lengths"] = np.array(episode_lengths)
+            params["algo"] = self
             logger.save_itr_params(itr, params)
             logger.log("saved")
             logger.dump_tabular(with_prefix=False)

@@ -7,6 +7,7 @@ from rllab.misc.special import discount_cumsum
 from rllab.sampler import parallel_sampler
 from rllab.sampler.parallel_sampler import pool_map, G
 from rllab.sampler.utils import rollout
+from rllab.core.serializable import Serializable
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 import cma_es_lib
@@ -29,7 +30,7 @@ def sample_return(env, policy, params, max_path_length, discount):
     )
 
 
-class CMAES(RLAlgorithm):
+class CMAES(RLAlgorithm, Serializable):
 
     def __init__(
             self,
@@ -56,6 +57,7 @@ class CMAES(RLAlgorithm):
         :param sigma0: Initial std for param dist
         :return:
         """
+        Serializable.quick_init(self, locals())
         self.env = env
         self.policy = policy
         self.plot = plot

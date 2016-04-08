@@ -8,6 +8,7 @@ from rllab.misc.special import discount_cumsum
 from rllab.sampler import parallel_sampler
 from rllab.sampler.parallel_sampler import pool_map, G
 from rllab.sampler.utils import rollout
+from rllab.core.serializable import Serializable
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 
@@ -29,7 +30,7 @@ def sample_return(env, policy, params, max_path_length, discount):
     )
 
 
-class CEM(RLAlgorithm):
+class CEM(RLAlgorithm, Serializable):
     def __init__(
             self,
             env,
@@ -63,6 +64,7 @@ class CEM(RLAlgorithm):
         :param best_frac: Best fraction of the sampled params
         :return:
         """
+        Serializable.quick_init(self, locals())
         self.env = env
         self.policy = policy
         self.batch_size = batch_size

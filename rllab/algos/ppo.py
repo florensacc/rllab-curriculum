@@ -1,8 +1,9 @@
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from rllab.algos.npo import NPO
+from rllab.core.serializable import Serializable
 
 
-class PPO(NPO):
+class PPO(NPO, Serializable):
     """
     Penalized Policy Optimization.
     """
@@ -12,6 +13,7 @@ class PPO(NPO):
             optimizer=None,
             optimizer_args=None,
             **kwargs):
+        Serializable.quick_init(self, locals())
         if optimizer is None:
             if optimizer_args is None:
                 optimizer_args = dict()

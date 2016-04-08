@@ -1,8 +1,9 @@
 from rllab.algos.npo import NPO
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from rllab.core.serializable import Serializable
 
 
-class TRPO(NPO):
+class TRPO(NPO, Serializable):
     """
     Trust Region Policy Optimization
     """
@@ -12,6 +13,7 @@ class TRPO(NPO):
             optimizer=None,
             optimizer_args=None,
             **kwargs):
+        Serializable.quick_init(self, locals())
         if optimizer is None:
             if optimizer_args is None:
                 optimizer_args = dict()

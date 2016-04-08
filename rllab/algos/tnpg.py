@@ -1,9 +1,10 @@
 from rllab.algos.npo import NPO
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.misc import ext
+from rllab.core.serializable import Serializable
 
 
-class TNPG(NPO):
+class TNPG(NPO, Serializable):
     """
     Truncated Natural Policy Gradient.
     """
@@ -13,6 +14,7 @@ class TNPG(NPO):
             optimizer=None,
             optimizer_args=None,
             **kwargs):
+        Serializable.quick_init(self, locals())
         if optimizer is None:
             default_args = dict(max_backtracks=0)
             if optimizer_args is None:
