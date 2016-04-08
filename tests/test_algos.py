@@ -60,6 +60,16 @@ algo_args = {
         replay_pool_size=1000,
         eval_samples=100,
     ),
+    CEM: dict(
+        n_itr=1,
+        max_path_length=100,
+        n_samples=5,
+    ),
+    CMAES: dict(
+        n_itr=1,
+        max_path_length=100,
+        batch_size=5,
+    )
 }
 
 polopt_cases = []

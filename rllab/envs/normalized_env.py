@@ -78,7 +78,8 @@ class NormalizedEnv(ProxyEnv, Serializable):
         lb, ub = self._wrapped_env.action_space.bounds
         scaled_action = lb + (action + 1.) * 0.5 * (ub - lb)
         scaled_action = np.clip(scaled_action, lb, ub)
-        next_obs, reward, done, info = self._wrapped_env.step(scaled_action)
+        wrapped_step = self._wrapped_env.step(scaled_action)
+        next_obs, reward, done, info = wrapped_step
         if self._normalize_obs:
             next_obs = self._apply_normalize_obs(next_obs)
         if self._normalize_reward:
