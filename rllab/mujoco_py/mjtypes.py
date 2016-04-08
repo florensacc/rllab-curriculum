@@ -13,6 +13,9 @@ class MJCONTACT(Structure):
         ("friction", c_double * 5),
         ("solref", c_double * 2),
         ("solimp", c_double * 3),
+        ("mu", c_double),
+        ("coef", c_double * 5),
+        ("zone", c_int),
         ("dim", c_int),
         ("geom1", c_int),
         ("geom2", c_int),
@@ -109,7 +112,7 @@ class MJVOPTION(Structure):
         ("frame", c_int),
         ("geomgroup", c_ubyte * 5),
         ("sitegroup", c_ubyte * 5),
-        ("flags", c_ubyte * 16),
+        ("flags", c_ubyte * 18),
     ]
 
 class MJVGEOM(Structure):
@@ -122,7 +125,7 @@ class MJVGEOM(Structure):
         ("category", c_int),
         ("texid", c_int),
         ("texuniform", c_int),
-        ("texscale", c_float * 2),
+        ("texrepeat", c_float * 2),
         ("size", c_float * 3),
         ("pos", c_float * 3),
         ("mat", c_float * 9),
@@ -169,6 +172,8 @@ class MJOPTION(Structure):
     _fields_ = [
         ("timestep", c_double),
         ("apirate", c_double),
+        ("tolerance", c_double),
+        ("impratio", c_double),
         ("gravity", c_double * 3),
         ("wind", c_double * 3),
         ("density", c_double),
@@ -176,6 +181,8 @@ class MJOPTION(Structure):
         ("o_margin", c_double),
         ("o_solref", c_double * 2),
         ("o_solimp", c_double * 3),
+        ("mpr_tolerance", c_double),
+        ("mpr_iterations", c_int),
         ("integrator", c_int),
         ("collision", c_int),
         ("impedance", c_int),
@@ -241,6 +248,8 @@ class MJVISUAL(Structure):
             ("contactheight", c_float),
             ("connect", c_float),
             ("com", c_float),
+            ("camera", c_float),
+            ("light", c_float),
             ("selectpoint", c_float),
             ("jointlength", c_float),
             ("jointwidth", c_float),
@@ -261,6 +270,8 @@ class MJVISUAL(Structure):
             ("joint", c_float * 4),
             ("actuator", c_float * 4),
             ("com", c_float * 4),
+            ("camera", c_float * 4),
+            ("light", c_float * 4),
             ("selectpoint", c_float * 4),
             ("connect", c_float * 4),
             ("contactpoint", c_float * 4),
@@ -300,13 +311,15 @@ class MJDATA(Structure):
         ("nf", c_int),
         ("nefc", c_int),
         ("ncon", c_int),
-        ("nwarning", c_int * 7),
+        ("nwarning", c_int * 8),
+        ("warning_info", c_int * 8),
         ("timer_duration", c_double * 14),
         ("timer_ncall", c_double * 14),
         ("mocaptime", c_double * 3),
         ("time", c_double),
         ("energy", c_double * 2),
         ("solverstat", c_double * 4),
+        ("solvertrace", c_double * 200),
         ("buffer", POINTER(c_ubyte)),
         ("stack", POINTER(c_double)),
         ("qpos", POINTER(c_double)),
@@ -370,6 +383,7 @@ class MJDATA(Structure):
         ("efc_J", POINTER(c_double)),
         ("efc_J_T", POINTER(c_double)),
         ("efc_diagApprox", POINTER(c_double)),
+        ("efc_D", POINTER(c_double)),
         ("efc_R", POINTER(c_double)),
         ("efc_AR", POINTER(c_double)),
         ("e_ARchol", POINTER(c_double)),
@@ -524,17 +538,27 @@ class MJMODEL(Structure):
         ("site_quat", POINTER(c_double)),
         ("site_user", POINTER(c_double)),
         ("site_rgba", POINTER(c_float)),
+        ("cam_mode", POINTER(c_int)),
         ("cam_bodyid", POINTER(c_int)),
+        ("cam_targetbodyid", POINTER(c_int)),
         ("cam_pos", POINTER(c_double)),
         ("cam_quat", POINTER(c_double)),
+        ("cam_poscom0", POINTER(c_double)),
+        ("cam_pos0", POINTER(c_double)),
+        ("cam_mat0", POINTER(c_double)),
         ("cam_fovy", POINTER(c_double)),
         ("cam_ipd", POINTER(c_double)),
+        ("light_mode", POINTER(c_int)),
         ("light_bodyid", POINTER(c_int)),
+        ("light_targetbodyid", POINTER(c_int)),
         ("light_directional", POINTER(c_ubyte)),
         ("light_castshadow", POINTER(c_ubyte)),
         ("light_active", POINTER(c_ubyte)),
         ("light_pos", POINTER(c_double)),
         ("light_dir", POINTER(c_double)),
+        ("light_poscom0", POINTER(c_double)),
+        ("light_pos0", POINTER(c_double)),
+        ("light_dir0", POINTER(c_double)),
         ("light_attenuation", POINTER(c_float)),
         ("light_cutoff", POINTER(c_float)),
         ("light_exponent", POINTER(c_float)),
@@ -562,7 +586,7 @@ class MJMODEL(Structure):
         ("tex_rgb", POINTER(c_ubyte)),
         ("mat_texid", POINTER(c_int)),
         ("mat_texuniform", POINTER(c_ubyte)),
-        ("mat_texscale", POINTER(c_float)),
+        ("mat_texrepeat", POINTER(c_float)),
         ("mat_emission", POINTER(c_float)),
         ("mat_specular", POINTER(c_float)),
         ("mat_shininess", POINTER(c_float)),
@@ -745,6 +769,33 @@ class MjContactWrapper(object):
     def solimp(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.solimp, val_ptr, 3 * sizeof(c_double))
+    
+    @property
+    def mu(self):
+        return self._wrapped.contents.mu
+    
+    @mu.setter
+    def mu(self, value):
+        self._wrapped.contents.mu = value
+    
+    @property
+    def coef(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.coef, dtype=np.double, count=(5)), (5, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @coef.setter
+    def coef(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.coef, val_ptr, 5 * sizeof(c_double))
+    
+    @property
+    def zone(self):
+        return self._wrapped.contents.zone
+    
+    @zone.setter
+    def zone(self, value):
+        self._wrapped.contents.zone = value
     
     @property
     def dim(self):
@@ -1411,14 +1462,14 @@ class MjvOptionWrapper(object):
     
     @property
     def flags(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.flags, dtype=np.uint8, count=(16)), (16, ))
+        arr = np.reshape(np.fromiter(self._wrapped.contents.flags, dtype=np.uint8, count=(18)), (18, ))
         arr.setflags(write=False)
         return arr
     
     @flags.setter
     def flags(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_ubyte))
-        memmove(self._wrapped.contents.flags, val_ptr, 16 * sizeof(c_ubyte))
+        memmove(self._wrapped.contents.flags, val_ptr, 18 * sizeof(c_ubyte))
 
 class MjvGeomWrapper(object):
     
@@ -1492,15 +1543,15 @@ class MjvGeomWrapper(object):
         self._wrapped.contents.texuniform = value
     
     @property
-    def texscale(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.texscale, dtype=np.float, count=(2)), (2, ))
+    def texrepeat(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.texrepeat, dtype=np.float, count=(2)), (2, ))
         arr.setflags(write=False)
         return arr
     
-    @texscale.setter
-    def texscale(self, value):
+    @texrepeat.setter
+    def texrepeat(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_float))
-        memmove(self._wrapped.contents.texscale, val_ptr, 2 * sizeof(c_float))
+        memmove(self._wrapped.contents.texrepeat, val_ptr, 2 * sizeof(c_float))
     
     @property
     def size(self):
@@ -1810,6 +1861,22 @@ class MjOptionWrapper(object):
         self._wrapped.contents.apirate = value
     
     @property
+    def tolerance(self):
+        return self._wrapped.contents.tolerance
+    
+    @tolerance.setter
+    def tolerance(self, value):
+        self._wrapped.contents.tolerance = value
+    
+    @property
+    def impratio(self):
+        return self._wrapped.contents.impratio
+    
+    @impratio.setter
+    def impratio(self, value):
+        self._wrapped.contents.impratio = value
+    
+    @property
     def gravity(self):
         arr = np.reshape(np.fromiter(self._wrapped.contents.gravity, dtype=np.double, count=(3)), (3, ))
         arr.setflags(write=False)
@@ -1876,6 +1943,22 @@ class MjOptionWrapper(object):
     def o_solimp(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.o_solimp, val_ptr, 3 * sizeof(c_double))
+    
+    @property
+    def mpr_tolerance(self):
+        return self._wrapped.contents.mpr_tolerance
+    
+    @mpr_tolerance.setter
+    def mpr_tolerance(self, value):
+        self._wrapped.contents.mpr_tolerance = value
+    
+    @property
+    def mpr_iterations(self):
+        return self._wrapped.contents.mpr_iterations
+    
+    @mpr_iterations.setter
+    def mpr_iterations(self, value):
+        self._wrapped.contents.mpr_iterations = value
     
     @property
     def integrator(self):
@@ -2135,14 +2218,25 @@ class MjDataWrapper(object):
     
     @property
     def nwarning(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.nwarning, dtype=np.int, count=(7)), (7, ))
+        arr = np.reshape(np.fromiter(self._wrapped.contents.nwarning, dtype=np.int, count=(8)), (8, ))
         arr.setflags(write=False)
         return arr
     
     @nwarning.setter
     def nwarning(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_int))
-        memmove(self._wrapped.contents.nwarning, val_ptr, 7 * sizeof(c_int))
+        memmove(self._wrapped.contents.nwarning, val_ptr, 8 * sizeof(c_int))
+    
+    @property
+    def warning_info(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.warning_info, dtype=np.int, count=(8)), (8, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @warning_info.setter
+    def warning_info(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_int))
+        memmove(self._wrapped.contents.warning_info, val_ptr, 8 * sizeof(c_int))
     
     @property
     def timer_duration(self):
@@ -2206,6 +2300,17 @@ class MjDataWrapper(object):
     def solverstat(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.solverstat, val_ptr, 4 * sizeof(c_double))
+    
+    @property
+    def solvertrace(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.solvertrace, dtype=np.double, count=(200)), (200, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @solvertrace.setter
+    def solvertrace(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.solvertrace, val_ptr, 200 * sizeof(c_double))
     
     @property
     def buffer(self):
@@ -2888,6 +2993,17 @@ class MjDataWrapper(object):
     def efc_diagApprox(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.efc_diagApprox, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
+    
+    @property
+    def efc_D(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.efc_D, dtype=np.double, count=(self._size_src.njmax*1)), (self._size_src.njmax, 1, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @efc_D.setter
+    def efc_D(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.efc_D, val_ptr, self._size_src.njmax*1 * sizeof(c_double))
     
     @property
     def efc_R(self):
@@ -4394,6 +4510,17 @@ class MjModelWrapper(object):
         memmove(self._wrapped.contents.site_rgba, val_ptr, self.nsite*4 * sizeof(c_float))
     
     @property
+    def cam_mode(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.cam_mode, dtype=np.int, count=(self.ncam*1)), (self.ncam, 1, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @cam_mode.setter
+    def cam_mode(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_int))
+        memmove(self._wrapped.contents.cam_mode, val_ptr, self.ncam*1 * sizeof(c_int))
+    
+    @property
     def cam_bodyid(self):
         arr = np.reshape(np.fromiter(self._wrapped.contents.cam_bodyid, dtype=np.int, count=(self.ncam*1)), (self.ncam, 1, ))
         arr.setflags(write=False)
@@ -4403,6 +4530,17 @@ class MjModelWrapper(object):
     def cam_bodyid(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.cam_bodyid, val_ptr, self.ncam*1 * sizeof(c_int))
+    
+    @property
+    def cam_targetbodyid(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.cam_targetbodyid, dtype=np.int, count=(self.ncam*1)), (self.ncam, 1, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @cam_targetbodyid.setter
+    def cam_targetbodyid(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_int))
+        memmove(self._wrapped.contents.cam_targetbodyid, val_ptr, self.ncam*1 * sizeof(c_int))
     
     @property
     def cam_pos(self):
@@ -4427,6 +4565,39 @@ class MjModelWrapper(object):
         memmove(self._wrapped.contents.cam_quat, val_ptr, self.ncam*4 * sizeof(c_double))
     
     @property
+    def cam_poscom0(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.cam_poscom0, dtype=np.double, count=(self.ncam*3)), (self.ncam, 3, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @cam_poscom0.setter
+    def cam_poscom0(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.cam_poscom0, val_ptr, self.ncam*3 * sizeof(c_double))
+    
+    @property
+    def cam_pos0(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.cam_pos0, dtype=np.double, count=(self.ncam*3)), (self.ncam, 3, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @cam_pos0.setter
+    def cam_pos0(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.cam_pos0, val_ptr, self.ncam*3 * sizeof(c_double))
+    
+    @property
+    def cam_mat0(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.cam_mat0, dtype=np.double, count=(self.ncam*9)), (self.ncam, 9, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @cam_mat0.setter
+    def cam_mat0(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.cam_mat0, val_ptr, self.ncam*9 * sizeof(c_double))
+    
+    @property
     def cam_fovy(self):
         arr = np.reshape(np.fromiter(self._wrapped.contents.cam_fovy, dtype=np.double, count=(self.ncam*1)), (self.ncam, 1, ))
         arr.setflags(write=False)
@@ -4449,6 +4620,17 @@ class MjModelWrapper(object):
         memmove(self._wrapped.contents.cam_ipd, val_ptr, self.ncam*1 * sizeof(c_double))
     
     @property
+    def light_mode(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.light_mode, dtype=np.int, count=(self.nlight*1)), (self.nlight, 1, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @light_mode.setter
+    def light_mode(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_int))
+        memmove(self._wrapped.contents.light_mode, val_ptr, self.nlight*1 * sizeof(c_int))
+    
+    @property
     def light_bodyid(self):
         arr = np.reshape(np.fromiter(self._wrapped.contents.light_bodyid, dtype=np.int, count=(self.nlight*1)), (self.nlight, 1, ))
         arr.setflags(write=False)
@@ -4458,6 +4640,17 @@ class MjModelWrapper(object):
     def light_bodyid(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.light_bodyid, val_ptr, self.nlight*1 * sizeof(c_int))
+    
+    @property
+    def light_targetbodyid(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.light_targetbodyid, dtype=np.int, count=(self.nlight*1)), (self.nlight, 1, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @light_targetbodyid.setter
+    def light_targetbodyid(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_int))
+        memmove(self._wrapped.contents.light_targetbodyid, val_ptr, self.nlight*1 * sizeof(c_int))
     
     @property
     def light_directional(self):
@@ -4513,6 +4706,39 @@ class MjModelWrapper(object):
     def light_dir(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
         memmove(self._wrapped.contents.light_dir, val_ptr, self.nlight*3 * sizeof(c_double))
+    
+    @property
+    def light_poscom0(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.light_poscom0, dtype=np.double, count=(self.nlight*3)), (self.nlight, 3, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @light_poscom0.setter
+    def light_poscom0(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.light_poscom0, val_ptr, self.nlight*3 * sizeof(c_double))
+    
+    @property
+    def light_pos0(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.light_pos0, dtype=np.double, count=(self.nlight*3)), (self.nlight, 3, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @light_pos0.setter
+    def light_pos0(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.light_pos0, val_ptr, self.nlight*3 * sizeof(c_double))
+    
+    @property
+    def light_dir0(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.light_dir0, dtype=np.double, count=(self.nlight*3)), (self.nlight, 3, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @light_dir0.setter
+    def light_dir0(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.light_dir0, val_ptr, self.nlight*3 * sizeof(c_double))
     
     @property
     def light_attenuation(self):
@@ -4812,15 +5038,15 @@ class MjModelWrapper(object):
         memmove(self._wrapped.contents.mat_texuniform, val_ptr, self.nmat*1 * sizeof(c_ubyte))
     
     @property
-    def mat_texscale(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.mat_texscale, dtype=np.float, count=(self.nmat*2)), (self.nmat, 2, ))
+    def mat_texrepeat(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.mat_texrepeat, dtype=np.float, count=(self.nmat*2)), (self.nmat, 2, ))
         arr.setflags(write=False)
         return arr
     
-    @mat_texscale.setter
-    def mat_texscale(self, value):
+    @mat_texrepeat.setter
+    def mat_texrepeat(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_float))
-        memmove(self._wrapped.contents.mat_texscale, val_ptr, self.nmat*2 * sizeof(c_float))
+        memmove(self._wrapped.contents.mat_texrepeat, val_ptr, self.nmat*2 * sizeof(c_float))
     
     @property
     def mat_emission(self):
@@ -5451,14 +5677,14 @@ class MjModelWrapper(object):
     
     @property
     def actuator_gear(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_gear, dtype=np.double, count=(self.nu*1)), (self.nu, 1, ))
+        arr = np.reshape(np.fromiter(self._wrapped.contents.actuator_gear, dtype=np.double, count=(self.nu*6)), (self.nu, 6, ))
         arr.setflags(write=False)
         return arr
     
     @actuator_gear.setter
     def actuator_gear(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
-        memmove(self._wrapped.contents.actuator_gear, val_ptr, self.nu*1 * sizeof(c_double))
+        memmove(self._wrapped.contents.actuator_gear, val_ptr, self.nu*6 * sizeof(c_double))
     
     @property
     def actuator_cranklength(self):
