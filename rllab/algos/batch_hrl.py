@@ -58,29 +58,29 @@ class BatchHRL(BatchPolopt, Serializable):
         super(BatchHRL, self).log_diagnostics(paths)
         self.bonus_evaluator.log_diagnostics(paths)
 
-    def _subsample_path(self, path, interval):
-        observations = path['observations']
-        rewards = path['rewards']
-        actions = path['actions']
-        path_length = len(rewards)
-        chunked_length = int(np.ceil(path_length * 1.0 / interval))
-        padded_length = chunked_length * interval
-        padded_rewards = np.append(rewards, np.zeros(padded_length - path_length))
-        chunked_rewards = np.sum(
-            np.reshape(padded_rewards, (chunked_length, interval)),
-            axis=1
-        )
-        chunked_env_infos = tensor_utils.subsample_tensor_dict(path["env_infos"], interval)
-        chunked_agent_infos = tensor_utils.subsample_tensor_dict(path["agent_infos"], interval)
-        chunked_actions = actions[::interval]
-        chunked_observations = observations[::interval]
-        return dict(
-            observations=chunked_observations,
-            actions=chunked_actions,
-            env_infos=chunked_env_infos,
-            agent_infos=chunked_agent_infos,
-            rewards=chunked_rewards,
-        )
+    # def _subsample_path(self, path, interval):
+    #     observations = path['observations']
+    #     rewards = path['rewards']
+    #     actions = path['actions']
+    #     path_length = len(rewards)
+    #     chunked_length = int(np.ceil(path_length * 1.0 / interval))
+    #     padded_length = chunked_length * interval
+    #     padded_rewards = np.append(rewards, np.zeros(padded_length - path_length))
+    #     chunked_rewards = np.sum(
+    #         np.reshape(padded_rewards, (chunked_length, interval)),
+    #         axis=1
+    #     )
+    #     chunked_env_infos = tensor_utils.subsample_tensor_dict(path["env_infos"], interval)
+    #     chunked_agent_infos = tensor_utils.subsample_tensor_dict(path["agent_infos"], interval)
+    #     chunked_actions = actions[::interval]
+    #     chunked_observations = observations[::interval]
+    #     return dict(
+    #         observations=chunked_observations,
+    #         actions=chunked_actions,
+    #         env_infos=chunked_env_infos,
+    #         agent_infos=chunked_agent_infos,
+    #         rewards=chunked_rewards,
+    #     )
 
     def process_samples(self, itr, paths):
         """
@@ -101,7 +101,7 @@ class BatchHRL(BatchPolopt, Serializable):
             # observations = path['observations']
             rewards = path['rewards']
             actions = path['actions']
-            path_length = len(rewards)
+            # path_length = len(rewards)
             # flat_observations = np.reshape(observations, (observations.shape[0], -1))
             high_agent_infos = path["agent_infos"]["high"]
             low_agent_infos = path["agent_infos"]["low"]
@@ -115,7 +115,7 @@ class BatchHRL(BatchPolopt, Serializable):
                 agent_infos=high_agent_infos,
                 rewards=rewards,
             )
-            chunked_high_path = self._subsample_path(high_path, self.policy.subgoal_interval)
+            chunked_high_path = self.bonus_evaluator.subsample_path(high_path)#, self.policy.subgoal_interval)
             # The high-level trajectory should be splitted according to the subgoal_interval parameter
 
             # high_path = dict(
@@ -131,11 +131,11 @@ class BatchHRL(BatchPolopt, Serializable):
             # fill in information needed by bonus_evaluator
             # path['subgoals'] = subgoals#chunked_subgoals#subgoals
             # path['high_pdists'] = high_pdists#chunked_high_pdists#high_pdists
-            chunked_bonuses = self.bonus_evaluator.predict(chunked_high_path)
-            bonuses = np.tile(
-                np.expand_dims(chunked_bonuses, axis=1),
-                (1, self.policy.subgoal_interval)
-            ).flatten()[:path_length]
+            bonuses = self.bonus_evaluator.predict(high_path)#chunked_high_path)
+            # bonuses = np.tile(
+            #     np.expand_dims(chunked_bonuses, axis=1),
+            #     (1, self.policy.subgoal_interval)
+            # ).flatten()[:path_length]
             # TODO normalize these two terms
             # path['bonuses'] = bonuses
             low_rewards = rewards + self.mi_coeff * bonuses

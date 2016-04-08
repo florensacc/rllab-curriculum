@@ -28,7 +28,7 @@ env = GridWorldEnv(
     ]
 )
 
-level = "hrl_level2"
+level = "hrl_level1"
 
 level_configs = dict(
     hrl_level0=dict(
@@ -119,7 +119,8 @@ approx_evaluator = StateGivenGoalMIEvaluator(
     logger_delegate=exact_evaluator,
 )
 
-evaluators = [approx_evaluator]#, exact_evaluator]
+evaluators = [exact_evaluator]#approx_evaluator]#, exact_evaluator]
+
 
 for evaluator in evaluators:
     algo = BatchHRL(
@@ -136,14 +137,14 @@ for evaluator in evaluators:
             policy=policy.high_policy,
             baseline=baseline.high_baseline,
             discount=0.99,
-            step_size=0.01,
+            step_size=0.1,
         ),
         low_algo=TRPO(
             env=env,
             policy=policy.low_policy,
             baseline=baseline.low_baseline,
             discount=0.99,
-            step_size=0.01,
+            step_size=0.1,
         ),
     )
 
