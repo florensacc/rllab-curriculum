@@ -1,13 +1,13 @@
 #!/bin/bash
 
 if [ "$(uname)" == "Darwin" ]; then
-    mujoco_file="libmujoco.dylib"
+    mujoco_file="libmujoco130.dylib"
     glfw_file="libglfw.3.dylib"
-    zip_file="mjpro122_osx.zip"
+    zip_file="mjpro130_osx.zip"
 elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
     mujoco_file="libmujoco.so"
     glfw_file="libglfw.so.3"
-    zip_file="mjpro122_linux.zip"
+    zip_file="mjpro130_linux.zip"
 fi
 
 if [ ! -f vendor/mujoco/$mujoco_file ]; then
@@ -18,20 +18,21 @@ if [ ! -f vendor/mujoco/$mujoco_file ]; then
         echo "No file found at $path"
         exit 0
     fi
+    rm -r /tmp/mujoco
     dir=`mktemp -d /tmp/mujoco`
     unzip $path -d $dir
-    if [ ! -f $dir/mjpro/$mujoco_file ]; then
+    if [ ! -f $dir/mjpro/bin/$mujoco_file ]; then
         echo "mjpro/$mujoco_file not found. Make sure you have the correct file (most likely named $zip_file)"
         exit 0
     fi
-    if [ ! -f $dir/mjpro/$glfw_file ]; then
+    if [ ! -f $dir/mjpro/bin/$glfw_file ]; then
         echo "mjpro/$glfw_file not found. Make sure you have the correct file (most likely named $zip_file)"
         exit 0
     fi
 
     mkdir -p vendor/mujoco
-    cp $dir/mjpro/$mujoco_file vendor/mujoco/
-    cp $dir/mjpro/$glfw_file vendor/mujoco/
+    cp $dir/mjpro/bin/$mujoco_file vendor/mujoco/
+    cp $dir/mjpro/bin/$glfw_file vendor/mujoco/
 fi
 
 if [ ! -f vendor/mujoco/mjkey.txt ]; then

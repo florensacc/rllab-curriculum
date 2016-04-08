@@ -33,3 +33,5 @@ src/
 .settings
 .pods
 docs/_build
+blackbox
+blackbox.zip
