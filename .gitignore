@@ -35,3 +35,4 @@ src/
 docs/_build
 blackbox
 blackbox.zip
+config_personal.py
