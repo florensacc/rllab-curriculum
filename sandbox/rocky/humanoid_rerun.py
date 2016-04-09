@@ -152,4 +152,4 @@ for seed in [1, 11, 21, 31, 41]:
                 snapshot_mode="last",
                 seed=seed,
             )
-            sys.exit(0)
+            # sys.exit(0)
