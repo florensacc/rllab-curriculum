@@ -5,7 +5,7 @@ if [ "$(uname)" == "Darwin" ]; then
     glfw_file="libglfw.3.dylib"
     zip_file="mjpro130_osx.zip"
 elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
-    mujoco_file="libmujoco.so"
+    mujoco_file="libmujoco130.so"
     glfw_file="libglfw.so.3"
     zip_file="mjpro130_linux.zip"
 fi

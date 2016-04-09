@@ -4,7 +4,7 @@ import os
 
 USE_GPU = False
 
-DOCKER_IMAGE = "quay.io/openai/rocky-sandbox-gpu"
+DOCKER_IMAGE = "quay.io/openai/rocky-sandbox-gpu:icml-fixed"
 
 KUBE_PREFIX = "rocky_"
 
@@ -23,10 +23,7 @@ AWS_KEY_NAME = "research_virginia"
 
 AWS_SPOT = True
 
-if USE_GPU:
-    AWS_SPOT_PRICE = '10.0'
-else:
-    AWS_SPOT_PRICE = '1.0'
+AWS_SPOT_PRICE = '10.0'
 
 AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY", None)
 

@@ -12,25 +12,36 @@ from rllab.envs.mujoco.simple_humanoid_env import SimpleHumanoidEnv
 from rllab.envs.mujoco.humanoid_env import HumanoidEnv
 from rllab.envs.mujoco.walker2d_env import Walker2DEnv
 from rllab.envs.mujoco.swimmer_env import SwimmerEnv
+from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
 from rllab.misc.instrument import stub, run_experiment_lite
+import sys
 
 stub(globals())
 
-N_ITR = 1#500
+N_ITR = 500
 HORIZON = 500
-BATCH_SIZE = 1000#50000
+BATCH_SIZE = 50000
 DISCOUNT = 0.99
 
 for seed in [1, 11, 21, 31, 41]:
 
-    for env in map(normalize, [SwimmerEnv(), Walker2DEnv(), HumanoidEnv(), SimpleHumanoidEnv()]):
+    for env in map(normalize, [HalfCheetahEnv(), SwimmerEnv(), Walker2DEnv(), HumanoidEnv(), SimpleHumanoidEnv()]):
 
         policy = GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(100, 50, 25))
         baseline = LinearFeatureBaseline(env_spec=env.spec)
 
         algos = [
+            CMAES(
+                env=env,
+                policy=policy,
+                n_itr=N_ITR,
+                max_path_length=HORIZON,
+                discount=DISCOUNT,
+                batch_size=BATCH_SIZE,
+                sigma0=1e-1,
+            ),
             CEM(
                 env=env,
                 policy=policy,
@@ -129,23 +140,16 @@ for seed in [1, 11, 21, 31, 41]:
                 discount=DISCOUNT,
                 optimizer_args=dict(learning_rate=1e-2),
             ),
-            CMAES(
-                env=env,
-                policy=policy,
-                n_itr=N_ITR,
-                max_path_length=HORIZON,
-                discount=DISCOUNT,
-                batch_size=BATCH_SIZE,
-                sigma0=1e-1,
-            ),
+
         ]
 
         for algo in algos:
             run_experiment_lite(
                 algo.train(),
-                mode="local",
+                mode="ec2",
                 exp_prefix="icml_plot_rerun",
                 n_parallel=4,
                 snapshot_mode="last",
                 seed=seed,
             )
+            sys.exit(0)

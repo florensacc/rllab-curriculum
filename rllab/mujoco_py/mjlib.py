@@ -7,7 +7,7 @@ osp = os.path
 if sys.platform.startswith("darwin"):
     libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco/libmujoco130.dylib"))
 elif sys.platform.startswith("linux"):
-    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco/libmujoco.so"))
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco/libmujoco130.so"))
 elif sys.platform.startswith("win"):
     libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco/mujoco.lib"))
 else:
