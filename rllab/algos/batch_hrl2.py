@@ -55,7 +55,7 @@ class BatchHRL2(BatchPolopt, Serializable):
         )
 
     def log_diagnostics(self, paths):
-        super(BatchHRL, self).log_diagnostics(paths)
+        super(BatchHRL2, self).log_diagnostics(paths)
         self.bonus_evaluator.log_diagnostics(paths)
 
     def _subsample_path(self, path, interval):
@@ -189,16 +189,17 @@ class BatchHRL2(BatchPolopt, Serializable):
             # shape: (N/subgoal_interval) * #subgoal
             chunked_goal_probs = policy.high_policy.dist_info(high_observations, None)["prob"]
             n_subgoals = policy.subgoal_space.n
+            # Actually compute p(a|g,s) and p(a|s)
+            N = all_flat_observations.shape[0]
             goal_probs = np.tile(
                 np.expand_dims(chunked_goal_probs, axis=1),
                 (1, policy.subgoal_interval, 1),
-            ).reshape((-1, n_subgoals))
+            ).reshape((-1, n_subgoals))[:N]
             # p(a|g,s)
             action_given_goal_pdists = []
             # p(a|s) = sum_g p(g|s) p(a|g,s)
             action_pdists = 0
-            # Actually compute p(a|g,s) and p(a|s)
-            N = all_flat_observations.shape[0]
+
             for goal in range(n_subgoals):
                 goal_onehot = np.tile(
                     to_onehot(goal, n_subgoals).reshape((1, -1)),

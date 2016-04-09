@@ -34,7 +34,9 @@ env = GridWorldEnv(
 )
 
 level = "hrl_level1"
-evaluator_name = "exact"
+evaluator_name = "exact2"
+algo_mode = "hrl2"
+
 # evaluator_name = "approx"
 
 level_configs = dict(
@@ -108,7 +110,12 @@ baseline = SubgoalBaseline(
     # ),
 )
 
-exact_evaluator = ExactStateGivenGoalMIEvaluator2(
+exact_evaluator = ExactStateGivenGoalMIEvaluator(
+    env=env,
+    policy=policy,
+)
+
+exact_evaluator2 = ExactStateGivenGoalMIEvaluator2(
     env=env,
     policy=policy,
 )
@@ -142,20 +149,24 @@ evaluator = dict(
     approx=approx_evaluator,
     dense_approx=dense_approx_evaluator,
     exact=exact_evaluator,
+    exact2=exact_evaluator2,
 )[evaluator_name]
 # ]#approx_evaluator
 # ]#,
 # exact_evaluator]
 
 
-algo = BatchHRL2(
+algo = dict(
+    hrl2=BatchHRL2,
+    hrl=BatchHRL
+)[algo_mode](
     env=env,
     policy=policy,
     baseline=baseline,
     bonus_evaluator=evaluator,
     batch_size=10000,
     whole_paths=True,
-    max_path_length=60,
+    max_path_length=200,
     n_itr=100,
     high_algo=PPO(
         env=env,
@@ -179,8 +190,8 @@ algo = BatchHRL2(
 run_experiment_lite(
     algo.train(),
     exp_prefix="hrl",
-    exp_name="{level}_{evaluator}".format(level=level, evaluator=evaluator_name),
-    n_parallel=4,
+    exp_name="{algo_mode}_{level}_{evaluator}".format(algo_mode=algo_mode, level=level, evaluator=evaluator_name),
+    n_parallel=1,
     snapshot_mode="last",
     seed=111,
     mode="local",

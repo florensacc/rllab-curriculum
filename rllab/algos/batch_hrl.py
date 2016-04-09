@@ -4,6 +4,7 @@ from rllab.algos.batch_polopt import BatchPolopt
 from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
 from rllab.misc import logger
+from rllab.misc import tensor_utils
 from rllab import hrl_utils
 from rllab.misc.overrides import overrides
 from rllab.misc.special import to_onehot
@@ -58,6 +59,31 @@ class BatchHRL(BatchPolopt, Serializable):
         super(BatchHRL, self).log_diagnostics(paths)
         self.bonus_evaluator.log_diagnostics(paths)
 
+    def _subsample_path(self, path, interval):
+        observations = path['observations']
+        rewards = path['rewards']
+        actions = path['actions']
+        path_length = len(rewards)
+        chunked_length = int(np.ceil(path_length * 1.0 / interval))
+        padded_length = chunked_length * interval
+        padded_rewards = np.append(rewards, np.zeros(padded_length - path_length))
+        chunked_rewards = np.sum(
+            np.reshape(padded_rewards, (chunked_length, interval)),
+            axis=1
+        )
+        chunked_env_infos = tensor_utils.subsample_tensor_dict(path["env_infos"], interval)
+        chunked_agent_infos = tensor_utils.subsample_tensor_dict(path["agent_infos"], interval)
+        chunked_actions = actions[::interval]
+        chunked_observations = observations[::interval]
+        return dict(
+            observations=chunked_observations,
+            actions=chunked_actions,
+            env_infos=chunked_env_infos,
+            agent_infos=chunked_agent_infos,
+            rewards=chunked_rewards,
+        )
+
+
     def process_samples(self, itr, paths):
         """
         Transform paths to high_paths and low_paths, and dispatch them to the high-level and low-level algorithms
@@ -72,13 +98,11 @@ class BatchHRL(BatchPolopt, Serializable):
         low_paths = []
         bonus_returns = []
 
-        # We need to train the predictor for p(s'|g, s)
-        with logger.prefix("MI | "), logger.tabular_prefix("MI_"):
-            self.bonus_evaluator.fit(paths)
 
         # Collect high-level trajectories
         for path in paths:
             rewards = path['rewards']
+            path_length = len(rewards)
             actions = path['actions']
             high_agent_infos = path["agent_infos"]["high"]
             high_observations = path["agent_infos"]["high_obs"]
@@ -94,7 +118,11 @@ class BatchHRL(BatchPolopt, Serializable):
             high_paths.append(chunked_high_path)
             low_agent_infos = path["agent_infos"]["low"]
             low_observations = path["agent_infos"]["low_obs"]
-            bonuses = self.bonus_evaluator.predict(path)
+            bonuses = self.bonus_evaluator.predict(chunked_high_path)#path)
+            bonuses = np.tile(
+                np.expand_dims(bonuses, axis=1),
+                (1, self.policy.subgoal_interval)
+            ).flatten()[:path_length]
             low_rewards = rewards + self.mi_coeff * bonuses
             bonus_returns.append(np.sum(bonuses))
             low_path = dict(
@@ -116,6 +144,9 @@ class BatchHRL(BatchPolopt, Serializable):
 
         # mi_action_goal = self._compute_mi_action_goal(self.env.spec, self.policy, high_samples_data, low_samples_data)
         # logger.record_tabular("I(action,goal|state)", mi_action_goal)
+        # We need to train the predictor for p(s'|g, s)
+        with logger.prefix("MI | "), logger.tabular_prefix("MI_"):
+            self.bonus_evaluator.fit(high_paths)
 
         return dict(
             high=high_samples_data,
