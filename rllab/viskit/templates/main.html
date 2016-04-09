@@ -26,7 +26,7 @@
                 </select>
                 <select class="filter">
                 </select>
-                <br />
+                <br/>
             </div>
         </form>
         Plot Attribute:
@@ -41,7 +41,7 @@
                                 {% if plottable_key == plot_key %}
                                checked
                                 {% endif %}
-                                />
+                        />
                         <label for="plot_key_{{ loop.index0 }}">{{ plottable_key }}</label>
                     </li>
                 {% endfor %}
@@ -55,13 +55,13 @@
             <ul class="dropdown-menu">
                 <li>
                     <input type="radio" id="split_key_0" name="split_key"
-                           value="0" checked/>
+                           value="0" checked />
                     <label for="split_key_0">(None)</label>
                 </li>
                 {% for key in distinct_param_keys %}
                     <li>
                         <input type="radio" id="split_key_{{ loop.index }}" name="split_key"
-                               value="{{ loop.index }}" />
+                               value="{{ loop.index }}"/>
                         <label for="split_key_{{ loop.index }}">{{ key }}</label>
                     </li>
                 {% endfor %}
@@ -69,21 +69,25 @@
         </div>
         (Series) Split by:
         <div class="btn-group">
-            <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">{{  distinct_param_keys[0] }}<span
+            <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">{{ distinct_param_keys[0] }}<span
                     class="caret"></span></button>
             <ul class="dropdown-menu">
                 {% for key in distinct_param_keys %}
                     <li>
                         <input type="radio" id="group_key_{{ loop.index }}" name="group_key"
-                               value="{{ loop.index }}" />
+                               value="{{ loop.index }}"
+                               {% if key == group_key %}
+                                checked
+                               {% endif %}
+                        />
                         <label for="group_key_{{ loop.index }}">{{ key }}</label>
                     </li>
                 {% endfor %}
             </ul>
         </div>
-        <br />
+        <br/>
         <button class="update">Update</button>
-        <br />
+        <br/>
         <span id="status"></span>
     </div>
     <div id="plot_wrapper">
@@ -99,10 +103,10 @@
     var plottableKeys = {{ plottable_keys|tojson|safe }};
     var distinctParamKeys = {{ distinct_param_keys|tojson|safe }};
     var distinctParams = {{ distinct_params|tojson|safe }};
-    function updatePlot() {
+    function updatePlot(callback) {
         $("#status").html("Updating");
 
-        var $controlPanel = $(this).closest(".control-panel");
+        var $controlPanel = $(".control-panel");
         var plotIndex = $controlPanel.find("input[name=plot_key]:checked").val();
         var plotKey = plottableKeys[plotIndex];
         var splitIndex = $controlPanel.find("input[type=radio][name=split_key]:checked").val();
@@ -115,7 +119,7 @@
         var groupIndex = $controlPanel.find("input[type=radio][name=group_key]:checked").val();
         var groupKey = distinctParamKeys[groupIndex - 1];
         var filters = {};
-        $.each($("div.filter"), function(itr, div) {
+        $.each($("div.filter"), function (itr, div) {
             var val = $(div).find(".filter").val();
             if (val && val.length != 0) {
                 filters[$(div).find(".target").val()] = val;
@@ -123,24 +127,43 @@
         });
         console.log("updating");
         $.get("/plot_div",
-              {"plot_key": plotKey, "split_key": splitKey,
-                  "group_key": groupKey, "filters": JSON.stringify(filters)},
-              function (data) {
-            $("#plot_wrapper").empty().append(data);
-            $("#status").html("Updated")
-        });
+                {
+                    "plot_key": plotKey, "split_key": splitKey,
+                    "group_key": groupKey, "filters": JSON.stringify(filters)
+                },
+                function (data) {
+                    $("#plot_wrapper").empty().append(data);
+                    $("#status").html("Updated");
+                    if (callback !== undefined) {
+                        callback();
+                    }
+                });
     }
     $(function () {
-        $("input[type=radio][name=plot_key]").change(updatePlot);
-        $("input[type=radio][name=split_key]").change(updatePlot);
-        $("input[type=radio][name=group_key]").change(updatePlot);
-        $("button.update").click(updatePlot);
+        $("input[type=radio][name=plot_key]").change(function () {
+            updatePlot();
+        });
+        $("input[type=radio][name=split_key]").change(function () {
+            updatePlot();
+        });
+        $("input[type=radio][name=group_key]").change(function () {
+            updatePlot();
+        });
+        $("button.update").click(function () {
+            updatePlot();
+        });
+{#        var periodicUpdatePlot = function() {#}
+{#            updatePlot(function() {#}
+{#                setTimeout(periodicUpdatePlot, 1000);#}
+{#            });#}
+{#        };#}
+{#        setTimeout(periodicUpdatePlot, 1000);#}
     });
     function updateFilterSelections() {
         var key = $(this).val();
         var select$ = $(this).parent().find("select.filter");
         select$.empty();
-        $.each([""].concat(distinctParams[key]), function(itr, v) {
+        $.each([""].concat(distinctParams[key]), function (itr, v) {
             select$.append(
                     $("<option />")
                             .attr("value", v)
@@ -158,7 +181,7 @@
         }
     }
     $("select.filter").change(addFilter);
-    $(document).ready(function() {
+    $(document).ready(function () {
         updateFilterSelections.call($("select.target"));
         cleanFilter = $(".filter.current").clone(true, true);
         $("#status").html("Ready")
