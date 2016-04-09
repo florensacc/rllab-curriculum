@@ -151,5 +151,6 @@ for seed in [1, 11, 21, 31, 41]:
                 n_parallel=4,
                 snapshot_mode="last",
                 seed=seed,
+                # dry=True
             )
             # sys.exit(0)
