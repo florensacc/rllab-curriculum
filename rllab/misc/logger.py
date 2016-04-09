@@ -40,7 +40,7 @@ def _add_output(file_name, arr, fds, mode='a'):
     if file_name not in arr:
         mkdir_p(os.path.dirname(file_name))
         arr.append(file_name)
-        fds[file_name] = open(file_name, 'a')
+        fds[file_name] = open(file_name, mode)
 
 
 def _remove_output(file_name, arr, fds):

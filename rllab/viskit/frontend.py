@@ -1,4 +1,4 @@
-import flask #import Flask, render_template, send_from_directory
+import flask  # import Flask, render_template, send_from_directory
 
 from rllab.misc.ext import flatten
 from rllab.viskit import core
@@ -10,6 +10,7 @@ import numpy as np
 # import threading, webbrowser
 import plotly.offline as po
 import plotly.graph_objs as go
+import threading
 
 app = flask.Flask(__name__, static_url_path='/static')
 
@@ -37,8 +38,8 @@ def make_plot(plot_list):
         y_upper = list(plt.means + plt.stds)
         y_lower = list(plt.means - plt.stds)
         data.append(go.Scatter(
-            x=x+x[::-1],
-            y=y_upper+y_lower[::-1],
+            x=x + x[::-1],
+            y=y_upper + y_lower[::-1],
             fill='tozerox',
             fillcolor=core.hex_to_rgb(color, 0.2),
             line=go.Line(color='transparent'),
@@ -131,17 +132,42 @@ def index():
     # exp_folder_path = "data/s3/experiments/ppo-atari-3"
     # _load_data(exp_folder_path)
     # exp_json = json.dumps(exp_data)
-    plot_key = "AverageReturn"
-    group_key = distinct_params[0][0]
+    if "AverageReturn" in plottable_keys:
+        plot_key = "AverageReturn"
+    else:
+        plot_key = plottable_keys[0]
+    if len(distinct_params) > 0:
+        group_key = distinct_params[0][0]
+    else:
+        group_key = None
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=None, group_key=group_key)
     return flask.render_template(
         "main.html",
         plot_div=plot_div,
         plot_key=plot_key,
+        group_key=group_key,
         plottable_keys=plottable_keys,
         distinct_param_keys=[str(k) for k, v in distinct_params],
         distinct_params=dict([(str(k), map(str, v)) for k, v in distinct_params]),
     )
+
+
+def background_refresh(data_path):
+    try:
+        global exps_data
+        global plottable_keys
+        global distinct_params
+        import time
+        while True:
+            exps_data = core.load_exps_data(data_path)
+            plottable_keys = list(set(flatten(exp.progress.keys() for exp in exps_data)))
+            distinct_params = core.extract_distinct_params(exps_data)
+            print("Refreshed...")
+            time.sleep(1)
+    except KeyboardInterrupt:
+        raise
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -152,6 +178,9 @@ if __name__ == "__main__":
     exps_data = core.load_exps_data(args.data_path)
     plottable_keys = list(set(flatten(exp.progress.keys() for exp in exps_data)))
     distinct_params = core.extract_distinct_params(exps_data)
+    bg = threading.Thread(target=background_refresh, args=(args.data_path,))
+    bg.daemon = True
+    bg.start()
     port = 5000
     url = "http://127.0.0.1:{0}".format(port)
     print("Done! View http://localhost:5000 in your browser")

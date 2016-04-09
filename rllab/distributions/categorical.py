@@ -13,7 +13,7 @@ def from_onehot_sym(x_var):
 
 
 def from_onehot(x_var):
-    ret = np.zeros((x_var.shape[0],), 'int32')
+    ret = np.zeros((len(x_var),), 'int32')
     nonzero_n, nonzero_a = np.nonzero(x_var)
     ret[nonzero_n] = nonzero_a
     return ret
@@ -66,7 +66,7 @@ class Categorical(Distribution):
         probs = dist_info["prob"]
         # Assume layout is N * A
         N = probs.shape[0]
-        return np.log(probs[np.arange(N), from_onehot(xs)] + TINY)
+        return np.log(probs[np.arange(N), from_onehot(np.asarray(xs))] + TINY)
 
     @property
     def dist_info_keys(self):

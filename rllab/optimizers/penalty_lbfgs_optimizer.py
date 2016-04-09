@@ -89,7 +89,6 @@ class PenaltyLbfgsOptimizer(Serializable):
             self._penalty, self._min_penalty, self._max_penalty)
 
         penalty_scale_factor = None
-        opt_params = None
         f_opt = self._opt_fun["f_opt"]
         f_penalized_loss = self._opt_fun["f_penalized_loss"]
 
@@ -100,6 +99,7 @@ class PenaltyLbfgsOptimizer(Serializable):
             return f
 
         cur_params = self._target.get_param_values(trainable=True).astype('float64')
+        opt_params = cur_params
 
         for penalty_itr in range(self._max_penalty_itr):
             logger.log('trying penalty=%.3f...' % try_penalty)

@@ -16,7 +16,7 @@ class CompoundActionSequenceEnv(ProxyEnv, Serializable):
     original mdp, and perform exploration using these learned action sequence primitives (thus, a hierarchy).
     """
 
-    def __init__(self, wrapped_env, action_map, action_dim=None, reset_history=False):
+    def __init__(self, wrapped_env, action_map, action_dim=None, reset_history=True, obs_include_history=False):
         """
         Constructs a compound mdp.
         :param mdp: The original mdp.
@@ -49,15 +49,23 @@ class CompoundActionSequenceEnv(ProxyEnv, Serializable):
             self._action_dim = action_dim
         self._raw_obs = None
         self._reset_history = reset_history
+        self._obs_include_history = obs_include_history
+        self._history_length = len(action_map[0])
+        if obs_include_history:
+            assert reset_history
+            # observation dimension is action_dim+1 to account for empty slots
+            self._observation_space = Product(
+                [self.wrapped_env.observation_space] + [Discrete(self._action_dim + 1) for _ in
+                                                        xrange(self._history_length)]
+            )
+        else:
+            self._observation_space = self.wrapped_env.observation_space
+        self._action_space = Discrete(self._action_dim)
         self.wrapped_env.reset()
 
     @property
-    def action_shape(self):
-        return Discrete(self._action_dim)
-
-    @property
-    def _history_length(self):
-        return len(self._action_map[0])
+    def action_space(self):
+        return self._action_space
 
     def reset(self):
         obs = self.wrapped_env.reset()
@@ -66,27 +74,22 @@ class CompoundActionSequenceEnv(ProxyEnv, Serializable):
         return self._get_current_obs()
 
     def _get_current_obs(self):
-        # if self._obs_include_actions:
-        #     # If history_length=5, and action_history = [1, 2, 3], then the observation would include a vector of the
-        #     # form [3, 2, 1, 0, 0]. Note that the most recent action appears first, and any blank spaces are padded
-        #     # at the end
-        #     # If the action history is longer than history_length, then only the last few will be included
-        #     included = self._action_history[::-1][:self._history_length]
-        #     # make shape checking happy
-        #     # one_hots = np.array([special.to_onehot(x, self._action_dim) for x in included])
-        #     padded = included + [0] * (self._history_length - len(included))
-        #     return (self._raw_obs,) + tuple(padded)
-        # else:
-        return self._raw_obs
+        if self._obs_include_history:
+            # If history_length=5, action_dim=4, and action_history = [1, 2, 3], then the observation would include a
+            # vector of the form [3, 2, 1, 4, 4]. Note that the most recent action appears first, and any empty
+            # slots are padded at the end
+            # If the action history is longer than history_length, then only the last few will be included
+            included = self._action_history[::-1][:self._history_length]
+            # make shape checking happy
+            # one_hots = np.array([special.to_onehot(x, self._action_dim) for x in included])
+            padded = included + [self._action_dim] * (self._history_length - len(included))
+            return (self._raw_obs,) + tuple(padded)
+        else:
+            return self._raw_obs
 
     @property
     def observation_space(self):
-        # if self._obs_include_actions:
-        #     return Product(
-        #         [self.wrapped_env.observation_space] + [Discrete(self._action_dim) for _ in xrange(self._action_dim)]
-        #     )
-        # else:
-        return self.wrapped_env.observation_space
+        return self._observation_space
 
     def step(self, action):
         self._action_history.append(action)

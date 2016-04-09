@@ -3,6 +3,7 @@ import matplotlib.patches as patches
 import numpy as np
 from rllab.misc.tabulate import tabulate
 from rllab.sampler.utils import rollout
+from rllab.spaces.product import Product
 import joblib
 
 
@@ -69,15 +70,18 @@ class HrlAnalyzer(object):
         self._policy = policy = params["policy"]
         self._n_row = env.wrapped_env.n_row
         self._n_col = env.wrapped_env.n_col
-        self._n_states = env.observation_space.n
-        self._n_actions = env.action_space.n
-        self._n_subgoals = policy.subgoal_space.n
-        self._obs_space = env.observation_space
-        self._action_space = env.action_space
-        self._subgoal_space = policy.subgoal_space
-        self._high_obs_space = policy.high_env_spec.observation_space
-        self._low_obs_space = policy.low_env_spec.observation_space
-        self._subgoal_interval = policy.subgoal_interval
+        if isinstance(env.observation_space, Product):
+            pass
+        else:
+            self._n_states = env.observation_space.n
+            self._n_actions = env.action_space.n
+            self._n_subgoals = policy.subgoal_space.n
+            self._obs_space = env.observation_space
+            self._action_space = env.action_space
+            self._subgoal_space = policy.subgoal_space
+            self._high_obs_space = policy.high_env_spec.observation_space
+            self._low_obs_space = policy.low_env_spec.observation_space
+            self._subgoal_interval = policy.subgoal_interval
 
     def analyze(self):
         self.print_subgoals()
@@ -140,7 +144,7 @@ class HrlAnalyzer(object):
         for _ in xrange(50):
             paths.append(rollout(env=self._env, agent=self._policy, max_length=200))
         states = np.vstack([p["observations"] for p in paths])
-        print np.array_str(np.mean(states, axis=0).reshape((4, 4)))
+        print np.array_str(np.mean(states, axis=0)[:16].reshape((4, 4)))
 
     def rollout(self, max_length=100):
         path = rollout(env=self._env, agent=self._policy, max_length=max_length)

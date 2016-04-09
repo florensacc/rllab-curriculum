@@ -53,6 +53,7 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
             else:
                 optimizer = LbfgsOptimizer()
 
+        self.output_dim = output_dim
         self._optimizer = optimizer
 
         prob_network = MLP(
@@ -144,13 +145,13 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
         logger.record_tabular(prefix + 'dLoss', loss_before - loss_after)
 
     def predict(self, xs):
-        return self._f_predict(xs)
+        return self._f_predict(np.asarray(xs))
 
     def predict_log_likelihood(self, xs, ys):
-        prob = self._f_prob(xs)
+        prob = self._f_prob(np.asarray(xs))
         # if np.any(np.abs(prob) > 1e3):
         #     import ipdb; ipdb.set_trace()
-        return self._dist.log_likelihood(ys, dict(prob=prob))
+        return self._dist.log_likelihood(np.asarray(ys), dict(prob=prob))
 
     def get_param_values(self, **tags):
         return LasagnePowered.get_param_values(self, **tags)

@@ -245,6 +245,8 @@ remote_confirmed = False
 def run_experiment_lite(
         stub_method_call,
         exp_prefix="experiment",
+        exp_name=None,
+        log_dir=None,
         script="scripts/run_experiment_lite.py",
         mode="local",
         dry=False,
@@ -272,9 +274,12 @@ def run_experiment_lite(
     global exp_count
     global remote_confirmed
     exp_count += 1
-    exp_name = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
+    if exp_name is None:
+        exp_name = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
+    if log_dir is None:
+        log_dir = config.LOG_DIR + "/local/" + exp_prefix.replace("_", "-") + "/" + exp_name
     kwargs["exp_name"] = exp_name
-    kwargs["log_dir"] = config.LOG_DIR + "/local/" + exp_name
+    kwargs["log_dir"] = log_dir
     kwargs["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
                                         exp_name)
     if mode not in ["local", "local_docker"] and not remote_confirmed and not dry and confirm_remote:
@@ -567,7 +572,6 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
         )
 
 
-
 S3_CODE_PATH = None
 
 
@@ -678,7 +682,7 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
                     "command": [
                         "/bin/bash",
                         "-c",
-                        "-li", # to load conda env file
+                        "-li",  # to load conda env file
                         command,
                     ],
                     "resources": resources,

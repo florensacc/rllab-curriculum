@@ -5,16 +5,21 @@ from rllab.envs.compound_action_sequence_env import CompoundActionSequenceEnv
 from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.algos.batch_hrl import BatchHRL
+from rllab.algos.batch_hrl2 import BatchHRL2
 from rllab.spaces import Discrete
 from rllab.policies.subgoal_policy import SubgoalPolicy
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
+from rllab.regressors.product_regressor import ProductRegressor
 from rllab.baselines.subgoal_baseline import SubgoalBaseline
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
 from rllab.mi_evaluator.exact_state_given_goal_mi_evaluator import ExactStateGivenGoalMIEvaluator
+from rllab.mi_evaluator.exact_state_given_goal_mi_evaluator2 import ExactStateGivenGoalMIEvaluator2
+from rllab.mi_evaluator.dense_state_given_goal_mi_evaluator import DenseStateGivenGoalMIEvaluator
 from rllab.algos.trpo import TRPO
+from rllab.algos.ppo import PPO
 from rllab.misc.instrument import stub, run_experiment_lite
 
 stub(globals())
@@ -29,6 +34,8 @@ env = GridWorldEnv(
 )
 
 level = "hrl_level1"
+evaluator_name = "exact"
+# evaluator_name = "approx"
 
 level_configs = dict(
     hrl_level0=dict(
@@ -63,7 +70,7 @@ level_configs = dict(
 env = CompoundActionSequenceEnv(
     wrapped_env=env,
     reset_history=True,
-    # obs_include_actions=True,
+    obs_include_history=False,
     action_map=level_configs[level]["action_map"],
 )
 
@@ -101,7 +108,7 @@ baseline = SubgoalBaseline(
     # ),
 )
 
-exact_evaluator = ExactStateGivenGoalMIEvaluator(
+exact_evaluator = ExactStateGivenGoalMIEvaluator2(
     env=env,
     policy=policy,
 )
@@ -109,51 +116,72 @@ exact_evaluator = ExactStateGivenGoalMIEvaluator(
 approx_evaluator = StateGivenGoalMIEvaluator(
     env_spec=env.spec,
     policy=policy,
-    # high_policy_distribution=high_policy.distribution,
-    # low_policy_distribution=low_policy.distribution,
-    regressor_cls=CategoricalMLPRegressor,
+    # regressor_cls=ProductMLPRegressor,#CategoricalMLPRegressor,
     regressor_args=dict(
         use_trust_region=False,
-        optimizer=LbfgsOptimizer(),
+        hidden_sizes=tuple(),
+        optimizer=LbfgsOptimizer(max_opt_itr=100),
     ),
     logger_delegate=exact_evaluator,
 )
 
-evaluators = [exact_evaluator]#approx_evaluator]#, exact_evaluator]
+dense_approx_evaluator = DenseStateGivenGoalMIEvaluator(
+    env_spec=env.spec,
+    policy=policy,
+    # regressor_cls=ProductMLPRegressor,
+    regressor_args=dict(
+        use_trust_region=False,
+        hidden_sizes=tuple(),
+        optimizer=LbfgsOptimizer(max_opt_itr=100),
+    ),
+    # logger_delegate=exact_evaluator,
+)
 
 
-for evaluator in evaluators:
-    algo = BatchHRL(
+evaluator = dict(
+    approx=approx_evaluator,
+    dense_approx=dense_approx_evaluator,
+    exact=exact_evaluator,
+)[evaluator_name]
+# ]#approx_evaluator
+# ]#,
+# exact_evaluator]
+
+
+algo = BatchHRL2(
+    env=env,
+    policy=policy,
+    baseline=baseline,
+    bonus_evaluator=evaluator,
+    batch_size=10000,
+    whole_paths=True,
+    max_path_length=60,
+    n_itr=100,
+    high_algo=PPO(
         env=env,
-        policy=policy,
-        baseline=baseline,
-        bonus_evaluator=evaluator,
-        batch_size=10000,
-        whole_paths=True,
-        max_path_length=60,
-        n_itr=100,
-        high_algo=TRPO(
-            env=env,
-            policy=policy.high_policy,
-            baseline=baseline.high_baseline,
-            discount=0.99,
-            step_size=0.1,
-        ),
-        low_algo=TRPO(
-            env=env,
-            policy=policy.low_policy,
-            baseline=baseline.low_baseline,
-            discount=0.99,
-            step_size=0.1,
-        ),
-    )
+        policy=policy.high_policy,
+        baseline=baseline.high_baseline,
+        discount=0.99,
+        step_size=0.01,
+        # optimizer_args=dict(
+        #     max_penalty_itr=0,
+        # )
+    ),
+    low_algo=PPO(
+        env=env,
+        policy=policy.low_policy,
+        baseline=baseline.low_baseline,
+        discount=0.99,
+        step_size=0.01,
+    ),
+)
 
-    run_experiment_lite(
-        algo.train(),
-        exp_prefix=level,# + "_approx_exact_cmp",
-        n_parallel=1,
-        snapshot_mode="last",
-        seed=111,
-        mode="local",
-        # env=ext.merge_dict(os.environ, dict(THEANO_FLAGS="optimizer=None"))
-    )
+run_experiment_lite(
+    algo.train(),
+    exp_prefix="hrl",
+    exp_name="{level}_{evaluator}".format(level=level, evaluator=evaluator_name),
+    n_parallel=4,
+    snapshot_mode="last",
+    seed=111,
+    mode="local",
+)
