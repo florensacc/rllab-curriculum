@@ -4,6 +4,7 @@ import argparse
 import joblib
 from rllab.envs.rl_gym_env import RLGymEnv
 from rl_gym import scoreboard
+import rl_gym
 
 
 class PolicyAgentWrapper(object):
@@ -16,6 +17,7 @@ class PolicyAgentWrapper(object):
 
 
 if __name__ == "__main__":
+    rl_gym.api_key = 'g8JOpnNVmcjMShBiFtyji2VWX3P2uCzc'
     parser = argparse.ArgumentParser()
     parser.add_argument('file', type=str,
                         help='path to the snapshot file')

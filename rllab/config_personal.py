@@ -4,13 +4,14 @@ import os
 
 USE_GPU = False
 
-DOCKER_IMAGE = "quay.io/openai/rocky-sandbox-gpu"
+#DOCKER_IMAGE = "quay.io/openai/rocky-sandbox-gpu"
+DOCKER_IMAGE = "rein/rllab-exp-new"#neocxi/rllab:atari
 
-KUBE_PREFIX = "rocky_"
+KUBE_PREFIX = "rhouthooft_"
 
 DOCKER_LOG_DIR = "/tmp/expt"
 
-AWS_S3_PATH = "s3://rocky-rllab-data/experiments"
+AWS_S3_PATH = "s3://openai-kubernetes-sci-rein/experiments"
 
 AWS_IMAGE_ID = "ami-67c5d00d"
 
@@ -36,10 +37,15 @@ AWS_IAM_INSTANCE_PROFILE_NAME = "rllab"
 
 AWS_SECURITY_GROUPS = ["rllab"]
 
-AWS_REGION_NAME = "us-east-1"
+AWS_REGION_NAME = "us-west-2"
 
-# AWS_CODE_SYNC_S3_PATH = "s3://pchen/code"
+AWS_CODE_SYNC_S3_PATH = "s3://openai-kubernetes-sci-rein/code"
 
-CODE_SYNC_IGNORES = ["*.git/*", "*data/*"]
+#CODE_SYNC_IGNORES = ["*.git/*", "*data/*"]
+CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*src/*"]
 
-# DOCKER_CODE_DIR = "/root/code/rllab"
+LOCAL_CODE_DIR = "/home/rein/workspace_python/rllab"
+
+LABEL = "rhouthooft"
+
+DOCKER_CODE_DIR = "/root/code/rllab"

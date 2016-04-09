@@ -245,7 +245,7 @@ remote_confirmed = False
 def run_experiment_lite(
         stub_method_call,
         exp_prefix="experiment",
-        script="scripts/run_experiment_lite.py",
+        script="rllab/scripts/run_experiment_lite.py",
         mode="local",
         dry=False,
         docker_image=None,
@@ -411,6 +411,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     :return:
     """
     log_dir = params.get("log_dir")
+    params.pop("remote_log_dir")
     if not dry:
         mkdir_p(log_dir)
     # create volume for logging directory
@@ -421,9 +422,12 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     docker_log_dir = config.DOCKER_LOG_DIR
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
                                                                     docker_log_dir=docker_log_dir)
+    command_prefix += " -v {local_code_dir}:{docker_code_dir}".format(local_code_dir=config.LOCAL_CODE_DIR,
+                                                                    docker_code_dir=config.DOCKER_CODE_DIR)
     params = ext.merge_dict(params, dict(log_dir=docker_log_dir))
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
+    #command_list.append('sleep 9999999')
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
@@ -665,6 +669,7 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
         "metadata": {
             "name": pod_name,
             "labels": {
+                "owner": config.LABEL,
                 "expt": pod_name,
                 "exp_time": timestamp,
                 "exp_prefix": exp_prefix,
