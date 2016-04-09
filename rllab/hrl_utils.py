@@ -19,7 +19,7 @@ def subsample_path(path, subsample_interval):
     new_dict["rewards"] = chunked_rewards
 
     for k, val in path.iteritems():
-        if k == "reward":
+        if k == "rewards":
             pass
         elif isinstance(val, dict):
             new_dict[k] = tensor_utils.subsample_tensor_dict(val, subsample_interval)

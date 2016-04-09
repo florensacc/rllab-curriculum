@@ -26,7 +26,7 @@ class ExactComputer(object):
         p_goal_given_state = np.zeros((self.n_states, self.n_subgoals))
         for state in xrange(self.n_states):
             # index: [0] -> goal
-            p_goal_given_state[state] = self.policy.high_policy.get_action(state)[1]["prob"]
+            p_goal_given_state[state] = np.copy(self.policy.high_policy.get_action(state)[1]["prob"])
         return p_goal_given_state
 
     def compute_p_next_state_given_goal_state(self):
@@ -46,7 +46,7 @@ class ExactComputer(object):
                         p_next_state_given_goal_state[subgoal, state, next_state] += seq_prob
         for state in xrange(self.n_states):
             for subgoal in xrange(self.n_subgoals):
-                p_next_state_given_goal_state[subgoal, state, state] = np.max(0., 1. - np.sum(
+                p_next_state_given_goal_state[subgoal, state, state] = max(0., 1. - np.sum(
                     p_next_state_given_goal_state[subgoal, state, :]))
         return p_next_state_given_goal_state
 

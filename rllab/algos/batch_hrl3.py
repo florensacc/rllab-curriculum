@@ -5,12 +5,11 @@ from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
 from rllab.misc import logger
 from rllab.misc import tensor_utils
-from rllab import hrl_utils
 from rllab.misc.overrides import overrides
 from rllab.misc.special import to_onehot
 
 
-class BatchHRL(BatchPolopt, Serializable):
+class BatchHRL3(BatchPolopt, Serializable):
     def __init__(
             self,
             env,
@@ -22,7 +21,7 @@ class BatchHRL(BatchPolopt, Serializable):
             mi_coeff=0.1,
             subgoal_interval=1,
             **kwargs):
-        super(BatchHRL, self).__init__(env=env, policy=policy, baseline=baseline, **kwargs)
+        super(BatchHRL3, self).__init__(env=env, policy=policy, baseline=baseline, **kwargs)
         Serializable.quick_init(self, locals())
         self.env = env
         self.policy = policy
@@ -56,7 +55,7 @@ class BatchHRL(BatchPolopt, Serializable):
         )
 
     def log_diagnostics(self, paths):
-        super(BatchHRL, self).log_diagnostics(paths)
+        super(BatchHRL3, self).log_diagnostics(paths)
         self.bonus_evaluator.log_diagnostics(paths)
 
     def _subsample_path(self, path, interval):
@@ -83,7 +82,6 @@ class BatchHRL(BatchPolopt, Serializable):
             rewards=chunked_rewards,
         )
 
-
     def process_samples(self, itr, paths):
         """
         Transform paths to high_paths and low_paths, and dispatch them to the high-level and low-level algorithms
@@ -98,11 +96,11 @@ class BatchHRL(BatchPolopt, Serializable):
         bonus_returns = []
         for path in paths:
             rewards = path['rewards']
-            path_length = len(rewards)
             actions = path['actions']
+            path_length = len(rewards)
             high_agent_infos = path["agent_infos"]["high"]
-            high_observations = path["agent_infos"]["high_obs"]
             low_agent_infos = path["agent_infos"]["low"]
+            high_observations = path["agent_infos"]["high_obs"]
             low_observations = path["agent_infos"]["low_obs"]
             subgoals = path["agent_infos"]["subgoal"]
             high_path = dict(
@@ -112,8 +110,12 @@ class BatchHRL(BatchPolopt, Serializable):
                 agent_infos=high_agent_infos,
                 rewards=rewards,
             )
-            chunked_high_path = hrl_utils.subsample_path(high_path, self.policy.subgoal_interval)
-            bonuses = self.bonus_evaluator.predict(path)
+            chunked_high_path = self._subsample_path(high_path, self.policy.subgoal_interval)
+            chunked_bonuses = self.bonus_evaluator.predict(chunked_high_path)
+            bonuses = np.tile(
+                np.expand_dims(chunked_bonuses, axis=1),
+                (1, self.policy.subgoal_interval)
+            ).flatten()[:path_length]
             low_rewards = rewards + self.mi_coeff * bonuses
             bonus_returns.append(np.sum(bonuses))
             low_path = dict(
@@ -134,11 +136,11 @@ class BatchHRL(BatchPolopt, Serializable):
                 if np.max(abs(self.baseline.low_baseline.predict(path))) > 1e3:
                     import ipdb; ipdb.set_trace()
 
-        # mi_action_goal = self._compute_mi_action_goal(self.env.spec, self.policy, high_samples_data, low_samples_data)
-        # logger.record_tabular("I(action,goal|state)", mi_action_goal)
+        mi_action_goal = self._compute_mi_action_goal(self.env.spec, self.policy, high_samples_data, low_samples_data)
+        logger.record_tabular("I(action,goal|state)", mi_action_goal)
         # We need to train the predictor for p(s'|g, s)
         with logger.prefix("MI | "), logger.tabular_prefix("MI_"):
-            self.bonus_evaluator.fit(paths)
+            self.bonus_evaluator.fit(high_paths)
 
         return dict(
             high=high_samples_data,
@@ -163,16 +165,17 @@ class BatchHRL(BatchPolopt, Serializable):
             # shape: (N/subgoal_interval) * #subgoal
             chunked_goal_probs = policy.high_policy.dist_info(high_observations, None)["prob"]
             n_subgoals = policy.subgoal_space.n
+            # Actually compute p(a|g,s) and p(a|s)
+            N = all_flat_observations.shape[0]
             goal_probs = np.tile(
                 np.expand_dims(chunked_goal_probs, axis=1),
                 (1, policy.subgoal_interval, 1),
-            ).reshape((-1, n_subgoals))
+            ).reshape((-1, n_subgoals))[:N]
             # p(a|g,s)
             action_given_goal_pdists = []
             # p(a|s) = sum_g p(g|s) p(a|g,s)
             action_pdists = 0
-            # Actually compute p(a|g,s) and p(a|s)
-            N = all_flat_observations.shape[0]
+
             for goal in range(n_subgoals):
                 goal_onehot = np.tile(
                     to_onehot(goal, n_subgoals).reshape((1, -1)),

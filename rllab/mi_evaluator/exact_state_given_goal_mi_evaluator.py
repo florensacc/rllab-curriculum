@@ -3,6 +3,7 @@ from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.policies.subgoal_policy import SubgoalPolicy
 from rllab.spaces.discrete import Discrete
 from sandbox.rocky.grid_world_hrl_utils import ExactComputer
+from rllab.misc import tensor_utils
 from rllab import hrl_utils
 from rllab.misc import logger
 import numpy as np
@@ -32,11 +33,10 @@ class ExactStateGivenGoalMIEvaluator(object):
         self.mi_states = None
         self.mi_avg = None
 
-
     def _get_relevant_data(self, paths):
-        obs = np.concatenate([p["observations"][:-1] for p in paths])
-        next_obs = np.concatenate([p["observations"][1:] for p in paths])
-        subgoals = np.concatenate([p["actions"][:-1] for p in paths])
+        obs = np.concatenate([p["agent_infos"]["high_obs"][:-1] for p in paths])
+        next_obs = np.concatenate([p["agent_infos"]["high_obs"][1:] for p in paths])
+        subgoals = np.concatenate([p["agent_infos"]["subgoal"][:-1] for p in paths])
         N = obs.shape[0]
         return obs.reshape((N, -1)), next_obs.reshape((N, -1)), subgoals
 
@@ -53,7 +53,7 @@ class ExactStateGivenGoalMIEvaluator(object):
         ret = np.append(ret, 0)
         ret = np.tile(
             np.expand_dims(ret, axis=1),
-            (1, self.subgoal_interval)
+            (1, self.policy.subgoal_interval)
         ).flatten()[:path_length]
         return ret
 
