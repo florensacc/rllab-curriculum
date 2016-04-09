@@ -373,12 +373,8 @@ class BatchPolopt(RLAlgorithm):
             self.pnn.save_old_params()
 
             # Update model weights based on current minibatch.
-            # FIXME: perhaps this is not the correct approach: we are updating
-            # the model as if we are training on the total data set. However,
-            # we are updating the model one sample at a time, given that the
-            # model is already trained on previous data. Therefore, we should
-            # replace the prior here with the current posterior.
-            self.pnn.train_update_fn(_inputs[i][None, :], _targets[i][None, :])
+            for _ in xrange(50):
+                self.pnn.train_update_fn(_inputs[i][None, :], _targets[i][None, :])
 
             # Calculate current minibatch KL.
             kl_div = float(self.pnn.f_kl_div_closed_form())

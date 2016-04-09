@@ -1,27 +1,20 @@
 import os
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from rllab.algos.trpo_unn import TRPO
+
+from rllab.algos.trpo import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
-import itertools
 
 stub(globals())
 
 # Param ranges
-seeds = range(1)
-etas = [0.1, 0.5]
-replay_pools = [True]
-kl_ratios = [True]
-reverse_kl_regs = [True]
-param_cart_product = itertools.product(
-    reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
-)
+seeds = range(10)
 
-for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
+for seed in seeds:
 
     mdp_class = CartpoleEnv
     mdp = NormalizedEnv(env=mdp_class())
@@ -31,8 +24,9 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         hidden_sizes=(32,),
     )
 
-    baseline = LinearFeatureBaseline(
-        mdp.spec
+    baseline = GaussianMLPBaseline(
+        mdp.spec,
+        regressor_args=dict(hidden_sizes=(32,)),
     )
 
     algo = TRPO(
@@ -44,21 +38,15 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         max_path_length=100,
         n_itr=100,
         step_size=0.01,
-        eta=eta,
-        eta_discount=0.99,
-        snn_n_samples=10,
         subsample_factor=1.0,
-        use_reverse_kl_reg=reverse_kl_reg,
-        use_replay_pool=replay_pool,
-        use_kl_ratio=kl_ratio,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="cartpole",
+        exp_prefix="trpo_cartpole",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local_docker",
+        mode="lab_kube",
         dry=False,
     )

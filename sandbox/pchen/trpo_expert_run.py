@@ -52,7 +52,8 @@ for mdp_class in mdp_classes:
             n_parallel=4,
             snapshot_mode="all",
             seed=1,
-            mode="local_docker",
+            dry=False,
+            mode="lab_kube",
         )
         break
     break

@@ -26,9 +26,11 @@ if USE_GPU:
 else:
     AWS_SPOT_PRICE = '1.0'
 
-AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY", None)
+# os.environ.get("AWS_ACCESS_KEY", None)
+AWS_ACCESS_KEY = 'AKIAIRE2HOZRAM4X4EPA'
 
-AWS_ACCESS_SECRET = os.environ.get("AWS_ACCESS_SECRET", None)
+# os.environ.get("AWS_ACCESS_SECRET", None)
+AWS_ACCESS_SECRET = 'mRiNYLimXg1IRveqAgplepyfBCAvARyw94ct+Ke9'
 
 AWS_IAM_INSTANCE_PROFILE_NAME = "rllab"
 
@@ -38,7 +40,7 @@ AWS_REGION_NAME = "us-west-2"
 
 AWS_CODE_SYNC_S3_PATH = "s3://openai-kubernetes-sci-rein/code"
 
-CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*src/*"]
+CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*src/*", "*.pods/*", "*tests/*", "*examples/*", "docs/*"]
 
 LOCAL_CODE_DIR = "/home/rein/workspace_python/rllab"
 

@@ -43,7 +43,7 @@ AWS_CODE_SYNC_S3_PATH = "s3://to/be/overriden/in/personal"
 
 KUBE_DEFAULT_RESOURCES = {
     "requests": {
-        "cpu": 0.5,
+        "cpu": 1.5,
     }
 }
 
