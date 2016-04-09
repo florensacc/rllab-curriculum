@@ -1,11 +1,8 @@
-import os.path as osp
 import os
-
 
 USE_GPU = False
 
-#DOCKER_IMAGE = "quay.io/openai/rocky-sandbox-gpu"
-DOCKER_IMAGE = "rein/rllab-exp-new"#neocxi/rllab:atari
+DOCKER_IMAGE = "rein/rllab-exp-new"
 
 KUBE_PREFIX = "rhouthooft_"
 
@@ -41,7 +38,6 @@ AWS_REGION_NAME = "us-west-2"
 
 AWS_CODE_SYNC_S3_PATH = "s3://openai-kubernetes-sci-rein/code"
 
-#CODE_SYNC_IGNORES = ["*.git/*", "*data/*"]
 CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*src/*"]
 
 LOCAL_CODE_DIR = "/home/rein/workspace_python/rllab"

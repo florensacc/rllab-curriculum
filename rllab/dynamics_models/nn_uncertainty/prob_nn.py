@@ -7,18 +7,15 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from utils import sliding_mean, iterate_minibatches
 import theano
 
-############################
-### Plotting global vars ###
-############################
+# Plotting params.
+# ----------------
 # Only works for regression
-
 PLOT_WEIGHTS_INDIVIDUAL = False
 PLOT_WEIGHTS_TOTAL = False
 PLOT_OUTPUT = True
 PLOT_OUTPUT_REGIONS = False
 PLOT_KL = False
-
-############################
+# ----------------
 
 
 class ProbLayer(lasagne.layers.Layer):
@@ -96,31 +93,31 @@ class ProbLayer(lasagne.layers.Layer):
         self.b = b
         return b
 
-#     def get_output_for(self, input, **kwargs):
-#         """Implementation of the local reparametrization trick.
-# 
-#         This essentially leads to a speedup compared to the naive implementation case.
-#         Furthermore, it leads to gradients with less variance.
-# 
-#         References
-#         ----------
-#         Kingma et al., "Variational Dropout and the Local Reparametrization Trick", 2015
-#         """
-# 
-#         if input.ndim > 2:
-#             # if the input has more than two dimensions, flatten it into a
-#             # batch of feature vectors.
-#             input = input.flatten(2)
-# 
-#         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-#         delta = T.dot(T.square(input), T.square(self.log_to_std(
-#             self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
-#         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
-#                                     dtype=theano.config.floatX)  # @UndefinedVariable
-# 
-#         activation = gamma + T.sqrt(delta) * epsilon
-# 
-#         return self.nonlinearity(activation)
+    def get_output_for(self, input, **kwargs):
+        """Implementation of the local reparametrization trick.
+
+        This essentially leads to a speedup compared to the naive implementation case.
+        Furthermore, it leads to gradients with less variance.
+
+        References
+        ----------
+        Kingma et al., "Variational Dropout and the Local Reparametrization Trick", 2015
+        """
+
+        if input.ndim > 2:
+            # if the input has more than two dimensions, flatten it into a
+            # batch of feature vectors.
+            input = input.flatten(2)
+
+        gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
+        delta = T.dot(T.square(input), T.square(self.log_to_std(
+            self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
+        epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
+                                    dtype=theano.config.floatX)  # @UndefinedVariable
+
+        activation = gamma + T.sqrt(delta) * epsilon
+
+        return self.nonlinearity(activation)
 
     def save_old_params(self):
         """Save old parameter values for KL calculation."""
@@ -128,6 +125,12 @@ class ProbLayer(lasagne.layers.Layer):
         self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
         self.b_rho_old.set_value(self.b_rho.get_value())
+
+    def reset_to_old_params(self):
+        self.mu.set_value(self.mu_old.get_value())
+        self.rho.set_value(self.rho_old.get_value())
+        self.b_mu.set_value(self.b_mu_old.get_value())
+        self.b_rho.set_value(self.b_rho_old.get_value())
 
     def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
@@ -201,16 +204,16 @@ class ProbLayer(lasagne.layers.Layer):
 
         return kl_div
 
-    def get_output_for(self, input, **kwargs):
-        if input.ndim > 2:
-            # if the input has more than two dimensions, flatten it into a
-            # batch of feature vectors.
-            input = input.flatten(2)
-
-        activation = T.dot(input, self.get_W()) + \
-            self.get_b().dimshuffle('x', 0)
-
-        return self.nonlinearity(activation)
+#     def get_output_for(self, input, **kwargs):
+#         if input.ndim > 2:
+#             # if the input has more than two dimensions, flatten it into a
+#             # batch of feature vectors.
+#             input = input.flatten(2)
+#
+#         activation = T.dot(input, self.get_W()) + \
+#             self.get_b().dimshuffle('x', 0)
+#
+#         return self.nonlinearity(activation)
 
     def get_output_shape_for(self, input_shape):
         return (input_shape[0], self.num_units)
@@ -263,6 +266,12 @@ class ProbNN:
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_old_params()
+
+    def reset_to_old_params(self):
+        layers = filter(lambda l: l.name == 'problayer',
+                        lasagne.layers.get_all_layers(self.network)[1:])
+        for layer in layers:
+            layer.reset_to_old_params()
 
     def get_kl_div_sampled(self):
         """Sampled KL calculation"""
@@ -351,7 +360,41 @@ class ProbNN:
 
         return loss
 
+    def get_loss_only_last_sample(self, input, target):
+        """The difference with the original loss is that we only update based on the latest sample.
+        This means that instead of using the prior p(w), we use the previous approximated posterior
+        q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
+        """
+
+        log_p_D_given_w = 0.
+
+        # MC samples.
+        for _ in xrange(self.n_samples):
+            # Make prediction.
+            prediction = self.pred_sym(input)
+            # Calculate model likelihood log(P(D|w)).
+            if self.type == 'regression':
+                log_p_D_given_w += self._log_prob_normal(
+                    target, prediction, self.prior_sd)
+            elif self.type == 'classification':
+                log_p_D_given_w += T.sum(
+                    T.log(prediction)[T.arange(target.shape[0]), T.cast(target[:, 0], dtype='int64')])
+
+        # Calculate variational posterior log(q(w)) and prior log(p(w)).
+        kl = self.kl_div()
+        if self.use_reverse_kl_reg:
+            kl += self.reverse_kl_reg_factor * \
+                self.reverse_log_p_w_q_w_kl()
+
+        # Calculate loss function.
+        loss = (kl / self.n_batches -
+                log_p_D_given_w) / self.batch_size
+        loss /= self.n_samples
+
+        return loss
+
     def get_loss_sym(self, input, target):
+        raise Exception("Deprecated")
 
         log_q_w, log_p_w, log_p_D_given_w = 0., 0., 0.
 
@@ -421,12 +464,10 @@ class ProbNN:
                               dtype=theano.config.floatX)  # @UndefinedVariable
 
         # Loss function.
-        if self.symbolic_prior_kl:
-            loss = self.get_loss_sym_sym(
-                input_var, target_var)
-        else:
-            loss = self.get_loss_sym(
-                input_var, target_var)
+        loss = self.get_loss_sym_sym(
+            input_var, target_var)
+        loss_only_last_sample = self.get_loss_only_last_sample(
+            input_var, target_var)
 
         # Create update methods.
         params = lasagne.layers.get_all_params(self.network, trainable=True)
@@ -438,6 +479,9 @@ class ProbNN:
             [input_var], self.pred_sym(input_var), allow_input_downcast=True)
         self.train_fn = theano.function(
             [input_var, target_var], loss, updates=updates, allow_input_downcast=True)
+        self.train_update_fn = theano.function(
+            [input_var, target_var], loss_only_last_sample, updates=updates, allow_input_downcast=True)
+
         self.train_err_fn = theano.function(
             [input_var, target_var], loss, allow_input_downcast=True)
         if self.reverse_update_kl:
@@ -458,11 +502,12 @@ class ProbNN:
         kl_div_stdns = []
         kl_all_values = []
 
-        ##########################
-        ### PLOT FUNCTIONALITY ###
-        ##########################
+        # Plotting
+        # ---------------------
+
         # Print weights from this layer.
         layer = lasagne.layers.get_all_layers(self.network)[-1]
+
         if PLOT_WEIGHTS_TOTAL:
             import matplotlib.pyplot as plt
             plt.ion()
@@ -528,6 +573,7 @@ class ProbNN:
             ax.grid()
             plt.draw()
             plt.show()
+        # ---------------------
 
         # Finally, launch the training loop.
         print("Starting training...")

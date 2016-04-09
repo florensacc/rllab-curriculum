@@ -1,130 +1,28 @@
 import numpy as np
-from rllab.algo.base import RLAlgorithm
+from rllab.algos.base import RLAlgorithm
 from rllab.sampler import parallel_sampler
-from rllab.misc import autoargs
-from rllab.misc.ext import extract
-from rllab.misc.special import explained_variance_1d, discount_cumsum
-from rllab.algo.util import center_advantages, shift_advantages_to_positive
+from rllab.misc import special
+from rllab.misc import tensor_utils
+from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from rllab.model.nn_uncertainty import prob_nn as prob_nn
-import lasagne
-import time
+# exploration imports
+# ----------------------
 import theano
+import lasagne
 from collections import deque
-
-G = parallel_sampler.G
-
-
-def worker_inject_baseline(baseline):
-    G.baseline = baseline
-
-
-def worker_update_baseline(params):
-    G.baseline.set_param_values(params, trainable=True)
-
-
-def worker_retrieve_paths():
-    return G.paths
-
-
-def retrieve_paths():
-    return sum(parallel_sampler.run_map(worker_retrieve_paths), [])
-
-
-def worker_compute_paths_returns(opt):
-    for path in G.paths:
-        path["returns"] = discount_cumsum(path["rewards_orig"], opt.discount)
-
-
-def worker_retrieve_samples_data():
-    return G.samples_data
-
-
-def aggregate_samples_data():
-    samples_datas = parallel_sampler.run_map(worker_retrieve_samples_data)
-
-    observations, states, pdists, actions, advantages, paths = extract(
-        samples_datas,
-        "observations", "states", "pdists", "actions", "advantages", "paths"
-    )
-    return dict(
-        observations=np.concatenate(observations),
-        states=np.concatenate(states),
-        pdists=np.concatenate(pdists),
-        actions=np.concatenate(actions),
-        advantages=np.concatenate(advantages),
-        paths=sum(paths, []),
-    )
-
-
-def worker_process_paths(opt):
-    try:
-        baselines = []
-        returns = []
-        for path in G.paths:
-            path_baselines = np.append(G.baseline.predict(path), 0)
-            deltas = path["rewards"] + \
-                opt.discount * path_baselines[1:] - \
-                path_baselines[:-1]
-            path["advantages"] = discount_cumsum(
-                deltas, opt.discount * opt.gae_lambda)
-            baselines.append(path_baselines[:-1])
-            returns.append(path["returns"])
-
-        observations = np.vstack([path["observations"] for path in G.paths])
-        states = np.vstack([path["states"] for path in G.paths])
-        pdists = np.vstack([path["pdists"] for path in G.paths])
-        actions = np.vstack([path["actions"] for path in G.paths])
-        advantages = np.concatenate(
-            [path["advantages"] for path in G.paths])
-
-        if opt.center_adv:
-            advantages = center_advantages(advantages)
-
-        if opt.positive_adv:
-            advantages = shift_advantages_to_positive(advantages)
-
-        G.samples_data = dict(
-            observations=observations,
-            states=states,
-            pdists=pdists,
-            actions=actions,
-            advantages=advantages,
-            paths=G.paths,
-        )
-
-        average_discounted_return = \
-            np.mean([path["returns"][0] for path in G.paths])
-
-        undiscounted_returns = [sum(path["rewards_orig"]) for path in G.paths]
-
-        return dict(
-            average_discounted_return=average_discounted_return,
-            average_return=np.mean(undiscounted_returns),
-            std_return=np.std(undiscounted_returns),
-            max_return=np.max(undiscounted_returns),
-            min_return=np.min(undiscounted_returns),
-            num_trajs=len(G.paths),
-            ent=G.policy.compute_entropy(pdists),
-            ev=explained_variance_1d(
-                np.concatenate(baselines),
-                np.concatenate(returns)
-            )
-        )
-    except Exception as e:
-        print e
-        import traceback
-        traceback.print_exc()
-        raise
+import time
+from rllab.dynamics_models.nn_uncertainty import prob_nn
+# ----------------------
 
 
 class SimpleReplayPool(object):
+    """Replay pool"""
 
     def __init__(
             self, max_pool_size, observation_shape, action_dim,
-            observation_dtype=theano.config.floatX,
-            action_dtype=theano.config.floatX):
+            observation_dtype=theano.config.floatX,  # @UndefinedVariable
+            action_dtype=theano.config.floatX):  # @UndefinedVariable
         self._observation_shape = observation_shape
         self._action_dim = action_dim
         self._observation_dtype = observation_dtype
@@ -191,61 +89,11 @@ class BatchPolopt(RLAlgorithm):
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
     """
 
-    @autoargs.arg("n_itr", type=int,
-                  help="Number of iterations.")
-    @autoargs.arg("start_itr", type=int,
-                  help="Starting iteration.")
-    @autoargs.arg("batch_size", type=int,
-                  help="Number of samples per iteration.")
-    @autoargs.arg("max_path_length", type=int,
-                  help="Maximum length of a single rollout.")
-    @autoargs.arg("whole_paths", type=bool,
-                  help="Make sure that the samples contain whole "
-                       "trajectories, even if the actual batch size is "
-                       "slightly larger than the specified batch_size.")
-    @autoargs.arg("discount", type=float,
-                  help="Discount.")
-    @autoargs.arg("gae_lambda", type=float,
-                  help="Lambda used for generalized advantage estimation.")
-    @autoargs.arg("center_adv", type=bool,
-                  help="Whether to rescale the advantages so that they have "
-                       "mean 0 and standard deviation 1")
-    @autoargs.arg("positive_adv", type=bool,
-                  help="Whether to shift the advantages so that they are "
-                       "always positive. When used in conjunction with center adv"
-                       "the advantages will be standardized before shifting")
-    @autoargs.arg("record_states", type=bool,
-                  help="Whether to record states when sampling")
-    @autoargs.arg("store_paths", type=bool,
-                  help="Whether to save all paths data to the snapshot")
-    @autoargs.arg("plot", type=bool,
-                  help="Plot evaluation run after each iteration")
-    @autoargs.arg("pause_for_plot", type=bool,
-                  help="Plot evaluation run after each iteration")
-    @autoargs.arg("eta", type=float,
-                  help="eta value for KL multiplier")
-    @autoargs.arg("snn_n_samples", type=int,
-                  help="snn_n_samples")
-    @autoargs.arg("prior_sd", type=float,
-                  help="prior_sd")
-    @autoargs.arg("use_kl_ratio", type=bool,
-                  help="use_kl_ratio")
-    @autoargs.arg("kl_q_len", type=int,
-                  help="kl_q_len")
-    @autoargs.arg("reverse_update_kl", type=bool,
-                  help="reverse_update_kl")
-    @autoargs.arg("symbolic_prior_kl", type=bool,
-                  help="symbolic_prior_kl")
-    @autoargs.arg("use_reverse_kl_reg", type=bool,
-                  help="use_reverse_kl_reg")
-    @autoargs.arg("reverse_kl_reg_factor", type=float,
-                  help="reverse_kl_reg_factor")
-    @autoargs.arg("use_replay_pool", type=bool,
-                  help="Use replay pool for dynamics model training.")
-    @autoargs.arg("eta_discount", type=float,
-                  help="eta_discount")
     def __init__(
             self,
+            env,
+            policy,
+            baseline,
             n_itr=500,
             start_itr=0,
             batch_size=5000,
@@ -260,6 +108,7 @@ class BatchPolopt(RLAlgorithm):
             record_states=False,
             store_paths=False,
             algorithm_parallelized=False,
+            # exploration params
             eta=1.,
             snn_n_samples=10,
             prior_sd=0.05,
@@ -277,21 +126,44 @@ class BatchPolopt(RLAlgorithm):
             eta_discount=1.0,
             **kwargs
     ):
-        super(RLAlgorithm, self).__init__()
-        self.opt.n_itr = n_itr
-        self.opt.start_itr = start_itr
-        self.opt.batch_size = batch_size
-        self.opt.max_path_length = max_path_length
-        self.opt.discount = discount
-        self.opt.gae_lambda = gae_lambda
-        self.opt.plot = plot
-        self.opt.pause_for_plot = pause_for_plot
-        self.opt.whole_paths = whole_paths
-        self.opt.center_adv = center_adv
-        self.opt.positive_adv = positive_adv
-        self.opt.record_states = record_states
-        self.opt.store_paths = store_paths
-        self.opt.algorithm_parallelized = algorithm_parallelized
+        """
+        :param env: Environment
+        :param policy: Policy
+        :param baseline: Baseline
+        :param n_itr: Number of iterations.
+        :param start_itr: Starting iteration.
+        :param batch_size: Number of samples per iteration.
+        :param max_path_length: Maximum length of a single rollout.
+        :param discount: Discount.
+        :param gae_lambda: Lambda used for generalized advantage estimation.
+        :param plot: Plot evaluation run after each iteration.
+        :param pause_for_plot: Whether to pause before contiuing when plotting.
+        :param whole_paths: Make sure that the samples contain whole trajectories, even if the actual batch size is
+        slightly larger than the specified batch_size.
+        :param center_adv: Whether to rescale the advantages so that they have mean 0 and standard deviation 1.
+        :param positive_adv: Whether to shift the advantages so that they are always positive. When used in
+        conjunction with center_adv the advantages will be standardized before shifting.
+        :param store_paths: Whether to save all paths data to the snapshot.
+        :return:
+        """
+        self.env = env
+        self.policy = policy
+        self.baseline = baseline
+        self.n_itr = n_itr
+        self.start_itr = start_itr
+        self.batch_size = batch_size
+        self.max_path_length = max_path_length
+        self.discount = discount
+        self.gae_lambda = gae_lambda
+        self.plot = plot
+        self.pause_for_plot = pause_for_plot
+        self.whole_paths = whole_paths
+        self.center_adv = center_adv
+        self.positive_adv = positive_adv
+        self.store_paths = store_paths
+
+        # Set exploration params
+        # ----------------------
         self.eta = eta
         self.snn_n_samples = snn_n_samples
         self.prior_sd = prior_sd
@@ -307,25 +179,24 @@ class BatchPolopt(RLAlgorithm):
         self.n_updates_per_sample = n_updates_per_sample
         self.pool_batch_size = pool_batch_size
         self.eta_discount = eta_discount
+        # ----------------------
 
-    def start_worker(self, mdp, policy, baseline):
-        parallel_sampler.populate_task(mdp, policy)
-        parallel_sampler.run_map(worker_inject_baseline, baseline)
-        if self.opt.plot:
-            plotter.init_plot(mdp, policy)
+    def start_worker(self):
+        parallel_sampler.populate_task(self.env, self.policy)
+        if self.plot:
+            plotter.init_plot(self.env, self.policy)
 
     def shutdown_worker(self):
         pass
 
-    def train(self, mdp, policy, baseline, **kwargs):
+    def train(self):
 
-        ################
-        ### SNN init ###
-        ################
+        # Uncertainty neural network (UNN) initialization.
+        # ----------------------
         batch_size = 1
         n_batches = 5  # temp
 
-        obs_dim = np.sum(mdp.observation_shape)
+        obs_dim = np.sum(self.env.observation_space.shape)
         act_dim = 1  # mdp.action_dim
         # double pendulum: in=7 out=6
         self.pnn = prob_nn.ProbNN(
@@ -352,7 +223,7 @@ class BatchPolopt(RLAlgorithm):
             # exploding kl value problem.
             self.kl_previous = deque(maxlen=self.kl_q_len)
 
-        print("Building SNN model (eta={}) ...".format(self.eta))
+        print("Building UNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
         # Build symbolic network architecture.
         self.pnn.build_network()
@@ -364,114 +235,123 @@ class BatchPolopt(RLAlgorithm):
         if self.use_replay_pool:
             pool = SimpleReplayPool(
                 max_pool_size=self.replay_pool_size,
-                observation_shape=mdp.observation_shape,
+                observation_shape=self.env.observation_space.shape,
                 action_dim=1,  # mdp.action_dim,
             )
+        # ----------------------
 
-        # Start RL
-        self.start_worker(mdp, policy, baseline)
-        opt_info = self.init_opt(mdp, policy, baseline)
-        for itr in xrange(self.opt.start_itr, self.opt.n_itr):
+        self.start_worker()
+        self.init_opt()
+        episode_rewards = []
+        episode_lengths = []
+        for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
-            samples_data = self.obtain_samples(itr, mdp, policy, baseline)
+            paths = self.obtain_samples(itr)
+            samples_data = self.process_samples(itr, paths)
 
-            if self.use_replay_pool:
-                # Fill replay pool.
-                for path in samples_data['paths']:
-                    path_len = len(path['rewards'])
-                    for i in xrange(path_len):
-                        obs = path['observations'][i]
-                        act = path['actions'][i]
-                        rew = path['rewards'][i]
-                        term = (i == path_len - 1)
-                        pool.add_sample(obs, act, rew, term)
+            # Exploration code
+            # ----------------------
+            # Fill replay pool.
+            for path in samples_data['paths']:
+                path_len = len(path['rewards'])
+                for i in xrange(path_len):
+                    obs = path['observations'][i]
+                    act = path['actions'][i]
+                    rew = path['rewards'][i]
+                    term = (i == path_len - 1)
+                    pool.add_sample(obs, act, rew, term)
 
-                # Now we train the dynamics model using the replay pool; only
-                # if pool is large enough.
-                if pool.size >= self.min_pool_size:
-                    _inputss = []
-                    _targetss = []
-                    for _ in xrange(self.n_updates_per_sample):
-                        batch = pool.random_batch(self.pool_batch_size)
-                        _inputs = np.hstack(
-                            [batch['observations'], batch['actions']])
-                        _targets = batch['next_observations']
-                        _inputss.append(_inputs)
-                        _targetss.append(_targets)
+            # Now we train the dynamics model using the replay pool; only
+            # if pool is large enough.
+            if pool.size >= self.min_pool_size:
+                _inputss = []
+                _targetss = []
+                for _ in xrange(self.n_updates_per_sample):
+                    batch = pool.random_batch(self.pool_batch_size)
+                    _inputs = np.hstack(
+                        [batch['observations'], batch['actions']])
+                    _targets = batch['next_observations']
+                    _inputss.append(_inputs)
+                    _targetss.append(_targets)
 
-                    _out = self.pnn.pred_fn(np.vstack(_inputss))
-                    old_acc = np.square(_out - np.vstack(_targetss))
-                    old_acc = np.mean(old_acc)
+                _out = self.pnn.pred_fn(np.vstack(_inputss))
+                old_acc = np.square(_out - np.vstack(_targetss))
+                old_acc = np.mean(old_acc)
 
-                    for _inputs, _targets in zip(_inputss, _targetss):
-                        self.pnn.train_fn(_inputs, _targets)
+                for _inputs, _targets in zip(_inputss, _targetss):
+                    self.pnn.train_fn(_inputs, _targets)
 
-                    _out = self.pnn.pred_fn(_inputs)
+                _out = self.pnn.pred_fn(_inputs)
 
-                    _out = self.pnn.pred_fn(np.vstack(_inputss))
-                    new_acc = np.square(_out - np.vstack(_targetss))
-                    new_acc = np.mean(new_acc)
+                _out = self.pnn.pred_fn(np.vstack(_inputss))
+                new_acc = np.square(_out - np.vstack(_targetss))
+                new_acc = np.mean(new_acc)
+            # ----------------------
 
-#                     print('old_acc: {:.3f}'.format(old_acc))
-#                     print('new_acc: {:.3f}'.format(new_acc))
-
-            opt_info = self.optimize_policy(
-                itr, policy, samples_data, opt_info)
+            self.env.log_diagnostics(paths)
+            self.policy.log_diagnostics(paths)
+            self.baseline.log_diagnostics(paths)
+            self.optimize_policy(itr, samples_data)
             logger.log("saving snapshot...")
-            params = self.get_itr_snapshot(
-                itr, mdp, policy, baseline, samples_data, opt_info)
-            if self.opt.store_paths:
-                params["paths"] = samples_data["paths"]
+            params = self.get_itr_snapshot(itr, samples_data)
+            paths = samples_data["paths"]
+            if self.store_paths:
+                params["paths"] = paths
+            episode_rewards.extend(sum(p["rewards"]) for p in paths)
+            episode_lengths.extend(len(p["rewards"]) for p in paths)
+            params["episode_rewards"] = np.array(episode_rewards)
+            params["episode_lengths"] = np.array(episode_lengths)
+            params["algo"] = self
             logger.save_itr_params(itr, params)
             logger.log("saved")
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
-            if self.opt.plot:
-                self.update_plot(policy)
-                if self.opt.pause_for_plot:
+            if self.plot:
+                self.update_plot()
+                if self.pause_for_plot:
                     raw_input("Plotting evaluation run: Press Enter to "
                               "continue...")
         self.shutdown_worker()
 
-    def init_opt(self, mdp, policy, baseline):
+    def init_opt(self):
         """
         Initialize the optimization procedure. If using theano / cgt, this may
         include declaring all the variables and compiling functions
         """
         raise NotImplementedError
 
-    def get_itr_snapshot(self, itr, mdp, policy, baseline, samples_data,
-                         opt_info):
+    def get_itr_snapshot(self, itr, samples_data):
         """
         Returns all the data that should be saved in the snapshot for this
         iteration.
         """
         raise NotImplementedError
 
-    def optimize_policy(self, itr, policy, samples_data, opt_info):
+    def optimize_policy(self, itr, samples_data):
         raise NotImplementedError
 
-    def update_plot(self, policy):
-        if self.opt.plot:
-            plotter.update_plot(policy, self.opt.max_path_length)
+    def update_plot(self):
+        if self.plot:
+            plotter.update_plot(self.policy, self.max_path_length)
 
-    def obtain_samples(self, itr, mdp, policy, baseline):
-        cur_params = policy.get_param_values()
+    def obtain_samples(self, itr):
+        cur_params = self.policy.get_param_values()
 
         parallel_sampler.request_samples(
             policy_params=cur_params,
-            max_samples=self.opt.batch_size,
-            max_path_length=self.opt.max_path_length,
-            whole_paths=self.opt.whole_paths,
-            record_states=self.opt.record_states,
+            max_samples=self.batch_size,
+            max_path_length=self.max_path_length,
+            whole_paths=self.whole_paths,
         )
 
-        ####################
-        ### UNN training ###
-        ####################
+        return parallel_sampler.collect_paths()
+
+    def process_samples(self, itr, paths):
+
+        # Computing intrinsic rewards.
+        # ----------------------
         logger.log("fitting dynamics model...")
         # Compute sample Bellman error.
-        paths = retrieve_paths()
         obs = np.vstack([path['observations'] for path in paths])
         act = np.vstack([path['actions'] for path in paths])
         rew = np.hstack([path['rewards'] for path in paths])
@@ -521,60 +401,155 @@ class BatchPolopt(RLAlgorithm):
         self.eta *= self.eta_discount
         kl = self.eta * np.hstack([0., kl])
         n_samples = 0
-        for i in xrange(len(G.paths)):
-            path_length = len(G.paths[i]['rewards'])
-            G.paths[i]['rewards_orig'] = np.array(G.paths[i]['rewards'])
-            G.paths[i]['rewards'] = G.paths[i]['rewards'] + \
+        for i in xrange(len(paths)):
+            path_length = len(paths[i]['rewards'])
+            paths[i]['rewards_orig'] = np.array(paths[i]['rewards'])
+            paths[i]['rewards'] = paths[i]['rewards'] + \
                 kl[n_samples:n_samples + path_length]
             n_samples += path_length
 
         logger.log("fitted")
+        # ----------------------
 
-        parallel_sampler.run_map(worker_compute_paths_returns, self.opt)
+        baselines = []
+        returns = []
+        for path in paths:
+            path_baselines = np.append(self.baseline.predict(path), 0)
+            deltas = path["rewards"] + \
+                self.discount * path_baselines[1:] - \
+                path_baselines[:-1]
+            path["advantages"] = special.discount_cumsum(
+                deltas, self.discount * self.gae_lambda)
+            path["returns"] = special.discount_cumsum(
+                path["rewards_orig"], self.discount)
+            baselines.append(path_baselines[:-1])
+            returns.append(path["returns"])
 
-        results = parallel_sampler.run_map(worker_process_paths, self.opt)
+        if not self.policy.recurrent:
+            observations = tensor_utils.concat_tensor_list(
+                [path["observations"] for path in paths])
+            actions = tensor_utils.concat_tensor_list(
+                [path["actions"] for path in paths])
+            rewards = tensor_utils.concat_tensor_list(
+                [path["rewards"] for path in paths])
+            advantages = tensor_utils.concat_tensor_list(
+                [path["advantages"] for path in paths])
+            env_infos = tensor_utils.concat_tensor_dict_list(
+                [path["env_infos"] for path in paths])
+            agent_infos = tensor_utils.concat_tensor_dict_list(
+                [path["agent_infos"] for path in paths])
 
-        logger.log("fitting baseline...")
-        if baseline.algorithm_parallelized:
-            try:
-                baseline.fit()
-            except Exception as e:
-                import ipdb
-                ipdb.set_trace()
-        else:
-            if self.opt.algorithm_parallelized:
-                print "[Warning] Baseline should be parallelized when using a " \
-                      "parallel algorithm for best possible performance"
-            paths = retrieve_paths()
-            baseline.fit(paths)
-        parallel_sampler.run_map(
-            worker_update_baseline,
-            baseline.get_param_values(trainable=True)
-        )
-        logger.log("fitted")
+            if self.center_adv:
+                advantages = util.center_advantages(advantages)
 
-        average_discounted_returns, average_returns, std_returns, max_returns, \
-            min_returns, num_trajses, ents, evs = extract(
-                results,
-                "average_discounted_return", "average_return", "std_return",
-                "max_return", "min_return", "num_trajs", "ent", "ev"
+            if self.positive_adv:
+                advantages = util.shift_advantages_to_positive(advantages)
+
+            average_discounted_return = \
+                np.mean([path["returns"][0] for path in paths])
+
+            undiscounted_returns = [
+                sum(path["rewards_orig"]) for path in paths]
+
+            ent = np.mean(self.policy.distribution.entropy(agent_infos))
+
+            ev = special.explained_variance_1d(
+                np.concatenate(baselines),
+                np.concatenate(returns)
             )
 
+            samples_data = dict(
+                observations=observations,
+                actions=actions,
+                rewards=rewards,
+                advantages=advantages,
+                env_infos=env_infos,
+                agent_infos=agent_infos,
+                paths=paths,
+            )
+        else:
+            max_path_length = max([len(path["advantages"]) for path in paths])
+
+            # make all paths the same length (pad extra advantages with 0)
+            obs = [path["observations"] for path in paths]
+            obs = np.array(
+                [tensor_utils.pad_tensor(ob, max_path_length) for ob in obs])
+
+            if self.center_adv:
+                raw_adv = np.concatenate(
+                    [path["advantages"] for path in paths])
+                adv_mean = np.mean(raw_adv)
+                adv_std = np.std(raw_adv) + 1e-8
+                adv = [
+                    (path["advantages"] - adv_mean) / adv_std for path in paths]
+            else:
+                adv = [path["advantages"] for path in paths]
+
+            adv = np.array(
+                [tensor_utils.pad_tensor(a, max_path_length) for a in adv])
+
+            actions = [path["actions"] for path in paths]
+            actions = np.array(
+                [tensor_utils.pad_tensor(a, max_path_length) for a in actions])
+
+            rewards = [path["rewards"] for path in paths]
+            rewards = np.array(
+                [tensor_utils.pad_tensor(r, max_path_length) for r in rewards])
+
+            agent_infos = [path["agent_infos"] for path in paths]
+            agent_infos = tensor_utils.stack_tensor_dict_list(
+                [tensor_utils.pad_tensor_dict(
+                    p, max_path_length) for p in agent_infos]
+            )
+
+            env_infos = [path["env_infos"] for path in paths]
+            env_infos = tensor_utils.stack_tensor_dict_list(
+                [tensor_utils.pad_tensor_dict(
+                    p, max_path_length) for p in env_infos]
+            )
+
+            valids = [np.ones_like(path["returns"]) for path in paths]
+            valids = np.array(
+                [tensor_utils.pad_tensor(v, max_path_length) for v in valids])
+
+            average_discounted_return = \
+                np.mean([path["returns"][0] for path in paths])
+
+            undiscounted_returns = [sum(path["rewards"]) for path in paths]
+
+            ent = np.mean(self.policy.distribution.entropy(agent_infos))
+
+            ev = special.explained_variance_1d(
+                np.concatenate(baselines),
+                np.concatenate(returns)
+            )
+
+            samples_data = dict(
+                observations=obs,
+                actions=actions,
+                advantages=adv,
+                rewards=rewards,
+                valids=valids,
+                agent_infos=agent_infos,
+                env_infos=env_infos,
+                paths=paths,
+            )
+
+        logger.log("fitting baseline...")
+        self.baseline.fit(paths)
+        logger.log("fitted")
+
         logger.record_tabular('Iteration', itr)
-        logger.record_tabular('Entropy', np.mean(ents))
-        logger.record_tabular('Perplexity', np.exp(np.mean(ents)))
-        logger.record_tabular('AverageReturn',
-                              np.mean(average_returns))
-        logger.record_tabular('StdReturn',
-                              np.mean(std_returns))
-        logger.record_tabular('MaxReturn',
-                              np.max(max_returns))
-        logger.record_tabular('MinReturn',
-                              np.min(min_returns))
         logger.record_tabular('AverageDiscountedReturn',
-                              np.mean(average_discounted_returns))
-        logger.record_tabular('NumTrajs', np.sum(num_trajses))
-        logger.record_tabular('ExplainedVariance', np.mean(evs))
+                              average_discounted_return)
+        logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
+        logger.record_tabular('ExplainedVariance', ev)
+        logger.record_tabular('NumTrajs', len(paths))
+        logger.record_tabular('Entropy', ent)
+        logger.record_tabular('Perplexity', np.exp(ent))
+        logger.record_tabular('StdReturn', np.std(undiscounted_returns))
+        logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
+        logger.record_tabular('MinReturn', np.min(undiscounted_returns))
         logger.record_tabular('SNN_MeanKL', np.mean(kl))
         logger.record_tabular('SNN_StdKL', np.std(kl))
         logger.record_tabular('SNN_MinKL', np.min(kl))
@@ -583,18 +558,4 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('SNN_DynModelSqLossAfter', new_acc)
         logger.record_tabular('eta', self.eta)
 
-        mdp.log_extra()
-        policy.log_extra()
-        baseline.log_extra()
-
-        if not self.opt.algorithm_parallelized:
-            return aggregate_samples_data()
-        else:
-            return dict()
-
-        # numerical check
-        check_param = policy.get_params()
-        if np.any(np.isnan(check_param)):
-            raise ArithmeticError("NaN in params")
-        elif np.any(np.isinf(check_param)):
-            raise ArithmeticError("InF in params")
+        return samples_data
