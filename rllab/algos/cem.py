@@ -4,6 +4,7 @@ import theano.tensor as TT
 import numpy as np
 
 from rllab.misc import autoargs
+from rllab.misc import ext
 from rllab.misc.special import discount_cumsum
 from rllab.sampler import parallel_sampler
 from rllab.sampler.parallel_sampler import pool_map, G
@@ -23,9 +24,9 @@ def sample_return(env, policy, params, max_path_length, discount):
     )
     path["returns"] = discount_cumsum(path["rewards"], discount)
     undiscounted_return = sum(path["rewards"])
-    return dict(
-        returns=path['returns'],
-        undiscounted_return=undiscounted_return,
+    return ext.merge_dict(
+        path,
+        dict(undiscounted_return=undiscounted_return),
     )
 
 
@@ -139,6 +140,8 @@ class CEM(RLAlgorithm):
             logger.record_tabular('NumTrajs',
                                   len(infos))
             self.policy.set_param_values(best_x)
+            self.env.log_diagnostics(infos)
+            self.policy.log_diagnostics(infos)
             logger.save_itr_params(itr, dict(
                 itr=itr,
                 policy=self.policy,

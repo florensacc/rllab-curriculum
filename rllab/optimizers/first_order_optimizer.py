@@ -15,7 +15,8 @@ class FirstOrderOptimizer(Serializable):
 
     def __init__(
             self,
-            update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
+            update_method=lasagne.updates.adam,
+            learning_rate=1e-3,
             max_epochs=1000,
             tolerance=1e-6,
             batch_size=32,
@@ -35,6 +36,7 @@ class FirstOrderOptimizer(Serializable):
         self._opt_fun = None
         self._target = None
         self._callback = callback
+        update_method = partial(lasagne.updates.adam, learning_rate=learning_rate)
         self._update_method = update_method
         self._max_epochs = max_epochs
         self._tolerance = tolerance
