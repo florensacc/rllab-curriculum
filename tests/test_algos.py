@@ -78,8 +78,8 @@ for algo in [VPG, TNPG, PPO, TRPO, CEM, CMAES, ERWR, REPS]:
     polopt_cases.extend([
         (algo, GridWorldEnv, CategoricalMLPPolicy),
         (algo, CartpoleEnv, GaussianMLPPolicy),
-        # (algo, GridWorldEnv, CategoricalGRUPolicy),
-        # (algo, CartpoleEnv, GaussianGRUPolicy),
+        (algo, GridWorldEnv, CategoricalGRUPolicy),
+        (algo, CartpoleEnv, GaussianGRUPolicy),
     ])
 
 
