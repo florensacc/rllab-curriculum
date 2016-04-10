@@ -13,9 +13,9 @@ stub(globals())
 
 # Param ranges
 seeds = range(5)
-etas = [0.1, 0.5, 1.0, 5.0]
+etas = [0.1]
 replay_pools = [True]
-kl_ratios = [True]
+kl_ratios = [False]
 reverse_kl_regs = [True]
 param_cart_product = itertools.product(
     reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
