@@ -9,3 +9,4 @@ Features:
 - Neural network policies now use tanh nonlinearities by default
 - Refactored interface for `rllab.sampler.parallel_sampler`. Extracted new module `rllab.sampler.stateful_pool` containing general parallelization utilities.
 - Fixed numerous issues in tests causing too long to run.
+- Merged release branch onto master and removed the release branch, to avoid potential confusions.
