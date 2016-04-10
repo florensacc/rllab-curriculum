@@ -26,7 +26,7 @@ HORIZON = 500
 BATCH_SIZE = 50000
 DISCOUNT = 0.99
 
-for seed in [1, 11, 21, 31, 41]:#28, 43, 68, 103, 148]:
+for seed in [28, 43, 68, 103, 148]:
 
     for env in map(normalize, [Walker2DEnv()]):
         #HalfCheetahEnv(), SwimmerEnv(), Walker2DEnv(), HumanoidEnv(),
@@ -34,8 +34,8 @@ for seed in [1, 11, 21, 31, 41]:#28, 43, 68, 103, 148]:
 
         for policy in [
             GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(100, 50, 25)),
-            GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(100, 50, 25),
-                              hidden_nonlinearity=lasagne.nonlinearities.tanh),
+            # GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(100, 50, 25),
+            #                   hidden_nonlinearity=lasagne.nonlinearities.tanh),
         ]:
             baseline = LinearFeatureBaseline(env_spec=env.spec)
 
@@ -154,7 +154,7 @@ for seed in [1, 11, 21, 31, 41]:#28, 43, 68, 103, 148]:
                 run_experiment_lite(
                     algo.train(),
                     mode="ec2",
-                    exp_prefix="icml_tanh_test",
+                    exp_prefix="icml_new_seed",
                     n_parallel=4,
                     snapshot_mode="last",
                     seed=seed,
