@@ -2,9 +2,9 @@ import numpy as np
 import os.path as osp
 
 from rllab import spaces
-from rllab.config import MUJOCO_VERSION
 from rllab.envs.base import Env
 from rllab.misc.overrides import overrides
+from rllab.mujoco_py import MjModel, MjViewer
 from rllab.misc import autoargs
 from rllab.misc import logger
 import theano
@@ -13,27 +13,12 @@ import os
 import mako.template
 import mako.lookup
 
-if MUJOCO_VERSION == "1.30":
-    logger.log("Using Mujoco 1.30")
-    from rllab.mujoco_py import MjModel, MjViewer
-    MODEL_DIR = osp.abspath(
-        osp.join(
-            osp.dirname(__file__),
-            '../../../vendor/mujoco_models'
-        )
+MODEL_DIR = osp.abspath(
+    osp.join(
+        osp.dirname(__file__),
+        '../../../vendor/mujoco_models'
     )
-elif MUJOCO_VERSION == "1.22":
-    logger.log("Using Mujoco 1.22")
-    from rllab.mujoco_py_122 import MjModel, MjViewer
-    MODEL_DIR = osp.abspath(
-        osp.join(
-            osp.dirname(__file__),
-            '../../../vendor/mujoco_models_122'
-        )
-    )
-else:
-    raise NotImplementedError
-
+)
 
 
 BIG = 1e6
