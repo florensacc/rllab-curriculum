@@ -1,8 +1,8 @@
 import numpy as np
 
-from rllab import hrl_utils
+from sandbox.rocky.hrl import hrl_utils
 from rllab.misc import logger
-from sandbox.rocky.grid_world_hrl_utils import ExactComputer
+from sandbox.rocky.hrl.grid_world_hrl_utils import ExactComputer
 
 
 class ExactStateGivenGoalMIEvaluator(object):

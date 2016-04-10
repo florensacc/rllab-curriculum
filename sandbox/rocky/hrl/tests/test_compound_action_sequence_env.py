@@ -5,7 +5,7 @@ from nose2 import tools
 # TODO: to be fixed by rocky
 def test_compound_action_sequence_env():
     from rllab.envs.grid_world_env import GridWorldEnv
-    from rllab.envs.compound_action_sequence_env import CompoundActionSequenceEnv
+    from sandbox.rocky.hrl.compound_action_sequence_env import CompoundActionSequenceEnv
     env = GridWorldEnv(desc=[
         "SFFF",
         "FFFF",

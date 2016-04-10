@@ -59,13 +59,14 @@ class HrlAnalyzer(object):
         'top'
     ]
 
-    def __init__(self, file_name):
-        print "loading"
-        import sys
-        sys.stdout.flush()
-        params = joblib.load(file_name)
-        print "loaded"
-        sys.stdout.flush()
+    def __init__(self, file_name=None, params=None):
+        if params is None:
+            print "loading"
+            import sys
+            sys.stdout.flush()
+            params = joblib.load(file_name)
+            print "loaded"
+            sys.stdout.flush()
         self._env = env = params["env"]
         self._policy = policy = params["policy"]
         self._n_row = env.wrapped_env.n_row

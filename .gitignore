@@ -13,8 +13,7 @@ build_linux
 .idea
 .sublime-project
 run_experiment.sh
-notebooks
-*.ipynb
+scratch-notebooks
 launch_scripts
 *.sh.e*
 *.sh.o*

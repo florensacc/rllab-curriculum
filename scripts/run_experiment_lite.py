@@ -91,7 +91,12 @@ def run_experiment(argv):
     args = parser.parse_args(argv[1:])
 
     from rllab.sampler import parallel_sampler
-    parallel_sampler.config_parallel_sampler(args.n_parallel, args.seed)
+    parallel_sampler.initialize(n_parallel=args.n_parallel)
+
+    if args.seed is not None:
+        set_seed(args.seed)
+        parallel_sampler.set_seed(args.seed)
+
     if args.plot:
         from rllab.plotter import plotter
         plotter.init_worker()
@@ -99,8 +104,6 @@ def run_experiment(argv):
     # read from stdin
     data = pickle.loads(base64.b64decode(args.args_data))
 
-    if args.seed is not None:
-        set_seed(args.seed)
 
     log_dir = args.log_dir
     # exp_dir = osp.join(log_dir, args.exp_name)

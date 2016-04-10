@@ -104,9 +104,8 @@ class DDPG(RLAlgorithm):
             qf_learning_rate=1e-3,
             policy_weight_decay=0,
             policy_update_method='adam',
-            policy_learning_rate=1e-4,
+            policy_learning_rate=1e-3,
             eval_samples=10000,
-            eval_whole_paths=True,
             soft_target=True,
             soft_target_tau=0.001,
             n_updates_per_sample=1,
@@ -132,8 +131,6 @@ class DDPG(RLAlgorithm):
         :param policy_update_method: Online optimization method for training the policy.
         :param policy_learning_rate: Learning rate for training the policy.
         :param eval_samples: Number of samples (timesteps) for evaluating the policy.
-        :param eval_whole_paths: Whether to make sure that all trajectories are executed until the terminal state or
-        the max_path_length, even at the expense of possibly more samples for evaluation.
         :param soft_target_tau: Interpolation parameter for doing the soft target update.
         :param n_updates_per_sample: Number of Q function and policy updates per new sample obtained
         :param scale_reward: The scaling factor applied to the rewards when training
@@ -168,7 +165,6 @@ class DDPG(RLAlgorithm):
             )
         self.policy_learning_rate = policy_learning_rate
         self.eval_samples = eval_samples
-        self.eval_whole_paths = eval_whole_paths
         self.soft_target_tau = soft_target_tau
         self.n_updates_per_sample = n_updates_per_sample
         self.include_horizon_terminal_transitions = include_horizon_terminal_transitions
@@ -360,14 +356,11 @@ class DDPG(RLAlgorithm):
 
     def evaluate(self, epoch, pool):
         logger.log("Collecting samples for evaluation")
-        parallel_sampler.request_samples(
+        paths = parallel_sampler.sample_paths(
             policy_params=self.policy.get_param_values(),
             max_samples=self.eval_samples,
             max_path_length=self.max_path_length,
-            whole_paths=self.eval_whole_paths,
         )
-
-        paths = parallel_sampler.collect_paths()
 
         average_discounted_return = np.mean(
             [special.discount_return(path["rewards"], self.discount) for path in paths]

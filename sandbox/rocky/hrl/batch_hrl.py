@@ -5,9 +5,9 @@ from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
 from rllab.misc import logger
 from rllab.misc import tensor_utils
-from rllab import hrl_utils
 from rllab.misc.overrides import overrides
 from rllab.misc.special import to_onehot
+from sandbox.rocky.hrl import hrl_utils
 
 
 class BatchHRL(BatchPolopt, Serializable):

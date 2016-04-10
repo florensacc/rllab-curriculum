@@ -13,7 +13,6 @@ for seed in [1, 2, 3, 4, 5]:
         mdp = AtariMDP(rom_name="pong", obs_type="ram", frame_skip=4)
         algo = PPO(
             batch_size=50000,
-            whole_paths=True,
             max_path_length=4500,
             n_itr=200,
             discount=0.99,

@@ -43,15 +43,15 @@ algo_args = {
             cg_iters=1,
         ),
     )),
-    PPO: dict(
+    PPO: ext.merge_dict(common_batch_algo_args, dict(
         optimizer_args=dict(
             max_penalty_itr=1,
             max_opt_itr=1
         ),
-    ),
-    REPS: dict(
+    )),
+    REPS: ext.merge_dict(common_batch_algo_args, dict(
         max_opt_itr=1,
-    ),
+    )),
     DDPG: dict(
         n_epochs=1,
         epoch_length=100,
@@ -68,8 +68,9 @@ algo_args = {
     CMAES: dict(
         n_itr=1,
         max_path_length=100,
-        batch_size=5,
-    )
+        batch_size=1000,
+    ),
+    ERWR: common_batch_algo_args,
 }
 
 polopt_cases = []
@@ -77,13 +78,9 @@ for algo in [VPG, TNPG, PPO, TRPO, CEM, CMAES, ERWR, REPS]:
     polopt_cases.extend([
         (algo, GridWorldEnv, CategoricalMLPPolicy),
         (algo, CartpoleEnv, GaussianMLPPolicy),
-        (algo, GridWorldEnv, CategoricalGRUPolicy),
-        (algo, CartpoleEnv, GaussianGRUPolicy),
+        # (algo, GridWorldEnv, CategoricalGRUPolicy),
+        # (algo, CartpoleEnv, GaussianGRUPolicy),
     ])
-# for algo in [DDPG]:
-#     cases.extend([
-#         (algo, CartpoleEnv, DeterministicMLPPolicy),
-#     ])
 
 
 @tools.params(*polopt_cases)
@@ -94,6 +91,7 @@ def test_polopt_algo(algo_cls, env_cls, policy_cls):
     baseline = ZeroBaseline(env_spec=env.spec)
     algo = algo_cls(env=env, policy=policy, baseline=baseline, **(algo_args.get(algo_cls, dict())))
     algo.train()
+
 
 def test_ddpg():
     env = CartpoleEnv()
@@ -110,4 +108,3 @@ def test_ddpg():
         eval_samples=100,
     )
     algo.train()
-

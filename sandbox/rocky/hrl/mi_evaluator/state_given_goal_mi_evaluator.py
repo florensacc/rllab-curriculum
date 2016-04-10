@@ -1,13 +1,13 @@
 import numpy as np
 
-from rllab import hrl_utils
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
 from rllab.misc.special import to_onehot
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from rllab.spaces.discrete import Discrete
-from sandbox.rocky.grid_world_hrl_utils import ExactComputer
+from sandbox.rocky.hrl import hrl_utils
+from sandbox.rocky.hrl.grid_world_hrl_utils import ExactComputer
 from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 
 

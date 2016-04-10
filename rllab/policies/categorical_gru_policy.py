@@ -20,7 +20,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             env_spec,
             hidden_sizes=(32,),
             state_include_action=True,
-            hidden_nonlinearity=NL.rectify):
+            hidden_nonlinearity=NL.tanh):
         """
         :param env_spec: A spec for the env.
         :param hidden_sizes: list of sizes for the fully connected hidden layers

@@ -10,7 +10,6 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from nose2 import tools
 
-algo = VPG(n_itr=1, batch_size=1000, max_path_length=100)
 
 baselines = [ZeroBaseline, LinearFeatureBaseline, GaussianMLPBaseline]
 
@@ -20,4 +19,8 @@ def test_baseline(baseline_cls):
     env = CartpoleEnv()
     policy = GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(6,))
     baseline = baseline_cls(env_spec=env.spec)
-    algo.train(env=env, policy=policy, baseline=baseline)
+    algo = VPG(
+        env=env, policy=policy, baseline=baseline,
+        n_itr=1, batch_size=1000, max_path_length=100
+    )
+    algo.train()

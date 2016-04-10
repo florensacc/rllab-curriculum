@@ -137,8 +137,10 @@ def pop_tabular_prefix():
 @contextmanager
 def prefix(key):
     push_prefix(key)
-    yield
-    pop_prefix()
+    try:
+        yield
+    finally:
+        pop_prefix()
 
 
 @contextmanager

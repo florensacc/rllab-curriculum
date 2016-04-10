@@ -3,9 +3,9 @@ from __future__ import print_function
 
 import numpy as np
 
-from rllab.envs.compound_action_sequence_env import CompoundActionSequenceEnv
 from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.spaces.discrete import Discrete
+from sandbox.rocky.hrl.compound_action_sequence_env import CompoundActionSequenceEnv
 from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 
 

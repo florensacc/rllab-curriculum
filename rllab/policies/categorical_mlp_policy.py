@@ -16,7 +16,7 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             self,
             env_spec,
             hidden_sizes=(32, 32),
-            hidden_nonlinearity=NL.rectify):
+            hidden_nonlinearity=NL.tanh):
         """
         :param env_spec: A spec for the mdp.
         :param hidden_sizes: list of sizes for the fully connected hidden layers

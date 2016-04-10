@@ -44,8 +44,8 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             adaptive_std=False,
             std_share_network=False,
             std_hidden_sizes=(32, 32),
-            std_hidden_nonlinearity=NL.rectify,
-            hidden_nonlinearity=NL.rectify,
+            std_hidden_nonlinearity=NL.tanh,
+            hidden_nonlinearity=NL.tanh,
             output_nonlinearity=None,
     ):
         Serializable.quick_init(self, locals())

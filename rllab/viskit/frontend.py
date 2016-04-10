@@ -65,7 +65,7 @@ def make_plot(plot_list):
     return po.plot(fig, output_type='div', include_plotlyjs=False)
 
 
-def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, aggregate_mean=False):
+def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, aggregate_mean=True):
     print plot_key, split_key, group_key, filters
     selector = core.Selector(exps_data)
     for k, v in filters.iteritems():

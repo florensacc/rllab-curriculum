@@ -19,7 +19,6 @@ algo = TRPO(
     policy=policy,
     baseline=baseline,
     batch_size=4000,
-    whole_paths=True,
     max_path_length=100,
     n_itr=40,
     discount=0.99,

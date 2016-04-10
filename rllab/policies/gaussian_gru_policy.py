@@ -21,7 +21,7 @@ class GaussianGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             env_spec,
             hidden_sizes=(32,),
             state_include_action=True,
-            hidden_nonlinearity=NL.rectify,
+            hidden_nonlinearity=NL.tanh,
             learn_std=True,
             init_std=1.0,
             output_nonlinearity=None,

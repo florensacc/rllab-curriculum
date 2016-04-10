@@ -27,7 +27,6 @@ class BatchPolopt(RLAlgorithm):
             gae_lambda=1,
             plot=False,
             pause_for_plot=False,
-            whole_paths=True,
             center_adv=True,
             positive_adv=False,
             store_paths=False,
@@ -45,8 +44,6 @@ class BatchPolopt(RLAlgorithm):
         :param gae_lambda: Lambda used for generalized advantage estimation.
         :param plot: Plot evaluation run after each iteration.
         :param pause_for_plot: Whether to pause before contiuing when plotting.
-        :param whole_paths: Make sure that the samples contain whole trajectories, even if the actual batch size is
-        slightly larger than the specified batch_size.
         :param center_adv: Whether to rescale the advantages so that they have mean 0 and standard deviation 1.
         :param positive_adv: Whether to shift the advantages so that they are always positive. When used in
         conjunction with center_adv the advantages will be standardized before shifting.
@@ -64,7 +61,6 @@ class BatchPolopt(RLAlgorithm):
         self.gae_lambda = gae_lambda
         self.plot = plot
         self.pause_for_plot = pause_for_plot
-        self.whole_paths = whole_paths
         self.center_adv = center_adv
         self.positive_adv = positive_adv
         self.store_paths = store_paths
@@ -81,24 +77,23 @@ class BatchPolopt(RLAlgorithm):
         self.start_worker()
         self.init_opt()
         for itr in xrange(self.start_itr, self.n_itr):
-            logger.push_prefix('itr #%d | ' % itr)
-            paths = self.obtain_samples(itr)
-            samples_data = self.process_samples(itr, paths)
-            self.log_diagnostics(paths)
-            self.optimize_policy(itr, samples_data)
-            logger.log("saving snapshot...")
-            params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
-            if self.store_paths:
-                params["paths"] = samples_data["paths"]
-            logger.save_itr_params(itr, params)
-            logger.log("saved")
-            logger.dump_tabular(with_prefix=False)
-            logger.pop_prefix()
-            if self.plot:
-                self.update_plot()
-                if self.pause_for_plot:
-                    raw_input("Plotting evaluation run: Press Enter to "
-                              "continue...")
+            with logger.prefix('itr #%d | ' % itr):
+                paths = self.obtain_samples(itr)
+                samples_data = self.process_samples(itr, paths)
+                self.log_diagnostics(paths)
+                self.optimize_policy(itr, samples_data)
+                logger.log("saving snapshot...")
+                params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
+                if self.store_paths:
+                    params["paths"] = samples_data["paths"]
+                logger.save_itr_params(itr, params)
+                logger.log("saved")
+                logger.dump_tabular(with_prefix=False)
+                if self.plot:
+                    self.update_plot()
+                    if self.pause_for_plot:
+                        raw_input("Plotting evaluation run: Press Enter to "
+                                  "continue...")
         self.shutdown_worker()
 
     def log_diagnostics(self, paths):
@@ -129,15 +124,11 @@ class BatchPolopt(RLAlgorithm):
 
     def obtain_samples(self, itr):
         cur_params = self.policy.get_param_values()
-
-        parallel_sampler.request_samples(
+        return parallel_sampler.sample_paths(
             policy_params=cur_params,
             max_samples=self.batch_size,
             max_path_length=self.max_path_length,
-            whole_paths=self.whole_paths,
         )
-
-        return parallel_sampler.collect_paths()
 
     def process_samples(self, itr, paths):
 

@@ -1,7 +1,7 @@
 import os
 
 os.environ["THEANO_FLAGS"] = "device=cpu"
-from rllab.envs.compound_action_sequence_env import CompoundActionSequenceEnv
+from sandbox.rocky.hrl.compound_action_sequence_env import CompoundActionSequenceEnv
 from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rocky.hrl.batch_hrl import BatchHRL
@@ -111,7 +111,6 @@ for evaluator in evaluators:
         baseline=baseline,
         bonus_evaluator=evaluator,
         batch_size=10000,
-        whole_paths=True,
         max_path_length=60,
         n_itr=100,
         high_algo=TRPO(

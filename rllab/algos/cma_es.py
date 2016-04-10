@@ -5,33 +5,28 @@ import numpy as np
 
 from rllab.misc import ext
 from rllab.misc.special import discount_cumsum
-from rllab.sampler import parallel_sampler
-from rllab.sampler.parallel_sampler import pool_map, G
+from rllab.sampler import parallel_sampler, stateful_pool
 from rllab.sampler.utils import rollout
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 import cma_es_lib
 
 
-def sample_return(env, policy, params, max_path_length, discount):
+def sample_return(G, params, max_path_length, discount):
     # env, policy, params, max_path_length, discount = args
     # of course we make the strong assumption that there is no race condition
-    policy.set_param_values(params)
+    G.policy.set_param_values(params)
     path = rollout(
-        env,
-        policy,
+        G.env,
+        G.policy,
         max_path_length,
     )
     path["returns"] = discount_cumsum(path["rewards"], discount)
-    undiscounted_return = sum(path["rewards"])
-    return ext.merge_dict(
-        path,
-        dict(undiscounted_return=undiscounted_return),
-    )
+    path["undiscounted_return"] = sum(path["rewards"])
+    return path
 
 
 class CMAES(RLAlgorithm):
-
     def __init__(
             self,
             env,
@@ -39,7 +34,6 @@ class CMAES(RLAlgorithm):
             n_itr=500,
             max_path_length=500,
             discount=0.99,
-            whole_paths=True,
             sigma0=1.,
             batch_size=None,
             plot=False,
@@ -51,8 +45,6 @@ class CMAES(RLAlgorithm):
         :param batch_size: # of samples from trajs from param distribution, when this
         is set, n_samples is ignored
         :param discount: Discount.
-        :param whole_paths: Make sure that the samples contain whole trajectories, even if the actual batch size is
-        slightly larger than the specified batch_size.
         :param plot: Plot evaluation run after each iteration.
         :param sigma0: Initial std for param dist
         :return:
@@ -61,7 +53,6 @@ class CMAES(RLAlgorithm):
         self.policy = policy
         self.plot = plot
         self.sigma0 = sigma0
-        self.whole_paths = whole_paths
         self.discount = discount
         self.max_path_length = max_path_length
         self.n_itr = n_itr
@@ -90,21 +81,22 @@ class CMAES(RLAlgorithm):
                 xs = np.asarray(xs)
                 # For each sample, do a rollout.
                 infos = (
-                    pool_map(sample_return, [(x, self.max_path_length, self.discount) for x in xs]))
+                    stateful_pool.singleton_pool.run_map(sample_return, [(x, self.max_path_length,
+                                                                          self.discount) for x in xs]))
             else:
                 cum_len = 0
                 infos = []
                 xss = []
                 done = False
                 while not done:
-                    sbs = G.n_parallel * 2
+                    sbs = stateful_pool.singleton_pool.n_parallel * 2
                     # Sample from multivariate normal distribution.
                     # You want to ask for sbs samples here.
                     xs = es.ask(sbs)
                     xs = np.asarray(xs)
 
                     xss.append(xs)
-                    sinfos = pool_map(
+                    sinfos = stateful_pool.singleton_pool.run_map(
                         sample_return, [(x, self.max_path_length, self.discount) for x in xs])
                     for info in sinfos:
                         infos.append(info)
@@ -157,4 +149,3 @@ class CMAES(RLAlgorithm):
 
         # Set final params.
         self.policy.set_param_values(es.result()[0])
-
