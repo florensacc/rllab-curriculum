@@ -1,6 +1,4 @@
 import numpy as np
-import pyprind
-from rllab.misc import logger
 from rllab.misc import tensor_utils
 
 
@@ -34,6 +32,3 @@ def rollout(env, agent, max_length=np.inf, animated=False, speedup=1):
         agent_infos=tensor_utils.stack_tensor_dict_list(agent_infos),
         env_infos=tensor_utils.stack_tensor_dict_list(env_infos),
     )
-
-
-

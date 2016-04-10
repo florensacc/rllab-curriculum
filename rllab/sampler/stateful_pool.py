@@ -91,7 +91,6 @@ class StatefulPool(object):
                 ret.append(runner(self.G, *args))
             return ret
 
-
     def run_collect(self, collect_once, threshold, args=None, show_prog_bar=True):
         """
         Run the collector method using the worker pool. The collect_once method will receive 'G' as
@@ -150,14 +149,7 @@ class StatefulPool(object):
             return results
 
 
-
 singleton_pool = StatefulPool()
-
-# run_each = pool.run_each
-#
-# run_collect = pool.run_collect
-#
-# initialize = pool.initialize
 
 
 def _worker_run_each(all_args):
