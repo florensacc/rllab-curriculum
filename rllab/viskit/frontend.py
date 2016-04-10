@@ -10,6 +10,8 @@ import numpy as np
 # import threading, webbrowser
 import plotly.offline as po
 import plotly.graph_objs as go
+import pdb
+
 
 app = flask.Flask(__name__, static_url_path='/static')
 
@@ -88,13 +90,14 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
             group_legends = [split_legend]
         to_plot = []
         for group_selector, group_legend in zip(group_selectors, group_legends):
-            # print group_selector._filters
             filtered_data = group_selector.extract()
             if len(filtered_data) > 0:
+
                 # Group by seed and sort.
                 # -----------------------
-                filtered_params = core.extract_distinct_params(filtered_data, l=0)
-                filtered_params2 = [[p[1][0]] for p in filtered_params]
+                filtered_params = core.extract_distinct_params(
+                    filtered_data, l=0)
+                filtered_params2 = [p[1] for p in filtered_params]
                 filtered_params_k = [p[0] for p in filtered_params]
                 import itertools
                 product_space = itertools.product(
@@ -102,23 +105,26 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
                 )
                 data_best_regret = None
                 best_regret = -np.inf
-                selector = core.Selector(exps_data)
                 for params in product_space:
+                    selector = core.Selector(exps_data)
                     for k, v in zip(filtered_params_k, params):
                         selector = selector.where(k, str(v))
                     data = selector.extract()
-                    progresses = [
-                    exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
-                    sizes = map(len, progresses)
-                    max_size = max(sizes)
-                    progresses = [
-                        np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-                    means = np.nanmean(progresses, axis=0)
-                    regret = np.mean(means)
-                    if regret > best_regret:
-                        best_regret = regret
-                        data_best_regret = data
-                print(best_regret)
+                    if len(data) > 0:
+                        progresses = [
+                            exp.progress.get(plot_key, np.array([np.nan])) for exp in data]
+                        sizes = map(len, progresses)
+                        max_size = max(sizes)
+                        progresses = [
+                            np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
+                        means = np.nanmean(progresses, axis=0)
+                        regret = np.mean(means)
+                        if regret > best_regret:
+                            best_regret = regret
+                            data_best_regret = data
+
+                print(group_selector._filters)
+                print('best regret: {}'.format(best_regret))
                 # -----------------------
 
                 progresses = [

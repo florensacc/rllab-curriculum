@@ -12,10 +12,10 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(5)
-etas = [0.1]
+seeds = range(10)
+etas = [0.01, 0.05, 0.1]
 replay_pools = [True]
-kl_ratios = [False]
+kl_ratios = [True, False]
 reverse_kl_regs = [True]
 param_cart_product = itertools.product(
     reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
@@ -43,7 +43,7 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         batch_size=1000,
         whole_paths=False,
         max_path_length=100,
-        n_itr=100,
+        n_itr=40,
         step_size=0.01,
         eta=eta,
         eta_discount=0.99,

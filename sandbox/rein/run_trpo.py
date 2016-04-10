@@ -36,7 +36,7 @@ for seed in seeds:
         batch_size=1000,
         whole_paths=False,
         max_path_length=100,
-        n_itr=100,
+        n_itr=40,
         step_size=0.01,
         subsample_factor=1.0,
     )
