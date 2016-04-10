@@ -43,7 +43,7 @@ for seed in seeds:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo_cartpole",
+        exp_prefix="cartpole",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

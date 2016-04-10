@@ -57,7 +57,7 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo_exploration_cartpole",
+        exp_prefix="cartpole",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

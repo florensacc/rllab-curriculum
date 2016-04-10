@@ -6,14 +6,15 @@ from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
+
 # exploration imports
-# ----------------------
+# -------------------
 import theano
 import lasagne
 from collections import deque
 import time
 from rllab.dynamics_models.nn_uncertainty import prob_nn
-# ----------------------
+# -------------------
 
 
 class SimpleReplayPool(object):
@@ -194,7 +195,7 @@ class BatchPolopt(RLAlgorithm):
     def train(self):
 
         # Uncertainty neural network (UNN) initialization.
-        # ----------------------
+        # ------------------------------------------------
         batch_size = 1
         n_batches = 5  # temp
 
@@ -240,7 +241,7 @@ class BatchPolopt(RLAlgorithm):
                 observation_shape=self.env.observation_space.shape,
                 action_dim=1,  # mdp.action_dim,
             )
-        # ----------------------
+        # ------------------------------------------------
 
         self.start_worker()
         self.init_opt()
@@ -252,7 +253,7 @@ class BatchPolopt(RLAlgorithm):
             samples_data = self.process_samples(itr, paths)
 
             # Exploration code
-            # ----------------------
+            # ----------------
             if self.use_replay_pool:
                 # Fill replay pool.
                 logger.log("Fitting dynamics model using replay pool ...")
@@ -290,7 +291,7 @@ class BatchPolopt(RLAlgorithm):
                     _out = self.pnn.pred_fn(np.vstack(_inputss))
                     new_acc = np.square(_out - np.vstack(_targetss))
                     new_acc = np.mean(new_acc)
-            # ----------------------
+            # ----------------
 
             self.env.log_diagnostics(paths)
             self.policy.log_diagnostics(paths)

@@ -48,7 +48,7 @@ KUBE_DEFAULT_RESOURCES = {
 }
 
 KUBE_DEFAULT_NODE_SELECTOR = {
-    "aws/type": "t2.medium",
+    "aws/type": "m4.2xlarge",
 }
 
 from config_personal import *
