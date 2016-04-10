@@ -124,6 +124,7 @@ class BatchPolopt(RLAlgorithm):
             n_updates_per_sample=500,
             pool_batch_size=10,
             eta_discount=1.0,
+            n_itr_update=5,
             **kwargs
     ):
         """
@@ -179,6 +180,7 @@ class BatchPolopt(RLAlgorithm):
         self.n_updates_per_sample = n_updates_per_sample
         self.pool_batch_size = pool_batch_size
         self.eta_discount = eta_discount
+        self.n_itr_update = n_itr_update
         # ----------------------
 
     def start_worker(self):
@@ -251,41 +253,43 @@ class BatchPolopt(RLAlgorithm):
 
             # Exploration code
             # ----------------------
-            # Fill replay pool.
-            for path in samples_data['paths']:
-                path_len = len(path['rewards'])
-                for i in xrange(path_len):
-                    obs = path['observations'][i]
-                    act = path['actions'][i]
-                    rew = path['rewards'][i]
-                    term = (i == path_len - 1)
-                    pool.add_sample(obs, act, rew, term)
+            if self.use_replay_pool:
+                # Fill replay pool.
+                logger.log("Fitting dynamics model using replay pool ...")
+                for path in samples_data['paths']:
+                    path_len = len(path['rewards'])
+                    for i in xrange(path_len):
+                        obs = path['observations'][i]
+                        act = path['actions'][i]
+                        rew = path['rewards'][i]
+                        term = (i == path_len - 1)
+                        pool.add_sample(obs, act, rew, term)
 
-            # Now we train the dynamics model using the replay pool; only
-            # if pool is large enough.
-            if pool.size >= self.min_pool_size:
-                _inputss = []
-                _targetss = []
-                for _ in xrange(self.n_updates_per_sample):
-                    batch = pool.random_batch(self.pool_batch_size)
-                    _inputs = np.hstack(
-                        [batch['observations'], batch['actions']])
-                    _targets = batch['next_observations']
-                    _inputss.append(_inputs)
-                    _targetss.append(_targets)
+                # Now we train the dynamics model using the replay pool; only
+                # if pool is large enough.
+                if pool.size >= self.min_pool_size:
+                    _inputss = []
+                    _targetss = []
+                    for _ in xrange(self.n_updates_per_sample):
+                        batch = pool.random_batch(self.pool_batch_size)
+                        _inputs = np.hstack(
+                            [batch['observations'], batch['actions']])
+                        _targets = batch['next_observations']
+                        _inputss.append(_inputs)
+                        _targetss.append(_targets)
 
-                _out = self.pnn.pred_fn(np.vstack(_inputss))
-                old_acc = np.square(_out - np.vstack(_targetss))
-                old_acc = np.mean(old_acc)
+                    _out = self.pnn.pred_fn(np.vstack(_inputss))
+                    old_acc = np.square(_out - np.vstack(_targetss))
+                    old_acc = np.mean(old_acc)
 
-                for _inputs, _targets in zip(_inputss, _targetss):
-                    self.pnn.train_fn(_inputs, _targets)
+                    for _inputs, _targets in zip(_inputss, _targetss):
+                        self.pnn.train_fn(_inputs, _targets)
 
-                _out = self.pnn.pred_fn(_inputs)
+                    _out = self.pnn.pred_fn(_inputs)
 
-                _out = self.pnn.pred_fn(np.vstack(_inputss))
-                new_acc = np.square(_out - np.vstack(_targetss))
-                new_acc = np.mean(new_acc)
+                    _out = self.pnn.pred_fn(np.vstack(_inputss))
+                    new_acc = np.square(_out - np.vstack(_targetss))
+                    new_acc = np.mean(new_acc)
             # ----------------------
 
             self.env.log_diagnostics(paths)
@@ -349,8 +353,8 @@ class BatchPolopt(RLAlgorithm):
     def process_samples(self, itr, paths):
 
         # Computing intrinsic rewards.
-        # ----------------------
-        logger.log("fitting dynamics model...")
+        # ----------------------------
+        logger.log("Computing intrinsic rewards ...")
         # Compute sample Bellman error.
         obs = np.vstack([path['observations'] for path in paths])
         act = np.vstack([path['actions'] for path in paths])
@@ -373,8 +377,9 @@ class BatchPolopt(RLAlgorithm):
             self.pnn.save_old_params()
 
             # Update model weights based on current minibatch.
-            for _ in xrange(50):
-                self.pnn.train_update_fn(_inputs[i][None, :], _targets[i][None, :])
+            for _ in xrange(self.n_itr_update):
+                self.pnn.train_update_fn(
+                    _inputs[i][None, :], _targets[i][None, :])
 
             # Calculate current minibatch KL.
             kl_div = float(self.pnn.f_kl_div_closed_form())
@@ -405,7 +410,7 @@ class BatchPolopt(RLAlgorithm):
             n_samples += path_length
 
         logger.log("fitted")
-        # ----------------------
+        # ----------------------------
 
         baselines = []
         returns = []

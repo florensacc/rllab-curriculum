@@ -328,7 +328,7 @@ def run_experiment_lite(
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
         params["resources"] = params.get(
-            "resouces", config.KUBE_DEFAULT_RESOURCES)
+            "resources", config.KUBE_DEFAULT_RESOURCES)
         params["node_selector"] = params.get(
             "node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
         params["exp_prefix"] = exp_prefix
