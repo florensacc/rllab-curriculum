@@ -155,8 +155,9 @@ for seed in [28, 43, 68, 103, 148]:
                 run_experiment_lite(
                     algo.train(),
                     mode="ec2",
-                    exp_prefix="icml_new_seed_tanh",
+                    exp_prefix="icml_new_seed_tanh_mujoco_122",
                     n_parallel=4,
                     snapshot_mode="last",
                     seed=seed,
+                    env=dict(RLLAB_MUJOCO_VERSION="1.22")
                 )

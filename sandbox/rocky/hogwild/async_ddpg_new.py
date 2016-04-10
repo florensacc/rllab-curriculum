@@ -81,9 +81,9 @@ class SimpleReplayPool(object):
         return self._size
 
 
-class DDPG(RLAlgorithm):
+class AsyncDDPG(RLAlgorithm):
     """
-    Deep Deterministic Policy Gradient.
+    Asynchronous Deep Deterministic Policy Gradient.
     """
 
     def __init__(
@@ -94,7 +94,7 @@ class DDPG(RLAlgorithm):
             es,
             batch_size=32,
             n_epochs=200,
-            epoch_length=1000,
+            epoch_length=10000,
             min_pool_size=10000,
             replay_pool_size=1000000,
             discount=0.99,
@@ -104,10 +104,9 @@ class DDPG(RLAlgorithm):
             qf_learning_rate=1e-3,
             policy_weight_decay=0,
             policy_update_method='adam',
-            policy_learning_rate=1e-4,
+            policy_learning_rate=1e-3,
             eval_samples=10000,
             eval_whole_paths=True,
-            soft_target=True,
             soft_target_tau=0.001,
             n_updates_per_sample=1,
             scale_reward=1.0,

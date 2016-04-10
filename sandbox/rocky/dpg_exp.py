@@ -22,6 +22,7 @@ from rllab.exploration_strategies.ou_strategy import OUStrategy
 from rllab.misc import instrument
 from rllab.policies.deterministic_mlp_policy import DeterministicMLPPolicy
 from rllab.q_functions.continuous_mlp_q_function import ContinuousMLPQFunction
+from lasagne.init import HeUniform, Constant
 
 instrument.stub(globals())
 
