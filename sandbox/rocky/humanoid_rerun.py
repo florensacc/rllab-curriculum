@@ -27,7 +27,9 @@ DISCOUNT = 0.99
 
 for seed in [1, 11, 21, 31, 41]:
 
-    for env in map(normalize, [HalfCheetahEnv(), SwimmerEnv(), Walker2DEnv(), HumanoidEnv(), SimpleHumanoidEnv()]):
+    for env in map(normalize, [Walker2DEnv()]):
+        #HalfCheetahEnv(), SwimmerEnv(), Walker2DEnv(), HumanoidEnv(),
+        #                                   SimpleHumanoidEnv()]):
 
         policy = GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(100, 50, 25))
         baseline = LinearFeatureBaseline(env_spec=env.spec)
@@ -91,16 +93,16 @@ for seed in [1, 11, 21, 31, 41]:
             #     discount=DISCOUNT,
             #     step_size=2e-1,
             # ),
-            TNPG(
-                env=env,
-                policy=policy,
-                baseline=baseline,
-                n_itr=N_ITR,
-                batch_size=BATCH_SIZE,
-                max_path_length=HORIZON,
-                discount=DISCOUNT,
-                step_size=3e-1,
-            ),
+            # TNPG(
+            #     env=env,
+            #     policy=policy,
+            #     baseline=baseline,
+            #     n_itr=N_ITR,
+            #     batch_size=BATCH_SIZE,
+            #     max_path_length=HORIZON,
+            #     discount=DISCOUNT,
+            #     step_size=3e-1,
+            # ),
             TNPG(
                 env=env,
                 policy=policy,
@@ -147,10 +149,18 @@ for seed in [1, 11, 21, 31, 41]:
             run_experiment_lite(
                 algo.train(),
                 mode="ec2",
-                exp_prefix="icml_plot_rerun",
+                exp_prefix="icml_mujoco_test",
                 n_parallel=4,
                 snapshot_mode="last",
                 seed=seed,
-                # dry=True
+                env=dict(RLLAB_MUJOCO_VERSION="1.22")
             )
-            # sys.exit(0)
+            run_experiment_lite(
+                algo.train(),
+                mode="ec2",
+                exp_prefix="icml_mujoco_test",
+                n_parallel=4,
+                snapshot_mode="last",
+                seed=seed,
+                env=dict(RLLAB_MUJOCO_VERSION="1.30")
+            )

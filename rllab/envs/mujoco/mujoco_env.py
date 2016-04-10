@@ -2,27 +2,44 @@ import numpy as np
 import os.path as osp
 
 from rllab import spaces
+from rllab.config import MUJOCO_VERSION
 from rllab.envs.base import Env
-from rllab.mujoco_py import MjModel, MjViewer
 from rllab.misc.overrides import overrides
 from rllab.misc import autoargs
+from rllab.misc import logger
 import theano
 import tempfile
 import os
 import mako.template
 import mako.lookup
 
-
-MODEL_DIR = osp.abspath(
-    osp.join(
-        osp.dirname(__file__),
-        '../../../vendor/mujoco_models'
+if MUJOCO_VERSION == "1.30":
+    logger.log("Using Mujoco 1.30")
+    from rllab.mujoco_py import MjModel, MjViewer
+    MODEL_DIR = osp.abspath(
+        osp.join(
+            osp.dirname(__file__),
+            '../../../vendor/mujoco_models'
+        )
     )
-)
+elif MUJOCO_VERSION == "1.22":
+    logger.log("Using Mujoco 1.22")
+    from rllab.mujoco_py_122 import MjModel, MjViewer
+    MODEL_DIR = osp.abspath(
+        osp.join(
+            osp.dirname(__file__),
+            '../../../vendor/mujoco_models_122'
+        )
+    )
+else:
+    raise NotImplementedError
+
+
 
 BIG = 1e6
-class MujocoEnv(Env):
 
+
+class MujocoEnv(Env):
     FILE = None
 
     @autoargs.arg('action_noise', type=float,
@@ -69,7 +86,7 @@ class MujocoEnv(Env):
             init_qpos_id = self.model.numeric_names.index("init_qpos")
             addr = self.model.numeric_adr.flat[init_qpos_id]
             size = self.model.numeric_size.flat[init_qpos_id]
-            init_qpos = self.model.numeric_data.flat[addr:addr+size]
+            init_qpos = self.model.numeric_data.flat[addr:addr + size]
             self.init_qpos = init_qpos
         self.dcom = None
         self.current_com = None
@@ -89,7 +106,7 @@ class MujocoEnv(Env):
     def observation_space(self):
         shp = self.get_current_obs().shape
         ub = BIG * np.ones(shp)
-        return spaces.Box(ub*-1, ub)
+        return spaces.Box(ub * -1, ub)
 
     @property
     def action_bounds(self):
@@ -97,9 +114,9 @@ class MujocoEnv(Env):
 
     def reset_mujoco(self):
         self.model.data.qpos = self.init_qpos + \
-            np.random.normal(size=self.init_qpos.shape) * 0.01
+                               np.random.normal(size=self.init_qpos.shape) * 0.01
         self.model.data.qvel = self.init_qvel + \
-            np.random.normal(size=self.init_qvel.shape) * 0.1
+                               np.random.normal(size=self.init_qvel.shape) * 0.1
         self.model.data.qacc = self.init_qacc
         self.model.data.ctrl = self.init_ctrl
 
@@ -146,7 +163,7 @@ class MujocoEnv(Env):
     def inject_action_noise(self, action):
         # generate action noise
         noise = self.action_noise * \
-            np.random.normal(size=action.shape)
+                np.random.normal(size=action.shape)
         # rescale the noise to make it proportional to the action bounds
         lb, ub = self.action_bounds
         noise = 0.5 * (ub - lb) * noise

@@ -290,15 +290,16 @@ def run_experiment_lite(
         if dry:
             return
         try:
-            subprocess.call(command, shell=True, env=env)
+            subprocess.call(command, shell=True, env=ext.merge_dict(os.environ, env))
         except Exception as e:
             if isinstance(e, KeyboardInterrupt):
                 raise
     elif mode == "local_docker":
+        del kwargs["remote_log_dir"]
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
-        command = to_docker_command(params, docker_image=docker_image, script=script)
+        command = to_docker_command(params, docker_image=docker_image, script=script, env=env)
         print(command)
         if dry:
             return
@@ -312,8 +313,9 @@ def run_experiment_lite(
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
         launch_ec2(params, exp_prefix=exp_prefix, docker_image=docker_image, script=script,
-                   aws_config=aws_config, dry=dry, terminate_machine=terminate_machine, use_gpu=use_gpu)
+                   aws_config=aws_config, dry=dry, terminate_machine=terminate_machine, use_gpu=use_gpu, env=env)
     elif mode == "lab_kube":
+        assert env is None
         # first send code folder to s3
         s3_code_path = s3_sync_code(config, dry=dry)
         if docker_image is None:
@@ -402,7 +404,7 @@ def to_local_command(params, script='scripts/run_experiment.py', use_gpu=False):
 
 
 def to_docker_command(params, docker_image, script='scripts/run_experiment.py', pre_commands=None,
-                      post_commands=None, dry=False, use_gpu=False):
+                      post_commands=None, dry=False, use_gpu=False, env=None):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
     docker volume mapping to make sure that the logging files are created at the correct locations
@@ -419,6 +421,9 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     else:
         command_prefix = "docker run"
     docker_log_dir = config.DOCKER_LOG_DIR
+    if env is not None:
+        for k, v in env.iteritems():
+            command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
                                                                     docker_log_dir=docker_log_dir)
     params = ext.merge_dict(params, dict(log_dir=docker_log_dir))
@@ -439,7 +444,7 @@ def dedent(s):
 
 
 def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.py',
-               aws_config=None, dry=False, terminate_machine=True, use_gpu=False):
+               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, env=None):
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
 
@@ -487,7 +492,7 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
     """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
     sio.write("""
         {command}
-    """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu)))
+    """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu, env=env)))
     sio.write("""
         aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
     """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))

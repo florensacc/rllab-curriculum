@@ -11,6 +11,8 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.mujoco.simple_humanoid_env import SimpleHumanoidEnv
 from rllab.envs.mujoco.humanoid_env import HumanoidEnv
 from rllab.envs.mujoco.walker2d_env import Walker2DEnv
+from rllab.misc import ext
+import os
 from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
@@ -27,7 +29,9 @@ DISCOUNT = 0.99
 
 for seed in [1, 11, 21, 31, 41]:
 
-    for env in map(normalize, [HalfCheetahEnv()]):#, SwimmerEnv(), Walker2DEnv(), HumanoidEnv(), SimpleHumanoidEnv()]):
+    for env in map(normalize, [Walker2DEnv()]):#HalfCheetahEnv()]):#, SwimmerEnv(), Walker2DEnv(), HumanoidEnv(),
+    # SimpleHumanoidEnv(
+        # )]):
 
         policy = GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32))#100, 50, 25))
         baseline = LinearFeatureBaseline(env_spec=env.spec)
@@ -146,11 +150,12 @@ for seed in [1, 11, 21, 31, 41]:
         for algo in algos:
             run_experiment_lite(
                 algo.train(),
-                mode="local",
+                mode="local_docker",
                 exp_prefix="icml_plot_rerun",
                 n_parallel=4,
                 snapshot_mode="last",
                 seed=seed,
+                env=dict(RLLAB_MUJOCO_VERSION="1.22")
                 # dry=True
             )
             sys.exit(0)
