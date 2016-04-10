@@ -1,12 +1,8 @@
-from rllab.envs.compound_action_sequence_env import CompoundActionSequenceEnv
-from rllab.envs.grid_world_env import GridWorldEnv
-from rllab.policies.subgoal_policy import SubgoalPolicy
-from rllab.spaces.discrete import Discrete
-from sandbox.rocky.grid_world_hrl_utils import ExactComputer
-from rllab.misc import tensor_utils
+import numpy as np
+
 from rllab import hrl_utils
 from rllab.misc import logger
-import numpy as np
+from sandbox.rocky.grid_world_hrl_utils import ExactComputer
 
 
 class ExactStateGivenGoalMIEvaluator(object):

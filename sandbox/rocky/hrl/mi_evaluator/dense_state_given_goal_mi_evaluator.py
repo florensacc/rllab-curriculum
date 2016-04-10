@@ -1,21 +1,18 @@
+import cPickle as pickle
+
 import numpy as np
+from rllab.regressors.product_regressor import ProductRegressor
 
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
-from rllab import hrl_utils
 from rllab.misc import ext
 from rllab.misc.special import to_onehot
-from rllab.policies.subgoal_policy import SubgoalPolicy
-from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
-from rllab.regressors.product_regressor import ProductRegressor
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
-from rllab.spaces.discrete import Discrete
 from rllab.spaces.box import Box
+from rllab.spaces.discrete import Discrete
 from rllab.spaces.product import Product
-import cPickle as pickle
-from sandbox.rocky.grid_world_hrl_utils import ExactComputer
-import itertools
+from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 
 
 class DenseStateGivenGoalMIEvaluator(LasagnePowered, Serializable):

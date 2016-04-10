@@ -1,12 +1,13 @@
-from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import print_function
 
 import joblib
+
 from rllab.sampler import parallel_sampler
+
 parallel_sampler.config_parallel_sampler(n_parallel=4, base_seed=0)
-from rllab.mi_evaluator.exact_state_given_goal_mi_evaluator import ExactStateGivenGoalMIEvaluator
-from rllab.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
-from rllab.mi_evaluator.dense_state_given_goal_mi_evaluator import DenseStateGivenGoalMIEvaluator
+from sandbox.rocky.hrl.mi_evaluator.exact_state_given_goal_mi_evaluator import ExactStateGivenGoalMIEvaluator
+from sandbox.rocky.hrl.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from rllab import hrl_utils

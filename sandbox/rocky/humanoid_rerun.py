@@ -33,9 +33,10 @@ for seed in [28, 43, 68, 103, 148]:
         #                                   SimpleHumanoidEnv()]):
 
         for policy in [
-            GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(100, 50, 25)),
-            # GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(100, 50, 25),
-            #                   hidden_nonlinearity=lasagne.nonlinearities.tanh),
+            GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(100, 50, 25),
+                              hidden_nonlinearity=lasagne.nonlinearities.rectify),
+            GaussianMLPPolicy(env_spec=env.spec, hidden_sizes=(100, 50, 25),
+                              hidden_nonlinearity=lasagne.nonlinearities.tanh),
         ]:
             baseline = LinearFeatureBaseline(env_spec=env.spec)
 
@@ -98,16 +99,16 @@ for seed in [28, 43, 68, 103, 148]:
                 #     discount=DISCOUNT,
                 #     step_size=2e-1,
                 # ),
-                # TNPG(
-                #     env=env,
-                #     policy=policy,
-                #     baseline=baseline,
-                #     n_itr=N_ITR,
-                #     batch_size=BATCH_SIZE,
-                #     max_path_length=HORIZON,
-                #     discount=DISCOUNT,
-                #     step_size=3e-1,
-                # ),
+                TNPG(
+                    env=env,
+                    policy=policy,
+                    baseline=baseline,
+                    n_itr=N_ITR,
+                    batch_size=BATCH_SIZE,
+                    max_path_length=HORIZON,
+                    discount=DISCOUNT,
+                    step_size=3e-1,
+                ),
                 TNPG(
                     env=env,
                     policy=policy,
@@ -154,7 +155,7 @@ for seed in [28, 43, 68, 103, 148]:
                 run_experiment_lite(
                     algo.train(),
                     mode="ec2",
-                    exp_prefix="icml_new_seed",
+                    exp_prefix="icml_new_seed_tanh",
                     n_parallel=4,
                     snapshot_mode="last",
                     seed=seed,

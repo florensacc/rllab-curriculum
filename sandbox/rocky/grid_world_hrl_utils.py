@@ -1,10 +1,12 @@
-from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import print_function
+
+import numpy as np
+
 from rllab.envs.compound_action_sequence_env import CompoundActionSequenceEnv
 from rllab.envs.grid_world_env import GridWorldEnv
-from rllab.policies.subgoal_policy import SubgoalPolicy
 from rllab.spaces.discrete import Discrete
-import numpy as np
+from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 
 
 class ExactComputer(object):
