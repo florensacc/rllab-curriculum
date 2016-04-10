@@ -152,12 +152,6 @@
         $("button.update").click(function () {
             updatePlot();
         });
-        var periodicUpdatePlot = function() {
-            updatePlot(function() {
-                setTimeout(periodicUpdatePlot, 1000);
-            });
-        };
-        setTimeout(periodicUpdatePlot, 1000);
     });
     function updateFilterSelections() {
         var key = $(this).val();

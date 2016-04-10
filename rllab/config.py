@@ -1,6 +1,8 @@
 import os.path as osp
 import os
 
+MUJOCO_VERSION = os.environ.get("RLLAB_MUJOCO_VERSION", "1.30")
+
 PROJECT_PATH = osp.abspath(osp.join(osp.dirname(__file__), '..'))
 
 LOG_DIR = PROJECT_PATH + "/data"

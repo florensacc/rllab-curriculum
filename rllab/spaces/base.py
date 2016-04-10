@@ -6,8 +6,6 @@ class Space(object):
     Provides a classification state spaces and action spaces,
     so you can write generic code that applies to any Environment.
     E.g. to choose a random action.
-
-    Adopted from rl-gym, OpenAI
     """
 
     def sample(self, seed=0):

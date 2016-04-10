@@ -1,0 +1,21 @@
+MuJoCo Pro Team license activation key #2564.
+
+Issued to Prof. Pieter Abbeel, UC Berkeley.
+
+Expires September 21, 2016.
+
+Do not share this file with anyone other than the users covered
+by your license agreement with Roboti LLC. This file activates
+MuJoCo Pro on any machine running any supported OS.
+
+Do not modify this file. Its entire content, including the
+plain text section, is used by the activation manager.
+
+269d1250e1bf24df052556a8c4aa65af84fa611e84063702357b0f4278dc48f3
+458137c16da0d200a361e3bf61312c9194d3a388ce7ca44727e18eeef61b170a
+4ce57c1ca04bc4e92c80c9ca2a0457a79b1df9b1bdbf4daabc29450d8fdc331d
+725e8974f5090718b7e0ed7b56132ff4f86dc02f078295041783180baa0920a8
+3a230795190bfab336a0372751edc3d7b0d5fb5d66a32eabcca1b04e664a9aaa
+5531bb93a7162cf66e19a139db58257c1380db420e6010a858091fea792133cc
+f6fbef98d0c365cdffc2b262c3289ad04e1f3dd08130590d76924bb2aa2e5b30
+e87f318b4b366615b50e028f3445f74a8aa78715ab7b902847308bba533d38ec

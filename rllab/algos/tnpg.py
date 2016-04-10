@@ -14,7 +14,7 @@ class TNPG(NPO):
             optimizer_args=None,
             **kwargs):
         if optimizer is None:
-            default_args = dict(max_backtracks=0)
+            default_args = dict(max_backtracks=1)
             if optimizer_args is None:
                 optimizer_args = default_args
             else:

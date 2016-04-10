@@ -5,11 +5,11 @@ from mjtypes import *
 
 osp = os.path
 if sys.platform.startswith("darwin"):
-    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco/libmujoco130.dylib"))
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco122/libmujoco.dylib"))
 elif sys.platform.startswith("linux"):
-    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco/libmujoco130.so"))
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco122/libmujoco.so"))
 elif sys.platform.startswith("win"):
-    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco/mujoco.lib"))
+    libfile = osp.abspath(osp.join(osp.dirname(__file__),"../../vendor/mujoco122/mujoco.lib"))
 else:
     raise RuntimeError("unrecognized platform %s"%sys.platform)
 
@@ -17,7 +17,7 @@ else:
 mjlib = cdll.LoadLibrary(libfile)
 
 
-mjlib.mj_loadXML.argtypes = [String, String, c_char_p, c_int]
+mjlib.mj_loadXML.argtypes = [c_char_p, c_char_p]
 mjlib.mj_loadXML.restype = POINTER(MJMODEL)
 mjlib.mj_saveXML.argtypes = [String, POINTER(MJMODEL), String]
 mjlib.mj_saveXML.restype = c_int
