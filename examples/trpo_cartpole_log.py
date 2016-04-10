@@ -1,27 +1,33 @@
-from rllab.algos.ppo import PPO
+from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from examples.bimod_env import BimodEnv
+from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.normalized_env import normalize
-from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-env = normalize(BimodEnv())
+stub(globals())
+
+env = normalize(CartpoleEnv())
+
 policy = GaussianMLPPolicy(
     env_spec=env.spec,
+    # The neural network policy should have two hidden layers, each with 32 hidden units.
+    hidden_sizes=(32, 32)
 )
+
 baseline = LinearFeatureBaseline(env_spec=env.spec)
-algo = PPO(
+
+algo = TRPO(
     env=env,
     policy=policy,
     baseline=baseline,
-    batch_size=400,
+    batch_size=4000,
     whole_paths=True,
     max_path_length=100,
     n_itr=40,
     discount=0.99,
     step_size=0.01,
 )
-
 
 run_experiment_lite(
     stub_method_call=algo.train(),
@@ -34,5 +40,5 @@ run_experiment_lite(
     seed=1,
     # plot=True,
     # Save to data/local/exp_name_timestamp
-    exp_prefix='ppo_try',
+    exp_prefix='trpo_try',
 )
