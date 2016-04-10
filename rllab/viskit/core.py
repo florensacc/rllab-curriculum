@@ -110,7 +110,7 @@ def load_exps_data(exp_folder_path):
     return exps_data
 
 
-def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed')):
+def extract_distinct_params(exps_data, excluded_params=tuple()):#('exp_name', 'seed')):
     # all_pairs = unique(flatten([d.flat_params.items() for d in exps_data]))
     # if logger:
     #     logger("(Excluding {excluded})".format(excluded=', '.join(excluded_params)))

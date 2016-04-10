@@ -1,4 +1,4 @@
-import flask  # import Flask, render_template, send_from_directory
+import flask #import Flask, render_template, send_from_directory
 
 from rllab.misc.ext import flatten
 from rllab.viskit import core
@@ -38,8 +38,8 @@ def make_plot(plot_list):
         y_upper = list(plt.means + plt.stds)
         y_lower = list(plt.means - plt.stds)
         data.append(go.Scatter(
-            x=x + x[::-1],
-            y=y_upper + y_lower[::-1],
+            x=x+x[::-1],
+            y=y_upper+y_lower[::-1],
             fill='tozerox',
             fillcolor=core.hex_to_rgb(color, 0.2),
             line=go.Line(color='transparent'),
@@ -65,7 +65,7 @@ def make_plot(plot_list):
     return po.plot(fig, output_type='div', include_plotlyjs=False)
 
 
-def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
+def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, aggregate_mean=False):
     print plot_key, split_key, group_key, filters
     selector = core.Selector(exps_data)
     for k, v in filters.iteritems():
@@ -92,14 +92,21 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
             # print group_selector._filters
             filtered_data = group_selector.extract()
             if len(filtered_data) > 0:
-                progresses = [exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
-                sizes = map(len, progresses)
-                # more intelligent:
-                max_size = max(sizes)
-                progresses = [np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-                means = np.nanmean(progresses, axis=0)
-                stds = np.std(progresses, axis=0)
-                to_plot.append(ext.AttrDict(means=means, stds=stds, legend=group_legend))
+                if aggregate_mean:
+                    progresses = [exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
+                    sizes = map(len, progresses)
+                    # more intelligent:
+                    max_size = max(sizes)
+                    progresses = [np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
+                    means = np.nanmean(progresses, axis=0)
+                    stds = np.std(progresses, axis=0)
+                    to_plot.append(ext.AttrDict(means=means, stds=stds, legend=group_legend))
+                else:
+                    for exp in filtered_data:
+                        if plot_key in exp.progress:
+                            to_plot.append(ext.AttrDict(means=np.array(exp.progress[plot_key]),
+                                                        stds=np.zeros_like(exp.progress[plot_key]),
+                                                        legend=exp.params.get("exp_name", "")))
         if len(to_plot) > 0:
             plots.append("<div>%s: %s</div>" % (split_key, split_legend))
             plots.append(make_plot(to_plot))
@@ -151,7 +158,6 @@ def index():
         distinct_params=dict([(str(k), map(str, v)) for k, v in distinct_params]),
     )
 
-
 def background_refresh(data_path):
     try:
         global exps_data
@@ -166,7 +172,6 @@ def background_refresh(data_path):
             time.sleep(1)
     except KeyboardInterrupt:
         raise
-
 
 
 if __name__ == "__main__":

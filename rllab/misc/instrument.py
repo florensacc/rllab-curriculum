@@ -295,8 +295,11 @@ def run_experiment_lite(
         if dry:
             return
         try:
+            if env is None:
+                env = dict()
             subprocess.call(command, shell=True, env=ext.merge_dict(os.environ, env))
         except Exception as e:
+            print e
             if isinstance(e, KeyboardInterrupt):
                 raise
     elif mode == "local_docker":

@@ -255,6 +255,8 @@ def stub_to_json(stub_sth):
         return {stub_to_json(k): stub_to_json(v) for k, v in stub_sth.iteritems()}
     elif isinstance(stub_sth, (list, tuple)):
         return map(stub_to_json, stub_sth)
+    elif type(stub_sth) == type(lambda: None):
+        return stub_sth.__module__ + "." + stub_sth.__name__
     return stub_sth
 
 
