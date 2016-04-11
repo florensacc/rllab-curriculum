@@ -27,3 +27,6 @@ def test_truncate_paths():
     assert len(truncated) == 2
     assert len(truncated[-1]["observations"]) == 30
     assert len(truncated[0]["observations"]) == 100
+    # make sure not to change the original one
+    assert len(paths) == 2
+    assert len(paths[-1]["observations"]) == 50

@@ -14,8 +14,7 @@ def _worker_init(G, id):
 
 def initialize(n_parallel):
     singleton_pool.initialize(n_parallel)
-    singleton_pool.run_each(
-        _worker_init, [(id,) for id in xrange(singleton_pool.n_parallel)])
+    singleton_pool.run_each(_worker_init, [(id,) for id in xrange(singleton_pool.n_parallel)])
 
 
 def _worker_populate_task(G, env, policy):
@@ -85,6 +84,8 @@ def truncate_paths(paths, max_samples):
     :return: a list of paths, truncated so that the number of samples adds up to max-samples
     """
     # chop samples collected by extra paths
+    # make a copy
+    paths = list(paths)
     total_n_samples = sum(len(path["rewards"]) for path in paths)
     while len(paths) > 0 and total_n_samples - len(paths[-1]["rewards"]) >= max_samples:
         total_n_samples -= len(paths.pop(-1)["rewards"])
