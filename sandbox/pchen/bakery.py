@@ -24,6 +24,7 @@ from rllab.misc.ext import stdize
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 from rllab.optimizers.hessian_free_optimizer import HessianFreeOptimizer
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
+from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler import parallel_sampler
 
 
@@ -33,6 +34,7 @@ class Bakery(Algorithm, LasagnePowered):
             self,
             env,
             policy,
+            new_pi,
             paths,
             optimizer,
             eval_optimizer,
@@ -44,11 +46,12 @@ class Bakery(Algorithm, LasagnePowered):
             fixed_encoder=False,
             max_path_length=100,
             whole_paths=True,
+            bake_hidden_sizes=(50, 25),
             **kwargs
     ):
         old_pi = policy
-        with suppress_params_loading():
-            new_pi = pickle.loads(pickle.dumps(policy))
+        # with suppress_params_loading():
+        #     new_pi = pickle.loads(pickle.dumps(policy))
 
         cur_ds = sum(p["observations"].shape[0] for p in paths)
         print "cur data size", cur_ds
@@ -67,22 +70,24 @@ class Bakery(Algorithm, LasagnePowered):
         print "env", env
 
         layers = new_pi._mean_network.layers
-        assert len(layers) == (1+3+1)
+        print "pi has ", len(layers)
         last_encoder_layer = layers[2]
-        bake_layers = []
+        bake_layers = [last_encoder_layer]
         predictions_tgt_var = TT.matrix("predictions")
         input_vars = [new_pi._mean_network.input_var, predictions_tgt_var]
-        if ul_obj == "passive_dynamics":
-            bake_layers.append(
-                L.DenseLayer(
-                    incoming=last_encoder_layer,
-                    num_units=50,
+        if ul_obj in ["passive_dynamics", "ae"]:
+            for size in bake_hidden_sizes:
+                bake_layers.append(
+                    L.DenseLayer(
+                        incoming=bake_layers[-1],
+                        num_units=size,
+                    )
                 )
-            )
             bake_layers.append(
                 L.DenseLayer(
                     incoming=bake_layers[-1],
                     num_units=env.spec.observation_space.flat_dim,
+                    nonlinearity=None,
                 )
             )
         elif ul_obj == "active_dynamics":
@@ -97,29 +102,33 @@ class Bakery(Algorithm, LasagnePowered):
                     )
                 ])
             )
-            bake_layers.append(
-                L.DenseLayer(
-                    incoming=bake_layers[-1],
-                    num_units=50,
+            for size in bake_hidden_sizes:
+                bake_layers.append(
+                    L.DenseLayer(
+                        incoming=bake_layers[-1],
+                        num_units=size,
+                    )
                 )
-            )
             bake_layers.append(
                 L.DenseLayer(
                     incoming=bake_layers[-1],
                     num_units=env.spec.observation_space.flat_dim,
+                    nonlinearity=None,
                 )
             )
         elif ul_obj == "baseline":
-            bake_layers.append(
-                L.DenseLayer(
-                    incoming=last_encoder_layer,
-                    num_units=50,
+            for size in bake_hidden_sizes:
+                bake_layers.append(
+                    L.DenseLayer(
+                        incoming=bake_layers[-1],
+                        num_units=size,
+                    )
                 )
-            )
             bake_layers.append(
                 L.DenseLayer(
                     incoming=bake_layers[-1],
                     num_units=1,
+                    nonlinearity=None,
                 )
             )
         elif ul_obj == "nop":
@@ -220,6 +229,7 @@ class Bakery(Algorithm, LasagnePowered):
             input_vars,
             train_portion,
             test_paths,
+            predictions,
             **kwargs
     ):
         if ul_obj == "nop":
@@ -233,6 +243,8 @@ class Bakery(Algorithm, LasagnePowered):
                     data[1].append(path["observations"][1:])
                 elif ul_obj == "baseline":
                     data[1].append(path["returns"][:-1])
+                elif ul_obj == "ae":
+                    data[1].append(path["observations"][:-1])
                 if ul_obj in ["active_dynamics"]:
                     data[2].append(path["actions"][:-1])
             data = [
@@ -262,24 +274,51 @@ class Bakery(Algorithm, LasagnePowered):
         loss = optimizer._opt_fun["f_loss"](*train_data)
         logger.log("initial train loss %s" % loss)
         def print_loss(loss, elapsed, itr, **kwargs):
-            # logger.log("bake itr %s ..." % itr)
             # logger.log("train loss %s" % loss)
+            # logger.log("%s" % predictions.eval({input_vars[0]: train_data[0]}))
             test_loss = optimizer._opt_fun["f_loss"](*test_data)
-            # logger.log("test loss %s" % test_loss)
             logger.push_prefix('bake itr #%d | ' % itr)
             logger.record_tabular('TrainLoss', loss)
             logger.record_tabular('EvalLoss', test_loss)
             logger.dump_tabular(with_prefix=True)
             logger.pop_prefix()
         optimizer._callback = lambda params: print_loss(**params)
+
         optimizer.optimize(
             train_data,
             # callback=print_loss,
         )
+        test_loss = optimizer._opt_fun["f_loss"](*test_data)
+        logger.log("test loss %s" % test_loss)
 
 
     def dummy(self):
         pass
+
+class Loader(object):
+    def __init__(
+            self,
+            file,
+            **kwargs
+    ):
+        data = joblib.load(file)
+        policy = data['policy']
+        env = data['env']
+        paths = data.get('paths', None)
+        Bakery(
+            policy=policy,
+            env=env,
+            paths=paths,
+            new_pi=GaussianMLPPolicy(
+                env_spec=env.spec,
+                hidden_sizes=(100, 50, 50, 25, )
+            ),
+            **kwargs
+        )
+
+    def dummy(self):
+        pass
+
 
 if __name__ == "__main__":
 
@@ -296,33 +335,39 @@ if __name__ == "__main__":
     parallel_sampler.config_parallel_sampler(3, 42)
     Bakery(
         policy=policy,
+        new_pi=GaussianMLPPolicy(
+            env_spec=env.spec,
+            hidden_sizes=(40, 20, 20,)
+        ),
         env=env,
         paths=paths,
         test_paths=True,
-        # fixed_encoder=True,
+        fixed_encoder=True,
+        bake_hidden_sizes=(10,),
+        # ul_obj="ae",
         # ul_obj="passive_dynamics",
         # ul_obj="active_dynamics",
         # ul_obj="baseline",
         ul_obj="nop",
+        # data_size=100000,
         # optimizer=LbfgsOptimizer(
-        #     max_opt_itr=2000,
-        # )
+        #     max_opt_itr=10,
+        # ),
         # optimizer=HessianFreeOptimizer(
-        #     max_opt_itr=300,
-        # )
-        data_size=100000,
+        #     max_opt_itr=10,
+        # ),
         optimizer=FirstOrderOptimizer(
             update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
             # update_method=partial(lasagne.updates.adadelta),
-            max_epochs=10,
+            max_epochs=50,
         ),
-        eval_optimizer=LbfgsOptimizer(
-            max_opt_itr=500,
-        ),
-        # eval_optimizer=FirstOrderOptimizer(
-        #     update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
-        #     # update_method=partial(lasagne.updates.adadelta),
-        #     max_epochs=100,
-        # )
+        # eval_optimizer=LbfgsOptimizer(
+        #     max_opt_itr=500,
+        # ),
+        eval_optimizer=FirstOrderOptimizer(
+            update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
+            # update_method=partial(lasagne.updates.adadelta),
+            max_epochs=500,
+        )
     )
 
