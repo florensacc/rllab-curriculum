@@ -75,6 +75,20 @@ class GridWorldEnv(Env, Serializable):
     def n_col(self):
         return self._n_col
 
+    @staticmethod
+    def action_from_direction(d):
+        """
+        Return the action corresponding to the given direction. This is a helper method for debugging and testing
+        purposes.
+        :return: the action index corresponding to the given direction
+        """
+        return dict(
+            left=0,
+            down=1,
+            right=2,
+            up=3
+        )[d]
+
     def step(self, action):
         """
         action map:
