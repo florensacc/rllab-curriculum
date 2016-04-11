@@ -207,14 +207,23 @@ def index():
     # exp_folder_path = "data/s3/experiments/ppo-atari-3"
     # _load_data(exp_folder_path)
     # exp_json = json.dumps(exp_data)
-    plot_key = "AverageReturn"
-    group_key = distinct_params[0][0]
+    if "AverageReturn" in plottable_keys:
+        plot_key = "AverageReturn"
+    elif len(plottable_keys) > 0:
+        plot_key = plottable_keys[0]
+    else:
+        plot_key = None
+    if len(distinct_params) > 0:
+        group_key = distinct_params[0][0]
+    else:
+        group_key = None
     plot_div = get_plot_instruction(
         plot_key=plot_key, split_key=None, group_key=group_key)
     return flask.render_template(
         "main.html",
         plot_div=plot_div,
         plot_key=plot_key,
+        group_key=group_key,
         plottable_keys=plottable_keys,
         distinct_param_keys=[str(k) for k, v in distinct_params],
         distinct_params=dict([(str(k), map(str, v))
