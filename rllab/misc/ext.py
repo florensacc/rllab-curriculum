@@ -1,13 +1,10 @@
 from __future__ import absolute_import
-
 from path import Path
 import sys
 import cPickle as pickle
 import random
-
 from rllab.misc.console import colorize, Message
 from collections import OrderedDict
-
 import numpy as np
 import operator
 
@@ -197,7 +194,6 @@ def shuffled(sequence):
 
 seed_ = None
 
-
 def set_seed(seed):
     global seed_
     seed_ = seed
@@ -368,3 +364,7 @@ def sliced_fun(f, n_slices):
         return ret_vals
 
     return sliced_f
+
+
+def stdize(data, eps=1e-6):
+    return (data - np.mean(data, axis=0)) / (np.std(data, axis=0) + eps)

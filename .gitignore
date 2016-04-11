@@ -34,4 +34,4 @@ src/
 docs/_build
 blackbox.zip
 blackbox
-config_personal.py
+rllab/config_personal.py

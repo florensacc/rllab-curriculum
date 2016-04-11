@@ -6,6 +6,9 @@ from rllab.core.serializable import Serializable
 
 
 MAPS = {
+    "chain": [
+        "GFFFFFFFFFFFFFSFFFFFFFFFFFFFG"
+    ],
     "4x4_safe": [
         "SFFF",
         "FWFW",
@@ -41,6 +44,7 @@ class GridWorldEnv(Env, Serializable):
 
 
     """
+
     def __init__(self, desc='4x4'):
         Serializable.quick_init(self, locals())
         if isinstance(desc, basestring):
@@ -144,7 +148,8 @@ class GridWorldEnv(Env, Serializable):
         # Hole: red
         # Agent: green
 
-        level_map = 0 * (self._desc == 'F') + 5 * (self._desc == 'W') + 4 * (self._desc == 'H')
+        level_map = 0 * (self._desc == 'F') + 5 * \
+            (self._desc == 'W') + 4 * (self._desc == 'H')
         # print level_map
         # print self._state
         if self._domain_fig is None:
@@ -155,7 +160,7 @@ class GridWorldEnv(Env, Serializable):
             plt.ion()
             plt.show()
             self._domain_fig = plt.imshow(
-                level_map,#self._desc == 'F',
+                level_map,  # self._desc == 'F',
                 cmap='GridWorld',
                 interpolation='nearest',
                 vmin=0,
@@ -164,19 +169,19 @@ class GridWorldEnv(Env, Serializable):
             plt.yticks(np.arange(self._n_row), fontsize=15)
             plt.tight_layout()
             self._agent_fig = plt.gca(
-            ).plot(self._state[1],#s[1],
-                   self._state[0],#s[0],
+            ).plot(self._state[1],  # s[1],
+                   self._state[0],  # s[0],
                    'bd',
                    markersize=20.0 - self._n_col)
-            plt.draw()#show(block=False)#idraw()
+            plt.draw()  # show(block=False)#idraw()
             plt.pause(0.001)
         else:
-            self._domain_fig.set_data(level_map)#self._desc == 'F')
+            self._domain_fig.set_data(level_map)  # self._desc == 'F')
             self._agent_fig.pop(0).remove()
             self._agent_fig = plt.figure("Domain")
             self._agent_fig = plt.gca(
-            ).plot(self._state[1],#s[1],
-                   self._state[0],#s[0],
+            ).plot(self._state[1],  # s[1],
+                   self._state[0],  # s[0],
                    'bd',
                    markersize=20.0 - self._n_col)
             plt.draw()

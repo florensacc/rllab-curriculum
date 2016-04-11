@@ -10,6 +10,7 @@ import itertools
 # import IPython.display
 # import plotly.offline as po
 # import plotly.graph_objs as go
+import pdb
 
 
 def unique(l):
@@ -67,13 +68,13 @@ def flatten_dict(d):
 def load_params(params_json_path):
     with open(params_json_path, 'r') as f:
         data = json.loads(f.read())
-        if 'args_data' in data:
-            stub_method = pickle.loads(base64.b64decode(data['args_data']))
-            method_args = stub_method.kwargs
-            for k, v in method_args.items():
-                data[k] = to_json(v)
-            data["algo"] = to_json(stub_method.obj)
-            del data['args_data']
+#         if 'args_data' in data:
+#             stub_method = pickle.loads(base64.b64decode(data['args_data']))
+#             method_args = stub_method.kwargs
+#             for k, v in method_args.items():
+#                 data[k] = to_json(v)
+#             data["algo"] = to_json(stub_method.obj)
+        del data['args_data']
     return data
 
 
@@ -123,7 +124,7 @@ def smart_repr(x):
             return repr(x)
 
 
-def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log_dir', 'json_args.'), l=1):
+def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log_dir'), l=1):
     # all_pairs = unique(flatten([d.flat_params.items() for d in exps_data]))
     # if logger:
     #     logger("(Excluding {excluded})".format(excluded=', '.join(excluded_params)))
@@ -131,8 +132,7 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
         map(eval, unique(flatten([map(smart_repr, d.flat_params.items()) for d in exps_data]))))
     proposals = [(k, [x[1] for x in v])
                  for k, v in itertools.groupby(stringified_pairs, lambda x: x[0])]
-    filtered = [(k, v) for (k, v) in proposals if len(v) > l and all(
-        [k.find(excluded_param) == -1 for excluded_param in excluded_params])]
+    filtered = [(k, v) for (k, v) in proposals if len(v) > l and all([k.find(excluded_param) == -1 for excluded_param in excluded_params])]
     return filtered
 
 
