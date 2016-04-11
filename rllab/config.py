@@ -35,7 +35,7 @@ AWS_SECURITY_GROUPS = ["rllab"]
 
 AWS_REGION_NAME = "us-east-1"
 
-CODE_SYNC_IGNORES = ["*.git/*", "*data/*"]
+CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*.pod/*"]
 
 DOCKER_CODE_DIR = "/root/code/rllab"
 
@@ -51,4 +51,10 @@ KUBE_DEFAULT_NODE_SELECTOR = {
     "aws/type": "m4.2xlarge",
 }
 
-from config_personal import *
+try:
+    from config_personal import *
+except:
+    print "Creating your personal config from template..."
+    from subprocess import call
+    call(["cp", "rllab/config_personal_template.py", "rllab/config_personal.py"])
+    from config_personal import *

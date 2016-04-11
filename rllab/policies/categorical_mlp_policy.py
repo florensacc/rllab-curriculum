@@ -16,24 +16,29 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             self,
             env_spec,
             hidden_sizes=(32, 32),
-            hidden_nonlinearity=NL.tanh):
+            hidden_nonlinearity=NL.rectify,
+            prob_network=None,
+    ):
         """
         :param env_spec: A spec for the mdp.
         :param hidden_sizes: list of sizes for the fully connected hidden layers
         :param hidden_nonlinearity: nonlinearity used for each hidden layer
+        :param prob_network: manually specified network for this policy, other network params
+        are ignored
         :return:
         """
         Serializable.quick_init(self, locals())
 
         assert isinstance(env_spec.action_space, Discrete)
 
-        prob_network = MLP(
-            input_shape=(env_spec.observation_space.flat_dim,),
-            output_dim=env_spec.action_space.n,
-            hidden_sizes=hidden_sizes,
-            hidden_nonlinearity=hidden_nonlinearity,
-            output_nonlinearity=NL.softmax,
-        )
+        if prob_network is None:
+            prob_network = MLP(
+                input_shape=(env_spec.observation_space.flat_dim,),
+                output_dim=env_spec.action_space.n,
+                hidden_sizes=hidden_sizes,
+                hidden_nonlinearity=hidden_nonlinearity,
+                output_nonlinearity=NL.softmax,
+            )
 
         self._l_prob = prob_network.output_layer
         self._l_obs = prob_network.input_layer
@@ -67,3 +72,4 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @property
     def distribution(self):
         return self._dist
+
