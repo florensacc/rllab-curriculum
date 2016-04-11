@@ -432,7 +432,6 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     :return:
     """
     log_dir = params.get("log_dir")
-    params.pop("remote_log_dir")
     script = 'rllab/' + script
     if not dry:
         mkdir_p(log_dir)

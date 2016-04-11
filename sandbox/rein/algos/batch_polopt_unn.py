@@ -13,7 +13,7 @@ import theano
 import lasagne
 from collections import deque
 import time
-from rllab.dynamics_models.nn_uncertainty import prob_nn
+from sandbox.rein.dynamics_models.nn_uncertainty import prob_nn
 # -------------------
 
 
@@ -341,15 +341,11 @@ class BatchPolopt(RLAlgorithm):
 
     def obtain_samples(self, itr):
         cur_params = self.policy.get_param_values()
-
-        parallel_sampler.request_samples(
+        return parallel_sampler.sample_paths(
             policy_params=cur_params,
             max_samples=self.batch_size,
             max_path_length=self.max_path_length,
-            whole_paths=self.whole_paths,
         )
-
-        return parallel_sampler.collect_paths()
 
     def process_samples(self, itr, paths):
 
