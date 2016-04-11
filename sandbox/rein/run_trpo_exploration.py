@@ -1,4 +1,5 @@
 import os
+from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
@@ -13,9 +14,9 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.01, 0.05, 0.1]
+etas = [0.05]
 replay_pools = [True]
-kl_ratios = [True, False]
+kl_ratios = [False]
 reverse_kl_regs = [True]
 param_cart_product = itertools.product(
     reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
@@ -23,7 +24,8 @@ param_cart_product = itertools.product(
 
 for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
-    mdp_class = CartpoleEnv
+    #     mdp_class = CartpoleEnv
+    mdp_class = CartpoleSwingupEnv
     mdp = NormalizedEnv(env=mdp_class())
 
     policy = GaussianMLPPolicy(
@@ -43,7 +45,7 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         batch_size=1000,
         whole_paths=False,
         max_path_length=100,
-        n_itr=40,
+        n_itr=500,
         step_size=0.01,
         eta=eta,
         eta_discount=0.99,
@@ -57,7 +59,7 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="cartpole",
+        exp_prefix="CartpoleSwingupEnv",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
