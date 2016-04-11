@@ -75,7 +75,6 @@ def load_params(params_json_path):
 #                 data[k] = to_json(v)
 #             data["algo"] = to_json(stub_method.obj)
         del data['args_data']
-        print(data)
     return data
 
 
