@@ -61,6 +61,6 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local_docker",
         dry=False,
     )
