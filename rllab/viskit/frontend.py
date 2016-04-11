@@ -33,18 +33,18 @@ def send_css(path):
 def make_plot(plot_list):
     data = []
     for idx, plt in enumerate(plot_list):
+        color = core.color_defaults[idx % len(core.color_defaults)]
         x = range(len(plt.means))
         y = list(plt.means)
-        color = core.color_defaults[idx % len(core.color_defaults)]
         y_upper = list(plt.means + plt.stds)
         y_lower = list(plt.means - plt.stds)
-#         # median
-#         # ------
+        # median
+        # ------
 #         x = range(len(plt.percentile50))
 #         y = list(plt.percentile50)
 #         y_upper = list(plt.percentile75)
 #         y_lower = list(plt.percentile25)
-#         # ------
+        # ------
         data.append(go.Scatter(
             x=x + x[::-1],
             y=y_upper + y_lower[::-1],
@@ -142,24 +142,25 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
                 print(group_selector._filters)
                 print('best regret: {}'.format(best_regret))
                 # -----------------------
-
-                progresses = [
-                    exp.progress.get(plot_key, np.array([np.nan])) for exp in data_best_regret]
-                sizes = map(len, progresses)
-                # more intelligent:
-                max_size = max(sizes)
-                progresses = [
-                    np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-#                 percentile25 = np.percentile(progresses, q=25, axis=0)
-#                 percentile50 = np.percentile(progresses, q=50, axis=0)
-#                 percentile75 = np.percentile(progresses, q=75, axis=0)
-                means = np.nanmean(progresses, axis=0)
-                stds = np.std(progresses, axis=0)
-                legend = '{} ({:.1f})'.format(group_legend, best_regret)
-                to_plot.append(
-                    ext.AttrDict(means=means, stds=stds, legend=legend))
+                if best_regret != -np.inf:
+                    progresses = [
+                        exp.progress.get(plot_key, np.array([np.nan])) for exp in data_best_regret]
+                    sizes = map(len, progresses)
+                    # more intelligent:
+                    max_size = max(sizes)
+                    progresses = [
+                        np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
+#                     percentile25 = np.nanpercentile(progresses, q=25, axis=0)
+#                     percentile50 = np.nanpercentile(progresses, q=50, axis=0)
+#                     percentile75 = np.nanpercentile(progresses, q=75, axis=0)
+                    means = np.nanmean(progresses, axis=0)
+                    stds = np.nanstd(progresses, axis=0)
+                    legend = '{} ({:.1f})'.format(group_legend, best_regret)
+                    to_plot.append(
+                        ext.AttrDict(means=means, stds=stds, legend=legend))
 #                 to_plot.append(
-#                     ext.AttrDict(percentile25=percentile25, percentile50=percentile50, percentile75=percentile75, legend=legend))
+# ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
+# percentile75=percentile75, legend=legend))
 
         if len(to_plot) > 0:
             plots.append("<div>%s: %s</div>" % (split_key, split_legend))

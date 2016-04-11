@@ -1,31 +1,22 @@
 import os
-from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
-from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from rllab.algos.trpo_unn import TRPO
+
+from rllab.algos.trpo import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
-import itertools
 
 stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.05]
-replay_pools = [True]
-kl_ratios = [False]
-reverse_kl_regs = [True]
-param_cart_product = itertools.product(
-    reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
-)
 
-for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
+for seed in seeds:
 
-    #     mdp_class = CartpoleEnv
-    mdp_class = CartpoleSwingupEnv
+    mdp_class = CartpoleEnv
     mdp = NormalizedEnv(env=mdp_class())
 
     policy = GaussianMLPPolicy(
@@ -45,21 +36,14 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         batch_size=1000,
         whole_paths=False,
         max_path_length=100,
-        n_itr=500,
+        n_itr=40,
         step_size=0.01,
-        eta=eta,
-        eta_discount=0.99,
-        snn_n_samples=10,
         subsample_factor=1.0,
-        use_reverse_kl_reg=reverse_kl_reg,
-        use_replay_pool=replay_pool,
-        use_kl_ratio=kl_ratio,
-        n_itr_update=5,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="CartpoleSwingupEnv",
+        exp_prefix="cartpole",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

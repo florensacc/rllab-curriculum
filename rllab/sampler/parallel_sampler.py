@@ -95,7 +95,8 @@ def config_parallel_sampler(n_parallel, base_seed):
     G.n_parallel = n_parallel
 
     if G.n_parallel > 1:
-        G.base_seed = base_seed if base_seed else random.getrandbits(32)
+        G.base_seed = base_seed if (
+            base_seed is not None) else random.getrandbits(32)
         G.queue = Queue()
         G.worker_queue = Queue()
 
@@ -106,7 +107,8 @@ def config_parallel_sampler(n_parallel, base_seed):
             temp_folder="/tmp",
         )
     else:
-        G.base_seed = base_seed if base_seed else random.getrandbits(32)
+        G.base_seed = base_seed if (
+            base_seed is not None) else random.getrandbits(32)
 
 
 def reset():
