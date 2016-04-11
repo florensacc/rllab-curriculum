@@ -53,7 +53,7 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         use_reverse_kl_reg=reverse_kl_reg,
         use_replay_pool=replay_pool,
         use_kl_ratio=kl_ratio,
-        n_itr_update=5,
+        n_itr_update=1,
     )
 
     run_experiment_lite(

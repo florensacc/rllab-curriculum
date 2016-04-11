@@ -507,7 +507,7 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
     """.format(log_dir=log_dir))
     sio.write("""
         while /bin/true; do
-            aws s3 sync --exclude *.pkl --exclude *.log {log_dir} {remote_log_dir} --region {aws_region}
+            aws s3 sync {log_dir} {remote_log_dir} --region {aws_region}
             sleep 1
         done &
     """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))

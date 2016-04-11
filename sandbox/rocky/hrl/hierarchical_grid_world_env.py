@@ -11,11 +11,13 @@ import numpy as np
 
 def expand_grid(high_grid, low_grid):
     """
-    Construct a large grid where each cell in the high_grid is replaced by a copy of low_grid. The starting position
-    will be respected in the following sense:
-        - The starting position in the low_grid that's also inside the starting position in the high_grid will be the
-        starting position of the total grid
-        - All other starting positions in the low_grid will be replaced by a free grid ('F')
+    Construct a large grid where each cell in the high_grid is replaced by a copy of low_grid. The starting and
+    goal positions will be respected in the following sense:
+        - The starting / goal positions in the low_grid that's also inside the starting position in the high_grid will
+        be the starting / goal position of the total grid
+        - All other starting / goal positions in the low_grid will be replaced by a free grid ('F')
+    For other types of grids:
+        - Wall and hole grids in the high grid will be replaced by an entire block of wall / hole grids
     :return: the expanded grid
     """
     high_grid = np.array(map(list, high_grid))
@@ -26,17 +28,32 @@ def expand_grid(high_grid, low_grid):
     total_n_row = high_n_row * low_n_row
     total_n_col = high_n_col * low_n_col
 
-    start_free_low_grid = np.copy(low_grid)
-    start_free_low_grid[start_free_low_grid == 'S'] = 'F'
+    start_only_low_grid = np.copy(low_grid)
+    start_only_low_grid[start_only_low_grid == 'G'] = 'F'
+
+    goal_only_low_grid = np.copy(low_grid)
+    goal_only_low_grid[goal_only_low_grid == 'S'] = 'F'
+
+    free_only_low_grid = np.copy(low_grid)
+    free_only_low_grid[np.any([free_only_low_grid == 'S', free_only_low_grid == 'G'], axis=0)] = 'F'
 
     total_grid = np.zeros((total_n_row, total_n_col), high_grid.dtype)
     for row in xrange(high_n_row):
         for col in xrange(high_n_col):
-            if high_grid[row, col] == 'S':
-                total_grid[row * low_n_row:(row + 1) * low_n_row, col * low_n_col:(col + 1) * low_n_col] = low_grid
+            cell = high_grid[row, col]
+            if cell == 'S':
+                replace_grid = start_only_low_grid
+            elif cell == 'G':
+                replace_grid = goal_only_low_grid
+            elif cell == 'F':
+                replace_grid = free_only_low_grid
+            elif cell == 'W':
+                replace_grid = 'W'
+            elif cell == 'H':
+                replace_grid = 'H'
             else:
-                total_grid[row * low_n_row:(row + 1) * low_n_row, col * low_n_col:(col + 1) * low_n_col] = \
-                    start_free_low_grid
+                raise NotImplementedError
+            total_grid[row * low_n_row:(row + 1) * low_n_row, col * low_n_col:(col + 1) * low_n_col] = replace_grid
     return total_grid
 
 
