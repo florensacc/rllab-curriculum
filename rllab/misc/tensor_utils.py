@@ -85,3 +85,17 @@ def subsample_tensor_dict(tensor_dict, interval):
         else:
             ret[k] = v[::interval]
     return ret
+
+
+def truncate_tensor_list(tensor_list, truncated_len):
+    return tensor_list[:truncated_len]
+
+
+def truncate_tensor_dict(tensor_dict, truncated_len):
+    ret = dict()
+    for k, v in tensor_dict.iteritems():
+        if isinstance(v, dict):
+            ret[k] = truncate_tensor_dict(v, truncated_len)
+        else:
+            ret[k] = truncate_tensor_list(v, truncated_len)
+    return ret
