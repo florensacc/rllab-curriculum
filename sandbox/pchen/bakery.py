@@ -59,13 +59,11 @@ class Bakery(Algorithm, LasagnePowered):
             diff_ds = data_size - cur_ds
             cur_params = policy.get_param_values()
             parallel_sampler.populate_task(env, policy)
-            parallel_sampler.request_samples(
+            paths = parallel_sampler.sample_paths(
                 policy_params=cur_params,
                 max_samples=diff_ds,
                 max_path_length=max_path_length,
-                whole_paths=whole_paths,
             )
-            paths = paths + parallel_sampler.collect_paths()
 
         print "env", env
 
