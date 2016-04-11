@@ -116,7 +116,7 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed')):
     #     logger("(Excluding {excluded})".format(excluded=', '.join(excluded_params)))
     stringified_pairs = sorted(map(eval, unique(flatten([map(repr, d.flat_params.items()) for d in exps_data]))))
     proposals = [(k, [x[1] for x in v]) for k, v in itertools.groupby(stringified_pairs, lambda x: x[0])]
-    filtered = [(k, v) for (k, v) in proposals if k not in excluded_params]
+    filtered = [(k, v) for (k, v) in proposals if len(v) > 1 and k not in excluded_params]
     return filtered
 
 
