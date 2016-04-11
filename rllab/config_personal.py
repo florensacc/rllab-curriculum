@@ -44,3 +44,13 @@ LOCAL_CODE_DIR = "/home/rein/workspace_python/rllab"
 LABEL = "rhouthooft"
 
 DOCKER_CODE_DIR = "/root/code/rllab"
+
+KUBE_DEFAULT_RESOURCES = {
+    "requests": {
+        "cpu": 0.8,
+    }
+}
+
+KUBE_DEFAULT_NODE_SELECTOR = {
+    "aws/type": "t2.medium",
+}
