@@ -12,8 +12,8 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(2)
-etas = [0.001]
+seeds = range(10)
+etas = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0]
 replay_pools = [True]
 kl_ratios = [False]
 reverse_kl_regs = [True]
