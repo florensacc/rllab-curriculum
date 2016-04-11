@@ -51,4 +51,10 @@ KUBE_DEFAULT_NODE_SELECTOR = {
     "aws/type": "m4.xlarge",
 }
 
-from config_personal import *
+try:
+    from config_personal import *
+except:
+    print "Creating your personal config from template..."
+    from subprocess import call
+    call(["cp", "rllab/config_personal_template.py", "rllab/config_personal.py"])
+    from config_personal import *

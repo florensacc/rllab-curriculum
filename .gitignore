@@ -33,3 +33,4 @@ src/
 .settings
 .pods
 docs/_build
+rllab/config_personal.py
