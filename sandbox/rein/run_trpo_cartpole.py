@@ -47,6 +47,6 @@ for seed in seeds:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local_docker",
         dry=False,
     )
