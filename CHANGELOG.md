@@ -10,3 +10,8 @@ Features:
 - Refactored interface for `rllab.sampler.parallel_sampler`. Extracted new module `rllab.sampler.stateful_pool` containing general parallelization utilities.
 - Fixed numerous issues in tests causing too long to run.
 - Merged release branch onto master and removed the release branch, to avoid potential confusions.
+
+# 2016-04-10
+
+- Known issues:
+  - TRPO does not work well with relu since the hessian is undefined at 0, causing NaN sometimes. This issue of Theano is tracked here: https://github.com/Theano/Theano/issues/4353). If relu must be used, try using `theano.tensor.maximum(x, 0.)` as opposed to `theano.tensor.nnet.relu`.

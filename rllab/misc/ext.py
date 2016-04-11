@@ -133,7 +133,7 @@ def scanr(f, l, base=None):
     return list(iscanr(f, l, base))
 
 
-def compile_function(inputs=None, outputs=None, updates=None, givens=None, log_name=None):
+def compile_function(inputs=None, outputs=None, updates=None, givens=None, log_name=None, **kwargs):
     import theano
     if log_name:
         msg = Message("Compiling function %s" % log_name)
@@ -144,7 +144,8 @@ def compile_function(inputs=None, outputs=None, updates=None, givens=None, log_n
         updates=updates,
         givens=givens,
         on_unused_input='ignore',
-        allow_input_downcast=True
+        allow_input_downcast=True,
+        **kwargs
     )
     if log_name:
         msg.__exit__(None, None, None)
