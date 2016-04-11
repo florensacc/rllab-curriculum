@@ -12,6 +12,7 @@ import plotly.offline as po
 import plotly.graph_objs as go
 import pdb
 
+USE_MEDIAN = False
 
 app = flask.Flask(__name__, static_url_path='/static')
 
@@ -34,17 +35,17 @@ def make_plot(plot_list):
     data = []
     for idx, plt in enumerate(plot_list):
         color = core.color_defaults[idx % len(core.color_defaults)]
-        x = range(len(plt.means))
-        y = list(plt.means)
-        y_upper = list(plt.means + plt.stds)
-        y_lower = list(plt.means - plt.stds)
-        # median
-        # ------
-#         x = range(len(plt.percentile50))
-#         y = list(plt.percentile50)
-#         y_upper = list(plt.percentile75)
-#         y_lower = list(plt.percentile25)
-        # ------
+        if USE_MEDIAN:
+            x = range(len(plt.percentile50))
+            y = list(plt.percentile50)
+            y_upper = list(plt.percentile75)
+            y_lower = list(plt.percentile25)
+        else:
+            x = range(len(plt.means))
+            y = list(plt.means)
+            y_upper = list(plt.means + plt.stds)
+            y_lower = list(plt.means - plt.stds)
+
         data.append(go.Scatter(
             x=x + x[::-1],
             y=y_upper + y_lower[::-1],
@@ -124,8 +125,12 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
                         max_size = max(sizes)
                         progresses = [
                             np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-                        means = np.nanmean(progresses, axis=0)
-                        regret = np.mean(means)
+                        if USE_MEDIAN:
+                            medians = np.nanmedian(progresses, axis=0)
+                            regret = np.median(medians)
+                        else:
+                            means = np.nanmean(progresses, axis=0)
+                            regret = np.mean(means)
                         if regret > best_regret:
                             best_regret = regret
                             data_best_regret = data
@@ -150,17 +155,23 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
                     max_size = max(sizes)
                     progresses = [
                         np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-#                     percentile25 = np.nanpercentile(progresses, q=25, axis=0)
-#                     percentile50 = np.nanpercentile(progresses, q=50, axis=0)
-#                     percentile75 = np.nanpercentile(progresses, q=75, axis=0)
-                    means = np.nanmean(progresses, axis=0)
-                    stds = np.nanstd(progresses, axis=0)
-                    legend = '{} ({:.1f})'.format(group_legend, best_regret)
-                    to_plot.append(
-                        ext.AttrDict(means=means, stds=stds, legend=legend))
-#                 to_plot.append(
-# ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
-# percentile75=percentile75, legend=legend))
+                    legend = '{} ({:.1f})'.format(
+                        group_legend, best_regret)
+                    if USE_MEDIAN:
+                        percentile25 = np.nanpercentile(
+                            progresses, q=25, axis=0)
+                        percentile50 = np.nanpercentile(
+                            progresses, q=50, axis=0)
+                        percentile75 = np.nanpercentile(
+                            progresses, q=75, axis=0)
+                        to_plot.append(
+                            ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
+                                         percentile75=percentile75, legend=legend))
+                    else:
+                        means = np.nanmean(progresses, axis=0)
+                        stds = np.nanstd(progresses, axis=0)
+                        to_plot.append(
+                            ext.AttrDict(means=means, stds=stds, legend=legend))
 
         if len(to_plot) > 0:
             plots.append("<div>%s: %s</div>" % (split_key, split_legend))
