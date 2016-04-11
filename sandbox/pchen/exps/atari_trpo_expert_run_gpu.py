@@ -70,12 +70,14 @@ for rom in roms:
             mode="lab_kube",
             resouces=dict(
                 requests=dict(
-                    cpu=8
+                    cpu=7
                 )
             ),
             node_selector={
                 "aws/type": "g2.2xlarge"
-            }
+            },
+            use_gpu=True,
         )
+        import sys; sys.exit(0)
         # import ipdb; ipdb.set_trace()
 
