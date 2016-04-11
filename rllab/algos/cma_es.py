@@ -27,7 +27,7 @@ def sample_return(G, params, max_path_length, discount):
     return path
 
 
-class CMAES(RLAlgorithm):
+class CMAES(RLAlgorithm, Serializable):
 
     def __init__(
             self,
