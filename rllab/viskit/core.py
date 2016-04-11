@@ -1,4 +1,3 @@
-from __future__ import print_function
 import csv
 from rllab.misc import ext
 import os
@@ -29,10 +28,7 @@ def load_progress(progress_csv_path):
             for k, v in row.iteritems():
                 if k not in entries:
                     entries[k] = []
-                try:
-                    entries[k].append(float(v))
-                except Exception as e:
-                    import ipdb; ipdb.set_trace()
+                entries[k].append(float(v))
     entries = dict([(k, np.array(v)) for k, v in entries.iteritems()])
     return entries
 
@@ -45,7 +41,8 @@ def to_json(stub_object):
         data = dict()
         for k, v in stub_object.kwargs.iteritems():
             data[k] = to_json(v)
-        data["_name"] = stub_object.proxy_class.__module__ + "." + stub_object.proxy_class.__name__
+        data["_name"] = stub_object.proxy_class.__module__ + \
+            "." + stub_object.proxy_class.__name__
         return data
     elif isinstance(stub_object, StubAttr):
         return dict(
@@ -70,13 +67,13 @@ def flatten_dict(d):
 def load_params(params_json_path):
     with open(params_json_path, 'r') as f:
         data = json.loads(f.read())
-        if 'args_data' in data and 'json_args' not in data:
+        if 'args_data' in data:
             stub_method = pickle.loads(base64.b64decode(data['args_data']))
             method_args = stub_method.kwargs
             for k, v in method_args.items():
                 data[k] = to_json(v)
             data["algo"] = to_json(stub_method.obj)
-        del data['args_data']
+            del data['args_data']
     return data
 
 
@@ -104,19 +101,38 @@ def load_exps_data(exp_folder_path):
             progress_csv_path = os.path.join(exp_path, "progress.csv")
             progress = load_progress(progress_csv_path)
             params = load_params(params_json_path)
-            exps_data.append(ext.AttrDict(progress=progress, params=params, flat_params=flatten_dict(params)))
+            exps_data.append(ext.AttrDict(
+                progress=progress, params=params, flat_params=flatten_dict(params)))
         except IOError as e:
             print(e)
     return exps_data
 
 
-def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed')):
+def smart_repr(x):
+    if isinstance(x, tuple):
+        if len(x) == 0:
+            return "tuple()"
+        elif len(x) == 1:
+            return "(%s,)" % smart_repr(x[0])
+        else:
+            return "(" + ",".join(map(smart_repr, x)) + ")"
+    else:
+        if hasattr(x, "__call__"):
+            return "__import__('pydoc').locate('%s')" % (x.__module__ + "." + x.__name__)
+        else:
+            return repr(x)
+
+
+def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log_dir', 'json_args.'), l=1):
     # all_pairs = unique(flatten([d.flat_params.items() for d in exps_data]))
     # if logger:
     #     logger("(Excluding {excluded})".format(excluded=', '.join(excluded_params)))
-    stringified_pairs = sorted(map(eval, unique(flatten([map(repr, d.flat_params.items()) for d in exps_data]))))
-    proposals = [(k, [x[1] for x in v]) for k, v in itertools.groupby(stringified_pairs, lambda x: x[0])]
-    filtered = [(k, v) for (k, v) in proposals if len(v) > 1 and k not in excluded_params]
+    stringified_pairs = sorted(
+        map(eval, unique(flatten([map(smart_repr, d.flat_params.items()) for d in exps_data]))))
+    proposals = [(k, [x[1] for x in v])
+                 for k, v in itertools.groupby(stringified_pairs, lambda x: x[0])]
+    filtered = [(k, v) for (k, v) in proposals if len(v) > l and all(
+        [k.find(excluded_param) == -1 for excluded_param in excluded_params])]
     return filtered
 
 
@@ -156,14 +172,12 @@ color_defaults = [
     '#17becf'   # blue-teal
 ]
 
+
 def hex_to_rgb(hex, opacity=1.0):
     if hex[0] == '#':
         hex = hex[1:]
     assert(len(hex) == 6)
     return "rgba({0},{1},{2},{3})".format(int(hex[:2], 16), int(hex[2:4], 16), int(hex[4:6], 16), opacity)
-
-
-
 
 
 # class VisApp(object):

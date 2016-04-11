@@ -1,5 +1,5 @@
-import flask #import Flask, render_template, send_from_directory
-
+from __future__ import print_function
+import flask  # import Flask, render_template, send_from_directory
 from rllab.misc.ext import flatten
 from rllab.viskit import core
 from rllab.misc import ext
@@ -10,7 +10,8 @@ import numpy as np
 # import threading, webbrowser
 import plotly.offline as po
 import plotly.graph_objs as go
-import threading
+import pdb
+
 
 app = flask.Flask(__name__, static_url_path='/static')
 
@@ -38,8 +39,8 @@ def make_plot(plot_list):
         y_upper = list(plt.means + plt.stds)
         y_lower = list(plt.means - plt.stds)
         data.append(go.Scatter(
-            x=x+x[::-1],
-            y=y_upper+y_lower[::-1],
+            x=x + x[::-1],
+            y=y_upper + y_lower[::-1],
             fill='tozerox',
             fillcolor=core.hex_to_rgb(color, 0.2),
             line=go.Line(color='transparent'),
@@ -65,8 +66,8 @@ def make_plot(plot_list):
     return po.plot(fig, output_type='div', include_plotlyjs=False)
 
 
-def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, aggregate_mean=True):
-    print plot_key, split_key, group_key, filters
+def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
+    print(plot_key, split_key, group_key, filters)
     selector = core.Selector(exps_data)
     for k, v in filters.iteritems():
         selector = selector.where(k, str(v))
@@ -89,24 +90,55 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, a
             group_legends = [split_legend]
         to_plot = []
         for group_selector, group_legend in zip(group_selectors, group_legends):
-            # print group_selector._filters
             filtered_data = group_selector.extract()
             if len(filtered_data) > 0:
-                if aggregate_mean:
-                    progresses = [exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
-                    sizes = map(len, progresses)
-                    # more intelligent:
-                    max_size = max(sizes)
-                    progresses = [np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-                    means = np.nanmean(progresses, axis=0)
-                    stds = np.std(progresses, axis=0)
-                    to_plot.append(ext.AttrDict(means=means, stds=stds, legend=group_legend))
-                else:
-                    for exp in filtered_data:
-                        if plot_key in exp.progress:
-                            to_plot.append(ext.AttrDict(means=np.array(exp.progress[plot_key]),
-                                                        stds=np.zeros_like(exp.progress[plot_key]),
-                                                        legend=exp.params.get("exp_name", "")))
+
+                # Group by seed and sort.
+                # -----------------------
+                filtered_params = core.extract_distinct_params(
+                    filtered_data, l=0)
+                filtered_params2 = [p[1] for p in filtered_params]
+                filtered_params_k = [p[0] for p in filtered_params]
+                import itertools
+                product_space = itertools.product(
+                    *filtered_params2
+                )
+                data_best_regret = None
+                best_regret = -np.inf
+                for params in product_space:
+                    selector = core.Selector(exps_data)
+                    for k, v in zip(filtered_params_k, params):
+                        selector = selector.where(k, str(v))
+                    data = selector.extract()
+                    if len(data) > 0:
+                        progresses = [
+                            exp.progress.get(plot_key, np.array([np.nan])) for exp in data]
+                        sizes = map(len, progresses)
+                        max_size = max(sizes)
+                        progresses = [
+                            np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
+                        means = np.nanmean(progresses, axis=0)
+                        regret = np.mean(means)
+                        if regret > best_regret:
+                            best_regret = regret
+                            data_best_regret = data
+
+                print(group_selector._filters)
+                print('best regret: {}'.format(best_regret))
+                # -----------------------
+
+                progresses = [
+                    exp.progress.get(plot_key, np.array([np.nan])) for exp in data_best_regret]
+                sizes = map(len, progresses)
+                # more intelligent:
+                max_size = max(sizes)
+                progresses = [
+                    np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
+                means = np.nanmean(progresses, axis=0)
+                stds = np.std(progresses, axis=0)
+                to_plot.append(
+                    ext.AttrDict(means=means, stds=stds, legend=group_legend))
+
         if len(to_plot) > 0:
             plots.append("<div>%s: %s</div>" % (split_key, split_legend))
             plots.append(make_plot(to_plot))
@@ -139,40 +171,19 @@ def index():
     # exp_folder_path = "data/s3/experiments/ppo-atari-3"
     # _load_data(exp_folder_path)
     # exp_json = json.dumps(exp_data)
-    if "AverageReturn" in plottable_keys:
-        plot_key = "AverageReturn"
-    else:
-        plot_key = plottable_keys[0]
-    if len(distinct_params) > 0:
-        group_key = distinct_params[0][0]
-    else:
-        group_key = None
-    plot_div = get_plot_instruction(plot_key=plot_key, split_key=None, group_key=group_key)
+    plot_key = "AverageReturn"
+    group_key = distinct_params[0][0]
+    plot_div = get_plot_instruction(
+        plot_key=plot_key, split_key=None, group_key=group_key)
     return flask.render_template(
         "main.html",
         plot_div=plot_div,
         plot_key=plot_key,
-        group_key=group_key,
         plottable_keys=plottable_keys,
         distinct_param_keys=[str(k) for k, v in distinct_params],
-        distinct_params=dict([(str(k), map(str, v)) for k, v in distinct_params]),
+        distinct_params=dict([(str(k), map(str, v))
+                              for k, v in distinct_params]),
     )
-
-def background_refresh(data_path):
-    try:
-        global exps_data
-        global plottable_keys
-        global distinct_params
-        import time
-        while True:
-            exps_data = core.load_exps_data(data_path)
-            plottable_keys = list(set(flatten(exp.progress.keys() for exp in exps_data)))
-            distinct_params = core.extract_distinct_params(exps_data)
-            print("Refreshed...")
-            time.sleep(1)
-    except KeyboardInterrupt:
-        raise
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -181,11 +192,10 @@ if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
     print("Importing data from {path}...".format(path=args.data_path))
     exps_data = core.load_exps_data(args.data_path)
-    plottable_keys = list(set(flatten(exp.progress.keys() for exp in exps_data)))
+    plottable_keys = list(
+        set(flatten(exp.progress.keys() for exp in exps_data)))
+
     distinct_params = core.extract_distinct_params(exps_data)
-    bg = threading.Thread(target=background_refresh, args=(args.data_path,))
-    bg.daemon = True
-    bg.start()
     port = 5000
     url = "http://127.0.0.1:{0}".format(port)
     print("Done! View http://localhost:5000 in your browser")
