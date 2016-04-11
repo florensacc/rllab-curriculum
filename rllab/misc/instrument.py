@@ -336,13 +336,11 @@ def run_experiment_lite(
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
-        params["resources"] = params.get(
-            "resources", config.KUBE_DEFAULT_RESOURCES)
-        params["node_selector"] = params.get(
-            "node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
+        params["resources"] = params.pop("resouces", config.KUBE_DEFAULT_RESOURCES)
+        params["node_selector"] = params.pop("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
         params["exp_prefix"] = exp_prefix
         pod_dict = to_lab_kube_pod(
-            params, code_full_path=s3_code_path, docker_image=docker_image, script=script)
+            params, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu)
         pod_str = json.dumps(pod_dict, indent=1)
         if dry:
             print(pod_str)
@@ -637,7 +635,10 @@ def s3_sync_code(config, dry=False):
     return full_path
 
 
-def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_experiment.py'):
+def to_lab_kube_pod(
+        params, docker_image, code_full_path,
+        script='scripts/run_experiment.py', is_gpu=False
+):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
     docker volume mapping to make sure that the logging files are created at the correct locations
@@ -663,9 +664,11 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
                         (code_full_path, config.DOCKER_CODE_DIR))
     pre_commands.append('cd %s' %
                         (config.DOCKER_CODE_DIR))
+    pre_commands.append('mkdir -p %s' %
+                        (log_dir))
     pre_commands.append("""
         while /bin/true; do
-            aws s3 sync {log_dir} {remote_log_dir} --region {aws_region}
+            aws s3 sync --exclude *.pkl {log_dir} {remote_log_dir} --region {aws_region}
             sleep 5
         done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
                                              aws_region=config.AWS_REGION_NAME))
@@ -681,20 +684,56 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
-    command_list.append(to_local_command(params, script))
+    command_list.append(
+        "%s 2>&1 | tee -a %s" % (
+            to_local_command(params, script),
+            "%s/stdouterr.log" % log_dir
+        )
+    )
     if post_commands is not None:
         command_list.extend(post_commands)
     command = "; ".join(command_list)
     pod_name = config.KUBE_PREFIX + params["exp_name"]
     # underscore is not allowed in pod names
     pod_name = pod_name.replace("_", "-")
+    print "Is gpu: ", is_gpu
+    if not is_gpu:
+        return {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "name": pod_name,
+                "labels": {
+                    "expt": pod_name,
+                    "exp_time": timestamp,
+                    "exp_prefix": exp_prefix,
+                },
+            },
+            "spec": {
+                "containers": [
+                    {
+                        "name": "foo",
+                        "image": docker_image,
+                        "command": [
+                            "/bin/bash",
+                            "-c",
+                            "-li", # to load conda env file
+                            command,
+                        ],
+                        "resources": resources,
+                        "imagePullPolicy": "Always",
+                    }
+                ],
+                "restartPolicy": "Never",
+                "nodeSelector": node_selector,
+            }
+        }
     return {
         "apiVersion": "v1",
         "kind": "Pod",
         "metadata": {
             "name": pod_name,
             "labels": {
-                "owner": config.LABEL,
                 "expt": pod_name,
                 "exp_time": timestamp,
                 "exp_prefix": exp_prefix,
@@ -713,6 +752,25 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
                     ],
                     "resources": resources,
                     "imagePullPolicy": "Always",
+                    # gpu specific
+                    "volumeMounts": [
+                        {
+                            "name": "nvidia",
+                            "mountPath": "/usr/local/nvidia",
+                            "readOnly": True,
+                        }
+                    ],
+                    "securityContext": {
+                        "privileged": True,
+                    }
+                }
+            ],
+            "volumes": [
+                {
+                    "name": "nvidia",
+                    "hostPath": {
+                        "path": "/var/lib/docker/volumes/nvidia_driver_352.63/_data",
+                    }
                 }
             ],
             "restartPolicy": "Never",

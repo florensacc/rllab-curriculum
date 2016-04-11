@@ -1,3 +1,4 @@
+from rllab.core.serializable import Serializable
 from .base import Space
 import numpy as np
 from rllab.misc import ext
