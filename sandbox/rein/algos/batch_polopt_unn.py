@@ -126,7 +126,6 @@ class BatchPolopt(RLAlgorithm):
             pool_batch_size=10,
             eta_discount=1.0,
             n_itr_update=5,
-            whole_paths=False,
             **kwargs
     ):
         """
@@ -164,7 +163,6 @@ class BatchPolopt(RLAlgorithm):
         self.center_adv = center_adv
         self.positive_adv = positive_adv
         self.store_paths = store_paths
-        self.whole_paths = whole_paths
 
 
         # Set exploration params
