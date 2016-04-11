@@ -4,7 +4,7 @@ USE_GPU = False
 
 DOCKER_IMAGE = "rein/rllab-exp-new"
 
-KUBE_PREFIX = "rhouthooft_"
+KUBE_PREFIX = "template_"
 
 DOCKER_LOG_DIR = "/tmp/expt"
 
@@ -27,17 +27,19 @@ AWS_SECURITY_GROUPS = ["rllab"]
 
 AWS_REGION_NAME = "us-west-2"
 
-AWS_CODE_SYNC_S3_PATH = "s3://openai-kubernetes-sci-rein/code"
+AWS_CODE_SYNC_S3_PATH = "<insert aws s3 bucket url for code>e"
 
-CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*src/*", "*.pods/*", "*tests/*", "*examples/*", "docs/*"]
+CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*src/*",
+                     "*.pods/*", "*tests/*", "*examples/*", "docs/*"]
 
-LOCAL_CODE_DIR = "/home/rein/workspace_python/rllab"
+LOCAL_CODE_DIR = "<insert local code dir>"
 
-LABEL = "rhouthooft"
+AWS_S3_PATH = "<insert aws s3 bucket url>"
+
+LABEL = "template"
 
 DOCKER_CODE_DIR = "/root/code/rllab"
 
-AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY", None)
+AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY", "<insert aws key>")
 
-AWS_ACCESS_SECRET = os.environ.get("AWS_ACCESS_SECRET", None)
-
+AWS_ACCESS_SECRET = os.environ.get("AWS_ACCESS_SECRET", "<insert aws secret>")

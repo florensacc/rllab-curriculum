@@ -1,5 +1,5 @@
 import os
-from rllab.envs.box2d.mountain_car_env import MountainCarEnv
+from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
@@ -23,7 +23,7 @@ param_cart_product = itertools.product(
 
 for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
-    mdp_class = MountainCarEnv
+    mdp_class = DoublePendulumEnv
     mdp = NormalizedEnv(env=mdp_class())
 
     policy = GaussianMLPPolicy(
@@ -43,7 +43,7 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         batch_size=1000,
         whole_paths=False,
         max_path_length=100,
-        n_itr=2000,
+        n_itr=1000,
         step_size=0.01,
         eta=eta,
         eta_discount=0.998,
@@ -57,7 +57,7 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="mountaincar",
+        exp_prefix="doublependulum",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
