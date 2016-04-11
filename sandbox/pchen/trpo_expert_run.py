@@ -45,13 +45,14 @@ for mdp_class in mdp_classes:
         step_size=5e-2,
         store_paths=True,
     )
-    for seed in [1, 42]:
+    for seed in [1, 3]:
         run_experiment_lite(
             algo.train(),
             exp_prefix="trpo_expert_run",
             n_parallel=4,
             snapshot_mode="all",
             seed=1,
+            dry=False,
             mode="lab_kube",
         )
         break

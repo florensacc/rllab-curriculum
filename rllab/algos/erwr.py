@@ -1,8 +1,9 @@
 from rllab.algos.vpg import VPG
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
+from rllab.core.serializable import Serializable
 
 
-class ERWR(VPG):
+class ERWR(VPG, Serializable):
     """
     Episodic Reward Weighted Regression [1]_
 
@@ -21,6 +22,7 @@ class ERWR(VPG):
             optimizer_args=None,
             positive_adv=None,
             **kwargs):
+        Serializable.quick_init(self, locals())
         if optimizer is None:
             if optimizer_args is None:
                 optimizer_args = dict()

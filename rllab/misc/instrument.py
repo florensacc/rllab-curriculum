@@ -23,6 +23,7 @@ from rllab.viskit.core import flatten
 
 
 class StubAttr(object):
+
     def __init__(self, obj, attr_name):
         self.__dict__["_obj"] = obj
         self.__dict__["_attr_name"] = attr_name
@@ -51,6 +52,7 @@ class StubAttr(object):
 
 
 class StubMethodCall(Serializable):
+
     def __init__(self, obj, method_name, args, kwargs):
         Serializable.quick_init(self, locals())
         self.obj = obj
@@ -64,6 +66,7 @@ class StubMethodCall(Serializable):
 
 
 class StubClass(object):
+
     def __init__(self, proxy_class):
         self.proxy_class = proxy_class
 
@@ -91,6 +94,7 @@ class StubClass(object):
 
 
 class StubObject(object):
+
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
             spec = inspect.getargspec(__proxy_class.__init__)
@@ -161,7 +165,8 @@ class VariantGenerator(object):
                     if len(v) > 0:
                         error_msg += k + " depends on " + " & ".join(v) + "\n"
                 raise ValueError(error_msg)
-            dependencies = [(k, v) for k, v in dependencies if k not in free_nodes]
+            dependencies = [(k, v)
+                            for k, v in dependencies if k not in free_nodes]
             # remove the free nodes from the remaining dependencies
             for _, v in dependencies:
                 v.difference_update(free_nodes)
@@ -187,7 +192,8 @@ class VariantGenerator(object):
                 last_val_keys = None
             for variant in first_variants:
                 if hasattr(last_vals, "__call__"):
-                    last_variants = last_vals(**{k: variant[k] for k in last_val_keys})
+                    last_variants = last_vals(
+                        **{k: variant[k] for k in last_val_keys})
                     for last_choice in last_variants:
                         yield ext.merge_dict(variant, {last_key: last_choice})
                 else:
@@ -283,7 +289,8 @@ def run_experiment_lite(
     kwargs["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
                                         exp_name)
     if mode not in ["local", "local_docker"] and not remote_confirmed and not dry and confirm_remote:
-        remote_confirmed = query_yes_no("Running in (non-dry) mode %s. Confirm?" % mode)
+        remote_confirmed = query_yes_no(
+            "Running in (non-dry) mode %s. Confirm?" % mode)
         if not remote_confirmed:
             sys.exit(1)
 
@@ -329,14 +336,18 @@ def run_experiment_lite(
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         params = dict(kwargs.items() + [("args_data", data)])
-        params["resources"] = params.get("resouces", config.KUBE_DEFAULT_RESOURCES)
-        params["node_selector"] = params.get("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
+        params["resources"] = params.get(
+            "resources", config.KUBE_DEFAULT_RESOURCES)
+        params["node_selector"] = params.get(
+            "node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
         params["exp_prefix"] = exp_prefix
-        pod_dict = to_lab_kube_pod(params, code_full_path=s3_code_path, docker_image=docker_image, script=script)
+        pod_dict = to_lab_kube_pod(
+            params, code_full_path=s3_code_path, docker_image=docker_image, script=script)
         pod_str = json.dumps(pod_dict, indent=1)
         if dry:
             print(pod_str)
-        dir = "{pod_dir}/{exp_prefix}".format(pod_dir=config.POD_DIR, exp_prefix=exp_prefix)
+        dir = "{pod_dir}/{exp_prefix}".format(
+            pod_dir=config.POD_DIR, exp_prefix=exp_prefix)
         ensure_dir(dir)
         fname = "{dir}/{exp_name}.json".format(
             dir=dir,
@@ -421,6 +432,8 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     :return:
     """
     log_dir = params.get("log_dir")
+    params.pop("remote_log_dir")
+    script = 'rllab/' + script
     if not dry:
         mkdir_p(log_dir)
     # create volume for logging directory
@@ -434,9 +447,12 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
                                                                     docker_log_dir=docker_log_dir)
+    command_prefix += " -v {local_code_dir}:{docker_code_dir}".format(local_code_dir=config.LOCAL_CODE_DIR,
+                                                                      docker_code_dir=config.DOCKER_CODE_DIR)
     params = ext.merge_dict(params, dict(log_dir=docker_log_dir))
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
+    #command_list.append('sleep 9999999')
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
@@ -561,7 +577,8 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
         if not dry:
             response = ec2.request_spot_instances(**spot_args)
             print response
-            spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
+            spot_request_id = response['SpotInstanceRequests'][
+                0]['SpotInstanceRequestId']
             for _ in range(10):
                 try:
                     ec2.create_tags(
@@ -590,7 +607,8 @@ def s3_sync_code(config, dry=False):
     base = config.AWS_CODE_SYNC_S3_PATH
     has_git = True
     try:
-        current_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).strip()
+        current_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"]).strip()
         clean_state = len(
             subprocess.check_output(["git", "status", "--porcelain"])) == 0
     except subprocess.CalledProcessError as _:
@@ -607,7 +625,7 @@ def s3_sync_code(config, dry=False):
     cache_cmds = ["aws", "s3", "sync"] + \
                  [cache_path, full_path]
     cmds = ["aws", "s3", "sync"] + \
-           flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+        flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
            [".", full_path]
     caching_cmds = ["aws", "s3", "sync"] + \
                    [full_path, cache_path]
@@ -677,6 +695,7 @@ def to_lab_kube_pod(params, docker_image, code_full_path, script='scripts/run_ex
         "metadata": {
             "name": pod_name,
             "labels": {
+                "owner": config.LABEL,
                 "expt": pod_name,
                 "exp_time": timestamp,
                 "exp_prefix": exp_prefix,

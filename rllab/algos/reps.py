@@ -5,11 +5,12 @@ from rllab.misc import logger
 from rllab.misc.overrides import overrides
 from rllab.misc import ext
 from rllab.algos.batch_polopt import BatchPolopt
+from rllab.core.serializable import Serializable
 import numpy as np
 from rllab.misc import tensor_utils
 
 
-class REPS(BatchPolopt):
+class REPS(BatchPolopt, Serializable):
     """
     Relative Entropy Policy Search (REPS)
 
@@ -37,6 +38,7 @@ class REPS(BatchPolopt):
         scipy.optimize.fmin_l_bfgs_b.
         :return:
         """
+        Serializable.quick_init(self, locals())
         super(REPS, self).__init__(**kwargs)
         self.epsilon = epsilon
         self.L2_reg_dual = L2_reg_dual

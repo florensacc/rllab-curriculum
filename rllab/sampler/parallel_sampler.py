@@ -13,7 +13,8 @@ def _worker_init(G, id):
 
 def initialize(n_parallel):
     singleton_pool.initialize(n_parallel)
-    singleton_pool.run_each(_worker_init, [(id,) for id in xrange(singleton_pool.n_parallel)])
+    singleton_pool.run_each(
+        _worker_init, [(id,) for id in xrange(singleton_pool.n_parallel)])
 
 
 def _worker_populate_task(G, env, policy):
