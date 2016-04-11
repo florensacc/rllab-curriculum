@@ -12,20 +12,27 @@ with such.A("expand_grid") as it:
     def test_expand_grid():
         from sandbox.rocky.hrl.hierarchical_grid_world_env import expand_grid
         high_grid = [
-            "SF",
-            "FF"
+            "SFF",
+            "FWH",
+            "FFG"
         ]
         low_grid = [
             "SFF",
             "FFF",
-            "FFF"
+            "FFG"
         ]
 
         total_grid = expand_grid(high_grid, low_grid)
-        it.assertEqual(total_grid.shape, (6, 6))
-        it.assertEqual(np.sum(total_grid == 'F'), 35)
+        it.assertEqual(total_grid.shape, (9, 9))
+        it.assertEqual(np.sum(total_grid == 'F'), 8 + 9 + 9 + 9 + 9 + 9 + 8)
         it.assertEqual(np.sum(total_grid == 'S'), 1)
-        it.assertEqual(total_grid[0, 0] == 'S')
+        it.assertEqual(np.sum(total_grid == 'G'), 1)
+        it.assertEqual(np.sum(total_grid == 'W'), 9)
+        it.assertEqual(np.sum(total_grid == 'H'), 9)
+        it.assertEqual(total_grid[0, 0], 'S')
+        it.assertEqual(total_grid[8, 8], 'G')
+
+it.createTests(globals())
 
 with such.A("hierarchical grid world") as it:
     @it.should("work")
@@ -33,17 +40,18 @@ with such.A("hierarchical grid world") as it:
         from sandbox.rocky.hrl.hierarchical_grid_world_env import HierarchicalGridWorldEnv
         from rllab.envs.grid_world_env import GridWorldEnv
         high_grid = [
-            "SF",
-            "FF"
+            "SFF",
+            "FWH",
+            "FFG"
         ]
         low_grid = [
             "SFF",
             "FFF",
-            "FFF"
+            "FFG"
         ]
 
         hier_grid_world = HierarchicalGridWorldEnv(high_grid, low_grid)
-        it.assertEqual(hier_grid_world.observation_space, Product(Discrete(4), Discrete(9)))
+        it.assertEqual(hier_grid_world.observation_space, Product(Discrete(9), Discrete(9)))
         it.assertEqual(hier_grid_world.action_space, Discrete(4))
         state = hier_grid_world.reset()
         it.assertEqual(state, (0, 0))
