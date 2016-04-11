@@ -43,12 +43,12 @@ AWS_CODE_SYNC_S3_PATH = "s3://to/be/overriden/in/personal"
 
 KUBE_DEFAULT_RESOURCES = {
     "requests": {
-        "cpu": 1.5,
+        "cpu": 0.8,
     }
 }
 
 KUBE_DEFAULT_NODE_SELECTOR = {
-    "aws/type": "m4.xlarge",
+    "aws/type": "m4.2xlarge",
 }
 
 from config_personal import *

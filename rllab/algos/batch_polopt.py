@@ -76,6 +76,8 @@ class BatchPolopt(RLAlgorithm):
     def train(self):
         self.start_worker()
         self.init_opt()
+        episode_rewards = []
+        episode_lengths = []
         for itr in xrange(self.start_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.obtain_samples(itr)
@@ -94,6 +96,7 @@ class BatchPolopt(RLAlgorithm):
                     if self.pause_for_plot:
                         raw_input("Plotting evaluation run: Press Enter to "
                                   "continue...")
+
         self.shutdown_worker()
 
     def log_diagnostics(self, paths):

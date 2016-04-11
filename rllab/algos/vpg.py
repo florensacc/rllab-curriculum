@@ -5,9 +5,10 @@ from rllab.misc.overrides import overrides
 from rllab.misc import ext
 from rllab.algos.batch_polopt import BatchPolopt
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
+from rllab.core.serializable import Serializable
 
 
-class VPG(BatchPolopt):
+class VPG(BatchPolopt, Serializable):
     """
     Vanilla Policy Gradient.
     """
@@ -20,6 +21,7 @@ class VPG(BatchPolopt):
             optimizer=None,
             optimizer_args=None,
             **kwargs):
+        Serializable.quick_init(self, locals())
         if optimizer is None:
             default_args = dict(
                 batch_size=None,
