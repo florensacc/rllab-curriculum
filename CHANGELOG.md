@@ -15,3 +15,7 @@ Features:
 
 - Known issues:
   - TRPO does not work well with relu since the hessian is undefined at 0, causing NaN sometimes. This issue of Theano is tracked here: https://github.com/Theano/Theano/issues/4353). If relu must be used, try using `theano.tensor.maximum(x, 0.)` as opposed to `theano.tensor.nnet.relu`.
+
+# 2016-04-11
+
+- Added a method `truncate_paths` to the `rllab.sampler.parallel_sampler` module. This should be sufficient to replace the old configurable parameter `whole_paths` which has been removed during refactoring.
