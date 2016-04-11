@@ -331,25 +331,25 @@ if __name__ == "__main__":
     policy = data['policy']
     env = data['env']
     paths = data.get('paths', None)
+    parallel_sampler.initialize(n_parallel=5)
 
-    parallel_sampler.config_parallel_sampler(3, 42)
     Bakery(
         policy=policy,
         new_pi=GaussianMLPPolicy(
             env_spec=env.spec,
-            hidden_sizes=(40, 20, 20,)
+            hidden_sizes=(100, 50, 50, 25,)
         ),
         env=env,
         paths=paths,
         test_paths=True,
         fixed_encoder=True,
-        bake_hidden_sizes=(10,),
-        # ul_obj="ae",
+        bake_hidden_sizes=(50,40,30,),
+        ul_obj="ae",
         # ul_obj="passive_dynamics",
         # ul_obj="active_dynamics",
         # ul_obj="baseline",
-        ul_obj="nop",
-        # data_size=100000,
+        # ul_obj="nop",
+        data_size=500000,
         # optimizer=LbfgsOptimizer(
         #     max_opt_itr=10,
         # ),
@@ -367,7 +367,7 @@ if __name__ == "__main__":
         eval_optimizer=FirstOrderOptimizer(
             update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
             # update_method=partial(lasagne.updates.adadelta),
-            max_epochs=500,
+            max_epochs=200,
         )
     )
 
