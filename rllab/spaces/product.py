@@ -42,3 +42,10 @@ class Product(Space):
         flat_xs = np.split(x, np.cumsum(dims)[:-1])
         return tuple(c.unflatten(xi) for c, xi in zip(self._components, flat_xs))
 
+    def __eq__(self, other):
+        if not isinstance(other, Product):
+            return False
+        return tuple(self.components) == tuple(other.components)
+
+    def __hash__(self):
+        return hash(tuple(self.components))

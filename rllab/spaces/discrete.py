@@ -61,3 +61,11 @@ class Discrete(Space):
                 ndim=extra_dims+1,
                 dtype='uint32'
             )
+
+    def __eq__(self, other):
+        if not isinstance(other, Discrete):
+            return False
+        return self.n == other.n
+
+    def __hash__(self):
+        return hash(self.n)

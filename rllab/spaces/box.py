@@ -56,6 +56,9 @@ class Box(Space):
         return isinstance(other, Box) and np.allclose(self.low, other.low) and \
                np.allclose(self.high, other.high)
 
+    def __hash__(self):
+        return hash((self.low, self.high))
+
     def new_tensor_variable(self, name, extra_dims):
         return ext.new_tensor(
             name=name,
