@@ -97,7 +97,7 @@ def load_exps_data(exp_folder_path):
     exps_data = []
     for exp in exps:
         try:
-            exp_path = os.path.join(exp_folder_path, exp)
+            exp_path = exp
             params_json_path = os.path.join(exp_path, "params.json")
             progress_csv_path = os.path.join(exp_path, "progress.csv")
             progress = load_progress(progress_csv_path)
