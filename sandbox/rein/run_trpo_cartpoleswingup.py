@@ -19,7 +19,7 @@ for seed in seeds:
 
     #     mdp_class = CartpoleEnv
     mdp_class = CartpoleSwingupEnv
-    mdp = NormalizedEnv(env=mdp_class())
+    mdp = NormalizedEnv(env=mdp_class(), normalize_obs=True, normalize_reward=True)
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
@@ -38,7 +38,7 @@ for seed in seeds:
         batch_size=1000,
         whole_paths=False,
         max_path_length=100,
-        n_itr=500,
+        n_itr=50,
         step_size=0.01,
         subsample_factor=1.0,
     )

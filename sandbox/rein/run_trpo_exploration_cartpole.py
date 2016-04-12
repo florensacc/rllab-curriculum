@@ -13,7 +13,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.05]
+etas = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0]
 replay_pools = [True]
 kl_ratios = [False]
 reverse_kl_regs = [True]
@@ -24,7 +24,7 @@ param_cart_product = itertools.product(
 for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
     mdp_class = CartpoleEnv
-    mdp = NormalizedEnv(env=mdp_class())
+    mdp = NormalizedEnv(env=mdp_class(), normalize_obs=True, normalize_reward=True)
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
@@ -43,7 +43,7 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         batch_size=1000,
         whole_paths=False,
         max_path_length=100,
-        n_itr=40,
+        n_itr=50,
         step_size=0.01,
         eta=eta,
         eta_discount=0.99,
@@ -61,6 +61,6 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local_docker",
+        mode="lab_kube",
         dry=False,
     )

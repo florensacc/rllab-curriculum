@@ -412,7 +412,7 @@ class BatchPolopt(RLAlgorithm):
                 kl[n_samples:n_samples + path_length]
             n_samples += path_length
 
-        logger.log("fitted")
+        logger.log("computed")
         # ----------------------------
 
         baselines = []
