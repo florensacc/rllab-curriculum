@@ -17,7 +17,7 @@ seeds = range(10)
 for seed in seeds:
 
     mdp_class = DoublePendulumEnv
-    mdp = NormalizedEnv(env=mdp_class(), normalize_obs=True, normalize_reward=True)
+    mdp = NormalizedEnv(env=mdp_class())
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,

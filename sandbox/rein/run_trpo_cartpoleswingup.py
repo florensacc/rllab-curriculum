@@ -3,7 +3,6 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
-from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 
@@ -17,9 +16,8 @@ seeds = range(10)
 
 for seed in seeds:
 
-    #     mdp_class = CartpoleEnv
     mdp_class = CartpoleSwingupEnv
-    mdp = NormalizedEnv(env=mdp_class(), normalize_obs=True, normalize_reward=True)
+    mdp = NormalizedEnv(env=mdp_class())
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,

@@ -24,7 +24,7 @@ param_cart_product = itertools.product(
 for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
     mdp_class = CartpoleEnv
-    mdp = NormalizedEnv(env=mdp_class(), normalize_obs=True, normalize_reward=True)
+    mdp = NormalizedEnv(env=mdp_class())
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
