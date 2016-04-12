@@ -44,7 +44,7 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         batch_size=1000,
         whole_paths=False,
         max_path_length=100,
-        n_itr=50,
+        n_itr=500,
         step_size=0.01,
         eta=eta,
         eta_discount=0.998,

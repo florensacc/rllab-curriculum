@@ -33,10 +33,10 @@ for seed in seeds:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=1000,
+        batch_size=500,
         whole_paths=False,
         max_path_length=100,
-        n_itr=50,
+        n_itr=2000,
         step_size=0.01,
         subsample_factor=1.0,
     )
