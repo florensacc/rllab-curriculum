@@ -186,8 +186,12 @@ class BatchPolopt(RLAlgorithm):
         self.eta_discount = eta_discount
         self.n_itr_update = n_itr_update
         self.reward_alpha = reward_alpha
+        self.kl_alpha = kl_alpha
         self.normalize_reward = normalize_reward
         # ----------------------
+
+        # Params to keep track of moving average (both intrinsic and external
+        # reward) mean/var.
         if self.normalize_reward:
             self._reward_mean = 0.
             self._reward_var = 0.
@@ -405,8 +409,10 @@ class BatchPolopt(RLAlgorithm):
         # Normalize reward
         # ----------------
         if self.normalize_reward:
-            [map(self._apply_normalize_reward, path['rewards'])
-             for path in paths]
+            for i in xrange(len(paths)):
+                for j in xrange(len(paths[i]['rewards'])):
+                    paths[i]['rewards'][j] = self._apply_normalize_reward(paths[i]['rewards'][j])
+
         # ----------------
 
         # Computing intrinsic rewards.
@@ -450,9 +456,10 @@ class BatchPolopt(RLAlgorithm):
             #             logger.log(str(self.kl_previous))
             #             self.kl_previous.append(np.mean(kl))
             #             kl = kl / np.mean(np.asarray(self.kl_previous))
-            print(kl)
-            map(self._apply_normalize_kl, kl)
-            print(kl)
+            print(kl[0])
+            for i in xrange(len(kl)):
+                kl[i] = self._apply_normalize_kl(kl[i])
+            print(kl[0])
 
         _out = self.pnn.pred_fn(_inputs)
 

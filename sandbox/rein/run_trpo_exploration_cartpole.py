@@ -15,7 +15,7 @@ stub(globals())
 seeds = range(10)
 seeds = range(2)
 etas = [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0]
-etas = [0.01]
+etas = [1.0]
 replay_pools = [True]
 kl_ratios = [True]
 reverse_kl_regs = [True]
