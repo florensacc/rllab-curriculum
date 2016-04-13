@@ -13,7 +13,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0]
+etas = [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0]
 replay_pools = [True]
 kl_ratios = [False]
 reverse_kl_regs = [True]
@@ -41,9 +41,9 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         policy=policy,
         baseline=baseline,
         batch_size=1000,
-        whole_paths=False,
+        whole_paths=True,
         max_path_length=100,
-        n_itr=2000,
+        n_itr=1000,
         step_size=0.01,
         eta=eta,
         eta_discount=0.998,

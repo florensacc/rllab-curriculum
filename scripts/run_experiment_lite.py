@@ -21,8 +21,9 @@ def concretize(maybe_stub):
         # print(maybe_stub, maybe_stub.obj, maybe_stub.method_name, maybe_stub.args, maybe_stub.kwargs)
         obj = concretize(maybe_stub.obj)
         method = getattr(obj, maybe_stub.method_name)
-        args = concretize(maybe_stub.args)#map(concretize, maybe_stub.args)
-        kwargs = concretize(maybe_stub.kwargs)#dict([(k, concretize(v)) for k, v in maybe_stub.kwargs.iteritems()])
+        args = concretize(maybe_stub.args)  # map(concretize, maybe_stub.args)
+        # dict([(k, concretize(v)) for k, v in maybe_stub.kwargs.iteritems()])
+        kwargs = concretize(maybe_stub.kwargs)
         return method(*args, **kwargs)
     elif isinstance(maybe_stub, StubClass):
         return maybe_stub.proxy_class
@@ -34,9 +35,11 @@ def concretize(maybe_stub):
             args = concretize(maybe_stub.args)
             kwargs = concretize(maybe_stub.kwargs)
             try:
-                maybe_stub.__stub_cache = maybe_stub.proxy_class(*args, **kwargs)
+                maybe_stub.__stub_cache = maybe_stub.proxy_class(
+                    *args, **kwargs)
             except Exception as e:
-                import traceback; traceback.print_exc()
+                import traceback
+                traceback.print_exc()
                 # import ipdb; ipdb.set_trace()
         ret = maybe_stub.__stub_cache
         return ret
@@ -65,7 +68,8 @@ def run_experiment(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument('--n_parallel', type=int, default=1,
                         help='Number of parallel workers to perform rollouts.')
-    parser.add_argument('--exp_name', type=str, default=default_exp_name, help='Name of the experiment.')
+    parser.add_argument(
+        '--exp_name', type=str, default=default_exp_name, help='Name of the experiment.')
     parser.add_argument('--log_dir', type=str, default=default_log_dir,
                         help='Path to save the log and iteration snapshot.')
     parser.add_argument('--snapshot_mode', type=str, default='all',
@@ -104,7 +108,6 @@ def run_experiment(argv):
     # read from stdin
     data = pickle.loads(base64.b64decode(args.args_data))
 
-
     log_dir = args.log_dir
     # exp_dir = osp.join(log_dir, args.exp_name)
     tabular_log_file = osp.join(log_dir, args.tabular_log_file)
@@ -131,6 +134,7 @@ def run_experiment(argv):
     logger.remove_tabular_output(tabular_log_file)
     logger.remove_text_output(text_log_file)
     logger.pop_prefix()
+
 
 if __name__ == "__main__":
     run_experiment(sys.argv)

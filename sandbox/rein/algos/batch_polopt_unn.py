@@ -126,6 +126,9 @@ class BatchPolopt(RLAlgorithm):
             pool_batch_size=10,
             eta_discount=1.0,
             n_itr_update=5,
+            reward_alpha=0.001,
+            kl_alpha=0.001,
+            normalize_reward=False,
             **kwargs
     ):
         """
@@ -164,7 +167,6 @@ class BatchPolopt(RLAlgorithm):
         self.positive_adv = positive_adv
         self.store_paths = store_paths
 
-
         # Set exploration params
         # ----------------------
         self.eta = eta
@@ -183,7 +185,15 @@ class BatchPolopt(RLAlgorithm):
         self.pool_batch_size = pool_batch_size
         self.eta_discount = eta_discount
         self.n_itr_update = n_itr_update
+        self.reward_alpha = reward_alpha
+        self.normalize_reward = normalize_reward
         # ----------------------
+        if self.normalize_reward:
+            self._reward_mean = 0.
+            self._reward_var = 0.
+        if self.use_kl_ratio:
+            self._kl_mean = 0.
+            self._kl_var = 0.
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy)
@@ -221,11 +231,11 @@ class BatchPolopt(RLAlgorithm):
             reverse_kl_reg_factor=self.reverse_kl_reg_factor
         )
 
-        if self.use_kl_ratio:
-            # Add Queue here to keep track of N last kl values, compute average
-            # over them and divide current kl values by it. This counters the
-            # exploding kl value problem.
-            self.kl_previous = deque(maxlen=self.kl_q_len)
+#         if self.use_kl_ratio:
+#             # Add Queue here to keep track of N last kl values, compute average
+#             # over them and divide current kl values by it. This counters the
+#             # exploding kl value problem.
+#             self.kl_previous = deque(maxlen=self.kl_q_len)
 
         print("Building UNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
@@ -350,10 +360,54 @@ class BatchPolopt(RLAlgorithm):
         if self.whole_paths:
             return paths
         else:
-            paths_truncated = parallel_sampler.truncate_paths(paths, self.batch_size)
+            paths_truncated = parallel_sampler.truncate_paths(
+                paths, self.batch_size)
             return paths_truncated
 
+    def _update_reward_estimate(self, reward):
+        """Update reward mean and variance estimates.
+
+        We keep a moving both mean/var estimates and update it.
+        """
+        self._reward_mean = (1 - self.reward_alpha) * \
+            self._reward_mean + self.reward_alpha * reward
+        self._reward_var = (1 - self.reward_alpha) * self._reward_var + self.reward_alpha * np.square(reward -
+                                                                                                      self._reward_mean)
+
+    def _apply_normalize_reward(self, reward):
+        """Apply reward normalization based on moving mean/var."""
+        self._update_reward_estimate(reward)
+        return (reward - self._reward_mean) / (np.sqrt(self._reward_var) + 1e-8)
+
+    def _update_kl_estimate(self, kl):
+        """Update kl mean and variance estimates.
+
+        We keep a moving both mean/var estimates and update it.
+        """
+        self._kl_mean = (1 - self.kl_alpha) * \
+            self._kl_mean + self.kl_alpha * kl
+        self._kl_var = (1 - self.kl_alpha) * self._kl_var + self.kl_alpha * np.square(kl -
+                                                                                      self._kl_mean)
+
+    def _apply_normalize_kl(self, kl):
+        """Apply kl normalization based on moving mean/var."""
+        self._update_kl_estimate(kl)
+        return (kl - self._kl_mean) / (np.sqrt(self._kl_var) + 1e-8)
+
     def process_samples(self, itr, paths):
+
+        # Save original reward.
+        # ---------------------
+        for i in xrange(len(paths)):
+            paths[i]['rewards_orig'] = np.array(paths[i]['rewards'])
+        # ---------------------
+
+        # Normalize reward
+        # ----------------
+        if self.normalize_reward:
+            [map(self._apply_normalize_reward, path['rewards'])
+             for path in paths]
+        # ----------------
 
         # Computing intrinsic rewards.
         # ----------------------------
@@ -393,9 +447,12 @@ class BatchPolopt(RLAlgorithm):
                 self.pnn.reset_to_old_params()
 
         if self.use_kl_ratio:
-            logger.log(str(self.kl_previous))
-            self.kl_previous.append(np.mean(kl))
-            kl = kl / np.mean(np.asarray(self.kl_previous))
+            #             logger.log(str(self.kl_previous))
+            #             self.kl_previous.append(np.mean(kl))
+            #             kl = kl / np.mean(np.asarray(self.kl_previous))
+            print(kl)
+            map(self._apply_normalize_kl, kl)
+            print(kl)
 
         _out = self.pnn.pred_fn(_inputs)
 
@@ -404,10 +461,10 @@ class BatchPolopt(RLAlgorithm):
 
         self.eta *= self.eta_discount
         kl = self.eta * np.hstack([0., kl])
+
         n_samples = 0
         for i in xrange(len(paths)):
             path_length = len(paths[i]['rewards'])
-            paths[i]['rewards_orig'] = np.array(paths[i]['rewards'])
             paths[i]['rewards'] = paths[i]['rewards'] + \
                 kl[n_samples:n_samples + path_length]
             n_samples += path_length

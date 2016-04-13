@@ -10,7 +10,7 @@ import lasagne
 def main():
 
     num_epochs = 1000
-    batch_size = 1
+    batch_size = 10
 
     ###########################
     ### UNCOMMENT FOR MNIST ###
