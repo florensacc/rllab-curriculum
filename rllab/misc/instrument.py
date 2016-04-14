@@ -704,6 +704,7 @@ def to_lab_kube_pod(
             "metadata": {
                 "name": pod_name,
                 "labels": {
+                    "owner": config.LABEL,
                     "expt": pod_name,
                     "exp_time": timestamp,
                     "exp_prefix": exp_prefix,
@@ -734,6 +735,7 @@ def to_lab_kube_pod(
         "metadata": {
             "name": pod_name,
             "labels": {
+                "owner": config.LABEL,
                 "expt": pod_name,
                 "exp_time": timestamp,
                 "exp_prefix": exp_prefix,

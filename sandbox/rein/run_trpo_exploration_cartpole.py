@@ -13,9 +13,11 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.05]
+seeds = range(2)
+etas = [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0]
+etas = [1.0]
 replay_pools = [True]
-kl_ratios = [False]
+kl_ratios = [True]
 reverse_kl_regs = [True]
 param_cart_product = itertools.product(
     reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
@@ -41,9 +43,9 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         policy=policy,
         baseline=baseline,
         batch_size=1000,
-        whole_paths=False,
+        whole_paths=True,
         max_path_length=100,
-        n_itr=40,
+        n_itr=50,
         step_size=0.01,
         eta=eta,
         eta_discount=0.99,
@@ -52,7 +54,7 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         use_reverse_kl_reg=reverse_kl_reg,
         use_replay_pool=replay_pool,
         use_kl_ratio=kl_ratio,
-        n_itr_update=5,
+        n_itr_update=1,
     )
 
     run_experiment_lite(

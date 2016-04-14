@@ -321,6 +321,12 @@ class ProbNN:
             T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - \
             T.square(input - mu) / (2 * T.square(sigma))
         return T.sum(log_normal)
+    
+    def _log_prob_normal_nonsummed(self, input, mu=0., sigma=0.01):
+        log_normal = - \
+            T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - \
+            T.square(input - mu) / (2 * T.square(sigma))
+        return log_normal
 
     def _log_prob_spike_and_slab(self, input, pi, mu, sigma0, sigma1):
         """sigma0 > sigma1"""
@@ -361,6 +367,39 @@ class ProbNN:
         return loss
 
     def get_loss_only_last_sample(self, input, target):
+        """The difference with the original loss is that we only update based on the latest sample.
+        This means that instead of using the prior p(w), we use the previous approximated posterior
+        q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
+        """
+
+        log_p_D_given_w = 0.
+
+        # MC samples.
+        for _ in xrange(self.n_samples):
+            # Make prediction.
+            prediction = self.pred_sym(input)
+            # Calculate model likelihood log(P(D|w)).
+            if self.type == 'regression':
+                log_p_D_given_w += self._log_prob_normal(
+                    target, prediction, self.prior_sd)
+            elif self.type == 'classification':
+                log_p_D_given_w += T.sum(
+                    T.log(prediction)[T.arange(target.shape[0]), T.cast(target[:, 0], dtype='int64')])
+
+        # Calculate variational posterior log(q(w)) and prior log(p(w)).
+        kl = self.kl_div()
+        if self.use_reverse_kl_reg:
+            kl += self.reverse_kl_reg_factor * \
+                self.reverse_log_p_w_q_w_kl()
+
+        # Calculate loss function.
+        loss = (kl / self.n_batches -
+                log_p_D_given_w) / self.batch_size
+        loss /= self.n_samples
+
+        return loss
+    
+    def get_loss_nonsummed(self, input, target):
         """The difference with the original loss is that we only update based on the latest sample.
         This means that instead of using the prior p(w), we use the previous approximated posterior
         q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
@@ -468,6 +507,8 @@ class ProbNN:
             input_var, target_var)
         loss_only_last_sample = self.get_loss_only_last_sample(
             input_var, target_var)
+#         loss_nonsummed = self.get_loss_nonsummed(
+#             input_var, target_var)
 
         # Create update methods.
         params = lasagne.layers.get_all_params(self.network, trainable=True)
@@ -481,6 +522,8 @@ class ProbNN:
             [input_var, target_var], loss, updates=updates, allow_input_downcast=True)
         self.train_update_fn = theano.function(
             [input_var, target_var], loss_only_last_sample, updates=updates, allow_input_downcast=True)
+#         self.calc_gradients = theano.function(
+#             [input_var, target_var], theano.grad(loss_only_last_sample, wrt=params), allow_input_downcast=True)
 
         self.train_err_fn = theano.function(
             [input_var, target_var], loss, allow_input_downcast=True)
@@ -585,7 +628,7 @@ class ProbNN:
 
             # Iterate over all minibatches and train on each of them.
             for batch in iterate_minibatches(X_train, T_train, self.batch_size, shuffle=True):
-
+                
                 # Fix old params for KL divergence computation.
                 self.save_old_params()
 
@@ -597,6 +640,9 @@ class ProbNN:
 
                 # Calculate current minibatch KL.
                 kl_mb_closed_form = self.f_kl_div_closed_form()
+                
+#                 a = self.calc_gradients(inputs, targets) 
+#                 print(len(a), len(a[0]))
 
                 kl_values.append(kl_mb_closed_form)
                 kl_all_values.append(kl_mb_closed_form)
