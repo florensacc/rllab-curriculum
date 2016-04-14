@@ -16,6 +16,11 @@
 <body>
 <div class="container">
     <div class="control-panel">
+    	Use median:
+    	<form>
+		  <input type="radio" name="use_median" value="False", checked="checked">False<br>
+		  <input type="radio" name="use_median" value="True">True<br>
+		</form>
         Filters:
         <form>
             <div class="filter current">
@@ -125,11 +130,13 @@
                 filters[$(div).find(".target").val()] = val;
             }
         });
+        var useMedian = $controlPanel.find("input[type=radio][name=use_median]:checked").val();
+        console.log(useMedian);
         console.log("updating");
         $.get("/plot_div",
                 {
                     "plot_key": plotKey, "split_key": splitKey,
-                    "group_key": groupKey, "filters": JSON.stringify(filters)
+                    "group_key": groupKey, "filters": JSON.stringify(filters), "use_median": useMedian
                 },
                 function (data) {
                     $("#plot_wrapper").empty().append(data);
