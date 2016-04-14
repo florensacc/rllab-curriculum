@@ -1,5 +1,6 @@
 import os
 
+from rllab.algos.ppo import PPO
 from rllab.core.network import ConvNetwork
 from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.envs.mujoco.hopper_env import HopperEnv
@@ -47,11 +48,11 @@ for rom in roms:
     baseline = LinearFeatureBaseline(
         mdp.spec
     )
-    algo = TRPO(
+    algo = PPO(
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=100000,
+        batch_size=50000,
         whole_paths=True,
         max_path_length=500,
         n_itr=500,
@@ -62,18 +63,18 @@ for rom in roms:
     for seed in [42, 123, 88]:
         run_experiment_lite(
             algo.train(),
-            exp_prefix="atari_trpo_expert_run_cpu",
-            n_parallel=4,
+            exp_prefix="atari_ppo_expert_run_cpu",
+            n_parallel=3,
             snapshot_mode="all",
             seed=seed,
             # mode="local",
             mode="lab_kube",
             resouces=dict(
                 requests=dict(
-                    cpu=2,
+                    cpu=3.3,
                 ),
                 limits=dict(
-                    cpu=2,
+                    cpu=3.3,
                 )
             ),
             node_selector={
@@ -81,5 +82,5 @@ for rom in roms:
                 "aws/type": "m4.xlarge"
             }
         )
-        import sys; sys.exit(0)
+        # import sys; sys.exit(0)
 
