@@ -404,7 +404,7 @@ def _to_param_val(v):
 
 
 def to_local_command(params, script='scripts/run_experiment.py', use_gpu=False):
-    command = "python " + script
+    command = "python " + osp.join(config.PROJECT_PATH, script)
     if use_gpu:
         command = "THEANO_FLAGS='device=gpu' " + command
     for k, v in params.iteritems():
