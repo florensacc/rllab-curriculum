@@ -26,6 +26,8 @@ algo = TRPO(
     n_itr=40,
     discount=0.99,
     step_size=0.01,
+    # Uncomment both lines (this and the plot parameter below) to enable plotting
+    # plot=True,
 )
 
 run_experiment_lite(

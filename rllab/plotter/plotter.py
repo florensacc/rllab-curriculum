@@ -15,7 +15,7 @@ queue = None
 
 
 def _worker_start():
-    mdp = None
+    env = None
     policy = None
     max_length = None
     try:
@@ -31,19 +31,17 @@ def _worker_start():
             if 'stop' in msgs:
                 break
             elif 'update' in msgs:
-                mdp, policy = msgs['update']
-                mdp.start_viewer()
+                env, policy = msgs['update']
+                # env.start_viewer()
             elif 'demo' in msgs:
                 param_values, max_length = msgs['demo']
                 policy.set_param_values(param_values)
-                rollout(mdp, policy, max_length=max_length, animated=True, speedup=5)
+                rollout(env, policy, max_length=max_length, animated=True, speedup=5)
             else:
                 if max_length:
-                    rollout(mdp, policy, max_length=max_length, animated=True, speedup=5)
+                    rollout(env, policy, max_length=max_length, animated=True, speedup=5)
     except KeyboardInterrupt:
         pass
-    if mdp:
-        mdp.stop_viewer()
 
 
 def _shutdown_worker():
@@ -61,8 +59,8 @@ def init_worker():
     atexit.register(_shutdown_worker)
 
 
-def init_plot(mdp, policy):
-    queue.put(['update', mdp, policy])
+def init_plot(env, policy):
+    queue.put(['update', env, policy])
 
 
 def update_plot(policy, max_length=np.inf):
