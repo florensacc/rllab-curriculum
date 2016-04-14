@@ -36,9 +36,9 @@ class SubgoalPolicy(StochasticPolicy, LasagnePowered, Serializable):
             observation_space=env_spec.observation_space,
             action_space=subgoal_space,
         )
-        self._interval_counter_space = interval_counter_space = Discrete(subgoal_interval)
+        # self._interval_counter_space = interval_counter_space = Discrete(subgoal_interval)
         low_env_spec = self._low_env_spec = EnvSpec(
-            observation_space=Product(env_spec.observation_space, subgoal_space, interval_counter_space),
+            observation_space=Product(env_spec.observation_space, subgoal_space),
             action_space=env_spec.action_space,
         )
         high_policy = self._high_policy = high_policy_cls(high_env_spec, **high_policy_args)
@@ -90,13 +90,14 @@ class SubgoalPolicy(StochasticPolicy, LasagnePowered, Serializable):
             self._subgoal, self._high_agent_info = self._high_policy.get_action(high_obs)
             # reset counter
             self._interval_counter = 0
-        low_obs = (high_obs, self._subgoal, self._interval_counter)
+
+        low_obs = (high_obs, self._subgoal)#, self._interval_counter)
         action, low_agent_info = self._low_policy.get_action(low_obs)
         return action, dict(
             high=self._high_agent_info,
             low=low_agent_info,
             subgoal=self.subgoal_space.flatten(self._subgoal),
-            counter=self._interval_counter_space.flatten(self._interval_counter),
+            # counter=self._interval_counter_space.flatten(self._interval_counter),
             high_obs=self.high_policy.observation_space.flatten(high_obs),
             low_obs=self.low_policy.observation_space.flatten(low_obs),
         )
