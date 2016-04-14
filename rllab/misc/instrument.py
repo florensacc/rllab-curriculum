@@ -297,7 +297,7 @@ def run_experiment_lite(
     if mode == "local":
         del kwargs["remote_log_dir"]
         params = dict(kwargs.items() + [("args_data", data)])
-        command = to_local_command(params, script=script, use_gpu=use_gpu)
+        command = to_local_command(params, script=osp.join(config.PROJECT_PATH, script), use_gpu=use_gpu)
         print(command)
         if dry:
             return
@@ -326,9 +326,18 @@ def run_experiment_lite(
     elif mode == "ec2":
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
+        s3_code_path = s3_sync_code(config, dry=dry)
         params = dict(kwargs.items() + [("args_data", data)])
-        launch_ec2(params, exp_prefix=exp_prefix, docker_image=docker_image, script=script,
-                   aws_config=aws_config, dry=dry, terminate_machine=terminate_machine, use_gpu=use_gpu, env=env)
+        launch_ec2(params,
+                   exp_prefix=exp_prefix,
+                   docker_image=docker_image,
+                   script=script,
+                   aws_config=aws_config,
+                   dry=dry,
+                   terminate_machine=terminate_machine,
+                   use_gpu=use_gpu,
+                   code_full_path=s3_code_path,
+                   env=env)
     elif mode == "lab_kube":
         assert env is None
         # first send code folder to s3
@@ -403,8 +412,8 @@ def _to_param_val(v):
         return _shellquote(str(v))
 
 
-def to_local_command(params, script='scripts/run_experiment.py', use_gpu=False):
-    command = "python " + osp.join(config.PROJECT_PATH, script)
+def to_local_command(params, script=osp.join(config.PROJECT_PATH, 'scripts/run_experiment.py'), use_gpu=False):
+    command = "python " + script
     if use_gpu:
         command = "THEANO_FLAGS='device=gpu' " + command
     for k, v in params.iteritems():
@@ -421,7 +430,7 @@ def to_local_command(params, script='scripts/run_experiment.py', use_gpu=False):
 
 
 def to_docker_command(params, docker_image, script='scripts/run_experiment.py', pre_commands=None,
-                      post_commands=None, dry=False, use_gpu=False, env=None):
+                      post_commands=None, dry=False, use_gpu=False, env=None, local_code_dir=None):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
     docker volume mapping to make sure that the logging files are created at the correct locations
@@ -430,7 +439,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     :return:
     """
     log_dir = params.get("log_dir")
-    script = 'rllab/' + script
+    # script = 'rllab/' + script
     if not dry:
         mkdir_p(log_dir)
     # create volume for logging directory
@@ -444,7 +453,9 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
                                                                     docker_log_dir=docker_log_dir)
-    command_prefix += " -v {local_code_dir}:{docker_code_dir}".format(local_code_dir=config.LOCAL_CODE_DIR,
+    if local_code_dir is None:
+        local_code_dir = config.PROJECT_PATH
+    command_prefix += " -v {local_code_dir}:{docker_code_dir}".format(local_code_dir=local_code_dir,
                                                                       docker_code_dir=config.DOCKER_CODE_DIR)
     params = ext.merge_dict(params, dict(log_dir=docker_log_dir))
     command_prefix += " -t " + docker_image + " /bin/bash -c "
@@ -453,7 +464,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
-    command_list.append(to_local_command(params, script, use_gpu=use_gpu))
+    command_list.append(to_local_command(params, osp.join(config.DOCKER_CODE_DIR, script), use_gpu=use_gpu))
     if post_commands is not None:
         command_list.extend(post_commands)
     return command_prefix + "'" + "; ".join(command_list) + "'"
@@ -464,7 +475,8 @@ def dedent(s):
     return '\n'.join(lines)
 
 
-def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.py',
+def launch_ec2(params, exp_prefix, docker_image, code_full_path,
+               script='scripts/run_experiment.py',
                aws_config=None, dry=False, terminate_machine=True, use_gpu=False, env=None):
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
@@ -503,17 +515,24 @@ def launch_ec2(params, exp_prefix, docker_image, script='scripts/run_experiment.
         docker --config /home/ubuntu/.docker pull {docker_image}
     """.format(docker_image=docker_image))
     sio.write("""
+        aws s3 cp --recursive {code_full_path} {local_code_path} --region {aws_region}
+    """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR, aws_region=config.AWS_REGION_NAME))
+    sio.write("""
+        cd {local_code_path}
+    """.format(local_code_path=config.DOCKER_CODE_DIR))
+    sio.write("""
         mkdir -p {log_dir}
     """.format(log_dir=log_dir))
     sio.write("""
         while /bin/true; do
-            aws s3 sync {log_dir} {remote_log_dir} --region {aws_region}
-            sleep 1
-        done &
-    """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
+            aws s3 sync --exclude *.pkl {log_dir} {remote_log_dir} --region {aws_region}
+            sleep 5
+        done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                             aws_region=config.AWS_REGION_NAME))
     sio.write("""
         {command}
-    """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu, env=env)))
+    """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu, env=env,
+                                         local_code_dir=config.DOCKER_CODE_DIR)))
     sio.write("""
         aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
     """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
