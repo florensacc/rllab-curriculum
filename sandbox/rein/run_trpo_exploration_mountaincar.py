@@ -56,6 +56,7 @@ for kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, rep
         use_replay_pool=replay_pool,
         use_kl_ratio=kl_ratio,
         n_itr_update=n_itr_update,
+        kl_batch_size=kl_batch_size
     )
 
     run_experiment_lite(

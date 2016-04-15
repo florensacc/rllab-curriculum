@@ -34,9 +34,9 @@ for seed in seeds:
         policy=policy,
         baseline=baseline,
         batch_size=1000,
-        whole_paths=False,
+        whole_paths=True,
         max_path_length=100,
-        n_itr=750,
+        n_itr=1000,
         step_size=0.01,
         subsample_factor=1.0,
     )

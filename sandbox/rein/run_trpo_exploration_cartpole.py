@@ -13,9 +13,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-seeds = range(2)
 etas = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0]
-etas = [1.0]
 replay_pools = [True]
 kl_ratios = [True]
 normalize_rewards = [True]
@@ -67,6 +65,6 @@ for kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, rep
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local_docker",
+        mode="lab_kube",
         dry=False,
     )
