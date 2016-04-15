@@ -1,4 +1,6 @@
 import numpy as np
+from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+
 from rllab.algos.base import RLAlgorithm
 from rllab.sampler import parallel_sampler
 from rllab.misc import special
@@ -14,7 +16,6 @@ import lasagne
 from collections import deque
 import time
 from sandbox.rein.dynamics_models.nn_uncertainty import prob_nn
-from __builtin__ import xrange
 # -------------------
 
 
@@ -131,6 +132,7 @@ class BatchPolopt(RLAlgorithm):
             kl_alpha=0.001,
             normalize_reward=False,
             kl_batch_size=1,
+            use_kl_ratio_q=False,
             **kwargs
     ):
         """
@@ -191,6 +193,7 @@ class BatchPolopt(RLAlgorithm):
         self.kl_alpha = kl_alpha
         self.normalize_reward = normalize_reward
         self.kl_batch_size = kl_batch_size
+        self.use_kl_ratio_q = use_kl_ratio_q
         # ----------------------
 
         # Params to keep track of moving average (both intrinsic and external
@@ -202,6 +205,12 @@ class BatchPolopt(RLAlgorithm):
             self._kl_mean = 0.
             self._kl_var = 0.
 
+        if self.use_kl_ratio_q:
+            # Add Queue here to keep track of N last kl values, compute average
+            # over them and divide current kl values by it. This counters the
+            # exploding kl value problem.
+            self.kl_previous = deque(maxlen=self.kl_q_len)
+
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy)
         if self.plot:
@@ -211,6 +220,18 @@ class BatchPolopt(RLAlgorithm):
         pass
 
     def train(self):
+
+        #         # Optimizer for fisher information intrinsic rew.
+        #         # -----------------------------------------------
+        #         optimizer = ConjugateGradientOptimizer()
+        #         self.optimizer.update_opt(
+        #             loss=surr_loss,
+        #             target=self.policy,
+        #             leq_constraint=(mean_kl, self.step_size),
+        #             inputs=input_list,
+        #             constraint_name="mean_kl"
+        #         )
+        #         # -----------------------------------------------
 
         # Uncertainty neural network (UNN) initialization.
         # ------------------------------------------------
@@ -417,6 +438,8 @@ class BatchPolopt(RLAlgorithm):
         # ----------------------------
         logger.log("Computing intrinsic rewards ...")
 
+        kls = []
+
         for i in xrange(len(paths)):
             obs = paths[i]['observations']
             act = paths[i]['actions']
@@ -453,22 +476,37 @@ class BatchPolopt(RLAlgorithm):
                 if self.use_replay_pool:
                     self.pnn.reset_to_old_params()
 
-            if self.use_kl_ratio:
+            # Last element in KL vector needs to be replaced by second last one
+            # because the actual last observation has no next observation.
+            kl[-1] = kl[-2]
+            # Add kl to list of kls
+            kls.append(kl)
+
+        # Flatten kl list
+        kls_flat = np.hstack(kls)
+
+        if self.use_kl_ratio:
+            if self.use_kl_ratio_q:
+                # Update kl Q
+                kls_mean = np.mean(kls_flat)
+                self.kl_previous.append(kls_mean)
+                kl = kl / np.mean(np.asarray(self.kl_previous))
+            else:
                 for j in xrange(len(kl)):
                     kl[j] = self._apply_normalize_kl(kl[j])
 
-            # discount eta
-            self.eta *= self.eta_discount
-            # last element in KL vector needs to be replaced by second last one
-            # because the actual last observation has no next observation.
-            kl[-1] = kl[-2]
-            # scale KL
-            kl_rescaled = self.eta * kl
+        # Discount eta
+        self.eta *= self.eta_discount
 
-            # add KL ass intrinsic reward to external reward
+        # Scale KL
+        kl_rescaled = self.eta * kl
+
+        for i in xrange(len(paths)):
+            # Add KL ass intrinsic reward to external reward
             paths[i]['rewards'] = paths[i]['rewards'] + kl_rescaled
 
         logger.log("Intrinsic reward computed.")
+
         # ----------------------------
 
         baselines = []

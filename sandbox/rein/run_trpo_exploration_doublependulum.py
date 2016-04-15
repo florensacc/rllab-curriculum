@@ -14,18 +14,19 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0]
+etas = [0.001, 0.01, 0.1, 1.0]
 replay_pools = [True]
 kl_ratios = [True]
-normalize_rewards = [True]
+normalize_rewards = [False, True]
 reverse_kl_regs = [True]
 n_itr_updates = [5]
-kl_batch_sizes = [1, 5]
+kl_batch_sizes = [5]
+use_kl_ratio_qs = [True]
 param_cart_product = itertools.product(
-    kl_batch_sizes, normalize_rewards, n_itr_updates, reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
+    use_kl_ratio_qs, kl_batch_sizes, normalize_rewards, n_itr_updates, reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
 )
 
-for kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
+for use_kl_ratio_q, kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
     mdp_class = DoublePendulumEnv
     mdp = NormalizedEnv(env=mdp_class())
@@ -58,16 +59,16 @@ for kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, rep
         use_kl_ratio=kl_ratio,
         n_itr_update=n_itr_update,
         normalize_reward=normalize_reward,
-        kl_batch_size=kl_batch_size
-
+        kl_batch_size=kl_batch_size,
+        use_kl_ratio_q=use_kl_ratio_q
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="doublependulum",
+        exp_prefix=config.EXP_PREFIX + "_" + "doublependulum",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local_docker",
         dry=False,
     )
