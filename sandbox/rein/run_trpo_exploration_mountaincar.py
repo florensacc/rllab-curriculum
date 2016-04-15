@@ -19,11 +19,12 @@ kl_ratios = [True]
 normalize_rewards = [True]
 reverse_kl_regs = [True]
 n_itr_updates = [5]
+kl_batch_sizes = [1, 5]
 param_cart_product = itertools.product(
-    normalize_rewards, n_itr_updates, reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
+    kl_batch_sizes, normalize_rewards, n_itr_updates, reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
 )
 
-for normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
+for kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
     mdp_class = MountainCarEnv
     mdp = NormalizedEnv(env=mdp_class())
@@ -54,7 +55,7 @@ for normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, replay_pool, eta, 
         use_reverse_kl_reg=reverse_kl_reg,
         use_replay_pool=replay_pool,
         use_kl_ratio=kl_ratio,
-        n_itr_update=5,
+        n_itr_update=n_itr_update,
     )
 
     run_experiment_lite(
