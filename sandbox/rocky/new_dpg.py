@@ -20,16 +20,6 @@ def extract(x, *keys):
     return tuple([xi[k] for xi in x] for k in keys)
 
 
-def merge_dict(*args):
-    if any([isinstance(x, OrderedDict) for x in args]):
-        z = OrderedDict()
-    else:
-        z = dict()
-    for x in args:
-        z.update(x)
-    return z
-
-
 # class logger(object):
 #     tabulars = list()
 #

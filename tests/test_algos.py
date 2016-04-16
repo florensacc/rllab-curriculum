@@ -22,7 +22,6 @@ from rllab.policies.deterministic_mlp_policy import DeterministicMLPPolicy
 from rllab.q_functions.continuous_mlp_q_function import ContinuousMLPQFunction
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from rllab.baselines.zero_baseline import ZeroBaseline
-from rllab.misc import ext
 from nose2 import tools
 
 common_batch_algo_args = dict(
@@ -32,26 +31,26 @@ common_batch_algo_args = dict(
 )
 
 algo_args = {
-    VPG: ext.merge_dict(common_batch_algo_args, dict()),
-    TNPG: ext.merge_dict(common_batch_algo_args, dict(
+    VPG: common_batch_algo_args,
+    TNPG: dict(common_batch_algo_args,
         optimizer_args=dict(
             cg_iters=1,
         ),
-    )),
-    TRPO: ext.merge_dict(common_batch_algo_args, dict(
+    ),
+    TRPO: dict(common_batch_algo_args,
         optimizer_args=dict(
             cg_iters=1,
         ),
-    )),
-    PPO: ext.merge_dict(common_batch_algo_args, dict(
+    ),
+    PPO: dict(common_batch_algo_args,
         optimizer_args=dict(
             max_penalty_itr=1,
             max_opt_itr=1
         ),
-    )),
-    REPS: ext.merge_dict(common_batch_algo_args, dict(
+    ),
+    REPS: dict(common_batch_algo_args,
         max_opt_itr=1,
-    )),
+    ),
     DDPG: dict(
         n_epochs=1,
         epoch_length=100,

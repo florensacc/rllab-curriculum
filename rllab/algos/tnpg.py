@@ -20,6 +20,6 @@ class TNPG(NPO, Serializable):
             if optimizer_args is None:
                 optimizer_args = default_args
             else:
-                optimizer_args = ext.merge_dict(default_args, optimizer_args)
+                optimizer_args = dict(default_args, **optimizer_args)
             optimizer = ConjugateGradientOptimizer(**optimizer_args)
         super(TNPG, self).__init__(optimizer=optimizer, **kwargs)

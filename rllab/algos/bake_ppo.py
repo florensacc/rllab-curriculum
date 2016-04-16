@@ -1,5 +1,5 @@
 from rllab.misc.tensor_utils import flatten_tensors
-from rllab.misc.ext import merge_dict, compile_function, extract, new_tensor
+from rllab.misc.ext import compile_function, extract, new_tensor
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 from rllab.algos.batch_polopt import BatchPolopt
@@ -260,7 +260,7 @@ class BakePPO(BatchPolopt):
         logger.record_tabular('LossAfter', loss_after)
         logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('dLoss', loss_before - loss_after)
-        return merge_dict(opt_info, dict(penalty=penalty))
+        return dict(opt_info, penalty=penalty)
 
     @overrides
     def optimize_policy(self, itr, policy, samples_data, opt_info):
