@@ -1,5 +1,6 @@
-import numpy as np
 import operator
+
+import numpy as np
 
 
 def flatten_tensors(tensors):
@@ -70,21 +71,6 @@ def concat_tensor_list(tensor_list):
 def concat_tensor_dict_list(tensor_dict_list):
     keys = tensor_dict_list[0].keys()
     return {k: concat_tensor_list([x[k] for x in tensor_dict_list]) for k in keys}
-
-
-def subsample_tensor_dict(tensor_dict, interval):
-    """
-    Given a dictionary of (tensors or dictionary of tensors), subsample each of the tensors according to the interval
-    :param tensor_dict: A dictionary of (tensors or dictionary of tensors)
-    :return: a dictionary with subsampled tensors
-    """
-    ret = dict()
-    for k, v in tensor_dict.iteritems():
-        if isinstance(v, dict):
-            ret[k] = subsample_tensor_dict(v, interval=interval)
-        else:
-            ret[k] = v[::interval]
-    return ret
 
 
 def truncate_tensor_list(tensor_list, truncated_len):

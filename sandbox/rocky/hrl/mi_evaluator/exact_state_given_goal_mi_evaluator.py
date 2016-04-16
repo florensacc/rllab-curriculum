@@ -9,15 +9,8 @@ from rllab.spaces.product import Product
 class ExactStateGivenGoalMIEvaluator(object):
     def __init__(self, env, policy, component_idx=None):
         self.exact_computer = ExactComputer(env, policy, component_idx)
-        # assert isinstance(env, CompoundActionSequenceEnv)
-        # assert isinstance(env.wrapped_env, GridWorldEnv)
-        # assert isinstance(policy, SubgoalPolicy)
-        # assert isinstance(policy.subgoal_space, Discrete)
-        # assert env._reset_history
         self.env = env
         self.policy = policy
-        # self.n_states = env.wrapped_env.observation_space.n
-        # self.n_raw_actions = env.wrapped_env.action_space.n
         self.n_subgoals = policy.subgoal_space.n
         self.subgoal_interval = policy.subgoal_interval
         self.component_idx = component_idx
@@ -36,13 +29,6 @@ class ExactStateGivenGoalMIEvaluator(object):
         self.mi_states = None
         self.mi_avg = None
 
-    # def _get_relevant_data(self, paths):
-    #     obs = np.concatenate([p["agent_infos"]["high_obs"][:-1] for p in paths])
-    #     next_obs = np.concatenate([p["agent_infos"]["high_obs"][1:] for p in paths])
-    #     subgoals = np.concatenate([p["agent_infos"]["subgoal"][:-1] for p in paths])
-    #     N = obs.shape[0]
-    #     return obs.reshape((N, -1)), next_obs.reshape((N, -1)), subgoals
-
     def _get_relevant_data(self, paths):
         obs = np.concatenate([p["agent_infos"]["high_obs"][:-1] for p in paths])
         N = obs.shape[0]
@@ -59,7 +45,7 @@ class ExactStateGivenGoalMIEvaluator(object):
 
     def predict(self, path):
         path_length = len(path["rewards"])
-        subsampled_path = hrl_utils.subsample_path(path, self.subgoal_interval)
+        subsampled_path = hrl_utils.downsample_path(path, self.subgoal_interval)
         self.update_cache()
         flat_obs, flat_next_obs, subgoals = self._get_relevant_data([subsampled_path])
         obs = map(self.env.observation_space.unflatten, flat_obs)
@@ -114,6 +100,9 @@ class ExactStateGivenGoalMIEvaluator(object):
         self.mi_states = mi_states
         self.mi_avg = np.mean(mi_states)
 
+    def mi_bonus_sym(self):
+        return self.exact_computer.mi_bonus_sym()
+
     def log_diagnostics(self, paths):
         self.update_cache()
         logger.record_tabular("I(goal,next_state|state)", self.mi_avg)
@@ -121,3 +110,4 @@ class ExactStateGivenGoalMIEvaluator(object):
     def fit(self, paths):
         # calling fit = invalidate caches
         self.computed = False
+        self.exact_computer.prepare_sym(paths)

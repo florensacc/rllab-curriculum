@@ -12,6 +12,7 @@ from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from sandbox.rocky.hrl.batch_hrl import BatchHRL
 from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 from sandbox.rocky.hrl.subgoal_baseline import SubgoalBaseline
+from sandbox.rocky.hrl.trpo_bonus import TRPOBonus
 from sandbox.rocky.hrl.mi_evaluator.component_state_given_goal_mi_evaluator import ComponentStateGivenGoalMIEvaluator
 from sandbox.rocky.hrl.mi_evaluator.exact_state_given_goal_mi_evaluator import ExactStateGivenGoalMIEvaluator
 
@@ -21,10 +22,11 @@ stub(globals())
 
 env = HierarchicalGridWorldEnv(
     high_grid=[
-        "SFFF",
-        "FFFF",
-        "FFFF",
-        "FFFF",
+        "FFFFF",
+        "FFFFF",
+        "FFSFF",
+        "FFFFF",
+        "FFFFF",
     ],
     low_grid=[
         "SF",
@@ -40,7 +42,7 @@ if HIERARCHICAL:
         high_policy_args=dict(hidden_sizes=tuple()),
         low_policy_cls=CategoricalMLPPolicy,
         low_policy_args=dict(hidden_sizes=tuple()),
-        subgoal_space=Discrete(10),
+        subgoal_space=Discrete(5),
         subgoal_interval=3,
     )
 
@@ -61,7 +63,7 @@ if HIERARCHICAL:
     mi_evaluator = ExactStateGivenGoalMIEvaluator(
         env=env,
         policy=policy,
-        component_idx=None,
+        component_idx=0,
     )
 
     algo = BatchHRL(
@@ -72,6 +74,7 @@ if HIERARCHICAL:
         batch_size=4000,
         max_path_length=100,
         n_itr=100,
+        bonus_gradient=True,
         high_algo=TRPO(
             env=env,
             policy=policy.high_policy,
@@ -79,12 +82,13 @@ if HIERARCHICAL:
             discount=0.99,
             step_size=0.01,
         ),
-        low_algo=TRPO(
+        low_algo=TRPOBonus(
             env=env,
             policy=policy.low_policy,
             baseline=baseline.low_baseline,
             discount=0.99,
             step_size=0.01,
+            bonus_evaluator=mi_evaluator
         ),
     )
 

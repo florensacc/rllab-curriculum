@@ -2,7 +2,7 @@ import numpy as np
 from rllab.misc import tensor_utils
 
 
-def rollout(env, agent, max_length=np.inf, animated=False, speedup=1):
+def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
     observations = []
     actions = []
     rewards = []
@@ -11,7 +11,9 @@ def rollout(env, agent, max_length=np.inf, animated=False, speedup=1):
     o = env.reset()
     agent.reset()
     path_length = 0
-    while path_length < max_length:
+    if animated:
+        env.render()
+    while path_length < max_path_length:
         a, agent_info = agent.get_action(o)
         next_o, r, d, env_info = env.step(a)
         observations.append(env.observation_space.flatten(o))

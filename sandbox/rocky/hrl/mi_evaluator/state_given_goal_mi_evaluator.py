@@ -56,7 +56,7 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
         return obs.reshape((N, -1)), next_obs.reshape((N, -1)), subgoals
 
     def fit(self, paths):
-        subsampled_paths = [hrl_utils.subsample_path(p, self.subgoal_interval) for p in paths]
+        subsampled_paths = [hrl_utils.downsample_path(p, self.subgoal_interval) for p in paths]
         flat_obs, flat_next_obs, subgoals = self._get_relevant_data(subsampled_paths)
         xs = np.concatenate([flat_obs, subgoals], axis=1)
         ys = flat_next_obs
@@ -70,7 +70,7 @@ class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
 
     def predict(self, path):
         path_length = len(path["rewards"])
-        path = hrl_utils.subsample_path(path, self.subgoal_interval)
+        path = hrl_utils.downsample_path(path, self.subgoal_interval)
         flat_obs, flat_next_obs, subgoals = self._get_relevant_data([path])
         N = flat_obs.shape[0]
         xs = np.concatenate([flat_obs, subgoals], axis=1)

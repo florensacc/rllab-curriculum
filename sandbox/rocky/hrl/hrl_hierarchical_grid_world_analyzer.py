@@ -12,8 +12,10 @@ import joblib
 
 
 class GridPlot(object):
-    def __init__(self, grid_size, title=None):
-        plt.figure(figsize=(5, 5))
+    def __init__(self, n_rows, n_cols, title=None):
+        min_row_col = min(n_rows, n_cols)
+        max_row_col = max(n_rows, n_cols)
+        plt.figure(figsize=(5.0 / min_row_col * n_cols, 5.0 / min_row_col * n_rows))
         ax = plt.axes(aspect=1)
 
         plt.tick_params(axis='x', labelbottom='off')
@@ -21,31 +23,32 @@ class GridPlot(object):
         if title:
             plt.title(title)
 
-        ax.set_xticks(range(grid_size + 1))
-        ax.set_yticks(range(grid_size + 1))
+        ax.set_xticks(range(n_cols + 1))
+        ax.set_yticks(range(n_rows + 1))
         ax.grid(True, linestyle='-', color=(0, 0, 0), alpha=1, linewidth=1)
-        self._grid_size = grid_size
-        self._ax = ax
+        self.n_rows = n_rows
+        self.n_cols = n_cols
+        self.ax = ax
 
     def add_text(self, x, y, text, gravity='center', size=10):
         # transform the grid index to coordinate
-        x, y = y, self._grid_size - 1 - x
+        x, y = y, self.n_rows - 1 - x
         if gravity == 'center':
-            self._ax.text(x + 0.5, y + 0.5, text, ha='center', va='center', size=size)
+            self.ax.text(x + 0.5, y + 0.5, text, ha='center', va='center', size=size)
         elif gravity == 'left':
-            self._ax.text(x + 0.05, y + 0.5, text, ha='left', va='center', size=size)
+            self.ax.text(x + 0.05, y + 0.5, text, ha='left', va='center', size=size)
         elif gravity == 'top':
-            self._ax.text(x + 0.5, y + 1 - 0.05, text, ha='center', va='top', size=size)
+            self.ax.text(x + 0.5, y + 1 - 0.05, text, ha='center', va='top', size=size)
         elif gravity == 'right':
-            self._ax.text(x + 1 - 0.05, y + 0.5, text, ha='right', va='center', size=size)
+            self.ax.text(x + 1 - 0.05, y + 0.5, text, ha='right', va='center', size=size)
         elif gravity == 'bottom':
-            self._ax.text(x + 0.5, y + 0.05, text, ha='center', va='bottom', size=size)
+            self.ax.text(x + 0.5, y + 0.05, text, ha='center', va='bottom', size=size)
         else:
             raise NotImplementedError
 
     def color_grid(self, x, y, color, alpha=1.):
-        x, y = y, self._grid_size - 1 - x
-        self._ax.add_patch(patches.Rectangle(
+        x, y = y, self.n_rows - 1 - x
+        self.ax.add_patch(patches.Rectangle(
             (x, y),
             1,
             1,
@@ -92,10 +95,11 @@ class HrlAnalyzer(object):
     def analyze(self):
         self.print_state_visitation_frequency()
 
+
     def print_state_visitation_frequency(self):
         paths = []
         for _ in xrange(50):
-            paths.append(rollout(env=self.env, agent=self.policy, max_length=100))
+            paths.append(rollout(env=self.env, agent=self.policy, max_path_length=100))
         observations = np.vstack([p["observations"] for p in paths])
         self.print_total_frequency(observations)
         self.print_high_frequency(observations)
@@ -120,19 +124,8 @@ class HrlAnalyzer(object):
         print(np.array2string(mean_onehots, formatter={'float_kind':lambda x: "%.2f" % x}))
 
     def print_high_frequency(self, observations):
-        # high_states = np.array([
-        #                            self.component_space.flatten(self.observation_space.unflatten(x)[0]) for x in states
-        #                            ])
-        # total_states = [self.observation_space.unflatten(x) for x in states]
-        # total_states = [x[0] *]
-        # mean_states = np.mean(states, axis=0).reshape(
-        #     (self.env.total_n_row, self.env.total_n_col)
-        # )
-        # print(np.array_str(mean_states))
-        #
         high_states = np.array(
             [self.component_space.flatten(self.observation_space.unflatten(x)[0]) for x in observations])
-        # print(high_states.shape)
         mean_high_states = np.mean(high_states, axis=0).reshape(
             (self.env.high_n_row, self.env.high_n_col)
         )
