@@ -1,6 +1,7 @@
 # 2016-04-16
 
 - Removed the helper method `rllab.misc.ext.merge_dict`. Turns out Python's `dict` constructor already supports this functionality: `merge_dict(dict1, dict2) == dict(dict1, **dict2)`.
+- Added a `min_std` option to `GaussianMLPPolicy`. This avoids the gradients being unstable near deterministic policies.
 
 # 2016-04-11
 
