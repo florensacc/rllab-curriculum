@@ -15,7 +15,7 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.rein.dynamics_models.nn_uncertainty import prob_nn
+from sandbox.rein.dynamics_models.nn_uncertainty import uncertain_nn
 # -------------------
 
 
@@ -133,6 +133,8 @@ class BatchPolopt(RLAlgorithm):
             normalize_reward=False,
             kl_batch_size=1,
             use_kl_ratio_q=False,
+            unn_n_hidden=[32],
+            unn_layers_type=[1, 1],
             **kwargs
     ):
         """
@@ -194,6 +196,8 @@ class BatchPolopt(RLAlgorithm):
         self.normalize_reward = normalize_reward
         self.kl_batch_size = kl_batch_size
         self.use_kl_ratio_q = use_kl_ratio_q
+        self.unn_n_hidden = unn_n_hidden
+        self.unn_layers_type = unn_layers_type
         # ----------------------
 
         # Params to keep track of moving average (both intrinsic and external
@@ -233,20 +237,21 @@ class BatchPolopt(RLAlgorithm):
         #         )
         #         # -----------------------------------------------
 
-        # Uncertainty neural network (UNN) initialization.
+        # Uncertain neural network (UNN) initialization.
         # ------------------------------------------------
         batch_size = 1
-        n_batches = 5  # temp
+        n_batches = 5  # FIXME, there is no correct value!
 
+        # MDP observation and action dimensions.
         obs_dim = np.sum(self.env.observation_space.shape)
-        act_dim = 1  # mdp.action_dim
-        # double pendulum: in=7 out=6
-        self.pnn = prob_nn.ProbNN(
+        act_dim = np.sum(self.env.action_space.shape)
+
+        self.pnn = uncertain_nn.ProbNN(
             n_in=(obs_dim + act_dim),
-            n_hidden=[32],
+            n_hidden=self.unn_n_hidden,
             n_out=obs_dim,
             n_batches=n_batches,
-            layers_type=[1, 1],
+            layers_type=self.unn_layers_type,
             trans_func=lasagne.nonlinearities.rectify,
             out_func=lasagne.nonlinearities.linear,
             batch_size=batch_size,
@@ -259,20 +264,21 @@ class BatchPolopt(RLAlgorithm):
             reverse_kl_reg_factor=self.reverse_kl_reg_factor
         )
 
-        print("Building UNN model (eta={}) ...".format(self.eta))
+        logger.log("Building UNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
         # Build symbolic network architecture.
         self.pnn.build_network()
         # Build all symbolic stuff around architecture, e.g., loss, prediction
         # functions, training functions,...
         self.pnn.build_model()
-        print("Model built ({:.1f} sec).".format((time.time() - start_time)))
+        logger.log(
+            "Model built ({:.1f} sec).".format((time.time() - start_time)))
 
         if self.use_replay_pool:
             pool = SimpleReplayPool(
                 max_pool_size=self.replay_pool_size,
                 observation_shape=self.env.observation_space.shape,
-                action_dim=1,  # mdp.action_dim,
+                action_dim=act_dim
             )
         # ------------------------------------------------
 

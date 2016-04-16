@@ -1,5 +1,5 @@
 import os
-from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
+from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
@@ -14,31 +14,30 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.001, 0.01, 0.1, 1.0]
+etas = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0]
 replay_pools = [True]
-kl_ratios = [True, False]
+kl_ratios = [False]
 normalize_rewards = [True]
 reverse_kl_regs = [True]
 n_itr_updates = [5]
 kl_batch_sizes = [5]
-use_kl_ratio_qs = [True, False]
 param_cart_product = itertools.product(
-    use_kl_ratio_qs, kl_batch_sizes, normalize_rewards, n_itr_updates, reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
+    kl_batch_sizes, normalize_rewards, n_itr_updates, reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
 )
 
-for use_kl_ratio_q, kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
+for kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
-    mdp_class = DoublePendulumEnv
+    mdp_class = SwimmerEnv
     mdp = NormalizedEnv(env=mdp_class())
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
-        hidden_sizes=(32,),
+        hidden_sizes=(64, 32),
     )
 
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(hidden_sizes=(32,)),
+        regressor_args=dict(hidden_sizes=(64, 32)),
     )
 
     algo = TRPO(
@@ -58,14 +57,14 @@ for use_kl_ratio_q, kl_batch_size, normalize_reward, n_itr_update, reverse_kl_re
         use_replay_pool=replay_pool,
         use_kl_ratio=kl_ratio,
         n_itr_update=n_itr_update,
-        normalize_reward=normalize_reward,
         kl_batch_size=kl_batch_size,
-        use_kl_ratio_q=use_kl_ratio_q
+        unn_n_hidden=[64, 32],
+        unn_layers_type=[1, 1, 1]
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix=config.EXP_PREFIX + "_" + "doublependulum",
+        exp_prefix=config.EXP_PREFIX + "_" + "swimmer",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
