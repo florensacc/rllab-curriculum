@@ -23,6 +23,7 @@ from rllab.q_functions.continuous_mlp_q_function import ContinuousMLPQFunction
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from rllab.baselines.zero_baseline import ZeroBaseline
 from nose2 import tools
+import numpy as np
 
 common_batch_algo_args = dict(
     n_itr=1,
@@ -90,6 +91,7 @@ def test_polopt_algo(algo_cls, env_cls, policy_cls):
     baseline = ZeroBaseline(env_spec=env.spec)
     algo = algo_cls(env=env, policy=policy, baseline=baseline, **(algo_args.get(algo_cls, dict())))
     algo.train()
+    assert not np.any(np.isnan(policy.get_param_values()))
 
 
 def test_ddpg():

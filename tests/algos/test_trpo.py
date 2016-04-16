@@ -7,6 +7,7 @@ from rllab.algos.trpo import TRPO
 from rllab.spaces.box import Box
 import lasagne.nonlinearities
 import numpy as np
+import theano.tensor as TT
 
 
 class DummyEnv(Env):
@@ -29,7 +30,7 @@ def test_trpo_nan():
     env = DummyEnv()
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
-        hidden_nonlinearity=lasagne.nonlinearities.rectify,
+        hidden_nonlinearity=lambda x: TT.max(x, 0),
         hidden_sizes=(1,))
     baseline = ZeroBaseline(env_spec=env.spec)
     algo = TRPO(
