@@ -8,6 +8,7 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.rein.algos.trpo_unn import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
+from rllab import config
 
 stub(globals())
 
@@ -15,14 +16,17 @@ stub(globals())
 seeds = range(10)
 etas = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0]
 replay_pools = [True]
-kl_ratios = [False, True]
+kl_ratios = [True]
+normalize_rewards = [True]
 reverse_kl_regs = [True]
-n_itr_updates = [30]
+n_itr_updates = [5]
+kl_batch_sizes = [1, 5]
+use_kl_ratio_qs = [False]
 param_cart_product = itertools.product(
-    n_itr_updates, reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
+    use_kl_ratio_qs, kl_batch_sizes, normalize_rewards, n_itr_updates, reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
 )
 
-for n_itr_update, reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
+for use_kl_ratio_q, kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
 
     mdp_class = DoublePendulumEnv
     mdp = NormalizedEnv(env=mdp_class())
@@ -54,12 +58,14 @@ for n_itr_update, reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart
         use_replay_pool=replay_pool,
         use_kl_ratio=kl_ratio,
         n_itr_update=n_itr_update,
-        normalize_reward=True
+        normalize_reward=normalize_reward,
+        kl_batch_size=kl_batch_size,
+        use_kl_ratio_q=use_kl_ratio_q
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="doublependulum",
+        exp_prefix=config.EXP_PREFIX + "_" + "doublependulum",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

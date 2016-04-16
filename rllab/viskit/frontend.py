@@ -13,8 +13,6 @@ import plotly.graph_objs as go
 import pdb
 
 
-USE_MEDIAN = False
-
 app = flask.Flask(__name__, static_url_path='/static')
 
 exps_data = None
@@ -32,11 +30,11 @@ def send_css(path):
     return flask.send_from_directory('css', path)
 
 
-def make_plot(plot_list):
+def make_plot(plot_list, use_median=False):
     data = []
     for idx, plt in enumerate(plot_list):
         color = core.color_defaults[idx % len(core.color_defaults)]
-        if USE_MEDIAN:
+        if use_median:
             x = range(len(plt.percentile50))
             y = list(plt.percentile50)
             y_upper = list(plt.percentile75)
@@ -68,14 +66,14 @@ def make_plot(plot_list):
     layout = go.Layout(
         legend=dict(
             xanchor="auto",
-            yanchor="bottom",
+            yanchor="auto",
         )
     )
     fig = go.Figure(data=data, layout=layout)
     return po.plot(fig, output_type='div', include_plotlyjs=False)
 
 
-def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
+def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, use_median=False):
     print(plot_key, split_key, group_key, filters)
     selector = core.Selector(exps_data)
     for k, v in filters.iteritems():
@@ -127,7 +125,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
                         progresses = [
                             np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
 
-                        if USE_MEDIAN:
+                        if use_median:
                             medians = np.nanmedian(progresses, axis=0)
                             regret = np.median(medians)
                         else:
@@ -159,7 +157,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
                         np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
                     legend = '{} ({:.1f})'.format(
                         group_legend, best_regret)
-                    if USE_MEDIAN:
+                    if use_median:
                         percentile25 = np.nanpercentile(
                             progresses, q=25, axis=0)
                         percentile50 = np.nanpercentile(
@@ -177,7 +175,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}):
 
         if len(to_plot) > 0:
             plots.append("<div>%s: %s</div>" % (split_key, split_legend))
-            plots.append(make_plot(to_plot))
+            plots.append(make_plot(to_plot, use_median=use_median))
     return "\n".join(plots)
 
 
@@ -196,8 +194,9 @@ def plot_div():
     # group_key = distinct_params[0][0]
     # print split_key
     # exp_filter = distinct_params[0]
+    use_median = args.get("use_median", "") == 'True'
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key,
-                                    group_key=group_key, filters=filters)
+                                    group_key=group_key, filters=filters, use_median=use_median)
     # print plot_div
     return plot_div
 

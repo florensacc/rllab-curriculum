@@ -1,4 +1,6 @@
 import numpy as np
+from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+
 from rllab.algos.base import RLAlgorithm
 from rllab.sampler import parallel_sampler
 from rllab.misc import special
@@ -129,6 +131,8 @@ class BatchPolopt(RLAlgorithm):
             reward_alpha=0.001,
             kl_alpha=0.001,
             normalize_reward=False,
+            kl_batch_size=1,
+            use_kl_ratio_q=False,
             **kwargs
     ):
         """
@@ -188,6 +192,8 @@ class BatchPolopt(RLAlgorithm):
         self.reward_alpha = reward_alpha
         self.kl_alpha = kl_alpha
         self.normalize_reward = normalize_reward
+        self.kl_batch_size = kl_batch_size
+        self.use_kl_ratio_q = use_kl_ratio_q
         # ----------------------
 
         # Params to keep track of moving average (both intrinsic and external
@@ -199,6 +205,12 @@ class BatchPolopt(RLAlgorithm):
             self._kl_mean = 0.
             self._kl_var = 0.
 
+        if self.use_kl_ratio_q:
+            # Add Queue here to keep track of N last kl values, compute average
+            # over them and divide current kl values by it. This counters the
+            # exploding kl value problem.
+            self.kl_previous = deque(maxlen=self.kl_q_len)
+
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy)
         if self.plot:
@@ -208,6 +220,18 @@ class BatchPolopt(RLAlgorithm):
         pass
 
     def train(self):
+
+        #         # Optimizer for fisher information intrinsic rew.
+        #         # -----------------------------------------------
+        #         optimizer = ConjugateGradientOptimizer()
+        #         self.optimizer.update_opt(
+        #             loss=surr_loss,
+        #             target=self.policy,
+        #             leq_constraint=(mean_kl, self.step_size),
+        #             inputs=input_list,
+        #             constraint_name="mean_kl"
+        #         )
+        #         # -----------------------------------------------
 
         # Uncertainty neural network (UNN) initialization.
         # ------------------------------------------------
@@ -234,12 +258,6 @@ class BatchPolopt(RLAlgorithm):
             use_reverse_kl_reg=self.use_reverse_kl_reg,
             reverse_kl_reg_factor=self.reverse_kl_reg_factor
         )
-
-#         if self.use_kl_ratio:
-#             # Add Queue here to keep track of N last kl values, compute average
-#             # over them and divide current kl values by it. This counters the
-#             # exploding kl value problem.
-#             self.kl_previous = deque(maxlen=self.kl_q_len)
 
         print("Building UNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
@@ -301,11 +319,12 @@ class BatchPolopt(RLAlgorithm):
                     for _inputs, _targets in zip(_inputss, _targetss):
                         self.pnn.train_fn(_inputs, _targets)
 
-                    _out = self.pnn.pred_fn(_inputs)
-
                     _out = self.pnn.pred_fn(np.vstack(_inputss))
                     new_acc = np.square(_out - np.vstack(_targetss))
                     new_acc = np.mean(new_acc)
+
+                    logger.record_tabular('SNN_DynModelSqLossBefore', old_acc)
+                    logger.record_tabular('SNN_DynModelSqLossAfter', new_acc)
             # ----------------
 
             self.env.log_diagnostics(paths)
@@ -400,83 +419,92 @@ class BatchPolopt(RLAlgorithm):
 
     def process_samples(self, itr, paths):
 
-        # Save original reward.
-        # ---------------------
-        for i in xrange(len(paths)):
-            paths[i]['rewards_orig'] = np.array(paths[i]['rewards'])
-        # ---------------------
-
-        # Normalize reward
-        # ----------------
-        if self.normalize_reward:
-            for i in xrange(len(paths)):
-                for j in xrange(len(paths[i]['rewards'])):
-                    paths[i]['rewards'][j] = self._apply_normalize_reward(paths[i]['rewards'][j])
-
-        # ----------------
-
         # Computing intrinsic rewards.
         # ----------------------------
         logger.log("Computing intrinsic rewards ...")
-        # Compute sample Bellman error.
-        obs = np.vstack([path['observations'] for path in paths])
-        act = np.vstack([path['actions'] for path in paths])
-        rew = np.hstack([path['rewards'] for path in paths])
 
-        # inputs = (o,a), target = o'
-        obs_nxt = np.vstack([obs[1:], obs[-1]])
-        _inputs = np.hstack([obs, act])
-        _targets = obs_nxt
+        # Save original reward.
+        for i in xrange(len(paths)):
+            paths[i]['rewards_orig'] = np.array(paths[i]['rewards'])
 
-        _out = self.pnn.pred_fn(_inputs)
+        # Normalize reward
+        if self.normalize_reward:
+            for i in xrange(len(paths)):
+                for j in xrange(len(paths[i]['rewards'])):
+                    paths[i]['rewards'][j] = self._apply_normalize_reward(
+                        paths[i]['rewards'][j])
 
-        old_acc = np.square(_out - _targets)
-        old_acc = np.mean(old_acc)
+        # List to keep track of kl per path.
+        kls = []
 
-        kl = np.zeros(rew.shape)
+        # Iterate over all paths and compute intrinsic reward by updating the
+        # model on each observation, calculating the KL divergence of the new
+        # params to the old ones, and undoing this operation.
+        for i in xrange(len(paths)):
+            obs = paths[i]['observations']
+            act = paths[i]['actions']
+            rew = paths[i]['rewards']
 
-        for i in xrange(obs.shape[0]):
+            # inputs = (o,a), target = o'
+            obs_nxt = np.vstack([obs[1:]])
+            _inputs = np.hstack([obs[:-1], act[:-1]])
+            _targets = obs_nxt
+
+            # KL vector assumes same shape as reward.
+            kl = np.zeros(rew.shape)
+
             # Save old params for every update.
             self.pnn.save_old_params()
 
-            # Update model weights based on current minibatch.
-            for _ in xrange(self.n_itr_update):
-                self.pnn.train_update_fn(
-                    _inputs[i][None, :], _targets[i][None, :])
+            for j in xrange(int(np.ceil(obs.shape[0] / float(self.kl_batch_size)))):
 
-            # Calculate current minibatch KL.
-            kl_div = float(self.pnn.f_kl_div_closed_form())
-            kl[i] = kl_div
+                start = j * self.kl_batch_size
+                end = np.minimum(
+                    (j + 1) * self.kl_batch_size, obs.shape[0] - 1)
 
-            # If using replay pool, undo updates.
-            if self.use_replay_pool:
-                self.pnn.reset_to_old_params()
+                # Update model weights based on current minibatch.
+                for _ in xrange(self.n_itr_update):
+                    self.pnn.train_update_fn(
+                        _inputs[start:end], _targets[start:end])
 
+                # Calculate current minibatch KL.
+                kl_div = float(self.pnn.f_kl_div_closed_form())
+                for k in xrange(start, end):
+                    kl[k] = kl_div
+
+                # If using replay pool, undo updates.
+                if self.use_replay_pool:
+                    self.pnn.reset_to_old_params()
+
+            # Last element in KL vector needs to be replaced by second last one
+            # because the actual last observation has no next observation.
+            kl[-1] = kl[-2]
+            # Add kl to list of kls
+            kls.append(kl)
+
+        # Perform normlization of the intrinsic rewards.
         if self.use_kl_ratio:
-            #             logger.log(str(self.kl_previous))
-            #             self.kl_previous.append(np.mean(kl))
-            #             kl = kl / np.mean(np.asarray(self.kl_previous))
-            print(kl[0])
-            for i in xrange(len(kl)):
-                kl[i] = self._apply_normalize_kl(kl[i])
-            print(kl[0])
+            if self.use_kl_ratio_q:
+                # Update kl Q
+                self.kl_previous.append(np.mean(np.hstack(kls)))
+                previous_mean_kl = np.mean(np.asarray(self.kl_previous))
+                for i in xrange(len(kls)):
+                    kls[i] = kls[i] / previous_mean_kl
+            else:
+                # For each kl element we normalize it, normalizing updates the
+                # running mean/var in each step.
+                for i in xrange(len(kls)):
+                    for j in xrange(len(kls[i])):
+                        kls[i][j] = self._apply_normalize_kl(kls[i][j])
 
-        _out = self.pnn.pred_fn(_inputs)
-
-        new_acc = np.square(_out - _targets)
-        new_acc = np.mean(new_acc)
-
-        self.eta *= self.eta_discount
-        kl = self.eta * np.hstack([0., kl])
-
-        n_samples = 0
+        # Add KL ass intrinsic reward to external reward
         for i in xrange(len(paths)):
-            path_length = len(paths[i]['rewards'])
-            paths[i]['rewards'] = paths[i]['rewards'] + \
-                kl[n_samples:n_samples + path_length]
-            n_samples += path_length
+            paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
 
-        logger.log("computed")
+        # Discount eta
+        self.eta *= self.eta_discount
+
+        logger.log("Intrinsic reward computed.")
         # ----------------------------
 
         baselines = []
@@ -618,12 +646,15 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('StdReturn', np.std(undiscounted_returns))
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
-        logger.record_tabular('SNN_MeanKL', np.mean(kl))
-        logger.record_tabular('SNN_StdKL', np.std(kl))
-        logger.record_tabular('SNN_MinKL', np.min(kl))
-        logger.record_tabular('SNN_MaxKL', np.max(kl))
-        logger.record_tabular('SNN_DynModelSqLossBefore', old_acc)
-        logger.record_tabular('SNN_DynModelSqLossAfter', new_acc)
+
+        # Exploration logged vars.
+        # ------------------------
+        kls_flat = np.hstack(kls)
+        logger.record_tabular('SNN_MeanKL', np.mean(kls_flat))
+        logger.record_tabular('SNN_StdKL', np.std(kls_flat))
+        logger.record_tabular('SNN_MinKL', np.min(kls_flat))
+        logger.record_tabular('SNN_MaxKL', np.max(kls_flat))
         logger.record_tabular('eta', self.eta)
+        # ------------------------
 
         return samples_data
