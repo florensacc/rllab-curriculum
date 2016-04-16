@@ -1,5 +1,5 @@
 import numpy as np
-from prob_nn import ProbNN
+from uncertain_nn import ProbNN
 from utils import load_dataset_1Dregression, load_dataset_MNIST
 import lasagne
 # import theano
@@ -57,7 +57,8 @@ def main():
         type='regression',
         prior_sd=0.5,
         use_reverse_kl_reg=True,
-        reverse_kl_reg_factor=0.1
+        reverse_kl_reg_factor=0.1,
+        stochastic_output=True
     )
 
     # Build symbolic network architecture.
