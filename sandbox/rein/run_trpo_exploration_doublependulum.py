@@ -14,14 +14,14 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.001, 0.01, 0.1, 1.0]
+etas = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0]
 replay_pools = [True]
 kl_ratios = [True]
-normalize_rewards = [False, True]
+normalize_rewards = [True]
 reverse_kl_regs = [True]
 n_itr_updates = [5]
-kl_batch_sizes = [5]
-use_kl_ratio_qs = [True]
+kl_batch_sizes = [1, 5]
+use_kl_ratio_qs = [False]
 param_cart_product = itertools.product(
     use_kl_ratio_qs, kl_batch_sizes, normalize_rewards, n_itr_updates, reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
 )
@@ -69,6 +69,6 @@ for use_kl_ratio_q, kl_batch_size, normalize_reward, n_itr_update, reverse_kl_re
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local_docker",
+        mode="lab_kube",
         dry=False,
     )

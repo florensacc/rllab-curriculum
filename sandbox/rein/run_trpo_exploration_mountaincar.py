@@ -8,6 +8,7 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.rein.algos.trpo_unn import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
+from rllab import config
 
 stub(globals())
 
@@ -61,7 +62,7 @@ for kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, rep
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="mountaincar",
+        exp_prefix=config.EXP_PREFIX + "_" +"mountaincar",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
