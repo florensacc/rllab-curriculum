@@ -15,26 +15,10 @@ from rllab.misc import logger
 from rllab.misc import ext
 from rllab.misc import autoargs
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
+import theano.tensor as TT
 
 
 class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
-    @autoargs.arg('hidden_sizes', type=int, nargs='*',
-                  help='list of sizes for the fully-connected hidden layers')
-    @autoargs.arg('std_sizes', type=int, nargs='*',
-                  help='list of sizes for the fully-connected layers for std, note'
-                       'there is a difference in semantics than above: here an empty'
-                       'list means that std is independent of input and the last size is ignored')
-    @autoargs.arg('initial_std', type=float,
-                  help='Initial std')
-    @autoargs.arg('std_trainable', type=bool,
-                  help='Is std trainable')
-    @autoargs.arg('output_nl', type=str,
-                  help='nonlinearity for the output layer')
-    @autoargs.arg('nonlinearity', type=str,
-                  help='nonlinearity used for each hidden layer, can be one '
-                       'of tanh, sigmoid')
-    @autoargs.arg('bn', type=bool,
-                  help='whether to apply batch normalization to hidden layers')
     def __init__(
             self,
             env_spec,
@@ -44,10 +28,25 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             adaptive_std=False,
             std_share_network=False,
             std_hidden_sizes=(32, 32),
+            min_std=1e-6,
             std_hidden_nonlinearity=NL.tanh,
             hidden_nonlinearity=NL.tanh,
             output_nonlinearity=None,
     ):
+        """
+        :param env_spec:
+        :param hidden_sizes: list of sizes for the fully-connected hidden layers
+        :param learn_std: Is std trainable
+        :param init_std: Initial std
+        :param adaptive_std:
+        :param std_share_network:
+        :param std_hidden_sizes: list of sizes for the fully-connected layers for std
+        :param min_std: whether to make sure that the std is at least some threshold value, to avoid numerical issues
+        :param std_hidden_nonlinearity:
+        :param hidden_nonlinearity: nonlinearity used for each hidden layer
+        :param output_nonlinearity: nonlinearity for the output layer
+        :return:
+        """
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
@@ -85,7 +84,13 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 trainable=learn_std,
             )
 
+        self.min_std = min_std
+
         mean_var, log_std_var = L.get_output([l_mean, l_log_std])
+
+        if self.min_std is not None:
+            log_std_var = TT.maximum(log_std_var, np.log(min_std))
+
         self._mean_var, self._log_std_var = mean_var, log_std_var
 
         self._l_mean = l_mean
@@ -103,6 +108,8 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     def dist_info_sym(self, obs_var, action_var):
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
+        if self.min_std is not None:
+            log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
         return dict(mean=mean_var, log_std=log_std_var)
 
     @overrides
