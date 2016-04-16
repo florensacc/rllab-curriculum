@@ -16,6 +16,7 @@ class ExactComputer(object):
         assert isinstance(policy.subgoal_space, Discrete)
         self.env = env
         self.analyzer = analyzer = env.analyzer
+        analyzer.set_policy(policy)
         self.policy = policy
         self.component_idx = component_idx
         if component_idx is not None:
@@ -37,7 +38,8 @@ class ExactComputer(object):
     def compute_p_next_state_given_goal_state(self):
         logger.log("computing p_next_state_given_goal_state")
         # [0] -> state, [1] -> goal, [2] -> next state
-        goal_transition_probs = self.analyzer.compute_goal_transition_probabilities(self.policy)
+        self.analyzer.set_policy(self.policy)
+        goal_transition_probs = self.analyzer.compute_goal_transition_probabilities()
         # return value index: [0] -> goal, [1] -> state, [2] -> next state
         p_next_state_given_goal_state = np.zeros((self.n_subgoals, self.n_states, self.n_component_states))
         for state in xrange(self.n_states):
@@ -90,3 +92,9 @@ class ExactComputer(object):
                 mi -= ent_next_state_given_goal_state[subgoal, state] * p_goal_given_state[state, subgoal]
             mi_states[state] = mi
         return mi_states
+
+    def mi_bonus_sym(self):
+        return self.analyzer.mi_bonus_sym(self.component_idx)
+
+    def prepare_sym(self, paths):
+        self.analyzer.prepare_sym(paths, self.component_idx)

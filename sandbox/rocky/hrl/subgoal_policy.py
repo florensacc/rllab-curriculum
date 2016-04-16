@@ -101,3 +101,20 @@ class SubgoalPolicy(StochasticPolicy, LasagnePowered, Serializable):
             high_obs=self.high_policy.observation_space.flatten(high_obs),
             low_obs=self.low_policy.observation_space.flatten(low_obs),
         )
+
+
+class FixedGoalPolicy(StochasticPolicy):
+
+    def __init__(self, policy, goal):
+        assert isinstance(policy, SubgoalPolicy)
+        self.policy = policy
+        self.goal = goal
+
+    def get_action(self, observation):
+        low_obs = (observation, self.goal)
+        action, low_agent_info = self.policy.low_policy.get_action(low_obs)
+        return action, dict(
+            low=low_agent_info,
+            subgoal=self.goal,
+            low_obs=low_obs
+        )

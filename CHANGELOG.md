@@ -1,3 +1,7 @@
+# 2016-04-16
+
+- Removed the helper method `rllab.misc.ext.merge_dict`. Turns out Python's `dict` constructor already supports this functionality: `merge_dict(dict1, dict2) == dict(dict1, **dict2)`.
+
 # 2016-04-11
 
 - Added a method `truncate_paths` to the `rllab.sampler.parallel_sampler` module. This should be sufficient to replace the old configurable parameter `whole_paths` which has been removed during refactoring.

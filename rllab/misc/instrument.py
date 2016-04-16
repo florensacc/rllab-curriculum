@@ -74,7 +74,7 @@ class StubClass(object):
         if len(args) > 0:
             # Convert the positional arguments to keyword arguments
             spec = inspect.getargspec(self.proxy_class.__init__)
-            kwargs = ext.merge_dict(dict(zip(spec.args[1:], args)), kwargs)
+            kwargs = dict(zip(spec.args[1:], args), **kwargs)
             args = tuple()
         return StubObject(self.proxy_class, *args, **kwargs)
 
@@ -98,7 +98,7 @@ class StubObject(object):
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
             spec = inspect.getargspec(__proxy_class.__init__)
-            kwargs = ext.merge_dict(dict(zip(spec.args[1:], args)), kwargs)
+            kwargs = dict(zip(spec.args[1:], args), **kwargs)
             args = tuple()
         self.proxy_class = __proxy_class
         self.args = args
@@ -195,10 +195,10 @@ class VariantGenerator(object):
                     last_variants = last_vals(
                         **{k: variant[k] for k in last_val_keys})
                     for last_choice in last_variants:
-                        yield ext.merge_dict(variant, {last_key: last_choice})
+                        yield dict(variant, last_key=last_choice)
                 else:
                     for last_choice in last_vals:
-                        yield ext.merge_dict(variant, {last_key: last_choice})
+                        yield dict(variant, last_key=last_choice)
 
 
 def stub(glbs):
@@ -304,7 +304,7 @@ def run_experiment_lite(
         try:
             if env is None:
                 env = dict()
-            subprocess.call(command, shell=True, env=ext.merge_dict(os.environ, env))
+            subprocess.call(command, shell=True, env=dict(os.environ, **env))
         except Exception as e:
             print e
             if isinstance(e, KeyboardInterrupt):
@@ -457,7 +457,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
         local_code_dir = config.PROJECT_PATH
     command_prefix += " -v {local_code_dir}:{docker_code_dir}".format(local_code_dir=local_code_dir,
                                                                       docker_code_dir=config.DOCKER_CODE_DIR)
-    params = ext.merge_dict(params, dict(log_dir=docker_log_dir))
+    params = dict(params, log_dir=docker_log_dir)
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
     #command_list.append('sleep 9999999')
@@ -493,7 +493,7 @@ def launch_ec2(params, exp_prefix, docker_image, code_full_path,
 
     if aws_config is None:
         aws_config = dict()
-    aws_config = ext.merge_dict(default_config, aws_config)
+    aws_config = dict(default_config, **aws_config)
 
     sio = StringIO()
     sio.write("#!/bin/bash\n")

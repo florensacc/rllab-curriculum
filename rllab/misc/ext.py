@@ -11,16 +11,6 @@ import operator
 sys.setrecursionlimit(50000)
 
 
-def merge_dict(*args):
-    if any([isinstance(x, OrderedDict) for x in args]):
-        z = OrderedDict()
-    else:
-        z = dict()
-    for x in args:
-        z.update(x)
-    return z
-
-
 def extract(x, *keys):
     if isinstance(x, (dict, lazydict)):
         return tuple(x[k] for k in keys)

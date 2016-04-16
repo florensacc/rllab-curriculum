@@ -119,6 +119,28 @@ with such.A("hierarchical grid world analyzer") as it:
             it.assertEqual(prob / 16., 1.)
 
 
+    @it.should("correctly convert indices")
+    def test_analyzer_convert_indices():
+        high_grid = [
+            "SF",
+            "FF"
+        ]
+        low_grid = [
+            "SF",
+            "FF"
+        ]
+        hier_grid_world = HierarchicalGridWorldEnv(high_grid, low_grid)
+        act = hier_grid_world.flat_env.action_from_direction
+        analyzer = hier_grid_world.analyzer
+        hier_grid_world.reset()
+        next_obs, _, _, _ = hier_grid_world.step(act("right"))
+        it.assertEqual(next_obs, (0, 1))
+        it.assertEqual(analyzer.get_int_state_from_obs(next_obs), 1)
+        next_obs, _, _, _ = hier_grid_world.step(act("right"))
+        it.assertEqual(next_obs, (1, 0))
+        it.assertEqual(analyzer.get_int_state_from_obs(next_obs), 2)
+
+
     @it.should("compute policy-dependent quantities")
     def test_hierarchical_grid_world_analyzer_with_policy():
         high_grid = [
@@ -142,7 +164,8 @@ with such.A("hierarchical grid world analyzer") as it:
         )
         print("compiling policy took %s" % (time.time() - start_time))
         start_time = time.time()
-        goal_probs = hier_grid_world.analyzer.compute_goal_transition_probabilities(policy)
+        hier_grid_world.analyzer.set_policy(policy)
+        goal_probs = hier_grid_world.analyzer.compute_goal_transition_probabilities()
         print("computing goal probs took %s" % (time.time() - start_time))
         np.testing.assert_allclose(np.sum(goal_probs, axis=-1), 1.)
 

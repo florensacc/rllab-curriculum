@@ -88,7 +88,7 @@ def run():
                     reset=lambda: None,
                     get_action=lambda obs_: (network.select_action(obs_), dict())
                 ),
-                max_length=max_path_length,
+                max_path_length=max_path_length,
             )
             paths.append(path)
         avg_return = np.mean([np.sum(p["rewards"]) for p in paths])

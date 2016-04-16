@@ -143,12 +143,12 @@ class HrlAnalyzer(object):
     def print_state_visitation_frequency(self):
         paths = []
         for _ in xrange(50):
-            paths.append(rollout(env=self._env, agent=self._policy, max_length=60))
+            paths.append(rollout(env=self._env, agent=self._policy, max_path_length=60))
         states = np.vstack([p["observations"] for p in paths])
         print np.array_str(np.mean(states, axis=0)[:16].reshape((4, 4)))
 
     def rollout(self, max_length=100):
-        path = rollout(env=self._env, agent=self._policy, max_length=max_length)
+        path = rollout(env=self._env, agent=self._policy, max_path_length=max_length)
         obs = [self._obs_space.unflatten(x) for x in path["observations"]]
         actions = [self._action_space.unflatten(x) for x in path["actions"]]
         subgoals = [self._subgoal_space.unflatten(x) for x in path["agent_infos"]["subgoal"]]

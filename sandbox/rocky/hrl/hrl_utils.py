@@ -4,14 +4,29 @@ from rllab.misc import tensor_utils
 import numpy as np
 
 
-def subsample_path(path, subsample_interval):
+def downsample_tensor_dict(tensor_dict, interval):
+    """
+    Given a dictionary of (tensors or dictionary of tensors), downsample each of the tensors according to the interval
+    :param tensor_dict: A dictionary of (tensors or dictionary of tensors)
+    :return: a dictionary with downsampled tensors
+    """
+    ret = dict()
+    for k, v in tensor_dict.iteritems():
+        if isinstance(v, dict):
+            ret[k] = downsample_tensor_dict(v, interval=interval)
+        else:
+            ret[k] = v[::interval]
+    return ret
+
+
+def downsample_path(path, downsample_interval):
     rewards = path['rewards']
     path_length = len(rewards)
-    chunked_length = int(np.ceil(path_length * 1.0 / subsample_interval))
-    padded_length = chunked_length * subsample_interval
+    chunked_length = int(np.ceil(path_length * 1.0 / downsample_interval))
+    padded_length = chunked_length * downsample_interval
     padded_rewards = np.append(rewards, np.zeros(padded_length - path_length))
     chunked_rewards = np.sum(
-        np.reshape(padded_rewards, (chunked_length, subsample_interval)),
+        np.reshape(padded_rewards, (chunked_length, downsample_interval)),
         axis=1
     )
 
@@ -22,24 +37,8 @@ def subsample_path(path, subsample_interval):
         if k == "rewards":
             pass
         elif isinstance(val, dict):
-            new_dict[k] = tensor_utils.subsample_tensor_dict(val, subsample_interval)
+            new_dict[k] = downsample_tensor_dict(val, downsample_interval)
         else:
-            new_dict[k] = val[::subsample_interval]
+            new_dict[k] = val[::downsample_interval]
 
     return new_dict
-
-
-    # observations = path['observations']
-    # actions = path['actions']
-    #
-    # chunked_env_infos = tensor_utils.subsample_tensor_dict(path["env_infos"], subsample_interval)
-    # chunked_agent_infos = tensor_utils.subsample_tensor_dict(path["agent_infos"], subsample_interval)
-    # chunked_actions = actions[::subsample_interval]
-    # chunked_observations = observations[::subsample_interval]
-    # return dict(
-    #     observations=chunked_observations,
-    #     actions=chunked_actions,
-    #     env_infos=chunked_env_infos,
-    #     agent_infos=chunked_agent_infos,
-    #     rewards=chunked_rewards,
-    # )

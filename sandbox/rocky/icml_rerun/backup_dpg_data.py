@@ -17,9 +17,11 @@ instances = [x for x in instances if x['State']['Name'] == 'running']
 
 for instance in instances:
     ip = instance['PublicIpAddress']
+    name = instance['Tags'][0]['Value']
+    # import ipdb; ipdb.set_trace()
     command = ("""
-    scp -o StrictHostKeyChecking=no -r ubuntu@{ip}:/Users/dementrock/research/rllab/data/local/* data/s3/dpg-new-search/
-    """.format(ip=ip))
-    print command
+    scp -o StrictHostKeyChecking=no -r ubuntu@{ip}:/Users/dementrock/research/rllab/data/local/{name}/progress.csv data/s3/dpg-new-search/{name}/progress.csv
+    """.format(ip=ip, name=name))
+    print(command)
     os.system(command)
 
