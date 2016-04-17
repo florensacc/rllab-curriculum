@@ -113,8 +113,7 @@ for i, exp in enumerate(exps):
     exp_name=exp.params['exp_name']
     path_experiment=os.path.join(datadir,exp_name)
     last_iter = np.size(exp.progress['Iteration']) - 1
-    pkl_name= 'itr_158'
-    # pkl_name= 'itr_{}'.format(last_iter)
+    pkl_name= 'itr_{}'.format(last_iter)
     last_data_unpickle = joblib.load(os.path.join(path_experiment,pkl_name+'.pkl'))
     first_data_unpickle = joblib.load(os.path.join(path_experiment,'itr_0.pkl'))
     #create fig_dir
