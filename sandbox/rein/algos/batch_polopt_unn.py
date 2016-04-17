@@ -18,6 +18,8 @@ import time
 from sandbox.rein.dynamics_models.nn_uncertainty import uncertain_nn
 # -------------------
 
+TSNE_PLOT = False
+
 
 class SimpleReplayPool(object):
     """Replay pool"""
@@ -135,6 +137,7 @@ class BatchPolopt(RLAlgorithm):
             use_kl_ratio_q=False,
             unn_n_hidden=[32],
             unn_layers_type=[1, 1],
+            stochastic_output=False,
             **kwargs
     ):
         """
@@ -198,6 +201,7 @@ class BatchPolopt(RLAlgorithm):
         self.use_kl_ratio_q = use_kl_ratio_q
         self.unn_n_hidden = unn_n_hidden
         self.unn_layers_type = unn_layers_type
+        self.stochastic_output = stochastic_output
         # ----------------------
 
         # Params to keep track of moving average (both intrinsic and external
@@ -214,6 +218,9 @@ class BatchPolopt(RLAlgorithm):
             # over them and divide current kl values by it. This counters the
             # exploding kl value problem.
             self.kl_previous = deque(maxlen=self.kl_q_len)
+
+        if TSNE_PLOT:
+            self.all_observations = []
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy)
@@ -261,7 +268,8 @@ class BatchPolopt(RLAlgorithm):
             reverse_update_kl=self.reverse_update_kl,
             symbolic_prior_kl=self.symbolic_prior_kl,
             use_reverse_kl_reg=self.use_reverse_kl_reg,
-            reverse_kl_reg_factor=self.reverse_kl_reg_factor
+            reverse_kl_reg_factor=self.reverse_kl_reg_factor,
+            stochastic_output=self.stochastic_output
         )
 
         logger.log("Building UNN model (eta={}) ...".format(self.eta))
@@ -288,8 +296,28 @@ class BatchPolopt(RLAlgorithm):
         episode_lengths = []
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
+
+            if TSNE_PLOT and itr > 0:
+                from sklearn import manifold
+                from matplotlib import pyplot as plt
+                n_components = 2
+                X = np.vstack(self.all_observations)
+                n_samples = 5000
+                rand_ind = np.random.choice(range(X.shape[0]), n_samples)
+                tsne = manifold.TSNE(
+                    n_components=n_components, init='pca', random_state=0)
+                Y = tsne.fit_transform(X[rand_ind, :])
+                color = ['blue' if i > n_samples/2 else 'red' for i in xrange(Y.shape[0])]
+                plt.scatter(Y[:, 0], Y[:, 1], c=color, cmap=plt.cm.Spectral, lw=0)
+                plt.show()
+
             paths = self.obtain_samples(itr)
             samples_data = self.process_samples(itr, paths)
+
+            if TSNE_PLOT:
+                # Keep track of all observations for T-SNE calc.
+                for path in paths:
+                    self.all_observations.append(path['observations'])
 
             # Exploration code
             # ----------------
@@ -356,6 +384,7 @@ class BatchPolopt(RLAlgorithm):
                 if self.pause_for_plot:
                     raw_input("Plotting evaluation run: Press Enter to "
                               "continue...")
+
         self.shutdown_worker()
 
     def init_opt(self):
