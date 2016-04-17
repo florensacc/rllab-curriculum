@@ -297,7 +297,6 @@ class AsyncDDPG(RLAlgorithm, Serializable):
                 finished = shared_T.value >= self.max_samples
                 if shared_T.value >= last_eval_T + self.min_eval_interval or finished:
                     last_eval_T = shared_T.value
-                    logger.log("Shared T: %d" % shared_T.value)
                     if self.evaluate_policy:
                         eval_policy.set_param_values(self.policy.get_param_values())
                         self.evaluate(eval_env, eval_policy, last_eval_T)
@@ -333,13 +332,12 @@ class AsyncDDPG(RLAlgorithm, Serializable):
             self.qf.get_param_values(regularizable=True)
         )
 
-            with self.shared_diagnostics.lock:
-                        logger.log("Sample time: %f" % self.shared_diagnostics.sample_time.value)
-                        logger.log("Update time: %f" % self.shared_diagnostics.update_time.value)
-                        self.shared_diagnostics.sample_time.value = 0
-                        self.shared_diagnostics.update_time.value = 0
-
         with self.shared_diagnostics.lock:
+
+            sample_time = self.shared_diagnostics.sample_time.value
+            update_time = self.shared_diagnostics.update_time.value
+            self.shared_diagnostics.sample_time.value = 0
+            self.shared_diagnostics.update_time.value = 0
 
             if len(self.shared_diagnostics.q_averages) > 0:
                 all_qs = np.concatenate(self.shared_diagnostics.q_averages)
@@ -383,11 +381,11 @@ class AsyncDDPG(RLAlgorithm, Serializable):
                               policy_reg_param_norm)
         logger.record_tabular('QFunRegParamNorm',
                               qfun_reg_param_norm)
+        logger.record_tabular('SampleTime', sample_time)
+        logger.record_tabular('UpdateTime', update_time)
         eval_env.log_diagnostics(paths)
         eval_policy.log_diagnostics(paths)
         logger.dump_tabular()
-
-
 
     def worker_init_opt(self):
         """
