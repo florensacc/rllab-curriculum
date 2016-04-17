@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flask Template Example</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="http://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css" rel="stylesheet" media="screen">
+    <link href="/static/css/dropdowns-enhancement.css" rel="stylesheet" media="screen">
+    <script type="text/javascript" src="/static/js/plotly-latest.min.js"></script>
+    <style type="text/css">
+        .container {
+            padding-top: 100px;
+        }
+    </style>
+
+</head>
+<body>
+<div class="container">
+    <div class="control-panel">
+    	Use median:
+    	<form>
+		  <input type="radio" name="use_median" value="False", checked="checked">False<br>
+		  <input type="radio" name="use_median" value="True">True<br>
+		</form>
+        Filters:
+        <form>
+            <div class="filter current">
+                <select class="target">
+                    {% for key in distinct_param_keys %}
+                        <option>{{ key }}</option>
+                    {% endfor %}
+                </select>
+                <select class="filter">
+                </select>
+                <br/>
+            </div>
+        </form>
+        Plot Attribute:
+        <div class="btn-group">
+            <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">{{ plot_key }}<span
+                    class="caret"></span></button>
+            <ul class="dropdown-menu">
+                {% for plottable_key in plottable_keys %}
+                    <li>
+                        <input type="radio" id="plot_key_{{ loop.index0 }}" name="plot_key"
+                               value="{{ loop.index0 }}"
+                                {% if plottable_key == plot_key %}
+                               checked
+                                {% endif %}
+                        />
+                        <label for="plot_key_{{ loop.index0 }}">{{ plottable_key }}</label>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <br/>
+        (Figure) Split by:
+        <div class="btn-group">
+            <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">(None)<span
+                    class="caret"></span></button>
+            <ul class="dropdown-menu">
+                <li>
+                    <input type="radio" id="split_key_0" name="split_key"
+                           value="0" checked />
+                    <label for="split_key_0">(None)</label>
+                </li>
+                {% for key in distinct_param_keys %}
+                    <li>
+                        <input type="radio" id="split_key_{{ loop.index }}" name="split_key"
+                               value="{{ loop.index }}"/>
+                        <label for="split_key_{{ loop.index }}">{{ key }}</label>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        (Series) Split by:
+        <div class="btn-group">
+            <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">{{ distinct_param_keys[0] }}<span
+                    class="caret"></span></button>
+            <ul class="dropdown-menu">
+                {% for key in distinct_param_keys %}
+                    <li>
+                        <input type="radio" id="group_key_{{ loop.index }}" name="group_key"
+                               value="{{ loop.index }}"
+                               {% if key == group_key %}
+                                checked
+                               {% endif %}
+                        />
+                        <label for="group_key_{{ loop.index }}">{{ key }}</label>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <br/>
+        <button class="update">Update</button>
+        <br/>
+        <span id="status"></span>
+    </div>
+    <div id="plot_wrapper">
+        {{ plot_div|safe }}
+    </div>
+</div>
+<script src="http://code.jquery.com/jquery-1.10.2.min.js"></script>
+<script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.0/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="/static/js/dropdowns-enhancement.js"></script>
+<script type="text/javascript" src="/static/js/jquery.loadTemplate-1.5.6.js"></script>
+
+<script type="text/javascript">
+    var plottableKeys = {{ plottable_keys|tojson|safe }};
+    var distinctParamKeys = {{ distinct_param_keys|tojson|safe }};
+    var distinctParams = {{ distinct_params|tojson|safe }};
+    function updatePlot(callback) {
+        $("#status").html("Updating");
+
+        var $controlPanel = $(".control-panel");
+        var plotIndex = $controlPanel.find("input[name=plot_key]:checked").val();
+        var plotKey = plottableKeys[plotIndex];
+        var splitIndex = $controlPanel.find("input[type=radio][name=split_key]:checked").val();
+        var splitKey;
+        if (splitIndex == 0) {
+            splitKey = null;
+        } else {
+            splitKey = distinctParamKeys[splitIndex - 1];
+        }
+        var groupIndex = $controlPanel.find("input[type=radio][name=group_key]:checked").val();
+        var groupKey = distinctParamKeys[groupIndex - 1];
+        var filters = {};
+        $.each($("div.filter"), function (itr, div) {
+            var val = $(div).find(".filter").val();
+            if (val && val.length != 0) {
+                filters[$(div).find(".target").val()] = val;
+            }
+        });
+        var useMedian = $controlPanel.find("input[type=radio][name=use_median]:checked").val();
+        console.log(useMedian);
+        console.log("updating");
+        $.get("/plot_div",
+                {
+                    "plot_key": plotKey, "split_key": splitKey,
+                    "group_key": groupKey, "filters": JSON.stringify(filters), "use_median": useMedian
+                },
+                function (data) {
+                    $("#plot_wrapper").empty().append(data);
+                    $("#status").html("Updated");
+                    if (callback !== undefined) {
+                        callback();
+                    }
+                });
+    }
+    $(function () {
+        $("input[type=radio][name=plot_key]").change(function () {
+            updatePlot();
+        });
+        $("input[type=radio][name=split_key]").change(function () {
+            updatePlot();
+        });
+        $("input[type=radio][name=group_key]").change(function () {
+            updatePlot();
+        });
+        $("button.update").click(function () {
+            updatePlot();
+        });
+    });
+    function updateFilterSelections() {
+        var key = $(this).val();
+        var select$ = $(this).parent().find("select.filter");
+        select$.empty();
+        $.each([""].concat(distinctParams[key]), function (itr, v) {
+            select$.append(
+                    $("<option />")
+                            .attr("value", v)
+                            .text(v)
+            );
+        });
+    }
+    $("select.target").change(updateFilterSelections);
+    var cleanFilter;
+    function addFilter() {
+        var parent$ = $(this).parent();
+        if (parent$.hasClass("current")) {
+            parent$.after(cleanFilter.clone(true, true));
+            parent$.removeClass("current");
+        }
+    }
+    $("select.filter").change(addFilter);
+    $(document).ready(function () {
+        updateFilterSelections.call($("select.target"));
+        cleanFilter = $(".filter.current").clone(true, true);
+        $("#status").html("Ready")
+    });
+</script>
+
+</body>
+</html>

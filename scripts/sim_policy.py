@@ -20,7 +20,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     policy = None
-    mdp = None
+    env = None
     while True:
         if ':' in args.file:
             # fetch file using ssh
@@ -29,22 +29,19 @@ if __name__ == "__main__":
             if policy:
                 new_policy = data['policy']
                 policy.set_param_values(new_policy.get_param_values())
-                path = rollout(mdp, policy, max_length=args.max_length,
+                path = rollout(env, policy, max_path_length=args.max_length,
                                animated=True, speedup=args.speedup)
             else:
                 policy = data['policy']
-                mdp = data['mdp']
-                mdp.start_viewer()
-                path = rollout(mdp, policy, max_length=args.max_length,
+                env = data['env']
+                path = rollout(env, policy, max_path_length=args.max_length,
                                animated=True, speedup=args.speedup)
         else:
             data = joblib.load(args.file)
             policy = data['policy']
-            mdp = data['mdp']
-            mdp.start_viewer()
-            path = rollout(mdp, policy, max_length=args.max_length,
+            env = data['env']
+            path = rollout(env, policy, max_path_length=args.max_length,
                            animated=True, speedup=args.speedup)
-            mdp.stop_viewer()
         # print 'Total reward: ', sum(path["rewards"])
         args.loop -= 1
         if ':' not in args.file:

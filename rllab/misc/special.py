@@ -2,6 +2,7 @@ import numpy as np
 import scipy
 import theano.tensor.nnet
 import theano.tensor as TT
+import theano.tensor.extra_ops
 from collections import OrderedDict
 
 
@@ -41,7 +42,29 @@ def cat_perplexity(x):
 def explained_variance_1d(ypred, y):
     assert y.ndim == 1 and ypred.ndim == 1
     vary = np.var(y)
-    return np.nan if vary == 0 else 1 - np.var(y - ypred) / vary
+    if np.isclose(vary, 0):
+        if np.var(ypred) > 0:
+            return 0
+        else:
+            return 1
+    if abs(1 - np.var(y - ypred) / (vary + 1e-8)) > 1e5:
+        import ipdb; ipdb.set_trace()
+    return 1 - np.var(y - ypred) / (vary + 1e-8)
+
+
+def to_onehot(ind, dim):
+    ret = np.zeros(dim)
+    ret[ind] = 1
+    return ret
+
+
+def to_onehot_sym(ind, dim):
+    assert ind.ndim == 1
+    return theano.tensor.extra_ops.to_one_hot(ind, dim)
+
+
+def from_onehot(v):
+    return np.nonzero(v)[0][0]
 
 
 def normalize_updates(old_mean, old_std, new_mean, new_std, old_W, old_b):

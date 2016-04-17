@@ -1,5 +1,6 @@
-import numpy as np
 import operator
+
+import numpy as np
 
 
 def flatten_tensors(tensors):
@@ -8,60 +9,79 @@ def flatten_tensors(tensors):
     else:
         return np.asarray([])
 
+
 def unflatten_tensors(flattened, tensor_shapes):
     tensor_sizes = map(lambda shape: reduce(operator.mul, shape), tensor_shapes)
     indices = np.cumsum(tensor_sizes)[:-1]
     return map(lambda pair: np.reshape(pair[0], pair[1]), zip(np.split(flattened, indices), tensor_shapes))
 
 
-def pad_tensor(x, max_len, rep):
+def pad_tensor(x, max_len):
     return np.concatenate([
         x,
-        np.tile(rep, (max_len - len(x),) + (1,) * np.ndim(rep))
+        np.tile(np.zeros_like(x[0]), (max_len - len(x),) + (1,) * np.ndim(x[0]))
     ])
+
+
+def pad_tensor_dict(tensor_dict, max_len):
+    keys = tensor_dict.keys()
+    ret = dict()
+    for k in keys:
+        if isinstance(tensor_dict[k], dict):
+            ret[k] = pad_tensor_dict(tensor_dict[k], max_len)
+        else:
+            ret[k] = pad_tensor(tensor_dict[k], max_len)
+    return ret
 
 
 def high_res_normalize(probs):
     return map(lambda x: x / sum(map(float, probs)), map(float, probs))
 
 
-def cg(prod, b, x0, tolerance=1.0e-10, max_itr=100):
+def stack_tensor_list(tensor_list):
+    return np.array(tensor_list)
+    # tensor_shape = np.array(tensor_list[0]).shape
+    # if tensor_shape is tuple():
+    #     return np.array(tensor_list)
+    # return np.vstack(tensor_list)
+
+
+def stack_tensor_dict_list(tensor_dict_list):
     """
-    A function to solve [A]{x} = {b} linear equation system with the 
-    conjugate gradient method.
-
-    More at: http://en.wikipedia.org/wiki/Conjugate_gradient_method
-
-    ========== Parameters ==========
-    prod : a function that computes A*x given x
-    b : vector
-        The right hand side (RHS) vector of the system.
-    x0 : vector
-        The starting guess for the solution.
-    max_itr : integer
-        Maximum number of iterations. Iteration will stop after maxiter 
-        steps even if the specified tolerance has not been achieved.
-    tolerance : float
-        Tolerance to achieve. The algorithm will terminate when either 
-        the relative or the absolute residual is below TOLERANCE.
+    Stack a list of dictionaries of {tensors or dictionary of tensors}.
+    :param tensor_dict_list: a list of dictionaries of {tensors or dictionary of tensors}.
+    :return: a dictionary of {stacked tensors or dictionary of stacked tensors}
     """
+    keys = tensor_dict_list[0].keys()
+    ret = dict()
+    for k in keys:
+        example = tensor_dict_list[0][k]
+        if isinstance(example, dict):
+            v = stack_tensor_dict_list([x[k] for x in tensor_dict_list])
+        else:
+            v = stack_tensor_list([x[k] for x in tensor_dict_list])
+        ret[k] = v
+    return ret
 
-    #   Initializations    
-    x = x0
-    r0 = b - prod(x)
-    p = r0
 
-    #   Start iterations    
-    for i in xrange(max_itr):
-        a = float(np.dot(r0.T, r0)/np.dot(prod(p).T, p))#np.dot(p.T, A), p))
-        x = x + p*a
-        ri = r0 - a*prod(p)
+def concat_tensor_list(tensor_list):
+    return np.concatenate(tensor_list, axis=0)
 
-        #print i, np.linalg.norm(ri)
 
-        if np.linalg.norm(ri) < tolerance:
-            return x
-        b = float(np.dot(ri.T, ri)/np.dot(r0.T, r0))
-        p = ri + b * p
-        r0 = ri
-    return x
+def concat_tensor_dict_list(tensor_dict_list):
+    keys = tensor_dict_list[0].keys()
+    return {k: concat_tensor_list([x[k] for x in tensor_dict_list]) for k in keys}
+
+
+def truncate_tensor_list(tensor_list, truncated_len):
+    return tensor_list[:truncated_len]
+
+
+def truncate_tensor_dict(tensor_dict, truncated_len):
+    ret = dict()
+    for k, v in tensor_dict.iteritems():
+        if isinstance(v, dict):
+            ret[k] = truncate_tensor_dict(v, truncated_len)
+        else:
+            ret[k] = truncate_tensor_list(v, truncated_len)
+    return ret

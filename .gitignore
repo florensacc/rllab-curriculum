@@ -13,8 +13,7 @@ build_linux
 .idea
 .sublime-project
 run_experiment.sh
-notebooks
-*.ipynb
+scratch-notebooks
 launch_scripts
 *.sh.e*
 *.sh.o*
@@ -23,7 +22,17 @@ vendor/mujoco
 .project
 .pydevproject
 *.pdf
+.env
+snippets
+vendor/mujoco
+private
+lua
 iterate.dat
 .env
 src/
 .settings
+.pods
+docs/_build
+blackbox.zip
+blackbox
+rllab/config_personal.py

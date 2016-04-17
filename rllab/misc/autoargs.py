@@ -1,5 +1,4 @@
 from rllab.misc.console import colorize
-from rllab.misc.ext import merge_dict
 import inspect
 
 
@@ -32,13 +31,9 @@ def prefix(prefix_):
 
 def _get_prefix(cls):
     from rllab.mdp.base import MDP
-    from rllab.policy.base import Policy
-    from rllab.baseline.base import Baseline
-    from rllab.vf.base import ValueFunction
-    from rllab.qf.base import QFunction
-    from rllab.algo.base import Algorithm
-    from rllab.es.base import ExplorationStrategy
-    from rllab.model.base import Model
+    from rllab.policies.base import Policy
+    from rllab.baselines.base import Baseline
+    from rllab.algos.base import Algorithm
 
     if hasattr(cls.__init__, '_autoargs_prefix'):
         return cls.__init__._autoargs_prefix
@@ -48,16 +43,8 @@ def _get_prefix(cls):
         return 'algo_'
     elif issubclass(cls, Baseline):
         return 'baseline_'
-    elif issubclass(cls, ValueFunction):
-        return 'vf_'
-    elif issubclass(cls, QFunction):
-        return 'qf_'
     elif issubclass(cls, Policy):
         return 'policy_'
-    elif issubclass(cls, ExplorationStrategy):
-        return 'es_'
-    elif issubclass(cls, Model):
-        return 'model_'
     else:
         return ""
 
@@ -129,9 +116,9 @@ def inherit(base_func):
 
     def wrap(func):
         assert func.__name__ == '__init__'
-        func._autoargs_info = merge_dict(
+        func._autoargs_info = dict(
             _get_info(base_func),
-            _get_info(func),
+            **_get_info(func)
         )
         return func
     return wrap
@@ -142,12 +129,14 @@ def get_all_parameters(cls, parsed_args):
     if prefix is None or len(prefix) == 0:
         raise ValueError('Cannot retrieve parameters without prefix')
     info = _get_info(cls)
-    spec = inspect.getargspec(cls.__init__)
-    if spec.defaults is None:
-        arg_defaults = {}
+    if inspect.ismethod(cls.__init__):
+        spec = inspect.getargspec(cls.__init__)
+        if spec.defaults is None:
+            arg_defaults = {}
+        else:
+            arg_defaults = dict(zip(spec.args[::-1], spec.defaults[::-1]))
     else:
-        arg_defaults = dict(zip(spec.args[::-1], spec.defaults[::-1]))
-    # print arg_defaults
+        arg_defaults = {}
     all_params = {}
     for arg_name, arg_info in info.iteritems():
         prefixed_name = prefix + arg_name

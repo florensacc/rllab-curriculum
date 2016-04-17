@@ -1,239 +1,104 @@
-import random
-
-from joblib.pool import MemmapingPool
-from rllab.sampler.utils import rollout, ProgBarCounter
-from rllab.misc.ext import extract, set_seed
-from multiprocessing import Manager, Queue
+from rllab.sampler.utils import rollout
+from rllab.sampler.stateful_pool import singleton_pool
+from rllab.misc import ext
+from rllab.misc import logger
+from rllab.misc import tensor_utils
 import numpy as np
-import traceback
-import sys
-
-__all__ = [
-    'config_parallel_sampler',
-    'populate_task',
-    'reset',
-]
 
 
-class Globals(object):
-
-    def __init__(self):
-        self.mdp = None
-        self.policy = None
-        self.n_parallel = 1
-        self.pool = None
-        self.base_seed = 0
-        # This queue is used to ensure that each worker is properly initialized
-        self.queue = None
-        self.paths = []
-        # This queue is used by each worker to communicate to the master that
-        # it has been initialized
-        self.worker_queue = None
-
-
-G = Globals()
-
-
-def pool_init_theano():
+def _worker_init(G, id):
     import os
     os.environ['THEANO_FLAGS'] = 'device=cpu'
+    G.worker_id = id
 
 
-def processor_init(queue):
-    pool_init_theano()
-    args = queue.get()
-    worker_init(*args)
+def initialize(n_parallel):
+    singleton_pool.initialize(n_parallel)
+    singleton_pool.run_each(_worker_init, [(id,) for id in xrange(singleton_pool.n_parallel)])
 
 
-def worker_init(mdp, policy, seed_inc):
-    set_seed(seed_inc + G.base_seed)
-    pool_init_theano()
-    G.mdp, G.policy = mdp, policy
-    if G.worker_queue:
-        G.worker_queue.put(None)
+def _worker_populate_task(G, env, policy):
+    G.env = env
+    G.policy = policy
 
 
-def pool_rollout(args):
-    try:
-        policy_params, max_samples, max_path_length, queue, record_states, whole_paths = \
-            extract(
-                args,
-                "policy_params", "max_samples", "max_path_length", "queue",
-                "record_states", "whole_paths"
-            )
-        G.policy.set_param_values(policy_params)
-        n_samples = 0
-        G.paths = []
-        if queue is None:
-            pbar = ProgBarCounter(max_samples)
-        while n_samples < max_samples:
-            if whole_paths:
-                max_rollout_length = max_path_length
-            else:
-                max_rollout_length = min(
-                    max_path_length, max_samples - n_samples)
-            path = rollout(
-                G.mdp,
-                G.policy,
-                max_rollout_length,
-                record_states
-            )
-            G.paths.append(path)
-            n_new_samples = len(path["rewards"])
-            n_samples += n_new_samples
-            if queue is not None:
-                queue.put(n_new_samples)
-            else:
-                pbar.inc(n_new_samples)
-        if queue is None:
-            pbar.stop()
-        return len(G.paths)
-    except Exception:
-        raise Exception("".join(traceback.format_exception(*sys.exc_info())))
+def populate_task(env, policy):
+    logger.log("Populating workers...")
+    singleton_pool.run_each(
+        _worker_populate_task,
+        [(env, policy)] * singleton_pool.n_parallel
+    )
+    logger.log("Populated")
 
 
-def config_parallel_sampler(n_parallel, base_seed):
-    G.n_parallel = n_parallel
-
-    if G.n_parallel > 1:
-        G.base_seed = base_seed if base_seed else random.getrandbits(32)
-        G.queue = Queue()
-        G.worker_queue = Queue()
-
-        G.pool = MemmapingPool(
-            G.n_parallel,
-            initializer=processor_init,
-            initargs=[G.queue]
-        )
+def _worker_set_seed(_, seed):
+    ext.set_seed(seed)
 
 
-def reset():
-    G.pool.close()
-    G.pool = None
+def set_seed(seed):
+    singleton_pool.run_each(
+        _worker_set_seed,
+        [(seed + i,) for i in xrange(singleton_pool.n_parallel)]
+    )
 
 
-def populate_task(mdp, policy):
-    if G.n_parallel > 1:
-        # pipes = []
-        for i in xrange(G.n_parallel):
-            G.queue.put((mdp, policy, i))
-        for i in xrange(G.n_parallel):
-            G.worker_queue.get()
-    else:
-        worker_init(mdp, policy, 0)
+def _worker_set_policy_params(G, params):
+    G.policy.set_param_values(params)
 
 
-def worker_run_task(all_args):
-    runner, args, kwargs = all_args
-    # signals to the master that this task is up and running
-    G.worker_queue.put(None)
-    # wait for the master to signal continuation
-    G.queue.get()
-    return runner(*args, **kwargs)
+def _worker_collect_one_path(G, max_path_length):
+    path = rollout(G.env, G.policy, max_path_length)
+    return path, len(path["rewards"])
 
 
-def run_map(runner, *args, **kwargs):
-    if G.n_parallel > 1:
-        results = G.pool.map_async(
-            worker_run_task, [(runner, args, kwargs)] * G.n_parallel)
-        for i in range(G.n_parallel):
-            G.worker_queue.get()
-        for i in range(G.n_parallel):
-            G.queue.put(None)
-        return results.get()
-    return [runner(*args, **kwargs)]
-
-
-def master_collect_mean(worker_f, *args, **kwargs):
-    try:
-        results = run_map(worker_f, *args, **kwargs)
-        if isinstance(results[0], (list, tuple)):
-            # returning a list / tuple of results, compute the mean of each of them
-            n_results = len(results[0])
-            ret = [np.mean(np.array([np.array(x[i]) for x in results]), axis=0)
-                   for i in range(n_results)]
-            if isinstance(results[0], tuple):
-                ret = tuple(ret)
-            return ret
-        else:
-            return np.mean(np.array(results), axis=0)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        import ipdb; ipdb.set_trace()
-
-
-def worker_set_param_values(params, **tags):
-    G.policy.set_param_values(params, **tags)
-
-
-def master_set_param_values(params, **tags):
-    run_map(worker_set_param_values, params, **tags)
-
-
-def worker_collect_paths():
-    return G.paths
-
-
-def collect_paths():
-    if G.n_parallel > 1:
-        return sum(run_map(worker_collect_paths), [])
-    else:
-        return G.paths
-
-
-def request_samples(
+def sample_paths(
         policy_params,
         max_samples,
-        max_path_length=np.inf,
-        whole_paths=True,
-        record_states=False):
-    if G.n_parallel > 1:
-        manager = Manager()
-        # pylint: disable=no-member
-        queue = manager.Queue()
-        # pylint: enable=no-member
-        pool_max_samples = max_samples / G.n_parallel
-        args = dict(
-            policy_params=policy_params,
-            max_samples=pool_max_samples,
-            max_path_length=max_path_length,
-            queue=queue,
-            whole_paths=whole_paths,
-            record_states=record_states
-        )
-        paths_per_pool = G.pool.map_async(pool_rollout, [args] * G.n_parallel)
-        pbar = ProgBarCounter(max_samples)
-        while not paths_per_pool.ready():
-            paths_per_pool.wait(0.1)
-            while not queue.empty():
-                pbar.inc(queue.get_nowait())
-        pbar.stop()
-        paths_per_pool.get()
-        # sanity check
-        # print [[p1['states'].shape == p2['states'].shape and \
-        #   np.allclose(p1['states'], p2['states']) \
-        #     for p1,p2 in zip(paths1, paths2)] for paths1, paths2 in \
-        #      zip(ps[1:], ps[:-1])]
-    else:
-        args = dict(
-            policy_params=policy_params,
-            max_samples=max_samples,
-            max_path_length=max_path_length,
-            queue=None,
-            whole_paths=whole_paths,
-            record_states=record_states
-        )
-        pool_rollout(args)
+        max_path_length=np.inf):
+    """
+    :param policy_params: parameters for the policy. This will be updated on each worker process
+    :param max_samples: desired maximum number of samples to be collected. The actual number of collected samples
+    might be greater since all trajectories will be rolled out either until termination or until max_path_length is
+    reached
+    :param max_path_length: horizon / maximum length of a single trajectory
+    :return: a list of collected paths
+    """
+    singleton_pool.run_each(
+        _worker_set_policy_params,
+        [(policy_params,)] * singleton_pool.n_parallel
+    )
+    return singleton_pool.run_collect(
+        _worker_collect_one_path,
+        threshold=max_samples,
+        args=(max_path_length,),
+        show_prog_bar=True
+    )
 
-def dispatch(inps):
-    f, args = inps
-    return f(*([G.mdp, G.policy]+list(args)))
 
-def pool_map(f, args_lst):
-    go_args = [[f, args] for args in args_lst]
-    if G.n_parallel > 1:
-        return G.pool.map(dispatch, go_args)
-    else:
-        return map(dispatch, go_args)
-
+def truncate_paths(paths, max_samples):
+    """
+    Truncate the list of paths so that the total number of samples is exactly equal to max_samples. This is done by
+    removing extra paths at the end of the list, and make the last path shorter if necessary
+    :param paths: a list of paths
+    :param max_samples: the absolute maximum number of samples
+    :return: a list of paths, truncated so that the number of samples adds up to max-samples
+    """
+    # chop samples collected by extra paths
+    # make a copy
+    paths = list(paths)
+    total_n_samples = sum(len(path["rewards"]) for path in paths)
+    while len(paths) > 0 and total_n_samples - len(paths[-1]["rewards"]) >= max_samples:
+        total_n_samples -= len(paths.pop(-1)["rewards"])
+    if len(paths) > 0:
+        last_path = paths.pop(-1)
+        truncated_last_path = dict()
+        truncated_len = len(last_path["rewards"]) - (total_n_samples - max_samples)
+        for k, v in last_path.iteritems():
+            if k in ["observations", "actions", "rewards"]:
+                truncated_last_path[k] = tensor_utils.truncate_tensor_list(v, truncated_len)
+            elif k in ["env_infos", "agent_infos"]:
+                truncated_last_path[k] = tensor_utils.truncate_tensor_dict(v, truncated_len)
+            else:
+                raise NotImplementedError
+        paths.append(truncated_last_path)
+    return paths

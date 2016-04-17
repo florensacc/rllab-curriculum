@@ -9,6 +9,10 @@ class LasagnePowered(Parameterized):
         self._output_layers = output_layers
         super(LasagnePowered, self).__init__()
 
+    @property
+    def output_layers(self):
+        return self._output_layers
+
     @overrides
     def get_params_internal(self, **tags):
         return L.get_all_params(
