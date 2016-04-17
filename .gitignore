@@ -24,7 +24,6 @@ vendor/mujoco
 *.pdf
 .env
 snippets
-vendor/mujoco
 private
 lua
 iterate.dat
