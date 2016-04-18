@@ -79,7 +79,7 @@ if HIERARCHICAL:
                     baseline=baseline.low_baseline,
                     discount=0.99,
                     step_size=0.01,
-                    bonus_evaluator=mi_evaluator
+                    bonus_evaluator=mi_evaluator,
                 )
             else:
                 low_algo = TRPO(

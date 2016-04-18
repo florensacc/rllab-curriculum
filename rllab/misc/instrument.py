@@ -263,6 +263,7 @@ def run_experiment_lite(
         confirm_remote=True,
         terminate_machine=True,
         n_parallel=1,
+        snapshot_mode='all',
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -288,6 +289,7 @@ def run_experiment_lite(
         log_dir = config.LOG_DIR + "/local/" + exp_prefix.replace("_", "-") + "/" + exp_name
 
     kwargs["n_parallel"] = n_parallel
+    kwargs["snapshot_mode"] = snapshot_mode
     kwargs["exp_name"] = exp_name
     kwargs["log_dir"] = log_dir
     kwargs["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),

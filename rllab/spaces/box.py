@@ -50,6 +50,14 @@ class Box(Space):
     def unflatten(self, x):
         return x.reshape(self.shape)
 
+    def flatten_n(self, xs):
+        xs = np.asarray(xs)
+        return xs.reshape((xs.shape[0], -1))
+
+    def unflatten_n(self, xs):
+        xs = np.asarray(xs)
+        return xs.reshape((xs.shape[0],) + self.shape)
+
     def __repr__(self):
         return "Box" + str(self.shape)
 

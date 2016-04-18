@@ -13,9 +13,10 @@ import theano.tensor as TT
 
 
 class TRPOBonus(TRPO, Serializable):
-    def __init__(self, bonus_evaluator, *args, **kwargs):
+    def __init__(self, bonus_evaluator, mi_coeff=0.1, *args, **kwargs):
         Serializable.quick_init(self, locals())
         self.bonus_evaluator = bonus_evaluator
+        self.mi_coeff = mi_coeff
         # These are used to rescale the symbolic reward bonus term
         self.adv_mean = theano.shared(np.float32(0.), "adv_mean")
         self.adv_std = theano.shared(np.float32(1.), "adv_std")
@@ -54,7 +55,7 @@ class TRPOBonus(TRPO, Serializable):
         mean_kl = TT.mean(kl)
 
         sym_bonus = self.bonus_evaluator.mi_bonus_sym()
-        sym_bonus = sym_bonus / self.adv_std
+        sym_bonus = self.mi_coeff * sym_bonus / self.adv_std
         surr_loss = - TT.mean(lr * advantage_var) - TT.mean(theano.gradient.zero_grad(lr) * sym_bonus)
 
         input_list = [
