@@ -1,3 +1,7 @@
+# 2016-04-17
+
+- Restored the default value of the `whole_paths` parameter in `BatchPolopt` back to `True`. This is more consistent with previous configurations.
+
 # 2016-04-16
 
 - Removed the helper method `rllab.misc.ext.merge_dict`. Turns out Python's `dict` constructor already supports this functionality: `merge_dict(dict1, dict2) == dict(dict1, **dict2)`.
