@@ -262,6 +262,7 @@ def run_experiment_lite(
         use_gpu=False,
         confirm_remote=True,
         terminate_machine=True,
+        n_parallel=1,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -274,6 +275,7 @@ def run_experiment_lite(
     :param docker_image: name of the docker image. Ignored if using local mode.
     :param aws_config: configuration for AWS. Only used under EC2 mode
     :param env: extra environment variables
+    :param n_parallel: Number of worker processes
     :param kwargs: All other parameters will be passed directly to the entrance python script.
     """
     data = base64.b64encode(pickle.dumps(stub_method_call))
@@ -284,6 +286,8 @@ def run_experiment_lite(
         exp_name = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
     if log_dir is None:
         log_dir = config.LOG_DIR + "/local/" + exp_prefix.replace("_", "-") + "/" + exp_name
+
+    kwargs["n_parallel"] = n_parallel
     kwargs["exp_name"] = exp_name
     kwargs["log_dir"] = log_dir
     kwargs["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
