@@ -6,6 +6,9 @@ import lasagne
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from utils import sliding_mean, iterate_minibatches
 import theano
+from rllab.core.parameterized import Parameterized
+from rllab.optimizers.hessian_free_optimizer import HessianFreeOptimizer
+from rllab.core.lasagne_powered import LasagnePowered
 
 # Plotting params.
 # ----------------
@@ -227,7 +230,7 @@ class ProbLayer(lasagne.layers.Layer):
         return (input_shape[0], self.num_units)
 
 
-class ProbNN:
+class ProbNN(LasagnePowered):
     """Neural network with weight uncertainty
 
     """
@@ -247,7 +250,8 @@ class ProbNN:
                  symbolic_prior_kl=True,
                  use_reverse_kl_reg=False,
                  reverse_kl_reg_factor=0.1,
-                 stochastic_output=False
+                 stochastic_output=False,
+                 second_order_update=False
                  ):
 
         self._srng = RandomStreams()
@@ -271,6 +275,7 @@ class ProbNN:
         if self.use_reverse_kl_reg:
             assert self.symbolic_prior_kl == True
         self.stochastic_output = stochastic_output
+        self.second_order_update = second_order_update
 
     def _get_prob_layers(self):
         if self.stochastic_output:
@@ -356,7 +361,7 @@ class ProbNN:
         # Mean is a matrix of batch_size rows.
         mean = self.pred_mean(input)
         stdn = self.pred_stdn(input)
-        epsilon = self._srng.normal(size=(1,), avg=0., std=1.)
+        epsilon = self._srng.normal(size=(self.n_out,), avg=0., std=1.)
         out = mean + epsilon * stdn
         return out
 
@@ -529,6 +534,8 @@ class ProbNN:
             self.network = network
             # --------------------
 
+        LasagnePowered.__init__(self, [self.network])
+
     def build_model(self):
 
         # Prepare Theano variables for inputs and targets
@@ -562,8 +569,17 @@ class ProbNN:
             [input_var], self.pred_sym(input_var), allow_input_downcast=True)
         self.train_fn = theano.function(
             [input_var, target_var], loss, updates=updates, allow_input_downcast=True)
-        self.train_update_fn = theano.function(
-            [input_var, target_var], loss_only_last_sample, updates=updates, allow_input_downcast=True)
+        if self.second_order_update:
+            # Hessian-free optimization step
+            # ------------------------------
+            hso = HessianFreeOptimizer(max_opt_itr=1, batch_size=1)
+            hso.update_opt(
+                loss, self.network, [input_var, target_var], self.pred_sym)
+            self.train_update_fn = hso.optimize
+            # ------------------------------
+        else:
+            self.train_update_fn = theano.function(
+                [input_var, target_var], loss_only_last_sample, updates=updates, allow_input_downcast=True)
 
         self.train_err_fn = theano.function(
             [input_var, target_var], loss, allow_input_downcast=True)

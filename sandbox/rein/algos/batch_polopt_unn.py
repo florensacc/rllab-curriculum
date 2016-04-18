@@ -138,6 +138,7 @@ class BatchPolopt(RLAlgorithm):
             unn_n_hidden=[32],
             unn_layers_type=[1, 1],
             stochastic_output=False,
+            second_order_update=False,
             **kwargs
     ):
         """
@@ -202,6 +203,7 @@ class BatchPolopt(RLAlgorithm):
         self.unn_n_hidden = unn_n_hidden
         self.unn_layers_type = unn_layers_type
         self.stochastic_output = stochastic_output
+        self.second_order_update = second_order_update
         # ----------------------
 
         # Params to keep track of moving average (both intrinsic and external
@@ -269,7 +271,8 @@ class BatchPolopt(RLAlgorithm):
             symbolic_prior_kl=self.symbolic_prior_kl,
             use_reverse_kl_reg=self.use_reverse_kl_reg,
             reverse_kl_reg_factor=self.reverse_kl_reg_factor,
-            stochastic_output=self.stochastic_output
+            stochastic_output=self.stochastic_output,
+            second_order_update=self.second_order_update
         )
 
         logger.log("Building UNN model (eta={}) ...".format(self.eta))
@@ -307,8 +310,10 @@ class BatchPolopt(RLAlgorithm):
                 tsne = manifold.TSNE(
                     n_components=n_components, init='pca', random_state=0)
                 Y = tsne.fit_transform(X[rand_ind, :])
-                color = ['blue' if i > n_samples/2 else 'red' for i in xrange(Y.shape[0])]
-                plt.scatter(Y[:, 0], Y[:, 1], c=color, cmap=plt.cm.Spectral, lw=0)
+                color = [
+                    'blue' if i > n_samples / 2 else 'red' for i in xrange(Y.shape[0])]
+                plt.scatter(
+                    Y[:, 0], Y[:, 1], c=color, cmap=plt.cm.Spectral, lw=0)
                 plt.show()
 
             paths = self.obtain_samples(itr)
