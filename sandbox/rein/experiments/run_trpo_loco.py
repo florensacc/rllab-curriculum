@@ -1,11 +1,8 @@
 import os
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
-from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
-from rllab.envs.box2d.mountain_car_env import MountainCarEnv
+from rllab.envs.mujoco.walker2d_env import Walker2DEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
-from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 
@@ -17,8 +14,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv, MountainCarEnv]
-mdp_classes = [CartpoleSwingupEnv]
+mdp_classes = [Walker2DEnv]
 mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
    mdps, seeds 
@@ -40,17 +36,17 @@ for mdp, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=1000,
+        batch_size=10000,
         whole_paths=True,
         max_path_length=500,
         n_itr=10000,
-        step_size=0.01,
+        step_size=0.001,
         subsample_factor=1.0,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-basic-v1",
+        exp_prefix="trpo-loco-v1",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
