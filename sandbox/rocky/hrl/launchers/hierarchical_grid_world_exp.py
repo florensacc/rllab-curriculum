@@ -15,6 +15,7 @@ from sandbox.rocky.hrl.subgoal_baseline import SubgoalBaseline
 from sandbox.rocky.hrl.trpo_bonus import TRPOBonus
 from sandbox.rocky.hrl.mi_evaluator.component_state_given_goal_mi_evaluator import ComponentStateGivenGoalMIEvaluator
 from sandbox.rocky.hrl.mi_evaluator.exact_state_given_goal_mi_evaluator import ExactStateGivenGoalMIEvaluator
+import sys
 
 HIERARCHICAL = True
 
@@ -22,9 +23,9 @@ stub(globals())
 
 env = HierarchicalGridWorldEnv(
     high_grid=[
+        "SFFFF",
         "FFFFF",
         "FFFFF",
-        "FFSFF",
         "FFFFF",
         "FFFFF",
     ],
@@ -36,66 +37,87 @@ env = HierarchicalGridWorldEnv(
 
 if HIERARCHICAL:
 
-    policy = SubgoalPolicy(
-        env_spec=env.spec,
-        high_policy_cls=CategoricalMLPPolicy,
-        high_policy_args=dict(hidden_sizes=tuple()),
-        low_policy_cls=CategoricalMLPPolicy,
-        low_policy_args=dict(hidden_sizes=tuple()),
-        subgoal_space=Discrete(5),
-        subgoal_interval=3,
-    )
 
-    baseline = SubgoalBaseline(
-        env_spec=env.spec,
-        high_baseline=LinearFeatureBaseline(env_spec=policy.high_env_spec),
-        low_baseline=LinearFeatureBaseline(env_spec=policy.low_env_spec),
-    )
+    for seed in [11, 21, 31, 41]:
 
-    mi_evaluator = ComponentStateGivenGoalMIEvaluator(
-        env_spec=env.spec,
-        policy=policy,
-        regressor_cls=CategoricalMLPRegressor,
-        regressor_args=dict(use_trust_region=False),
-        component_idx=0,
-    )
+        for low_algo_cls in [TRPOBonus, TRPO]:
 
-    mi_evaluator = ExactStateGivenGoalMIEvaluator(
-        env=env,
-        policy=policy,
-        component_idx=0,
-    )
+            policy = SubgoalPolicy(
+                env_spec=env.spec,
+                high_policy_cls=CategoricalMLPPolicy,
+                high_policy_args=dict(hidden_sizes=tuple()),
+                low_policy_cls=CategoricalMLPPolicy,
+                low_policy_args=dict(hidden_sizes=tuple()),
+                subgoal_space=Discrete(5),
+                subgoal_interval=3,
+            )
 
-    algo = BatchHRL(
-        env=env,
-        policy=policy,
-        baseline=baseline,
-        bonus_evaluator=mi_evaluator,
-        batch_size=4000,
-        max_path_length=100,
-        n_itr=100,
-        bonus_gradient=True,
-        high_algo=TRPO(
-            env=env,
-            policy=policy.high_policy,
-            baseline=baseline.high_baseline,
-            discount=0.99,
-            step_size=0.01,
-        ),
-        low_algo=TRPOBonus(
-            env=env,
-            policy=policy.low_policy,
-            baseline=baseline.low_baseline,
-            discount=0.99,
-            step_size=0.01,
-            bonus_evaluator=mi_evaluator
-        ),
-    )
+            baseline = SubgoalBaseline(
+                env_spec=env.spec,
+                high_baseline=LinearFeatureBaseline(env_spec=policy.high_env_spec),
+                low_baseline=LinearFeatureBaseline(env_spec=policy.low_env_spec),
+            )
 
-    run_experiment_lite(
-        algo.train(),
-        snapshot_mode="last",
-    )
+            mi_evaluator = ComponentStateGivenGoalMIEvaluator(
+                env_spec=env.spec,
+                policy=policy,
+                regressor_cls=CategoricalMLPRegressor,
+                regressor_args=dict(use_trust_region=False),
+                component_idx=0,
+            )
+
+            mi_evaluator = ExactStateGivenGoalMIEvaluator(
+                env=env,
+                policy=policy,
+                component_idx=0,
+            )
+
+            if low_algo_cls == TRPOBonus:
+                low_algo = TRPOBonus(
+                    env=env,
+                    policy=policy.low_policy,
+                    baseline=baseline.low_baseline,
+                    discount=0.99,
+                    step_size=0.01,
+                    bonus_evaluator=mi_evaluator
+                )
+            else:
+                low_algo = TRPO(
+                    env=env,
+                    policy=policy.low_policy,
+                    baseline=baseline.low_baseline,
+                    discount=0.99,
+                    step_size=0.01,
+                )
+
+            algo = BatchHRL(
+                env=env,
+                policy=policy,
+                baseline=baseline,
+                bonus_evaluator=mi_evaluator,
+                batch_size=4000,
+                max_path_length=100,
+                n_itr=20,
+                bonus_gradient=True,
+                high_algo=TRPO(
+                    env=env,
+                    policy=policy.high_policy,
+                    baseline=baseline.high_baseline,
+                    discount=0.99,
+                    step_size=0.01,
+                ),
+                low_algo=low_algo,
+            )
+
+            run_experiment_lite(
+                algo.train(),
+                exp_prefix="hrl_reward_gradient_cmp_1",
+                snapshot_mode="last",
+                seed=seed,
+                n_parallel=1,
+            )
+
+            # sys.exit(0)
 
 else:
 
