@@ -1,5 +1,5 @@
 import os
-from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
+from rllab.envs.mujoco.walker2d_env import Walker2DEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
@@ -13,18 +13,15 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0]
-replay_pools = [True]
-kl_ratios = [False]
-reverse_kl_regs = [True]
+etas = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
+normalize_rewards = [False]
+mdp_classes = [Walker2DEnv]
+mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
-    reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
+    mdps, etas, seeds, normalize_rewards
 )
 
-for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
-
-    mdp_class = DoublePendulumEnv
-    mdp = NormalizedEnv(env=mdp_class())
+for mdp, eta, seed, normalize_reward in param_cart_product:
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
@@ -40,24 +37,27 @@ for reverse_kl_reg, kl_ratio, replay_pool, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=1000,
-        whole_paths=False,
-        max_path_length=100,
-        n_itr=1000,
+        batch_size=10000,
+        whole_paths=True,
+        max_path_length=500,
+        n_itr=10000,
         step_size=0.01,
         eta=eta,
-        eta_discount=0.998,
+        eta_discount=1.0,
         snn_n_samples=10,
         subsample_factor=1.0,
-        use_reverse_kl_reg=reverse_kl_reg,
-        use_replay_pool=replay_pool,
-        use_kl_ratio=kl_ratio,
+        use_reverse_kl_reg=True,
+        use_replay_pool=True,
+        use_kl_ratio=normalize_reward,
         n_itr_update=5,
+        kl_batch_size=5,
+        normalize_reward=normalize_reward,
+        stochastic_output=False
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="doublependulum",
+        exp_prefix="trpo-exploration-loco-v1",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

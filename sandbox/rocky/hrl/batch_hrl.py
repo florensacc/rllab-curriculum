@@ -5,9 +5,13 @@ from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
 from rllab.misc import logger
 from rllab.misc import tensor_utils
+from rllab.misc import ext
 from rllab.misc.overrides import overrides
 from rllab.misc.special import to_onehot
 from sandbox.rocky.hrl import hrl_utils
+import theano.tensor as TT
+import theano
+from rllab.distributions.categorical import from_onehot_sym
 
 
 class BatchHRL(BatchPolopt, Serializable):
@@ -20,8 +24,20 @@ class BatchHRL(BatchPolopt, Serializable):
             high_algo,
             low_algo,
             mi_coeff=0.1,
-            subgoal_interval=1,
+            bonus_gradient=False,
             **kwargs):
+        """
+        :param env:
+        :param policy:
+        :param baseline:
+        :param bonus_evaluator: Evaluator for the bonus
+        :param high_algo: algorithm for high-level policy
+        :param low_algo: algorithm for low-level policy
+        :param mi_coeff: coefficient for mutual information
+        :param bonus_gradient: whether to differentiate through the bonus reward
+        :param kwargs:
+        :return:
+        """
         super(BatchHRL, self).__init__(env=env, policy=policy, baseline=baseline, **kwargs)
         Serializable.quick_init(self, locals())
         self.env = env
@@ -31,7 +47,7 @@ class BatchHRL(BatchPolopt, Serializable):
         self.high_algo = high_algo
         self.low_algo = low_algo
         self.mi_coeff = mi_coeff
-        self.subgoal_interval = subgoal_interval
+        self.bonus_gradient = bonus_gradient
 
     @overrides
     def init_opt(self):
@@ -59,31 +75,6 @@ class BatchHRL(BatchPolopt, Serializable):
         super(BatchHRL, self).log_diagnostics(paths)
         self.bonus_evaluator.log_diagnostics(paths)
 
-    def _subsample_path(self, path, interval):
-        observations = path['observations']
-        rewards = path['rewards']
-        actions = path['actions']
-        path_length = len(rewards)
-        chunked_length = int(np.ceil(path_length * 1.0 / interval))
-        padded_length = chunked_length * interval
-        padded_rewards = np.append(rewards, np.zeros(padded_length - path_length))
-        chunked_rewards = np.sum(
-            np.reshape(padded_rewards, (chunked_length, interval)),
-            axis=1
-        )
-        chunked_env_infos = tensor_utils.subsample_tensor_dict(path["env_infos"], interval)
-        chunked_agent_infos = tensor_utils.subsample_tensor_dict(path["agent_infos"], interval)
-        chunked_actions = actions[::interval]
-        chunked_observations = observations[::interval]
-        return dict(
-            observations=chunked_observations,
-            actions=chunked_actions,
-            env_infos=chunked_env_infos,
-            agent_infos=chunked_agent_infos,
-            rewards=chunked_rewards,
-        )
-
-
     def process_samples(self, itr, paths):
         """
         Transform paths to high_paths and low_paths, and dispatch them to the high-level and low-level algorithms
@@ -96,9 +87,14 @@ class BatchHRL(BatchPolopt, Serializable):
         high_paths = []
         low_paths = []
         bonus_returns = []
+        all_bonuses = []
+
+        self.env.analyzer.prepare_sym(paths, self.bonus_evaluator.component_idx)
+        self.bonus_evaluator.computed = False
+        self.bonus_evaluator.update_cache()
+
         for path in paths:
             rewards = path['rewards']
-            path_length = len(rewards)
             actions = path['actions']
             high_agent_infos = path["agent_infos"]["high"]
             high_observations = path["agent_infos"]["high_obs"]
@@ -112,9 +108,10 @@ class BatchHRL(BatchPolopt, Serializable):
                 agent_infos=high_agent_infos,
                 rewards=rewards,
             )
-            chunked_high_path = hrl_utils.subsample_path(high_path, self.policy.subgoal_interval)
+            chunked_high_path = hrl_utils.downsample_path(high_path, self.policy.subgoal_interval)
             bonuses = self.bonus_evaluator.predict(path)
             low_rewards = rewards + self.mi_coeff * bonuses
+            all_bonuses.extend(bonuses)
             bonus_returns.append(np.sum(bonuses))
             low_path = dict(
                 observations=low_observations,
@@ -132,13 +129,26 @@ class BatchHRL(BatchPolopt, Serializable):
             low_samples_data = self.low_algo.process_samples(itr, low_paths)
             for path in low_samples_data['paths']:
                 if np.max(abs(self.baseline.low_baseline.predict(path))) > 1e3:
-                    import ipdb; ipdb.set_trace()
+                    import ipdb;
+                    ipdb.set_trace()
+
+        # bonus_vals = self.bonus_evaluator.mi_bonus_sym().eval()
+        # # compute bonus values explicitly to cross-compare
+        # ref_bonus_vals = np.asarray(all_bonuses)
+        #
+        # diff = bonus_vals - ref_bonus_vals
+        #
+        # if np.linalg.norm(diff) > 1e-5:
+        #     # compute bonus by hand to compare
+        #     import ipdb; ipdb.set_trace()
 
         # mi_action_goal = self._compute_mi_action_goal(self.env.spec, self.policy, high_samples_data, low_samples_data)
         # logger.record_tabular("I(action,goal|state)", mi_action_goal)
         # We need to train the predictor for p(s'|g, s)
         with logger.prefix("MI | "), logger.tabular_prefix("MI_"):
             self.bonus_evaluator.fit(paths)
+
+
 
         return dict(
             high=high_samples_data,

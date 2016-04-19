@@ -1,8 +1,8 @@
 import os
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
-from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 
@@ -16,7 +16,7 @@ seeds = range(10)
 
 for seed in seeds:
 
-    mdp_class = CartpoleEnv
+    mdp_class = DoublePendulumEnv
     mdp = NormalizedEnv(env=mdp_class())
 
     policy = GaussianMLPPolicy(
@@ -33,20 +33,20 @@ for seed in seeds:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=1000,
-        whole_paths=False,
+        batch_size=100,
+        whole_paths=True,
         max_path_length=100,
-        n_itr=40,
+        n_itr=750,
         step_size=0.01,
         subsample_factor=1.0,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="cartpole",
+        exp_prefix="doublependulum",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local_docker",
+        mode="lab_kube",
         dry=False,
     )

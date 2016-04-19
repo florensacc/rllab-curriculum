@@ -1,3 +1,12 @@
+# 2016-04-17
+
+- Restored the default value of the `whole_paths` parameter in `BatchPolopt` back to `True`. This is more consistent with previous configurations.
+
+# 2016-04-16
+
+- Removed the helper method `rllab.misc.ext.merge_dict`. Turns out Python's `dict` constructor already supports this functionality: `merge_dict(dict1, dict2) == dict(dict1, **dict2)`.
+- Added a `min_std` option to `GaussianMLPPolicy`. This avoids the gradients being unstable near deterministic policies.
+
 # 2016-04-11
 
 - Added a method `truncate_paths` to the `rllab.sampler.parallel_sampler` module. This should be sufficient to replace the old configurable parameter `whole_paths` which has been removed during refactoring.

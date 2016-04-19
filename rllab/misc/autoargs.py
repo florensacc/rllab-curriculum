@@ -1,5 +1,4 @@
 from rllab.misc.console import colorize
-from rllab.misc.ext import merge_dict
 import inspect
 
 
@@ -117,9 +116,9 @@ def inherit(base_func):
 
     def wrap(func):
         assert func.__name__ == '__init__'
-        func._autoargs_info = merge_dict(
+        func._autoargs_info = dict(
             _get_info(base_func),
-            _get_info(func),
+            **_get_info(func)
         )
         return func
     return wrap

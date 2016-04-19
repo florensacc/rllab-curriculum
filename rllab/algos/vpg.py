@@ -30,7 +30,7 @@ class VPG(BatchPolopt, Serializable):
             if optimizer_args is None:
                 optimizer_args = default_args
             else:
-                optimizer_args = ext.merge_dict(default_args, optimizer_args)
+                optimizer_args = dict(default_args, **optimizer_args)
             optimizer = FirstOrderOptimizer(**optimizer_args)
         self.optimizer = optimizer
         self.opt_info = None

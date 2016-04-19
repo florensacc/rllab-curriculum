@@ -72,24 +72,36 @@ class ProbLayer(lasagne.layers.Layer):
                                        regularizable=False, trainable=False)
         self.b_rho_old = self.add_param(b_rho, (self.num_units,), name="b_rho_old",
                                         regularizable=False, trainable=False)
+        # placeholder
+        # -----------
+        self.epsilon_W_ph = T.matrix()
+        self.epsilon_b_ph = T.vector()
+        self.epsilon_T_ph = T.vector()
+        self.epsilon_W = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=self.prior_sd,
+                                           dtype=theano.config.floatX)  # @UndefinedVariable
+        self.epsilon_b = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
+                                           dtype=theano.config.floatX)  # @UndefinedVariable
+        self.epsilon_T = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
+                                           dtype=theano.config.floatX)  # @UndefinedVariable
+        # -----------
 
     def get_W(self):
         # Here we generate random epsilon values from a normal distribution
         # (paper step 1)
-        epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=self.prior_sd,
-                                    dtype=theano.config.floatX)  # @UndefinedVariable
+        self.epsilon_W = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=self.prior_sd,
+                                           dtype=theano.config.floatX)  # @UndefinedVariable
         # Here we calculate weights based on shifting and rescaling according
         # to mean and variance (paper step 2)
-        W = self.mu + self.log_to_std(self.rho) * epsilon
+        W = self.mu + self.log_to_std(self.rho) * self.epsilon_W_ph
         self.W = W
         return W
 
     def get_b(self):
         # Here we generate random epsilon values from a normal distribution
         # (paper step 1)
-        epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
-                                    dtype=theano.config.floatX)  # @UndefinedVariable
-        b = self.b_mu + self.log_to_std(self.b_rho) * epsilon
+        self.epsilon_b = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
+                                           dtype=theano.config.floatX)  # @UndefinedVariable
+        b = self.b_mu + self.log_to_std(self.b_rho) * self.epsilon_b_ph
         self.b = b
         return b
 
@@ -112,10 +124,9 @@ class ProbLayer(lasagne.layers.Layer):
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
         delta = T.dot(T.square(input), T.square(self.log_to_std(
             self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
-        epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
-                                    dtype=theano.config.floatX)  # @UndefinedVariable
-
-        activation = gamma + T.sqrt(delta) * epsilon
+        self.epsilon_T = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
+                                           dtype=theano.config.floatX)  # @UndefinedVariable
+        activation = gamma + T.sqrt(delta) * self.epsilon_T_ph
 
         return self.nonlinearity(activation)
 
@@ -322,6 +333,12 @@ class ProbNN:
             T.square(input - mu) / (2 * T.square(sigma))
         return T.sum(log_normal)
 
+    def _log_prob_normal_nonsummed(self, input, mu=0., sigma=0.01):
+        log_normal = - \
+            T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - \
+            T.square(input - mu) / (2 * T.square(sigma))
+        return T.sum(log_normal, axis=1)
+
     def _log_prob_spike_and_slab(self, input, pi, mu, sigma0, sigma1):
         """sigma0 > sigma1"""
         log_prob = pi * self._log_prob_normal(input, mu=mu, sigma=sigma0) + (
@@ -393,6 +410,35 @@ class ProbNN:
 
         return loss
 
+    def get_loss_nonsummed(self, input, target):
+        """The difference with the original loss is that we only update based on the latest sample.
+        This means that instead of using the prior p(w), we use the previous approximated posterior
+        q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
+        """
+
+        log_p_D_given_w = 0.
+
+        # MC samples.
+        for _ in xrange(self.n_samples):
+            # Make prediction.
+            prediction = self.pred_sym(input)
+            # Calculate model likelihood log(P(D|w)).
+            log_p_D_given_w += self._log_prob_normal_nonsummed(
+                target, prediction, self.prior_sd)
+
+#         # Calculate variational posterior log(q(w)) and prior log(p(w)).
+#         kl = self.kl_div()
+#         if self.use_reverse_kl_reg:
+#             kl += self.reverse_kl_reg_factor * \
+#                 self.reverse_log_p_w_q_w_kl()
+
+#         # Calculate loss function.
+#         loss = (kl / self.n_batches -
+#                 log_p_D_given_w) / self.batch_size
+#         loss /= self.n_samples
+
+        return log_p_D_given_w
+
     def get_loss_sym(self, input, target):
         raise Exception("Deprecated")
 
@@ -463,24 +509,55 @@ class ProbNN:
         target_var = T.matrix('targets',
                               dtype=theano.config.floatX)  # @UndefinedVariable
 
-        # Loss function.
-        loss = self.get_loss_sym_sym(
-            input_var, target_var)
-        loss_only_last_sample = self.get_loss_only_last_sample(
-            input_var, target_var)
-
-        # Create update methods.
+        # Trainable params
         params = lasagne.layers.get_all_params(self.network, trainable=True)
+        print(params)
+
+        # Loss function.
+        _loss = self.get_loss_sym_sym(
+            input_var, target_var)
+        _loss_only_last_sample = self.get_loss_only_last_sample(
+            input_var, target_var)
+        _predict = self.pred_sym(input_var)
+
+        # Jacobian calculation
+        # --------------------
+        _loss_nonsummed = self.get_loss_nonsummed(
+            input_var, target_var)
+        _jacobian = T.jacobian(_loss_nonsummed, params)
+        # --------------------
+
+        # Replace placeholders
+        # --------------------
+        layers = filter(lambda l: l.name == 'problayer',
+                        lasagne.layers.get_all_layers(self.network)[1:])
+        replace = []
+        for layer in layers:
+            replace.append((layer.epsilon_W_ph, layer.epsilon_W))
+            replace.append((layer.epsilon_b_ph, layer.epsilon_b))
+            replace.append((layer.epsilon_T_ph, layer.epsilon_T))
+        jacobian = theano.clone(_jacobian, replace=replace)
+        loss = theano.clone(_loss, replace=replace)
+        loss_only_last_sample = theano.clone(
+            _loss_only_last_sample, replace=replace)
+        predict = theano.clone(_predict, replace=replace)
+        loss_nonsummed = theano.clone(_loss_nonsummed, replace=replace)
+        # --------------------
+
         updates = lasagne.updates.adam(
             loss, params, learning_rate=0.001)
 
         # Train/val fn.
         self.pred_fn = theano.function(
-            [input_var], self.pred_sym(input_var), allow_input_downcast=True)
+            [input_var], predict, allow_input_downcast=True)
         self.train_fn = theano.function(
             [input_var, target_var], loss, updates=updates, allow_input_downcast=True)
         self.train_update_fn = theano.function(
             [input_var, target_var], loss_only_last_sample, updates=updates, allow_input_downcast=True)
+        self.calc_jacobian = theano.function(
+            [input_var, target_var], jacobian, allow_input_downcast=True)
+        self.loss_nonsummed = theano.function(
+            [input_var, target_var], loss_nonsummed, allow_input_downcast=True)
 
         self.train_err_fn = theano.function(
             [input_var, target_var], loss, allow_input_downcast=True)
@@ -592,11 +669,19 @@ class ProbNN:
                 # Train current minibatch.
                 inputs, targets = batch
                 _train_err = self.train_fn(inputs, targets)
+                jacobian = self.calc_jacobian(inputs, targets)
+                loss_nonsummed = self.loss_nonsummed(inputs, targets)
+                i=7
+                print(len(jacobian), len(jacobian[i]), len(jacobian[i][0]))
+                return
                 train_err += _train_err
                 train_batches += 1
 
                 # Calculate current minibatch KL.
                 kl_mb_closed_form = self.f_kl_div_closed_form()
+
+#                 a = self.calc_gradients(inputs, targets)
+#                 print(len(a), len(a[0]))
 
                 kl_values.append(kl_mb_closed_form)
                 kl_all_values.append(kl_mb_closed_form)

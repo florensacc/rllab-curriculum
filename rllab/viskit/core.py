@@ -97,7 +97,7 @@ def load_exps_data(exp_folder_path):
     exps_data = []
     for exp in exps:
         try:
-            exp_path = os.path.join(exp_folder_path, exp)
+            exp_path = exp
             params_json_path = os.path.join(exp_path, "params.json")
             progress_csv_path = os.path.join(exp_path, "progress.csv")
             progress = load_progress(progress_csv_path)
@@ -149,7 +149,8 @@ class Selector(object):
         return Selector(self._exps_data, self._filters + ((k, v),))
 
     def _check_exp(self, exp):
-        return all((str(exp.flat_params.get(k, None)) == str(v) for k, v in self._filters))
+        # or exp.flat_params.get(k, None) is None
+        return all(((str(exp.flat_params.get(k, None)) == str(v)) for k, v in self._filters))
 
     def extract(self):
         return filter(self._check_exp, self._exps_data)

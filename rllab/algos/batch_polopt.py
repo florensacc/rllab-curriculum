@@ -30,7 +30,7 @@ class BatchPolopt(RLAlgorithm):
             center_adv=True,
             positive_adv=False,
             store_paths=False,
-            whole_paths=False,
+            whole_paths=True,
             **kwargs
     ):
         """

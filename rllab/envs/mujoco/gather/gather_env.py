@@ -13,7 +13,6 @@ from rllab.envs.base import Env, Step
 from rllab.envs.mujoco.gather.embedded_viewer import EmbeddedViewer
 from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
 from rllab.misc import autoargs
-from rllab.misc.ext import merge_dict
 from rllab.misc.overrides import overrides
 from rllab.mujoco_py import MjViewer, MjModel, mjcore, mjlib, \
     mjextra, glfw
@@ -187,29 +186,29 @@ class GatherEnv(Env, Serializable):
         )
         walldist = self.activity_range + 1
         ET.SubElement(
-            worldbody, "geom", merge_dict(
-                attrs, dict(
-                    name="wall1",
-                    pos="0 -%d 0" % walldist,
-                    size="%d.5 0.5 1" % walldist)))
+            worldbody, "geom", dict(
+                attrs,
+                name="wall1",
+                pos="0 -%d 0" % walldist,
+                size="%d.5 0.5 1" % walldist))
         ET.SubElement(
-            worldbody, "geom", merge_dict(
-                attrs, dict(
-                    name="wall2",
-                    pos="0 %d 0" % walldist,
-                    size="%d.5 0.5 1" % walldist)))
+            worldbody, "geom", dict(
+                attrs,
+                name="wall2",
+                pos="0 %d 0" % walldist,
+                size="%d.5 0.5 1" % walldist))
         ET.SubElement(
-            worldbody, "geom", merge_dict(
-                attrs, dict(
-                    name="wall3",
-                    pos="-%d 0 0" % walldist,
-                    size="0.5 %d.5 1" % walldist)))
+            worldbody, "geom", dict(
+                attrs,
+                name="wall3",
+                pos="-%d 0 0" % walldist,
+                size="0.5 %d.5 1" % walldist))
         ET.SubElement(
-            worldbody, "geom", merge_dict(
-                attrs, dict(
-                    name="wall4",
-                    pos="%d 0 0" % walldist,
-                    size="0.5 %d.5 1" % walldist)))
+            worldbody, "geom", dict(
+                attrs,
+                name="wall4",
+                pos="%d 0 0" % walldist,
+                size="0.5 %d.5 1" % walldist))
         _, file_path = tempfile.mkstemp(text=True)
         tree.write(file_path)
         # pylint: disable=not-callable

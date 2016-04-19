@@ -18,12 +18,12 @@ launch_scripts
 *.sh.e*
 *.sh.o*
 MUJOCO_LOG.TXT
+vendor/mujoco
 .project
 .pydevproject
 *.pdf
 .env
 snippets
-vendor/mujoco
 private
 lua
 iterate.dat
@@ -35,3 +35,4 @@ docs/_build
 blackbox.zip
 blackbox
 rllab/config_personal.py
+*.swp

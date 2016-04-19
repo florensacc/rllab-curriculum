@@ -15,26 +15,10 @@ from rllab.misc import logger
 from rllab.misc import ext
 from rllab.misc import autoargs
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
+import theano.tensor as TT
 
 
 class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
-    @autoargs.arg('hidden_sizes', type=int, nargs='*',
-                  help='list of sizes for the fully-connected hidden layers')
-    @autoargs.arg('std_sizes', type=int, nargs='*',
-                  help='list of sizes for the fully-connected layers for std, note'
-                       'there is a difference in semantics than above: here an empty'
-                       'list means that std is independent of input and the last size is ignored')
-    @autoargs.arg('initial_std', type=float,
-                  help='Initial std')
-    @autoargs.arg('std_trainable', type=bool,
-                  help='Is std trainable')
-    @autoargs.arg('output_nl', type=str,
-                  help='nonlinearity for the output layer')
-    @autoargs.arg('nonlinearity', type=str,
-                  help='nonlinearity used for each hidden layer, can be one '
-                       'of tanh, sigmoid')
-    @autoargs.arg('bn', type=bool,
-                  help='whether to apply batch normalization to hidden layers')
     def __init__(
             self,
             env_spec,
@@ -44,10 +28,25 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             adaptive_std=False,
             std_share_network=False,
             std_hidden_sizes=(32, 32),
+            min_std=1e-6,
             std_hidden_nonlinearity=NL.tanh,
             hidden_nonlinearity=NL.tanh,
             output_nonlinearity=None,
     ):
+        """
+        :param env_spec:
+        :param hidden_sizes: list of sizes for the fully-connected hidden layers
+        :param learn_std: Is std trainable
+        :param init_std: Initial std
+        :param adaptive_std:
+        :param std_share_network:
+        :param std_hidden_sizes: list of sizes for the fully-connected layers for std
+        :param min_std: whether to make sure that the std is at least some threshold value, to avoid numerical issues
+        :param std_hidden_nonlinearity:
+        :param hidden_nonlinearity: nonlinearity used for each hidden layer
+        :param output_nonlinearity: nonlinearity for the output layer
+        :return:
+        """
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
@@ -85,7 +84,13 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 trainable=learn_std,
             )
 
+        self.min_std = min_std
+
         mean_var, log_std_var = L.get_output([l_mean, l_log_std])
+
+        if self.min_std is not None:
+            log_std_var = TT.maximum(log_std_var, np.log(min_std))
+
         self._mean_var, self._log_std_var = mean_var, log_std_var
 
         self._l_mean = l_mean
@@ -103,14 +108,40 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     def dist_info_sym(self, obs_var, action_var):
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
+        if self.min_std is not None:
+            log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
         return dict(mean=mean_var, log_std=log_std_var)
 
     @overrides
     def get_action(self, observation):
-        mean, log_std = [x[0] for x in self._f_dist([observation])]
-        rnd = np.random.randn(len(mean))
+        flat_obs = self.observation_space.flatten(observation)
+        mean, log_std = [x[0] for x in self._f_dist([flat_obs])]
+        rnd = np.random.normal(size=mean.shape)
         action = rnd * np.exp(log_std) + mean
         return action, dict(mean=mean, log_std=log_std)
+
+    def get_actions(self, observations):
+        flat_obs = self.observation_space.flatten_n(observations)
+        means, log_stds = self._f_dist(flat_obs)
+        rnd = np.random.normal(size=means.shape)
+        actions = rnd * np.exp(log_stds) + means
+        return actions, dict(mean=means, log_std=log_stds)
+
+    def get_reparam_action_sym(self, obs_var, action_var, old_dist_info_vars):
+        """
+        Given observations, old actions, and distribution of old actions, return a symbolically reparameterized
+        representation of the actions in terms of the policy parameters
+        :param obs_var:
+        :param action_var:
+        :param old_dist_info_vars:
+        :return:
+        """
+        new_dist_info_vars = self.dist_info_sym(obs_var, action_var)
+        new_mean_var, new_log_std_var = new_dist_info_vars["mean"], new_dist_info_vars["log_std"]
+        old_mean_var, old_log_std_var = old_dist_info_vars["mean"], old_dist_info_vars["log_std"]
+        epsilon_var = (action_var - old_mean_var) / (TT.exp(old_log_std_var) + 1e-8)
+        new_action_var = new_mean_var + epsilon_var * TT.exp(new_log_std_var)
+        return new_action_var
 
     def log_diagnostics(self, paths):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])

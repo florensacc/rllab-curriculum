@@ -1,8 +1,8 @@
 import os
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from rllab.envs.box2d.mountain_car_env import MountainCarEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
+from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 
@@ -16,7 +16,7 @@ seeds = range(10)
 
 for seed in seeds:
 
-    mdp_class = MountainCarEnv
+    mdp_class = CartpoleEnv
     mdp = NormalizedEnv(env=mdp_class())
 
     policy = GaussianMLPPolicy(
@@ -34,16 +34,16 @@ for seed in seeds:
         policy=policy,
         baseline=baseline,
         batch_size=1000,
-        whole_paths=False,
+        whole_paths=True,
         max_path_length=100,
-        n_itr=2000,
+        n_itr=1000,
         step_size=0.01,
         subsample_factor=1.0,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="mountaincar",
+        exp_prefix="cartpole",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

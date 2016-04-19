@@ -22,8 +22,8 @@ from rllab.policies.deterministic_mlp_policy import DeterministicMLPPolicy
 from rllab.q_functions.continuous_mlp_q_function import ContinuousMLPQFunction
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from rllab.baselines.zero_baseline import ZeroBaseline
-from rllab.misc import ext
 from nose2 import tools
+import numpy as np
 
 common_batch_algo_args = dict(
     n_itr=1,
@@ -32,26 +32,26 @@ common_batch_algo_args = dict(
 )
 
 algo_args = {
-    VPG: ext.merge_dict(common_batch_algo_args, dict()),
-    TNPG: ext.merge_dict(common_batch_algo_args, dict(
+    VPG: common_batch_algo_args,
+    TNPG: dict(common_batch_algo_args,
         optimizer_args=dict(
             cg_iters=1,
         ),
-    )),
-    TRPO: ext.merge_dict(common_batch_algo_args, dict(
+    ),
+    TRPO: dict(common_batch_algo_args,
         optimizer_args=dict(
             cg_iters=1,
         ),
-    )),
-    PPO: ext.merge_dict(common_batch_algo_args, dict(
+    ),
+    PPO: dict(common_batch_algo_args,
         optimizer_args=dict(
             max_penalty_itr=1,
             max_opt_itr=1
         ),
-    )),
-    REPS: ext.merge_dict(common_batch_algo_args, dict(
+    ),
+    REPS: dict(common_batch_algo_args,
         max_opt_itr=1,
-    )),
+    ),
     DDPG: dict(
         n_epochs=1,
         epoch_length=100,
@@ -91,6 +91,7 @@ def test_polopt_algo(algo_cls, env_cls, policy_cls):
     baseline = ZeroBaseline(env_spec=env.spec)
     algo = algo_cls(env=env, policy=policy, baseline=baseline, **(algo_args.get(algo_cls, dict())))
     algo.train()
+    assert not np.any(np.isnan(policy.get_param_values()))
 
 
 def test_ddpg():
