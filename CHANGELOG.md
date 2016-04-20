@@ -1,6 +1,7 @@
-# 2016-04-18
+# 2016-04-20
 
 - Default nonlinearity for `CategoricalMLPPolicy` changed to `tanh` as well, for consistency.
+- Add `flatten_n`, `unflatten_n` support for `Discrete` and `Product` spaces.
 
 # 2016-04-17
 
