@@ -5,7 +5,15 @@ import rllab.misc.logger as logger
 import theano
 import theano.tensor as TT
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-
+#imports from batch_polopt I might need as not I use here process_samples and others
+# import numpy as np
+# from rllab.algos.base import RLAlgorithm
+# from rllab.sampler import parallel_sampler
+# from rllab.misc import special
+# from rllab.misc import tensor_utils
+# from rllab.algos import util
+# import rllab.misc.logger as logger
+# import rllab.plotter as plotter
 
 class NPO_snn(BatchPolopt):
     """
@@ -27,6 +35,33 @@ class NPO_snn(BatchPolopt):
         super(NPO_snn, self).__init__(**kwargs)
 
     @overrides
+    def train(self):
+        self.start_worker()
+        self.init_opt()
+        episode_rewards = []
+        episode_lengths = []
+        for itr in xrange(self.start_itr, self.n_itr):
+            with logger.prefix('itr #%d | ' % itr):
+                paths = self.obtain_samples(itr)
+                samples_data = self.process_samples(itr, paths)
+                self.log_diagnostics(paths)
+                self.optimize_policy(itr, samples_data)
+                logger.log("saving snapshot...")
+                params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
+                if self.store_paths:
+                    params["paths"] = samples_data["paths"]
+                logger.save_itr_params(itr, params)
+                logger.log("saved")
+                logger.dump_tabular(with_prefix=False)
+                if self.plot:
+                    self.update_plot()
+                    if self.pause_for_plot:
+                        raw_input("Plotting evaluation run: Press Enter to "
+                                  "continue...")
+
+        self.shutdown_worker()
+
+    @overrides
     def init_opt(self):
         is_recurrent = int(self.policy.recurrent)
         obs_var = self.env.observation_space.new_tensor_variable(
@@ -38,32 +73,36 @@ class NPO_snn(BatchPolopt):
             extra_dims=1 + is_recurrent,
         )
         ##
-        # latent_var = self.env.latent_space.new_tensor_variable(
-        #     'latent',
-        #     extra_dims=1 + is_recurrent,
-        # )
+        latent_var = self.policy.latent_space.new_tensor_variable(
+            'latent',
+            extra_dims=1 + is_recurrent,
+        )
         ##
         advantage_var = ext.new_tensor(
             'advantage',
             ndim=1 + is_recurrent,
             dtype=theano.config.floatX
         )
-        dist = self.policy.distribution
+        dist = self.policy.distribution   ### this can still be the dist P(a|s,__h__)
         old_dist_info_vars = {
             k: ext.new_tensor(
-                'old_%s' % k,
+                'old_%s' % k,   ##define tensors old_mean and old_log_std
                 ndim=2 + is_recurrent,
                 dtype=theano.config.floatX
             ) for k in dist.dist_info_keys
             }
-        old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
+        old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys] ##put 2 tensors above in a list
 
         if is_recurrent:
             valid_var = TT.matrix('valid')
         else:
             valid_var = None
 
-        dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)
+        ## this will have to change as now the pdist depends also on the particuar latent var h sampled!
+        # dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)  ##returns dict with mean and log_std_var for this obs_var (action useless here!)
+        ##CF
+        dist_info_vars = self.policy.dist_info_sym(obs_var, latent_var, action_var)
+
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
         lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
         if is_recurrent:
@@ -73,11 +112,13 @@ class NPO_snn(BatchPolopt):
             mean_kl = TT.mean(kl)
             surr_loss = - TT.mean(lr * advantage_var)
 
-        input_list = [
+        input_list = [                  ##these are sym var. the inputs in optimize_policy have to be in same order!
                          obs_var,
                          action_var,
                          advantage_var,
-                     ] + old_dist_info_vars_list
+                         ##CF
+                         latent_var,
+                     ] + old_dist_info_vars_list  ##provide old mean and var, for the new states as they were sampled from it!
         if is_recurrent:
             input_list.append(valid_var)
 
@@ -91,16 +132,20 @@ class NPO_snn(BatchPolopt):
         return dict()
 
     @overrides
-    def optimize_policy(self, itr, samples_data):   ###make that samples_data comes with latents
-        all_input_values = tuple(ext.extract(
+    def optimize_policy(self, itr, samples_data):   ###make that samples_data comes with latents: see train in batch_polopt
+        all_input_values = tuple(ext.extract(       ### it will be in agent_infos!!! under key "latents"
             samples_data,
-            "observations",  "actions", "advantages" ##### "latents",
+            "observations",  "actions", "advantages"
         ))
         agent_infos = samples_data["agent_infos"]
-        info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
-        all_input_values += tuple(info_list)
+        ##CF
+        all_input_values += (agent_infos["latent"],)  #latent has already been processed and is the concat of all latents, but keeps key "latent"
+        #
+        info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys] ##these are the mean and var used at rollout, corresponding to
+        all_input_values += tuple(info_list)                                            # old_dist_info_vars_list as symbolic var
         if self.policy.recurrent:
             all_input_values += (samples_data["valids"],)
+
         loss_before = self.optimizer.loss(all_input_values)
         self.optimizer.optimize(all_input_values)
         mean_kl = self.optimizer.constraint_val(all_input_values)

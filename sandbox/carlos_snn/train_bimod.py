@@ -1,17 +1,18 @@
 from rllab.algos.trpo import TRPO
+from rllab.algos.npo import NPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.misc.instrument import stub, run_experiment_lite
 
-# from sandbox.carlos_snn.bimod_env_tunable import BimodEnv
-from sandbox.carlos_snn.bimod2D_env import BimodEnv
+from sandbox.carlos_snn.bimod_env_tunable import BimodEnv
+# from sandbox.carlos_snn.bimod2D_env import BimodEnv
 
 stub(globals())
 
-# env = BimodEnv(mu1=-1,mu2=1,sigma1=0.01,sigma2=0.01,rand_init=True)
-env = BimodEnv(mu1=[1,0],mu2=[-1,0],sigma1=0.01,sigma2=0.01,rand_init=False)
+env = BimodEnv(mu1=-1,mu2=1,sigma1=0.01,sigma2=0.01,rand_init=False)
+# env = BimodEnv(mu1=[1,0],mu2=[-1,0],sigma1=0.01,sigma2=0.01,rand_init=False)
 
 ## If you want to recover a previous policy
 # import joblib
@@ -30,11 +31,11 @@ policy = GaussianMLPPolicy(
 
 baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-algo = TRPO(
+algo = NPO(
     env=env,
     policy=policy,
     baseline=baseline,
-    batch_size=500,
+    batch_size=100,
     whole_paths=True, ##I think this is useless: the kw only appears in some provisional/experimental files by Rocky or PChen
     store_paths=True,
     max_path_length=100,
@@ -42,6 +43,7 @@ algo = TRPO(
     discount=0.99,
     step_size=0.01,
 )
+
 
 for s in [4]:#,5,155]:
     run_experiment_lite(
@@ -55,5 +57,8 @@ for s in [4]:#,5,155]:
         seed=s,
         # plot=True,
         # Save to data/local/exp_name/exp_name_timestamp ##OJO! the folder exp_name will change _ by -!!
-        exp_prefix='trpo_2Dbimod_baseline200_just_check',
+        exp_prefix='npo2',
+        exp_name='npo_4'
     )
+
+import plt_results1D
