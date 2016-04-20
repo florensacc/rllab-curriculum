@@ -44,13 +44,15 @@ env = HierarchicalGridWorldEnv(
     ],
 )
 
-CONTINUOUS = False#True#False#True
+CONTINUOUS = True#False#True#False#True
 
 seed = 11
 
 batch_size = 10000#1000#10000#4000  # 0
 
 subgoal_dim = 1#5#1
+
+component_idx = None
 
 subgoal_space = Box(low=-1, high=1, shape=(subgoal_dim,)) if CONTINUOUS else Discrete(20)
 
@@ -79,12 +81,12 @@ baseline = SubgoalBaseline(
 exact_evaluator = ExactStateBasedMIEvaluator(
     env=env,
     policy=policy,
-    component_idx=0,
+    component_idx=component_idx,
 )
 cont_exact_evaluator = ContinuousExactStateBasedMIEvaluator(
     env=env,
     policy=policy,
-    component_idx=0,
+    component_idx=component_idx,
 )
 
 # mi_evaluator = exact_evaluator
@@ -103,12 +105,12 @@ mi_evaluator = StateBasedMIEvaluator(
         use_trust_region=False,
         # hidden_nonlinearity=NL.tanh
     ),
-    component_idx=0,
+    component_idx=component_idx,
     n_subgoal_samples=10,
     use_state_regressor=False,
     # state_regressor_cls=CategoricalMLPRegressor,
     # state_regressor_args=dict(use_trust_region=False, hidden_nonlinearity=NL.tanh),
-    logger_delegates=[cont_exact_evaluator, exact_evaluator],
+    logger_delegates=[cont_exact_evaluator] if CONTINUOUS else [cont_exact_evaluator, exact_evaluator],
 )
 
 low_algo = TRPO(
@@ -124,7 +126,7 @@ algo = BatchHRL(
     env=env,
     policy=policy,
     baseline=baseline,
-    bonus_evaluator=exact_evaluator,#mi_evaluator,
+    bonus_evaluator=mi_evaluator,
     batch_size=batch_size,
     max_path_length=100,
     n_itr=100,

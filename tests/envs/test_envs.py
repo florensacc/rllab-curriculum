@@ -91,7 +91,8 @@ def test_env(env):
     res = env.step(a)
     assert ob_space.contains(res.observation)
     assert np.isscalar(res.reward)
-    if 'CIRCLECI' in os.environ:
+    print(os.environ)
+    if 'CI' in os.environ:
         print("Skipping rendering test")
     else:
         env.render()
