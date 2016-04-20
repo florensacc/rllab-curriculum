@@ -2,6 +2,7 @@
 
 - Default nonlinearity for `CategoricalMLPPolicy` changed to `tanh` as well, for consistency.
 - Add `flatten_n`, `unflatten_n` support for `Discrete` and `Product` spaces.
+- Changed `dist_info_sym` and `dist_info` interface for policies. Previously it takes both the observations and actions as input arguments, where actions are needed for recurrent policies when the policy takes both the current state and the previous action into account. However this is rather artificial. The interface is now changed to take in the observation plus a dictionary of state-related information. An extra property `state_info_keys` is added to specify the list of keys used for state-related information. By default this is an empty list.
 
 # 2016-04-17
 

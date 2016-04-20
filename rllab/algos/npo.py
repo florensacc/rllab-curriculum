@@ -52,12 +52,21 @@ class NPO(BatchPolopt):
             }
         old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
 
+        state_info_vars = {
+            k: ext.new_tensor(
+                k,
+                ndim=2 + is_recurrent,
+                dtype=theano.config.floatX
+            ) for k in self.policy.state_info_keys
+        }
+        state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
+
         if is_recurrent:
             valid_var = TT.matrix('valid')
         else:
             valid_var = None
 
-        dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)
+        dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
         lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
         if is_recurrent:
@@ -71,7 +80,7 @@ class NPO(BatchPolopt):
                          obs_var,
                          action_var,
                          advantage_var,
-                     ] + old_dist_info_vars_list
+                     ] + state_info_vars_list + old_dist_info_vars_list
         if is_recurrent:
             input_list.append(valid_var)
 
@@ -91,8 +100,9 @@ class NPO(BatchPolopt):
             "observations", "actions", "advantages"
         ))
         agent_infos = samples_data["agent_infos"]
-        info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
-        all_input_values += tuple(info_list)
+        state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
+        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
+        all_input_values += tuple(state_info_list) + tuple(dist_info_list)
         if self.policy.recurrent:
             all_input_values += (samples_data["valids"],)
         loss_before = self.optimizer.loss(all_input_values)
