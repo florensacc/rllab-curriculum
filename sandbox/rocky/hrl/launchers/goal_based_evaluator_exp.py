@@ -37,10 +37,14 @@ env = HierarchicalGridWorldEnv(
 
 seed = 11
 
-batch_size = 4000#200000
+batch_size = 200000
+
+n_subgoals = 5
+
+for use_entropy in [True, False]:
 
 
-for n_subgoals in [5, 10, 15, 20, 25, 30]:#= 5
+    #for n_subgoals in [5, 10, 15, 20, 25, 30]:#= 5
 
     policy = SubgoalPolicy(
         env_spec=env.spec,
@@ -72,7 +76,8 @@ for n_subgoals in [5, 10, 15, 20, 25, 30]:#= 5
         regressor_cls=CategoricalMLPRegressor,
         regressor_args=dict(use_trust_region=False),
         component_idx=0,
-        logger_delegate=exact_evaluator
+        use_entropy=use_entropy,
+        logger_delegate=exact_evaluator,
     )
 
     low_algo = TRPO(
@@ -104,8 +109,8 @@ for n_subgoals in [5, 10, 15, 20, 25, 30]:#= 5
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hrl_goal_based_more_goals",
+        exp_prefix="hrl_goal_based_more_goals_ent",
         snapshot_mode="last",
         seed=seed,
-        n_parallel=1,
+        n_parallel=4,
     )

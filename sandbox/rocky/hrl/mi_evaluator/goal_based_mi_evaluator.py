@@ -28,8 +28,8 @@ class GoalBasedMIEvaluator(LasagnePowered, Serializable):
             component_idx=None,
             regressor_cls=None,
             regressor_args=None,
-
-            logger_delegate=None):
+            logger_delegate=None,
+            use_entropy=False):
         assert isinstance(policy, SubgoalPolicy)
         assert isinstance(policy.subgoal_space, (Discrete, Box))
         if component_idx is not None:
@@ -65,6 +65,7 @@ class GoalBasedMIEvaluator(LasagnePowered, Serializable):
         self.subgoal_space = policy.subgoal_space
         self.subgoal_interval = policy.subgoal_interval
         self.logger_delegate = logger_delegate
+        self.use_entropy = use_entropy
 
     def _get_relevant_data(self, paths):
         if self.component_idx is None:
@@ -106,8 +107,14 @@ class GoalBasedMIEvaluator(LasagnePowered, Serializable):
         ys = subgoals
         log_p_g_given_s_sp = self.regressor.predict_log_likelihood(xs, ys)
         high_dist_info = self.policy.high_policy.dist_info(flat_obs, subgoals)
-        log_p_g_given_s = self.policy.high_policy.distribution.log_likelihood(subgoals, high_dist_info)
-        bonuses = np.append(log_p_g_given_s_sp - log_p_g_given_s, 0)
+        high_dist = self.policy.high_policy.distribution
+        est_ent_g_given_s_sp = - log_p_g_given_s_sp
+        if self.use_entropy:
+            est_ent_g_given_s = high_dist.entropy(high_dist_info)
+        else:
+            log_p_g_given_s = high_dist.log_likelihood(subgoals, high_dist_info)
+            est_ent_g_given_s = - log_p_g_given_s
+        bonuses = np.append(est_ent_g_given_s - est_ent_g_given_s_sp, 0)
         bonuses = np.tile(
             np.expand_dims(bonuses, axis=1),
             (1, self.subgoal_interval)
