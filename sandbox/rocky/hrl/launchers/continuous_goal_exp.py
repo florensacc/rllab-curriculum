@@ -44,15 +44,15 @@ env = HierarchicalGridWorldEnv(
     ],
 )
 
-CONTINUOUS = True
+CONTINUOUS = False#True#False#True
 
 seed = 11
 
-batch_size = 4000#0
+batch_size = 10000#1000#10000#4000  # 0
 
-subgoal_dim = 1
+subgoal_dim = 1#5#1
 
-subgoal_space = Box(low=-1, high=1, shape=(subgoal_dim,)) if CONTINUOUS else Discrete(5)
+subgoal_space = Box(low=-1, high=1, shape=(subgoal_dim,)) if CONTINUOUS else Discrete(20)
 
 policy = SubgoalPolicy(
     env_spec=env.spec,
@@ -61,7 +61,7 @@ policy = SubgoalPolicy(
     # low_policy_cls=StateGoalCategoricalMLPPolicy,
     low_policy_cls=CategoricalMLPPolicy,
     low_policy_args=dict(
-        hidden_sizes=tuple(),
+        hidden_sizes=(32, 32) if CONTINUOUS else tuple(),
         # subgoal_space=subgoal_space,
         # state_hidden_sizes=tuple(),
         # goal_hidden_sizes=(32,),
@@ -77,33 +77,34 @@ baseline = SubgoalBaseline(
     low_baseline=LinearFeatureBaseline(env_spec=policy.low_env_spec),
 )
 
-# exact_evaluator = ContinuousExactStateBasedMIEvaluator(
-#     env=env,
-#     policy=policy,
-#     component_idx=0,
-# )
+exact_evaluator = ContinuousExactStateBasedMIEvaluator(
+    env=env,
+    policy=policy,
+    component_idx=0,
+)
 
 # mi_evaluator = exact_evaluator
 
 mi_evaluator = StateBasedMIEvaluator(
     env_spec=env.spec,
     policy=policy,
-    regressor_cls=StateGoalCategoricalMLPRegressor,
+    regressor_cls=CategoricalMLPRegressor,
     regressor_args=dict(
-        state_dim=env.observation_space.flat_dim,
-        goal_dim=subgoal_space.flat_dim,
-        state_hidden_sizes=tuple(),
-        goal_hidden_sizes=(32,),
-        joint_hidden_sizes=(32,),
+        # state_dim=env.observation_space.flat_dim,
+        # goal_dim=subgoal_space.flat_dim,
+        # state_hidden_sizes=tuple(),
+        # goal_hidden_sizes=(32,),
+        # joint_hidden_sizes=(32,),
+        hidden_sizes=(32, 32) if CONTINUOUS else tuple(),
         use_trust_region=False,
         hidden_nonlinearity=NL.tanh
     ),
     component_idx=0,
-    n_subgoal_samples=50,
-    use_state_regressor=True,
-    state_regressor_cls=CategoricalMLPRegressor,
-    state_regressor_args=dict(use_trust_region=False, hidden_nonlinearity=NL.tanh),
-    # logger_delegate=exact_evaluator,
+    n_subgoal_samples=10,
+    use_state_regressor=False,
+    # state_regressor_cls=CategoricalMLPRegressor,
+    # state_regressor_args=dict(use_trust_region=False, hidden_nonlinearity=NL.tanh),
+    logger_delegate=exact_evaluator,
 )
 
 low_algo = TRPO(
