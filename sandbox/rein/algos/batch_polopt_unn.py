@@ -1,8 +1,7 @@
 import numpy as np
-from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 
 from rllab.algos.base import RLAlgorithm
-from rllab.sampler import parallel_sampler
+from sandbox.rein.sampler import parallel_sampler_vbnn as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
@@ -224,11 +223,11 @@ class BatchPolopt(RLAlgorithm):
         # Params to keep track of moving average (both intrinsic and external
         # reward) mean/var.
         if self.normalize_reward:
-            self._reward_mean = 0.
-            self._reward_var = 0.
+            self._reward_mean = deque(maxlen=self.kl_q_len)
+            self._reward_std = deque(maxlen=self.kl_q_len)
         if self.use_kl_ratio:
-            self._kl_mean = 0.
-            self._kl_var = 0.
+            self._kl_mean = deque(maxlen=self.kl_q_len)
+            self._kl_std = deque(maxlen=self.kl_q_len)
 
         if self.use_kl_ratio_q:
             # Add Queue here to keep track of N last kl values, compute average
@@ -441,53 +440,32 @@ class BatchPolopt(RLAlgorithm):
                 paths, self.batch_size)
             return paths_truncated
 
-    def _update_reward_estimate(self, reward):
-        """Update reward mean and variance estimates.
-
-        We keep a moving both mean/var estimates and update it.
-        """
-        self._reward_mean = (1 - self.reward_alpha) * \
-            self._reward_mean + self.reward_alpha * reward
-        self._reward_var = (1 - self.reward_alpha) * self._reward_var + self.reward_alpha * np.square(reward -
-                                                                                                      self._reward_mean)
-
-    def _apply_normalize_reward(self, reward):
-        """Apply reward normalization based on moving mean/var."""
-        self._update_reward_estimate(reward)
-        return (reward - self._reward_mean) / (np.sqrt(self._reward_var) + 1e-8)
-
-    def _update_kl_estimate(self, kl):
-        """Update kl mean and variance estimates.
-
-        We keep a moving both mean/var estimates and update it.
-        """
-        self._kl_mean = (1 - self.kl_alpha) * \
-            self._kl_mean + self.kl_alpha * kl
-        self._kl_var = (1 - self.kl_alpha) * self._kl_var + self.kl_alpha * np.square(kl -
-                                                                                      self._kl_mean)
-
-    def _apply_normalize_kl(self, kl):
-        """Apply kl normalization based on moving mean/var."""
-        self._update_kl_estimate(kl)
-        return (kl - self._kl_mean) / (np.sqrt(self._kl_var) + 1e-8)
-
     def process_samples(self, itr, paths):
 
         # Save original reward.
         for i in xrange(len(paths)):
             paths[i]['rewards_orig'] = np.array(paths[i]['rewards'])
 
+        if self.normalize_reward:
+            # Update reward mean/std Q.
+            rewards = []
+            for i in xrange(len(paths)):
+                rewards.append(paths[i]['rewards'])
+            rewards_flat = np.hstack(rewards)
+            self._reward_mean.append(np.mean(rewards_flat))
+            self._reward_std.append(np.std(rewards_flat))
+
+            # Normalize rewards.
+            reward_mean = np.mean(np.asarray(self._reward_mean))
+            reward_std = np.mean(np.asarray(self._reward_std))
+            for i in xrange(len(paths)):
+                paths[i]['rewards'] = (
+                    paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
+
         # Computing intrinsic rewards.
         # ----------------------------
         if itr > 0:
             logger.log("Computing intrinsic rewards ...")
-
-            # Normalize reward
-            if self.normalize_reward:
-                for i in xrange(len(paths)):
-                    for j in xrange(len(paths[i]['rewards'])):
-                        paths[i]['rewards'][j] = self._apply_normalize_reward(
-                            paths[i]['rewards'][j])
 
             # List to keep track of kl per path.
             kls = []
@@ -547,12 +525,6 @@ class BatchPolopt(RLAlgorithm):
                     previous_mean_kl = np.mean(np.asarray(self.kl_previous))
                     for i in xrange(len(kls)):
                         kls[i] = kls[i] / previous_mean_kl
-                else:
-                    # For each kl element we normalize it, normalizing updates the
-                    # running mean/var in each step.
-                    for i in xrange(len(kls)):
-                        for j in xrange(len(kls[i])):
-                            kls[i][j] = self._apply_normalize_kl(kls[i][j])
 
             # Add KL ass intrinsic reward to external reward
             for i in xrange(len(paths)):

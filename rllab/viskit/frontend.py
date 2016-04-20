@@ -88,7 +88,7 @@ def make_plot(plot_list, use_median=False):
 
 
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
-                         only_show_best=False):
+                         only_show_best=True):
     print(plot_key, split_key, group_key, filters)
     selector = core.Selector(exps_data)
     if filters is None:
@@ -175,6 +175,8 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                             np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
                         legend = '{} ({:.1f})'.format(
                             group_legend, best_regret)
+                        window_size = np.maximum(
+                        int(np.round(max_size / float(1000))), 1)
                         if use_median:
                             percentile25 = np.nanpercentile(
                                 progresses, q=25, axis=0)
@@ -182,12 +184,22 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                 progresses, q=50, axis=0)
                             percentile75 = np.nanpercentile(
                                 progresses, q=75, axis=0)
+                            percentile25 = sliding_mean(percentile25,
+                                                    window=window_size)
+                            percentile50 = sliding_mean(percentile50,
+                                                        window=window_size)
+                            percentile75 = sliding_mean(percentile75,
+                                                        window=window_size)
                             to_plot.append(
                                 ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
                                              percentile75=percentile75, legend=legend))
                         else:
                             means = np.nanmean(progresses, axis=0)
                             stds = np.nanstd(progresses, axis=0)
+                            means = sliding_mean(means,
+                                             window=window_size)
+                            stds = sliding_mean(stds,
+                                            window=window_size)
                             to_plot.append(
                                 ext.AttrDict(means=means, stds=stds, legend=legend))
                 else:
@@ -293,7 +305,7 @@ def index():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("data_path", type=str)
-    parser.add_argument("--debug", action="store_true", default=True)
+    parser.add_argument("--debug", action="store_true", default=False)
     args = parser.parse_args(sys.argv[1:])
     print("Importing data from {path}...".format(path=args.data_path))
     exps_data = core.load_exps_data(args.data_path)

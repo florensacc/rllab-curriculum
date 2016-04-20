@@ -154,7 +154,7 @@ class Selector(object):
 
     def _check_exp(self, exp):
         # or exp.flat_params.get(k, None) is None
-        return all(((str(exp.flat_params.get(k, None)) == str(v)) for k, v in self._filters))
+        return all(((str(exp.flat_params.get(k, None)) == str(v)or exp.flat_params.get(k, None) is None) for k, v in self._filters))
 
     def extract(self):
         return filter(self._check_exp, self._exps_data)

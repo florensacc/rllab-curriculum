@@ -15,15 +15,14 @@ stub(globals())
 seeds = range(10)
 etas = [0.00001, 0.00003, 0.0001, 0.0003,
         0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 10.0]
-normalize_rewards = [False]
 mdp_classes = [Walker2DEnv]
 mdps = [NormalizedEnv(env=mdp_class())
         for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
-    mdps, etas, seeds, normalize_rewards
+    mdps, etas, seeds
 )
 
-for mdp, eta, seed, normalize_reward in param_cart_product:
+for mdp, eta, seed in param_cart_product:
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
@@ -43,7 +42,7 @@ for mdp, eta, seed, normalize_reward in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=1000,
+        n_itr=500,
         step_size=0.01,
         eta=eta,
         eta_discount=1.0,
@@ -51,17 +50,18 @@ for mdp, eta, seed, normalize_reward in param_cart_product:
         subsample_factor=0.1,
         use_reverse_kl_reg=False,
         use_replay_pool=True,
-        use_kl_ratio=normalize_reward,
+        use_kl_ratio=True,
+        use_kl_ratio_q=True,
         n_itr_update=5,
         kl_batch_size=5,
-        normalize_reward=normalize_reward,
+        normalize_reward=False,
         stochastic_output=False,
         replay_pool_size=1000000,
-        n_updates_per_sample=batch_size,
+        n_updates_per_sample=10000,
         #         second_order_update=True,
-        unn_n_hidden=[64, 32],
-        unn_layers_type=[1, 1, 1],
-        unn_learning_rate=0.001
+        unn_n_hidden=[64, 32, 64],
+        unn_layers_type=[1, 1, 1, 1],
+        unn_learning_rate=0.0001
     )
 
     run_experiment_lite(
