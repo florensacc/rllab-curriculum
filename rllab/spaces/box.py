@@ -45,10 +45,10 @@ class Box(Space):
         return self.low, self.high
 
     def flatten(self, x):
-        return x.flatten()
+        return np.asarray(x).flatten()
 
     def unflatten(self, x):
-        return x.reshape(self.shape)
+        return np.asarray(x).reshape(self.shape)
 
     def flatten_n(self, xs):
         xs = np.asarray(xs)

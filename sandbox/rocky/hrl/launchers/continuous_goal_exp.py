@@ -12,6 +12,7 @@ from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
+from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from sandbox.rocky.hrl.batch_hrl import BatchHRL
 import lasagne.nonlinearities as NL
 from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
@@ -57,12 +58,14 @@ policy = SubgoalPolicy(
     env_spec=env.spec,
     high_policy_cls=GaussianMLPPolicy if CONTINUOUS else CategoricalMLPPolicy,
     high_policy_args=dict(hidden_sizes=(32, 32)),
-    low_policy_cls=StateGoalCategoricalMLPPolicy,
+    # low_policy_cls=StateGoalCategoricalMLPPolicy,
+    low_policy_cls=CategoricalMLPPolicy,
     low_policy_args=dict(
-        subgoal_space=subgoal_space,
-        state_hidden_sizes=tuple(),
-        goal_hidden_sizes=(32,),
-        joint_hidden_sizes=(32,)
+        hidden_sizes=tuple(),
+        # subgoal_space=subgoal_space,
+        # state_hidden_sizes=tuple(),
+        # goal_hidden_sizes=(32,),
+        # joint_hidden_sizes=(32,)
     ),
     subgoal_space=subgoal_space,
     subgoal_interval=3,
@@ -104,11 +107,12 @@ mi_evaluator = StateBasedMIEvaluator(
 )
 
 low_algo = TRPO(
-    env=env,
+    env=policy.low_env_spec,
     policy=policy.low_policy,
     baseline=baseline.low_baseline,
     discount=0.99,
     step_size=0.01,
+    optimizer=ConjugateGradientOptimizer(subsample_factor=1.),
 )
 
 algo = BatchHRL(
@@ -121,7 +125,7 @@ algo = BatchHRL(
     n_itr=100,
     bonus_gradient=True,
     high_algo=TRPO(
-        env=env,
+        env=policy.high_env_spec,
         policy=policy.high_policy,
         baseline=baseline.high_baseline,
         discount=0.99,
