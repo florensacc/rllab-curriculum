@@ -374,7 +374,7 @@ class HierarchicalGridWorldAnalyzer(object):
                             policy.low_policy.observation_space.flatten,
                             [(x, goal) for x in prior_obs]
                         ))
-                        a_dists = policy.low_policy.dist_info(flat_states, flat_actions)["prob"]
+                        a_dists = policy.low_policy.dist_info(flat_states, dict())["prob"]
                         # select the actions we actually took
                         a_prob = np.prod([prob[a] for prob, a in zip(a_dists, action_seq)])
                         probs[state, goal, next_state] += s_prob * a_prob
@@ -548,7 +548,7 @@ class HierarchicalGridWorldAnalyzer(object):
         nonseq_states = np.asarray(nonseq_states, dtype='uint8')
         nonseq_states_shared = theano.shared(nonseq_states)
 
-        high_dist_info_sym = self.policy.high_policy.dist_info_sym(nonseq_states_shared, None)
+        high_dist_info_sym = self.policy.high_policy.dist_info_sym(nonseq_states_shared, dict())
 
         for goal in xrange(n_subgoals):
             subgoals = TT.zeros((flat_states_shared.shape[0], flat_states_shared.shape[1], n_subgoals))
@@ -562,7 +562,7 @@ class HierarchicalGridWorldAnalyzer(object):
 
             states_2d = flat_states_with_subgoal.reshape((-1, state_dim))
             actions_2d = flat_actions_shared.reshape((-1, action_dim))
-            dist_info_sym = self.policy.low_policy.dist_info_sym(states_2d, actions_2d)
+            dist_info_sym = self.policy.low_policy.dist_info_sym(states_2d, dict())
             action_prob_2d_sym = TT.exp(
                 self.policy.low_policy.distribution.log_likelihood_sym(actions_2d, dist_info_sym))
             action_prob_sym = action_prob_2d_sym.reshape((-1, interval))

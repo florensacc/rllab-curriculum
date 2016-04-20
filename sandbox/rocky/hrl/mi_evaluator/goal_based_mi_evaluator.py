@@ -106,7 +106,7 @@ class GoalBasedMIEvaluator(LasagnePowered, Serializable):
         xs = np.concatenate([flat_obs, flat_next_obs], axis=1)
         ys = subgoals
         log_p_g_given_s_sp = self.regressor.predict_log_likelihood(xs, ys)
-        high_dist_info = self.policy.high_policy.dist_info(flat_obs, subgoals)
+        high_dist_info = self.policy.high_policy.dist_info(flat_obs, dict())
         high_dist = self.policy.high_policy.distribution
         est_ent_g_given_s_sp = - log_p_g_given_s_sp
         if self.use_entropy:

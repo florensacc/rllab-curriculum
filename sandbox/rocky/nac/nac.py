@@ -249,7 +249,16 @@ class NAC(RLAlgorithm):
             }
         old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
 
-        dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)
+        state_info_vars = {
+            k: ext.new_tensor(
+                k,
+                ndim=2,
+                dtype=theano.config.floatX
+            ) for k in self.policy.state_info_keys
+        }
+        state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
+
+        dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
         reparam_action_var = self.policy.get_reparam_action_sym(obs_var, action_var, old_dist_info_vars)
 
@@ -262,7 +271,7 @@ class NAC(RLAlgorithm):
         input_list = [
                          obs_var,
                          action_var,
-                     ] + old_dist_info_vars_list
+                     ] + state_info_vars_list + old_dist_info_vars_list
 
         self.policy_optimizer.update_opt(
             loss=surr_loss,
@@ -304,8 +313,9 @@ class NAC(RLAlgorithm):
         obs = batch["observations"]
         actions, agent_infos = self.policy.get_actions(obs)
         dist = self.policy.distribution
+        state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
         dist_infos = [agent_infos[k] for k in dist.dist_info_keys]
-        all_input_values = [obs, actions] + dist_infos
+        all_input_values = [obs, actions] + state_info_list + dist_infos
         loss_before = self.policy_optimizer.loss(all_input_values)
         self.policy_optimizer.optimize(all_input_values)
         mean_kl = self.policy_optimizer.constraint_val(all_input_values)

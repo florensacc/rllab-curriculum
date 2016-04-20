@@ -92,7 +92,7 @@ class ContinuousExactStateBasedMIEvaluator(object):
                     reshape_dup_concat = np.concatenate([reshape_dup_flat_states, reshape_dup_goals], axis=-1)
                     a_probs = np.exp(self.policy.low_policy.distribution.log_likelihood(
                         reshape_dup_actions,
-                        self.policy.low_policy.dist_info(reshape_dup_concat, None)
+                        self.policy.low_policy.dist_info(reshape_dup_concat, dict())
                     )).reshape((self.subgoal_interval, n_goal_samples)).prod(axis=0)
 
                     p_sp_given_s_g += ps * a_probs
@@ -107,7 +107,7 @@ class ContinuousExactStateBasedMIEvaluator(object):
             )
             mi_states.append(mi_goal_states)
         mi_avg = np.mean(mi_states)
-        logger.record_tabular("I(goal,next_state|state)", mi_avg)
+        logger.record_tabular("Approx.I(goal,next_state|state)", mi_avg)
 
     def fit(self, paths):
         pass

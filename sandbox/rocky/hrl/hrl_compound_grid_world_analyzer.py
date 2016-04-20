@@ -100,7 +100,7 @@ class HrlAnalyzer(object):
                 print "State (%d,%d)" % (x, y)
                 tabulate_data = []
                 high_obs = self._high_obs_space.flatten(state)
-                high_prob = self._policy.high_policy.dist_info([high_obs], None)['prob'].flatten()
+                high_prob = self._policy.high_policy.dist_info([high_obs], dict())['prob'].flatten()
                 row = [""]
                 for subgoal in range(self._n_subgoals):
                     row.append("Subgoal %d: p=%.2f" % (subgoal, high_prob[subgoal]))
@@ -109,7 +109,7 @@ class HrlAnalyzer(object):
                     row = ["T=%d" % (time_step)]
                     for subgoal in range(self._n_subgoals):
                         low_obs = self._low_obs_space.flatten((state, subgoal, time_step))
-                        prob = self._policy.low_policy.dist_info([low_obs], None)['prob'].flatten()
+                        prob = self._policy.low_policy.dist_info([low_obs], dict())['prob'].flatten()
                         row.append(" ".join(["%.2f" % px for px in prob]))
                     tabulate_data.append(row)
                 print tabulate(tabulate_data)

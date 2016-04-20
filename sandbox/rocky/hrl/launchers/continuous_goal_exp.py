@@ -57,7 +57,7 @@ subgoal_space = Box(low=-1, high=1, shape=(subgoal_dim,)) if CONTINUOUS else Dis
 policy = SubgoalPolicy(
     env_spec=env.spec,
     high_policy_cls=GaussianMLPPolicy if CONTINUOUS else CategoricalMLPPolicy,
-    high_policy_args=dict(hidden_sizes=(32, 32)),
+    high_policy_args=dict(hidden_sizes=(32, 32) if CONTINUOUS else tuple()),
     # low_policy_cls=StateGoalCategoricalMLPPolicy,
     low_policy_cls=CategoricalMLPPolicy,
     low_policy_args=dict(
@@ -76,8 +76,12 @@ baseline = SubgoalBaseline(
     high_baseline=LinearFeatureBaseline(env_spec=policy.high_env_spec),
     low_baseline=LinearFeatureBaseline(env_spec=policy.low_env_spec),
 )
-
-exact_evaluator = ContinuousExactStateBasedMIEvaluator(
+exact_evaluator = ExactStateBasedMIEvaluator(
+    env=env,
+    policy=policy,
+    component_idx=0,
+)
+cont_exact_evaluator = ContinuousExactStateBasedMIEvaluator(
     env=env,
     policy=policy,
     component_idx=0,
@@ -95,16 +99,16 @@ mi_evaluator = StateBasedMIEvaluator(
         # state_hidden_sizes=tuple(),
         # goal_hidden_sizes=(32,),
         # joint_hidden_sizes=(32,),
-        hidden_sizes=(32, 32) if CONTINUOUS else tuple(),
+        # hidden_sizes=(32, 32) if CONTINUOUS else tuple(),
         use_trust_region=False,
-        hidden_nonlinearity=NL.tanh
+        # hidden_nonlinearity=NL.tanh
     ),
     component_idx=0,
     n_subgoal_samples=10,
     use_state_regressor=False,
     # state_regressor_cls=CategoricalMLPRegressor,
     # state_regressor_args=dict(use_trust_region=False, hidden_nonlinearity=NL.tanh),
-    logger_delegate=exact_evaluator,
+    logger_delegates=[cont_exact_evaluator, exact_evaluator],
 )
 
 low_algo = TRPO(
@@ -120,7 +124,7 @@ algo = BatchHRL(
     env=env,
     policy=policy,
     baseline=baseline,
-    bonus_evaluator=mi_evaluator,
+    bonus_evaluator=exact_evaluator,#mi_evaluator,
     batch_size=batch_size,
     max_path_length=100,
     n_itr=100,

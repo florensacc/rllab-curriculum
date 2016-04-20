@@ -171,7 +171,7 @@ class BatchHRL(BatchPolopt, Serializable):
             high_observations = high_samples_data["observations"]
             # p(g|s)
             # shape: (N/subgoal_interval) * #subgoal
-            chunked_goal_probs = policy.high_policy.dist_info(high_observations, None)["prob"]
+            chunked_goal_probs = policy.high_policy.dist_info(high_observations, dict())["prob"]
             n_subgoals = policy.subgoal_space.n
             goal_probs = np.tile(
                 np.expand_dims(chunked_goal_probs, axis=1),
@@ -189,7 +189,7 @@ class BatchHRL(BatchPolopt, Serializable):
                     (N, 1)
                 )
                 low_observations = np.concatenate([all_flat_observations, goal_onehot], axis=1)
-                action_given_goal_pdist = policy.low_policy.dist_info(low_observations, None)["prob"]
+                action_given_goal_pdist = policy.low_policy.dist_info(low_observations, dict())["prob"]
                 action_given_goal_pdists.append(action_given_goal_pdist)
                 action_pdists += goal_probs[:, [goal]] * action_given_goal_pdist
             # The mutual information between actions and goals
