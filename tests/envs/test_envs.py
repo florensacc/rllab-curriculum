@@ -8,6 +8,7 @@ from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
 from rllab.envs.box2d.mountain_car_env import MountainCarEnv
 from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.envs.identification_env import IdentificationEnv
+import os
 
 MUJOCO_ENABLED = True
 
@@ -90,5 +91,7 @@ def test_env(env):
     res = env.step(a)
     assert ob_space.contains(res.observation)
     assert np.isscalar(res.reward)
-    env.render()
-
+    if 'CIRCLECI' in os.environ:
+        print("Skipping rendering test")
+    else:
+        env.render()

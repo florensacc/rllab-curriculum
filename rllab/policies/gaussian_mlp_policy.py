@@ -114,10 +114,34 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     @overrides
     def get_action(self, observation):
-        mean, log_std = [x[0] for x in self._f_dist([observation])]
-        rnd = np.random.randn(len(mean))
+        flat_obs = self.observation_space.flatten(observation)
+        mean, log_std = [x[0] for x in self._f_dist([flat_obs])]
+        rnd = np.random.normal(size=mean.shape)
         action = rnd * np.exp(log_std) + mean
         return action, dict(mean=mean, log_std=log_std)
+
+    def get_actions(self, observations):
+        flat_obs = self.observation_space.flatten_n(observations)
+        means, log_stds = self._f_dist(flat_obs)
+        rnd = np.random.normal(size=means.shape)
+        actions = rnd * np.exp(log_stds) + means
+        return actions, dict(mean=means, log_std=log_stds)
+
+    def get_reparam_action_sym(self, obs_var, action_var, old_dist_info_vars):
+        """
+        Given observations, old actions, and distribution of old actions, return a symbolically reparameterized
+        representation of the actions in terms of the policy parameters
+        :param obs_var:
+        :param action_var:
+        :param old_dist_info_vars:
+        :return:
+        """
+        new_dist_info_vars = self.dist_info_sym(obs_var, action_var)
+        new_mean_var, new_log_std_var = new_dist_info_vars["mean"], new_dist_info_vars["log_std"]
+        old_mean_var, old_log_std_var = old_dist_info_vars["mean"], old_dist_info_vars["log_std"]
+        epsilon_var = (action_var - old_mean_var) / (TT.exp(old_log_std_var) + 1e-8)
+        new_action_var = new_mean_var + epsilon_var * TT.exp(new_log_std_var)
+        return new_action_var
 
     def log_diagnostics(self, paths):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])

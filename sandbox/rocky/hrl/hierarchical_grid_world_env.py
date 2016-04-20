@@ -127,6 +127,14 @@ class HierarchicalGridWorldEnv(Env, Serializable):
         print("")
 
 
+class SymSharedArrs(object):
+    def __init__(self):
+        self.states = theano.shared(np.zeros((1,), dtype='int'), 'lookup_states')
+        self.next_component_states = theano.shared(np.zeros((1,), dtype='int'), 'lookup_next_component_states')
+        self.terminal_ids = theano.shared(np.zeros((1,), dtype='int'), 'terminal_ids')
+        self.goals = theano.shared(np.zeros((1,), dtype='int'), 'lookup_goals')
+
+
 class HierarchicalGridWorldAnalyzer(object):
     def __init__(self, env):
         assert isinstance(env, HierarchicalGridWorldEnv)
@@ -134,7 +142,7 @@ class HierarchicalGridWorldAnalyzer(object):
         self.policy = None
         self._posterior_sequences = dict()
         self._sequence_transition_probabilities = dict()
-        self._sym_shared_arrs = dict()
+        self._sym_shared_arrs = None
 
     @classmethod
     def from_pkl(cls, file_name):
@@ -291,6 +299,7 @@ class HierarchicalGridWorldAnalyzer(object):
         """
         if interval in self._posterior_sequences:
             return self._posterior_sequences[interval]
+        logger.log("computing posterior_sequences")
         forward_probs = self.compute_sequence_transition_probabilities(interval)
         posteriors = dict()
         for key, prob in forward_probs.iteritems():
@@ -409,57 +418,62 @@ class HierarchicalGridWorldAnalyzer(object):
         print(np.array2string(mean_high_states, formatter={'float_kind': lambda x: "%.2f" % x}))
 
     def prepare_sym(self, paths, component_idx):
-        if len(self._sym_shared_arrs) == 0:
+        if self._sym_shared_arrs is None:
             return
-        states_shared = self._sym_shared_arrs["states"]
-        next_component_states_shared = self._sym_shared_arrs["next_component_states"]
-        goals_shared = self._sym_shared_arrs["goals"]
-        terminal_ids_shared = self._sym_shared_arrs["terminal_ids"]
+        states_shared = self._sym_shared_arrs.states
+        next_component_states_shared = self._sym_shared_arrs.next_component_states
+        goals_shared = self._sym_shared_arrs.goals
+        terminal_ids_shared = self._sym_shared_arrs.terminal_ids
 
         new_states = []
         new_next_component_states = []
         new_goals = []
         new_terminal_ids = []
 
+        interval = self.policy.subgoal_interval
+
         for path in paths:
             path_obs = path["observations"]
             path_goals = path["agent_infos"]["subgoal"]
 
+            path_length = len(path_obs)
 
             unflat_obs = map(self.env.observation_space.unflatten, path_obs)
             int_obs = map(self.get_int_state_from_obs, unflat_obs)
+            sub_int_obs = int_obs[::interval]
             component_obs = [self.get_int_component_state_from_obs(self.get_component_state(x, component_idx),
                                                                    component_idx) for x in int_obs]
-            unflat_goals = map(self.policy.subgoal_space.unflatten, path_goals)
-            next_component_obs = np.append(component_obs[1:], 0)
+            sub_component_obs = component_obs[::interval]
+            next_sub_component_obs = np.append(sub_component_obs[1:], 0)
+
+            int_goals = map(self.policy.subgoal_space.unflatten, path_goals)
+            sub_int_goals = int_goals[::interval]
+
+            int_obs = np.repeat(sub_int_obs, interval, axis=0)[:path_length]
+            next_component_obs = np.repeat(next_sub_component_obs, interval, axis=0)[:path_length]
+            int_goals = np.repeat(sub_int_goals, interval, axis=0)[:path_length]
+
             new_states.extend(int_obs)
             new_next_component_states.extend(next_component_obs)
             new_terminal_ids.append(len(new_next_component_states) - 1)
-            new_goals.extend(unflat_goals)
+            new_goals.extend(int_goals)
 
-            import ipdb; ipdb.set_trace()
-
-
-
-
-        # our job is to populate these arrays
-        import ipdb; ipdb.set_trace()
+        states_shared.set_value(np.asarray(new_states))
+        next_component_states_shared.set_value(np.asarray(new_next_component_states))
+        goals_shared.set_value(np.asarray(new_goals))
+        terminal_ids_shared.set_value(np.asarray(new_terminal_ids))
 
     def mi_bonus_sym(self, component_idx):
-        if len(self._sym_shared_arrs) == 0:
+        if self._sym_shared_arrs is None:
+            self._sym_shared_arrs = SymSharedArrs()
             # initialize shared arrays
             # these should be of the same length as the number of low-level states, actions, etc.
             # basically, what we need to do
-            self._sym_shared_arrs["states"] = theano.shared(np.zeros((1,), dtype='int'), 'lookup_states')
-            self._sym_shared_arrs["next_component_states"] = theano.shared(np.zeros((1,), dtype='int'),
-                                                                           'lookup_next_component_states')
-            self._sym_shared_arrs["terminal_ids"] = theano.shared(np.zeros((1,), dtype='int'),
-                                                                           'terminal_ids')
-            self._sym_shared_arrs["goals"] = theano.shared(np.zeros((1,), dtype='int'), 'lookup_goals')
-        states_shared = self._sym_shared_arrs["states"]
-        next_component_states_shared = self._sym_shared_arrs["next_component_states"]
-        terminal_ids = self._sym_shared_arrs["terminal_ids"]
-        goals_shared = self._sym_shared_arrs["goals"]
+
+        states_shared = self._sym_shared_arrs.states
+        next_component_states_shared = self._sym_shared_arrs.next_component_states
+        terminal_ids = self._sym_shared_arrs.terminal_ids
+        goals_shared = self._sym_shared_arrs.goals
 
         lookup_sym = self.compute_mi_bonus_lookup_sym(component_idx)
         bonus_sym = lookup_sym[states_shared, next_component_states_shared, goals_shared]
@@ -512,7 +526,6 @@ class HierarchicalGridWorldAnalyzer(object):
                     state_ids.append(state)
                     next_component_state_ids.append(next_component_state)
 
-
         flat_states = np.array(
             [[self.env.observation_space.flatten(self.get_obs_from_int_state(x)) for x in xs] for xs in
              states_arr], dtype='uint8'
@@ -525,8 +538,17 @@ class HierarchicalGridWorldAnalyzer(object):
         flat_actions_shared = theano.shared(flat_actions)
         flat_tprobs_shared = theano.shared(flat_tprobs)
 
-
         p_sp_given_s_g_sym = TT.zeros((n_states, n_component_states, n_subgoals))
+        p_sp_given_s_sym = TT.zeros((n_states, n_component_states))
+        # p_g_given_s_sym = TT.zeros((n_states, n_subgoals))
+
+        nonseq_states = []
+        for state in xrange(n_states):
+            nonseq_states.append(self.env.observation_space.flatten(self.get_obs_from_int_state(state)))
+        nonseq_states = np.asarray(nonseq_states, dtype='uint8')
+        nonseq_states_shared = theano.shared(nonseq_states)
+
+        high_dist_info_sym = self.policy.high_policy.dist_info_sym(nonseq_states_shared, None)
 
         for goal in xrange(n_subgoals):
             subgoals = TT.zeros((flat_states_shared.shape[0], flat_states_shared.shape[1], n_subgoals))
@@ -534,6 +556,9 @@ class HierarchicalGridWorldAnalyzer(object):
             flat_states_with_subgoal = TT.concatenate([flat_states_shared, subgoals], axis=2)
             state_dim = flat_states_with_subgoal.shape[-1]
             action_dim = flat_actions_shared.shape[-1]
+
+            nonseq_subgoal_sym = TT.zeros((n_states, n_subgoals), dtype='uint8')
+            nonseq_subgoal_sym = TT.set_subtensor(nonseq_subgoal_sym[:, goal], 1)
 
             states_2d = flat_states_with_subgoal.reshape((-1, state_dim))
             actions_2d = flat_actions_shared.reshape((-1, action_dim))
@@ -546,7 +571,15 @@ class HierarchicalGridWorldAnalyzer(object):
             # repeating indices
             p_sp_given_s_g_sym = TT.inc_subtensor(p_sp_given_s_g_sym[state_ids, next_component_state_ids, goal],
                                                   seq_prob)
-        p_sp_given_s_sym = TT.sum(p_sp_given_s_g_sym, axis=-1, keepdims=True)
-        mi_bonus_sym = TT.log(p_sp_given_s_g_sym + 1e-8) - TT.log(p_sp_given_s_sym + 1e-8)
+            p_g_given_s_sym = TT.exp(
+                self.policy.high_policy.distribution.log_likelihood_sym(nonseq_subgoal_sym, high_dist_info_sym)
+            )
+            p_sp_given_s_sym = p_sp_given_s_sym + p_sp_given_s_g_sym[:, :, goal] * p_g_given_s_sym.dimshuffle(0, 'x')
+
+        # for goal in xrange(n_subgoals):
+        #     p_sp_g_given_s_sym = p_sp_given_s_g_sym[:,:,goal] *
+        #     p_sp_given_s_sym = TT.inc_subtensor()
+        # p_sp_given_s_sym = TT.sum(p_sp_given_s_g_sym, axis=-1, keepdims=True)
+        mi_bonus_sym = TT.log(p_sp_given_s_g_sym + 1e-8) - TT.log(p_sp_given_s_sym + 1e-8).dimshuffle(0, 1, 'x')
 
         return mi_bonus_sym

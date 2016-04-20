@@ -87,6 +87,12 @@ class BatchHRL(BatchPolopt, Serializable):
         high_paths = []
         low_paths = []
         bonus_returns = []
+        all_bonuses = []
+
+        # self.env.analyzer.prepare_sym(paths, self.bonus_evaluator.component_idx)
+        # self.bonus_evaluator.computed = False
+        # self.bonus_evaluator.update_cache()
+
         for path in paths:
             rewards = path['rewards']
             actions = path['actions']
@@ -105,6 +111,7 @@ class BatchHRL(BatchPolopt, Serializable):
             chunked_high_path = hrl_utils.downsample_path(high_path, self.policy.subgoal_interval)
             bonuses = self.bonus_evaluator.predict(path)
             low_rewards = rewards + self.mi_coeff * bonuses
+            all_bonuses.extend(bonuses)
             bonus_returns.append(np.sum(bonuses))
             low_path = dict(
                 observations=low_observations,
@@ -125,11 +132,23 @@ class BatchHRL(BatchPolopt, Serializable):
                     import ipdb;
                     ipdb.set_trace()
 
+        # bonus_vals = self.bonus_evaluator.mi_bonus_sym().eval()
+        # # compute bonus values explicitly to cross-compare
+        # ref_bonus_vals = np.asarray(all_bonuses)
+        #
+        # diff = bonus_vals - ref_bonus_vals
+        #
+        # if np.linalg.norm(diff) > 1e-5:
+        #     # compute bonus by hand to compare
+        #     import ipdb; ipdb.set_trace()
+
         # mi_action_goal = self._compute_mi_action_goal(self.env.spec, self.policy, high_samples_data, low_samples_data)
         # logger.record_tabular("I(action,goal|state)", mi_action_goal)
         # We need to train the predictor for p(s'|g, s)
         with logger.prefix("MI | "), logger.tabular_prefix("MI_"):
             self.bonus_evaluator.fit(paths)
+
+
 
         return dict(
             high=high_samples_data,

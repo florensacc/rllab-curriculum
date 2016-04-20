@@ -11,8 +11,8 @@ from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from sandbox.rocky.hrl.subgoal_baseline import SubgoalBaseline
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
-from sandbox.rocky.hrl.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
-from sandbox.rocky.hrl.mi_evaluator.exact_state_given_goal_mi_evaluator import ExactStateGivenGoalMIEvaluator
+from sandbox.rocky.hrl.mi_evaluator.state_based_mi_evaluator import StateBasedMIEvaluator
+from sandbox.rocky.hrl.mi_evaluator.exact_state_based_mi_evaluator import ExactStateBasedMIEvaluator
 from rllab.algos.trpo import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 
@@ -86,12 +86,12 @@ baseline = SubgoalBaseline(
     ),
 )
 
-exact_evaluator = ExactStateGivenGoalMIEvaluator(
+exact_evaluator = ExactStateBasedMIEvaluator(
     env=env,
     policy=policy,
 )
 
-approx_evaluator = StateGivenGoalMIEvaluator(
+approx_evaluator = StateBasedMIEvaluator(
     env_spec=env.spec,
     policy=policy,
     regressor_cls=CategoricalMLPRegressor,

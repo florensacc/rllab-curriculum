@@ -6,8 +6,8 @@ import joblib
 from rllab.sampler import parallel_sampler
 
 parallel_sampler.config_parallel_sampler(n_parallel=4, base_seed=0)
-from sandbox.rocky.hrl.mi_evaluator.exact_state_given_goal_mi_evaluator import ExactStateGivenGoalMIEvaluator
-from sandbox.rocky.hrl.mi_evaluator.state_given_goal_mi_evaluator import StateGivenGoalMIEvaluator
+from sandbox.rocky.hrl.mi_evaluator.exact_state_based_mi_evaluator import ExactStateBasedMIEvaluator
+from sandbox.rocky.hrl.mi_evaluator.state_based_mi_evaluator import StateBasedMIEvaluator
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from rllab import hrl_utils
@@ -17,12 +17,12 @@ data = joblib.load("data/local/hrl-level1/hrl_level1_2016_04_08_15_45_02_0001/pa
 env = data["env"]
 policy = data["policy"]
 
-exact_evaluator = ExactStateGivenGoalMIEvaluator(
+exact_evaluator = ExactStateBasedMIEvaluator(
     env=env,
     policy=policy,
 )
 
-approx_evaluator = StateGivenGoalMIEvaluator(
+approx_evaluator = StateBasedMIEvaluator(
     env_spec=env.spec,
     policy=policy,
     regressor_cls=CategoricalMLPRegressor,

@@ -27,6 +27,12 @@ class Space(object):
     def unflatten(self, x):
         raise NotImplementedError
 
+    def flatten_n(self, xs):
+        raise NotImplementedError
+
+    def unflatten_n(self, xs):
+        raise NotImplementedError
+
     @property
     def flat_dim(self):
         """

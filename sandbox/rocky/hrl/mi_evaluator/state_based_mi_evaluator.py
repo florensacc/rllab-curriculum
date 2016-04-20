@@ -3,7 +3,7 @@ import numpy as np
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
-from rllab.misc.special import to_onehot
+from rllab.misc.special import to_onehot, from_onehot
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from rllab.spaces.discrete import Discrete
 from sandbox.rocky.hrl import hrl_utils
@@ -11,7 +11,7 @@ from sandbox.rocky.hrl.grid_world_hrl_utils import ExactComputer
 from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 
 
-class StateGivenGoalMIEvaluator(LasagnePowered, Serializable):
+class StateBasedMIEvaluator(LasagnePowered, Serializable):
     """
     Defines the reward bonus as the mutual information between the future state and the subgoal, given the current
     state: I(s',g|s) = H(s'|s) - H(s'|g,s) = E[log(p(s'|g,s)) - log(p(s'|s))]
