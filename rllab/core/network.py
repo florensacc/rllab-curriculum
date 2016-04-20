@@ -3,7 +3,6 @@ from itertools import izip
 import lasagne.layers as L
 import lasagne.nonlinearities as LN
 import lasagne.init as LI
-import pydoc
 import theano.tensor as TT
 import theano
 from rllab.misc import ext

@@ -99,6 +99,7 @@ class NPO(BatchPolopt):
         self.optimizer.optimize(all_input_values)
         mean_kl = self.optimizer.constraint_val(all_input_values)
         loss_after = self.optimizer.loss(all_input_values)
+        logger.record_tabular('LossBefore', loss_before)
         logger.record_tabular('LossAfter', loss_after)
         logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('dLoss', loss_before - loss_after)

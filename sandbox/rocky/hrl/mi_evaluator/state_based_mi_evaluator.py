@@ -5,10 +5,22 @@ from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
 from rllab.misc.special import to_onehot, from_onehot
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
+from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from rllab.spaces.discrete import Discrete
+from rllab.spaces.box import Box
+from rllab.spaces.product import Product
 from sandbox.rocky.hrl import hrl_utils
 from sandbox.rocky.hrl.grid_world_hrl_utils import ExactComputer
 from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
+
+
+def regressor_cls_from_space(space):
+    if isinstance(space, Discrete):
+        return CategoricalMLPRegressor
+    elif isinstance(space, Box):
+        return GaussianMLPRegressor
+    else:
+        raise NotImplementedError
 
 
 class StateBasedMIEvaluator(LasagnePowered, Serializable):
@@ -24,17 +36,37 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
             self,
             env_spec,
             policy,
+            # how many samples to estimate marginal p(s'|s,g)
+            n_subgoal_samples=10,
+            use_state_regressor=False,
+            state_regressor_cls=None,
+            state_regressor_args=None,
+            component_idx=None,
             regressor_cls=None,
             regressor_args=None,
             logger_delegate=None):
         assert isinstance(policy, SubgoalPolicy)
-        assert isinstance(policy.subgoal_space, Discrete)
-        assert isinstance(policy.high_policy.distribution, Categorical)
-        assert isinstance(policy.low_policy.distribution, Categorical)
+        # if isinstance(policy.subgoal_space, Discrete):
+        #     assert isinstance(policy.high_policy.distribution, Categorical)
+        # elif isinstance(policy.subgoal_space, Box):
+        # assert isinstance(policy.subgoal_space, Discrete)
+        # assert isinstance(policy.high_policy.distribution, Categorical)
+        # assert isinstance(policy.low_policy.distribution, Categorical)
+
+        if component_idx is not None:
+            assert isinstance(env_spec.observation_space, Product)
+            assert 0 <= component_idx < len(env_spec.observation_space.components)
 
         Serializable.quick_init(self, locals())
+
+        self.component_idx = component_idx
+        if component_idx is None:
+            self.component_space = env_spec.observation_space
+        else:
+            self.component_space = env_spec.observation_space.components[component_idx]
+
         if regressor_cls is None:
-            regressor_cls = GaussianMLPRegressor
+            regressor_cls = regressor_cls_from_space(self.component_space)
         if regressor_args is None:
             regressor_args = dict()
 
@@ -44,16 +76,45 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
             name="(s'|g,s)",
             **regressor_args
         )
+        # self.use_state_regressor = use_state_regressor
+        if use_state_regressor:
+            if state_regressor_cls is None:
+                state_regressor_cls = regressor_cls_from_space(self.component_space)
+            if state_regressor_args is None:
+                state_regressor_args = dict()
+            self.state_regressor = state_regressor_cls(
+                input_shape=(env_spec.observation_space.flat_dim,),
+                output_dim=env_spec.observation_space.flat_dim,
+                name="(s'|s)",
+                **state_regressor_args
+            )
+        else:
+            self.state_regressor = None
+        self.env_spec = env_spec
+        self.policy = policy
         self.subgoal_space = policy.subgoal_space
         self.subgoal_interval = policy.subgoal_interval
         self.logger_delegate = logger_delegate
+        self.n_subgoal_samples = n_subgoal_samples
 
     def _get_relevant_data(self, paths):
-        obs = np.concatenate([p["agent_infos"]["high_obs"][:-1] for p in paths])
-        next_obs = np.concatenate([p["agent_infos"]["high_obs"][1:] for p in paths])
-        subgoals = np.concatenate([p["agent_infos"]["subgoal"][:-1] for p in paths])
-        N = obs.shape[0]
-        return obs.reshape((N, -1)), next_obs.reshape((N, -1)), subgoals
+        if self.component_idx is None:
+            obs = np.concatenate([p["agent_infos"]["high_obs"][:-1] for p in paths])
+            next_obs = np.concatenate([p["agent_infos"]["high_obs"][1:] for p in paths])
+            subgoals = np.concatenate([p["agent_infos"]["subgoal"][:-1] for p in paths])
+            N = obs.shape[0]
+            return obs.reshape((N, -1)), next_obs.reshape((N, -1)), subgoals
+        else:
+            obs = np.concatenate([p["agent_infos"]["high_obs"][:-1] for p in paths])
+            N = obs.shape[0]
+            next_obs = np.concatenate([p["agent_infos"]["high_obs"][1:] for p in paths]).reshape((N, -1))
+
+            obs_flat_dims = [c.flat_dim for c in self.env_spec.observation_space.components]
+            slice_start = sum(obs_flat_dims[:self.component_idx])
+            slice_end = slice_start + obs_flat_dims[self.component_idx]
+            next_component_obs = next_obs[:, slice_start:slice_end]
+            subgoals = np.concatenate([p["agent_infos"]["subgoal"][:-1] for p in paths])
+            return obs.reshape((N, -1)), next_component_obs, subgoals
 
     def fit(self, paths):
         subsampled_paths = [hrl_utils.downsample_path(p, self.subgoal_interval) for p in paths]
@@ -61,6 +122,8 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
         xs = np.concatenate([flat_obs, subgoals], axis=1)
         ys = flat_next_obs
         self.regressor.fit(xs, ys)
+        if self.state_regressor is not None:
+            self.state_regressor.fit(flat_obs, flat_next_obs)
         if self.logger_delegate:
             self.logger_delegate.fit(paths)
 
@@ -75,55 +138,32 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
         N = flat_obs.shape[0]
         xs = np.concatenate([flat_obs, subgoals], axis=1)
         ys = flat_next_obs
-        high_probs = path["agent_infos"]["high"]["prob"]
         log_p_sprime_given_g_s = self.regressor.predict_log_likelihood(xs, ys)
-        p_sprime_given_s = 0.
-        n_subgoals = self.subgoal_space.n
-        for goal in range(n_subgoals):
-            goal_mat = np.tile(to_onehot(goal, n_subgoals), (N, 1))
-            xs_goal = np.concatenate([flat_obs, goal_mat], axis=1)
-            p_sprime_given_s += high_probs[:-1, goal] * np.exp(self.regressor.predict_log_likelihood(xs_goal, ys))
-        bonuses = np.append(log_p_sprime_given_g_s - np.log(p_sprime_given_s + 1e-8), 0)
+        if self.state_regressor is not None:
+            log_p_sprime_given_s = self.state_regressor.predict_log_likelihood(flat_obs, flat_next_obs)
+        else:
+            p_sprime_given_s = 0.
+            if isinstance(self.subgoal_space, Discrete):
+                high_probs = path["agent_infos"]["high"]["prob"]
+                n_subgoals = self.subgoal_space.n
+                for goal in range(n_subgoals):
+                    goal_mat = np.tile(to_onehot(goal, n_subgoals), (N, 1))
+                    xs_goal = np.concatenate([flat_obs, goal_mat], axis=1)
+                    p_sprime_given_s += high_probs[:-1, goal] * np.exp(self.regressor.predict_log_likelihood(xs_goal, ys))
+            elif isinstance(self.subgoal_space, Box):
+                unflat_obs = self.env_spec.observation_space.unflatten_n(flat_obs)
+                # if subgoals are continuous, we'd need to sample instead of marginalize
+                for _ in xrange(self.n_subgoal_samples):
+                    goals, _ = self.policy.high_policy.get_actions(unflat_obs)
+                    xs_goal = np.concatenate([flat_obs, self.subgoal_space.flatten_n(goals)], axis=1)
+                    p_sprime_given_s += np.exp(self.regressor.predict_log_likelihood(xs_goal, ys))
+                p_sprime_given_s /= self.n_subgoal_samples
+            else:
+                raise NotImplementedError
+            log_p_sprime_given_s = np.log(p_sprime_given_s + 1e-8)
+        bonuses = np.append(log_p_sprime_given_g_s - log_p_sprime_given_s, 0)
         bonuses = np.tile(
             np.expand_dims(bonuses, axis=1),
             (1, self.subgoal_interval)
         ).flatten()[:path_length]
         return bonuses
-
-    def get_predicted_mi(self, env, policy):
-        exact_computer = ExactComputer(env, policy)
-        # We need to compute p(s'|g,s) approximately
-
-        n_subgoals = policy.subgoal_space.n
-        n_states = env.observation_space.n
-        # index: [0] -> goal, [1] -> state, [2] -> next state
-        p_next_state_given_goal_state = np.zeros((n_subgoals, n_states, n_states))
-
-        for state in xrange(n_states):
-            for subgoal in xrange(n_subgoals):
-                for next_state in xrange(n_states):
-                    xs = [
-                        np.concatenate([env.observation_space.flatten(state), policy.subgoal_space.flatten(subgoal)])
-                    ]
-                    ys = [
-                        env.observation_space.flatten(next_state)
-                    ]
-                    p_next_state_given_goal_state[subgoal, state, next_state] = np.exp(
-                        self.regressor.predict_log_likelihood(xs, ys)[0])
-
-        p_goal_given_state = exact_computer.compute_p_goal_given_state()
-        p_next_state_given_state = exact_computer.compute_p_next_state_given_state(
-            p_next_state_given_goal_state=p_next_state_given_goal_state,
-            p_goal_given_state=p_goal_given_state
-        )
-
-        # Now we can compute the entropies
-        ent_next_state_given_state = exact_computer.compute_ent_next_state_given_state(p_next_state_given_state)
-        ent_next_state_given_goal_state = exact_computer.compute_ent_next_state_given_goal_state(
-            p_next_state_given_goal_state)
-        mi_states = exact_computer.compute_mi_states(
-            ent_next_state_given_goal_state=ent_next_state_given_goal_state,
-            ent_next_state_given_state=ent_next_state_given_state,
-            p_goal_given_state=p_goal_given_state
-        )
-        return np.mean(mi_states)

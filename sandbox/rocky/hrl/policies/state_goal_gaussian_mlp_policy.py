@@ -1,58 +1,58 @@
-import lasagne.layers as L
-import lasagne.nonlinearities as NL
+from __future__ import print_function
+from __future__ import absolute_import
 
+from rllab.policies.base import Policy
+import lasagne.nonlinearities as NL
 from rllab.core.lasagne_powered import LasagnePowered
-from rllab.core.network import MLP
 from rllab.core.serializable import Serializable
+from rllab.policies.base import StochasticPolicy
+from rllab.core.network import MLP
+from sandbox.rocky.hrl.core.network import MergeMLP
+from rllab.spaces.discrete import Discrete
 from rllab.distributions.categorical import Categorical
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
-from rllab.policies.base import StochasticPolicy
-from rllab.spaces import Discrete
+import lasagne.layers as L
 
 
-class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
+class StateGoalCategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def __init__(
             self,
             env_spec,
-            hidden_sizes=(32, 32),
+            subgoal_space,
+            state_hidden_sizes=(32,),
+            goal_hidden_sizes=(32,),
+            joint_hidden_sizes=(32,),
             hidden_nonlinearity=NL.tanh,
-            prob_network=None,
     ):
-        """
-        :param env_spec: A spec for the mdp.
-        :param hidden_sizes: list of sizes for the fully connected hidden layers
-        :param hidden_nonlinearity: nonlinearity used for each hidden layer
-        :param prob_network: manually specified network for this policy, other network params
-        are ignored
-        :return:
-        """
         Serializable.quick_init(self, locals())
 
         assert isinstance(env_spec.action_space, Discrete)
 
-        if prob_network is None:
-            prob_network = MLP(
-                input_shape=(env_spec.observation_space.flat_dim,),
-                output_dim=env_spec.action_space.n,
-                hidden_sizes=hidden_sizes,
-                hidden_nonlinearity=hidden_nonlinearity,
-                output_nonlinearity=NL.softmax,
-            )
+        goal_dim = subgoal_space.flat_dim
+        obs_dim = env_spec.observation_space.flat_dim - goal_dim
+        action_dim = env_spec.action_space.flat_dim
+        prob_network = MergeMLP(
+            input_shape=(obs_dim + goal_dim,),
+            branch_dims=[obs_dim, goal_dim],
+            output_dim=action_dim,
+            branch_hidden_sizes=[state_hidden_sizes, goal_hidden_sizes],
+            joint_hidden_sizes=joint_hidden_sizes,
+            hidden_nonlinearity=hidden_nonlinearity,
+            output_nonlinearity=NL.softmax,
+        )
 
+        self._l_in = prob_network.input_layer
         self._l_prob = prob_network.output_layer
-        self._l_obs = prob_network.input_layer
-        self._f_prob = ext.compile_function([prob_network.input_layer.input_var], L.get_output(
-            prob_network.output_layer))
+        self._f_prob = ext.compile_function([prob_network.input_var], prob_network.output)
 
         self._dist = Categorical()
-
-        super(CategoricalMLPPolicy, self).__init__(env_spec)
+        super(StateGoalCategoricalMLPPolicy, self).__init__(env_spec)
         LasagnePowered.__init__(self, [prob_network.output_layer])
 
     @overrides
     def dist_info_sym(self, obs_var, action_var):
-        return dict(prob=L.get_output(self._l_prob, {self._l_obs: obs_var}))
+        return dict(prob=L.get_output(self._l_prob, {self._l_in: obs_var}))
 
     @overrides
     def dist_info(self, obs, actions):
@@ -78,4 +78,3 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @property
     def distribution(self):
         return self._dist
-
