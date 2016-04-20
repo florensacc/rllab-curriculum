@@ -13,7 +13,7 @@ from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 import numpy as np
 
 
-class ComponentStateGivenGoalMIEvaluator(LasagnePowered, Serializable):
+class ComponentStateBasedMIEvaluator(LasagnePowered, Serializable):
 
     def __init__(
             self,
@@ -21,7 +21,8 @@ class ComponentStateGivenGoalMIEvaluator(LasagnePowered, Serializable):
             policy,
             component_idx,
             regressor_cls=None,
-            regressor_args=None):
+            regressor_args=None,
+            logger_delegate=None):
         """
         Compute the bonus reward as given by I(g,s'_i|s), where i is given by the provided component index.
         :param env_spec: Spec for the environment
@@ -55,6 +56,7 @@ class ComponentStateGivenGoalMIEvaluator(LasagnePowered, Serializable):
         )
         self.subgoal_space = policy.subgoal_space
         self.subgoal_interval = policy.subgoal_interval
+        self.logger_delegate = logger_delegate
 
     def _get_relevant_data(self, paths):
         obs = np.concatenate([p["agent_infos"]["high_obs"][:-1] for p in paths])
@@ -74,6 +76,8 @@ class ComponentStateGivenGoalMIEvaluator(LasagnePowered, Serializable):
         xs = np.concatenate([flat_obs, subgoals], axis=1)
         ys = flat_next_component_obs
         self.regressor.fit(xs, ys)
+        if self.logger_delegate:
+            self.logger_delegate.fit(paths)
 
     def predict(self, path):
         path_length = len(path["rewards"])
@@ -98,7 +102,8 @@ class ComponentStateGivenGoalMIEvaluator(LasagnePowered, Serializable):
         return bonuses
 
     def log_diagnostics(self, paths):
-        pass
+        if self.logger_delegate:
+            self.logger_delegate.log_diagnostics(paths)
 
     # def get_predicted_mi(self, env, policy):
     #     exact_computer = ExactComputer(env, policy)

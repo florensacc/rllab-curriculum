@@ -89,9 +89,9 @@ class BatchHRL(BatchPolopt, Serializable):
         bonus_returns = []
         all_bonuses = []
 
-        self.env.analyzer.prepare_sym(paths, self.bonus_evaluator.component_idx)
-        self.bonus_evaluator.computed = False
-        self.bonus_evaluator.update_cache()
+        # self.env.analyzer.prepare_sym(paths, self.bonus_evaluator.component_idx)
+        # self.bonus_evaluator.computed = False
+        # self.bonus_evaluator.update_cache()
 
         for path in paths:
             rewards = path['rewards']

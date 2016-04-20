@@ -6,7 +6,7 @@ from sandbox.rocky.hrl.grid_world_hrl_utils import ExactComputer
 from rllab.spaces.product import Product
 
 
-class ExactStateGivenGoalMIEvaluator(object):
+class ExactStateBasedMIEvaluator(object):
     def __init__(self, env, policy, component_idx=None):
         self.exact_computer = ExactComputer(env, policy, component_idx)
         self.env = env
@@ -110,4 +110,4 @@ class ExactStateGivenGoalMIEvaluator(object):
     def fit(self, paths):
         # calling fit = invalidate caches
         self.computed = False
-        self.exact_computer.prepare_sym(paths)
+        # self.exact_computer.prepare_sym(paths)
