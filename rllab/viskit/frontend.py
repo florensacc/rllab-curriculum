@@ -10,8 +10,7 @@ import numpy as np
 # import threading, webbrowser
 import plotly.offline as po
 import plotly.graph_objs as go
-import pdb
-
+import itertools
 
 app = flask.Flask(__name__, static_url_path='/static')
 
@@ -73,9 +72,12 @@ def make_plot(plot_list, use_median=False):
     return po.plot(fig, output_type='div', include_plotlyjs=False)
 
 
-def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, use_median=False):
+def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
+                         only_show_best=False):
     print(plot_key, split_key, group_key, filters)
     selector = core.Selector(exps_data)
+    if filters is None:
+        filters = dict()
     for k, v in filters.iteritems():
         selector = selector.where(k, str(v))
     # print selector._filters
@@ -87,6 +89,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, u
         split_selectors = [selector]
         split_legends = ["Plot"]
     plots = []
+    print("here")
     for split_selector, split_legend in zip(split_selectors, split_legends):
         if group_key:
             vs = [vs for k, vs in distinct_params if k == group_key][0]
@@ -100,63 +103,86 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, u
             filtered_data = group_selector.extract()
             if len(filtered_data) > 0:
 
-                # Group by seed and sort.
-                # -----------------------
-                filtered_params = core.extract_distinct_params(
-                    filtered_data, l=0)
-                filtered_params2 = [p[1] for p in filtered_params]
-                filtered_params_k = [p[0] for p in filtered_params]
-                import itertools
-                product_space = itertools.product(
-                    *filtered_params2
-                )
-                data_best_regret = None
-                best_regret = -np.inf
-                for params in product_space:
-                    selector = core.Selector(exps_data)
-                    for k, v in zip(filtered_params_k, params):
-                        selector = selector.where(k, str(v))
-                    data = selector.extract()
-                    if len(data) > 0:
+                if only_show_best:
+                    # Group by seed and sort.
+                    # -----------------------
+                    filtered_params = core.extract_distinct_params(
+                        filtered_data, l=0)
+                    filtered_params2 = [p[1] for p in filtered_params]
+                    filtered_params_k = [p[0] for p in filtered_params]
+                    product_space = list(itertools.product(
+                        *filtered_params2
+                    ))
+                    data_best_regret = None
+                    best_regret = -np.inf
+                    for idx, params in enumerate(product_space):
+                        selector = core.Selector(exps_data)
+                        for k, v in zip(filtered_params_k, params):
+                            selector = selector.where(k, str(v))
+                        data = selector.extract()
+                        if len(data) > 0:
+                            progresses = [
+                                exp.progress.get(plot_key, np.array([np.nan])) for exp in data]
+                            sizes = map(len, progresses)
+                            max_size = max(sizes)
+                            progresses = [
+                                np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
+
+                            if use_median:
+                                medians = np.nanmedian(progresses, axis=0)
+                                regret = np.median(medians)
+                            else:
+                                means = np.nanmean(progresses, axis=0)
+                                regret = np.mean(means)
+                            if regret > best_regret:
+                                best_regret = regret
+                                data_best_regret = data
+                            distinct_params_k = [p[0] for p in distinct_params]
+                            distinct_params_v = [
+                                v for k, v in zip(filtered_params_k, params) if k in distinct_params_k]
+                            distinct_params_kv = [
+                                (k, v) for k, v in zip(distinct_params_k, distinct_params_v)]
+                            distinct_params_kv_string = str(
+                                distinct_params_kv).replace('), ', ')\t')
+                            print(
+                                '{}\t{}\t{}'.format(regret, len(progresses), distinct_params_kv_string))
+
+                    print(group_selector._filters)
+                    print('best regret: {}'.format(best_regret))
+                    # -----------------------
+                    if best_regret != -np.inf:
                         progresses = [
-                            exp.progress.get(plot_key, np.array([np.nan])) for exp in data]
+                            exp.progress.get(plot_key, np.array([np.nan])) for exp in data_best_regret]
                         sizes = map(len, progresses)
+                        # more intelligent:
                         max_size = max(sizes)
                         progresses = [
                             np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-
+                        legend = '{} ({:.1f})'.format(
+                            group_legend, best_regret)
                         if use_median:
-                            medians = np.nanmedian(progresses, axis=0)
-                            regret = np.median(medians)
+                            percentile25 = np.nanpercentile(
+                                progresses, q=25, axis=0)
+                            percentile50 = np.nanpercentile(
+                                progresses, q=50, axis=0)
+                            percentile75 = np.nanpercentile(
+                                progresses, q=75, axis=0)
+                            to_plot.append(
+                                ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
+                                             percentile75=percentile75, legend=legend))
                         else:
                             means = np.nanmean(progresses, axis=0)
-                            regret = np.mean(means)
-                        if regret > best_regret:
-                            best_regret = regret
-                            data_best_regret = data
-                        distinct_params_k = [p[0] for p in distinct_params]
-                        distinct_params_v = [
-                            v for k, v in zip(filtered_params_k, params) if k in distinct_params_k]
-                        distinct_params_kv = [
-                            (k, v) for k, v in zip(distinct_params_k, distinct_params_v)]
-                        distinct_params_kv_string = str(
-                            distinct_params_kv).replace('), ', ')\t')
-                        print(
-                            '{}\t{}\t{}'.format(regret, len(progresses), distinct_params_kv_string))
-
-                print(group_selector._filters)
-                print('best regret: {}'.format(best_regret))
-                # -----------------------
-                if best_regret != -np.inf:
+                            stds = np.nanstd(progresses, axis=0)
+                            to_plot.append(
+                                ext.AttrDict(means=means, stds=stds, legend=legend))
+                else:
                     progresses = [
-                        exp.progress.get(plot_key, np.array([np.nan])) for exp in data_best_regret]
+                        exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
                     sizes = map(len, progresses)
                     # more intelligent:
                     max_size = max(sizes)
                     progresses = [
                         np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-                    legend = '{} ({:.1f})'.format(
-                        group_legend, best_regret)
                     if use_median:
                         percentile25 = np.nanpercentile(
                             progresses, q=25, axis=0)
@@ -166,12 +192,12 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, u
                             progresses, q=75, axis=0)
                         to_plot.append(
                             ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
-                                         percentile75=percentile75, legend=legend))
+                                         percentile75=percentile75, legend=group_legend))
                     else:
                         means = np.nanmean(progresses, axis=0)
                         stds = np.nanstd(progresses, axis=0)
                         to_plot.append(
-                            ext.AttrDict(means=means, stds=stds, legend=legend))
+                            ext.AttrDict(means=means, stds=stds, legend=group_legend))
 
         if len(to_plot) > 0:
             plots.append("<div>%s: %s</div>" % (split_key, split_legend))
@@ -228,6 +254,7 @@ def index():
         distinct_params=dict([(str(k), map(str, v))
                               for k, v in distinct_params]),
     )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
