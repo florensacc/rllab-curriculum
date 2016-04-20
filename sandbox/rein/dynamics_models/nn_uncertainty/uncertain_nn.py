@@ -251,7 +251,8 @@ class ProbNN(LasagnePowered):
                  use_reverse_kl_reg=False,
                  reverse_kl_reg_factor=0.1,
                  stochastic_output=False,
-                 second_order_update=False
+                 second_order_update=False,
+                 learning_rate=0.0001
                  ):
 
         self._srng = RandomStreams()
@@ -276,6 +277,7 @@ class ProbNN(LasagnePowered):
             assert self.symbolic_prior_kl == True
         self.stochastic_output = stochastic_output
         self.second_order_update = second_order_update
+        self.learning_rate = learning_rate
 
     def _get_prob_layers(self):
         if self.stochastic_output:
@@ -562,7 +564,7 @@ class ProbNN(LasagnePowered):
             params = lasagne.layers.get_all_params(
                 self.network, trainable=True)
         updates = lasagne.updates.adam(
-            loss, params, learning_rate=0.001)
+            loss, params, learning_rate=self.learning_rate)
 
         # Train/val fn.
         self.pred_fn = theano.function(
@@ -572,9 +574,9 @@ class ProbNN(LasagnePowered):
         if self.second_order_update:
             # Hessian-free optimization step
             # ------------------------------
-            hso = HessianFreeOptimizer(max_opt_itr=1, batch_size=1)
+            hso = HessianFreeOptimizer(max_opt_itr=1, batch_size=5)
             hso.update_opt(
-                loss, self.network, [input_var, target_var], self.pred_sym)
+                loss, self, [input_var, target_var], self.pred_sym(input_var))
             self.train_update_fn = hso.optimize
             # ------------------------------
         else:

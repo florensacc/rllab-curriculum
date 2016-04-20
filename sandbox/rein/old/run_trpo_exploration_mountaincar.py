@@ -15,12 +15,13 @@ stub(globals())
 # Param ranges
 seeds = range(10)
 etas = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0]
+etas = [0.01]
 replay_pools = [True]
-kl_ratios = [True]
-normalize_rewards = [True]
+kl_ratios = [False]
+normalize_rewards = [False]
 reverse_kl_regs = [True]
 n_itr_updates = [5]
-kl_batch_sizes = [1, 5]
+kl_batch_sizes = [5]
 param_cart_product = itertools.product(
     kl_batch_sizes, normalize_rewards, n_itr_updates, reverse_kl_regs, kl_ratios, replay_pools, etas, seeds
 )
@@ -62,7 +63,7 @@ for kl_batch_size, normalize_reward, n_itr_update, reverse_kl_reg, kl_ratio, rep
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix=config.EXP_PREFIX + "_" +"mountaincar",
+        exp_prefix="trpo-exploration-noise",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

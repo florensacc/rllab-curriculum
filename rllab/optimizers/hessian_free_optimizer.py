@@ -35,7 +35,7 @@ class HessianFreeOptimizer(Serializable):
             extra_inputs = list()
 
         self._hf_optimizer = hf_optimizer(
-            p=target.get_params(trainable=True),
+            _p=target.get_params(trainable=True),
             inputs=(inputs + extra_inputs),
             s=network_outputs,
             costs=[loss],
@@ -55,6 +55,7 @@ class HessianFreeOptimizer(Serializable):
         if extra_inputs is None:
             extra_inputs = list()
 
+        import ipdb; ipdb.set_trace()
         dataset = BatchDataset(inputs=inputs, batch_size=self._batch_size, extra_inputs=extra_inputs)
         cg_dataset = BatchDataset(inputs=inputs, batch_size=self._cg_batch_size, extra_inputs=extra_inputs)
 

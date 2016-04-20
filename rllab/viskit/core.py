@@ -29,7 +29,10 @@ def load_progress(progress_csv_path):
             for k, v in row.iteritems():
                 if k not in entries:
                     entries[k] = []
-                entries[k].append(float(v))
+                try:
+                    entries[k].append(float(v))
+                except:
+                    entries[k].append(0.)
     entries = dict([(k, np.array(v)) for k, v in entries.iteritems()])
     return entries
 
@@ -132,7 +135,8 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
         map(eval, unique(flatten([map(smart_repr, d.flat_params.items()) for d in exps_data]))))
     proposals = [(k, [x[1] for x in v])
                  for k, v in itertools.groupby(stringified_pairs, lambda x: x[0])]
-    filtered = [(k, v) for (k, v) in proposals if len(v) > l and all([k.find(excluded_param) == -1 for excluded_param in excluded_params])]
+    filtered = [(k, v) for (k, v) in proposals if len(v) > l and all(
+        [k.find(excluded_param) == -1 for excluded_param in excluded_params])]
     return filtered
 
 

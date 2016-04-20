@@ -15,38 +15,40 @@ stub(globals())
 # Param ranges
 seeds = range(10)
 mdp_classes = [Walker2DEnv]
-mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
+mdps = [NormalizedEnv(env=mdp_class())
+        for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
-   mdps, seeds 
+    mdps, seeds
 )
 
 for mdp, seed in param_cart_product:
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
-        hidden_sizes=(32,),
+        hidden_sizes=(64, 32),
     )
 
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(hidden_sizes=(32,)),
+        regressor_args=dict(hidden_sizes=(64, 32)),
     )
 
+    batch_size = 50000
     algo = TRPO(
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=10000,
+        batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=10000,
-        step_size=0.001,
-        subsample_factor=1.0,
+        n_itr=1000,
+        step_size=0.01,
+        subsample_factor=0.1,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-loco-v1",
+        exp_prefix="trpo-loco-v1x",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

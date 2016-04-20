@@ -12,6 +12,19 @@ import plotly.offline as po
 import plotly.graph_objs as go
 import pdb
 
+def sliding_mean(data_array, window=5):
+    data_array = np.array(data_array)
+    new_list = []
+    for i in range(len(data_array)):
+        indices = range(max(i - window + 1, 0),
+                        min(i + window + 1, len(data_array)))
+        avg = 0
+        for j in indices:
+            avg += data_array[j]
+        avg /= float(len(indices))
+        new_list.append(avg)
+
+    return np.array(new_list)
 
 app = flask.Flask(__name__, static_url_path='/static')
 
@@ -157,6 +170,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, u
                         np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
                     legend = '{} ({:.1f})'.format(
                         group_legend, best_regret)
+                    window_size = np.maximum(int(np.round(max_size / float(1000))), 1)
                     if use_median:
                         percentile25 = np.nanpercentile(
                             progresses, q=25, axis=0)
@@ -164,12 +178,22 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters={}, u
                             progresses, q=50, axis=0)
                         percentile75 = np.nanpercentile(
                             progresses, q=75, axis=0)
+                        percentile25 = sliding_mean(percentile25,
+                                      window=window_size)
+                        percentile50 = sliding_mean(percentile50,
+                                     window=window_size)
+                        percentile75 = sliding_mean(percentile75,
+                                     window=window_size)
                         to_plot.append(
                             ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
                                          percentile75=percentile75, legend=legend))
                     else:
                         means = np.nanmean(progresses, axis=0)
                         stds = np.nanstd(progresses, axis=0)
+                        means = sliding_mean(means,
+                                      window=window_size)
+                        stds = sliding_mean(stds,
+                                     window=window_size)
                         to_plot.append(
                             ext.AttrDict(means=means, stds=stds, legend=legend))
 
