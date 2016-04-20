@@ -1,3 +1,7 @@
+# 2016-04-18
+
+- Default nonlinearity for `CategoricalMLPPolicy` changed to `tanh` as well, for consistency.
+
 # 2016-04-17
 
 - Restored the default value of the `whole_paths` parameter in `BatchPolopt` back to `True`. This is more consistent with previous configurations.

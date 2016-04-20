@@ -35,6 +35,12 @@ class Discrete(Space):
     def unflatten(self, x):
         return special.from_onehot(x)
 
+    def flatten_n(self, x):
+        return special.to_onehot_n(x, self.n)
+
+    def unflatten_n(self, x):
+        return special.from_onehot_n(x)
+
     @property
     def flat_dim(self):
         return self.n

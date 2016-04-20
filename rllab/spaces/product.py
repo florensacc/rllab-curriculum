@@ -37,10 +37,22 @@ class Product(Space):
     def flatten(self, x):
         return np.concatenate([c.flatten(xi) for c, xi in zip(self._components, x)])
 
+    def flatten_n(self, xs):
+        xs_regrouped = [[x[i] for x in xs] for i in xrange(len(xs[0]))]
+        flat_regrouped = [c.flatten_n(xi) for c, xi in zip(self.components, xs_regrouped)]
+        return np.concatenate(flat_regrouped, axis=-1)
+
     def unflatten(self, x):
         dims = [c.flat_dim for c in self._components]
         flat_xs = np.split(x, np.cumsum(dims)[:-1])
         return tuple(c.unflatten(xi) for c, xi in zip(self._components, flat_xs))
+
+    def unflatten_n(self, xs):
+        dims = [c.flat_dim for c in self._components]
+        flat_xs = np.split(xs, np.cumsum(dims)[:-1], axis=-1)
+        unflat_xs = [c.unflatten_n(xi) for c, xi in zip(self.components, flat_xs)]
+        unflat_xs_grouped = [tuple(xs) for xs in zip(*unflat_xs)]
+        return unflat_xs_grouped
 
     def __eq__(self, other):
         if not isinstance(other, Product):
