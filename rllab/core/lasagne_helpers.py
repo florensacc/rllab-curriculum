@@ -2,7 +2,7 @@ from lasagne.layers import get_all_layers
 from lasagne import utils
 
 
-def get_output_with_extra(layer_or_layers, inputs=None, **kwargs):
+def get_full_output(layer_or_layers, inputs=None, **kwargs):
     """
     Computes the output of the network at one or more given layers.
     Optionally, you can define the input(s) to propagate through the network
@@ -81,9 +81,9 @@ def get_output_with_extra(layer_or_layers, inputs=None, **kwargs):
                                  "mapping this layer to an input expression."
                                  % layer)
             if hasattr(layer, "get_full_output_for"):
-                full_output = layer.get_full_output_for(layer_inputs, **kwargs)
-                all_outputs[layer] = full_output[0]
-                extra_outputs[layer] = full_output[1:]
+                output, extra = layer.get_full_output_for(layer_inputs, **kwargs)
+                all_outputs[layer] = output
+                extra_outputs[layer] = extra
             else:
                 all_outputs[layer] = layer.get_output_for(
                     layer_inputs, **kwargs)
@@ -95,4 +95,4 @@ def get_output_with_extra(layer_or_layers, inputs=None, **kwargs):
 
 
 def get_output(layer_or_layers, inputs=None, **kwargs):
-    return get_output_with_extra(layer_or_layers, inputs, **kwargs)[0]
+    return get_full_output(layer_or_layers, inputs, **kwargs)[0]

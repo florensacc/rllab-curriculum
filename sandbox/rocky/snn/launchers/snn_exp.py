@@ -4,7 +4,7 @@ from __future__ import absolute_import
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from sandbox.rocky.snn.bimod_env import BimodEnv
 from rllab.envs.normalized_env import normalize
-from sandbox.rocky.snn.stochastic_gaussian_mlp_policy import StochasticGaussianMLPPolicy
+from sandbox.rocky.snn.policies.stochastic_gaussian_mlp_policy import StochasticGaussianMLPPolicy
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.algos.trpo import TRPO
 
@@ -14,8 +14,9 @@ env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False)
 
 policy = StochasticGaussianMLPPolicy(
     env_spec=env.spec,
-    latent_dim=2,
-    latent_type='binomial',
+    input_latent_vars=[('bernoulli', 2)],
+    # latent_dim=2,
+    # latent_type='binomial',
     hidden_sizes=(8, 8)
 )
 
