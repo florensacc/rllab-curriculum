@@ -6,8 +6,6 @@ import lasagne.nonlinearities as LN
 import lasagne.init as LI
 from sandbox.rocky.snn.core.lasagne_layers import IndependentGaussianLayer, IndependentBernoulliLayer, \
     BernoulliLayer, GaussianLayer
-from rllab.core.lasagne_helpers import get_full_output
-import theano.tensor as TT
 
 
 def _pad_latent_tuple(tpl):
@@ -168,19 +166,3 @@ class StochasticMLP(object):
     @property
     def latent_dtypes(self):
         return self._latent_dtypes
-
-    # def get_logli_sym(self, input_var, latent_vars):
-    #     """
-    #     Get the log likelihood of all latent variables, conditioned on the values of other latent variables and
-    #     the input layer.
-    #     :param latent_vars: a list of latent variables, appeared in the order of layers as would be returned
-    #     by the `latent_layers` property
-    #     :return:
-    #     """
-    #     logli = 0.
-    #     assert len(latent_vars) == len(self.latent_layers)
-    #     latent_vars_dict = dict(zip(self.latent_layers, latent_vars))
-    #     _, extras = get_full_output(self._l_out, {self._l_in: input_var}, latent_givens=latent_vars_dict)
-    #     for latent_layer in self.latent_layers:
-    #         logli += TT.sum(extras[latent_layer]["logli"], axis=1)
-    #     return logli

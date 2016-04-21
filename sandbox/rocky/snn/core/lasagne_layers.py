@@ -6,7 +6,6 @@ import lasagne.nonlinearities as LN
 import lasagne.init as LI
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import theano.tensor as TT
-import numpy as np
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 from sandbox.rocky.snn.distributions.standard_bernoulli import StandardBernoulli
 from sandbox.rocky.snn.distributions.standard_gaussian import StandardGaussian

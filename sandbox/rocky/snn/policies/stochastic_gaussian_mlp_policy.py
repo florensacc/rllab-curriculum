@@ -2,15 +2,12 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 import lasagne
-import lasagne.layers as L
 import lasagne.nonlinearities as NL
-import theano.tensor as TT
 import numpy as np
 import itertools
 
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
-from rllab.core.network import MLP
 from rllab.spaces import Box
 
 from rllab.core.serializable import Serializable
