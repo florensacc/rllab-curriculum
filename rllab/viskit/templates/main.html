@@ -92,6 +92,7 @@
         </div>
         <br/>
         <button class="update">Update</button>
+        <button class="eps">Plot</button>
         <br/>
         <span id="status"></span>
     </div>
@@ -146,6 +147,44 @@
                     }
                 });
     }
+    function genEPS(callback) {
+        $("#status").html("Updating");
+
+        var $controlPanel = $(".control-panel");
+        var plotIndex = $controlPanel.find("input[name=plot_key]:checked").val();
+        var plotKey = plottableKeys[plotIndex];
+        var splitIndex = $controlPanel.find("input[type=radio][name=split_key]:checked").val();
+        var splitKey;
+        if (splitIndex == 0) {
+            splitKey = null;
+        } else {
+            splitKey = distinctParamKeys[splitIndex - 1];
+        }
+        var groupIndex = $controlPanel.find("input[type=radio][name=group_key]:checked").val();
+        var groupKey = distinctParamKeys[groupIndex - 1];
+        var filters = {};
+        $.each($("div.filter"), function (itr, div) {
+            var val = $(div).find(".filter").val();
+            if (val && val.length != 0) {
+                filters[$(div).find(".target").val()] = val;
+            }
+        });
+        var useMedian = $controlPanel.find("input[type=radio][name=use_median]:checked").val();
+        console.log(useMedian);
+        console.log("updating");
+        $.get("/plot_div",
+                {
+                    "plot_key": plotKey, "split_key": splitKey,
+                    "group_key": groupKey, "filters": JSON.stringify(filters), "use_median": useMedian, "eps": "True"
+                },
+                function (data) {
+                    $("#plot_wrapper").empty().append(data);
+                    $("#status").html("Updated");
+                    if (callback !== undefined) {
+                        callback();
+                    }
+                });
+    }
     $(function () {
         $("input[type=radio][name=plot_key]").change(function () {
             updatePlot();
@@ -158,6 +197,9 @@
         });
         $("button.update").click(function () {
             updatePlot();
+        });
+        $("button.eps").click(function () {
+            genEPS();
         });
     });
     function updateFilterSelections() {

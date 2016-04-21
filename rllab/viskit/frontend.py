@@ -1,4 +1,6 @@
 from __future__ import print_function
+import matplotlib
+matplotlib.use('Agg')
 import flask  # import Flask, render_template, send_from_directory
 from rllab.misc.ext import flatten
 from rllab.viskit import core
@@ -87,8 +89,43 @@ def make_plot(plot_list, use_median=False):
     return po.plot(fig, output_type='div', include_plotlyjs=False)
 
 
+def make_plot_eps(plot_list, use_median=False, counter=0):
+    data = []
+    import matplotlib.pyplot as _plt
+    f, ax = _plt.subplots(figsize=(8, 6))
+    for idx, plt in enumerate(plot_list):
+        color = core.color_defaults[idx % len(core.color_defaults)]
+        if use_median:
+            x = range(len(plt.percentile50))
+            y = list(plt.percentile50)
+            y_upper = list(plt.percentile75)
+            y_lower = list(plt.percentile25)
+        else:
+            x = range(len(plt.means))
+            y = list(plt.means)
+            y_upper = list(plt.means + plt.stds)
+            y_lower = list(plt.means - plt.stds)
+
+        ax.fill_between(
+            x, y_lower, y_upper, interpolate=True, facecolor=color, linewidth=0.0, alpha=0.3)
+        ax.plot(x, y, color=color, label=plt.legend)
+        ax.grid(True)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        if counter == 1:
+            ax.set_xlim([0, 10000])
+        elif counter == 2:
+            ax.set_xlim([0, 800])
+        elif counter == 3:
+            ax.set_xlim([0, 1000])
+        elif counter == 4:
+            ax.set_xlim([0, 250])
+        ax.legend(loc="lower right", borderaxespad=0., prop={'size':12}, ncol=2)
+        _plt.savefig('tmp' + str(counter) + '.pdf')
+
+
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
-                         only_show_best=True):
+                         only_show_best=True, gen_eps=False):
     print(plot_key, split_key, group_key, filters)
     selector = core.Selector(exps_data)
     if filters is None:
@@ -104,7 +141,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
         split_selectors = [selector]
         split_legends = ["Plot"]
     plots = []
-    print("here")
+    counter = 1
     for split_selector, split_legend in zip(split_selectors, split_legends):
         if group_key:
             vs = [vs for k, vs in distinct_params if k == group_key][0]
@@ -176,7 +213,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                         legend = '{} ({:.1f})'.format(
                             group_legend, best_regret)
                         window_size = np.maximum(
-                        int(np.round(max_size / float(1000))), 1)
+                            int(np.round(max_size / float(1000))), 1)
                         if use_median:
                             percentile25 = np.nanpercentile(
                                 progresses, q=25, axis=0)
@@ -185,7 +222,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                             percentile75 = np.nanpercentile(
                                 progresses, q=75, axis=0)
                             percentile25 = sliding_mean(percentile25,
-                                                    window=window_size)
+                                                        window=window_size)
                             percentile50 = sliding_mean(percentile50,
                                                         window=window_size)
                             percentile75 = sliding_mean(percentile75,
@@ -197,9 +234,9 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                             means = np.nanmean(progresses, axis=0)
                             stds = np.nanstd(progresses, axis=0)
                             means = sliding_mean(means,
-                                             window=window_size)
+                                                 window=window_size)
                             stds = sliding_mean(stds,
-                                            window=window_size)
+                                                window=window_size)
                             to_plot.append(
                                 ext.AttrDict(means=means, stds=stds, legend=legend))
                 else:
@@ -245,9 +282,13 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                         to_plot.append(
                             ext.AttrDict(means=means, stds=stds, legend=group_legend))
 
-        if len(to_plot) > 0:
+        if len(to_plot) > 0 and not gen_eps:
             plots.append("<div>%s: %s</div>" % (split_key, split_legend))
             plots.append(make_plot(to_plot, use_median=use_median))
+
+        if gen_eps:
+            make_plot_eps(to_plot, use_median=use_median, counter=counter)
+        counter += 1
     return "\n".join(plots)
 
 
@@ -267,8 +308,9 @@ def plot_div():
     # print split_key
     # exp_filter = distinct_params[0]
     use_median = args.get("use_median", "") == 'True'
+    gen_eps = args.get("eps", "") == 'True'
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key,
-                                    group_key=group_key, filters=filters, use_median=use_median)
+                                    group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps)
     # print plot_div
     return plot_div
 
