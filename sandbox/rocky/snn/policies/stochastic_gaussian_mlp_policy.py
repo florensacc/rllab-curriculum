@@ -152,12 +152,16 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
 
     @overrides
     def get_action(self, observation):
-        outputs = {k: v[0] for k, v in self._f_dist_info([observation]).iteritems()}
+        actions, outputs = self.get_actions([observation])
+        return actions[0], {k: v[0] for k, v in outputs.iteritems()}
+
+    def get_actions(self, observations):
+        outputs = self._f_dist_info(observations)
         mean = outputs["mean"]
         log_std = outputs["log_std"]
         rnd = np.random.normal(size=mean.shape)
-        action = rnd * np.exp(log_std) + mean
-        return action, outputs
+        actions = rnd * np.exp(log_std) + mean
+        return actions, outputs
 
     def log_diagnostics(self, paths):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])

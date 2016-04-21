@@ -19,9 +19,9 @@ def _get_input_latent_layers(l_in, input_latent_vars):
         return []
     layers = []
     for dist, num_units, options in map(_pad_latent_tuple, input_latent_vars):
-        if dist == 'bernoulli':
+        if dist == 'independent_bernoulli':
             cls = IndependentBernoulliLayer
-        elif dist == 'gaussian':
+        elif dist == 'independent_gaussian':
             cls = IndependentGaussianLayer
         else:
             raise NotImplementedError
@@ -42,6 +42,10 @@ def _get_latent_layers(l_prev, latent_vars):
             cls = BernoulliLayer
         elif dist == 'gaussian':
             cls = GaussianLayer
+        elif dist == 'independent_bernoulli':
+            cls = IndependentBernoulliLayer
+        elif dist == 'independent_gaussian':
+            cls = IndependentGaussianLayer
         else:
             raise NotImplementedError
         layers.append(cls(
