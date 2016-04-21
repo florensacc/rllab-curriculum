@@ -148,6 +148,26 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
             lr *= latent_dist.likelihood_ratio_sym(latent_var, old_latent_dist_info, new_latent_dist_info)
         return lr
 
+    def log_likelihood(self, x, dist_info):
+        logli = self._dist.log_likelihood(x, dist_info)
+        for idx, latent_dist in enumerate(self._latent_distributions):
+            latent_var = dist_info["latent_%d" % idx]
+            prefix = "latent_%d_" % idx
+            latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.iteritems() if k.startswith(
+                prefix)}
+            logli += latent_dist.log_likelihood(latent_var, latent_dist_info)
+        return logli
+
+    def log_likelihood_sym(self, x_var, dist_info_vars):
+        logli = self._dist.log_likelihood_sym(x_var, dist_info_vars)
+        for idx, latent_dist in enumerate(self._latent_distributions):
+            latent_var = dist_info_vars["latent_%d" % idx]
+            prefix = "latent_%d_" % idx
+            latent_dist_info = {k[len(prefix):]: v for k, v in dist_info_vars.iteritems() if k.startswith(
+                prefix)}
+            logli += latent_dist.log_likelihood_sym(latent_var, latent_dist_info)
+        return logli
+
     def entropy(self, dist_info):
         ent = self._dist.entropy(dist_info)
         for idx, latent_dist in enumerate(self._latent_distributions):
