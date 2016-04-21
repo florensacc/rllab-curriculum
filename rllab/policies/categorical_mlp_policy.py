@@ -51,11 +51,11 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         LasagnePowered.__init__(self, [prob_network.output_layer])
 
     @overrides
-    def dist_info_sym(self, obs_var, action_var):
+    def dist_info_sym(self, obs_var, state_info_vars=None):
         return dict(prob=L.get_output(self._l_prob, {self._l_obs: obs_var}))
 
     @overrides
-    def dist_info(self, obs, actions):
+    def dist_info(self, obs, state_infos=None):
         return dict(prob=self._f_prob(obs))
 
     # The return value is a pair. The first item is a matrix (N, A), where each

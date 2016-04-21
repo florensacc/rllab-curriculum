@@ -44,7 +44,8 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
             component_idx=None,
             regressor_cls=None,
             regressor_args=None,
-            logger_delegate=None):
+            logger_delegate=None,
+            logger_delegates=None):
         assert isinstance(policy, SubgoalPolicy)
         # if isinstance(policy.subgoal_space, Discrete):
         #     assert isinstance(policy.high_policy.distribution, Categorical)
@@ -94,7 +95,12 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
         self.policy = policy
         self.subgoal_space = policy.subgoal_space
         self.subgoal_interval = policy.subgoal_interval
-        self.logger_delegate = logger_delegate
+        if logger_delegates is None:
+            if logger_delegate is not None:
+                logger_delegates = [logger_delegate]
+            else:
+                logger_delegates = []
+        self.logger_delegates = logger_delegates
         self.n_subgoal_samples = n_subgoal_samples
 
     def _get_relevant_data(self, paths):
@@ -124,12 +130,12 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
         self.regressor.fit(xs, ys)
         if self.state_regressor is not None:
             self.state_regressor.fit(flat_obs, flat_next_obs)
-        if self.logger_delegate:
-            self.logger_delegate.fit(paths)
+        for d in self.logger_delegates:
+            d.fit(paths)
 
     def log_diagnostics(self, paths):
-        if self.logger_delegate:
-            self.logger_delegate.log_diagnostics(paths)
+        for d in self.logger_delegates:
+            d.log_diagnostics(paths)
 
     def predict(self, path):
         path_length = len(path["rewards"])

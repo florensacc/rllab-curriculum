@@ -13,4 +13,4 @@ dependencies:
 
 test:
   override:
-    - docker run tester /bin/bash -li -c "nose2"
+    - docker run tester /bin/bash -li -c "CIRCLECI=true nose2"

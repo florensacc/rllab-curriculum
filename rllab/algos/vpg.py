@@ -68,7 +68,16 @@ class VPG(BatchPolopt, Serializable):
         else:
             valid_var = None
 
-        dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)
+        state_info_vars = {
+            k: ext.new_tensor(
+                k,
+                ndim=2 + is_recurrent,
+                dtype=theano.config.floatX
+            ) for k in self.policy.state_info_keys
+        }
+        state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
+
+        dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
         logli = dist.log_likelihood_sym(action_var, dist_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
 
@@ -83,7 +92,7 @@ class VPG(BatchPolopt, Serializable):
             mean_kl = TT.mean(kl)
             max_kl = TT.max(kl)
 
-        input_list = [obs_var, action_var, advantage_var]
+        input_list = [obs_var, action_var, advantage_var] + state_info_vars_list
         if is_recurrent:
             input_list.append(valid_var)
 
@@ -104,9 +113,11 @@ class VPG(BatchPolopt, Serializable):
             samples_data,
             "observations", "actions", "advantages"
         )
+        agent_infos = samples_data["agent_infos"]
+        state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
+        inputs += tuple(state_info_list)
         if self.policy.recurrent:
             inputs += (samples_data["valids"],)
-        agent_infos = samples_data["agent_infos"]
         dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
         loss_before = self.optimizer.loss(inputs)
         self.optimizer.optimize(inputs)

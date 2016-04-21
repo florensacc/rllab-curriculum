@@ -69,20 +69,12 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         LasagnePowered.__init__(self, [prob_network.output_layer])
 
-    def _get_prev_action_var(self, action_var):
-        n_batches = action_var.shape[0]
-        action_dim = action_var.shape[2]
-        return TT.concatenate([
-            TT.zeros((n_batches, 1, action_dim), dtype=action_var.dtype),
-            action_var[:, :-1, :]
-        ], axis=1)
-
     @overrides
-    def dist_info_sym(self, obs_var, action_var):
+    def dist_info_sym(self, obs_var, state_info_vars):
         n_batches, n_steps = obs_var.shape[:2]
         obs_var = obs_var.reshape((n_batches, n_steps, -1))
         if self._state_include_action:
-            prev_action_var = self._get_prev_action_var(action_var)
+            prev_action_var = state_info_vars["prev_action"]
             all_input_var = TT.concatenate(
                 [obs_var, prev_action_var],
                 axis=2
@@ -96,11 +88,6 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             )
         )
 
-    # @overrides
-    # def dist_info(self, obs, actions):
-    #     raise NotImplementedError
-    #     # pass
-
     def reset(self):
         self._prev_action = None
         self._prev_hidden = self._prob_network.hid_init_param.get_value()
@@ -113,22 +100,25 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def get_action(self, observation):
         if self._state_include_action:
             if self._prev_action is None:
-                all_input = np.concatenate([
-                    self.observation_space.flatten(observation),
-                    np.zeros((self.action_space.flat_dim,))
-                ])
+                prev_action = np.zeros((self.action_space.flat_dim,))
             else:
-                all_input = np.concatenate([
-                    self.observation_space.flatten(observation),
-                    self.action_space.flatten(self._prev_action)
-                ])
+                prev_action = self.action_space.flatten(self._prev_action)
+            all_input = np.concatenate([
+                self.observation_space.flatten(observation),
+                prev_action
+            ])
         else:
             all_input = self.observation_space.flatten(observation)
+            # should not be used
+            prev_action = np.nan
         probs, hidden_vec = [x[0] for x in self._f_step_prob([all_input], [self._prev_hidden])]
         action = special.weighted_sample(probs, xrange(self.action_space.n))
         self._prev_action = action
         self._prev_hidden = hidden_vec
-        return action, dict(prob=probs)
+        agent_info = dict(prob=probs)
+        if self._state_include_action:
+            agent_info["prev_action"] = prev_action
+        return action, agent_info
 
     @property
     @overrides
@@ -138,3 +128,10 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @property
     def distribution(self):
         return self._dist
+
+    @property
+    def state_info_keys(self):
+        if self._state_include_action:
+            return ["prev_action"]
+        else:
+            return []

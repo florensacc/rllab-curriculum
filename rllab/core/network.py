@@ -9,6 +9,7 @@ from rllab.misc import ext
 from rllab.core.lasagne_layers import OpLayer
 import numpy as np
 
+
 def wrapped_conv(*args, **kwargs):
     copy = dict(kwargs)
     copy.pop("image_shape", None)
@@ -28,7 +29,6 @@ def wrapped_conv(*args, **kwargs):
 
 
 class MLP(object):
-
     def __init__(self, input_shape, output_dim, hidden_sizes, hidden_nonlinearity,
                  output_nonlinearity, hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
                  output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
@@ -38,7 +38,6 @@ class MLP(object):
             prefix = ""
         else:
             prefix = name + "_"
-
 
         l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var)
         self._layers = [l_in]
@@ -87,8 +86,8 @@ class MLP(object):
     def output(self):
         return self._output
 
-class GRULayer(L.Layer):
 
+class GRULayer(L.Layer):
     """
     A gated recurrent unit implements the following update mechanism:
     Reset gate:        r(t) = f_r(x(t) @ W_xr + h(t-1) @ W_hr + b_r)
@@ -97,6 +96,7 @@ class GRULayer(L.Layer):
     New hidden state:  h(t) = (1 - u(t)) * h(t-1) + u_t * c(t)
     Note that the reset, update, and cell vectors must have the same dimension as the hidden state
     """
+
     def __init__(self, incoming, num_units, hidden_nonlinearity,
                  gate_nonlinearity=LN.sigmoid, name=None,
                  W_init=LI.HeUniform(), b_init=LI.Constant(0.),
@@ -160,7 +160,6 @@ class GRULayer(L.Layer):
 
 
 class GRUStepLayer(L.MergeLayer):
-
     def __init__(self, incomings, gru_layer, name=None):
         super(GRUStepLayer, self).__init__(incomings, name)
         self._gru_layer = gru_layer
@@ -180,13 +179,13 @@ class GRUStepLayer(L.MergeLayer):
 
 
 class GRUNetwork(object):
-
     def __init__(self, input_shape, output_dim, hidden_dim, hidden_nonlinearity=LN.rectify,
                  output_nonlinearity=None, name=None, input_var=None):
         l_in = L.InputLayer(shape=(None, None) + input_shape, input_var=input_var)
         l_step_input = L.InputLayer(shape=(None,) + input_shape)
         l_step_prev_hidden = L.InputLayer(shape=(None, hidden_dim))
-        l_gru = GRULayer(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity, hidden_init_trainable=False)
+        l_gru = GRULayer(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity,
+                         hidden_init_trainable=False)
         l_gru_flat = L.ReshapeLayer(
             l_gru, shape=(-1, hidden_dim)
         )
@@ -198,9 +197,9 @@ class GRUNetwork(object):
         l_output = OpLayer(
             l_output_flat,
             op=lambda flat_output, l_input:
-                flat_output.reshape((l_input.shape[0], l_input.shape[1], -1)),
+            flat_output.reshape((l_input.shape[0], l_input.shape[1], -1)),
             shape_op=lambda flat_output_shape, l_input_shape:
-                (l_input_shape[0], l_input_shape[1], flat_output_shape[-1]),
+            (l_input_shape[0], l_input_shape[1], flat_output_shape[-1]),
             extras=[l_in]
         )
         l_step_hidden = l_gru.get_step_layer(l_step_input, l_step_prev_hidden)
@@ -253,8 +252,8 @@ class GRUNetwork(object):
     def hid_init_param(self):
         return self._hid_init_param
 
-class ConvNetwork(object):
 
+class ConvNetwork(object):
     def __init__(self, input_shape, output_dim, hidden_sizes,
                  conv_filters, conv_filter_sizes, conv_strides, conv_pads,
                  hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
@@ -276,11 +275,11 @@ class ConvNetwork(object):
             l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var)
             l_hid = l_in
         for idx, conv_filter, filter_size, stride, pad in izip(
-            xrange(len(conv_filters)),
-            conv_filters,
-            conv_filter_sizes,
-            conv_strides,
-            conv_pads,
+                xrange(len(conv_filters)),
+                conv_filters,
+                conv_filter_sizes,
+                conv_strides,
+                conv_pads,
         ):
             l_hid = L.Conv2DLayer(
                 l_hid,

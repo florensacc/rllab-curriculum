@@ -83,8 +83,17 @@ class REPS(BatchPolopt, Serializable):
 
         valid_var = TT.matrix('valid')
 
+        state_info_vars = {
+            k: ext.new_tensor(
+                k,
+                ndim=2 + is_recurrent,
+                dtype=theano.config.floatX
+            ) for k in self.policy.state_info_keys
+        }
+        state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
+
         # Policy-related symbolics
-        dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)
+        dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
         dist = self.policy.distribution
         # log of the policy dist
         logli = dist.log_likelihood_sym(action_var, dist_info_vars)
@@ -118,7 +127,7 @@ class REPS(BatchPolopt, Serializable):
             recurrent_vars = []
 
         input = [rewards, obs_var, feat_diff,
-                 action_var] + recurrent_vars + [param_eta, param_v]
+                 action_var] + state_info_vars_list + recurrent_vars + [param_eta, param_v]
         # if is_recurrent:
         #     input +=
         f_loss = ext.compile_function(
@@ -146,7 +155,7 @@ class REPS(BatchPolopt, Serializable):
             mean_kl = TT.mean(dist.kl_sym(old_dist_info_vars, dist_info_vars))
 
         f_kl = ext.compile_function(
-            inputs=[obs_var, action_var] + old_dist_info_vars_list + recurrent_vars,
+            inputs=[obs_var, action_var] + state_info_vars_list + old_dist_info_vars_list + recurrent_vars,
             outputs=mean_kl,
         )
 
@@ -179,11 +188,11 @@ class REPS(BatchPolopt, Serializable):
 
         # Eval functions.
         f_dual = ext.compile_function(
-            inputs=[rewards, feat_diff] + recurrent_vars + [param_eta, param_v],
+            inputs=[rewards, feat_diff] + state_info_vars_list + recurrent_vars + [param_eta, param_v],
             outputs=dual
         )
         f_dual_grad = ext.compile_function(
-            inputs=[rewards, feat_diff] + recurrent_vars + [param_eta, param_v],
+            inputs=[rewards, feat_diff] + state_info_vars_list + recurrent_vars + [param_eta, param_v],
             outputs=dual_grad
         )
 
@@ -207,6 +216,10 @@ class REPS(BatchPolopt, Serializable):
         rewards = samples_data['rewards']
         actions = samples_data['actions']
         observations = samples_data['observations']
+
+        agent_infos = samples_data["agent_infos"]
+        state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
+        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
         if self.policy.recurrent:
             recurrent_vals = [samples_data["valids"]]
         else:
@@ -238,14 +251,14 @@ class REPS(BatchPolopt, Serializable):
         def eval_dual(input):
             param_eta = input[0]
             param_v = input[1:]
-            val = f_dual(*([rewards, feat_diff] + recurrent_vals + [param_eta, param_v]))
+            val = f_dual(*([rewards, feat_diff] + state_info_list + recurrent_vals + [param_eta, param_v]))
             return val.astype(np.float64)
 
         # Set BFGS gradient eval function
         def eval_dual_grad(input):
             param_eta = input[0]
             param_v = input[1:]
-            grad = f_dual_grad(*([rewards, feat_diff] + recurrent_vals + [param_eta, param_v]))
+            grad = f_dual_grad(*([rewards, feat_diff] + state_info_list + recurrent_vals + [param_eta, param_v]))
             eta_grad = np.float(grad[0])
             v_grad = grad[1]
             return np.hstack([eta_grad, v_grad])
@@ -281,7 +294,7 @@ class REPS(BatchPolopt, Serializable):
         f_loss = self.opt_info["f_loss"]
         f_loss_grad = self.opt_info['f_loss_grad']
         input = [rewards, observations, feat_diff,
-                 actions] + recurrent_vals + [self.param_eta, self.param_v]
+                 actions] + state_info_list + recurrent_vals + [self.param_eta, self.param_v]
 
         # Set loss eval function
         def eval_loss(params):
@@ -307,9 +320,9 @@ class REPS(BatchPolopt, Serializable):
         loss_after = eval_loss(params_ast)
 
         f_kl = self.opt_info['f_kl']
-        agent_infos = samples_data["agent_infos"]
-        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
-        mean_kl = f_kl(*([observations, actions] + dist_info_list + recurrent_vals)).astype(np.float64)
+
+        mean_kl = f_kl(*([observations, actions] + state_info_list + dist_info_list + recurrent_vals)).astype(
+            np.float64)
 
         logger.log('eta %f -> %f' % (eta_before, self.param_eta))
 

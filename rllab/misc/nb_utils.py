@@ -48,7 +48,7 @@ class Experiment(object):
         flat_params = dict()
         for k, v in params.iteritems():
             if isinstance(v, dict) and depth != 0:
-                for subk, subv in self._flatten_params(v, depth=depth-1):
+                for subk, subv in self._flatten_params(v, depth=depth-1).iteritems():
                     if subk == "_name":
                         flat_params[k] = subv
                     else:
@@ -90,7 +90,7 @@ class ExperimentDatabase(object):
             name_or_patterns = [name_or_patterns]
         files = []
         for name_or_pattern in name_or_patterns:
-            matched_files = glob(osp.join(data_folder, name_or_pattern))
+            matched_files = glob(osp.join(data_folder, name_or_pattern)) #golb gives a list of all files satisfying pattern
             files += matched_files
         experiments = []
         for f in files:
@@ -101,7 +101,6 @@ class ExperimentDatabase(object):
                 experiments.append(Experiment(progress, params))
             except Exception as e:
                 print e
-                continue
         self._experiments = experiments
 
     def plot_experiments(self, key=None, legend=None, color_key=None, filter_exp=None, **kwargs):

@@ -1,5 +1,5 @@
 from __future__ import print_function
-from rllab.spaces import Product, Discrete
+from rllab.spaces import Product, Discrete, Box
 import numpy as np
 
 
@@ -12,4 +12,12 @@ def test_product_space():
 
 def test_product_space_unflatten_n():
     space = Product([Discrete(3), Discrete(3)])
-    np.testing.assert_array_equal(space.flatten((2,2)), space.flatten_n([(2, 2)])[0])
+    np.testing.assert_array_equal(space.flatten((2, 2)), space.flatten_n([(2, 2)])[0])
+
+
+def test_box():
+    space = Box(low=-1, high=1, shape=(2, 2))
+    np.testing.assert_array_equal(space.flatten([[1, 2], [3, 4]]), [1, 2, 3, 4])
+    np.testing.assert_array_equal(space.flatten_n([[[1, 2], [3, 4]]]), [[1, 2, 3, 4]])
+    np.testing.assert_array_equal(space.unflatten([1, 2, 3, 4]), [[1, 2], [3, 4]])
+    np.testing.assert_array_equal(space.unflatten_n([[1, 2, 3, 4]]), [[[1, 2], [3, 4]]])

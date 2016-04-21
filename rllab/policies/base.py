@@ -35,6 +35,14 @@ class Policy(Parameterized):
         """
         pass
 
+    @property
+    def state_info_keys(self):
+        """
+        Return keys for the information related to the policy's state when taking an action.
+        :return:
+        """
+        return list()
+
 
 class StochasticPolicy(Policy):
     # def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
@@ -66,16 +74,22 @@ class StochasticPolicy(Policy):
     #     """
     #     return list()
 
-    def dist_info_sym(self, obs_var, action_var):
+    def dist_info_sym(self, obs_var, state_info_vars):
         """
         Return the symbolic distribution information about the actions.
+        :param obs_var: symbolic variable for observations
+        :param state_info_vars: a dictionary whose values should contain information about the state of the policy at
+        the time it received the observation
         :return:
         """
         raise NotImplementedError
 
-    def dist_info(self, obs, actions):
+    def dist_info(self, obs, state_infos):
         """
         Return the distribution information about the actions.
+        :param obs_var: observation values
+        :param state_info_vars: a dictionary whose values should contain information about the state of the policy at
+        the time it received the observation
         :return:
         """
         raise NotImplementedError
