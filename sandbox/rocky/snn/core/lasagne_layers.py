@@ -106,7 +106,8 @@ class GaussianLayer(L.DenseLayer):
     """
 
     def __init__(self, incoming, num_units, W=LI.GlorotUniform(),
-                 b=LI.Constant(0.), adaptive_std=False, learn_std=False, init_std=1.0, **kwargs):
+                 b=LI.Constant(0.), adaptive_std=False, learn_std=False, init_std=1.0,
+                 reparameterize=True, **kwargs):
         """
         :param incoming: incoming layer
         :param num_units: number of independent Gaussian outputs
@@ -115,6 +116,7 @@ class GaussianLayer(L.DenseLayer):
         :param adaptive_std: whether std is dependent on the input
         :param learn_std: only in effect if adaptive_std is False. Controls whether to learn the std parameter.
         :param init_std: only in effect if adaptive_std is False. Initial value for the std parameter.
+        :param whether to reparameterize
         :return:
         """
         if adaptive_std:
@@ -128,6 +130,7 @@ class GaussianLayer(L.DenseLayer):
                                           trainable=learn_std)
         self.srng = RandomStreams()
         self.adaptive_std = adaptive_std
+        self.reparameterize = reparameterize
 
     def get_output_for(self, input, **kwargs):
         return self.get_full_output_for(input, **kwargs)[0]
@@ -141,10 +144,25 @@ class GaussianLayer(L.DenseLayer):
             mean = LN.tanh(activation)
             log_std = TT.tile(self.log_std.dimshuffle('x', 0), (mean.shape[0], 1))
         if "latent_givens" in kwargs and self in kwargs["latent_givens"]:
-            ret = kwargs["latent_givens"][self]
+            given_value = kwargs["latent_givens"][self]
+            if self.reparameterize:
+                assert "latent_dist_infos" in kwargs
+                assert self in kwargs["latent_dist_infos"]
+                dist_info = kwargs["latent_dist_infos"][self]
+                epsilon = dist_info["epsilon"]
+                ret = mean + epsilon * TT.exp(log_std)
+            else:
+                ret = given_value
         else:
-            ret = self.srng.normal(size=mean.shape, avg=mean, std=TT.exp(log_std))
-        return ret, dict(
-            distribution=DiagonalGaussian(),
-            dist_info=dict(mean=mean, log_std=log_std),
-        )
+            epsilon = self.srng.normal(size=mean.shape)
+            ret = mean + epsilon * TT.exp(log_std)
+        if self.reparameterize:
+            return ret, dict(
+                distribution=StandardGaussian(),
+                dist_info=dict(shape_placeholder=TT.zeros_like(ret), epsilon=epsilon),
+            )
+        else:
+            return ret, dict(
+                distribution=DiagonalGaussian(),
+                dist_info=dict(mean=mean, log_std=log_std),
+            )

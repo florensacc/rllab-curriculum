@@ -87,16 +87,26 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
 
     def dist_info_sym(self, obs_var, state_info_vars=None):
         if state_info_vars is not None:
-            latent_vars = {
+            latent_givens = {
                 latent_layer: state_info_vars["latent_%d" % idx]
                 for idx, latent_layer in enumerate(self._mean_network.latent_layers)
                 }
+            latent_dist_infos = dict()
+            for idx, latent_layer in enumerate(self._mean_network.latent_layers):
+                cur_dist_info = dict()
+                prefix = "latent_%d_" % idx
+                for k, v in state_info_vars.iteritems():
+                    if k.startswith(prefix):
+                        cur_dist_info[k[len(prefix):]] = v
+                latent_dist_infos[latent_layer] = cur_dist_info
         else:
-            latent_vars = dict()
+            latent_givens = dict()
+            latent_dist_infos = dict()
         all_outputs, extras = get_full_output(
             [self._l_mean, self._l_log_std] + self._mean_network.latent_layers,
             inputs={self._mean_network._l_in: obs_var},
-            latent_givens=latent_vars,
+            latent_givens=latent_givens,
+            latent_dist_infos=latent_dist_infos,
         )
 
         mean_var = all_outputs[0]
