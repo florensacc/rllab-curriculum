@@ -61,11 +61,6 @@ def main():
         stochastic_output=True
     )
 
-    # Build symbolic network architecture.
-    pnn.build_network()
-    # Build all symbolic stuff around architecture, e.g., loss, prediction
-    # functions, training functions,...
-    pnn.build_model()
     # Train the model.
     pnn.train(num_epochs=num_epochs, X_train=X_train,
               T_train=T_train, X_test=X_test, T_test=T_test)

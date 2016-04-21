@@ -48,7 +48,7 @@ def welch2(abar, avar, na, bbar, bvar, nb):
     return tf, pf
 
 counter = 0
-methods = ['random', 'vpg', 'tnpg', 'rwr', 'reps', 'trpo', 'cem', 'cma-es']
+methods = ['random', 'vpg', 'tnpg', 'rwr', 'reps', 'trpo', 'cem', 'cma-es', 'ddpg']
 for m, s in zip(mean, std):
     counter += 1
     
@@ -60,3 +60,6 @@ for m, s in zip(mean, std):
             if (not result_test[1] < 0.05) and (m[i] == np.max(m) or m[j] == np.max(m)) :
                 print('task %s: %s not different from %s (p = %s)' % (counter, methods[i], methods[j], result_test[1]))
                 print(m[i], m[j])
+#             else: 
+#                 print('task %s: %s IS different from %s (p = %s)' % (counter, methods[i], methods[j], result_test[1]))
+    

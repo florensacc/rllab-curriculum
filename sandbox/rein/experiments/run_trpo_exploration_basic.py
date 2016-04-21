@@ -70,9 +70,9 @@ for mdp, eta, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix="trpo-expl-basic-v2x",
-        n_parallel=1,
+        n_parallel=2,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
     )

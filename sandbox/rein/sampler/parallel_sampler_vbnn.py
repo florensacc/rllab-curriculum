@@ -14,19 +14,21 @@ def _worker_init(G, id):
 
 def initialize(n_parallel):
     singleton_pool.initialize(n_parallel)
-    singleton_pool.run_each(_worker_init, [(id,) for id in xrange(singleton_pool.n_parallel)])
+    singleton_pool.run_each(
+        _worker_init, [(id,) for id in xrange(singleton_pool.n_parallel)])
 
 
-def _worker_populate_task(G, env, policy):
+def _worker_populate_task(G, env, policy, dynamics):
     G.env = env
     G.policy = policy
+    G.dynamics = dynamics
 
 
-def populate_task(env, policy):
+def populate_task(env, policy, dynamics):
     logger.log("Populating workers...")
     singleton_pool.run_each(
         _worker_populate_task,
-        [(env, policy)] * singleton_pool.n_parallel
+        [(env, policy, dynamics)] * singleton_pool.n_parallel
     )
     logger.log("Populated")
 
@@ -46,16 +48,87 @@ def _worker_set_policy_params(G, params):
     G.policy.set_param_values(params)
 
 
-def _worker_collect_one_path(G, max_path_length):
+def _worker_set_dynamics_params(G, params):
+    G.dynamics.set_param_values(params)
+
+
+def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
+                             reward_mean, reward_std, kl_batch_size, n_itr_update, use_replay_pool,
+                             obs_mean, obs_std, act_mean, act_std):
+    # Path rollout.
     path = rollout(G.env, G.policy, max_path_length)
-    # TODO: calculate KL divergence here and add as path['KL'].
+
+    # Computing intrinsic rewards.
+    # ----------------------------
+    # Save original reward.
+    path['rewards_orig'] = np.array(path['rewards'])
+
+    if normalize_reward:
+        # Normalize rewards.
+        path['rewards'] = (
+            path['rewards'] - reward_mean) / (reward_std + 1e-8)
+
+    if itr > 0:
+        # Iterate over all paths and compute intrinsic reward by updating the
+        # model on each observation, calculating the KL divergence of the new
+        # params to the old ones, and undoing this operation.
+        obs = (path['observations'] - obs_mean) / (obs_std + 1e-8)
+        act = (path['actions'] - act_mean) / (act_std + 1e-8)
+        rew = path['rewards']
+        # inputs = (o,a), target = o'
+        obs_nxt = np.vstack([obs[1:]])
+        _inputs = np.hstack([obs[:-1], act[:-1]])
+        _targets = obs_nxt
+        # KL vector assumes same shape as reward.
+        kl = np.zeros(rew.shape)
+        for j in xrange(int(np.ceil(obs.shape[0] / float(kl_batch_size)))):
+
+            # Save old params for every update.
+            G.dynamics.save_old_params()
+
+            start = j * kl_batch_size
+            end = np.minimum(
+                (j + 1) * kl_batch_size, obs.shape[0] - 1)
+            # Update model weights based on current minibatch.
+            for _ in xrange(n_itr_update):
+                G.dynamics.train_update_fn(
+                    _inputs[start:end], _targets[start:end])
+            # Calculate current minibatch KL.
+            kl_div = float(G.dynamics.f_kl_div_closed_form())
+            for k in xrange(start, end):
+                kl[k] = kl_div
+            # If using replay pool, undo updates.
+            if use_replay_pool:
+                G.dynamics.reset_to_old_params()
+
+        # Last element in KL vector needs to be replaced by second last one
+        # because the actual last observation has no next observation.
+        kl[-1] = kl[-2]
+
+        # Stuff it in path
+        path['KL'] = kl
+        # ----------------------------
+
     return path, len(path["rewards"])
 
 
 def sample_paths(
         policy_params,
+        dynamics_params,
         max_samples,
-        max_path_length=np.inf):
+        max_path_length=np.inf,
+        itr=None,
+        normalize_reward=None,
+        reward_mean=None,
+        reward_std=None,
+        kl_batch_size=None,
+        n_itr_update=None,
+        use_replay_pool=None,
+        obs_mean=None,
+        obs_std=None,
+        act_mean=None,
+        act_std=None
+):
     """
     :param policy_params: parameters for the policy. This will be updated on each worker process
     :param max_samples: desired maximum number of samples to be collected. The actual number of collected samples
@@ -68,11 +141,18 @@ def sample_paths(
         _worker_set_policy_params,
         [(policy_params,)] * singleton_pool.n_parallel
     )
-    # TODO: set dynamics vbnn params here.
+    # Set dynamics params.
+    # --------------------
+    singleton_pool.run_each(
+        _worker_set_dynamics_params,
+        [(dynamics_params,)] * singleton_pool.n_parallel
+    )
+    # --------------------
     return singleton_pool.run_collect(
         _worker_collect_one_path,
         threshold=max_samples,
-        args=(max_path_length,),
+        args=(max_path_length, itr, normalize_reward, reward_mean,
+              reward_std, kl_batch_size, n_itr_update, use_replay_pool, obs_mean, obs_std, act_mean, act_std),
         show_prog_bar=True
     )
 
@@ -94,12 +174,15 @@ def truncate_paths(paths, max_samples):
     if len(paths) > 0:
         last_path = paths.pop(-1)
         truncated_last_path = dict()
-        truncated_len = len(last_path["rewards"]) - (total_n_samples - max_samples)
+        truncated_len = len(
+            last_path["rewards"]) - (total_n_samples - max_samples)
         for k, v in last_path.iteritems():
             if k in ["observations", "actions", "rewards"]:
-                truncated_last_path[k] = tensor_utils.truncate_tensor_list(v, truncated_len)
+                truncated_last_path[k] = tensor_utils.truncate_tensor_list(
+                    v, truncated_len)
             elif k in ["env_infos", "agent_infos"]:
-                truncated_last_path[k] = tensor_utils.truncate_tensor_dict(v, truncated_len)
+                truncated_last_path[k] = tensor_utils.truncate_tensor_dict(
+                    v, truncated_len)
             else:
                 raise NotImplementedError
         paths.append(truncated_last_path)

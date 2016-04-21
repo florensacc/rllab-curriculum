@@ -6,9 +6,11 @@ import lasagne
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from utils import sliding_mean, iterate_minibatches
 import theano
-from rllab.core.parameterized import Parameterized
 from rllab.optimizers.hessian_free_optimizer import HessianFreeOptimizer
 from rllab.core.lasagne_powered import LasagnePowered
+from rllab.core.serializable import Serializable
+from rllab.misc import ext
+
 
 # Plotting params.
 # ----------------
@@ -230,7 +232,7 @@ class ProbLayer(lasagne.layers.Layer):
         return (input_shape[0], self.num_units)
 
 
-class ProbNN(LasagnePowered):
+class ProbNN(LasagnePowered, Serializable):
     """Neural network with weight uncertainty
 
     """
@@ -255,6 +257,8 @@ class ProbNN(LasagnePowered):
                  learning_rate=0.0001
                  ):
 
+        Serializable.quick_init(self, locals())
+
         self._srng = RandomStreams()
         assert len(layers_type) == len(n_hidden) + 1
 
@@ -278,6 +282,14 @@ class ProbNN(LasagnePowered):
         self.stochastic_output = stochastic_output
         self.second_order_update = second_order_update
         self.learning_rate = learning_rate
+
+        # Build network architecture.
+        self.build_network()
+        
+        # Build all theano function.
+        self.build_model()
+
+        LasagnePowered.__init__(self, [self.network])
 
     def _get_prob_layers(self):
         if self.stochastic_output:
@@ -536,8 +548,6 @@ class ProbNN(LasagnePowered):
             self.network = network
             # --------------------
 
-        LasagnePowered.__init__(self, [self.network])
-
     def build_model(self):
 
         # Prepare Theano variables for inputs and targets
@@ -567,10 +577,10 @@ class ProbNN(LasagnePowered):
             loss, params, learning_rate=self.learning_rate)
 
         # Train/val fn.
-        self.pred_fn = theano.function(
-            [input_var], self.pred_sym(input_var), allow_input_downcast=True)
-        self.train_fn = theano.function(
-            [input_var, target_var], loss, updates=updates, allow_input_downcast=True)
+        self.pred_fn = ext.compile_function(
+            [input_var], self.pred_sym(input_var), log_name='pred_fn')
+        self.train_fn = ext.compile_function(
+            [input_var, target_var], loss, updates=updates, log_name='train_fn')
         if self.second_order_update:
             # Hessian-free optimization step
             # ------------------------------
@@ -580,17 +590,17 @@ class ProbNN(LasagnePowered):
             self.train_update_fn = hso.optimize
             # ------------------------------
         else:
-            self.train_update_fn = theano.function(
-                [input_var, target_var], loss_only_last_sample, updates=updates, allow_input_downcast=True)
+            self.train_update_fn = ext.compile_function(
+                [input_var, target_var], loss_only_last_sample, updates=updates, log_name='train_update_fn')
 
-        self.train_err_fn = theano.function(
-            [input_var, target_var], loss, allow_input_downcast=True)
+        self.train_err_fn = ext.compile_function(
+            [input_var, target_var], loss, log_name='train_err_fn')
         if self.reverse_update_kl:
-            self.f_kl_div_closed_form = theano.function(
-                [], self.get_kl_div_closed_form_reversed(), allow_input_downcast=True)
+            self.f_kl_div_closed_form = ext.compile_function(
+                [], self.get_kl_div_closed_form_reversed(), log_name='kl_div_fn')
         else:
-            self.f_kl_div_closed_form = theano.function(
-                [], self.kl_div(), allow_input_downcast=True)
+            self.f_kl_div_closed_form = ext.compile_function(
+                [], self.kl_div(), log_name='kl_div_fn')
 
     def train(self, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None):
 
