@@ -44,7 +44,9 @@ class BatchPolopt_snn(BatchPolopt, Serializable):
             all_samples = [real_samples] + hallucinated
             if self.self_normalize:
                 all_importance_weights = np.asarray([x["importance_weights"] for x in all_samples])
-                all_importance_weights = all_importance_weights / (np.sum(all_importance_weights, axis=0) + 1e-8)
+                # It is important to use the mean instead of the sum. Otherwise, the computation of the weighted KL
+                # divergence will be incorrect
+                all_importance_weights = all_importance_weights / (np.mean(all_importance_weights, axis=0) + 1e-8)
                 for sample, weights in zip(all_samples, all_importance_weights):
                     sample["importance_weights"] = weights
             return tensor_utils.concat_tensor_dict_list(all_samples)
