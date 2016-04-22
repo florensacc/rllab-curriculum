@@ -13,7 +13,8 @@ from rllab.spaces.box import Box
 EMPTY = 0
 AGENT = 1
 DIVER = 2
-N_OBJECT_TYPES = 3
+BOMB = 3
+N_OBJECT_TYPES = 4
 
 
 class GridPlot(object):
@@ -73,9 +74,24 @@ class SeaquestGridWorldEnv(Env):
     encode whether each type of objects is present in this grid.
     """
 
-    def __init__(self, size=10):
+    def __init__(self, size=10, agent_position=None, diver_position=None, bomb_positions=None):
         self.grid = None
         self.size = size
+
+        if agent_position is None:
+            self.start_agent_position = (0, 0)
+        else:
+            self.start_agent_position = agent_position
+        if diver_position is None:
+            self.start_diver_position = (self.size - 1, self.size - 1)
+        else:
+            self.start_diver_position = diver_position
+        if bomb_positions is None:
+            self.start_bomb_positions = []
+        else:
+            self.start_bomb_positions = bomb_positions
+        assert not self.start_agent_position in self.start_bomb_positions
+        assert not self.start_diver_position in self.start_bomb_positions
         self.agent_position = None
         self.diver_position = None
         self.diver_picked_up = False
@@ -86,8 +102,9 @@ class SeaquestGridWorldEnv(Env):
 
     def reset(self):
         # agent starts at top left corner
-        self.agent_position = (0, 0)
-        self.diver_position = (self.size - 1, self.size - 1)
+        self.agent_position = self.start_agent_position
+        self.diver_position = self.start_diver_position
+        self.bomb_positions = self.start_bomb_positions
         self.diver_picked_up = False
         return self.get_current_obs()
 
@@ -96,6 +113,8 @@ class SeaquestGridWorldEnv(Env):
         grid[(AGENT,) + self.agent_position] = 1
         if not self.diver_picked_up:
             grid[(DIVER,) + self.diver_position] = 1
+        for bomb_position in self.bomb_positions:
+            grid[(BOMB,) + bomb_position] = 1
         return grid
 
     def step(self, action):
@@ -106,6 +125,8 @@ class SeaquestGridWorldEnv(Env):
             [0, 0],
             [self.size - 1, self.size - 1]
         ))
+        if self.agent_position in self.bomb_positions:
+            return Step(observation=self.get_current_obs(), reward=0, done=True)
         if self.agent_position == self.diver_position:
             self.diver_picked_up = True
         if self.diver_picked_up and self.agent_position[0] == 0:
@@ -131,11 +152,14 @@ class SeaquestGridWorldEnv(Env):
             self.fig = GridPlot(self.size)
             plt.ion()
         self.fig.reset_grid()
-        self.fig.color_grid(self.agent_position[0], self.agent_position[1], 'r')
+        self.fig.color_grid(self.agent_position[0], self.agent_position[1], 'g')
         self.fig.add_text(self.agent_position[0], self.agent_position[1], 'Agent')
         if not self.diver_picked_up:
             self.fig.color_grid(self.diver_position[0], self.diver_position[1], 'b')
             self.fig.add_text(self.diver_position[0], self.diver_position[1], 'Diver')
+        for bomb_position in self.bomb_positions:
+            self.fig.color_grid(bomb_position[0], bomb_position[1], 'r')
+            self.fig.add_text(bomb_position[0], bomb_position[1], 'Bomb')
         plt.show()
         plt.pause(0.01)
 

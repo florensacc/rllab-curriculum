@@ -1,7 +1,6 @@
 from __future__ import print_function
 from __future__ import absolute_import
 import os
-os.environ['THEANO_FLAGS'] = 'device=cpu'
 
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rocky.hrl.envs.seaquest_grid_world_env import SeaquestGridWorldEnv
@@ -107,8 +106,15 @@ if HIERARCHICAL:
     # sys.exit(0)
 
 else:
-    for size in [5, 7, 10, 15]:
-        env = SeaquestGridWorldEnv(size=size)
+    for size in [10]:#, 15]:
+        env = SeaquestGridWorldEnv(
+            size=size,
+            agent_position=(0, 0),
+            goal_position=(size-1, size-1),
+            bomb_positions=[
+                (5, 0), (5, 1), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8), (5, 9),
+            ],
+        )
 
         network = ConvNetwork(
             input_shape=env.observation_space.shape,
@@ -130,7 +136,7 @@ else:
             baseline=baseline,
             batch_size=4000,
             max_path_length=100,
-            n_itr=100,
+            n_itr=50,
         )
 
         run_experiment_lite(
@@ -138,6 +144,5 @@ else:
             exp_prefix="seaquest",
             snapshot_mode="last",
             seed=11,
-            env=dict(THEANO_FLAGS='device=cpu'),
         )
         # sys.exit(0)
