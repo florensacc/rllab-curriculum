@@ -18,7 +18,7 @@ stub(globals())
 env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False)
 
 for latent_dim in [0,5]:
-    for n_samples in [1,5]:#xrange(1, 6):
+    for n_samples in [0,1,4]:
         if latent_dim == 0:
             latents_def = None
         else:
@@ -56,7 +56,7 @@ for latent_dim in [0,5]:
                 n_parallel=1,
                 snapshot_mode="last",
                 seed=s,
-                exp_prefix='snn_posterior_hallucinate2',
+                exp_prefix='snn_prior_hallucinate',
             )
 
             # sys.exit(0)
