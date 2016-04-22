@@ -15,6 +15,7 @@ import theano.tensor as TT
 import numpy as np
 import cPickle as pickle
 import time
+import contextlib
 
 
 def start_worker(algo, worker_id, shared_T, pipe):
@@ -36,6 +37,29 @@ def new_params_like(param_obj):
     for param in param_obj.get_params(trainable=True):
         new_params.append(new_shared_mem_array(np.zeros_like(param.get_value(borrow=True))))
     return new_params
+
+
+@contextlib.contextmanager
+def using_local_memory(*param_objs):
+    """
+    Upon entering the context, replace all parameters for the provided parameterized objects to using local memory,
+    so that they will remain fixed during the whole body. This is useful to make gradient computation more stable.
+    :param param_objs:
+    :return:
+    """
+    shared_params = []
+    # replace to local parameters
+    for param_obj in param_objs:
+        obj_shared_params = []
+        for param in param_obj.get_params():
+            param_val = param.get_value(borrow=True)
+            obj_shared_params.append(param_val)
+            param.set_value(np.copy(param_val), borrow=True)
+        shared_params.append(obj_shared_params)
+    yield
+    for param_obj, obj_shared_params in zip(param_objs, shared_params):
+        for param, shared_param in zip(param_obj.get_params(), obj_shared_params):
+            param.set_value(shared_param, borrow=True)
 
 
 AdamState = namedtuple('AdamState', ['t', 'm_t', 'v_t', 'beta1', 'beta2', 'epsilon'])
@@ -205,6 +229,13 @@ class AsyncDDPG(RLAlgorithm, Serializable):
             batch_size=32,
             sync_mode='all'
     ):
+        """
+        :param sync_mode: Can be one of 'all', 'none'.
+            all: Synchronize everything. This is the slowest version. Only one process will be allowed to compute the
+                gradient at a given time.
+            none: Totally asynchronous.
+        :return:
+        """
         assert sync_mode in ['all', 'none']
         if es is None and worker_es is None:
             raise ValueError("Must provide at least one of `es` and `worker_es` parameters")
@@ -546,16 +577,17 @@ class AsyncDDPG(RLAlgorithm, Serializable):
                         apply_target_update(self.qf, self.target_qf, self.soft_target_tau)
                         apply_target_update(self.policy, self.target_policy, self.soft_target_tau)
                 else:
-                    next_actions, _ = self.target_policy.get_actions(next_observations)
-                    next_qvals = self.target_qf.get_qval(next_observations, next_actions)
-                    ys = rewards + (1. - terminals) * self.discount * next_qvals
+                    with using_local_memory(self.target_qf, self.target_policy, self.policy, self.qf):
+                        next_actions, _ = self.target_policy.get_actions(next_observations)
+                        next_qvals = self.target_qf.get_qval(next_observations, next_actions)
+                        ys = rewards + (1. - terminals) * self.discount * next_qvals
 
-                    results = self.f_qf_grads(ys, observations, actions)
-                    qf_loss, qval = results[:2]
-                    qf_grads = results[2:]
-                    results = self.f_policy_grads(observations)
-                    policy_surr = results[0]
-                    policy_grads = results[1:]
+                        results = self.f_qf_grads(ys, observations, actions)
+                        qf_loss, qval = results[:2]
+                        qf_grads = results[2:]
+                        results = self.f_policy_grads(observations)
+                        policy_surr = results[0]
+                        policy_grads = results[1:]
 
                     apply_adam_update(self.qf, qf_grads, self.qf_adam_state, learning_rate=self.qf_learning_rate)
                     apply_adam_update(self.policy, policy_grads, self.policy_adam_state,
