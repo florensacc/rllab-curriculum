@@ -1,7 +1,7 @@
 #!/bin/bash 
-COUNTER=0
-while [  $COUNTER -lt 11 ]; do
-kubectl delete pod "rein-trpo-basic-v1x-2016-04-19-21-57-09-"$(printf %04d $COUNTER)
+COUNTER=1
+while [  $COUNTER -lt 111 ]; do
+kubectl delete pod "rein-trpo-expl-loco-v1x-2016-04-21-18-15-34-"$(printf %04d $COUNTER)
 let COUNTER=COUNTER+1 
 done
          

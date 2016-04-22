@@ -13,8 +13,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.00001, 0.00003, 0.0001, 0.0003,
-        0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 10.0]
+etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
 mdp_classes = [Walker2DEnv]
 mdps = [NormalizedEnv(env=mdp_class())
         for mdp_class in mdp_classes]
@@ -34,7 +33,7 @@ for mdp, eta, seed in param_cart_product:
         regressor_args=dict(hidden_sizes=(64, 32)),
     )
 
-    batch_size = 50000
+    batch_size = 10000
     algo = TRPO(
         env=mdp,
         policy=policy,
@@ -42,13 +41,13 @@ for mdp, eta, seed in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=500,
+        n_itr=2500,
         step_size=0.01,
         eta=eta,
         eta_discount=1.0,
         snn_n_samples=10,
         subsample_factor=0.1,
-        use_reverse_kl_reg=False,
+        use_reverse_kl_reg=True,
         use_replay_pool=True,
         use_kl_ratio=True,
         use_kl_ratio_q=True,
@@ -56,20 +55,21 @@ for mdp, eta, seed in param_cart_product:
         kl_batch_size=5,
         normalize_reward=False,
         stochastic_output=False,
-        replay_pool_size=1000000,
-        n_updates_per_sample=10000,
+        replay_pool_size=200000,
+        n_updates_per_sample=1000,
         #         second_order_update=True,
         unn_n_hidden=[64, 32, 64],
         unn_layers_type=[1, 1, 1, 1],
-        unn_learning_rate=0.0001
+        unn_learning_rate=0.0005
     )
 
     run_experiment_lite(
         algo.train(),
         exp_prefix="trpo-expl-loco-v1x",
-        n_parallel=1,
+        n_parallel=15,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",
         dry=False,
+        script="sandbox/rein/run_experiment_lite.py",
     )

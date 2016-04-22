@@ -187,7 +187,6 @@ seed_ = None
 def set_seed(seed):
     global seed_
     seed_ = seed
-    import numpy as np
     import lasagne
     random.seed(seed)
     np.random.seed(seed)

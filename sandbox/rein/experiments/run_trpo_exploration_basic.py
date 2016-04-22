@@ -16,7 +16,9 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.0001, 0.0003, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
+seeds = range(2)
+etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
+etas = [0.01]
 mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
                DoublePendulumEnv, MountainCarEnv]
 mdps = [NormalizedEnv(env=mdp_class())
@@ -73,6 +75,7 @@ for mdp, eta, seed in param_cart_product:
         n_parallel=2,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
+        script="sandbox/rein/run_experiment_lite.py"
     )
