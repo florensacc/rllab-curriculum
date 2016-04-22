@@ -195,10 +195,10 @@ class VariantGenerator(object):
                     last_variants = last_vals(
                         **{k: variant[k] for k in last_val_keys})
                     for last_choice in last_variants:
-                        yield dict(variant, last_key=last_choice)
+                        yield dict(variant, **{last_key: last_choice})
                 else:
                     for last_choice in last_vals:
-                        yield dict(variant, last_key=last_choice)
+                        yield dict(variant, **{last_key: last_choice})
 
 
 def stub(glbs):
