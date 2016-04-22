@@ -39,6 +39,12 @@ class DiagonalGaussian(Distribution):
                0.5 * TT.sum(TT.square(zs), axis=-1) - \
                0.5 * means.shape[-1] * np.log(2 * np.pi)
 
+    def sample(self, dist_info):
+        means = dist_info["mean"]
+        log_stds = dist_info["log_std"]
+        rnd = np.random.normal(size=means.shape)
+        return rnd * np.exp(log_stds) + means
+
     def log_likelihood(self, xs, dist_info):
         means = dist_info["mean"]
         log_stds = dist_info["log_std"]
@@ -54,4 +60,3 @@ class DiagonalGaussian(Distribution):
     @property
     def dist_info_keys(self):
         return ["mean", "log_std"]
-

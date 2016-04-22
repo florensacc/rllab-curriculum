@@ -20,6 +20,10 @@ class Bernoulli(Distribution):
              (1 - old_p) * (np.log(1 - old_p + 1e-8) - np.log(1 - new_p + 1e-8))
         return np.sum(kl, axis=-1)
 
+    def sample(self, dist_info):
+        p = np.asarray(dist_info["p"])
+        return np.cast['int'](np.random.uniform(low=0., high=1., size=p.shape) < p)
+
     def likelihood_ratio_sym(self, x_var, old_dist_info_vars, new_dist_info_vars):
         old_p = old_dist_info_vars["p"]
         new_p = new_dist_info_vars["p"]

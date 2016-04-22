@@ -10,24 +10,44 @@ from rllab.misc import ext
 from rllab.misc import logger
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+from rllab.misc import tensor_utils
 import theano
 import numpy as np
 import theano.tensor as TT
 
 
 class BatchPolopt_snn(BatchPolopt, Serializable):
-    def __init__(self, hallucinator=None, *args, **kwargs):
+    def __init__(self, hallucinator=None, self_normalize=False, *args, **kwargs):
+        """
+        :param hallucinator: Hallucinator object used for generating extra samples
+        :param self_normalize: whether to normalize the importance weights to sum to one for the same real experience
+        :return:
+        """
         Serializable.quick_init(self, locals())
         self.hallucinator = hallucinator
+        self.self_normalize = self_normalize
         BatchPolopt.__init__(self, *args, **kwargs)
 
     def process_samples(self, itr, paths):
-        preprocessed = BatchPolopt.process_samples(self, itr, paths)
+        real_samples = ext.extract_dict(
+            BatchPolopt.process_samples(self, itr, paths),
+            "observations", "actions", "advantages", "env_infos", "agent_infos"
+        )
+        real_samples["importance_weights"] = np.ones_like(real_samples["advantages"])
         # now, hallucinate some more...
         if self.hallucinator is None:
-            return dict(preprocessed, importance_weights=np.ones_like(preprocessed["advantages"]))
+            return real_samples
         else:
-            return self.hallucinator.hallucinate(preprocessed)
+            hallucinated = self.hallucinator.hallucinate(real_samples)
+            if len(hallucinated) == 0:
+                return real_samples
+            all_samples = [real_samples] + hallucinated
+            if self.self_normalize:
+                all_importance_weights = np.asarray([x["importance_weights"] for x in all_samples])
+                all_importance_weights = all_importance_weights / (np.sum(all_importance_weights, axis=0) + 1e-8)
+                for sample, weights in zip(all_samples, all_importance_weights):
+                    sample["importance_weights"] = weights
+            return tensor_utils.concat_tensor_dict_list(all_samples)
 
 
 class NPO_snn(NPO, BatchPolopt_snn):
@@ -102,12 +122,21 @@ class NPO_snn(NPO, BatchPolopt_snn):
         logger.record_tabular('dLoss', loss_before - loss_after)
         return dict()
 
+    def get_itr_snapshot(self, itr, samples_data):
+        return dict(
+            itr=itr,
+            policy=self.policy,
+            baseline=self.baseline,
+            env=self.env,
+            hallucinator=self.hallucinator,
+        )
+
 
 class TRPO_snn(NPO_snn):
     def __init__(self,
-            optimizer=None,
-            optimizer_args=None,
-            *args, **kwargs):
+                 optimizer=None,
+                 optimizer_args=None,
+                 *args, **kwargs):
         Serializable.quick_init(self, locals())
         if optimizer is None:
             if optimizer_args is None:

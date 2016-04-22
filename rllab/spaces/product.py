@@ -50,7 +50,7 @@ class Product(Space):
     def unflatten_n(self, xs):
         dims = [c.flat_dim for c in self._components]
         flat_xs = np.split(xs, np.cumsum(dims)[:-1], axis=-1)
-        unflat_xs = [c.unflatten_n(xi) for c, xi in zip(self.components, flat_xs)]
+        nflat_xs = [c.unflatten_n(xi) for c, xi in zip(self.components, flat_xs)]
         unflat_xs_grouped = [tuple(xs) for xs in zip(*unflat_xs)]
         return unflat_xs_grouped
 

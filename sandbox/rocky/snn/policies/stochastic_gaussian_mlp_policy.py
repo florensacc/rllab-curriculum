@@ -18,6 +18,7 @@ from rllab.misc import ext
 from sandbox.rocky.snn.core.network import StochasticMLP
 from rllab.core.lasagne_helpers import get_full_output
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
+import theano.tensor as TT
 
 
 class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
@@ -84,6 +85,33 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
             inputs=[obs_var],
             outputs=outputs,
         )
+        self._f_dist_info_givens = None
+
+    @property
+    def latent_layers(self):
+        return self._mean_network.latent_layers
+
+    @property
+    def latent_dims(self):
+        return self._mean_network.latent_dims
+
+    def dist_info(self, obs, state_infos=None):
+        if state_infos is None or len(state_infos) == 0:
+            return self._f_dist_info(obs)
+        if self._f_dist_info_givens is None:
+            # compile function
+            obs_var = self._mean_network.input_var
+            latent_keys = ["latent_%d" % idx for idx in xrange(self._n_latent_layers)]
+            latent_vars = [TT.matrix("latent_%d" % idx) for idx in xrange(self._n_latent_layers)]
+            latent_dict = dict(zip(latent_keys, latent_vars))
+            self._f_dist_info_givens = ext.compile_function(
+                inputs=[obs_var] + latent_vars,
+                outputs=self.dist_info_sym(obs_var, latent_dict),
+            )
+        latent_vals = []
+        for idx in xrange(self._n_latent_layers):
+            latent_vals.append(state_infos["latent_%d" % idx])
+        return self._f_dist_info_givens(*[obs] + latent_vals)
 
     def dist_info_sym(self, obs_var, state_info_vars=None):
         if state_info_vars is not None:

@@ -1,3 +1,7 @@
+# 2016-04-21
+
+- Fixed `tensor_utils.concat_tensor_dict_list` to handle nested situations properly.
+
 # 2016-04-20
 
 - Default nonlinearity for `CategoricalMLPPolicy` changed to `tanh` as well, for consistency.
