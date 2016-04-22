@@ -146,11 +146,14 @@ class GaussianLayer(L.DenseLayer):
         if "latent_givens" in kwargs and self in kwargs["latent_givens"]:
             given_value = kwargs["latent_givens"][self]
             if self.reparameterize:
-                assert "latent_dist_infos" in kwargs
-                assert self in kwargs["latent_dist_infos"]
-                dist_info = kwargs["latent_dist_infos"][self]
-                epsilon = dist_info["epsilon"]
-                ret = mean + epsilon * TT.exp(log_std)
+                if "latent_dist_infos" in kwargs and self in kwargs["latent_dist_infos"]:
+                    dist_info = kwargs["latent_dist_infos"][self]
+                    epsilon = dist_info["epsilon"]
+                    ret = mean + epsilon * TT.exp(log_std)
+                else:
+                    # Unfortunately occasionally we might still want the distribution information but not the actual
+                    # output... Any better way to do this?
+                    ret = given_value
             else:
                 ret = given_value
         else:

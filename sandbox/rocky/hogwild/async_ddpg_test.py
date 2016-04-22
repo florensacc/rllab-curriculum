@@ -29,17 +29,19 @@ if ASYNC:
     policy = DeterministicMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32))#, hidden_sizes=(400, 300))
     qf = ContinuousMLPQFunction(env_spec=env.spec, hidden_sizes=(32, 32))#, hidden_sizes=(400, 300))
     es = OUStrategy(env_spec=env.spec)
-    worker_es = [
-        OUStrategy(env_spec=env.spec, sigma=0.3),
-        OUStrategy(env_spec=env.spec, sigma=0.2),
-        OUStrategy(env_spec=env.spec, sigma=0.1),
-        OUStrategy(env_spec=env.spec, sigma=0.4),
-    ]
+    # worker_es = [
+    #     OUStrategy(env_spec=env.spec, sigma=0.3),
+    #     OUStrategy(env_spec=env.spec, sigma=0.2),
+    #     OUStrategy(env_spec=env.spec, sigma=0.1),
+    #     OUStrategy(env_spec=env.spec, sigma=0.4),
+    # ]
     algo = AsyncDDPG(
         env=env, policy=policy, qf=qf, n_workers=4, es=es, scale_reward=1, qf_learning_rate=1e-3,
         max_path_length=500, policy_learning_rate=1e-3, max_samples=10000000, use_replay_pool=True, batch_size=32,
         qf_weight_decay=1e-7, policy_weight_decay=1e-7, evaluate_policy=True, min_eval_interval=10000,
-        soft_target_tau=1e-3)
+        soft_target_tau=1e-3,
+        sync_mode="none",
+    )
     for seed in [11, 21, 31, 41, 51]:
         run_experiment_lite(
             algo.train(),
