@@ -11,7 +11,7 @@ with such.A("Stochastic MLP") as it:
     def test_construct_latent_input():
         mlp = StochasticMLP(
             input_shape=(5,),
-            input_latent_vars=(('gaussian', 5), ('bernoulli', 3)),
+            input_latent_vars=(('independent_gaussian', 5), ('independent_bernoulli', 3)),
             hidden_sizes=tuple(),
             output_dim=2,
         )

@@ -153,6 +153,9 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
         return output_dict
 
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
+        """
+        Compute the symbolic KL divergence of distributions of both the actions and the latent variables
+        """
         kl = self._dist.kl_sym(old_dist_info_vars, new_dist_info_vars)
         for idx, latent_dist in enumerate(self._latent_distributions):
             # collect dist info for each latent variable
@@ -164,8 +167,11 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
             kl += latent_dist.kl_sym(old_latent_dist_info, new_latent_dist_info)
         return kl
 
-    def likelihood_ratio_sym(self, x_var, old_dist_info_vars, new_dist_info_vars):
-        lr = self._dist.likelihood_ratio_sym(x_var, old_dist_info_vars, new_dist_info_vars)
+    def likelihood_ratio_sym(self, action_var, old_dist_info_vars, new_dist_info_vars):
+        """
+        Compute the symbolic likelihood ratio of both the actions and the latent variables.
+        """
+        lr = self._dist.likelihood_ratio_sym(action_var, old_dist_info_vars, new_dist_info_vars)
         for idx, latent_dist in enumerate(self._latent_distributions):
             latent_var = old_dist_info_vars["latent_%d" % idx]
             prefix = "latent_%d_" % idx
@@ -176,18 +182,24 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
             lr *= latent_dist.likelihood_ratio_sym(latent_var, old_latent_dist_info, new_latent_dist_info)
         return lr
 
-    def log_likelihood(self, x, dist_info):
-        logli = self._dist.log_likelihood(x, dist_info)
-        for idx, latent_dist in enumerate(self._latent_distributions):
-            latent_var = dist_info["latent_%d" % idx]
-            prefix = "latent_%d_" % idx
-            latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.iteritems() if k.startswith(
-                prefix)}
-            logli += latent_dist.log_likelihood(latent_var, latent_dist_info)
+    def log_likelihood(self, actions, dist_info, action_only=False):
+        """
+        Computes the log likelihood of both the actions and the latent variables, unless action_only is set to True,
+        in which case it will only compute the log likelihood of the actions.
+        :return:
+        """
+        logli = self._dist.log_likelihood(actions, dist_info)
+        if not action_only:
+            for idx, latent_dist in enumerate(self._latent_distributions):
+                latent_var = dist_info["latent_%d" % idx]
+                prefix = "latent_%d_" % idx
+                latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.iteritems() if k.startswith(
+                    prefix)}
+                logli += latent_dist.log_likelihood(latent_var, latent_dist_info)
         return logli
 
-    def log_likelihood_sym(self, x_var, dist_info_vars):
-        logli = self._dist.log_likelihood_sym(x_var, dist_info_vars)
+    def log_likelihood_sym(self, action_var, dist_info_vars):
+        logli = self._dist.log_likelihood_sym(action_var, dist_info_vars)
         for idx, latent_dist in enumerate(self._latent_distributions):
             latent_var = dist_info_vars["latent_%d" % idx]
             prefix = "latent_%d_" % idx
@@ -227,6 +239,10 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
 
     @property
     def distribution(self):
+        """
+        We set the distribution to the policy itself since we need some behavior different from a usual diagonal
+        Gaussian distribution.
+        """
         return self
 
     @property

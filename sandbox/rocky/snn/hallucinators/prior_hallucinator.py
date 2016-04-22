@@ -27,16 +27,16 @@ class PriorHallucinator(Serializable):
         actions = samples_data["actions"]
         agent_infos = samples_data["agent_infos"]
         h_samples = []
-        dist = self.policy.distribution
-        old_logli = dist.log_likelihood(actions, agent_infos)
+        old_logli = self.policy.log_likelihood(actions, agent_infos, action_only=True)
         for _ in xrange(self.n_hallucinate_samples):
             new_actions, new_agent_infos = self.policy.get_actions(observations)
+            new_logli = self.policy.log_likelihood(actions, new_agent_infos, action_only=True)
             # We'd need to compute the importance ratio. This is given by p(a|h_new) / p(a|h_old)
             h_samples.append(
                 dict(
                     samples_data,
-                    importance_weights=np.exp(dist.log_likelihood(actions, new_agent_infos) - old_logli),
-                    agent_infos=new_agent_infos,
+                    importance_weights=np.exp(new_logli - old_logli),
+                    agent_infos=new_agent_infos, #overwrites this original agent_infos in samples_data
                 )
             )
         return h_samples

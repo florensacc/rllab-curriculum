@@ -366,6 +366,6 @@ if __name__ == "__main__":
 
     distinct_params = core.extract_distinct_params(exps_data)
     port = 5000
-    url = "http://127.0.0.1:{0}".format(port)
+    #url = "http://0.0.0.0:{0}".format(port)
     print("Done! View http://localhost:5000 in your browser")
-    app.run(debug=args.debug)
+    app.run(host='0.0.0.0', debug=args.debug)
