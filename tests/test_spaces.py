@@ -13,6 +13,10 @@ def test_product_space():
 def test_product_space_unflatten_n():
     space = Product([Discrete(3), Discrete(3)])
     np.testing.assert_array_equal(space.flatten((2, 2)), space.flatten_n([(2, 2)])[0])
+    np.testing.assert_array_equal(
+        space.unflatten(space.flatten((2, 2))),
+        space.unflatten_n(space.flatten_n([(2, 2)]))[0]
+    )
 
 
 def test_box():
