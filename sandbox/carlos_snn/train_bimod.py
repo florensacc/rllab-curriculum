@@ -31,11 +31,11 @@ policy = GaussianMLPPolicy(
 
 baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-algo = NPO(
+algo = TRPO(
     env=env,
     policy=policy,
     baseline=baseline,
-    batch_size=100,
+    batch_size=500,
     whole_paths=True, ##I think this is useless: the kw only appears in some provisional/experimental files by Rocky or PChen
     store_paths=True,
     max_path_length=100,
@@ -45,20 +45,20 @@ algo = NPO(
 )
 
 
-for s in [4]:#,5,155]:
+for s in [4,5,155]:
     run_experiment_lite(
         stub_method_call=algo.train(),
         # Number of parallel workers for sampling
         n_parallel=1,  
         # Only keep the snapshot parameters for the last iteration
-        snapshot_mode="all",
+        snapshot_mode="last",
         # Specifies the seed for the experiment. If this is not provided, a random seed
         # will be used
         seed=s,
         # plot=True,
         # Save to data/local/exp_name/exp_name_timestamp ##OJO! the folder exp_name will change _ by -!!
-        exp_prefix='npo2',
-        exp_name='npo_4'
+        exp_prefix='snn_prior_hallucinate_baseline',
+        exp_name='trpo_lfBase_sgmlpNone_halluNone_{:04d}'.format(s),
     )
 
-import plt_results1D
+# import plt_results1D

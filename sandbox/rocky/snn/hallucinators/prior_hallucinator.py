@@ -36,7 +36,7 @@ class PriorHallucinator(Serializable):
                 dict(
                     samples_data,
                     importance_weights=np.exp(new_logli - old_logli),
-                    agent_infos=new_agent_infos, #overwrites this original agent_infos in samples_data
+                    agent_infos=new_agent_infos,   # overwrites this original agent_infos in samples_data
                 )
             )
         return h_samples
