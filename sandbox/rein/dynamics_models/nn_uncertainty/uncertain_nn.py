@@ -43,10 +43,10 @@ class ProbLayer(lasagne.layers.Layer):
     def __init__(self,
                  incoming,
                  num_units,
-                 mu=lasagne.init.Normal(std=1., mean=0.),
-                 rho=lasagne.init.Normal(std=1., mean=0.),
-                 b_mu=lasagne.init.Normal(std=1., mean=0.),
-                 b_rho=lasagne.init.Normal(std=1., mean=0.),
+                 mu=lasagne.init.Normal(std=0.1, mean=0.),
+                 rho=lasagne.init.Normal(std=0.1, mean=0.),
+                 b_mu=lasagne.init.Normal(std=0.1, mean=0.),
+                 b_rho=lasagne.init.Normal(std=0.1, mean=0.),
                  nonlinearity=lasagne.nonlinearities.rectify,
                  prior_sd=None,
                  **kwargs):
@@ -285,7 +285,7 @@ class ProbNN(LasagnePowered, Serializable):
 
         # Build network architecture.
         self.build_network()
-        
+
         # Build all theano function.
         self.build_model()
 

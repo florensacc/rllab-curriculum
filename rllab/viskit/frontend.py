@@ -90,9 +90,8 @@ def make_plot(plot_list, use_median=False):
 
 
 def make_plot_eps(plot_list, use_median=False, counter=0):
-    data = []
     import matplotlib.pyplot as _plt
-    f, ax = _plt.subplots(figsize=(8, 6))
+    f, ax = _plt.subplots(figsize=(8, 4))
     for idx, plt in enumerate(plot_list):
         color = core.color_defaults[idx % len(core.color_defaults)]
         if use_median:
@@ -105,7 +104,11 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
             y = list(plt.means)
             y_upper = list(plt.means + plt.stds)
             y_lower = list(plt.means - plt.stds)
-
+        print(plt.legend)
+        if 'rllab.algos.trpo.TRPO' in plt.legend:
+            plt.legend = 'TRPO'
+        if 'sandbox.rein.algos.trpo_unn.TRPO' in plt.legend:
+            plt.legend = 'TRPO+EX'
         ax.fill_between(
             x, y_lower, y_upper, interpolate=True, facecolor=color, linewidth=0.0, alpha=0.3)
         ax.plot(x, y, color=color, label=plt.legend)
@@ -113,14 +116,21 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         if counter == 1:
-            ax.set_xlim([0, 10000])
+            ax.set_xlim([0, 200])
+            #ax.set_ylim([0, 1600])
+            loc = 'lower right'
         elif counter == 2:
             ax.set_xlim([0, 800])
+            loc = 'lower right'
         elif counter == 3:
             ax.set_xlim([0, 1000])
+            loc = 'lower right'
         elif counter == 4:
-            ax.set_xlim([0, 250])
-        ax.legend(loc="lower right", borderaxespad=0., prop={'size':12}, ncol=2)
+            ax.set_xlim([0, 120])
+            loc= 'lower right'
+        leg = ax.legend(loc=loc, prop={'size':12}, ncol=1)
+        for legobj in leg.legendHandles:
+            legobj.set_linewidth(5.0)
         _plt.savefig('tmp' + str(counter) + '.pdf')
 
 

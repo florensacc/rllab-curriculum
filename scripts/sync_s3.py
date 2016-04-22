@@ -8,6 +8,6 @@ if __name__ == "__main__":
     else:
         extra = ""
     os.system("""
-        aws s3 sync {remote_dir} {local_dir} --exclude '*debug.log'  --exclude '*.pkl' --content-type "UTF-8" {extra}
+        aws s3 sync {remote_dir} {local_dir} --exclude '*debug.log' --exclude '*stdouterr.log' --exclude '*.pkl' --content-type "UTF-8" {extra}
     """.format(local_dir=os.path.join(config.LOG_DIR, "s3"), remote_dir=config.AWS_S3_PATH,
                extra=extra))
