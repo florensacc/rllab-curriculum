@@ -51,7 +51,7 @@ class Product(Space):
         dims = [c.flat_dim for c in self._components]
         flat_xs = np.split(xs, np.cumsum(dims)[:-1], axis=-1)
         unflat_xs = [c.unflatten_n(xi) for c, xi in zip(self.components, flat_xs)]
-        unflat_xs_grouped = [tuple(xs) for xs in zip(*unflat_xs)]
+        unflat_xs_grouped = zip(*unflat_xs)
         return unflat_xs_grouped
 
     def __eq__(self, other):

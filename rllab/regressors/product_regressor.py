@@ -4,6 +4,7 @@ from __future__ import absolute_import
 import numpy as np
 from rllab.core.serializable import Serializable
 
+
 class ProductRegressor(Serializable):
     """
     A class for performing MLE regression by fitting a product distribution to the outputs. A separate regressor will
@@ -29,14 +30,19 @@ class ProductRegressor(Serializable):
 
     def predict(self, xs):
         return np.concatenate([
-            [regressor.predict(xs) for regressor in self.regressors]
+            regressor.predict(xs) for regressor in self.regressors
+        ], axis=1)
+
+    def sample_predict(self, xs):
+        return np.concatenate([
+            regressor.sample_predict(xs) for regressor in self.regressors
         ], axis=1)
 
     def predict_log_likelihood(self, xs, ys):
         return np.sum([
-                   regressor.predict_log_likelihood(xs, split_ys)
-                   for regressor, split_ys in zip(self.regressors, self._split_ys(ys))
-                   ], axis=0)
+                          regressor.predict_log_likelihood(xs, split_ys)
+                          for regressor, split_ys in zip(self.regressors, self._split_ys(ys))
+                          ], axis=0)
 
     def get_param_values(self, **tags):
         return np.concatenate(

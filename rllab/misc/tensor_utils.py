@@ -70,7 +70,15 @@ def concat_tensor_list(tensor_list):
 
 def concat_tensor_dict_list(tensor_dict_list):
     keys = tensor_dict_list[0].keys()
-    return {k: concat_tensor_list([x[k] for x in tensor_dict_list]) for k in keys}
+    ret = dict()
+    for k in keys:
+        example = tensor_dict_list[0][k]
+        if isinstance(example, dict):
+            v = concat_tensor_dict_list([x[k] for x in tensor_dict_list])
+        else:
+            v = concat_tensor_list([x[k] for x in tensor_dict_list])
+        ret[k] = v
+    return ret
 
 
 def truncate_tensor_list(tensor_list, truncated_len):
