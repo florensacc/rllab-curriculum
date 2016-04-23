@@ -3,6 +3,7 @@ from rllab.sampler.stateful_pool import singleton_pool
 from rllab.misc import ext
 from rllab.misc import logger
 from rllab.misc import tensor_utils
+import pickle
 import numpy as np
 
 
@@ -18,15 +19,15 @@ def initialize(n_parallel):
 
 
 def _worker_populate_task(G, env, policy):
-    G.env = env
-    G.policy = policy
+    G.env = pickle.loads(env)
+    G.policy = pickle.loads(policy)
 
 
 def populate_task(env, policy):
     logger.log("Populating workers...")
     singleton_pool.run_each(
         _worker_populate_task,
-        [(env, policy)] * singleton_pool.n_parallel
+        [(pickle.dumps(env), pickle.dumps(policy))] * singleton_pool.n_parallel
     )
     logger.log("Populated")
 

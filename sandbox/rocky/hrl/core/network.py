@@ -2,8 +2,10 @@ from __future__ import print_function
 from __future__ import absolute_import
 import lasagne.layers as L
 import lasagne.init as LI
+import lasagne.nonlinearities as LN
 import itertools
 import numpy as np
+from rllab.core.network import wrapped_conv
 
 
 class MergeMLP(object):
@@ -36,7 +38,7 @@ class MergeMLP(object):
         branch_offset = 0
 
         for branch_idx, branch_dim, hidden_sizes in zip(itertools.count(), branch_dims, branch_hidden_sizes):
-            l_hid = L.SliceLayer(l_reshaped_in, slice(branch_offset, branch_offset+branch_dim), axis=-1)
+            l_hid = L.SliceLayer(l_reshaped_in, slice(branch_offset, branch_offset + branch_dim), axis=-1)
             for idx, hidden_size in enumerate(hidden_sizes):
                 l_hid = L.DenseLayer(
                     l_hid,
@@ -90,3 +92,79 @@ class MergeMLP(object):
     @property
     def output(self):
         return self._output
+
+
+class ConvMergeNetwork(object):
+    def __init__(self, input_shape, output_dim, hidden_sizes,
+                 conv_filters, conv_filter_sizes, conv_strides, conv_pads,
+                 hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
+                 output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
+                 # conv_W_init=LI.GlorotUniform(), conv_b_init=LI.Constant(0.),
+                 hidden_nonlinearity=LN.rectify,
+                 output_nonlinearity=LN.softmax,
+                 name=None, input_var=None):
+        if name is None:
+            prefix = ""
+        else:
+            prefix = name + "_"
+
+        if len(input_shape) == 3:
+            l_in = L.InputLayer(shape=(None, np.prod(input_shape)), input_var=input_var)
+            l_hid = L.reshape(l_in, ([0],) + input_shape)
+        elif len(input_shape) == 2:
+            l_in = L.InputLayer(shape=(None, np.prod(input_shape)), input_var=input_var)
+            input_shape = (1,) + input_shape
+            l_hid = L.reshape(l_in, ([0],) + input_shape)
+        else:
+            l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var)
+            l_hid = l_in
+        for idx, conv_filter, filter_size, stride, pad in izip(
+                xrange(len(conv_filters)),
+                conv_filters,
+                conv_filter_sizes,
+                conv_strides,
+                conv_pads,
+        ):
+            l_hid = L.Conv2DLayer(
+                l_hid,
+                num_filters=conv_filter,
+                filter_size=filter_size,
+                stride=(stride, stride),
+                pad=pad,
+                nonlinearity=hidden_nonlinearity,
+                name="%sconv_hidden_%d" % (prefix, idx),
+                convolution=wrapped_conv,
+            )
+        for idx, hidden_size in enumerate(hidden_sizes):
+            l_hid = L.DenseLayer(
+                l_hid,
+                num_units=hidden_size,
+                nonlinearity=hidden_nonlinearity,
+                name="%shidden_%d" % (prefix, idx),
+                W=hidden_W_init,
+                b=hidden_b_init,
+            )
+        l_out = L.DenseLayer(
+            l_hid,
+            num_units=output_dim,
+            nonlinearity=output_nonlinearity,
+            name="%soutput" % (prefix,),
+            W=output_W_init,
+            b=output_b_init,
+        )
+        self._l_in = l_in
+        self._l_out = l_out
+        self._input_var = l_in.input_var
+
+    @property
+    def input_layer(self):
+        return self._l_in
+
+    @property
+    def output_layer(self):
+        return self._l_out
+
+    @property
+    def input_var(self):
+        return self._l_in.input_var
+        pass

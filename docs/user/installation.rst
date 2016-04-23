@@ -23,50 +23,39 @@ The fastest way to set up dependencies for rllab is via running the setup script
 
 .. code-block:: bash
 
-    ./script/setup_linux.sh
+    ./scripts/setup_linux.sh
 
 - On Mac OS X, run the following:
 
 .. code-block:: bash
 
-    ./script/setup_osx.sh
+    ./scripts/setup_osx.sh
 
-The script sets up a virtual environment. To start using it, run the following:
+The script sets up a conda environment, which is similar to :code:`virtualenv`. To start using it, run the following:
 
 .. code-block:: bash
 
-    source .env/bin/activate
+    source activate rllab
 
 
 Optionally, if you would like to run experiments that depends on the Mujoco environment, you can set it up by running the following command:
 
 .. code-block:: bash
 
-    ./script/setup_mujoco.sh
+    ./scripts/setup_mujoco.sh
 
-and follow the instructions. You need to have the zip file for Mujoco v1.22 and the license file ready.
+and follow the instructions. You need to have the zip file for Mujoco v1.30 and the license file ready.
 
 
 
 Manual Install
 ==============
 
-Python + pip
+Anaconda
 ------------
 
-RLLab currently requires Python 2.7.4 to run. Please install Python via
-the package manager of your operating system if it is not included already.
+:code:`rllab` assumes that you are using Anaconda Python distribution. You can download it from `https://www.continuum.io/downloads<https://www.continuum.io/downloads>`.  Make sure to download the installer for Python 2.7.
 
-Python includes ``pip`` for installing additional modules that are not shipped
-with your operating system, or shipped in an old version, and we will make use
-of it below. You should set up a `virtual environment
-<http://www.dabapps.com/blog/introduction-to-pip-and-virtualenv-python/>`_
-like below:
-
-.. code-block:: bash
-
-    virtualenv --no-site-packages .env
-    source .env/bin/activate
 
 System dependencies for pygame
 ------------------------------
@@ -101,4 +90,4 @@ Install Python modules
 
 .. code-block:: bash
 
-  pip install -r requirements.txt
+  conda env create -f environment.yml

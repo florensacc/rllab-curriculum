@@ -17,6 +17,8 @@ def wrapped_conv(*args, **kwargs):
     assert copy.pop("filter_flip", False)
 
     input, W, input_shape, get_W_shape = args
+    if theano.config.device == 'cpu':
+        return theano.tensor.nnet.conv2d(*args, **kwargs)
     try:
         return theano.sandbox.cuda.dnn.dnn_conv(
             input.astype('float32'),
@@ -267,7 +269,10 @@ class ConvNetwork(object):
         else:
             prefix = name + "_"
 
-        if len(input_shape) == 2:
+        if len(input_shape) == 3:
+            l_in = L.InputLayer(shape=(None, np.prod(input_shape)), input_var=input_var)
+            l_hid = L.reshape(l_in, ([0],) + input_shape)
+        elif len(input_shape) == 2:
             l_in = L.InputLayer(shape=(None, np.prod(input_shape)), input_var=input_var)
             input_shape = (1,) + input_shape
             l_hid = L.reshape(l_in, ([0],) + input_shape)

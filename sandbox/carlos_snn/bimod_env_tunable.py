@@ -3,23 +3,26 @@ from rllab.envs.base import Step
 from rllab.spaces import Box
 import numpy as np
 
+
 class BimodEnv(Env):
-    def __init__(self,mu1=-1,mu2=1,sigma1=0.01,sigma2=0.01,rand_init=False):
-        self.mu1=mu1
-        self.mu2=mu2
-        self.sigma1=sigma1 ##here sigma is in fact the variance, ie sigma**2.
-        self.sigma2=sigma2
-        self.rand_init=rand_init
+    def __init__(self, mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False):
+        self.mu1 = mu1
+        self.mu2 = mu2
+        self.sigma1 = sigma1  ##here sigma is in fact the variance, ie sigma**2.
+        self.sigma2 = sigma2
+        self.rand_init = rand_init
+
     @property
     def observation_space(self):
-        return Box(low= -np.inf, high=np.inf, shape=(1,))
+        return Box(low=-np.inf, high=np.inf, shape=(1,))
 
     @property
     def action_space(self):
-        return Box(low=5.0*self.mu1, high=5.0*self.mu2, shape=(1,))
+        return Box(low=5.0 * self.mu1, high=5.0 * self.mu2, shape=(1,))
 
     def reset(self):
-        self._state = np.zeros(shape=(1,)) + int(self.rand_init)*(np.random.rand(1,)*5*(self.mu2-self.mu1)+self.mu1)
+        self._state = np.zeros(shape=(1,)) + int(self.rand_init)*(
+                    np.random.rand(1,)*5*(self.mu2-self.mu1)+self.mu1)
         observation = np.copy(self._state)
         return observation
 
@@ -27,6 +30,7 @@ class BimodEnv(Env):
         x, = state
         return - 0.5 + 1./(2.*np.sqrt(2.*np.pi*self.sigma1))*(np.exp(-0.5/self.sigma1*(x-self.mu1)**2)) \
                      + 1./(2.*np.sqrt(2.*np.pi*self.sigma2))*(np.exp(-0.5/self.sigma2*(x-self.mu2)**2))
+
     def step(self, action):
         # print 'before taking action {}, state= {}'.format(action, self._state)
         self._state = self._state + action

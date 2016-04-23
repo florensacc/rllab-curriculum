@@ -6,8 +6,8 @@ Implementing New Algorithms (Basic)
 
 In this section, we will walk through the implementation of the classical
 REINFORCE [1]_ algorithm, also known as the "vanilla" policy gradient.
-We will start with an implementation that works with a fixed policy and MDP.
-The next section :ref:`implement_algo_advanced` will improve upon this
+We will start with an implementation that works with a fixed policy and
+environment. The next section :ref:`implement_algo_advanced` will improve upon this
 implementation, utilizing the functionalities provided by the framework to make
 it more structured and command-line friendly.
 
@@ -95,21 +95,22 @@ As a start, we will try to solve the cartpole balancing task using a neural
 network policy. We will later generalize our algorithm to accept configuration
 parameters. But let's keep things simple for now.
 
-.. code-block:: py
+.. code-block:: python
 
     from __future__ import print_function
-    from rllab.mdp.box2d.cartpole_mdp import CartpoleMDP
-    from rllab.policy.mean_std_nn_policy import MeanStdNNPolicy
-    from rllab.mdp.normalized_mdp import normalize
+    from rllab.envs.box2d.cartpole_env import CartpoleEnv
+    from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+    from rllab.envs.normalized_env import normalize
     import numpy as np
     import theano
     import theano.tensor as TT
     from lasagne.updates import adam
 
-    # normalize() makes sure that the actions for the MDP lies within the range [-1, 1]
-    mdp = normalize(CartpoleMDP())
-    # Initialize a neural network policy with a single hidden layer of 32 hidden units
-    policy = MeanStdNNPolicy(mdp, hidden_sizes=[32])
+    # normalize() makes sure that the actions for the environment lies
+    # within the range [-1, 1] (only works for environments with continuous actions)
+    env = normalize(CartpoleEnv())
+    # Initialize a neural network policy with a single hidden layer of 8 hidden units
+    policy = GaussianMLPPolicy(env.spec, hidden_sizes=(8,))
 
     # We will collect 100 trajectories per iteration
     N = 100
@@ -122,13 +123,14 @@ parameters. But let's keep things simple for now.
     # Learning rate for the gradient update
     learning_rate = 0.01
 
+
 Collecting Samples
 ==================
 
-Now, let's collect samples for the MDP under our current policy within a single
+Now, let's collect samples for the environment under our current policy within a single
 iteration.
 
-.. code-block:: py
+.. code-block:: python
 
     paths = []
 
@@ -137,20 +139,24 @@ iteration.
         actions = []
         rewards = []
 
-        observation = mdp.reset()
+        observation = env.reset()
 
         for _ in xrange(T):
-            # policy.get_action() returns a pair of values. The second one
-            # summarizes the distribution of the actions in the case of a
-            # stochastic policy. This information is useful when forming
-            # importance sampling ratios. In our case it is not needed.
+            # policy.get_action() returns a pair of values. The second one returns a dictionary, whose values contains
+            # sufficient statistics for the action distribution. It should at least contain entries that would be
+            # returned by calling policy.dist_info(), which is the non-symbolic analog of policy.dist_info_sym().
+            # Storing these statistics is useful, e.g., when forming importance sampling ratios. In our case it is
+            # not needed.
             action, _ = policy.get_action(observation)
-            next_observation, reward, terminal = mdp.step(action)
+            # Recall that the last entry of the tuple stores diagnostic information about the environment. In our
+            # case it is not needed.
+            next_observation, reward, terminal, _ = env.step(action)
             observations.append(observation)
             actions.append(action)
             rewards.append(reward)
             observation = next_observation
             if terminal:
+                # Finish rollout if terminal state reached
                 break
 
         # We need to compute the empirical return for each time step along the
@@ -174,7 +180,7 @@ Observe that according to the formula for the empirical policy gradient, we
 could concatenate all the collected data for different trajectories together,
 which helps us vectorize the implementation further.
 
-.. code-block:: py
+.. code-block:: python
 
     observations = np.concatenate([p["observations"] for p in paths])
     actions = np.concatenate([p["actions"] for p in paths])
@@ -190,10 +196,22 @@ first.
 
 First, we construct symbolic variables for the input data:
 
-.. code-block:: py
+.. code-block:: python
 
-    observations_var = TT.matrix('observations')
-    actions_var = TT.matrix('actions')
+    # Create a Theano variable for storing the observations
+    # We could have simply written `observations_var = TT.matrix('observations')` instead for this example. However,
+    # doing it in a slightly more abstract way allows us to delegate to the environment for handling the correct data
+    # type for the variable. For instance, for an environment with discrete observations, we might want to use integer
+    # types if the observations are represented as one-hot vectors.
+    observations_var = env.observation_space.new_tensor_variable(
+        'observations',
+        # It should have 1 extra dimension since we want to represent a list of observations
+        extra_dims=1
+    )
+    actions_var = env.action_space.new_tensor_variable(
+        'actions',
+        extra_dims=1
+    )
     returns_var = TT.vector('returns')
 
 Note that we can transform the policy gradient formula as
@@ -204,14 +222,23 @@ Note that we can transform the policy gradient formula as
 
 where :math:`L(\theta) = \frac{1}{NT} \sum_{i=1}^N \sum_{t=0}^{T-1} \log \pi_\theta(a_t^i | s_t^i) R_t^i` is called the surrogate function. Hence, we can first construct the computation graph for :math:`L(\theta)`, and then take its gradient to get the empirical policy gradient.
 
-.. code-block:: py
+.. code-block:: python
 
-    # policy.get_log_prob_sym computes the symbolic log probability of the
-    # actions given the observations
+    # policy.dist_info_sym returns a dictionary, whose values are symbolic expressions for quantities related to the
+    # distribution of the actions. For a Gaussian policy, it contains the mean and (log) standard deviation.
+    dist_info_vars = policy.dist_info_sym(observations_var, actions_var)
+
+    # policy.distribution returns a distribution object under rllab.distributions. It contains many utilities for computing
+    # distribution-related quantities, given the computed dist_info_vars. Below we use dist.log_likelihood_sym to compute
+    # the symbolic log-likelihood. For this example, the corresponding distribution is an instance of the class
+    # rllab.distributions.DiagonalGaussian
+    dist = policy.distribution
+
     # Note that we negate the objective, since most optimizers assume a
     # minimization problem
-    surr = - TT.mean(policy.get_log_prob_sym(observations_var, actions_var) * returns_var)
-    # Get the list of trainable parameters
+    surr = - TT.mean(dist.log_likelihood_sym(actions_var, dist_info_vars) * returns_var)
+
+    # Get the list of trainable parameters.
     params = policy.get_params(trainable=True)
     grads = theano.grad(surr, params)
 
@@ -220,7 +247,7 @@ Gradient Update and Diagnostics
 
 We are almost done! Now, you can use your favorite stochastic optimization algorithm for performing the parameter update. We choose ADAM [2]_ in our implementation:
 
-.. code-block:: py
+.. code-block:: python
 
     f_train = theano.function(
         inputs=[observations_var, actions_var, returns_var],
@@ -256,15 +283,15 @@ this case, :math:`R_t^i - b(s_t^i)` is an estimator of
 :math:`A^\pi(s_t^i, a_t^i)`. The framework implements a few options for the
 baseline. A good balance of computational efficiency and accuracy is achieved
 by a linear baseline using state features, available
-at :code:`rllab/baseline/linear_feature_baseline.py`. To use it in our implementation,
+at :code:`rllab/baselines/linear_feature_baseline.py`. To use it in our implementation,
 the relevant code looks like the following:
 
-.. code-block:: py
+.. code-block:: python
 
     # ... initialization code ...
 
-    from rllab.baseline.linear_feature_baseline import LinearFeatureBaseline
-    baseline = LinearFeatureBaseline(mdp)
+    from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+    baseline = LinearFeatureBaseline(env.spec)
 
     # ... inside the loop for each episode, after the samples are collected
 
