@@ -39,15 +39,15 @@ if ASYNC:
     env = normalize(SwimmerEnv(), normalize_obs=True)#CartpoleEnv())#DoublePendulumEnv())
     vg = instrument.VariantGenerator()
     vg.add("soft_target_tau", [1e-3, 5e-4, 1e-4])
-    vg.add("qf_learning_rate", [1e-4, 1e-3, 1e-5])#1e-3, 1e-4, 1e-5])
-    vg.add("policy_lr_ratio", [1, 0.1])#0.1])#, 0.1])
-    vg.add("scale_reward", [1, 0.1])
-    vg.add("use_replay_pool", [False])#True, False])
-    vg.add("batch_size", [5, 10, 15, 20, 32])
+    vg.add("qf_learning_rate", [1e-3, 5e-4, 1e-4, 5e-5, 1e-5])
+    vg.add("policy_lr_ratio", [0.1, 0.5, 1])
+    vg.add("scale_reward", [0.1, 1])
+    vg.add("use_replay_pool", [True])#False])#True, False])
+    vg.add("batch_size", [32])
     vg.add("hidden_sizes", [(400, 300)])#(32, 32), (400, 300)])
     vg.add("seed", [11, 111, 211, 311, 411])
-    vg.add("n_workers", [16])#20])#4, 10, 16, 20])
-    vg.add("qf_weight_decay", [1e-6, 1e-5, 1e-4])#, 0, 1e-3, 1e-4])
+    vg.add("n_workers", [1, 2, 4, 8, 16])#20])#4, 10, 16, 20])
+    vg.add("qf_weight_decay", [1e-7])#, 1e-5, 1e-4])#, 0, 1e-3, 1e-4])
     vg.add("target_update_method", ['soft'])#, 0, 1e-3, 1e-4])
     vg.add("hard_target_interval", [1000000])#, 0, 1e-3, 1e-4])
 
@@ -86,7 +86,7 @@ if ASYNC:
         print("num threads: %d" % num_threads)
         run_experiment_lite(
             algo.train(),
-            exp_prefix="async_ddpg_again1",
+            exp_prefix="async_ddpg_replay",
             seed=variant["seed"],
             mode="local",
             env=dict(OMP_NUM_THREADS=str(num_threads))
