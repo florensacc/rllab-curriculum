@@ -109,18 +109,19 @@ else:
     for size in [10]:#, 15]:
         env = SeaquestGridWorldEnv(
             size=size,
-            agent_position=(0, 0),
-            goal_position=(size-1, size-1),
-            bomb_positions=[
-                (5, 0), (5, 1), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8), (5, 9),
-            ],
+            n_bombs=size / 2,
+            # agent_position=(0, 0),
+            # goal_position=(size-1, size-1),
+            # bomb_positions=[
+            #     (5, 0), (5, 1), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8), (5, 9),
+            # ],
         )
 
         network = ConvNetwork(
             input_shape=env.observation_space.shape,
             output_dim=env.action_space.n,
             hidden_sizes=(20,),
-            conv_filters=(16, 16),
+            conv_filters=(8, 8),
             conv_filter_sizes=(3, 3),
             conv_strides=(1, 1),
             conv_pads=('full', 'full'),

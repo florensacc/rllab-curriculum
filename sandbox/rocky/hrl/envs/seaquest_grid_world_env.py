@@ -74,24 +74,13 @@ class SeaquestGridWorldEnv(Env):
     encode whether each type of objects is present in this grid.
     """
 
-    def __init__(self, size=10, agent_position=None, diver_position=None, bomb_positions=None):
+    def __init__(self, size=3, n_bombs=None):
         self.grid = None
         self.size = size
 
-        if agent_position is None:
-            self.start_agent_position = (0, 0)
-        else:
-            self.start_agent_position = agent_position
-        if diver_position is None:
-            self.start_diver_position = (self.size - 1, self.size - 1)
-        else:
-            self.start_diver_position = diver_position
-        if bomb_positions is None:
-            self.start_bomb_positions = []
-        else:
-            self.start_bomb_positions = bomb_positions
-        assert not self.start_agent_position in self.start_bomb_positions
-        assert not self.start_diver_position in self.start_bomb_positions
+        if n_bombs is None:
+            n_bombs = size #/ 2
+        self.n_bombs = n_bombs
         self.agent_position = None
         self.diver_position = None
         self.diver_picked_up = False
@@ -102,11 +91,36 @@ class SeaquestGridWorldEnv(Env):
 
     def reset(self):
         # agent starts at top left corner
-        self.agent_position = self.start_agent_position
-        self.diver_position = self.start_diver_position
-        self.bomb_positions = self.start_bomb_positions
+        self.agent_position = (0, 0)
+        while True:
+            self.diver_position = tuple(np.random.randint(low=0, high=self.size, size=2))
+            self.bomb_positions = [
+                tuple(np.random.randint(low=0, high=self.size, size=2))
+                for _ in xrange(self.n_bombs)
+                ]
+            # ensure that there's a path from the agent to the diver
+            if self.feasible():
+                break
         self.diver_picked_up = False
         return self.get_current_obs()
+
+    def feasible(self):
+        # perform floodfill from the diver position
+        if self.agent_position in self.bomb_positions:
+            return False
+        visited = np.zeros((self.size, self.size))
+        visited[self.agent_position] = 1
+        cur = self.agent_position
+        queue = [cur]
+        incs = np.array([[0, 1], [0, -1], [1, 0], [-1, 0]])
+        while len(queue) > 0:
+            node = queue.pop()
+            visited[node] = True
+            for inc in incs:
+                next = tuple(np.clip(np.array(node) + inc, [0, 0], [self.size - 1, self.size - 1]))
+                if next not in self.bomb_positions and not visited[next]:
+                    queue.append(next)
+        return visited[self.diver_position]
 
     def get_current_obs(self):
         grid = np.zeros((N_OBJECT_TYPES, self.size, self.size), dtype='uint8')
