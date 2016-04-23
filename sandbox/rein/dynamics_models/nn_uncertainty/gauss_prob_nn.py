@@ -176,7 +176,7 @@ class GenLayer(lasagne.layers.Layer):
     def get_output_shape_for(self, input_shape):
         return (input_shape[0], self.num_units)
 
-class ProbLayer(lasagne.layers.Layer):
+class VBNNLayer(lasagne.layers.Layer):
     """Probabilistic layer: for now uses Gaussian weights (2 params)."""
 
     def __init__(self,
@@ -189,7 +189,7 @@ class ProbLayer(lasagne.layers.Layer):
                  nonlinearity=lasagne.nonlinearities.rectify,
                  prior_sd=None,
                  **kwargs):
-        super(ProbLayer, self).__init__(incoming, **kwargs)
+        super(VBNNLayer, self).__init__(incoming, **kwargs)
 
         self._srng = RandomStreams()
 
@@ -260,7 +260,7 @@ class ProbLayer(lasagne.layers.Layer):
         return (input_shape[0], self.num_units)
 
 
-class ProbNN:
+class VBNN:
 
     def __init__(self, n_in,
                  n_hidden,
@@ -433,7 +433,7 @@ class ProbNN:
         for i in xrange(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             if self.layers_type[i] == 1:
-                network = ProbLayer(
+                network = VBNNLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, name='problayer')
             else:
                 network = lasagne.layers.DenseLayer(
@@ -444,7 +444,7 @@ class ProbNN:
 
         # Output layer
         if self.layers_type[len(self.n_hidden)] == 1:
-            network = ProbLayer(
+            network = VBNNLayer(
                 network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name='problayer')
         else:
             network = lasagne.layers.DenseLayer(
@@ -456,7 +456,7 @@ class ProbNN:
         network = input
         # Output layer
         if self.layers_type[len(self.n_hidden)] == 1:
-            network = ProbLayer(
+            network = VBNNLayer(
                 network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name='problayer')
         else:
             network = lasagne.layers.DenseLayer(

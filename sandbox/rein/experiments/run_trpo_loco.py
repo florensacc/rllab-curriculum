@@ -33,7 +33,7 @@ for mdp, seed in param_cart_product:
         regressor_args=dict(hidden_sizes=(64, 32)),
     )
 
-    batch_size = 50000
+    batch_size = 10000
     algo = TRPO(
         env=mdp,
         policy=policy,
@@ -41,7 +41,7 @@ for mdp, seed in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=500,
+        n_itr=2500,
         step_size=0.01,
         subsample_factor=0.1,
     )

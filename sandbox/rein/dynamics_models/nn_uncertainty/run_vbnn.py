@@ -1,5 +1,5 @@
 import numpy as np
-from uncertain_nn import ProbNN
+from sandbox.rein.dynamics_models.nn_uncertainty.vbnn import VBNN
 from utils import load_dataset_1Dregression, load_dataset_MNIST
 import lasagne
 # import theano
@@ -10,7 +10,7 @@ import lasagne
 def main():
 
     num_epochs = 1000
-    batch_size = 10
+    batch_size = 1
 
     ###########################
     ### UNCOMMENT FOR MNIST ###
@@ -23,7 +23,7 @@ def main():
 #     n_batches = np.ceil(len(X_train) / float(batch_size))
 #     # Create neural network model
 #     print("Building model and compiling functions ...")
-#     pnn = ProbNN(
+#     vbnn = VBNN(
 #         n_in=28 * 28,
 #         n_hidden=[50],
 #         n_out=10,
@@ -44,7 +44,7 @@ def main():
     (X_train, T_train), (X_test, T_test) = load_dataset_1Dregression()
     n_batches = int(np.ceil(len(X_train) / float(batch_size)))
     print("Building model and compiling functions ...")
-    pnn = ProbNN(
+    vbnn = VBNN(
         n_in=4,
         n_hidden=[32],
         n_out=1,
@@ -53,16 +53,16 @@ def main():
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=20,
+        n_samples=10,
         type='regression',
-        prior_sd=0.5,
+        prior_sd=0.05,
         use_reverse_kl_reg=True,
         reverse_kl_reg_factor=0.1,
-        stochastic_output=True
+        stochastic_output=False
     )
 
     # Train the model.
-    pnn.train(num_epochs=num_epochs, X_train=X_train,
+    vbnn.train(num_epochs=num_epochs, X_train=X_train,
               T_train=T_train, X_test=X_test, T_test=T_test)
     print('Done.')
 

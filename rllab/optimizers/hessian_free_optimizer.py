@@ -55,7 +55,7 @@ class HessianFreeOptimizer(Serializable):
         if extra_inputs is None:
             extra_inputs = list()
 
-        import ipdb; ipdb.set_trace()
+#         import ipdb; ipdb.set_trace()
         dataset = BatchDataset(inputs=inputs, batch_size=self._batch_size, extra_inputs=extra_inputs)
         cg_dataset = BatchDataset(inputs=inputs, batch_size=self._cg_batch_size, extra_inputs=extra_inputs)
 
@@ -82,5 +82,5 @@ class HessianFreeOptimizer(Serializable):
             itr_callback=opt_callback,
             num_updates=self._max_opt_itr,
             preconditioner=True,
-            verbose=False
+            verbose=True
         )

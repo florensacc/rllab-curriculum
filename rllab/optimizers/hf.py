@@ -246,11 +246,11 @@ class hf_optimizer:
             for u in xrange(first_iteration, 1 + num_updates):
                 if verbose: print 'update %i/%i,' % (u, num_updates),
                 sys.stdout.flush()
-                import ipdb; ipdb.set_trace()
+#                 import ipdb; ipdb.set_trace()
                 gradient = numpy.zeros(sum(self.sizes), dtype=theano.config.floatX)
                 costs = []
                 for inputs in gradient_dataset.iterate(update=True):
-                    import ipdb; ipdb.set_trace()
+#                     import ipdb; ipdb.set_trace()
                     result = self.f_gc(*inputs)
                     gradient += self.list_to_flat(result[:len(self.p)]) / gradient_dataset.number_batches
                     costs.append(result[len(self.p):])

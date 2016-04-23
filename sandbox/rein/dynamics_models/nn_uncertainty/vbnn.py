@@ -17,11 +17,11 @@ from rllab.misc import ext
 # Only works for regression
 PLOT_WEIGHTS_INDIVIDUAL = False
 PLOT_WEIGHTS_TOTAL = False
-PLOT_OUTPUT = True
+PLOT_OUTPUT = False
 PLOT_OUTPUT_REGIONS = False
-PLOT_KL = False
+PLOT_KL = True
 # ----------------
-UNN_LAYER_TAG = 'unnlayer'
+UNN_LAYER_TAG = 'vbnnlayer'
 USE_REPARAMETRIZATION_TRICK = True
 
 
@@ -34,7 +34,7 @@ def log_to_std(rho):
     return T.log(1 + T.exp(rho))
 
 
-class ProbLayer(lasagne.layers.Layer):
+class VBNNLayer(lasagne.layers.Layer):
     """Probabilistic layer that uses Gaussian weights.
 
     Each weight has two parameters: mean and standard deviation (std).
@@ -43,14 +43,14 @@ class ProbLayer(lasagne.layers.Layer):
     def __init__(self,
                  incoming,
                  num_units,
-                 mu=lasagne.init.Normal(std=0.1, mean=0.),
-                 rho=lasagne.init.Normal(std=0.1, mean=0.),
-                 b_mu=lasagne.init.Normal(std=0.1, mean=0.),
-                 b_rho=lasagne.init.Normal(std=0.1, mean=0.),
+                 mu=lasagne.init.Normal(std=1, mean=0.),
+                 rho=lasagne.init.Normal(std=1, mean=0.),
+                 b_mu=lasagne.init.Normal(std=1, mean=0.),
+                 b_rho=lasagne.init.Normal(std=1, mean=0.),
                  nonlinearity=lasagne.nonlinearities.rectify,
                  prior_sd=None,
                  **kwargs):
-        super(ProbLayer, self).__init__(incoming, **kwargs)
+        super(VBNNLayer, self).__init__(incoming, **kwargs)
 
         self._srng = RandomStreams()
 
@@ -232,9 +232,10 @@ class ProbLayer(lasagne.layers.Layer):
         return (input_shape[0], self.num_units)
 
 
-class ProbNN(LasagnePowered, Serializable):
-    """Neural network with weight uncertainty
+class VBNN(LasagnePowered, Serializable):
+    """Variational Bayes neural network (VBNN)
 
+    Neural network with Gaussian weights.
     """
 
     def __init__(self, n_in,
@@ -286,10 +287,15 @@ class ProbNN(LasagnePowered, Serializable):
         # Build network architecture.
         self.build_network()
 
-        # Build all theano function.
-        self.build_model()
+        # Build model might depend on this.
+        if self.stochastic_output:
+            LasagnePowered.__init__(
+                self, [self.network_mean, self.network_stdn])
+        else:
+            LasagnePowered.__init__(self, [self.network])
 
-        LasagnePowered.__init__(self, [self.network])
+        # Compile theano functions.
+        self.build_model()
 
     def _get_prob_layers(self):
         if self.stochastic_output:
@@ -505,7 +511,7 @@ class ProbNN(LasagnePowered, Serializable):
         for i in xrange(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             if self.layers_type[i] == 1:
-                network = ProbLayer(
+                network = VBNNLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, name=UNN_LAYER_TAG)
             else:
                 network = lasagne.layers.DenseLayer(
@@ -516,7 +522,7 @@ class ProbNN(LasagnePowered, Serializable):
             # ---------------
             # Mean output subnet: actual network
             if self.layers_type[len(self.n_hidden)] == 1:
-                network = ProbLayer(
+                network = VBNNLayer(
                     network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=UNN_LAYER_TAG)
             else:
                 network = lasagne.layers.DenseLayer(
@@ -527,7 +533,7 @@ class ProbNN(LasagnePowered, Serializable):
             # Stdn output subnet: this connects directly to input
             network = input
             if self.layers_type[len(self.n_hidden)] == 1:
-                network = ProbLayer(
+                network = VBNNLayer(
                     network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=UNN_LAYER_TAG)
             else:
                 network = lasagne.layers.DenseLayer(
@@ -540,7 +546,7 @@ class ProbNN(LasagnePowered, Serializable):
             # Nonstochastic output
             # --------------------
             if self.layers_type[len(self.n_hidden)] == 1:
-                network = ProbLayer(
+                network = VBNNLayer(
                     network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=UNN_LAYER_TAG)
             else:
                 network = lasagne.layers.DenseLayer(
@@ -677,12 +683,20 @@ class ProbNN(LasagnePowered, Serializable):
 
         elif PLOT_KL:
             import matplotlib.pyplot as plt
+            import matplotlib.ticker as mtick
             plt.ion()
             _, ax = plt.subplots(1)
             painter_kl, = ax.plot([], [], label="y", color=(1, 0, 0, 1))
-            plt.xlim(xmin=0 * self.n_batches, xmax=100)
-            plt.ylim(ymin=0, ymax=0.1)
+            plt.xlim(xmin=0 * self.n_batches, xmax=20000)
+            plt.ylim(ymin=0, ymax=0.003)
             ax.grid()
+            def eformat(f, prec, exp_digits):
+                s = "%.*e"%(prec, f)
+                mantissa, exp = s.split('e')
+                # add 1 to digits as 1 is taken by sign +/-
+                return "%se%+0*d"%(mantissa, exp_digits+1, int(exp))
+            ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+            ax.xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
             plt.draw()
             plt.show()
         # ---------------------
@@ -690,10 +704,14 @@ class ProbNN(LasagnePowered, Serializable):
         # Finally, launch the training loop.
         print("Starting training...")
         # We iterate over epochs:
+        counter = 0
         for epoch in range(num_epochs):
 
             # In each epoch, we do a full pass over the training data:
             train_err, train_batches, start_time, kl_values = 0, 0, time.time(), []
+
+            if epoch == 10:
+                T_train[0:100] = 9.
 
             # Iterate over all minibatches and train on each of them.
             for batch in iterate_minibatches(X_train, T_train, self.batch_size, shuffle=True):
@@ -715,6 +733,8 @@ class ProbNN(LasagnePowered, Serializable):
 
                 kl_values.append(kl_mb_closed_form)
                 kl_all_values.append(kl_mb_closed_form)
+                
+                counter += 1
 
             # Calculate KL divergence variance over all minibatches.
             kl_mean = np.mean(np.asarray(kl_values))
@@ -803,9 +823,12 @@ class ProbNN(LasagnePowered, Serializable):
                 plt.show()
 
             elif PLOT_KL:
-                painter_kl.set_xdata(range((epoch + 1)))
-                painter_kl.set_ydata(kl_div_means)
+                painter_kl.set_xdata(range(counter))
+                painter_kl.set_ydata(sliding_mean(np.hstack(kl_all_values), window=25))
                 plt.draw()
+                plt.pause(0.0001)
+                if counter > 20000:
+                    plt.savefig('kl_spike.pdf', bbox_inches='tight')
 
             # Then we print the results for this epoch:
             print("Epoch {} of {} took {:.3f}s".format(

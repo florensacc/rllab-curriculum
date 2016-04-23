@@ -18,7 +18,7 @@ PLOT_KL = False
 # ----------------
 
 
-class ProbLayer(lasagne.layers.Layer):
+class VBNNLayer(lasagne.layers.Layer):
     """Probabilistic layer that uses Gaussian weights.
 
     Each weight has two parameters: mean and standard deviation (std).
@@ -34,7 +34,7 @@ class ProbLayer(lasagne.layers.Layer):
                  nonlinearity=lasagne.nonlinearities.rectify,
                  prior_sd=None,
                  **kwargs):
-        super(ProbLayer, self).__init__(incoming, **kwargs)
+        super(VBNNLayer, self).__init__(incoming, **kwargs)
 
         self._srng = RandomStreams()
 
@@ -230,7 +230,7 @@ class ProbLayer(lasagne.layers.Layer):
         return (input_shape[0], self.num_units)
 
 
-class ProbNN:
+class VBNN:
     """Neural network with weight uncertainty
 
     """
@@ -484,7 +484,7 @@ class ProbNN:
         for i in xrange(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             if self.layers_type[i] == 1:
-                network = ProbLayer(
+                network = VBNNLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, name='problayer')
             else:
                 network = lasagne.layers.DenseLayer(
@@ -492,7 +492,7 @@ class ProbNN:
 
         # Output layer
         if self.layers_type[len(self.n_hidden)] == 1:
-            network = ProbLayer(
+            network = VBNNLayer(
                 network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name='problayer')
         else:
             network = lasagne.layers.DenseLayer(

@@ -63,7 +63,7 @@ for mdp, eta, seed in param_cart_product:
         stochastic_output=False,
         replay_pool_size=100000,
         n_updates_per_sample=500,
-        #         second_order_update=True,
+#         second_order_update=True,
         unn_n_hidden=[32],
         unn_layers_type=[1, 1],
         unn_learning_rate=0.001
@@ -72,10 +72,10 @@ for mdp, eta, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix="trpo-expl-basic-v2x",
-        n_parallel=2,
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         script="sandbox/rein/run_experiment_lite.py"
     )

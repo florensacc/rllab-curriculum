@@ -14,7 +14,7 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.rein.dynamics_models.nn_uncertainty import uncertain_nn
+from sandbox.rein.dynamics_models.nn_uncertainty import vbnn
 # -------------------
 
 TSNE_PLOT = False
@@ -259,7 +259,7 @@ class BatchPolopt(RLAlgorithm):
 
         logger.log("Building UNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
-        self.pnn = uncertain_nn.ProbNN(
+        self.pnn = vbnn.VBNN(
             n_in=(obs_dim + act_dim),
             n_hidden=self.unn_n_hidden,
             n_out=obs_dim,
@@ -449,7 +449,8 @@ class BatchPolopt(RLAlgorithm):
             obs_mean=obs_mean,
             obs_std=obs_std,
             act_mean=act_mean,
-            act_std=act_std
+            act_std=act_std,
+            second_order_update=self.second_order_update
         )
         if self.whole_paths:
             return paths

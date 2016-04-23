@@ -54,7 +54,7 @@ def _worker_set_dynamics_params(G, params):
 
 def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                              reward_mean, reward_std, kl_batch_size, n_itr_update, use_replay_pool,
-                             obs_mean, obs_std, act_mean, act_std):
+                             obs_mean, obs_std, act_mean, act_std, second_order_update):
     # Path rollout.
     path = rollout(G.env, G.policy, max_path_length)
 
@@ -90,9 +90,15 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
             end = np.minimum(
                 (j + 1) * kl_batch_size, obs.shape[0] - 1)
             # Update model weights based on current minibatch.
-            for _ in xrange(n_itr_update):
+            if second_order_update:
+                # Not sure if this is correct... FIXME: it probably isn't.
+                # Getting NaN in cost. FIXME
                 G.dynamics.train_update_fn(
-                    _inputs[start:end], _targets[start:end])
+                    (_inputs[start:end], _targets[start:end]))
+            else:
+                for _ in xrange(n_itr_update):
+                    G.dynamics.train_update_fn(
+                        _inputs[start:end], _targets[start:end])
             # Calculate current minibatch KL.
             kl_div = float(G.dynamics.f_kl_div_closed_form())
             for k in xrange(start, end):
@@ -127,7 +133,8 @@ def sample_paths(
         obs_mean=None,
         obs_std=None,
         act_mean=None,
-        act_std=None
+        act_std=None,
+        second_order_update=None
 ):
     """
     :param policy_params: parameters for the policy. This will be updated on each worker process
@@ -152,7 +159,7 @@ def sample_paths(
         _worker_collect_one_path,
         threshold=max_samples,
         args=(max_path_length, itr, normalize_reward, reward_mean,
-              reward_std, kl_batch_size, n_itr_update, use_replay_pool, obs_mean, obs_std, act_mean, act_std),
+              reward_std, kl_batch_size, n_itr_update, use_replay_pool, obs_mean, obs_std, act_mean, act_std, second_order_update),
         show_prog_bar=True
     )
 

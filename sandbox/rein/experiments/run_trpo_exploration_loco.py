@@ -34,7 +34,7 @@ for normalize_reward, mdp, eta, seed in param_cart_product:
         regressor_args=dict(hidden_sizes=(64, 32)),
     )
 
-    batch_size = 50000
+    batch_size = 10000
     algo = TRPO(
         env=mdp,
         policy=policy,
@@ -42,7 +42,7 @@ for normalize_reward, mdp, eta, seed in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=500,
+        n_itr=2500,
         step_size=0.01,
         eta=eta,
         eta_discount=1.0,
@@ -56,8 +56,8 @@ for normalize_reward, mdp, eta, seed in param_cart_product:
         kl_batch_size=5,
         normalize_reward=normalize_reward,
         stochastic_output=False,
-        replay_pool_size=2500000,
-        n_updates_per_sample=50000,
+        replay_pool_size=500000,
+        n_updates_per_sample=10000,
         #         second_order_update=True,
         unn_n_hidden=[64, 32],
         unn_layers_type=[1, 1, 1],
