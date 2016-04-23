@@ -329,9 +329,6 @@ class AsyncDDPG(RLAlgorithm, Serializable):
         last_eval_T = 0
         try:
             while True:
-                # for p, pipe in zip(processes, pipes):
-                #     parent_conn = pipe[0]
-                #     parent_conn.
                 finished = shared_T.value >= self.max_samples
                 if shared_T.value >= last_eval_T + self.min_eval_interval or finished:
                     last_eval_T = shared_T.value
@@ -344,9 +341,10 @@ class AsyncDDPG(RLAlgorithm, Serializable):
             print("finished. joining...")
             for p in processes:
                 p.terminate()
-        except KeyboardInterrupt:
+        except Exception:
             for p in processes:
                 p.terminate()
+            raise
 
     def evaluate(self, eval_env, eval_policy, T):
         paths = []
@@ -444,6 +442,11 @@ class AsyncDDPG(RLAlgorithm, Serializable):
         eval_env.log_diagnostics(paths)
         eval_policy.log_diagnostics(paths)
         logger.dump_tabular()
+        # decide whether to exit
+        check_list = np.asarray([policy_reg_param_norm, qfun_reg_param_norm, target_policy_reg_param_norm,
+                      target_qfun_reg_param_norm, average_action])
+        if np.any(np.isnan(check_list)) or np.any(np.abs(check_list)) > 1e8:
+            raise ValueError("Extreme values / NaN detected. Terminating!")
 
     def worker_init_opt(self):
         """

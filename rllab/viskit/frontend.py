@@ -1,5 +1,6 @@
 from __future__ import print_function
 import matplotlib
+
 matplotlib.use('Agg')
 import flask  # import Flask, render_template, send_from_directory
 from rllab.misc.ext import flatten
@@ -27,6 +28,8 @@ def sliding_mean(data_array, window=5):
         new_list.append(avg)
 
     return np.array(new_list)
+
+
 import itertools
 
 app = flask.Flask(__name__, static_url_path='/static')
@@ -83,8 +86,8 @@ def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None):
         legend=dict(
             x=1,
             y=1,
-            #xanchor="left",
-            #yanchor="bottom",
+            # xanchor="left",
+            # yanchor="bottom",
         ),
         width=plot_width,
         height=plot_height,
@@ -121,7 +124,7 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
         ax.spines['top'].set_visible(False)
         if counter == 1:
             ax.set_xlim([0, 200])
-            #ax.set_ylim([0, 1600])
+            # ax.set_ylim([0, 1600])
             loc = 'lower right'
         elif counter == 2:
             ax.set_xlim([0, 800])
@@ -131,27 +134,40 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
             loc = 'lower right'
         elif counter == 4:
             ax.set_xlim([0, 120])
-            loc= 'lower right'
-        leg = ax.legend(loc=loc, prop={'size':12}, ncol=1)
+            loc = 'lower right'
+        leg = ax.legend(loc=loc, prop={'size': 12}, ncol=1)
         for legobj in leg.legendHandles:
             legobj.set_linewidth(5.0)
         _plt.savefig('tmp' + str(counter) + '.pdf')
 
 
-def summary_name(x):
-    if len(distinct_params) > 0:
-        name = ""
-        for k, _ in distinct_params:
-            name += "%s=%s;" % (k.split(".")[-1], x.flat_params.get(k,""))
-        return name
-    return x.params["exp_name"]
+def summary_name(exp, selector=None):
+    # if selector is not None:
+    #     exclude_params = set([x[0] for x in selector._filters])
+    # else:
+    #     exclude_params = set()
+    # rest_params = set([x[0] for x in distinct_params]).difference(exclude_params)
+    # if len(rest_params) > 0:
+    #     name = ""
+    #     for k in rest_params:
+    #         name += "%s=%s;" % (k.split(".")[-1], str(exp.flat_params.get(k, "")).split(".")[-1])
+    #     return name
+    return exp.params["exp_name"]
+
+
+def check_nan(exp):
+    return all(not np.any(np.isnan(vals)) for vals in exp.progress.values())
 
 
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
                          only_show_best=False, gen_eps=False, clip_plot_value=None, plot_width=None,
-                         plot_height=None):
+                         plot_height=None, filter_nan=False):
     print(plot_key, split_key, group_key, filters)
-    selector = core.Selector(exps_data)
+    if filter_nan:
+        nonnan_exps_data = filter(check_nan, exps_data)
+        selector = core.Selector(nonnan_exps_data)
+    else:
+        selector = core.Selector(exps_data)
     if filters is None:
         filters = dict()
     for k, v in filters.iteritems():
@@ -173,11 +189,11 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
             group_legends = map(lambda x: str(x), vs)
         else:
             group_key = "exp_name"
-            vs = sorted([x.params["exp_name"] for x in selector.extract()])
+            vs = sorted([x.params["exp_name"] for x in split_selector.extract()])
             group_selectors = [split_selector.where(group_key, v) for v in vs]
-            group_legends = [summary_name(x.extract()[0]) for x in group_selectors]
-        #group_selectors = [split_selector]
-        #group_legends = [split_legend]
+            group_legends = [summary_name(x.extract()[0], split_selector) for x in group_selectors]
+        # group_selectors = [split_selector]
+        # group_legends = [split_legend]
         to_plot = []
         for group_selector, group_legend in zip(group_selectors, group_legends):
             filtered_data = group_selector.extract()
@@ -335,6 +351,7 @@ def parse_float_arg(args, key):
     except Exception:
         return None
 
+
 @app.route("/plot_div")
 def plot_div():
     reload_data()
@@ -354,10 +371,11 @@ def plot_div():
     use_median = args.get("use_median", "") == 'True'
     gen_eps = args.get("eps", "") == 'True'
     only_show_best = args.get("only_show_best", "") == 'True'
+    filter_nan = args.get("filter_nan", "") == 'True'
     clip_plot_value = parse_float_arg(args, "clip_plot_value")
     plot_width = parse_float_arg(args, "plot_width")
     plot_height = parse_float_arg(args, "plot_height")
-    plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key,
+    plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, filter_nan=filter_nan,
                                     group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps,
                                     only_show_best=only_show_best, clip_plot_value=clip_plot_value,
                                     plot_width=plot_width, plot_height=plot_height)
@@ -393,6 +411,7 @@ def index():
                               for k, v in distinct_params]),
     )
 
+
 def reload_data():
     global exps_data
     global plottable_keys
@@ -411,6 +430,6 @@ if __name__ == "__main__":
     print("Importing data from {path}...".format(path=args.data_path))
     reload_data()
     port = 5000
-    #url = "http://0.0.0.0:{0}".format(port)
+    # url = "http://0.0.0.0:{0}".format(port)
     print("Done! View http://localhost:5000 in your browser")
     app.run(host='0.0.0.0', debug=args.debug)

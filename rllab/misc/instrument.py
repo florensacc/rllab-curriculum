@@ -23,7 +23,6 @@ from rllab.viskit.core import flatten
 
 
 class StubAttr(object):
-
     def __init__(self, obj, attr_name):
         self.__dict__["_obj"] = obj
         self.__dict__["_attr_name"] = attr_name
@@ -52,7 +51,6 @@ class StubAttr(object):
 
 
 class StubMethodCall(Serializable):
-
     def __init__(self, obj, method_name, args, kwargs):
         Serializable.quick_init(self, locals())
         self.obj = obj
@@ -66,7 +64,6 @@ class StubMethodCall(Serializable):
 
 
 class StubClass(object):
-
     def __init__(self, proxy_class):
         self.proxy_class = proxy_class
 
@@ -94,7 +91,6 @@ class StubClass(object):
 
 
 class StubObject(object):
-
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
             spec = inspect.getargspec(__proxy_class.__init__)
@@ -249,7 +245,8 @@ remote_confirmed = False
 
 
 def run_experiment_lite(
-        stub_method_call,
+        stub_method_call=None,
+        batch_tasks=None,
         exp_prefix="experiment",
         exp_name=None,
         log_dir=None,
@@ -262,8 +259,6 @@ def run_experiment_lite(
         use_gpu=False,
         confirm_remote=True,
         terminate_machine=True,
-        n_parallel=1,
-        snapshot_mode='all',
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -276,24 +271,31 @@ def run_experiment_lite(
     :param docker_image: name of the docker image. Ignored if using local mode.
     :param aws_config: configuration for AWS. Only used under EC2 mode
     :param env: extra environment variables
-    :param n_parallel: Number of worker processes
     :param kwargs: All other parameters will be passed directly to the entrance python script.
     """
-    data = base64.b64encode(pickle.dumps(stub_method_call))
+    assert stub_method_call is not None or batch_tasks is not None, "Must provide at least either stub_method_call or batch_tasks"
+    if batch_tasks is None:
+        batch_tasks = [
+            dict(kwargs, stub_method_call=stub_method_call, exp_name=exp_name, log_dir=log_dir, env=env)
+        ]
+
     global exp_count
     global remote_confirmed
-    exp_count += 1
-    if exp_name is None:
-        exp_name = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
-    if log_dir is None:
-        log_dir = config.LOG_DIR + "/local/" + exp_prefix.replace("_", "-") + "/" + exp_name
 
-    kwargs["n_parallel"] = n_parallel
-    kwargs["snapshot_mode"] = snapshot_mode
-    kwargs["exp_name"] = exp_name
-    kwargs["log_dir"] = log_dir
-    kwargs["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"),
-                                        exp_name)
+    # params_list = []
+
+    for task in batch_tasks:
+        call = task.pop("stub_method_call")
+        data = base64.b64encode(pickle.dumps(call))
+        task["args_data"] = data
+        exp_count += 1
+        params = dict(kwargs)
+        if task.get("exp_name", None) is None:
+            task["exp_name"] = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
+        if task.get("log_dir", None) is None:
+            task["log_dir"] = config.LOG_DIR + "/local/" + exp_prefix.replace("_", "-") + "/" + task["exp_name"]
+        task["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), task["exp_name"])
+
     if mode not in ["local", "local_docker"] and not remote_confirmed and not dry and confirm_remote:
         remote_confirmed = query_yes_no(
             "Running in (non-dry) mode %s. Confirm?" % mode)
@@ -301,40 +303,41 @@ def run_experiment_lite(
             sys.exit(1)
 
     if mode == "local":
-        del kwargs["remote_log_dir"]
-        params = dict(kwargs.items() + [("args_data", data)])
-        command = to_local_command(params, script=osp.join(config.PROJECT_PATH, script), use_gpu=use_gpu)
-        print(command)
-        if dry:
-            return
-        try:
-            if env is None:
-                env = dict()
-            subprocess.call(command, shell=True, env=dict(os.environ, **env))
-        except Exception as e:
-            print e
-            if isinstance(e, KeyboardInterrupt):
-                raise
+        for task in batch_tasks:
+            del task["remote_log_dir"]
+            env = task.pop("env", None)
+            command = to_local_command(task, script=osp.join(config.PROJECT_PATH, script), use_gpu=use_gpu)
+            print(command)
+            if dry:
+                return
+            try:
+                if env is None:
+                    env = dict()
+                subprocess.call(command, shell=True, env=dict(os.environ, **env))
+            except Exception as e:
+                print e
+                if isinstance(e, KeyboardInterrupt):
+                    raise
     elif mode == "local_docker":
-        del kwargs["remote_log_dir"]
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
-        params = dict(kwargs.items() + [("args_data", data)])
-        command = to_docker_command(params, docker_image=docker_image, script=script, env=env)
-        print(command)
-        if dry:
-            return
-        try:
-            subprocess.call(command, shell=True)
-        except Exception as e:
-            if isinstance(e, KeyboardInterrupt):
-                raise
+        for task in batch_tasks:
+            del task["remote_log_dir"]
+            env = task.pop("env", None)
+            command = to_docker_command(task, docker_image=docker_image, script=script, env=env)
+            print(command)
+            if dry:
+                return
+            try:
+                subprocess.call(command, shell=True)
+            except Exception as e:
+                if isinstance(e, KeyboardInterrupt):
+                    raise
     elif mode == "ec2":
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         s3_code_path = s3_sync_code(config, dry=dry)
-        params = dict(kwargs.items() + [("args_data", data)])
-        launch_ec2(params,
+        launch_ec2(batch_tasks,
                    exp_prefix=exp_prefix,
                    docker_image=docker_image,
                    script=script,
@@ -342,41 +345,40 @@ def run_experiment_lite(
                    dry=dry,
                    terminate_machine=terminate_machine,
                    use_gpu=use_gpu,
-                   code_full_path=s3_code_path,
-                   env=env)
+                   code_full_path=s3_code_path)
     elif mode == "lab_kube":
         assert env is None
         # first send code folder to s3
         s3_code_path = s3_sync_code(config, dry=dry)
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
-        params = dict(kwargs.items() + [("args_data", data)])
-        params["resources"] = params.pop("resouces", config.KUBE_DEFAULT_RESOURCES)
-        params["node_selector"] = params.pop("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
-        params["exp_prefix"] = exp_prefix
-        pod_dict = to_lab_kube_pod(
-            params, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu)
-        pod_str = json.dumps(pod_dict, indent=1)
-        if dry:
-            print(pod_str)
-        dir = "{pod_dir}/{exp_prefix}".format(
-            pod_dir=config.POD_DIR, exp_prefix=exp_prefix)
-        ensure_dir(dir)
-        fname = "{dir}/{exp_name}.json".format(
-            dir=dir,
-            exp_name=exp_name
-        )
-        with open(fname, "w") as fh:
-            fh.write(pod_str)
-        kubecmd = "kubectl create -f %s" % fname
-        print(kubecmd)
-        if dry:
-            return
-        try:
-            subprocess.call(kubecmd, shell=True)
-        except Exception as e:
-            if isinstance(e, KeyboardInterrupt):
-                raise
+        for task in batch_tasks:
+            task["resources"] = params.pop("resouces", config.KUBE_DEFAULT_RESOURCES)
+            task["node_selector"] = params.pop("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
+            task["exp_prefix"] = exp_prefix
+            pod_dict = to_lab_kube_pod(
+                task, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu)
+            pod_str = json.dumps(pod_dict, indent=1)
+            if dry:
+                print(pod_str)
+            dir = "{pod_dir}/{exp_prefix}".format(
+                pod_dir=config.POD_DIR, exp_prefix=exp_prefix)
+            ensure_dir(dir)
+            fname = "{dir}/{exp_name}.json".format(
+                dir=dir,
+                exp_name=task["exp_name"]
+            )
+            with open(fname, "w") as fh:
+                fh.write(pod_str)
+            kubecmd = "kubectl create -f %s" % fname
+            print(kubecmd)
+            if dry:
+                return
+            try:
+                subprocess.call(kubecmd, shell=True)
+            except Exception as e:
+                if isinstance(e, KeyboardInterrupt):
+                    raise
     else:
         raise NotImplementedError
 
@@ -466,7 +468,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     params = dict(params, log_dir=docker_log_dir)
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
-    #command_list.append('sleep 9999999')
+    # command_list.append('sleep 9999999')
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
@@ -481,11 +483,11 @@ def dedent(s):
     return '\n'.join(lines)
 
 
-def launch_ec2(params, exp_prefix, docker_image, code_full_path,
+def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                script='scripts/run_experiment.py',
-               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, env=None):
-    log_dir = params.get("log_dir")
-    remote_log_dir = params.pop("remote_log_dir")
+               aws_config=None, dry=False, terminate_machine=True, use_gpu=False):
+    if len(params_list) == 0:
+        return
 
     default_config = dict(
         image_id=config.AWS_IMAGE_ID,
@@ -503,7 +505,6 @@ def launch_ec2(params, exp_prefix, docker_image, code_full_path,
 
     sio = StringIO()
     sio.write("#!/bin/bash\n")
-    # sio.write("rm /home/ubuntu/user_data.log")
     sio.write("{\n")
     sio.write("""
         die() { status=$1; shift; echo "FATAL: $*"; exit $status; }
@@ -513,7 +514,7 @@ def launch_ec2(params, exp_prefix, docker_image, code_full_path,
     """)
     sio.write("""
         aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={exp_name} --region {aws_region}
-    """.format(exp_name=params.get("exp_name"), aws_region=config.AWS_REGION_NAME))
+    """.format(exp_name=params_list[0].get("exp_name"), aws_region=config.AWS_REGION_NAME))
     sio.write("""
         service docker start
     """)
@@ -522,35 +523,48 @@ def launch_ec2(params, exp_prefix, docker_image, code_full_path,
     """.format(docker_image=docker_image))
     sio.write("""
         aws s3 cp --recursive {code_full_path} {local_code_path} --region {aws_region}
-    """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR, aws_region=config.AWS_REGION_NAME))
+    """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
+               aws_region=config.AWS_REGION_NAME))
     sio.write("""
         cd {local_code_path}
     """.format(local_code_path=config.DOCKER_CODE_DIR))
-    sio.write("""
-        mkdir -p {log_dir}
-    """.format(log_dir=log_dir))
-    sio.write("""
-        while /bin/true; do
-            aws s3 sync --exclude *.pkl {log_dir} {remote_log_dir} --region {aws_region}
-            sleep 5
-        done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                             aws_region=config.AWS_REGION_NAME))
-    sio.write("""
-        {command}
-    """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu, env=env,
-                                         local_code_dir=config.DOCKER_CODE_DIR)))
-    sio.write("""
-        aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
-    """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
-    sio.write("""
-        aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
-    """.format(remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
+
+    for params in params_list:
+        log_dir = params.get("log_dir")
+        remote_log_dir = params.pop("remote_log_dir")
+        env = params.pop("env", None)
+
+        sio.write("""
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={exp_name} --region {aws_region}
+        """.format(exp_name=params.get("exp_name"), aws_region=config.AWS_REGION_NAME))
+        sio.write("""
+            mkdir -p {log_dir}
+        """.format(log_dir=log_dir))
+        sio.write("""
+            while /bin/true; do
+                aws s3 sync --exclude *.pkl {log_dir} {remote_log_dir} --region {aws_region}
+                sleep 5
+            done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                 aws_region=config.AWS_REGION_NAME))
+        sio.write("""
+            {command}
+        """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu, env=env,
+                                             local_code_dir=config.DOCKER_CODE_DIR)))
+        sio.write("""
+            aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
+        """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
+        sio.write("""
+            aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
+        """.format(remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
+
     if terminate_machine:
         sio.write("""
             EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
             aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {aws_region}
         """.format(aws_region=config.AWS_REGION_NAME))
     sio.write("} >> /home/ubuntu/user_data.log 2>&1\n")
+
+    full_script = dedent(sio.getvalue())
 
     import boto3
     import botocore
@@ -568,10 +582,26 @@ def launch_ec2(params, exp_prefix, docker_image, code_full_path,
             aws_access_key_id=config.AWS_ACCESS_KEY,
             aws_secret_access_key=config.AWS_ACCESS_SECRET,
         )
+
+    if len(full_script) > 10000 or len(base64.b64encode(full_script)) > 10000:
+        # Script too long; need to upload script to s3 first.
+        # We're being conservative here since the actual limit is 16384 bytes
+        s3_path = upload_file_to_s3(full_script)
+        sio = StringIO()
+        sio.write("#!/bin/bash\n")
+        sio.write("""
+        aws s3 cp {s3_path} /home/ubuntu/remote_script.sh --region {aws_region} && \\
+        chmod +x /home/ubuntu/remote_script.sh && \\
+        bash /home/ubuntu/remote_script.sh
+        """.format(s3_path=s3_path, aws_region=config.AWS_REGION_NAME))
+        user_data = dedent(sio.getvalue())
+    else:
+        user_data = full_script
+
     instance_args = dict(
         ImageId=aws_config["image_id"],
         KeyName=aws_config["key_name"],
-        UserData=dedent(sio.getvalue()),
+        UserData=user_data,
         InstanceType=aws_config["instance_type"],
         EbsOptimized=True,
         SecurityGroups=aws_config["security_groups"],
@@ -592,7 +622,7 @@ def launch_ec2(params, exp_prefix, docker_image, code_full_path,
             InstanceCount=1,
             LaunchSpecification=instance_args,
             SpotPrice=aws_config["spot_price"],
-            ClientToken=params["exp_name"],
+            ClientToken=params_list[0]["exp_name"],
         )
         import pprint
         pprint.pprint(spot_args)
@@ -605,7 +635,7 @@ def launch_ec2(params, exp_prefix, docker_image, code_full_path,
                 try:
                     ec2.create_tags(
                         Resources=[spot_request_id],
-                        Tags=[{'Key': 'Name', 'Value': params["exp_name"]}],
+                        Tags=[{'Key': 'Name', 'Value': params_list[0]["exp_name"]}],
                     )
                     break
                 except botocore.exceptions.ClientError:
@@ -647,7 +677,7 @@ def s3_sync_code(config, dry=False):
     cache_cmds = ["aws", "s3", "sync"] + \
                  [cache_path, full_path]
     cmds = ["aws", "s3", "sync"] + \
-        flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+           flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
            [".", full_path]
     caching_cmds = ["aws", "s3", "sync"] + \
                    [full_path, cache_path]
@@ -658,6 +688,18 @@ def s3_sync_code(config, dry=False):
         subprocess.check_call(caching_cmds)
     S3_CODE_PATH = full_path
     return full_path
+
+
+def upload_file_to_s3(script_content):
+    import tempfile
+    import uuid
+    f = tempfile.NamedTemporaryFile(delete=False)
+    f.write(script_content)
+    f.close()
+    remote_path = os.path.join(config.AWS_CODE_SYNC_S3_PATH, "oversize_bash_scripts", str(uuid.uuid4()))
+    subprocess.check_call(["aws", "s3", "cp", f.name, remote_path])
+    os.unlink(f.name)
+    return remote_path
 
 
 def to_lab_kube_pod(
@@ -743,7 +785,7 @@ def to_lab_kube_pod(
                         "command": [
                             "/bin/bash",
                             "-c",
-                            "-li", # to load conda env file
+                            "-li",  # to load conda env file
                             command,
                         ],
                         "resources": resources,

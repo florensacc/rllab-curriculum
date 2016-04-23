@@ -46,7 +46,7 @@ if HIERARCHICAL:
             hidden_nonlinearity=NL.tanh,
         )
 
-        low_network = ConvNetwork(
+        low_network = ConvMergeNetwork(
             input_shape=env.observation_space.shape,
             output_dim=n_subgoals,
             hidden_sizes=(20,),
