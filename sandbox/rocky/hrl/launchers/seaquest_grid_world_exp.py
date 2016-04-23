@@ -31,16 +31,38 @@ if HIERARCHICAL:
 
     seed = 11
 
-    batch_size = 10000#200000
+    batch_size = 4000
 
     for n_subgoals in [5, 10, 15, 20, 25, 30]:
+
+        high_network = ConvNetwork(
+            input_shape=env.observation_space.shape,
+            output_dim=n_subgoals,
+            hidden_sizes=(20,),
+            conv_filters=(8, 8),
+            conv_filter_sizes=(3, 3),
+            conv_strides=(1, 1),
+            conv_pads=('full', 'full'),
+            hidden_nonlinearity=NL.tanh,
+        )
+
+        low_network = ConvNetwork(
+            input_shape=env.observation_space.shape,
+            output_dim=n_subgoals,
+            hidden_sizes=(20,),
+            conv_filters=(8, 8),
+            conv_filter_sizes=(3, 3),
+            conv_strides=(1, 1),
+            conv_pads=('full', 'full'),
+            hidden_nonlinearity=NL.tanh,
+        )
 
         policy = SubgoalPolicy(
             env_spec=env.spec,
             high_policy_cls=CategoricalMLPPolicy,
-            high_policy_args=dict(hidden_sizes=tuple()),
+            high_policy_args=dict(prob_network=high_network),
             low_policy_cls=CategoricalMLPPolicy,
-            low_policy_args=dict(hidden_sizes=tuple()),
+            low_policy_args=dict(low_network),
             subgoal_space=Discrete(n_subgoals),
             subgoal_interval=3,
         )
@@ -106,44 +128,45 @@ if HIERARCHICAL:
     # sys.exit(0)
 
 else:
-    for size in [10]:#, 15]:
-        env = SeaquestGridWorldEnv(
-            size=size,
-            n_bombs=size / 2,
-            # agent_position=(0, 0),
-            # goal_position=(size-1, size-1),
-            # bomb_positions=[
-            #     (5, 0), (5, 1), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8), (5, 9),
-            # ],
-        )
+    for seed in [11, 21, 31, 41, 51]:
+        for size in [10]:#, 15]:
+            env = SeaquestGridWorldEnv(
+                size=size,
+                n_bombs=size / 2,
+                # agent_position=(0, 0),
+                # goal_position=(size-1, size-1),
+                # bomb_positions=[
+                #     (5, 0), (5, 1), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8), (5, 9),
+                # ],
+            )
 
-        network = ConvNetwork(
-            input_shape=env.observation_space.shape,
-            output_dim=env.action_space.n,
-            hidden_sizes=(20,),
-            conv_filters=(8, 8),
-            conv_filter_sizes=(3, 3),
-            conv_strides=(1, 1),
-            conv_pads=('full', 'full'),
-            hidden_nonlinearity=NL.tanh,
-        )
-        policy = CategoricalMLPPolicy(env_spec=env.spec, prob_network=network)
-        # policy = CategoricalCNNPolicy(env_spec=env.spec, hidden_sizes=tuple(),)
-        baseline = ZeroBaseline(env_spec=env.spec)#LinearFeatureBaseline(env_spec=env.spec)
+            network = ConvNetwork(
+                input_shape=env.observation_space.shape,
+                output_dim=env.action_space.n,
+                hidden_sizes=(20,),
+                conv_filters=(8, 8),
+                conv_filter_sizes=(3, 3),
+                conv_strides=(1, 1),
+                conv_pads=('full', 'full'),
+                hidden_nonlinearity=NL.tanh,
+            )
+            policy = CategoricalMLPPolicy(env_spec=env.spec, prob_network=network)
+            # policy = CategoricalCNNPolicy(env_spec=env.spec, hidden_sizes=tuple(),)
+            baseline = ZeroBaseline(env_spec=env.spec)#LinearFeatureBaseline(env_spec=env.spec)
 
-        algo = TRPO(
-            env=env,
-            policy=policy,
-            baseline=baseline,
-            batch_size=4000,
-            max_path_length=100,
-            n_itr=50,
-        )
+            algo = TRPO(
+                env=env,
+                policy=policy,
+                baseline=baseline,
+                batch_size=4000,
+                max_path_length=100,
+                n_itr=200,
+            )
 
-        run_experiment_lite(
-            algo.train(),
-            exp_prefix="seaquest",
-            snapshot_mode="last",
-            seed=11,
-        )
-        # sys.exit(0)
+            run_experiment_lite(
+                algo.train(),
+                exp_prefix="seaquest",
+                snapshot_mode="last",
+                seed=seed,
+            )
+            # sys.exit(0)
