@@ -2,7 +2,6 @@ from rllab.misc import ext
 from rllab.misc import krylov
 from rllab.misc import logger
 from rllab.core.serializable import Serializable
-from theano.compile.nanguardmode import NanGuardMode
 import theano.tensor as TT
 import theano
 import itertools
@@ -86,6 +85,7 @@ class ConjugateGradientOptimizer(Serializable):
 
 
         if self._debug_nan:
+            from theano.compile.nanguardmode import NanGuardMode
             mode = NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True)
         else:
             mode = None
