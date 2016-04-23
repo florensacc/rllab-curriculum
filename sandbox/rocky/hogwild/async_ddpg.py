@@ -445,7 +445,7 @@ class AsyncDDPG(RLAlgorithm, Serializable):
         # decide whether to exit
         check_list = np.asarray([policy_reg_param_norm, qfun_reg_param_norm, target_policy_reg_param_norm,
                       target_qfun_reg_param_norm, average_action])
-        if np.any(np.isnan(check_list)) or np.any(np.abs(check_list)) > 1e8:
+        if np.any(np.isnan(check_list)) or np.any(np.greater_equal(np.abs(check_list), 1e5)):
             raise ValueError("Extreme values / NaN detected. Terminating!")
 
     def worker_init_opt(self):
