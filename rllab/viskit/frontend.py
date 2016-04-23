@@ -148,7 +148,8 @@ def summary_name(x):
 
 
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
-                         only_show_best=False, gen_eps=False, clip_plot_value=None, plot_width=None, plot_height=None):
+                         only_show_best=False, gen_eps=False, clip_plot_value=None, plot_width=None,
+                         plot_height=None):
     print(plot_key, split_key, group_key, filters)
     selector = core.Selector(exps_data)
     if filters is None:
@@ -281,12 +282,6 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                     max_size = max(sizes)
                     progresses = [
                         np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-                    if only_show_best:
-                        legend = '{} ({:.1f})'.format(
-                            group_legend, best_regret)
-                    else:
-                        legend = '{}'.format(
-                            group_legend)
                     window_size = np.maximum(
                         int(np.round(max_size / float(1000))), 1)
 
@@ -364,7 +359,8 @@ def plot_div():
     plot_height = parse_float_arg(args, "plot_height")
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key,
                                     group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps,
-                                    only_show_best=only_show_best, clip_plot_value=clip_plot_value, plot_width=plot_width, plot_height=plot_height)
+                                    only_show_best=only_show_best, clip_plot_value=clip_plot_value,
+                                    plot_width=plot_width, plot_height=plot_height)
     # print plot_div
     return plot_div
 
@@ -404,9 +400,7 @@ def reload_data():
     exps_data = core.load_exps_data(args.data_path)
     plottable_keys = list(
         set(flatten(exp.progress.keys() for exp in exps_data)))
-
     distinct_params = core.extract_distinct_params(exps_data)
-
 
 
 if __name__ == "__main__":
