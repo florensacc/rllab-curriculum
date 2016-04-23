@@ -46,7 +46,7 @@ def send_css(path):
     return flask.send_from_directory('css', path)
 
 
-def make_plot(plot_list, use_median=False):
+def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None):
     data = []
     for idx, plt in enumerate(plot_list):
         color = core.color_defaults[idx % len(core.color_defaults)]
@@ -81,9 +81,13 @@ def make_plot(plot_list, use_median=False):
 
     layout = go.Layout(
         legend=dict(
-            xanchor="auto",
-            yanchor="auto",
-        )
+            x=1,
+            y=1,
+            #xanchor="left",
+            #yanchor="bottom",
+        ),
+        width=plot_width,
+        height=plot_height,
     )
     fig = go.Figure(data=data, layout=layout)
     return po.plot(fig, output_type='div', include_plotlyjs=False)
@@ -134,8 +138,17 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
         _plt.savefig('tmp' + str(counter) + '.pdf')
 
 
+def summary_name(x):
+    if len(distinct_params) > 0:
+        name = ""
+        for k, _ in distinct_params:
+            name += "%s=%s;" % (k.split(".")[-1], x.flat_params.get(k,""))
+        return name
+    return x.params["exp_name"]
+
+
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
-                         only_show_best=True, gen_eps=False):
+                         only_show_best=False, gen_eps=False, clip_plot_value=None, plot_width=None, plot_height=None):
     print(plot_key, split_key, group_key, filters)
     selector = core.Selector(exps_data)
     if filters is None:
@@ -153,13 +166,17 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
     plots = []
     counter = 1
     for split_selector, split_legend in zip(split_selectors, split_legends):
-        if group_key:
+        if group_key and group_key is not "exp_name":
             vs = [vs for k, vs in distinct_params if k == group_key][0]
             group_selectors = [split_selector.where(group_key, v) for v in vs]
-            group_legends = map(str, vs)
+            group_legends = map(lambda x: str(x), vs)
         else:
-            group_selectors = [split_selector]
-            group_legends = [split_legend]
+            group_key = "exp_name"
+            vs = sorted([x.params["exp_name"] for x in selector.extract()])
+            group_selectors = [split_selector.where(group_key, v) for v in vs]
+            group_legends = [summary_name(x.extract()[0]) for x in group_selectors]
+        #group_selectors = [split_selector]
+        #group_legends = [split_legend]
         to_plot = []
         for group_selector, group_legend in zip(group_selectors, group_legends):
             filtered_data = group_selector.extract()
@@ -237,6 +254,10 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                                         window=window_size)
                             percentile75 = sliding_mean(percentile75,
                                                         window=window_size)
+                            if clip_plot_value is not None:
+                                percentile25 = np.clip(percentile25, -clip_plot_value, clip_plot_value)
+                                percentile50 = np.clip(percentile50, -clip_plot_value, clip_plot_value)
+                                percentile75 = np.clip(percentile75, -clip_plot_value, clip_plot_value)
                             to_plot.append(
                                 ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
                                              percentile75=percentile75, legend=legend))
@@ -247,6 +268,9 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                                  window=window_size)
                             stds = sliding_mean(stds,
                                                 window=window_size)
+                            if clip_plot_value is not None:
+                                means = np.clip(means, -clip_plot_value, clip_plot_value)
+                                stds = np.clip(stds, -clip_plot_value, clip_plot_value)
                             to_plot.append(
                                 ext.AttrDict(means=means, stds=stds, legend=legend))
                 else:
@@ -279,6 +303,10 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                                     window=window_size)
                         percentile75 = sliding_mean(percentile75,
                                                     window=window_size)
+                        if clip_plot_value is not None:
+                            percentile25 = np.clip(percentile25, -clip_plot_value, clip_plot_value)
+                            percentile50 = np.clip(percentile50, -clip_plot_value, clip_plot_value)
+                            percentile75 = np.clip(percentile75, -clip_plot_value, clip_plot_value)
                         to_plot.append(
                             ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
                                          percentile75=percentile75, legend=group_legend))
@@ -289,12 +317,15 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                              window=window_size)
                         stds = sliding_mean(stds,
                                             window=window_size)
+                        if clip_plot_value is not None:
+                            means = np.clip(means, -clip_plot_value, clip_plot_value)
+                            stds = np.clip(stds, -clip_plot_value, clip_plot_value)
                         to_plot.append(
                             ext.AttrDict(means=means, stds=stds, legend=group_legend))
 
         if len(to_plot) > 0 and not gen_eps:
             plots.append("<div>%s: %s</div>" % (split_key, split_legend))
-            plots.append(make_plot(to_plot, use_median=use_median))
+            plots.append(make_plot(to_plot, use_median=use_median, plot_width=plot_width, plot_height=plot_height))
 
         if gen_eps:
             make_plot_eps(to_plot, use_median=use_median, counter=counter)
@@ -302,8 +333,16 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
     return "\n".join(plots)
 
 
+def parse_float_arg(args, key):
+    x = args.get(key, "")
+    try:
+        return float(x)
+    except Exception:
+        return None
+
 @app.route("/plot_div")
 def plot_div():
+    reload_data()
     args = flask.request.args
     plot_key = args.get("plot_key")
     split_key = args.get("split_key", "")
@@ -319,8 +358,13 @@ def plot_div():
     # exp_filter = distinct_params[0]
     use_median = args.get("use_median", "") == 'True'
     gen_eps = args.get("eps", "") == 'True'
+    only_show_best = args.get("only_show_best", "") == 'True'
+    clip_plot_value = parse_float_arg(args, "clip_plot_value")
+    plot_width = parse_float_arg(args, "plot_width")
+    plot_height = parse_float_arg(args, "plot_height")
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key,
-                                    group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps)
+                                    group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps,
+                                    only_show_best=only_show_best, clip_plot_value=clip_plot_value, plot_width=plot_width, plot_height=plot_height)
     # print plot_div
     return plot_div
 
@@ -353,6 +397,17 @@ def index():
                               for k, v in distinct_params]),
     )
 
+def reload_data():
+    global exps_data
+    global plottable_keys
+    global distinct_params
+    exps_data = core.load_exps_data(args.data_path)
+    plottable_keys = list(
+        set(flatten(exp.progress.keys() for exp in exps_data)))
+
+    distinct_params = core.extract_distinct_params(exps_data)
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -360,11 +415,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", default=False)
     args = parser.parse_args(sys.argv[1:])
     print("Importing data from {path}...".format(path=args.data_path))
-    exps_data = core.load_exps_data(args.data_path)
-    plottable_keys = list(
-        set(flatten(exp.progress.keys() for exp in exps_data)))
-
-    distinct_params = core.extract_distinct_params(exps_data)
+    reload_data()
     port = 5000
     #url = "http://0.0.0.0:{0}".format(port)
     print("Done! View http://localhost:5000 in your browser")

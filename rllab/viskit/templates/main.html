@@ -18,8 +18,13 @@
     <div class="control-panel">
     	Use median:
     	<form>
-		  <input type="radio" name="use_median" value="False", checked="checked">False<br>
+		  <input type="radio" name="use_median" value="False" checked="checked">False<br>
 		  <input type="radio" name="use_median" value="True">True<br>
+		</form>
+        Only show best:
+    	<form>
+		  <input type="radio" name="only_show_best" value="False" checked="checked">False<br>
+		  <input type="radio" name="only_show_best" value="True">True<br>
 		</form>
         Filters:
         <form>
@@ -52,6 +57,19 @@
                 {% endfor %}
             </ul>
         </div>
+        <div class="btn-group">
+            <label for="clip_plot_value">Clip absolute value (leave blank if no clip):</label>
+            <input type="text" id="clip_plot_value" name="clip_plot_value" />
+        </div>
+        <br/>
+        <div class="btn-group">
+            <label for="plot_width">Plot width: </label>
+            <input type="text" id="plot_width" name="plot_width" placeholder="default" />
+            <label for="plot_height">Plot height: </label>
+            <input type="text" id="plot_height" name="plot_height" placeholder="default"/>
+
+        </div>
+
         <br/>
         (Figure) Split by:
         <div class="btn-group">
@@ -77,6 +95,11 @@
             <button data-toggle="dropdown" class="btn btn-default dropdown-toggle">{{ distinct_param_keys[0] }}<span
                     class="caret"></span></button>
             <ul class="dropdown-menu">
+                <li>
+                    <input type="radio" id="group_key_0" name="group_key"
+                           value="0" />
+                    <label for="group_key_0">(None: split by experiment name)</label>
+                </li>
                 {% for key in distinct_param_keys %}
                     <li>
                         <input type="radio" id="group_key_{{ loop.index }}" name="group_key"
@@ -109,7 +132,8 @@
     var plottableKeys = {{ plottable_keys|tojson|safe }};
     var distinctParamKeys = {{ distinct_param_keys|tojson|safe }};
     var distinctParams = {{ distinct_params|tojson|safe }};
-    function updatePlot(callback) {
+
+    function _updatePlotInternal(callback, options) {
         $("#status").html("Updating");
 
         var $controlPanel = $(".control-panel");
@@ -123,7 +147,11 @@
             splitKey = distinctParamKeys[splitIndex - 1];
         }
         var groupIndex = $controlPanel.find("input[type=radio][name=group_key]:checked").val();
-        var groupKey = distinctParamKeys[groupIndex - 1];
+        if (groupKey == 0) {
+            groupKey = null;
+        } else {
+            var groupKey = distinctParamKeys[groupIndex - 1];
+        }
         var filters = {};
         $.each($("div.filter"), function (itr, div) {
             var val = $(div).find(".filter").val();
@@ -132,13 +160,19 @@
             }
         });
         var useMedian = $controlPanel.find("input[type=radio][name=use_median]:checked").val();
+        var onlyShowBest = $controlPanel.find("input[type=radio][name=only_show_best]:checked").val();
+        var clipPlotValue = $controlPanel.find("input[name=clip_plot_value]").val();
+        var plotWidth = $controlPanel.find("input[name=plot_width]").val();
+        var plotHeight = $controlPanel.find("input[name=plot_height]").val();
         console.log(useMedian);
         console.log("updating");
         $.get("/plot_div",
-                {
+                $.extend({
                     "plot_key": plotKey, "split_key": splitKey,
-                    "group_key": groupKey, "filters": JSON.stringify(filters), "use_median": useMedian
-                },
+                    "group_key": groupKey, "filters": JSON.stringify(filters), "use_median": useMedian,
+                    "only_show_best": onlyShowBest, "clip_plot_value": clipPlotValue,
+                    "plot_width": plotWidth, "plot_height": plotHeight,
+                }, options),
                 function (data) {
                     $("#plot_wrapper").empty().append(data);
                     $("#status").html("Updated");
@@ -146,44 +180,13 @@
                         callback();
                     }
                 });
+
+    }
+    function updatePlot(callback) {
+        _updatePlotInternal(callback, {});
     }
     function genEPS(callback) {
-        $("#status").html("Updating");
-
-        var $controlPanel = $(".control-panel");
-        var plotIndex = $controlPanel.find("input[name=plot_key]:checked").val();
-        var plotKey = plottableKeys[plotIndex];
-        var splitIndex = $controlPanel.find("input[type=radio][name=split_key]:checked").val();
-        var splitKey;
-        if (splitIndex == 0) {
-            splitKey = null;
-        } else {
-            splitKey = distinctParamKeys[splitIndex - 1];
-        }
-        var groupIndex = $controlPanel.find("input[type=radio][name=group_key]:checked").val();
-        var groupKey = distinctParamKeys[groupIndex - 1];
-        var filters = {};
-        $.each($("div.filter"), function (itr, div) {
-            var val = $(div).find(".filter").val();
-            if (val && val.length != 0) {
-                filters[$(div).find(".target").val()] = val;
-            }
-        });
-        var useMedian = $controlPanel.find("input[type=radio][name=use_median]:checked").val();
-        console.log(useMedian);
-        console.log("updating");
-        $.get("/plot_div",
-                {
-                    "plot_key": plotKey, "split_key": splitKey,
-                    "group_key": groupKey, "filters": JSON.stringify(filters), "use_median": useMedian, "eps": "True"
-                },
-                function (data) {
-                    $("#plot_wrapper").empty().append(data);
-                    $("#status").html("Updated");
-                    if (callback !== undefined) {
-                        callback();
-                    }
-                });
+        _updatePlotInternal(callback, {"eps": "True"});
     }
     $(function () {
         $("input[type=radio][name=plot_key]").change(function () {
