@@ -17,7 +17,7 @@ import time
 from sandbox.rein.dynamics_models.nn_uncertainty import vbnn
 # -------------------
 
-TSNE_PLOT = False
+TSNE_PLOT = True
 
 
 class SimpleReplayPool(object):
@@ -236,7 +236,7 @@ class BatchPolopt(RLAlgorithm):
             self.kl_previous = deque(maxlen=self.kl_q_len)
 
         if TSNE_PLOT:
-            self.all_observations = []
+            self.all_observations, self.all_actions = [], []
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy, self.pnn)
@@ -297,22 +297,6 @@ class BatchPolopt(RLAlgorithm):
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
-            if TSNE_PLOT and itr > 0:
-                from sklearn import manifold
-                from matplotlib import pyplot as plt
-                n_components = 2
-                X = np.vstack(self.all_observations)
-                n_samples = 5000
-                rand_ind = np.random.choice(range(X.shape[0]), n_samples)
-                tsne = manifold.TSNE(
-                    n_components=n_components, init='pca', random_state=0)
-                Y = tsne.fit_transform(X[rand_ind, :])
-                color = [
-                    'blue' if i > n_samples / 2 else 'red' for i in xrange(Y.shape[0])]
-                plt.scatter(
-                    Y[:, 0], Y[:, 1], c=color, cmap=plt.cm.Spectral, lw=0)
-                plt.show()
-
             paths = self.obtain_samples(itr)
             samples_data = self.process_samples(itr, paths)
 
@@ -320,6 +304,15 @@ class BatchPolopt(RLAlgorithm):
                 # Keep track of all observations for T-SNE calc.
                 for path in paths:
                     self.all_observations.append(path['observations'])
+                    self.all_actions.append(path['actions'])
+                if len(self.all_observations) >= 500000:
+                    randind = np.random.choice(
+                        len(self.all_observations), 500000)
+                else:
+                    randind = range(len(self.all_observations))
+                array = np.hstack(
+                    [np.vstack(self.all_observations), np.vstack(self.all_actions)])[randind, :]
+                np.save('data/obs_act.npy', array)
 
             # Exploration code
             # ----------------

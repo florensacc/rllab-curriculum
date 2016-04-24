@@ -16,18 +16,17 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-seeds = range(2)
-etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
-etas = [0.01]
+etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
+normalize_rewards = [False, True]
 mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
                DoublePendulumEnv, MountainCarEnv]
 mdps = [NormalizedEnv(env=mdp_class())
         for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
-    mdps, etas, seeds
+    normalize_rewards, mdps, etas, seeds
 )
 
-for mdp, eta, seed in param_cart_product:
+for normalize_reward, mdp, eta, seed in param_cart_product:
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
@@ -59,7 +58,7 @@ for mdp, eta, seed in param_cart_product:
         use_kl_ratio_q=True,
         n_itr_update=5,
         kl_batch_size=5,
-        normalize_reward=False,
+        normalize_reward=normalize_reward,
         stochastic_output=False,
         replay_pool_size=100000,
         n_updates_per_sample=500,
@@ -71,7 +70,7 @@ for mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-expl-basic-v2x",
+        exp_prefix="trpo-expl-basic-v3x",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

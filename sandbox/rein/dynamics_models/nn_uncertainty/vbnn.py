@@ -581,6 +581,7 @@ class VBNN(LasagnePowered, Serializable):
                 self.network, trainable=True)
         updates = lasagne.updates.adam(
             loss, params, learning_rate=self.learning_rate)
+        updates_kl = lasagne.updates.rmsprop(loss, params, learning_rate=self.learning_rate)
 
         # Train/val fn.
         self.pred_fn = ext.compile_function(
@@ -597,7 +598,7 @@ class VBNN(LasagnePowered, Serializable):
             # ------------------------------
         else:
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates, log_name='train_update_fn')
+                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
 
         self.train_err_fn = ext.compile_function(
             [input_var, target_var], loss, log_name='train_err_fn')

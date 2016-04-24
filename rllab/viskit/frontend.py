@@ -98,57 +98,54 @@ def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None):
 
 def make_plot_eps(plot_list, use_median=False, counter=0):
     import matplotlib.pyplot as _plt
-    f, ax = _plt.subplots(figsize=(8, 4))
+    f, ax = _plt.subplots(figsize=(8, 5))
     for idx, plt in enumerate(plot_list):
-        if '0.0001' in plt.legend or '5.0' in plt.legend:
-            color = core.color_defaults[idx % len(core.color_defaults)]
-            if use_median:
-                x = range(len(plt.percentile50))
-                y = list(plt.percentile50)
-                y_upper = list(plt.percentile75)
-                y_lower = list(plt.percentile25)
-            else:
-                x = range(len(plt.means))
-                y = list(plt.means)
-                y_upper = list(plt.means + plt.stds)
-                y_lower = list(plt.means - plt.stds)
-            print(plt.legend)
-            if 'rllab.algos.trpo.TRPO' in plt.legend:
-                plt.legend = 'TRPO'
-            if 'sandbox.rein.algos.trpo_unn.TRPO' in plt.legend:
-                plt.legend = 'TRPO+EX'
-            if 'rllab.algos.vpg.VPG' in plt.legend:
-                plt.legend = 'VPG'
-            if 'sandbox.rein.algos.vpg_unn.VPG' in plt.legend:
-                plt.legend = 'VPG+EX'
-            if '0.0001' in plt.legend:
-                plt.legend = '1e-4'
-            if '5.0' in plt.legend:
-                plt.legend = '5.0'
-            ax.fill_between(
-                x, y_lower, y_upper, interpolate=True, facecolor=color, linewidth=0.0, alpha=0.3)
-            ax.plot(x, y, color=color, label=plt.legend)
-            ax.grid(True)
-            ax.spines['right'].set_visible(False)
-            ax.spines['top'].set_visible(False)
-            if counter == 1:
-                ax.set_xlim([0, 1000])
-                ax.set_ylim([0, 2.5])
-                loc = 'lower right'
-            elif counter == 2:
-                ax.set_xlim([0, 1000])
-                loc = 'upper left'
-            elif counter == 3:
-                ax.set_xlim([0, 1000])
-                loc = 'upper left'
-            elif counter == 4:
-                ax.set_xlim([0, 1000])
-                ax.set_ylim([0, 2])
-                loc= 'upper left'
-            leg = ax.legend(loc=loc, prop={'size':12}, ncol=1)
-            for legobj in leg.legendHandles:
-                legobj.set_linewidth(5.0)
-            _plt.savefig('tmp' + str(counter) + '.pdf', bbox_inches='tight')
+        color = core.color_defaults[idx % len(core.color_defaults)]
+        if use_median:
+            x = range(len(plt.percentile50))
+            y = list(plt.percentile50)
+            y_upper = list(plt.percentile75)
+            y_lower = list(plt.percentile25)
+        else:
+            x = range(len(plt.means))
+            y = list(plt.means)
+            y_upper = list(plt.means + plt.stds)
+            y_lower = list(plt.means - plt.stds)
+        plt.legend = plt.legend.replace('rllab.algos.trpo.TRPO', 'TRPO')
+        plt.legend = plt.legend.replace('rllab.algos.vpg.VPG', 'R')
+        plt.legend = plt.legend.replace('sandbox.rein.algos.trpo_unn.TRPO', 'TRPO+EX')
+        plt.legend = plt.legend.replace('sandbox.rein.algos.vpg_unn.VPG', 'R+EX')
+        plt.legend = plt.legend.replace('0.0001', '1e-4')
+        ax.fill_between(
+            x, y_lower, y_upper, interpolate=True, facecolor=color, linewidth=0.0, alpha=0.3)
+        ax.plot(x, y, color=color, label=plt.legend)
+        ax.grid(True)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        if counter == 1:
+#                 ax.set_xlim([0, 1000])
+            ax.set_ylim([0, 2000])
+            loc = 'upper left'
+        elif counter == 2:
+            ax.set_xlim([0, 1000])
+            loc = 'upper left'
+        elif counter == 3:
+            ax.set_xlim([0, 1000])
+            loc = 'upper left'
+        elif counter == 4:
+            ax.set_xlim([0, 1000])
+            ax.set_ylim([0, 2])
+            loc= 'upper left'
+        leg = ax.legend(loc=loc, prop={'size':12}, ncol=1)
+        for legobj in leg.legendHandles:
+            legobj.set_linewidth(5.0)
+            
+        def y_fmt(x, y):
+            return str(int(np.round(x/1000.0)))+'k'
+
+        import matplotlib.ticker as tick
+        ax.xaxis.set_major_formatter(tick.FuncFormatter(y_fmt))
+        _plt.savefig('tmp' + str(counter) + '.pdf', bbox_inches='tight')
 
 
 def summary_name(exp, selector=None):
@@ -364,7 +361,7 @@ def parse_float_arg(args, key):
 
 @app.route("/plot_div")
 def plot_div():
-    reload_data()
+#     reload_data()
     args = flask.request.args
     plot_key = args.get("plot_key")
     split_key = args.get("split_key", "")
