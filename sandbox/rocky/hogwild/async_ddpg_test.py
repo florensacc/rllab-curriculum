@@ -61,7 +61,7 @@ if ASYNC:
     np.random.shuffle(variants)
 
     config.AWS_INSTANCE_TYPE = 'c4.4xlarge'
-    config.AWS_SPOT_PRICE = '0.5'
+    config.AWS_SPOT_PRICE = '0.49'
 
     total_machines = 50
 

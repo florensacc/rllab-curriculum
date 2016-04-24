@@ -6,9 +6,11 @@ import lasagne.nonlinearities as LN
 import itertools
 import numpy as np
 from rllab.core.network import wrapped_conv
+from rllab.core.serializable import Serializable
+import itertools
 
 
-class MergeMLP(object):
+class MergeMLP(Serializable):
     """
     A more general version of the usual multi-layer perceptron. It first split the input layer into multiple
     branches, specified by the `branch_dim` parameter, passing each one of them into several layers,
@@ -19,6 +21,8 @@ class MergeMLP(object):
                  hidden_nonlinearity, output_nonlinearity, hidden_W_init=LI.GlorotUniform(),
                  hidden_b_init=LI.Constant(0.), output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
                  name=None, input_var=None):
+
+        Serializable.quick_init(self, locals())
 
         if name is None:
             prefix = ""
@@ -94,39 +98,53 @@ class MergeMLP(object):
         return self._output
 
 
-class ConvMergeNetwork(object):
-    def __init__(self, input_shape, output_dim, hidden_sizes,
+class ConvMergeNetwork(Serializable):
+    """
+    This network allows the input to consist of a convolution-friendly component, plus a non-convolution-friendly
+    component. These two components will be concatenated in the fully connected layers. There can also be a list of
+    optional layers for the non-convolution-friendly component alone.
+
+
+    The input to the network should be a matrix where each row is a single input entry, with both the aforementioned
+    components flattened out and then concatenated together
+    """
+    def __init__(self, input_shape, extra_input_shape, output_dim, hidden_sizes,
                  conv_filters, conv_filter_sizes, conv_strides, conv_pads,
+                 extra_hidden_sizes=None,
                  hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
                  output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
-                 # conv_W_init=LI.GlorotUniform(), conv_b_init=LI.Constant(0.),
                  hidden_nonlinearity=LN.rectify,
-                 output_nonlinearity=LN.softmax,
+                 output_nonlinearity=None,
                  name=None, input_var=None):
+        Serializable.quick_init(self, locals())
+
+        if extra_hidden_sizes is None:
+            extra_hidden_sizes = []
+
         if name is None:
             prefix = ""
         else:
             prefix = name + "_"
 
-        if len(input_shape) == 3:
-            l_in = L.InputLayer(shape=(None, np.prod(input_shape)), input_var=input_var)
-            l_hid = L.reshape(l_in, ([0],) + input_shape)
-        elif len(input_shape) == 2:
-            l_in = L.InputLayer(shape=(None, np.prod(input_shape)), input_var=input_var)
-            input_shape = (1,) + input_shape
-            l_hid = L.reshape(l_in, ([0],) + input_shape)
-        else:
-            l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var)
-            l_hid = l_in
-        for idx, conv_filter, filter_size, stride, pad in izip(
+        input_flat_dim = np.prod(input_shape)
+        extra_input_flat_dim = np.prod(extra_input_shape)
+        total_input_flat_dim = input_flat_dim + extra_input_flat_dim
+
+        l_in = L.InputLayer(shape=(None, total_input_flat_dim), input_var=input_var)
+
+        l_conv_in = L.reshape(L.SliceLayer(l_in, indices=slice(input_flat_dim)), ([0],) + input_shape)
+        l_extra_in = L.reshape(L.SliceLayer(l_in, indices=slice(input_flat_dim, None)), ([0],) + extra_input_shape)
+
+        l_conv_hid = l_conv_in
+        for idx, conv_filter, filter_size, stride, pad in itertools.izip(
                 xrange(len(conv_filters)),
                 conv_filters,
                 conv_filter_sizes,
                 conv_strides,
                 conv_pads,
         ):
-            l_hid = L.Conv2DLayer(
-                l_hid,
+            l_conv_hid = L.Conv2DLayer(
+                l_conv_hid,
                 num_filters=conv_filter,
                 filter_size=filter_size,
                 stride=(stride, stride),
@@ -135,17 +153,31 @@ class ConvMergeNetwork(object):
                 name="%sconv_hidden_%d" % (prefix, idx),
                 convolution=wrapped_conv,
             )
-        for idx, hidden_size in enumerate(hidden_sizes):
-            l_hid = L.DenseLayer(
-                l_hid,
+
+        l_extra_hid = l_extra_in
+        for idx, hidden_size in enumerate(extra_hidden_sizes):
+            l_extra_hid = L.DenseLayer(
+                l_extra_hid,
                 num_units=hidden_size,
                 nonlinearity=hidden_nonlinearity,
-                name="%shidden_%d" % (prefix, idx),
+                name="%sextra_hidden_%d" % (prefix, idx),
+                W=hidden_W_init,
+                b=hidden_b_init,
+            )
+
+        l_joint_hid = L.concat([L.flatten(l_conv_hid), l_extra_hid])
+
+        for idx, hidden_size in enumerate(hidden_sizes):
+            l_joint_hid = L.DenseLayer(
+                l_joint_hid,
+                num_units=hidden_size,
+                nonlinearity=hidden_nonlinearity,
+                name="%sjoint_hidden_%d" % (prefix, idx),
                 W=hidden_W_init,
                 b=hidden_b_init,
             )
         l_out = L.DenseLayer(
-            l_hid,
+            l_joint_hid,
             num_units=output_dim,
             nonlinearity=output_nonlinearity,
             name="%soutput" % (prefix,),
@@ -167,4 +199,3 @@ class ConvMergeNetwork(object):
     @property
     def input_var(self):
         return self._l_in.input_var
-        pass
