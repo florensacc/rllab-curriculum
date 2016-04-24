@@ -176,6 +176,7 @@ class MJOPTION(Structure):
         ("impratio", c_double),
         ("gravity", c_double * 3),
         ("wind", c_double * 3),
+        ("magnetic", c_double * 3),
         ("density", c_double),
         ("viscosity", c_double),
         ("o_margin", c_double),
@@ -368,7 +369,6 @@ class MJDATA(Structure):
         ("contact", POINTER(MJCONTACT)),
         ("efc_type", POINTER(c_int)),
         ("efc_id", POINTER(c_int)),
-        ("efc_signature", POINTER(c_int)),
         ("efc_rownnz", POINTER(c_int)),
         ("efc_rowadr", POINTER(c_int)),
         ("efc_colind", POINTER(c_int)),
@@ -1899,6 +1899,17 @@ class MjOptionWrapper(object):
         memmove(self._wrapped.contents.wind, val_ptr, 3 * sizeof(c_double))
     
     @property
+    def magnetic(self):
+        arr = np.reshape(np.fromiter(self._wrapped.contents.magnetic, dtype=np.double, count=(3)), (3, ))
+        arr.setflags(write=False)
+        return arr
+    
+    @magnetic.setter
+    def magnetic(self, value):
+        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        memmove(self._wrapped.contents.magnetic, val_ptr, 3 * sizeof(c_double))
+    
+    @property
     def density(self):
         return self._wrapped.contents.density
     
@@ -2828,17 +2839,6 @@ class MjDataWrapper(object):
     def efc_id(self, value):
         val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_int))
         memmove(self._wrapped.contents.efc_id, val_ptr, self._size_src.njmax*1 * sizeof(c_int))
-    
-    @property
-    def efc_signature(self):
-        arr = np.reshape(np.fromiter(self._wrapped.contents.efc_signature, dtype=np.int, count=(self._size_src.njmax*1)), (self._size_src.njmax, 1, ))
-        arr.setflags(write=False)
-        return arr
-    
-    @efc_signature.setter
-    def efc_signature(self, value):
-        val_ptr = np.array(value, dtype=np.float64).ctypes.data_as(POINTER(c_int))
-        memmove(self._wrapped.contents.efc_signature, val_ptr, self._size_src.njmax*1 * sizeof(c_int))
     
     @property
     def efc_rownnz(self):

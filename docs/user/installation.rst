@@ -44,7 +44,7 @@ Optionally, if you would like to run experiments that depends on the Mujoco envi
 
     ./scripts/setup_mujoco.sh
 
-and follow the instructions. You need to have the zip file for Mujoco v1.30 and the license file ready.
+and follow the instructions. You need to have the zip file for Mujoco v1.31 and the license file ready.
 
 
 
