@@ -20,6 +20,7 @@ def from_onehot(x_var):
 
 
 class Categorical(Distribution):
+
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
         """
         Compute the symbolic KL divergence of two categorical distributions
@@ -71,4 +72,3 @@ class Categorical(Distribution):
     @property
     def dist_info_keys(self):
         return ["prob"]
-

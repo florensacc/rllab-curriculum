@@ -1,5 +1,4 @@
 class Distribution(object):
-
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
         """
         Compute the symbolic KL divergence of two distributions
@@ -22,4 +21,12 @@ class Distribution(object):
         raise NotImplementedError
 
     def log_likelihood(self, xs, dist_info):
+        raise NotImplementedError
+
+    @property
+    def dist_info_keys(self):
+        raise NotImplementedError
+
+    @property
+    def flat_dim(self):
         raise NotImplementedError

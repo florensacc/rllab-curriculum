@@ -4,6 +4,7 @@ from rllab.distributions.base import Distribution
 
 
 class DiagonalGaussian(Distribution):
+
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
         old_means = old_dist_info_vars["mean"]
         old_log_stds = old_dist_info_vars["log_std"]

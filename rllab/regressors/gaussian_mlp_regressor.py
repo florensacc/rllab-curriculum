@@ -25,6 +25,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             self,
             input_shape,
             output_dim,
+            mean_network=None,
             hidden_sizes=(32, 32),
             hidden_nonlinearity=NL.rectify,
             optimizer=None,
@@ -67,13 +68,14 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
 
         self._optimizer = optimizer
 
-        mean_network = MLP(
-            input_shape=input_shape,
-            output_dim=output_dim,
-            hidden_sizes=hidden_sizes,
-            hidden_nonlinearity=hidden_nonlinearity,
-            output_nonlinearity=None,
-        )
+        if mean_network is None:
+            mean_network = MLP(
+                input_shape=input_shape,
+                output_dim=output_dim,
+                hidden_sizes=hidden_sizes,
+                hidden_nonlinearity=hidden_nonlinearity,
+                output_nonlinearity=None,
+            )
 
         l_mean = mean_network.output_layer
 
