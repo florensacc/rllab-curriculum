@@ -123,8 +123,8 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
             return obs.reshape((N, -1)), next_component_obs, subgoals
 
     def fit(self, paths):
-        subsampled_paths = [hrl_utils.downsample_path(p, self.subgoal_interval) for p in paths]
-        flat_obs, flat_next_obs, subgoals = self._get_relevant_data(subsampled_paths)
+        downsampled_paths = [hrl_utils.downsample_path(p, self.subgoal_interval) for p in paths]
+        flat_obs, flat_next_obs, subgoals = self._get_relevant_data(downsampled_paths)
         xs = np.concatenate([flat_obs, subgoals], axis=1)
         ys = flat_next_obs
         self.regressor.fit(xs, ys)
@@ -139,8 +139,11 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
 
     def predict(self, path):
         path_length = len(path["rewards"])
-        path = hrl_utils.downsample_path(path, self.subgoal_interval)
-        flat_obs, flat_next_obs, subgoals = self._get_relevant_data([path])
+        # No MI reward bonus if trajectory terminated too fast
+        if path_length <= self.subgoal_interval:
+            return np.zeros_like(path["rewards"])
+        downsampled_path = hrl_utils.downsample_path(path, self.subgoal_interval)
+        flat_obs, flat_next_obs, subgoals = self._get_relevant_data([downsampled_path])
         N = flat_obs.shape[0]
         xs = np.concatenate([flat_obs, subgoals], axis=1)
         ys = flat_next_obs
@@ -150,7 +153,7 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
         else:
             p_sprime_given_s = 0.
             if isinstance(self.subgoal_space, Discrete):
-                high_probs = path["agent_infos"]["high"]["prob"]
+                high_probs = downsampled_path["agent_infos"]["high"]["prob"]
                 n_subgoals = self.subgoal_space.n
                 for goal in range(n_subgoals):
                     goal_mat = np.tile(to_onehot(goal, n_subgoals), (N, 1))

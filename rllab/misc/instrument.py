@@ -846,3 +846,39 @@ def to_lab_kube_pod(
             "nodeSelector": node_selector,
         }
     }
+
+
+def concretize(maybe_stub):
+    if isinstance(maybe_stub, StubMethodCall):
+        obj = concretize(maybe_stub.obj)
+        method = getattr(obj, maybe_stub.method_name)
+        args = concretize(maybe_stub.args)
+        kwargs = concretize(maybe_stub.kwargs)
+        return method(*args, **kwargs)
+    elif isinstance(maybe_stub, StubClass):
+        return maybe_stub.proxy_class
+    elif isinstance(maybe_stub, StubAttr):
+        return getattr(concretize(maybe_stub.obj), maybe_stub.attr_name)
+    elif isinstance(maybe_stub, StubObject):
+        if not hasattr(maybe_stub, "__stub_cache"):
+            args = concretize(maybe_stub.args)
+            kwargs = concretize(maybe_stub.kwargs)
+            try:
+                maybe_stub.__stub_cache = maybe_stub.proxy_class(
+                    *args, **kwargs)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                # import ipdb; ipdb.set_trace()
+        ret = maybe_stub.__stub_cache
+        return ret
+    elif isinstance(maybe_stub, dict):
+        # make sure that there's no hidden caveat
+        ret = dict()
+        for k, v in maybe_stub.iteritems():
+            ret[concretize(k)] = concretize(v)
+        return ret
+    elif isinstance(maybe_stub, (list, tuple)):
+        return maybe_stub.__class__(map(concretize, maybe_stub))
+    else:
+        return maybe_stub
