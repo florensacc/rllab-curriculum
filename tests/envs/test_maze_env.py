@@ -1,8 +1,6 @@
-# from nose2 import tools
-
 import math
 
-from rllab.envs.mujoco.maze.maze_env import line_intersect, ray_segment_intersect
+from rllab.envs.mujoco.maze.maze_env_utils import line_intersect, ray_segment_intersect
 
 
 def test_line_intersect():

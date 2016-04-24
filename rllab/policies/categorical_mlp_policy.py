@@ -16,7 +16,7 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             self,
             env_spec,
             hidden_sizes=(32, 32),
-            hidden_nonlinearity=NL.rectify,
+            hidden_nonlinearity=NL.tanh,
             prob_network=None,
     ):
         """
@@ -51,11 +51,11 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         LasagnePowered.__init__(self, [prob_network.output_layer])
 
     @overrides
-    def dist_info_sym(self, obs_var, action_var):
+    def dist_info_sym(self, obs_var, state_info_vars=None):
         return dict(prob=L.get_output(self._l_prob, {self._l_obs: obs_var}))
 
     @overrides
-    def dist_info(self, obs, actions):
+    def dist_info(self, obs, state_infos=None):
         return dict(prob=self._f_prob(obs))
 
     # The return value is a pair. The first item is a matrix (N, A), where each
@@ -68,6 +68,12 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         prob = self._f_prob([flat_obs])[0]
         action = self.action_space.weighted_sample(prob)
         return action, dict(prob=prob)
+
+    def get_actions(self, observations):
+        flat_obs = self.observation_space.flatten_n(observations)
+        probs = self._f_prob(flat_obs)
+        actions = map(self.action_space.weighted_sample, probs)
+        return actions, dict(prob=probs)
 
     @property
     def distribution(self):

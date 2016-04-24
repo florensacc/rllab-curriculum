@@ -21,13 +21,16 @@ class ConjugateGradientOptimizer(Serializable):
             reg_coeff=1e-5,
             subsample_factor=0.1,
             backtrack_ratio=0.8,
-            max_backtracks=15):
+            max_backtracks=15,
+            debug_nan=False):
         """
 
         :param cg_iters: The number of CG iterations used to calculate A^-1 g
         :param reg_coeff: A small value so that A -> A + reg*I
         :param subsample_factor: Subsampling factor to reduce samples when using "conjugate gradient. Since the
         computation time for the descent direction dominates, this can greatly reduce the overall computation time.
+        :param debug_nan: if set to True, NanGuard will be added to the compilation, and ipdb will be invoked when
+        nan is detected
         :return:
         """
         Serializable.quick_init(self, locals())
@@ -41,6 +44,7 @@ class ConjugateGradientOptimizer(Serializable):
         self._target = None
         self._max_constraint_val = None
         self._constraint_name = None
+        self._debug_nan = debug_nan
 
     def update_opt(self, loss, target, leq_constraint, inputs, extra_inputs=None, constraint_name="constraint", *args,
                    **kwargs):
@@ -79,31 +83,43 @@ class ConjugateGradientOptimizer(Serializable):
         self._max_constraint_val = constraint_value
         self._constraint_name = constraint_name
 
+
+        if self._debug_nan:
+            from theano.compile.nanguardmode import NanGuardMode
+            mode = NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True)
+        else:
+            mode = None
+
         self._opt_fun = ext.lazydict(
             f_loss=lambda: ext.compile_function(
                 inputs=inputs + extra_inputs,
                 outputs=loss,
                 log_name="f_loss",
+                mode=mode,
             ),
             f_grad=lambda: ext.compile_function(
                 inputs=inputs + extra_inputs,
                 outputs=flat_grad,
                 log_name="f_grad",
+                mode=mode,
             ),
             f_Hx_plain=lambda: ext.compile_function(
                 inputs=inputs + extra_inputs + xs,
                 outputs=Hx_plain,
                 log_name="f_Hx_plain",
+                mode=mode,
             ),
             f_constraint=lambda: ext.compile_function(
                 inputs=inputs + extra_inputs,
                 outputs=constraint_term,
-                log_name="constraint"
+                log_name="constraint",
+                mode=mode,
             ),
             f_loss_constraint=lambda: ext.compile_function(
                 inputs=inputs + extra_inputs,
                 outputs=[loss, constraint_term],
-                log_name="f_loss_constraint"
+                log_name="f_loss_constraint",
+                mode=mode,
             ),
         )
 
@@ -153,6 +169,7 @@ class ConjugateGradientOptimizer(Serializable):
             2.0 * self._max_constraint_val * (1. / (descent_direction.dot(Hx(descent_direction)) + 1e-8))
         )
         flat_descent_step = initial_step_size * descent_direction
+
         logger.log("descent direction computed")
 
         prev_param = self._target.get_param_values(trainable=True)
@@ -161,8 +178,11 @@ class ConjugateGradientOptimizer(Serializable):
             cur_param = prev_param - cur_step
             self._target.set_param_values(cur_param, trainable=True)
             loss, constraint_val = self._opt_fun["f_loss_constraint"](*(inputs + extra_inputs))
+            if self._debug_nan and np.isnan(constraint_val):
+                import ipdb; ipdb.set_trace()
             if loss < loss_before and constraint_val <= self._max_constraint_val:
                 break
+        logger.log("backtrack iters: %d" % n_iter)
         logger.log("computing loss after")
         logger.log("optimization finished")
 

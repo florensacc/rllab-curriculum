@@ -64,36 +64,57 @@ def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
                 if done:
                     tr = 0.
                     env.reset()
-        else:
+            return
+
+        from rllab.envs.mujoco.mujoco_env import MujocoEnv
+        from rllab.envs.mujoco.maze.maze_env import MazeEnv
+        if isinstance(env, (MujocoEnv, MazeEnv)):
             trs = [tr]
             actions = [np.zeros(2)]
-            from rllab.envs.mujoco.mujoco_env import MujocoEnv
-            # from rllab.env.mujoco_1_22.gather.gather_env import GatherMDP
-            from rllab.envs.mujoco.maze.maze_env import MazeEnv
-            if isinstance(env, (MujocoEnv, MazeEnv)):  # , GatherMDP, MazeMDP)):
-                print "is mujoco"
-                # from rllab.mjcapi.rocky_mjc_1_22 import glfw
-                from rllab.mujoco_py import glfw
+            from rllab.mujoco_py import glfw
 
-                def cb(window, key, scancode, action, mods):
-                    actions[0] = env.action_from_key(key)
+            def cb(window, key, scancode, action, mods):
+                actions[0] = env.action_from_key(key)
 
-                glfw.set_key_callback(env.viewer.window, cb)
-                while True:
-                    try:
-                        actions[0] = np.zeros(2)
-                        glfw.poll_events()
-                        # if np.linalg.norm(actions[0]) > 0:
-                        ob, r, done, info = env.step(actions[0])
-                        trs[0] += r
-                        env.render()
-                        # time.sleep(env.timestep / speedup)
-                        time.sleep(env.timestep / speedup)
-                        if done:
-                            trs[0] = 0.
-                            env.reset()
-                    except Exception as e:
-                        print e
+            glfw.set_key_callback(env.viewer.window, cb)
+            while True:
+                try:
+                    actions[0] = np.zeros(2)
+                    glfw.poll_events()
+                    # if np.linalg.norm(actions[0]) > 0:
+                    ob, r, done, info = env.step(actions[0])
+                    trs[0] += r
+                    env.render()
+                    # time.sleep(env.timestep / speedup)
+                    time.sleep(env.timestep / speedup)
+                    if done:
+                        trs[0] = 0.
+                        env.reset()
+                except Exception as e:
+                    print e
+            return
+
+        assert hasattr(env, "action_from_key") and hasattr(env, "matplotlib_figure"), \
+            "The environment must implement the method action_from_key and have the matplotlib_figure attribute " \
+            "available"
+        # Assume using matplotlib
+        # TODO - make this logic more legit
+
+        env.render()
+        import matplotlib.pyplot as plt
+        def handle_key_pressed(event):
+            action = env.action_from_key(event.key)
+            if action is not None:
+                _, _, done, _ = env.step(action)
+                if done:
+                    plt.close()
+                    return
+                env.render()
+
+        env.matplotlib_figure.canvas.mpl_connect('key_press_event', handle_key_pressed)
+        plt.ioff()
+        plt.show()
+
     else:
         raise ValueError('Unsupported mode: %s' % mode)
         # env.stop_viewer()

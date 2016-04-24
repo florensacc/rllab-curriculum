@@ -201,7 +201,21 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         logger.record_tabular(prefix + 'dLoss', loss_before - loss_after)
 
     def predict(self, xs):
+        """
+        Return the maximum likelihood estimate of the predicted y.
+        :param xs:
+        :return:
+        """
         return self._f_predict(xs)
+
+    def sample_predict(self, xs):
+        """
+        Sample one possible output from the prediction distribution.
+        :param xs:
+        :return:
+        """
+        means, log_stds = self._f_pdists(xs)
+        return self._dist.sample(dict(mean=means, log_std=log_stds))
 
     def predict_log_likelihood(self, xs, ys):
         means, log_stds = self._f_pdists(xs)

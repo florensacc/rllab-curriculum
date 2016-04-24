@@ -16,7 +16,7 @@ def gauss_newton_product(cost, p, v, s):  # this computes the product Gv = J'HJv
     sum_Gv = None
     for si in s:
         Jv = T.Rop(si, p, v)
-        HJv = T.grad(T.sum(T.grad(cost, si) * Jv), si, consider_constant=[Jv], disconnected_inputs='ignore')
+        HJv = T.grad(T.sum(T.grad(cost, si, disconnected_inputs='ignore') * Jv), si, consider_constant=[Jv], disconnected_inputs='ignore')
         Gv = T.grad(T.sum(HJv * si), p, consider_constant=[HJv, Jv], disconnected_inputs='ignore')
         Gv = map(T.as_tensor_variable, Gv)  # for CudaNdarray
         if sum_Gv is None:
@@ -36,7 +36,7 @@ class hf_optimizer:
     train :
         Performs HF optimization following the above references.'''
 
-    def __init__(self, p, inputs, s, costs, h=None, ha=None):
+    def __init__(self, _p, inputs, s, costs, h=None, ha=None):
         '''Constructs and compiles the necessary Theano functions.
 
         p : list of Theano shared variables
@@ -58,12 +58,12 @@ class hf_optimizer:
             structural damping term (typically the activation of the hidden layer). If
             None, it will be set to `h`.'''
 
-        self.p = p
-        self.shapes = [i.get_value().shape for i in p]
+        self.p = _p
+        self.shapes = [i.get_value().shape for i in _p]
         self.sizes = map(numpy.prod, self.shapes)
         self.positions = numpy.cumsum([0] + self.sizes)[:-1]
 
-        g = T.grad(costs[0], p)
+        g = T.grad(costs[0], _p)
         g = map(T.as_tensor_variable, g)  # for CudaNdarray
         self.f_gc = compile_function(inputs, g + costs)  # during gradient computation
         self.f_cost = compile_function(inputs, costs)  # for quick cost evaluation
@@ -71,7 +71,7 @@ class hf_optimizer:
         symbolic_types = T.scalar, T.vector, T.matrix, T.tensor3, T.tensor4
 
         v = [symbolic_types[len(i)]() for i in self.shapes]
-        Gv = gauss_newton_product(costs[0], p, v, s)
+        Gv = gauss_newton_product(costs[0], _p, v, s)
 
         coefficient = T.scalar()  # this is lambda*mu
         if h is not None:  # structural damping with cross-entropy
@@ -79,7 +79,7 @@ class hf_optimizer:
             structural_damping = coefficient * (
                 -h_constant * T.log(h + 1e-10) - (1 - h_constant) * T.log((1 - h) + 1e-10)).sum() / h.shape[0]
             if ha is None: ha = h
-            Gv_damping = gauss_newton_product(structural_damping, p, v, ha)
+            Gv_damping = gauss_newton_product(structural_damping, _p, v, ha)
             Gv = [a + b for a, b in zip(Gv, Gv_damping)]
             givens = {h_constant: h}
         else:
@@ -246,10 +246,11 @@ class hf_optimizer:
             for u in xrange(first_iteration, 1 + num_updates):
                 if verbose: print 'update %i/%i,' % (u, num_updates),
                 sys.stdout.flush()
-
+#                 import ipdb; ipdb.set_trace()
                 gradient = numpy.zeros(sum(self.sizes), dtype=theano.config.floatX)
                 costs = []
                 for inputs in gradient_dataset.iterate(update=True):
+#                     import ipdb; ipdb.set_trace()
                     result = self.f_gc(*inputs)
                     gradient += self.list_to_flat(result[:len(self.p)]) / gradient_dataset.number_batches
                     costs.append(result[len(self.p):])

@@ -5,17 +5,40 @@
 Running Experiments
 ===================
 
-Configuration using Python
-==========================
 
+We use object oriented abstractions for different components required for an experiment. To run an experiment, simply construct the corresponding objects for the environment, algorithm, etc. and call the appropriate train method on the algorithm. A sample script is provided in :code:`examples/trpo_cartpole.py`. The code is also pasted below for a quick glance:
 
-We provide a simple way for running experiments with user-specified
-hyper-parameter settings. An example is given in the
-:code:`examples/trpo_cartpole.py` file. You can run it via:
+.. code-block:: python
 
-.. code-block:: bash
+    from rllab.algos.trpo import TRPO
+    from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+    from rllab.envs.box2d.cartpole_env import CartpoleEnv
+    from rllab.envs.normalized_env import normalize
+    from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-    python examples/trpo_cartpole.py
+    env = normalize(CartpoleEnv())
+
+    policy = GaussianMLPPolicy(
+        env_spec=env.spec,
+        # The neural network policy should have two hidden layers, each with 32 hidden units.
+        hidden_sizes=(32, 32)
+    )
+
+    baseline = LinearFeatureBaseline(env_spec=env.spec)
+
+    algo = TRPO(
+        env=env,
+        policy=policy,
+        baseline=baseline,
+        batch_size=4000,
+        whole_paths=True,
+        max_path_length=100,
+        n_itr=40,
+        discount=0.99,
+        step_size=0.01,
+    )
+    algo.train()
+
 
 Running the script for the first time might take a while for initializing
 Theano and compiling the computation graph, which can take a few minutes.
@@ -73,47 +96,65 @@ see some log messages like the following:
     2016-02-14 14:31:29.922186 PST | -----------------------  -------------
 
 
-You can open the example file to understand what it's doing, which is
-self-documented via comments.
+=====================
+Stub Mode Experiments
+=====================
+
+:code:`rllab` also supports a "stub" mode for running experiments, which supports more configurations like logging and parallelization. A sample script is provided in :code:`examples/trpo_cartpole_stub.py`. The content is pasted below:
+
+.. code-block:: python
+
+    from rllab.algos.trpo import TRPO
+    from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+    from rllab.envs.box2d.cartpole_env import CartpoleEnv
+    from rllab.envs.normalized_env import normalize
+    from rllab.misc.instrument import stub, run_experiment_lite
+    from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+
+    stub(globals())
+
+    env = normalize(CartpoleEnv())
+
+    policy = GaussianMLPPolicy(
+        env_spec=env.spec,
+        # The neural network policy should have two hidden layers, each with 32 hidden units.
+        hidden_sizes=(32, 32)
+    )
+
+    baseline = LinearFeatureBaseline(env_spec=env.spec)
+
+    algo = TRPO(
+        env=env,
+        policy=policy,
+        baseline=baseline,
+        batch_size=4000,
+        whole_paths=True,
+        max_path_length=100,
+        n_itr=40,
+        discount=0.99,
+        step_size=0.01,
+    )
+
+    run_experiment_lite(
+        algo.train(),
+        # Number of parallel workers for sampling
+        n_parallel=1,
+        # Only keep the snapshot parameters for the last iteration
+        snapshot_mode="last",
+        # Specifies the seed for the experiment. If this is not provided, a random seed
+        # will be used
+        seed=1,
+        # plot=True,
+    )
 
 
-Configuration using Command Line
-================================
+The first notable difference is the line `stub(globals())` after all the import calls, which replaces all imported class constructors by stubbed methods. After the call, class constructors like `TRPO()` will return a serializable stub object, and all method invocations and property accessors will also become stub method calls and stub attributes that are serializable. Then, the `run_experiment_lite` call serializes the final stubbed method call, and launches a script that actually runs the experiment.
 
+The benefit for launching experiment this way is that we separate the configuration of experiment parameters and the actual execution of the experiment. `run_experiment_lite` supports multiple ways of running the experiment, either locally, locally in a docker container, or remotely on ec2 (documentation pending). Multiple experiments with different hyper-parameter settings can be quickly constructed and launched simultaneously on multiple ec2 machines using this abstraction.
 
-The example file above actually constructs a bash command, which calls the
-script :code:`scripts/run_experiment.py`. Alternatively, you can call this
-script directly. The command that corresponds to the experiment above is:
+Another subtle point is that we use Theano for our algorithm implementations, which has rather poor support for mixed GPU and CPU usage. This might be handy when the main process wants to use GPU for the batch optimization phase, while multiple worker processes want to use the GPU for generating trajectory rollouts. Launching the experiment separately allows the worker processes to be properly initialized with Theano configured to use CPU.
 
-.. code-block:: bash
+Additional arguments for `run_experiment_lite` (experimental):
 
-    python scripts/run_experiment.py \
-        --mdp box2d.cartpole_mdp
-        --normalize_mdp True \
-        --policy mean_std_nn_policy \
-        --policy_hidden_sizes 32 32 \
-        --baseline linear_feature_baseline \
-        --exp_name trpo_cartpole \
-        --algo trpo \
-        --algo_discount 0.99 \
-        --algo_whole_paths True \
-        --algo_step_size 0.01 \
-        --algo_n_itr 40 \
-        --algo_max_path_length 100 \
-        --algo_batch_size 4000 \
-        --n_parallel 1 \
-        --snapshot_mode last \
-        --seed 1
-
-You can see a list of supported configuration parameters by running:
-
-.. code-block:: bash
-
-    python scripts/run_experiment.py --help
-
-Each of the specific MDP and algorithm might have additional configuration
-parameters. You can view further help on these by, e.g. running
-
-.. code-block:: bash
-
-    python scripts/run_experiment.py --algo trpo --more_help
+- `exp_name`: If this is set, the experiment data will be stored in the folder `data/local/{exp_name}`. By default, the folder name is set to `experiment_{timestamp}`.
+- `exp_prefix`: If this is set, and if `exp_name` is not specified, the experiment folder name will be set to `{exp_prefix}_{timestamp}`.

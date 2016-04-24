@@ -1,3 +1,14 @@
+# 2016-04-21
+
+- Fixed `tensor_utils.concat_tensor_dict_list` to handle nested situations properly.
+
+# 2016-04-20
+
+- Default nonlinearity for `CategoricalMLPPolicy` changed to `tanh` as well, for consistency.
+- Add `flatten_n`, `unflatten_n` support for `Discrete` and `Product` spaces.
+- Changed `dist_info_sym` and `dist_info` interface for policies. Previously it takes both the observations and actions as input arguments, where actions are needed for recurrent policies when the policy takes both the current state and the previous action into account. However this is rather artificial. The interface is now changed to take in the observation plus a dictionary of state-related information. An extra property `state_info_keys` is added to specify the list of keys used for state-related information. By default this is an empty list.
+- Removed `lasagne_recurrent.py` since it's not used anywhere, and its functionality is replaced by `GRUNetwork` implemented in `rllab.core.network`.
+
 # 2016-04-17
 
 - Restored the default value of the `whole_paths` parameter in `BatchPolopt` back to `True`. This is more consistent with previous configurations.

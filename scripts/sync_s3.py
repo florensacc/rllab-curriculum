@@ -1,13 +1,16 @@
 from rllab import config
 import os
-import sys
+import argparse
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        extra = " ".join(sys.argv[1:])
-    else:
-        extra = ""
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--folder', type=str, default=None)
+    args = parser.parse_args()
+    remote_dir = config.AWS_S3_PATH
+    local_dir = os.path.join(config.LOG_DIR, "s3")
+    if args.folder:
+        remote_dir = os.path.join(remote_dir, args.folder)
+        local_dir = os.path.join(local_dir, args.folder)
     os.system("""
-        aws s3 sync {remote_dir} {local_dir} --exclude '*debug.log' --exclude '*stdouterr.log' --exclude '*params.pkl' --content-type "UTF-8" {extra}
-    """.format(local_dir=os.path.join(config.LOG_DIR, "s3"), remote_dir=config.AWS_S3_PATH,
-               extra=extra))
+        aws s3 sync {remote_dir} {local_dir} --exclude '*debug.log' --exclude '*stdouterr.log' --exclude '*.pkl' --content-type "UTF-8"
+    """.format(local_dir=local_dir, remote_dir=remote_dir))

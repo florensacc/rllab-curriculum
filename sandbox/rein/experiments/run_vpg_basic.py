@@ -17,10 +17,11 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv, MountainCarEnv]
+mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
+               DoublePendulumEnv, MountainCarEnv]
 mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
-   mdps, seeds 
+    mdps, seeds
 )
 
 for mdp, seed in param_cart_product:
@@ -35,11 +36,12 @@ for mdp, seed in param_cart_product:
         regressor_args=dict(hidden_sizes=(32,)),
     )
 
+    batch_size = 5000
     algo = VPG(
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=1000,
+        batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
         n_itr=1000,
@@ -47,7 +49,7 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="vpg-basic-v1",
+        exp_prefix="vpg-basic-v1x",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

@@ -7,8 +7,8 @@ from rllab.spaces.product import Product
 
 from nose2.tools import such
 
-from sandbox.rocky.hrl.hierarchical_grid_world_env import HierarchicalGridWorldEnv
-from sandbox.rocky.hrl.hierarchical_grid_world_env import expand_grid
+from sandbox.rocky.hrl.envs.hierarchical_grid_world_env import HierarchicalGridWorldEnv
+from sandbox.rocky.hrl.envs.hierarchical_grid_world_env import expand_grid
 from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy

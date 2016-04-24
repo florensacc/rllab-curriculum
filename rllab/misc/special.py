@@ -1,5 +1,6 @@
 import numpy as np
 import scipy
+import scipy.signal
 import theano.tensor.nnet
 import theano.tensor as TT
 import theano.tensor.extra_ops
@@ -58,6 +59,12 @@ def to_onehot(ind, dim):
     return ret
 
 
+def to_onehot_n(inds, dim):
+    ret = np.zeros((len(inds), dim))
+    ret[np.arange(len(inds)), inds] = 1
+    return ret
+
+
 def to_onehot_sym(ind, dim):
     assert ind.ndim == 1
     return theano.tensor.extra_ops.to_one_hot(ind, dim)
@@ -65,6 +72,10 @@ def to_onehot_sym(ind, dim):
 
 def from_onehot(v):
     return np.nonzero(v)[0][0]
+
+
+def from_onehot_n(v):
+    return np.nonzero(v)[1]
 
 
 def normalize_updates(old_mean, old_std, new_mean, new_std, old_W, old_b):
