@@ -26,8 +26,15 @@ class BimodEnv(Env):
 
     def reward_state(self,state):
         x = state
-        return - 0.5 + 1./(2.*np.sqrt(np.power(2.*np.pi,2.)*self.sigma1))*(np.exp(-0.5/self.sigma1*np.linalg.norm(x-self.mu1)**2)) #\
-                     # + 1./(2.*np.sqrt(np.power(2.*np.pi,2.)*self.sigma1))*(np.exp(-0.5/self.sigma2*np.linalg.norm(x-self.mu2)**2))
+        mu=self.mu1
+        n = 2     ##number of modes around 0
+        A = np.array([[np.cos(2.*np.pi/n), -np.sin(2.*np.pi/n)], [np.sin(2.*np.pi/n), np.cos(2.*np.pi/n)]])  ##rotation matrix
+        reward = -0.5 + 1./(2*np.sqrt(np.power(2.*np.pi,2.)*self.sigma1))*(np.exp(-0.5/self.sigma1*np.linalg.norm(x-mu)**2))
+        for i in range(1,n):
+            mu = np.dot(A,mu)
+            reward += 1. / (2 * np.sqrt(np.power(2. * np.pi, 2.) * self.sigma1)) * (
+                np.exp(-0.5 / self.sigma1 * np.linalg.norm(x - mu) ** 2))
+        return reward
         # return float(- 0.5 + 1./(2.*np.sqrt(np.power(2.*np.pi,2.)*self.sigma1))*(np.exp(-0.5/self.sigma1*(np.linalg.norm(x)-self.mu1)**2)) )#\
     def step(self, action):
         self._state = self._state + action

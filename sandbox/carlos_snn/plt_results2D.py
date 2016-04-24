@@ -103,38 +103,47 @@ def plot_all_policy_at0(path_experiment,color,num_iter=100,fig_dir=None):
 
 
 ## plot for all the experiments
-datadir="./data/local/trpo-2Dbimod-baseline200-just-check"
-database = ExperimentDatabase(datadir,names_or_patterns='*')
-exps = database._experiments
-colors=[(1,0.1,0.1),(0.1,1,0.1),(0.1,0.1,1),(1,1,0)]
+def plot_all_exp(datadir):
+    database = ExperimentDatabase(datadir,names_or_patterns='*')
+    exps = database._experiments
+    colors=[(1,0.1,0.1),(0.1,1,0.1),(0.1,0.1,1),(1,1,0)]
 
-for i, exp in enumerate(exps):
-    #get the last pickle
-    exp_name=exp.params['exp_name']
-    path_experiment=os.path.join(datadir,exp_name)
-    last_iter = np.size(exp.progress['Iteration']) - 1
-    pkl_name= 'itr_{}'.format(last_iter)
-    last_data_unpickle = joblib.load(os.path.join(path_experiment,pkl_name+'.pkl'))
-    first_data_unpickle = joblib.load(os.path.join(path_experiment,'itr_0.pkl'))
-    #create fig_dir
-    fig_dir = os.path.join(path_experiment,'Figures')
-    if not os.path.exists(fig_dir):
-        os.makedirs(fig_dir)
-    #fix a color for plots of this exp
-    color = np.array(colors[i])
-    #plot everything
-    print 'Plotting for: ',exp_name
-    fig=plt.figure(1)
-    plot_reward(fig,first_data_unpickle,color,fig_dir)
-    print 'Plotting learning curve'
-    plt.figure(2)
-    plot_learning_curve(exp,color,fig_dir)
-    print 'Plotting last policy'
-    plt.figure(3)
-    plot_policy_learned(last_data_unpickle,color,fig_dir=fig_dir)
-    # print 'Plotting policy progress'
-    # plt.figure(4)
-    # plot_all_policy_at0(path_experiment,color,num_iter=last_iter+1,fig_dir=fig_dir)
+    for i, exp in enumerate(exps):
+        #get the last pickle
+        exp_name=exp.params['exp_name']
+        path_experiment=os.path.join(datadir,exp_name)
+        last_iter = np.size(exp.progress['Iteration']) - 1
+        # pkl_name= 'itr_{}'.format(last_iter)
+        # last_data_unpickle = joblib.load(os.path.join(path_experiment,pkl_name+'.pkl'))
+        # first_data_unpickle = joblib.load(os.path.join(path_experiment,'itr_0.pkl'))
+        pkl_file='params.pkl'
+        last_data_unpickle  = joblib.load(os.path.join(path_experiment,pkl_file))
+        first_data_unpickle = joblib.load(os.path.join(path_experiment,pkl_file))
+        #create fig_dir
+        fig_dir = os.path.join(path_experiment,'Figures')
+        if not os.path.exists(fig_dir):
+            os.makedirs(fig_dir)
+        #fix a color for plots of this exp
+        color = np.array(colors[i])
+        #plot everything
+        print 'Plotting for: ',exp_name
+        fig=plt.figure(1)
+        plot_reward(fig,first_data_unpickle,color,fig_dir)
+        print 'Plotting learning curve'
+        plt.figure(2)
+        plot_learning_curve(exp,color,fig_dir)
+        print 'Plotting last policy'
+        plt.figure(3)
+        plot_policy_learned(last_data_unpickle,color,fig_dir=fig_dir)
+        # print 'Plotting policy progress'
+        # plt.figure(4)
+        # plot_all_policy_at0(path_experiment,color,num_iter=last_iter+1,fig_dir=fig_dir)
 
-
+## plot for all the experiments
+if __name__ == "__main__":
+    import sys
+    name_dir=sys.argv[1]
+    path_dir = "./data/local/"+name_dir
+    print "plotting all experiments in: " +path_dir
+    plot_all_exp(path_dir)
 

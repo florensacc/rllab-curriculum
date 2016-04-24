@@ -4,6 +4,8 @@ from __future__ import absolute_import
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from sandbox.rocky.snn.baselines.linear_feature_snn_baseline import LinearFeatureSNNBaseline
 from sandbox.rocky.snn.bimod_env import BimodEnv
+from rllab.envs.box2d.cartpole_env import CartpoleEnv
+
 from rllab.envs.normalized_env import normalize
 from sandbox.rocky.snn.policies.stochastic_gaussian_mlp_policy import StochasticGaussianMLPPolicy
 from sandbox.rocky.snn.algos.snn_algos import TRPO_snn
@@ -15,7 +17,10 @@ import sys
 
 stub(globals())
 
-env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False)
+
+
+# env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False)
+env = normalize(CartpoleEnv())
 
 baseline1 = [LinearFeatureSNNBaseline(env_spec=env.spec),'baseline']
 baseline2 = [LinearFeatureBaseline(env_spec=env.spec),'SNNbaseline']
