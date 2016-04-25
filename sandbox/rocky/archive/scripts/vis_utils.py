@@ -79,13 +79,20 @@ def plot_experiments(
         plt.legend(plots, legends, bbox_to_anchor=(1, 0.2))
     if aggregate:
         all_s = all_returns.values()
-        max_len = map(len, all_s)
-        filter_s = [s for s in all_s if len(s) == max_len]
-        raws = zip(all_s)
-        all_lens = np.array(map(len, raws))
-        assert np.alltrue(all_lens == max(all_lens))
-        means = np.mean(raws, axis=0).flatten()
-        stds = np.std(raws, axis=0).flatten()
+        max_len = max(map(len, all_s))
+        # raws = zip(all_s)
+        # all_lens = np.array(map(len, raws))
+        # assert np.alltrue(all_lens == max(all_lens))
+        # means = np.mean(raws, axis=0).flatten()
+        # stds = np.std(raws, axis=0).flatten()
+        means = np.array([
+            np.mean([s[ind] for s in all_s if ind < len(s)])
+            for ind in xrange(max_len)
+        ])
+        stds = np.array([
+            np.std([s[ind] for s in all_s if ind < len(s)])
+            for ind in xrange(max_len)
+        ])
         plot = plt.plot(means)[0]
         if get_color:
             color = get_color(name_or_patterns)
@@ -98,7 +105,7 @@ def plot_experiments(
             linewidth=0)
     return all_returns
 
-import statsmodels.api as sm
+# import statsmodels.api as sm
 import numpy as np
 def smooth_plot(ys):
     xs = np.arange(len(ys))
@@ -146,6 +153,7 @@ def get_params(fn):
             param_h = json.load(jsonfile)
             return param_h
     except IOError as e:
+        # import ipdb; ipdb.set_trace()
         return None
 
 
@@ -186,20 +194,31 @@ def group_by_params(rets, warn=False, key=lambda x: -x[-1], trans=None):
     seen = defaultdict(list)
     for filename, series in rets.items():
         params = get_params(filename)
+        if params is None:
+            print "params not found for ", filename
+            continue
         seen[conv(params)].append((filename, series))
     outs = []
     for param_str, tup in seen.items():
         filenames, lst_series = zip(*tup)
         params = json.loads(param_str)
         max_len = max([len(s) for s in lst_series])
-        eligible_lst_series = [s for s in lst_series if len(s) == max_len]
-        if warn:
-            if len(lst_series) != len(eligible_lst_series):
-                print "warning: some series have imcomplete data, ignoring"
-        mean_series = np.mean(eligible_lst_series, axis=0).flatten()
-        std_series = np.std(eligible_lst_series, axis=0).flatten()
+        # eligible_lst_series = [s for s in lst_series if len(s) == max_len]
+        # if warn:
+        #     if len(lst_series) != len(eligible_lst_series):
+        #         print "warning: some series have imcomplete data, ignoring"
+        # mean_series = np.mean(eligible_lst_series, axis=0).flatten()
+        # std_series = np.std(eligible_lst_series, axis=0).flatten()
+        means = np.array([
+                             np.mean([s[ind] for s in lst_series if ind < len(s)])
+                             for ind in xrange(max_len)
+                             ])
+        stds = np.array([
+                            np.std([s[ind] for s in lst_series if ind < len(s)])
+                            for ind in xrange(max_len)
+                            ])
         outs.append(
-            (params, mean_series, std_series, lst_series, filenames)
+            (params, means, stds, lst_series, filenames)
         )
     return sorted(outs, key=lambda o: key(o[1]))
 

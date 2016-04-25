@@ -60,5 +60,6 @@ except:
     from config_personal import *
     print "Personal config created, but you should probably edit it before further experiments " \
           "are run"
-    import sys; sys.exit(0)
+    if 'CIRCLECI' not in os.environ:
+        import sys; sys.exit(0)
 

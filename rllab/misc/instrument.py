@@ -18,6 +18,7 @@ from StringIO import StringIO
 import datetime
 import dateutil.tz
 import json
+import numpy as np
 
 from rllab.viskit.core import flatten
 
@@ -139,8 +140,11 @@ class VariantGenerator(object):
     def add(self, key, vals):
         self._variants.append((key, vals))
 
-    def variants(self):
-        return list(self.ivariants())
+    def variants(self, randomized=False):
+        ret = list(self.ivariants())
+        if randomized:
+            np.random.shuffle(ret)
+        return ret
 
     def ivariants(self):
         dependencies = list()

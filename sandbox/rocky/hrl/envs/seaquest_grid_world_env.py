@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from rllab.spaces.discrete import Discrete
 from rllab.spaces.box import Box
+from rllab.spaces.product import Product
 
 EMPTY = 0
 AGENT = 1
@@ -74,19 +75,35 @@ class SeaquestGridWorldEnv(Env):
     encode whether each type of objects is present in this grid.
     """
 
-    def __init__(self, size=3, n_bombs=None):
+    def __init__(self, size=10, n_bombs=None, guided_observation=False):
+        """
+        Create a new Seaquest-like grid world environment.
+        :param size: Size of the grid world
+        :param n_bombs: Number of bombs on the grid
+        :param guided_observation: whether to include additional information in the observation in the form of
+               categorical variables. This could potentially simplify the state predictor used in the MI bonus
+               evaluator.
+        :return:
+        """
         self.grid = None
         self.size = size
 
         if n_bombs is None:
-            n_bombs = size #/ 2
+            n_bombs = size / 2
         self.n_bombs = n_bombs
         self.agent_position = None
         self.diver_position = None
+        self.guided_observation = guided_observation
         self.diver_picked_up = False
         self.reset()
         self.fig = None
-        self._observation_space = Box(low=0, high=N_OBJECT_TYPES, shape=(N_OBJECT_TYPES, self.size, self.size))
+
+        visual_obs_space = Box(low=0, high=N_OBJECT_TYPES, shape=(N_OBJECT_TYPES, self.size, self.size))
+        if guided_observation:
+            guided_obs_space = Product(Discrete(self.size), Discrete(self.size), Discrete(2))
+            self._observation_space = Product(visual_obs_space, guided_obs_space)
+        else:
+            self._observation_space = visual_obs_space
         self._action_space = Discrete(4)
 
     def reset(self):
@@ -129,6 +146,8 @@ class SeaquestGridWorldEnv(Env):
             grid[(DIVER,) + self.diver_position] = 1
         for bomb_position in self.bomb_positions:
             grid[(BOMB,) + bomb_position] = 1
+        if self.guided_observation:
+            return (grid, self.agent_position + (int(self.diver_picked_up),))
         return grid
 
     def step(self, action):

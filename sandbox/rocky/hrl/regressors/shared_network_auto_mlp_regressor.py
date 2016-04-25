@@ -1,51 +1,74 @@
+from __future__ import print_function
+from __future__ import absolute_import
 import lasagne.layers as L
-import lasagne.nonlinearities as NL
-import numpy as np
-import theano
-import theano.tensor as TT
-
+import lasagne.nonlinearities as LN
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
 from rllab.core.serializable import Serializable
-from rllab.distributions.categorical import Categorical
-from rllab.misc import ext
-from rllab.misc import logger
-from rllab.misc import special
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+from rllab.spaces.box import Box
+from rllab.spaces.discrete import Discrete
+from rllab.spaces.product import Product
+from rllab.distributions.categorical import Categorical
+from rllab.distributions.diagonal_gaussian import DiagonalGaussian
+from rllab.misc import ext
+from rllab.misc import logger
+from sandbox.rocky.hrl.distributions.product_distribution import ProductDistribution
+import theano
+import theano.tensor as TT
+import numpy as np
+import itertools
 
-NONE = list()
 
-
-class CategoricalMLPRegressor(LasagnePowered, Serializable):
-
+def space_to_distribution(space):
     """
-    A class for performing regression (or classification, really) by fitting a categorical distribution to the outputs.
-    Assumes that the outputs will be always a one hot vector.
+    Build a distribution from the given space
     """
+    if isinstance(space, Discrete):
+        return Categorical()
+    elif isinstance(space, Box):
+        return DiagonalGaussian()
+    elif isinstance(space, Product):
+        components = space.components
+        component_dists = map(space_to_distribution, components)
+        dimensions = [x.flat_dim for x in components]
+        return ProductDistribution(component_dists, dimensions)
+    else:
+        raise NotImplementedError
 
+
+def output_to_info(output_var, output_space):
+    if isinstance(output_space, Discrete):
+        return dict(prob=TT.nnet.softmax(output_var))
+    elif isinstance(output_space, Box):
+        raise NotImplementedError
+    elif isinstance(output_space, Product):
+        components = output_space.components
+        dimensions = [x.flat_dim for x in components]
+        cum_dims = list(np.cumsum(dimensions))
+        ret = dict()
+        for idx, slice_from, slice_to, subspace in zip(itertools.count(), [0] + cum_dims, cum_dims, components):
+            sub_info = output_to_info(output_var[:, slice_from:slice_to], subspace)
+            for k, v in sub_info.iteritems():
+                ret["id_%d_%s" % (idx, k)] = v
+        return ret
+
+
+class SharedNetworkAutoMLPRegressor(LasagnePowered, Serializable):
     def __init__(
             self,
             input_shape,
-            output_dim,
-            prob_network=None,
+            output_space,
+            network=None,
             hidden_sizes=(32, 32),
-            hidden_nonlinearity=NL.rectify,
+            hidden_nonlinearity=LN.rectify,
             optimizer=None,
             use_trust_region=True,
             step_size=0.01,
             normalize_inputs=True,
             name=None,
     ):
-        """
-        :param input_shape: Shape of the input data.
-        :param output_dim: Dimension of output.
-        :param hidden_sizes: Number of hidden units of each layer of the mean network.
-        :param hidden_nonlinearity: Non-linearity used for each layer of the mean network.
-        :param optimizer: Optimizer for minimizing the negative log-likelihood.
-        :param use_trust_region: Whether to use trust region constraint.
-        :param step_size: KL divergence constraint for each iteration
-        """
         Serializable.quick_init(self, locals())
 
         if optimizer is None:
@@ -53,70 +76,64 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
                 optimizer = PenaltyLbfgsOptimizer()
             else:
                 optimizer = LbfgsOptimizer()
-
-        self.output_dim = output_dim
         self._optimizer = optimizer
 
-        if prob_network is None:
-            prob_network = MLP(
+        if network is None:
+            network = MLP(
                 input_shape=input_shape,
-                output_dim=output_dim,
+                output_dim=output_space.flat_dim,
                 hidden_sizes=hidden_sizes,
                 hidden_nonlinearity=hidden_nonlinearity,
-                output_nonlinearity=NL.softmax,
+                # separate nonlinearities will be used for each component of the output
+                output_nonlinearity=None,
             )
 
-        l_prob = prob_network.output_layer
+        l_output = network.output_layer
+        LasagnePowered.__init__(self, [l_output])
 
-        LasagnePowered.__init__(self, [l_prob])
-
-        xs_var = prob_network.input_layer.input_var
-        ys_var = TT.imatrix("ys")
-        old_prob_var = TT.matrix("old_prob")
+        xs_var = network.input_var
+        ys_var = TT.matrix("ys")
 
         x_mean_var = theano.shared(
             np.zeros((1,) + input_shape),
             name="x_mean",
-            broadcastable=(True,) + (False, ) * len(input_shape)
+            broadcastable=(True,) + (False,) * len(input_shape)
         )
         x_std_var = theano.shared(
             np.ones((1,) + input_shape),
             name="x_std",
-            broadcastable=(True,) + (False, ) * len(input_shape)
+            broadcastable=(True,) + (False,) * len(input_shape)
         )
 
         normalized_xs_var = (xs_var - x_mean_var) / x_std_var
 
-        prob_var = L.get_output(l_prob, {prob_network.input_layer: normalized_xs_var})
+        output_var = L.get_output(l_output, {network.input_layer: normalized_xs_var})
 
-        old_info_vars = dict(prob=old_prob_var)
-        info_vars = dict(prob=prob_var)
+        dist = self._dist = space_to_distribution(output_space)
 
-        dist = self._dist = Categorical()
+        info_vars = output_to_info(output_var, output_space)
+
+        old_info_vars_list = [TT.matrix("old_%s") % k for k in dist.dist_info_keys]
+        old_info_vars = dict(zip(dist.dist_info_keys, old_info_vars_list))
 
         mean_kl = TT.mean(dist.kl_sym(old_info_vars, info_vars))
 
         loss = - TT.mean(dist.log_likelihood_sym(ys_var, info_vars))
 
-        predicted = special.to_onehot_sym(TT.argmax(prob_var, axis=1), output_dim)
-
-        self._f_predict = ext.compile_function([xs_var], predicted)
-        self._f_prob = ext.compile_function([xs_var], prob_var)
-        self._l_prob = l_prob
-
         optimizer_args = dict(
             loss=loss,
             target=self,
-            network_outputs=[prob_var],
+            network_outputs=[output_var],
         )
 
         if use_trust_region:
             optimizer_args["leq_constraint"] = (mean_kl, step_size)
-            optimizer_args["inputs"] = [xs_var, ys_var, old_prob_var]
+            optimizer_args["inputs"] = [xs_var, ys_var] + old_info_vars_list
         else:
             optimizer_args["inputs"] = [xs_var, ys_var]
 
         self._optimizer.update_opt(**optimizer_args)
+        self._f_dist_info = ext.compile_function([xs_var], info_vars)
 
         self._use_trust_region = use_trust_region
         self._name = name
@@ -131,8 +148,9 @@ class CategoricalMLPRegressor(LasagnePowered, Serializable):
             self._x_mean_var.set_value(np.mean(xs, axis=0, keepdims=True))
             self._x_std_var.set_value(np.std(xs, axis=0, keepdims=True) + 1e-8)
         if self._use_trust_region:
-            old_prob = self._f_prob(xs)
-            inputs = [xs, ys, old_prob]
+            old_infos = self._f_dist_info(xs)
+            old_info_list = [old_infos[k] for k in self._dist.dist_info_keys]
+            inputs = [xs, ys] + old_info_list
         else:
             inputs = [xs, ys]
         loss_before = self._optimizer.loss(inputs)

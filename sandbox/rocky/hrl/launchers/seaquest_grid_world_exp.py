@@ -1,7 +1,7 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.misc import instrument
 from sandbox.rocky.hrl.envs.seaquest_grid_world_env import SeaquestGridWorldEnv
 
 from rllab.algos.trpo import TRPO
@@ -10,6 +10,8 @@ from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.baselines.zero_baseline import ZeroBaseline
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
+from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.core.network import ConvNetwork
 from sandbox.rocky.hrl.batch_hrl import BatchHRL
 from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
@@ -18,14 +20,13 @@ from sandbox.rocky.hrl.mi_evaluator.state_based_mi_evaluator import StateBasedMI
 from sandbox.rocky.hrl.core.network import ConvMergeNetwork
 import lasagne.nonlinearities as NL
 import sys
+import numpy as np
 
 HIERARCHICAL = True
 
-stub(globals())
+instrument.stub(globals())
 
 if HIERARCHICAL:
-
-    seed = 11
 
     batch_size = 4000
 
@@ -34,64 +35,98 @@ if HIERARCHICAL:
     env = SeaquestGridWorldEnv(
         size=grid_size,
         n_bombs=grid_size / 2,
+        guided_observation=True,
     )
 
-    for n_subgoals in [5, 10, 15, 20, 25, 30]:
-        high_network = ConvNetwork(
-            input_shape=env.observation_space.shape,
-            output_dim=n_subgoals,
-            hidden_sizes=(20,),
-            conv_filters=(8, 8),
-            conv_filter_sizes=(3, 3),
-            conv_strides=(1, 1),
-            conv_pads=('full', 'full'),
-            hidden_nonlinearity=NL.tanh,
-            output_nonlinearity=NL.softmax,
-        )
+    guided_obs_size = grid_size + grid_size + 2
 
-        low_network = ConvMergeNetwork(
-            input_shape=env.observation_space.shape,
-            extra_input_shape=(n_subgoals,),
-            output_dim=env.action_space.flat_dim,
-            extra_hidden_sizes=(20,),
-            hidden_sizes=(20,),
-            conv_filters=(8, 8),
-            conv_filter_sizes=(3, 3),
-            conv_strides=(1, 1),
-            conv_pads=('full', 'full'),
-            hidden_nonlinearity=NL.tanh,
-            output_nonlinearity=NL.softmax,
-        )
+    tasks = []
+
+    from rllab import config
+
+    config.AWS_INSTANCE_TYPE = "c4.2xlarge"
+
+    vg = instrument.VariantGenerator()
+
+    vg.add("seed", [11, 21, 31, 41, 51])
+    vg.add("n_subgoals", [5, 10, 15, 20, 25, 30])
+    vg.add("mi_coeff", [10, 1, 0.1, 0.01, 0])
+
+    variants = vg.variants(randomized=True)
+
+    print("#Experiments: ", len(variants))
+
+    for variant in variants:
+        def new_high_network(output_dim, output_nonlinearity):
+            return ConvMergeNetwork(
+                input_shape=env.observation_space.shape,
+                extra_input_shape=(guided_obs_size,),
+                extra_hidden_sizes=(20,),
+                output_dim=output_dim,
+                hidden_sizes=(20,),
+                conv_filters=(8, 8),
+                conv_filter_sizes=(3, 3),
+                conv_strides=(1, 1),
+                conv_pads=('full', 'full'),
+                hidden_nonlinearity=NL.tanh,
+                output_nonlinearity=output_nonlinearity,
+            )
+
+
+        def new_low_network(output_dim, output_nonlinearity):
+            return ConvMergeNetwork(
+                input_shape=env.observation_space.shape,
+                extra_input_shape=(guided_obs_size + variant["n_subgoals"],),
+                output_dim=output_dim,
+                extra_hidden_sizes=(20,),
+                hidden_sizes=(20,),
+                conv_filters=(8, 8),
+                conv_filter_sizes=(3, 3),
+                conv_strides=(1, 1),
+                conv_pads=('full', 'full'),
+                hidden_nonlinearity=NL.tanh,
+                output_nonlinearity=output_nonlinearity,
+            )
+
+
+        # high_network = ConvNetwork(
+        #     input_shape=env.observation_space.shape,
+        #     output_dim=variant["n_subgoals"],
+        #     hidden_sizes=(20,),
+        #     conv_filters=(8, 8),
+        #     conv_filter_sizes=(3, 3),
+        #     conv_strides=(1, 1),
+        #     conv_pads=('full', 'full'),
+        #     hidden_nonlinearity=NL.tanh,
+        #     output_nonlinearity=NL.softmax,
+        # )
+
+        # low_network =
 
         policy = SubgoalPolicy(
             env_spec=env.spec,
             high_policy_cls=CategoricalMLPPolicy,
-            high_policy_args=dict(prob_network=high_network),
+            high_policy_args=dict(prob_network=new_high_network(variant["n_subgoals"], NL.softmax)),
             low_policy_cls=CategoricalMLPPolicy,
-            low_policy_args=dict(prob_network=low_network),
-            subgoal_space=Discrete(n_subgoals),
+            low_policy_args=dict(prob_network=new_low_network(env.action_space.flat_dim, NL.softmax)),
+            subgoal_space=Discrete(variant["n_subgoals"]),
             subgoal_interval=3,
         )
 
         baseline = SubgoalBaseline(
             env_spec=env.spec,
-            high_baseline=LinearFeatureBaseline(env_spec=policy.high_env_spec),
-            low_baseline=LinearFeatureBaseline(env_spec=policy.low_env_spec),
+            high_baseline=GaussianMLPBaseline(env_spec=policy.high_env_spec,
+                                              regressor_args=dict(mean_network=new_high_network(1, None))),
+            low_baseline=GaussianMLPBaseline(env_spec=policy.low_env_spec,
+                                             regressor_args=dict(mean_network=new_low_network(1, None))),
         )
 
         mi_evaluator = StateBasedMIEvaluator(
             env_spec=env.spec,
             policy=policy,
-            regressor_cls=CategoricalMLPRegressor,
+            regressor_cls=SharedProductMLPRegressor,
             regressor_args=dict(use_trust_region=False),
-        )
-
-        low_algo = TRPO(
-            env=env,
-            policy=policy.low_policy,
-            baseline=baseline.low_baseline,
-            discount=0.99,
-            step_size=0.01,
+            component_idx=1,
         )
 
         algo = BatchHRL(
@@ -100,10 +135,9 @@ if HIERARCHICAL:
             baseline=baseline,
             bonus_evaluator=mi_evaluator,
             batch_size=batch_size,
-            mi_coeff=0.01,
+            mi_coeff=variant["mi_coeff"],
             max_path_length=100,
             n_itr=100,
-            bonus_gradient=True,
             high_algo=TRPO(
                 env=env,
                 policy=policy.high_policy,
@@ -111,18 +145,32 @@ if HIERARCHICAL:
                 discount=0.99,
                 step_size=0.01,
             ),
-            low_algo=low_algo,
+            low_algo=TRPO(
+                env=env,
+                policy=policy.low_policy,
+                baseline=baseline.low_baseline,
+                discount=0.99,
+                step_size=0.01,
+            ),
         )
 
-        run_experiment_lite(
-            algo.train(),
+        tasks.append(dict(
+            stub_method_call=algo.train(),
+            seed=variant["seed"],
+            n_parallel=1,
+        ))
+
+    n_machines = 10
+    n_runs_per_machine = int(np.ceil(len(tasks) * 1.0 / n_machines))
+
+    for idx in xrange(0, len(tasks), n_runs_per_machine):
+        machine_tasks = tasks[idx:idx + n_runs_per_machine]
+        instrument.run_experiment_lite(
+            batch_tasks=machine_tasks,
             exp_prefix="hrl_seaquest",
             snapshot_mode="last",
-            seed=seed,
-            n_parallel=1,
+            mode="ec2",
         )
-
-        sys.exit(0)
 
 else:
     for seed in [11, 21, 31, 41, 51]:
