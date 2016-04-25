@@ -305,14 +305,15 @@ class BatchPolopt(RLAlgorithm):
                 for path in paths:
                     self.all_observations.append(path['observations'])
                     self.all_actions.append(path['actions'])
+                arr = np.hstack(
+                    [np.vstack(self.all_observations), np.vstack(self.all_actions)])
                 if len(self.all_observations) >= 500000:
                     randind = np.random.choice(
-                        len(self.all_observations), 500000)
+                        len(arr), 500000)
                 else:
-                    randind = range(len(self.all_observations))
-                array = np.hstack(
-                    [np.vstack(self.all_observations), np.vstack(self.all_actions)])[randind, :]
-                np.save('data/obs_act.npy', array)
+                    randind = range(len(arr))
+                array = arr[randind, :]
+                np.save('data/trpo_obs_act_ex.npy', array)
 
             # Exploration code
             # ----------------

@@ -1,6 +1,7 @@
 import os
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.mujoco.walker2d_env import Walker2DEnv
+from rllab.envs.mujoco.hopper_env import HopperEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
@@ -14,7 +15,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-mdp_classes = [Walker2DEnv]
+mdp_classes = [HopperEnv]
 mdps = [NormalizedEnv(env=mdp_class())
         for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
@@ -33,7 +34,7 @@ for mdp, seed in param_cart_product:
         regressor_args=dict(hidden_sizes=(64, 32)),
     )
 
-    batch_size = 10000
+    batch_size = 1000
     algo = TRPO(
         env=mdp,
         policy=policy,
@@ -41,15 +42,15 @@ for mdp, seed in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=2500,
+        n_itr=10000,
         step_size=0.01,
-        subsample_factor=0.1,
+        subsample_factor=1.0,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-loco-v1x",
-        n_parallel=15,
+        exp_prefix="trpo-loco-v3y",
+        n_parallel=2,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

@@ -15,11 +15,17 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(10)
-etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
-normalize_rewards = [False, True]
-mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
-               DoublePendulumEnv, MountainCarEnv]
+# seeds = range(10)
+# etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
+# normalize_rewards = [False, True]
+# mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
+#                DoublePendulumEnv, MountainCarEnv]
+
+seeds = range(1)
+etas = [0.01]
+normalize_rewards = [False]
+mdp_classes = [MountainCarEnv]
+
 mdps = [NormalizedEnv(env=mdp_class())
         for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
@@ -50,7 +56,7 @@ for normalize_reward, mdp, eta, seed in param_cart_product:
         step_size=0.01,
         eta=eta,
         eta_discount=1.0,
-        snn_n_samples=10,
+        snn_n_samples=10,   
         subsample_factor=1.0,
         use_reverse_kl_reg=True,
         use_replay_pool=True,
@@ -62,7 +68,7 @@ for normalize_reward, mdp, eta, seed in param_cart_product:
         stochastic_output=False,
         replay_pool_size=100000,
         n_updates_per_sample=500,
-#         second_order_update=True,
+        #         second_order_update=True,
         unn_n_hidden=[32],
         unn_layers_type=[1, 1],
         unn_learning_rate=0.001
@@ -74,7 +80,7 @@ for normalize_reward, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         script="sandbox/rein/run_experiment_lite.py"
     )

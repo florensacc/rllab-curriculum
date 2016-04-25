@@ -17,7 +17,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-mdp_classes = [DoublePendulumEnv, MountainCarEnv]
+mdp_classes = [DoublePendulumEnv]
 mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
     mdps, seeds
@@ -43,7 +43,7 @@ for mdp, seed in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=1000,
+        n_itr=200,
         step_size=0.01,
         subsample_factor=1.0,
     )
@@ -54,6 +54,6 @@ for mdp, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
     )

@@ -1,9 +1,11 @@
 from __future__ import print_function
+
 import sys
+
 sys.path.append(".")
 
 from rllab.misc.ext import is_iterable, set_seed
-from rllab.misc.instrument import StubClass, StubObject, StubAttr, StubMethodCall
+from rllab.misc.instrument import concretize
 from rllab import config
 import rllab.misc.logger as logger
 import argparse
@@ -14,45 +16,6 @@ import ast
 import uuid
 import cPickle as pickle
 import base64
-from sandbox.rein.sampler import parallel_sampler_vbnn as parallel_sampler
-
-def concretize(maybe_stub):
-    if isinstance(maybe_stub, StubMethodCall):
-        # print(maybe_stub, maybe_stub.obj, maybe_stub.method_name, maybe_stub.args, maybe_stub.kwargs)
-        obj = concretize(maybe_stub.obj)
-        method = getattr(obj, maybe_stub.method_name)
-        args = concretize(maybe_stub.args)  # map(concretize, maybe_stub.args)
-        # dict([(k, concretize(v)) for k, v in maybe_stub.kwargs.iteritems()])
-        kwargs = concretize(maybe_stub.kwargs)
-        return method(*args, **kwargs)
-    elif isinstance(maybe_stub, StubClass):
-        return maybe_stub.proxy_class
-    elif isinstance(maybe_stub, StubAttr):
-        return getattr(concretize(maybe_stub.obj), maybe_stub.attr_name)
-    elif isinstance(maybe_stub, StubObject):
-        # print(maybe_stub, maybe_stub.proxy_class, maybe_stub.args, maybe_stub.kwargs)
-        if not hasattr(maybe_stub, "__stub_cache"):
-            args = concretize(maybe_stub.args)
-            kwargs = concretize(maybe_stub.kwargs)
-            try:
-                maybe_stub.__stub_cache = maybe_stub.proxy_class(
-                    *args, **kwargs)
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                # import ipdb; ipdb.set_trace()
-        ret = maybe_stub.__stub_cache
-        return ret
-    elif isinstance(maybe_stub, dict):
-        # make sure that there's no hidden caveat
-        ret = dict()
-        for k, v in maybe_stub.iteritems():
-            ret[concretize(k)] = concretize(v)
-        return ret
-    elif isinstance(maybe_stub, (list, tuple)):
-        return map(concretize, maybe_stub)
-    else:
-        return maybe_stub
 
 
 def run_experiment(argv):
@@ -94,6 +57,7 @@ def run_experiment(argv):
 
     args = parser.parse_args(argv[1:])
 
+    from sandbox.rein.sampler import parallel_sampler_vbnn as parallel_sampler
     parallel_sampler.initialize(n_parallel=args.n_parallel)
 
     if args.seed is not None:
