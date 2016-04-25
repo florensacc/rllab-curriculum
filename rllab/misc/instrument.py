@@ -357,6 +357,7 @@ def run_experiment_lite(
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         for task in batch_tasks:
+            task.pop('env')
             task["resources"] = params.pop("resouces", config.KUBE_DEFAULT_RESOURCES)
             task["node_selector"] = params.pop("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
             task["exp_prefix"] = exp_prefix

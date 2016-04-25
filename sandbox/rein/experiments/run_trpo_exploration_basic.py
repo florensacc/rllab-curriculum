@@ -15,16 +15,16 @@ import itertools
 stub(globals())
 
 # Param ranges
-# seeds = range(10)
-# etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
-# normalize_rewards = [False, True]
-# mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
-#                DoublePendulumEnv, MountainCarEnv]
-
-seeds = range(1)
-etas = [0.01]
-normalize_rewards = [False]
-mdp_classes = [MountainCarEnv]
+seeds = range(10)
+etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
+normalize_rewards = [False, True]
+mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
+               DoublePendulumEnv, MountainCarEnv]
+#
+# seeds = range(1)
+# etas = [0.01]
+# normalize_rewards = [False]
+# mdp_classes = [MountainCarEnv]
 
 mdps = [NormalizedEnv(env=mdp_class())
         for mdp_class in mdp_classes]
@@ -56,7 +56,7 @@ for normalize_reward, mdp, eta, seed in param_cart_product:
         step_size=0.01,
         eta=eta,
         eta_discount=1.0,
-        snn_n_samples=10,   
+        snn_n_samples=10,
         subsample_factor=1.0,
         use_reverse_kl_reg=True,
         use_replay_pool=True,
