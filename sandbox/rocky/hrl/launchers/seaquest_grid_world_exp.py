@@ -18,6 +18,7 @@ from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 from sandbox.rocky.hrl.subgoal_baseline import SubgoalBaseline
 from sandbox.rocky.hrl.mi_evaluator.state_based_mi_evaluator import StateBasedMIEvaluator
 from sandbox.rocky.hrl.core.network import ConvMergeNetwork
+from sandbox.rocky.hrl.regressors.shared_network_auto_mlp_regressor import SharedNetworkAutoMLPRegressor
 import lasagne.nonlinearities as NL
 import sys
 import numpy as np
@@ -59,7 +60,7 @@ if HIERARCHICAL:
     for variant in variants:
         def new_high_network(output_dim, output_nonlinearity):
             return ConvMergeNetwork(
-                input_shape=env.observation_space.shape,
+                input_shape=env.observation_space.components[0].shape,
                 extra_input_shape=(guided_obs_size,),
                 extra_hidden_sizes=(20,),
                 output_dim=output_dim,
@@ -75,7 +76,7 @@ if HIERARCHICAL:
 
         def new_low_network(output_dim, output_nonlinearity):
             return ConvMergeNetwork(
-                input_shape=env.observation_space.shape,
+                input_shape=env.observation_space.components[0].shape,
                 extra_input_shape=(guided_obs_size + variant["n_subgoals"],),
                 output_dim=output_dim,
                 extra_hidden_sizes=(20,),
@@ -124,8 +125,8 @@ if HIERARCHICAL:
         mi_evaluator = StateBasedMIEvaluator(
             env_spec=env.spec,
             policy=policy,
-            regressor_cls=SharedProductMLPRegressor,
-            regressor_args=dict(use_trust_region=False),
+            regressor_cls=SharedNetworkAutoMLPRegressor,
+            regressor_args=dict(use_trust_region=False, output_space=env.observation_space.components[1]),
             component_idx=1,
         )
 
@@ -160,6 +161,15 @@ if HIERARCHICAL:
             n_parallel=1,
         ))
 
+        instrument.run_experiment_lite(
+            batch_tasks=tasks,
+            exp_prefix="hrl_seaquest",
+            snapshot_mode="last",
+            mode="local",
+        )
+
+        sys.exit(0)
+
     n_machines = 10
     n_runs_per_machine = int(np.ceil(len(tasks) * 1.0 / n_machines))
 
@@ -169,8 +179,9 @@ if HIERARCHICAL:
             batch_tasks=machine_tasks,
             exp_prefix="hrl_seaquest",
             snapshot_mode="last",
-            mode="ec2",
+            mode="local",
         )
+        sys.exit(0)
 
 else:
     for seed in [11, 21, 31, 41, 51]:

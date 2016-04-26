@@ -59,6 +59,7 @@ class SharedNetworkAutoMLPRegressor(LasagnePowered, Serializable):
     def __init__(
             self,
             input_shape,
+            output_dim,
             output_space,
             network=None,
             hidden_sizes=(32, 32),
@@ -113,7 +114,7 @@ class SharedNetworkAutoMLPRegressor(LasagnePowered, Serializable):
 
         info_vars = output_to_info(output_var, output_space)
 
-        old_info_vars_list = [TT.matrix("old_%s") % k for k in dist.dist_info_keys]
+        old_info_vars_list = [TT.matrix("old_%s" % k) for k in dist.dist_info_keys]
         old_info_vars = dict(zip(dist.dist_info_keys, old_info_vars_list))
 
         mean_kl = TT.mean(dist.kl_sym(old_info_vars, info_vars))
@@ -165,13 +166,11 @@ class SharedNetworkAutoMLPRegressor(LasagnePowered, Serializable):
         logger.record_tabular(prefix + 'dLoss', loss_before - loss_after)
 
     def predict(self, xs):
-        return self._f_predict(np.asarray(xs))
+        raise NotImplementedError
 
     def predict_log_likelihood(self, xs, ys):
-        prob = self._f_prob(np.asarray(xs))
-        # if np.any(np.abs(prob) > 1e3):
-        #     import ipdb; ipdb.set_trace()
-        return self._dist.log_likelihood(np.asarray(ys), dict(prob=prob))
+        dist_info = self._f_dist_info(xs)
+        return self._dist.log_likelihood(np.asarray(ys), dist_info)
 
     def get_param_values(self, **tags):
         return LasagnePowered.get_param_values(self, **tags)
