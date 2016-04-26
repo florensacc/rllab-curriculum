@@ -105,22 +105,22 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         old_log_stds_var = TT.matrix("old_log_stds")
 
         x_mean_var = theano.shared(
-            np.zeros((1,) + input_shape),
+            np.zeros((1,) + input_shape, dtype=theano.config.floatX),
             name="x_mean",
             broadcastable=(True,) + (False,) * len(input_shape)
         )
         x_std_var = theano.shared(
-            np.ones((1,) + input_shape),
+            np.ones((1,) + input_shape, dtype=theano.config.floatX),
             name="x_std",
             broadcastable=(True,) + (False,) * len(input_shape)
         )
         y_mean_var = theano.shared(
-            np.zeros((1, output_dim)),
+            np.zeros((1, output_dim), dtype=theano.config.floatX),
             name="y_mean",
             broadcastable=(True, False)
         )
         y_std_var = theano.shared(
-            np.ones((1, output_dim)),
+            np.ones((1, output_dim), dtype=theano.config.floatX),
             name="y_std",
             broadcastable=(True, False)
         )
@@ -180,12 +180,12 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
     def fit(self, xs, ys):
         if self._normalize_inputs:
             # recompute normalizing constants for inputs
-            self._x_mean_var.set_value(np.mean(xs, axis=0, keepdims=True))
-            self._x_std_var.set_value(np.std(xs, axis=0, keepdims=True) + 1e-8)
+            self._x_mean_var.set_value(np.mean(xs, axis=0, keepdims=True).astype(theano.config.floatX))
+            self._x_std_var.set_value((np.std(xs, axis=0, keepdims=True) + 1e-8).astype(theano.config.floatX))
         if self._normalize_outputs:
             # recompute normalizing constants for outputs
-            self._y_mean_var.set_value(np.mean(ys, axis=0, keepdims=True))
-            self._y_std_var.set_value(np.std(ys, axis=0, keepdims=True) + 1e-8)
+            self._y_mean_var.set_value(np.mean(ys, axis=0, keepdims=True).astype(theano.config.floatX))
+            self._y_std_var.set_value((np.std(ys, axis=0, keepdims=True) + 1e-8).astype(theano.config.floatX))
         if self._use_trust_region:
             old_means, old_log_stds = self._f_pdists(xs)
             inputs = [xs, ys, old_means, old_log_stds]
