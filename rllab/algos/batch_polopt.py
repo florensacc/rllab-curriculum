@@ -66,7 +66,6 @@ class BatchPolopt(RLAlgorithm):
         self.positive_adv = positive_adv
         self.store_paths = store_paths
         self.whole_paths = whole_paths
-        self.all_observations, self.all_actions = [], []
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy)
@@ -85,19 +84,6 @@ class BatchPolopt(RLAlgorithm):
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.obtain_samples(itr)
                 samples_data = self.process_samples(itr, paths)
-                # Keep track of all observations for T-SNE calc.
-                for path in paths:
-                    self.all_observations.append(path['observations'])
-                    self.all_actions.append(path['actions'])
-                arr = np.hstack(
-                    [np.vstack(self.all_observations), np.vstack(self.all_actions)])
-                if len(self.all_observations) >= 500000:
-                    randind = np.random.choice(
-                        len(arr), 500000)
-                else:
-                    randind = range(len(arr))
-                array = arr[randind, :]
-                np.save('data/obs_act.npy', array)
                 self.log_diagnostics(paths)
                 self.optimize_policy(itr, samples_data)
                 logger.log("saving snapshot...")
