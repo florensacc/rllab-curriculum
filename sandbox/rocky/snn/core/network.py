@@ -84,7 +84,8 @@ class StochasticMLP(object):
         :param output_dim: int dimension of the output.
         :param hidden_sizes: a list of integers denoting number of deterministic hidden units for each layer.
         :param input_latent_vars: if specified, it should be a list/tuple of tuples of the form (distribution_str,
-        num_units), where distribution can be one of 'bernoulli' and 'gaussian'
+        num_units), where distribution can be one of 'bernoulli', 'gaussian', 'independent_bernoulli'
+        and 'independent_gaussian'
         :param hidden_latent_vars: if specified, it should be a list/tuple of lists/tuples of tuples, where each
         top-level list/tuple specifies the latent variable configuration for each hidden layer.
         :param hidden_nonlinearity: Nonlinearity applied at each hidden layer to the deterministic units.
