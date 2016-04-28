@@ -15,11 +15,16 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(10)
-etas = [0.0001, 0.0003, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
-normalize_rewards = [False, True]
-mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
-               DoublePendulumEnv, MountainCarEnv]
+# seeds = range(10)
+# etas = [0.0001, 0.0003, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
+# normalize_rewards = [False, True]
+# mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
+#                DoublePendulumEnv, MountainCarEnv]
+seeds = [1]
+mdp_classes = [DoublePendulumEnv]
+etas = [0.1]
+normalize_rewards = [True]
+
 mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
     mdps, etas, seeds, normalize_rewards
@@ -71,6 +76,7 @@ for mdp, eta, seed, normalize_reward in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
+        script="sandbox/rein/run_experiment_lite.py"
     )

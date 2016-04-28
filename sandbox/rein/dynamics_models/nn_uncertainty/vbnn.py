@@ -10,7 +10,7 @@ from rllab.optimizers.hessian_free_optimizer import HessianFreeOptimizer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc import ext
-
+from collections import OrderedDict
 
 # Plotting params.
 # ----------------
@@ -80,14 +80,14 @@ class VBNNLayer(lasagne.layers.Layer):
 
         # Backup params for KL calculations.
         self.mu_old = self.add_param(
-            mu, (self.num_inputs, self.num_units), name='mu_old', trainable=False)
+            mu, (self.num_inputs, self.num_units), name='mu_old', trainable=False, oldparam=True)
         self.rho_old = self.add_param(
-            rho, (self.num_inputs, self.num_units), name='rho_old', trainable=False)
+            rho, (self.num_inputs, self.num_units), name='rho_old', trainable=False, oldparam=True)
         # Bias priors.
         self.b_mu_old = self.add_param(b_mu, (self.num_units,), name="b_mu_old",
-                                       regularizable=False, trainable=False)
+                                       regularizable=False, trainable=False, oldparam=True)
         self.b_rho_old = self.add_param(b_rho, (self.num_units,), name="b_rho_old",
-                                        regularizable=False, trainable=False)
+                                        regularizable=False, trainable=False, oldparam=True)
 
     def get_W(self):
         # Here we generate random epsilon values from a normal distribution
@@ -579,9 +579,9 @@ class VBNN(LasagnePowered, Serializable):
         else:
             params = lasagne.layers.get_all_params(
                 self.network, trainable=True)
+
         updates = lasagne.updates.adam(
             loss, params, learning_rate=self.learning_rate)
-        updates_kl = lasagne.updates.rmsprop(loss, params, learning_rate=self.learning_rate)
 
         # Train/val fn.
         self.pred_fn = ext.compile_function(
@@ -589,16 +589,35 @@ class VBNN(LasagnePowered, Serializable):
         self.train_fn = ext.compile_function(
             [input_var, target_var], loss, updates=updates, log_name='train_fn')
         if self.second_order_update:
-            # Hessian-free optimization step
-            # ------------------------------
-            hso = HessianFreeOptimizer(max_opt_itr=1, batch_size=5)
-            hso.update_opt(
-                loss, self, [input_var, target_var], self.pred_sym(input_var))
-            self.train_update_fn = hso.optimize
-            # ------------------------------
-        else:
+
+            oldparams = lasagne.layers.get_all_params(
+                self.network, oldparam=True)
+
+            def sgd(loss_or_grads, params, oldparams):
+                grads = T.grad(loss_or_grads, params)
+                updates = OrderedDict()
+                for i in xrange(len(params)):
+                    param = params[i]
+                    grad = grads[i]
+                    if param.name == 'mu' or param.name == 'b_mu':
+                        oldparam_rho = oldparams[i + 1]
+                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                    else:
+                        oldparam_rho = oldparams[i]
+                        invH = (1 + T.exp(param)) * T.log(1 + T.exp(param)) / T.exp(param) * \
+                            (-1 + T.square(T.log(1 + T.exp(oldparam_rho)))
+                             * T.square(T.log(1 + T.exp(param))))
+                    updates[param] = param - invH * grad
+
+                return updates
+
+            updates_kl = sgd(
+                loss, params, oldparams)
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
+        else:
+            self.train_update_fn = ext.compile_function(
+                [input_var, target_var], loss_only_last_sample, updates=updates, log_name='train_update_fn')
 
         self.train_err_fn = ext.compile_function(
             [input_var, target_var], loss, log_name='train_err_fn')
@@ -691,11 +710,12 @@ class VBNN(LasagnePowered, Serializable):
             plt.xlim(xmin=0 * self.n_batches, xmax=20000)
             plt.ylim(ymin=0, ymax=0.003)
             ax.grid()
+
             def eformat(f, prec, exp_digits):
-                s = "%.*e"%(prec, f)
+                s = "%.*e" % (prec, f)
                 mantissa, exp = s.split('e')
                 # add 1 to digits as 1 is taken by sign +/-
-                return "%se%+0*d"%(mantissa, exp_digits+1, int(exp))
+                return "%se%+0*d" % (mantissa, exp_digits + 1, int(exp))
             ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
             ax.xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
             plt.draw()
@@ -734,7 +754,7 @@ class VBNN(LasagnePowered, Serializable):
 
                 kl_values.append(kl_mb_closed_form)
                 kl_all_values.append(kl_mb_closed_form)
-                
+
                 counter += 1
 
             # Calculate KL divergence variance over all minibatches.
@@ -825,7 +845,8 @@ class VBNN(LasagnePowered, Serializable):
 
             elif PLOT_KL:
                 painter_kl.set_xdata(range(counter))
-                painter_kl.set_ydata(sliding_mean(np.hstack(kl_all_values), window=25))
+                painter_kl.set_ydata(
+                    sliding_mean(np.hstack(kl_all_values), window=25))
                 plt.draw()
                 plt.pause(0.0001)
                 if counter > 20000:

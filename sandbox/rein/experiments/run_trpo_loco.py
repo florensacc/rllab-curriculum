@@ -34,7 +34,7 @@ for mdp, seed in param_cart_product:
         regressor_args=dict(hidden_sizes=(64, 32)),
     )
 
-    batch_size = 1000
+    batch_size = 5000
     algo = TRPO(
         env=mdp,
         policy=policy,
@@ -49,8 +49,8 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-loco-v3y",
-        n_parallel=2,
+        exp_prefix="trpo-loco-v1z",
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

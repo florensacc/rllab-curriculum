@@ -63,12 +63,12 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     # Save original reward.
     path['rewards_orig'] = np.array(path['rewards'])
 
-    if normalize_reward:
-        # Normalize rewards.
-        path['rewards'] = (
-            path['rewards'] - reward_mean) / (reward_std + 1e-8)
-
     if itr > 0:
+        if normalize_reward:
+            # Normalize rewards.
+            path['rewards'] = (
+                path['rewards'] - reward_mean) / (reward_std + 1e-8)
+
         # Iterate over all paths and compute intrinsic reward by updating the
         # model on each observation, calculating the KL divergence of the new
         # params to the old ones, and undoing this operation.

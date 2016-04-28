@@ -14,7 +14,7 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.rein.dynamics_models.nn_uncertainty import uncertain_nn
+from sandbox.rein.dynamics_models.nn_uncertainty import vbnn
 # -------------------
 
 TSNE_PLOT = False
@@ -236,12 +236,12 @@ class BatchPolopt(RLAlgorithm):
             self.kl_previous = deque(maxlen=self.kl_q_len)
 
         if TSNE_PLOT:
-            self.all_observations = []
+            self.all_observations, self.all_actions = [], []
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy, self.pnn)
         if self.plot:
-            plotter.init_plot(self.env, self.policy, self.pnn)
+            plotter.init_plot(self.env, self.policy)
 
     def shutdown_worker(self):
         pass
@@ -257,7 +257,9 @@ class BatchPolopt(RLAlgorithm):
         obs_dim = np.sum(self.env.observation_space.shape)
         act_dim = np.sum(self.env.action_space.shape)
 
-        self.pnn = uncertain_nn.ProbNN(
+        logger.log("Building UNN model (eta={}) ...".format(self.eta))
+        start_time = time.time()
+        self.pnn = vbnn.VBNN(
             n_in=(obs_dim + act_dim),
             n_hidden=self.unn_n_hidden,
             n_out=obs_dim,
@@ -277,14 +279,6 @@ class BatchPolopt(RLAlgorithm):
             second_order_update=self.second_order_update,
             learning_rate=self.unn_learning_rate
         )
-
-        logger.log("Building UNN model (eta={}) ...".format(self.eta))
-        start_time = time.time()
-        # Build symbolic network architecture.
-        self.pnn.build_network()
-        # Build all symbolic stuff around architecture, e.g., loss, prediction
-        # functions, training functions,...
-        self.pnn.build_model()
         logger.log(
             "Model built ({:.1f} sec).".format((time.time() - start_time)))
 
@@ -303,22 +297,6 @@ class BatchPolopt(RLAlgorithm):
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
-            if TSNE_PLOT and itr > 0:
-                from sklearn import manifold
-                from matplotlib import pyplot as plt
-                n_components = 2
-                X = np.vstack(self.all_observations)
-                n_samples = 5000
-                rand_ind = np.random.choice(range(X.shape[0]), n_samples)
-                tsne = manifold.TSNE(
-                    n_components=n_components, init='pca', random_state=0)
-                Y = tsne.fit_transform(X[rand_ind, :])
-                color = [
-                    'blue' if i > n_samples / 2 else 'red' for i in xrange(Y.shape[0])]
-                plt.scatter(
-                    Y[:, 0], Y[:, 1], c=color, cmap=plt.cm.Spectral, lw=0)
-                plt.show()
-
             paths = self.obtain_samples(itr)
             samples_data = self.process_samples(itr, paths)
 
@@ -326,6 +304,10 @@ class BatchPolopt(RLAlgorithm):
                 # Keep track of all observations for T-SNE calc.
                 for path in paths:
                     self.all_observations.append(path['observations'])
+                    self.all_actions.append(path['actions'])
+                array = np.hstack(
+                    [np.vstack(self.all_observations), np.vstack(self.all_actions)])
+                np.save('data/obs-act_vbnn.npy', array)
 
             # Exploration code
             # ----------------
@@ -428,10 +410,35 @@ class BatchPolopt(RLAlgorithm):
 
     def obtain_samples(self, itr):
         cur_params = self.policy.get_param_values()
+        cur_dynamics_params = self.pnn.get_param_values()
+
+        reward_mean = None
+        reward_std = None
+        if self.normalize_reward:
+            # Compute running mean/std.
+            reward_mean = np.mean(np.asarray(self._reward_mean))
+            reward_std = np.mean(np.asarray(self._reward_std))
+
+        # Mean/std obs/act based on replay pool.
+        obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
+
         paths = parallel_sampler.sample_paths(
             policy_params=cur_params,
+            dynamics_params=cur_dynamics_params,
             max_samples=self.batch_size,
             max_path_length=self.max_path_length,
+            itr=itr,
+            normalize_reward=self.normalize_reward,
+            reward_mean=reward_mean,
+            reward_std=reward_std,
+            kl_batch_size=self.kl_batch_size,
+            n_itr_update=self.n_itr_update,
+            use_replay_pool=self.use_replay_pool,
+            obs_mean=obs_mean,
+            obs_std=obs_std,
+            act_mean=act_mean,
+            act_std=act_std,
+            second_order_update=self.second_order_update
         )
         if self.whole_paths:
             return paths
@@ -442,80 +449,26 @@ class BatchPolopt(RLAlgorithm):
 
     def process_samples(self, itr, paths):
 
-        # Save original reward.
-        for i in xrange(len(paths)):
-            paths[i]['rewards_orig'] = np.array(paths[i]['rewards'])
-
         if self.normalize_reward:
             # Update reward mean/std Q.
             rewards = []
             for i in xrange(len(paths)):
-                rewards.append(paths[i]['rewards'])
+                rewards.append(paths[i]['rewards_orig'])
             rewards_flat = np.hstack(rewards)
             self._reward_mean.append(np.mean(rewards_flat))
             self._reward_std.append(np.std(rewards_flat))
 
-            # Normalize rewards.
-            reward_mean = np.mean(np.asarray(self._reward_mean))
-            reward_std = np.mean(np.asarray(self._reward_std))
-            for i in xrange(len(paths)):
-                paths[i]['rewards'] = (
-                    paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
-
-        # Computing intrinsic rewards.
-        # ----------------------------
         if itr > 0:
-            logger.log("Computing intrinsic rewards ...")
-
-            # List to keep track of kl per path.
             kls = []
-
-            # Iterate over all paths and compute intrinsic reward by updating the
-            # model on each observation, calculating the KL divergence of the new
-            # params to the old ones, and undoing this operation.
-            obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
             for i in xrange(len(paths)):
-                obs = (paths[i]['observations'] - obs_mean) / (obs_std + 1e-8)
-                act = (paths[i]['actions'] - act_mean) / (act_std + 1e-8)
-                rew = paths[i]['rewards']
+                kls.append(paths[i]['KL'])
 
-                # inputs = (o,a), target = o'
-                obs_nxt = np.vstack([obs[1:]])
-                _inputs = np.hstack([obs[:-1], act[:-1]])
-                _targets = obs_nxt
+            kls_flat = np.hstack(kls)
 
-                # KL vector assumes same shape as reward.
-                kl = np.zeros(rew.shape)
-
-                for j in xrange(int(np.ceil(obs.shape[0] / float(self.kl_batch_size)))):
-
-                    # Save old params for every update.
-                    self.pnn.save_old_params()
-
-                    start = j * self.kl_batch_size
-                    end = np.minimum(
-                        (j + 1) * self.kl_batch_size, obs.shape[0] - 1)
-
-                    # Update model weights based on current minibatch.
-                    for _ in xrange(self.n_itr_update):
-                        #                     import ipdb; ipdb.set_trace()
-                        self.pnn.train_update_fn(
-                            _inputs[start:end], _targets[start:end])
-
-                    # Calculate current minibatch KL.
-                    kl_div = float(self.pnn.f_kl_div_closed_form())
-                    for k in xrange(start, end):
-                        kl[k] = kl_div
-
-                    # If using replay pool, undo updates.
-                    if self.use_replay_pool:
-                        self.pnn.reset_to_old_params()
-
-                # Last element in KL vector needs to be replaced by second last one
-                # because the actual last observation has no next observation.
-                kl[-1] = kl[-2]
-                # Add kl to list of kls
-                kls.append(kl)
+            logger.record_tabular('VBNN_MeanKL', np.mean(kls_flat))
+            logger.record_tabular('VBNN_StdKL', np.std(kls_flat))
+            logger.record_tabular('VBNN_MinKL', np.min(kls_flat))
+            logger.record_tabular('VBNN_MaxKL', np.max(kls_flat))
 
             # Perform normlization of the intrinsic rewards.
             if self.use_kl_ratio:
@@ -533,8 +486,11 @@ class BatchPolopt(RLAlgorithm):
             # Discount eta
             self.eta *= self.eta_discount
 
-            logger.log("Intrinsic reward computed.")
-            # ----------------------------
+        else:
+            logger.record_tabular('VBNN_MeanKL', 0.)
+            logger.record_tabular('VBNN_StdKL', 0.)
+            logger.record_tabular('VBNN_MinKL', 0.)
+            logger.record_tabular('VBNN_MaxKL', 0.)
 
         baselines = []
         returns = []
@@ -675,21 +631,6 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('StdReturn', np.std(undiscounted_returns))
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
-
-        # Exploration logged vars.
-        # ------------------------
-        if itr > 0:
-            kls_flat = np.hstack(kls)
-            logger.record_tabular('SNN_MeanKL', np.mean(kls_flat))
-            logger.record_tabular('SNN_StdKL', np.std(kls_flat))
-            logger.record_tabular('SNN_MinKL', np.min(kls_flat))
-            logger.record_tabular('SNN_MaxKL', np.max(kls_flat))
-        else:
-            logger.record_tabular('SNN_MeanKL', 0.)
-            logger.record_tabular('SNN_StdKL', 0.)
-            logger.record_tabular('SNN_MinKL', 0.)
-            logger.record_tabular('SNN_MaxKL', 0.)
-        logger.record_tabular('eta', self.eta)
-        # ------------------------
+        logger.record_tabular('Expl_eta', self.eta)
 
         return samples_data
