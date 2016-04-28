@@ -23,7 +23,21 @@ import numpy as np
 from rllab.viskit.core import flatten
 
 
-class StubAttr(object):
+class StubBase(object):
+
+    def __getitem__(self, item):
+        return StubMethodCall(self, "__getitem__", args=[item], kwargs=dict())
+
+    def __getattr__(self, item):
+        try:
+            return super(self.__class__, self).__getattribute__(item)
+        except AttributeError:
+            if item.startswith("__") and item.endswith("__"):
+                raise
+            return StubAttr(self, item)
+
+
+class StubAttr(StubBase):
     def __init__(self, obj, attr_name):
         self.__dict__["_obj"] = obj
         self.__dict__["_attr_name"] = attr_name
@@ -39,20 +53,13 @@ class StubAttr(object):
     def __call__(self, *args, **kwargs):
         return StubMethodCall(self.obj, self.attr_name, args, kwargs)
 
-    def __getattr__(self, item):
-        try:
-            return super(StubAttr, self).__getattribute__(item)
-        except AttributeError:
-            if item.startswith("__") and item.endswith("__"):
-                raise
-            return StubAttr(self, item)
-
     def __str__(self):
         return "StubAttr(%s, %s)" % (str(self.obj), str(self.attr_name))
 
 
-class StubMethodCall(Serializable):
+class StubMethodCall(StubBase, Serializable):
     def __init__(self, obj, method_name, args, kwargs):
+        self._serializable_initialized = False
         Serializable.quick_init(self, locals())
         self.obj = obj
         self.method_name = method_name
@@ -64,7 +71,7 @@ class StubMethodCall(Serializable):
             str(self.obj), str(self.method_name), str(self.args), str(self.kwargs))
 
 
-class StubClass(object):
+class StubClass(StubBase):
     def __init__(self, proxy_class):
         self.proxy_class = proxy_class
 
@@ -91,7 +98,7 @@ class StubClass(object):
         return "StubClass(%s)" % self.proxy_class
 
 
-class StubObject(object):
+class StubObject(StubBase):
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
             spec = inspect.getargspec(__proxy_class.__init__)

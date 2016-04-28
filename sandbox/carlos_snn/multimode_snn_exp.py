@@ -3,7 +3,8 @@ from __future__ import absolute_import
 
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from sandbox.rocky.snn.baselines.linear_feature_snn_baseline import LinearFeatureSNNBaseline
-from sandbox.rocky.snn.bimod_env import BimodEnv
+from sandbox.carlos_snn.multiMod2D_env import MultiModEnv
+#from sandbox.rocky.snn.bimod_env import BimodEnv
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
 
@@ -20,14 +21,14 @@ stub(globals())
 
 
 
-# env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False)
-# env = normalize(CartpoleEnv())
-env = normalize(CartpoleSwingupEnv())
+#env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=True)
 
-# baseline1 = [LinearFeatureSNNBaseline(env_spec=env.spec),'baseline']
-baseline2 = [LinearFeatureBaseline(env_spec=env.spec),'SNNbaseline']
+env = MultiModEnv(mu=[1,0], sigma=0.01, n=2, rand_init=False)
 
-for base in [baseline2]:
+baseline1 = [LinearFeatureSNNBaseline(env_spec=env.spec), 'SNNbaseline']
+# baseline2 = [LinearFeatureBaseline(env_spec=env.spec), 'baseline']
+
+for base in [baseline1]:
     for latent_dim in [0,1,2,5,11]:
         for n_samples in [0,1,5,13]:
             # for hid_latent in [1, 2, 5]:
@@ -44,7 +45,7 @@ for base in [baseline2]:
                         [],
                         [],
                     ],
-                    hidden_sizes=(32, 32)
+                    hidden_sizes=(8, 8)
                 )
 
                 baseline = base[0]
@@ -55,9 +56,9 @@ for base in [baseline2]:
                     baseline=baseline,
                     self_normalize=True,
                     # hallucinator = None,
-                    # hallucinator=PriorHallucinator(env_spec=env.spec, policy=policy, n_hallucinate_samples=n_samples),
-                    hallucinator=PosteriorHallucinator(env_spec=env.spec, policy=policy, n_hallucinate_samples=n_samples),
-                    batch_size=2000,
+                    hallucinator=PriorHallucinator(env_spec=env.spec, policy=policy, n_hallucinate_samples=n_samples),
+                    # hallucinator=PosteriorHallucinator(env_spec=env.spec, policy=policy, n_hallucinate_samples=n_samples),
+                    batch_size=500,
                     whole_paths=True,
                     max_path_length=100,
                     n_itr=100,
@@ -71,9 +72,8 @@ for base in [baseline2]:
                         n_parallel=1,
                         snapshot_mode="last",
                         seed=s,
-                        exp_prefix='cartSwing-snn-posterior-hallucinate',
-                        exp_name='cartSwing_trpo_{}_{}Blatent_{}halluPost_{:04d}'.format(
+                        exp_prefix='bimod2D-snn-prior-hallucinate',
+                        exp_name='bimod2D_trpo_{}_{}Blatent_{}halluPrior_{:04d}'.format(
                             base[1], latent_dim, n_samples, s),
-                        # exp_name='trpo_lbase_{}lat_{}nsamp_{:04d}'.format(latent_dim,n_samples,s),
                     )
                     # sys.exit(0)

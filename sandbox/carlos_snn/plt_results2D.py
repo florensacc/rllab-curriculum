@@ -80,6 +80,53 @@ def plot_policy_learned(data_unpickle,color,fig_dir=None):
     else:
         print "No directory for saving plots"
 
+## estimate by MC the policy at 0!
+def plot_snn_at0(fig, data_unpickle, itr=0, color=(1,0.1,0.1),fig_dir=None):
+    #recover the policy
+    poli = data_unpickle['policy']
+    #range to plot it
+    bound = 3
+    num_bins=600
+    step = (2.*bound)/num_bins
+    samples=(num_bins)**2
+    x = np.arange(-bound,bound+step, step)
+    y = np.arange(-bound,bound+step, step)
+    x, y = np.meshgrid(x,y)
+    p_xy = np.zeros_like(x)
+    for _ in xrange(samples):
+        a = poli.get_action(np.array((0,0)))[0]
+        idx_x=int(np.floor(a[0]/step) + bound/step)
+        idx_y=int(np.floor(a[1]/step) + bound/step)
+        # find the coord of the action in the grid
+        if idx_x>=0 and idx_x<np.shape(x)[1]:
+            px=idx_x
+        elif idx<0:
+            px=0
+        else:
+            px=np.shape(x)[1]
+        # same for y
+        if idx_y >= 0 and idx_y < np.shape(y)[0]:
+            py = idx_y
+        elif idx_y < 0:
+            py = 0
+        else:
+            py = np.shape(y)[0]
+        p_xy[px,py]+=1
+
+    ax = fig.gca(projection='3d')
+    p_xy=p_xy/float(samples)
+    surf = ax.plot_surface(y,x,p_xy, rstride=1, cstride=1, cmap=cm.coolwarm,
+                           linewidth=0, antialiased=False)
+    plt.title('Policy distribution at 0 after {} iter'.format(itr))
+    fig.colorbar(surf,shrink=0.8)
+    #plt.xlabel('next state')
+    #plt.ylabel('probability mass')
+    if fig_dir:
+        plt.savefig(os.path.join(fig_dir,'MC_policy_learned_at0_iter{}'.format(itr)))
+    else:
+        print "No directory for saving plots"
+
+
 def plot_all_policy_at0(path_experiment,color,num_iter=100,fig_dir=None):
     mean_at_0 = []
     var_at_0 = []
@@ -97,10 +144,9 @@ def plot_all_policy_at0(path_experiment,color,num_iter=100,fig_dir=None):
     plt.ylabel('mean and variance at 0')
     plt.legend(loc=3)
     if fig_dir:
-        plt.savefig(os.path.join(fig_dir,'policy_progress'))
+        plt.savefig(os.path.join(fig_dir,'policy_at_0'))
     else:
         print "No directory for saving plots"
-
 
 ## plot for all the experiments
 def plot_all_exp(datadir):
@@ -124,20 +170,23 @@ def plot_all_exp(datadir):
         if not os.path.exists(fig_dir):
             os.makedirs(fig_dir)
         #fix a color for plots of this exp
-        color = np.array(colors[i])
+        color = np.array(colors[i%3])
         #plot everything
         print 'Plotting for: ',exp_name
-        fig=plt.figure(1)
-        plot_reward(fig,first_data_unpickle,color,fig_dir)
+        fig1=plt.figure(1+(i/4)*6)
+        plot_reward(fig1,first_data_unpickle,color,fig_dir)
         print 'Plotting learning curve'
-        plt.figure(2)
+        fig2=plt.figure(2+i*6)#(2+(i/3)*6)
         plot_learning_curve(exp,color,fig_dir)
         print 'Plotting last policy'
-        plt.figure(3)
-        plot_policy_learned(last_data_unpickle,color,fig_dir=fig_dir)
+        fig3=plt.figure(3+i*6)#(3+(i/3)*6)
+        # plot_policy_learned(last_data_unpickle, color, fig_dir=fig_dir)
+        plot_snn_at0(fig3, last_data_unpickle, color=color, fig_dir=fig_dir)
         # print 'Plotting policy progress'
         # plt.figure(4)
         # plot_all_policy_at0(path_experiment,color,num_iter=last_iter+1,fig_dir=fig_dir)
+        if (i+1)/3 > i/3:
+            plt.close('all')
 
 ## plot for all the experiments
 if __name__ == "__main__":

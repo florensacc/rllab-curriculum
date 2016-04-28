@@ -1,7 +1,10 @@
 from __future__ import print_function
 from __future__ import absolute_import
 from rllab.distributions.base import Distribution
+from rllab.distributions.categorical import Categorical
 import numpy as np
+import theano.tensor as TT
+
 
 
 class ProductDistribution(Distribution):
@@ -15,8 +18,14 @@ class ProductDistribution(Distribution):
         """
         cum_dims = list(np.cumsum(self.dimensions))
         out = []
-        for slice_from, slice_to in zip([0] + cum_dims, cum_dims):
-            out.append(x[:, slice_from:slice_to])
+        for slice_from, slice_to, dist in zip([0] + cum_dims, cum_dims, self.distributions):
+            sliced = x[:, slice_from:slice_to]
+            if isinstance(dist, Categorical):
+                if isinstance(sliced, TT.TensorVariable):
+                    sliced = TT.cast(sliced, dtype='uint8')
+                else:
+                    sliced = np.cast['uint8'](sliced)
+            out.append(sliced)
         return out
 
     def _split_dist_info(self, dist_info):
@@ -29,6 +38,14 @@ class ProductDistribution(Distribution):
             for k in dist.dist_info_keys:
                 cur_dist_info[k] = dist_info["id_%d_%s" % (idx, k)]
             ret.append(cur_dist_info)
+        return ret
+
+    def log_likelihood(self, xs, dist_infos):
+        splitted_xs = self._split_x(xs)
+        dist_infos = self._split_dist_info(dist_infos)
+        ret = 0
+        for x_i, dist_info_i, dist_i in zip(splitted_xs, dist_infos, self.distributions):
+            ret += dist_i.log_likelihood(x_i, dist_info_i)
         return ret
 
     def log_likelihood_sym(self, x_var, dist_info_vars):
