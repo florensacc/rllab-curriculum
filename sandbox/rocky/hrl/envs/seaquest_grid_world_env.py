@@ -11,11 +11,11 @@ from rllab.spaces.discrete import Discrete
 from rllab.spaces.box import Box
 from rllab.spaces.product import Product
 
-EMPTY = 0
-AGENT = 1
-DIVER = 2
-BOMB = 3
-N_OBJECT_TYPES = 4
+# EMPTY = 0
+AGENT = 0
+DIVER = 1
+BOMB = 2
+N_OBJECT_TYPES = 3#4
 
 
 class GridPlot(object):
