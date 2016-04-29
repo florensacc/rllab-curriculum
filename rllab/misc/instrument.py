@@ -756,7 +756,7 @@ def to_lab_kube_pod(
     post_commands.append('aws s3 cp --recursive %s %s' %
                          (log_dir,
                           remote_log_dir))
-    post_commands.append('sleep 500000')
+    # post_commands.append('sleep 500000')
     # command = to_docker_command(params, docker_image=docker_image, script=script,
     #                             pre_commands=pre_commands,
     #                             post_commands=post_commands)
