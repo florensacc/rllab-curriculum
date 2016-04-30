@@ -205,13 +205,11 @@ class DDPG(RLAlgorithm):
             # exploration params
             eta=1.,
             snn_n_samples=10,
-            prior_sd=0.05,
+            prior_sd=0.5,
             use_kl_ratio=False,
-            kl_q_len=100,
-            reverse_update_kl=False,
-            symbolic_prior_kl=True,  # leave as is
+            kl_q_len=10,
             use_reverse_kl_reg=False,
-            reverse_kl_reg_factor=0.2,
+            reverse_kl_reg_factor=1e-3,
             use_replay_pool=True,
             dyn_replay_pool_size=100000,
             dyn_min_pool_size=500,
@@ -226,8 +224,7 @@ class DDPG(RLAlgorithm):
             use_kl_ratio_q=False,
             unn_n_hidden=[32],
             unn_layers_type=[1, 1],
-            unn_learning_rate=0.0001,
-            stochastic_output=False,
+            unn_learning_rate=0.001,
             second_order_update=False,
             dyn_replay_freq=100
     ):
@@ -308,8 +305,6 @@ class DDPG(RLAlgorithm):
         self.prior_sd = prior_sd
         self.use_kl_ratio = use_kl_ratio
         self.kl_q_len = kl_q_len
-        self.reverse_update_kl = reverse_update_kl
-        self.symbolic_prior_kl = symbolic_prior_kl
         self.use_reverse_kl_reg = use_reverse_kl_reg
         self.reverse_kl_reg_factor = reverse_kl_reg_factor
         self.use_replay_pool = use_replay_pool
@@ -327,7 +322,6 @@ class DDPG(RLAlgorithm):
         self.unn_n_hidden = unn_n_hidden
         self.unn_layers_type = unn_layers_type
         self.unn_learning_rate = unn_learning_rate
-        self.stochastic_output = stochastic_output
         self.second_order_update = second_order_update
         self.dyn_replay_freq = dyn_replay_freq
         # ----------------------
@@ -377,13 +371,9 @@ class DDPG(RLAlgorithm):
             out_func=lasagne.nonlinearities.linear,
             batch_size=batch_size,
             n_samples=self.snn_n_samples,
-            type='regression',
             prior_sd=self.prior_sd,
-            reverse_update_kl=self.reverse_update_kl,
-            symbolic_prior_kl=self.symbolic_prior_kl,
             use_reverse_kl_reg=self.use_reverse_kl_reg,
             reverse_kl_reg_factor=self.reverse_kl_reg_factor,
-            stochastic_output=self.stochastic_output,
             second_order_update=self.second_order_update,
             learning_rate=self.unn_learning_rate
         )
@@ -444,6 +434,8 @@ class DDPG(RLAlgorithm):
                 path_return += reward
                 rewards.append(reward)
 
+                # TODO: we need kl normalization.
+
                 # Computing intrinsic rewards.
                 # ----------------------------
                 if epoch > 0:
@@ -482,8 +474,6 @@ class DDPG(RLAlgorithm):
                 if itr_counter % self.dyn_replay_freq == 0:
                     if self.use_replay_pool:
                         # Fill replay pool.
-                        logger.log(
-                            "Fitting dynamics model using replay pool ...")
                         # Now we train the dynamics model using the replay self.pool; only
                         # if self.pool is large enough.
                         if self.pool.size >= self.dyn_min_pool_size:

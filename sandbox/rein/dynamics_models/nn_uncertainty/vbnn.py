@@ -13,7 +13,6 @@ import theano
 
 # Plotting params.
 # ----------------
-# Only works for regression
 PLOT_WEIGHTS_INDIVIDUAL = False
 PLOT_WEIGHTS_TOTAL = False
 PLOT_OUTPUT = True
@@ -22,6 +21,7 @@ PLOT_KL = False
 # ----------------
 VBNN_LAYER_TAG = 'vbnnlayer'
 USE_REPARAMETRIZATION_TRICK = True
+# ----------------
 
 
 def log_to_std(rho):
@@ -130,7 +130,6 @@ class VBNNLayer(lasagne.layers.Layer):
 
     def get_W(self):
         # Here we generate random epsilon values from a normal distribution
-        # (paper step 1)
         epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
         # Here we calculate weights based on shifting and rescaling according
@@ -141,7 +140,6 @@ class VBNNLayer(lasagne.layers.Layer):
 
     def get_b(self):
         # Here we generate random epsilon values from a normal distribution
-        # (paper step 1)
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
         b = self.b_mu + log_to_std(self.b_rho) * epsilon
@@ -179,6 +177,12 @@ class VBNNLayer(lasagne.layers.Layer):
         self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
         self.b_rho_old.set_value(self.b_rho.get_value())
+
+    def reset_to_old_params(self):
+        self.mu.set_value(self.mu_old.get_value())
+        self.rho.set_value(self.rho_old.get_value())
+        self.b_mu.set_value(self.b_mu_old.get_value())
+        self.b_rho.set_value(self.b_rho_old.get_value())
 
     def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
@@ -266,7 +270,7 @@ class VBNNLayer(lasagne.layers.Layer):
 
 
 class VBNN(LasagnePowered, Serializable):
-    """Neural network with weight uncertainty
+    """Variational Bayes neural network (VBNN), see Blundell2016.
 
     """
 
@@ -280,12 +284,12 @@ class VBNN(LasagnePowered, Serializable):
                  batch_size=100,
                  n_samples=10,
                  prior_sd=0.5,
-                 type='regression',
                  symbolic_prior_kl=True,
                  use_reverse_kl_reg=False,
                  reverse_kl_reg_factor=0.1,
                  likelihood_sd=0.5,
-                 second_order_update=False
+                 second_order_update=False,
+                 learning_rate=0.001
                  ):
 
         assert len(layers_type) == len(n_hidden) + 1
@@ -299,7 +303,6 @@ class VBNN(LasagnePowered, Serializable):
         self.n_samples = n_samples
         self.prior_sd = prior_sd
         self.layers_type = layers_type
-        self.type = type
         self.n_batches = n_batches
         self.symbolic_prior_kl = symbolic_prior_kl
         self.use_reverse_kl_reg = use_reverse_kl_reg
@@ -308,6 +311,7 @@ class VBNN(LasagnePowered, Serializable):
             assert self.symbolic_prior_kl == True
         self.likelihood_sd = likelihood_sd
         self.second_order_update = second_order_update
+        self.learning_rate = learning_rate
 
         # Build network architecture.
         self.build_network()
@@ -323,6 +327,12 @@ class VBNN(LasagnePowered, Serializable):
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_old_params()
+
+    def reset_to_old_params(self):
+        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+                        lasagne.layers.get_all_layers(self.network)[1:])
+        for layer in layers:
+            layer.reset_to_old_params()
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
@@ -368,6 +378,38 @@ class VBNN(LasagnePowered, Serializable):
 
         # Calculate variational posterior log(q(w)) and prior log(p(w)).
         kl = self.log_p_w_q_w_kl()
+        if self.use_reverse_kl_reg:
+            kl += self.reverse_kl_reg_factor * \
+                self.reverse_log_p_w_q_w_kl()
+
+        # Calculate loss function.
+        loss = (kl / self.n_batches -
+                log_p_D_given_w) / self.batch_size
+        loss /= self.n_samples
+
+        return loss
+
+    def fast_get_loss_only_last_sample(self, input, target):
+        """The difference with the original loss is that we only update based on the latest sample.
+        This means that instead of using the prior p(w), we use the previous approximated posterior
+        q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
+        """
+
+        log_p_D_given_w = 0.
+        
+        # TODO: stack input and target along extra dimension, n_samples times.
+        # TODO: make sure that epsilon is calculated along extra dimension, n_samples times
+
+        # MC samples.
+        for _ in xrange(self.n_samples):
+            # Make prediction.
+            prediction = self.fast_pred_sym(input)
+            # Calculate model likelihood log(P(D|w)).
+            log_p_D_given_w += self._log_prob_normal(
+                target, prediction, self.likelihood_sd)
+
+        # Calculate variational posterior log(q(w)) and prior log(p(w)).
+        kl = self.kl_div()
         if self.use_reverse_kl_reg:
             kl += self.reverse_kl_reg_factor * \
                 self.reverse_log_p_w_q_w_kl()
@@ -452,7 +494,7 @@ class VBNN(LasagnePowered, Serializable):
         # Create update methods.
         params = lasagne.layers.get_all_params(self.network, trainable=True)
         updates = lasagne.updates.adam(
-            loss, params, learning_rate=0.001)
+            loss, params, learning_rate=self.learning_rate)
 
         # Train/val fn.
         self.pred_fn = ext.compile_function(
@@ -509,9 +551,8 @@ class VBNN(LasagnePowered, Serializable):
         kl_div_stdns = []
         kl_all_values = []
 
-        ##########################
-        ### PLOT FUNCTIONALITY ###
-        ##########################
+        # Plot functionality
+        # ------------------
         # Print weights from this layer.
         layer = lasagne.layers.get_all_layers(self.network)[-1]
         if PLOT_WEIGHTS_TOTAL:
@@ -579,6 +620,7 @@ class VBNN(LasagnePowered, Serializable):
             ax.grid()
             plt.draw()
             plt.show()
+        # ------------------
 
         # Finally, launch the training loop.
         print("Starting training...")
@@ -613,9 +655,8 @@ class VBNN(LasagnePowered, Serializable):
             kl_div_means.append(kl_mean)
             kl_div_stdns.append(kl_stdn)
 
-            ##########################
-            ### PLOT FUNCTIONALITY ###
-            ##########################
+            # Plot functionality
+            # ------------------
             if PLOT_WEIGHTS_TOTAL:
                 sd = np.log(1 + np.exp(layer.rho.eval())).ravel()
                 mean = layer.mu.eval().ravel()
@@ -696,6 +737,7 @@ class VBNN(LasagnePowered, Serializable):
                 painter_kl.set_xdata(range((epoch + 1)))
                 painter_kl.set_ydata(kl_div_means)
                 plt.draw()
+            # ------------------
 
             # Then we print the results for this epoch:
             print("Epoch {} of {} took {:.3f}s".format(
@@ -704,8 +746,6 @@ class VBNN(LasagnePowered, Serializable):
                 train_err / train_batches))
             print(
                 "  KL divergence:\t\t{:.6f} ({:.6f})".format(kl_mean, kl_stdn))
-#             print(
-#                 "  alien KL ({:.1f}):\t\t{:.6f} ; {:.6f}".format(alien_value, alien_kl, alien_kl / kl_mean))
 
         print("Done training.")
 

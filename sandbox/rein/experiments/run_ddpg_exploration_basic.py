@@ -70,13 +70,12 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         n_itr_update=1,
         kl_batch_size=5,
         normalize_reward=normalize_reward,
-        stochastic_output=False,
         dyn_replay_pool_size=100000,
         n_updates_per_sample=500,
         second_order_update=False,
         unn_n_hidden=[32],
         unn_layers_type=[1, 1],
-        unn_learning_rate=0.0001,
+        unn_learning_rate=0.001,
         dyn_replay_freq=100
     )
 

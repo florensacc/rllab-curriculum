@@ -28,7 +28,7 @@ def main():
         n_samples=10,
         prior_sd=0.5,
         use_reverse_kl_reg=True,
-        reverse_kl_reg_factor=1e-4
+        reverse_kl_reg_factor=1e-2
     )
 
     # Train the model.
