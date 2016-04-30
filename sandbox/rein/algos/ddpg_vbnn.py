@@ -213,7 +213,7 @@ class DDPG(RLAlgorithm):
             use_replay_pool=True,
             dyn_replay_pool_size=100000,
             dyn_min_pool_size=500,
-            dyn_n_updates_per_sample=500,
+            dyn_n_updates_per_sample=50,
             pool_batch_size=10,
             eta_discount=1.0,
             n_itr_update=5,
@@ -349,7 +349,7 @@ class DDPG(RLAlgorithm):
     @overrides
     def train(self):
 
-        # Uncertain neural network (UNN) initialization.
+        # Variational Bayes neural network (VBNN) init
         # ------------------------------------------------
         batch_size = 1
         n_batches = 5  # FIXME, there is no correct value!
@@ -412,7 +412,8 @@ class DDPG(RLAlgorithm):
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
-            rewards = []
+
+            rewards, kls = [], []
             for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
                 # Execute policy
                 if terminal:  # or path_length > self.max_path_length:
@@ -434,39 +435,44 @@ class DDPG(RLAlgorithm):
                 path_return += reward
                 rewards.append(reward)
 
-                # TODO: we need kl normalization.
-
                 # Computing intrinsic rewards.
                 # ----------------------------
+                # Iterate over all paths and compute intrinsic reward by updating the
+                # model on each observation, calculating the KL divergence of the new
+                # params to the old ones, and undoing this operation.
+
+                obs = (observation - obs_mean) / (obs_std + 1e-8)
+                obs_nxt = (next_observation - obs_mean) / (obs_std + 1e-8)
+                act = (action - act_mean) / (act_std + 1e-8)
+
+                # Save old params for every update.
+                self.vbnn.save_old_params()
+
+                # Update model weights based on current minibatch.
+                for _ in xrange(self.n_itr_update):
+                    self.vbnn.train_update_fn(
+                        np.expand_dims(np.hstack((obs, act)), axis=0),
+                        np.expand_dims(obs_nxt, axis=0))
+
+                kl_div = float(self.vbnn.f_kl_div_closed_form())
+                kls.append(kl_div)
+
+                # If using replay pool, undo updates.
+                if self.use_replay_pool:
+                    self.vbnn.reset_to_old_params()
+
                 if epoch > 0:
-                    # Iterate over all paths and compute intrinsic reward by updating the
-                    # model on each observation, calculating the KL divergence of the new
-                    # params to the old ones, and undoing this operation.
+                    # Perform normlization of the intrinsic rewards.
+                    if self.use_kl_ratio and self.use_kl_ratio_q:
+                        previous_mean_kl = np.mean(
+                            np.asarray(self.kl_previous))
+                        # Add KL ass intrinsic reward to external reward
+                        reward += self.eta * kl_div / previous_mean_kl
+                    else:
+                        reward += self.eta * kl_div
 
-                    obs = (observation - obs_mean) / (obs_std + 1e-8)
-                    obs_nxt = (next_observation - obs_mean) / (obs_std + 1e-8)
-                    act = (action - act_mean) / (act_std + 1e-8)
-
-                    # Save old params for every update.
-                    self.vbnn.save_old_params()
-
-                    # Update model weights based on current minibatch.
-                    for _ in xrange(self.n_itr_update):
-                        self.vbnn.train_update_fn(
-                            np.expand_dims(np.hstack((obs, act)), axis=0),
-                            np.expand_dims(obs_nxt, axis=0))
-
-                    kl_div = float(self.vbnn.f_kl_div_closed_form())
-
-                    # If using replay pool, undo updates.
-                    if self.use_replay_pool:
-                        self.vbnn.reset_to_old_params()
-
-                    # Add KL ass intrinsic reward to external reward
-                    reward += self.eta * kl_div
-
-                    # Discount eta
-                    self.eta *= self.eta_discount
+                # Discount eta
+                self.eta *= self.eta_discount
                 # ---------------------------
 
                 # Exploration code
@@ -497,7 +503,6 @@ class DDPG(RLAlgorithm):
 
                             for _inputs, _targets in zip(_inputss, _targetss):
                                 self.vbnn.train_fn(_inputs, _targets)
-
                     # ----------------
 
                 if not terminal and path_length >= self.max_path_length:
@@ -529,6 +534,9 @@ class DDPG(RLAlgorithm):
 
                 itr += 1
                 itr_counter += 1
+
+            # Update kl Q
+            self.kl_previous.append(np.median(np.hstack(kls)))
 
             logger.log("Training finished")
             if pool.size >= self.min_pool_size:
