@@ -127,10 +127,10 @@ class BatchHRL(BatchPolopt, Serializable):
             high_samples_data = self.high_algo.process_samples(itr, high_paths)
         with logger.tabular_prefix('Lo_'), logger.prefix('Lo | '):
             low_samples_data = self.low_algo.process_samples(itr, low_paths)
-            for path in low_samples_data['paths']:
-                if np.max(abs(self.baseline.low_baseline.predict(path))) > 1e3:
-                    import ipdb;
-                    ipdb.set_trace()
+            # for path in low_samples_data['paths']:
+            #     if np.max(abs(self.baseline.low_baseline.predict(path))) > 1e3:
+            #         import ipdb;
+            #         ipdb.set_trace()
 
         # bonus_vals = self.bonus_evaluator.mi_bonus_sym().eval()
         # # compute bonus values explicitly to cross-compare

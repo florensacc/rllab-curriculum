@@ -756,7 +756,7 @@ def to_lab_kube_pod(
     post_commands.append('aws s3 cp --recursive %s %s' %
                          (log_dir,
                           remote_log_dir))
-    post_commands.append('sleep 500000')
+    # post_commands.append('sleep 500000')
     # command = to_docker_command(params, docker_image=docker_image, script=script,
     #                             pre_commands=pre_commands,
     #                             post_commands=post_commands)
@@ -871,7 +871,10 @@ def concretize(maybe_stub):
     elif isinstance(maybe_stub, StubClass):
         return maybe_stub.proxy_class
     elif isinstance(maybe_stub, StubAttr):
-        return getattr(concretize(maybe_stub.obj), maybe_stub.attr_name)
+        obj = concretize(maybe_stub.obj)
+        attr_name = maybe_stub.attr_name
+        attr_val = getattr(obj, attr_name)
+        return attr_val
     elif isinstance(maybe_stub, StubObject):
         if not hasattr(maybe_stub, "__stub_cache"):
             args = concretize(maybe_stub.args)

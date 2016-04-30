@@ -12,6 +12,8 @@ from rllab.baselines.zero_baseline import ZeroBaseline
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from rllab.core.network import ConvNetwork
 from sandbox.rocky.hrl.batch_hrl import BatchHRL
 from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
@@ -23,7 +25,7 @@ import lasagne.nonlinearities as NL
 import sys
 import numpy as np
 
-HIERARCHICAL = True
+HIERARCHICAL = False
 
 instrument.stub(globals())
 
@@ -51,9 +53,9 @@ if HIERARCHICAL:
 
     vg.add("seed", [11, 21, 31, 41, 51])
     vg.add("n_subgoals", [5, 10, 15, 20, 25, 30])
-    vg.add("mi_coeff", [10, 1, 0.1, 0.01, 0])
+    vg.add("mi_coeff", [0.1, 0.01, 10, 1, 0])
 
-    variants = vg.variants(randomized=True)
+    variants = vg.variants()#randomized=True)
 
     print("#Experiments: ", len(variants))
 
@@ -67,7 +69,7 @@ if HIERARCHICAL:
                 hidden_sizes=(20,),
                 conv_filters=(8, 8),
                 conv_filter_sizes=(3, 3),
-                conv_strides=(1, 1),
+                conv_strides=(2, 2),
                 conv_pads=('full', 'full'),
                 hidden_nonlinearity=NL.tanh,
                 output_nonlinearity=output_nonlinearity,
@@ -83,11 +85,13 @@ if HIERARCHICAL:
                 hidden_sizes=(20,),
                 conv_filters=(8, 8),
                 conv_filter_sizes=(3, 3),
-                conv_strides=(1, 1),
+                conv_strides=(2, 2),
                 conv_pads=('full', 'full'),
                 hidden_nonlinearity=NL.tanh,
                 output_nonlinearity=output_nonlinearity,
             )
+
+        # 8 * 10 * 10 * 4
 
 
         # high_network = ConvNetwork(
@@ -114,12 +118,30 @@ if HIERARCHICAL:
             subgoal_interval=3,
         )
 
+        # import ipdb; ipdb.set_trace()
+
         baseline = SubgoalBaseline(
             env_spec=env.spec,
-            high_baseline=GaussianMLPBaseline(env_spec=policy.high_env_spec,
-                                              regressor_args=dict(mean_network=new_high_network(1, None))),
-            low_baseline=GaussianMLPBaseline(env_spec=policy.low_env_spec,
-                                             regressor_args=dict(mean_network=new_low_network(1, None))),
+            #high_baseline=ZeroBaseline(env_spec=policy.high_env_spec),
+            high_baseline=GaussianMLPBaseline(
+                env_spec=policy.high_env_spec,
+                regressor_args=dict(
+                    mean_network=new_high_network(1, None),
+                    #normalize_inputs=False,
+                    #normalize_outputs=False,
+                    optimizer=ConjugateGradientOptimizer(),
+                )
+            ),
+            #low_baseline=ZeroBaseline(env_spec=policy.high_env_spec),
+            low_baseline=GaussianMLPBaseline(
+                env_spec=policy.low_env_spec,
+                regressor_args=dict(
+                    mean_network=new_low_network(1, None),
+                    #normalize_inputs=False,
+                    #normalize_outputs=False,
+                    optimizer=ConjugateGradientOptimizer(),
+                )
+            ),
         )
 
         mi_evaluator = StateBasedMIEvaluator(
@@ -185,10 +207,12 @@ if HIERARCHICAL:
 
 else:
     for seed in [11, 21, 31, 41, 51]:
-        for size in [10]:  # , 15]:
+        for size in [4]:  # , 15]:
+            guided_obs_size = size + size + 2
             env = SeaquestGridWorldEnv(
                 size=size,
                 n_bombs=size / 2,
+                guided_observation=True,
                 # agent_position=(0, 0),
                 # goal_position=(size-1, size-1),
                 # bomb_positions=[
@@ -196,15 +220,17 @@ else:
                 # ],
             )
 
-            network = ConvNetwork(
-                input_shape=env.observation_space.shape,
+            network = ConvMergeNetwork(
+                input_shape=env.observation_space.components[0].shape,
+                extra_input_shape=(guided_obs_size,),
                 output_dim=env.action_space.n,
-                hidden_sizes=(20,),
+                hidden_sizes=(10,),
                 conv_filters=(8, 8),
                 conv_filter_sizes=(3, 3),
                 conv_strides=(1, 1),
                 conv_pads=('full', 'full'),
                 hidden_nonlinearity=NL.tanh,
+                output_nonlinearity=NL.softmax,
             )
             policy = CategoricalMLPPolicy(env_spec=env.spec, prob_network=network)
             # policy = CategoricalCNNPolicy(env_spec=env.spec, hidden_sizes=tuple(),)
@@ -214,15 +240,16 @@ else:
                 env=env,
                 policy=policy,
                 baseline=baseline,
-                batch_size=4000,
+                batch_size=10000,
                 max_path_length=100,
-                n_itr=200,
+                n_itr=1000,
             )
 
-            run_experiment_lite(
+            instrument.run_experiment_lite(
                 algo.train(),
                 exp_prefix="seaquest",
                 snapshot_mode="last",
                 seed=seed,
+                n_parallel=8,
             )
             # sys.exit(0)
