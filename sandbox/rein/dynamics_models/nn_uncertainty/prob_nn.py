@@ -5,10 +5,6 @@ import theano.tensor as T
 import lasagne
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from utils import sliding_mean, iterate_minibatches
-from rllab.core.lasagne_powered import LasagnePowered
-from rllab.core.serializable import Serializable
-from rllab.misc import ext
-from collections import OrderedDict
 import theano
 
 # Plotting params.
@@ -20,7 +16,7 @@ PLOT_OUTPUT = True
 PLOT_OUTPUT_REGIONS = False
 PLOT_KL = False
 # ----------------
-VBNN_LAYER_TAG = 'vbnnlayer'
+VBNN_LAYER_TAG = 'unnlayer'
 USE_REPARAMETRIZATION_TRICK = True
 
 
@@ -33,12 +29,7 @@ def log_to_std(rho):
     return T.log(1 + T.exp(rho))
 
 
-def std_to_log(sigma):
-    """Reverse log_to_std transformation."""
-    return np.log(np.exp(sigma) - 1)
-
-
-class VBNNLayer(lasagne.layers.Layer):
+class ProbLayer(lasagne.layers.Layer):
     """Probabilistic layer that uses Gaussian weights.
 
     Each weight has two parameters: mean and standard deviation (std).
@@ -47,10 +38,14 @@ class VBNNLayer(lasagne.layers.Layer):
     def __init__(self,
                  incoming,
                  num_units,
+                 mu=lasagne.init.Normal(std=1., mean=0.),
+                 rho=lasagne.init.Normal(std=1., mean=0.),
+                 b_mu=lasagne.init.Normal(std=1., mean=0.),
+                 b_rho=lasagne.init.Normal(std=1., mean=0.),
                  nonlinearity=lasagne.nonlinearities.rectify,
                  prior_sd=None,
                  **kwargs):
-        super(VBNNLayer, self).__init__(incoming, **kwargs)
+        super(ProbLayer, self).__init__(incoming, **kwargs)
 
         self._srng = RandomStreams()
 
@@ -60,78 +55,39 @@ class VBNNLayer(lasagne.layers.Layer):
         self.num_units = num_units
         self.prior_sd = prior_sd
 
-        prior_rho = std_to_log(self.prior_sd)
-
-        self.W = np.random.normal(0., prior_sd,
-                                  (self.num_inputs, self.num_units))  # @UndefinedVariable
+        self.W = np.zeros(
+            (self.num_inputs, self.num_units),
+            dtype=theano.config.floatX)  # @UndefinedVariable
         self.b = np.zeros(
             (self.num_units,),
             dtype=theano.config.floatX)  # @UndefinedVariable
 
         # Here we set the priors.
-        # -----------------------
         self.mu = self.add_param(
-            lasagne.init.Normal(1., 0.),
-            (self.num_inputs, self.num_units),
-            name='mu'
-        )
+            mu, (self.num_inputs, self.num_units), name='mu')
         self.rho = self.add_param(
-            lasagne.init.Constant(prior_rho),
-            (self.num_inputs, self.num_units),
-            name='rho'
-        )
+            rho, (self.num_inputs, self.num_units), name='rho')
         # Bias priors.
-        self.b_mu = self.add_param(
-            lasagne.init.Normal(1., 0.),
-            (self.num_units,),
-            name="b_mu",
-            regularizable=False
-        )
-        self.b_rho = self.add_param(
-            lasagne.init.Constant(prior_rho),
-            (self.num_units,),
-            name="b_rho",
-            regularizable=False
-        )
-        # -----------------------
+        self.b_mu = self.add_param(b_mu, (self.num_units,), name="b_mu",
+                                   regularizable=False)
+        self.b_rho = self.add_param(b_rho, (self.num_units,), name="b_rho",
+                                    regularizable=False)
 
         # Backup params for KL calculations.
         self.mu_old = self.add_param(
-            np.zeros((self.num_inputs, self.num_units)),
-            (self.num_inputs, self.num_units),
-            name='mu_old',
-            trainable=False,
-            oldparam=True
-        )
+            mu, (self.num_inputs, self.num_units), name='mu_old', trainable=False)
         self.rho_old = self.add_param(
-            np.ones((self.num_inputs, self.num_units)),
-            (self.num_inputs, self.num_units),
-            name='rho_old',
-            trainable=False,
-            oldparam=True
-        )
+            rho, (self.num_inputs, self.num_units), name='rho_old', trainable=False)
         # Bias priors.
-        self.b_mu_old = self.add_param(
-            np.zeros((self.num_units,)),
-            (self.num_units,),
-            name="b_mu_old",
-            regularizable=False,
-            trainable=False,
-            oldparam=True
-        )
-        self.b_rho_old = self.add_param(
-            np.ones((self.num_units,)),
-            (self.num_units,),
-            name="b_rho_old",
-            regularizable=False,
-            trainable=False,
-            oldparam=True
-        )
+        self.b_mu_old = self.add_param(b_mu, (self.num_units,), name="b_mu_old",
+                                       regularizable=False, trainable=False)
+        self.b_rho_old = self.add_param(b_rho, (self.num_units,), name="b_rho_old",
+                                        regularizable=False, trainable=False)
 
     def get_W(self):
         # Here we generate random epsilon values from a normal distribution
         # (paper step 1)
-        epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
+        epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=self.prior_sd,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
         # Here we calculate weights based on shifting and rescaling according
         # to mean and variance (paper step 2)
@@ -142,7 +98,7 @@ class VBNNLayer(lasagne.layers.Layer):
     def get_b(self):
         # Here we generate random epsilon values from a normal distribution
         # (paper step 1)
-        epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
+        epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
         b = self.b_mu + log_to_std(self.b_rho) * epsilon
         self.b = b
@@ -166,89 +122,12 @@ class VBNNLayer(lasagne.layers.Layer):
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
         delta = T.dot(T.square(input), T.square(log_to_std(
             self.rho))) + T.square(log_to_std(self.b_rho)).dimshuffle('x', 0)
-        epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
+        epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
 
         activation = gamma + T.sqrt(delta) * epsilon
 
         return self.nonlinearity(activation)
-
-    def save_old_params(self):
-        """Save old parameter values for KL calculation."""
-        self.mu_old.set_value(self.mu.get_value())
-        self.rho_old.set_value(self.rho.get_value())
-        self.b_mu_old.set_value(self.b_mu.get_value())
-        self.b_rho_old.set_value(self.b_rho.get_value())
-
-    def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
-        """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
-        numerator = T.square(p_mean - q_mean) + \
-            T.square(p_std) - T.square(q_std)
-        denominator = 2 * T.square(q_std) + 1e-8
-        return T.sum(
-            numerator / denominator + T.log(q_std) - T.log(p_std))
-
-    def kl_div_new_old(self):
-        old_mean = self.mu_old
-        old_std = log_to_std(self.rho_old)
-        new_mean = self.mu
-        new_std = log_to_std(self.rho)
-        kl_div = self.kl_div_p_q(new_mean, new_std, old_mean, old_std)
-
-        old_mean = self.b_mu_old
-        old_std = log_to_std(self.b_rho_old)
-        new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho)
-        kl_div += self.kl_div_p_q(new_mean, new_std, old_mean, old_std)
-
-        return kl_div
-
-    def kl_div_old_new(self):
-        old_mean = self.mu_old
-        old_std = log_to_std(self.rho_old)
-        new_mean = self.mu
-        new_std = log_to_std(self.rho)
-        kl_div = self.kl_div_p_q(old_mean, old_std, new_mean, new_std)
-
-        old_mean = self.b_mu_old
-        old_std = log_to_std(self.b_rho_old)
-        new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho)
-        kl_div += self.kl_div_p_q(old_mean, old_std, new_mean, new_std)
-
-        return kl_div
-
-    def kl_div_new_prior(self):
-        prior_mean = 0.
-        prior_std = self.prior_sd
-        new_mean = self.mu
-        new_std = log_to_std(self.rho)
-        kl_div = self.kl_div_p_q(new_mean, new_std, prior_mean, prior_std)
-
-        new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho)
-        kl_div += self.kl_div_p_q(new_mean, new_std, prior_mean, prior_std)
-
-        return kl_div
-
-    def kl_div_prior_new(self):
-        prior_mean = 0.
-        prior_std = self.prior_sd
-        new_mean = self.mu
-        new_std = log_to_std(self.rho)
-        kl_div = self.kl_div_p_q(prior_mean, prior_std, new_mean, new_std)
-
-        new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho)
-        kl_div += self.kl_div_p_q(prior_mean, prior_std, new_mean, new_std)
-
-        return kl_div
-
-    def get_output_for(self, input, **kwargs):
-        if USE_REPARAMETRIZATION_TRICK:
-            return self.get_output_for_reparametrization(input, **kwargs)
-        else:
-            return self.get_output_for_default(input, **kwargs)
 
     def get_output_for_default(self, input, **kwargs):
         if input.ndim > 2:
@@ -261,11 +140,94 @@ class VBNNLayer(lasagne.layers.Layer):
 
         return self.nonlinearity(activation)
 
+    def get_output_for(self, input, **kwargs):
+        if USE_REPARAMETRIZATION_TRICK:
+            return self.get_output_for_reparametrization(input, **kwargs)
+        else:
+            return self.get_output_for_default(input, **kwargs)
+
+    def save_old_params(self):
+        """Save old parameter values for KL calculation."""
+        self.mu_old.set_value(self.mu.get_value())
+        self.rho_old.set_value(self.rho.get_value())
+        self.b_mu_old.set_value(self.b_mu.get_value())
+        self.b_rho_old.set_value(self.b_rho.get_value())
+
+    def reset_to_old_params(self):
+        self.mu.set_value(self.mu_old.get_value())
+        self.rho.set_value(self.rho_old.get_value())
+        self.b_mu.set_value(self.b_mu_old.get_value())
+        self.b_rho.set_value(self.b_rho_old.get_value())
+
+    def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
+        """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
+        numerator = T.square(p_mean - q_mean) + \
+            T.square(p_std) - T.square(q_std)
+        denominator = 2 * T.square(q_std) + 1e-8
+        return T.sum(
+            numerator / denominator + T.log(q_std) - T.log(p_std))
+
+    def kl_div_new_old(self):
+        old_mean = self.mu_old
+        old_std = log_to_std(self.rho_old) * self.prior_sd
+        new_mean = self.mu
+        new_std = log_to_std(self.rho) * self.prior_sd
+        kl_div = self.kl_div_p_q(new_mean, new_std, old_mean, old_std)
+
+        old_mean = self.b_mu_old
+        old_std = log_to_std(self.b_rho_old) * self.prior_sd
+        new_mean = self.b_mu
+        new_std = log_to_std(self.b_rho) * self.prior_sd
+        kl_div += self.kl_div_p_q(new_mean, new_std, old_mean, old_std)
+
+        return kl_div
+
+    def kl_div_old_new(self):
+        old_mean = self.mu_old
+        old_std = log_to_std(self.rho_old) * self.prior_sd
+        new_mean = self.mu
+        new_std = log_to_std(self.rho) * self.prior_sd
+        kl_div = self.kl_div_p_q(old_mean, old_std, new_mean, new_std)
+
+        old_mean = self.b_mu_old
+        old_std = log_to_std(self.b_rho_old) * self.prior_sd
+        new_mean = self.b_mu
+        new_std = log_to_std(self.b_rho) * self.prior_sd
+        kl_div += self.kl_div_p_q(old_mean, old_std, new_mean, new_std)
+
+        return kl_div
+
+    def kl_div_new_prior(self):
+        prior_mean = 0.
+        prior_std = self.prior_sd
+        new_mean = self.mu
+        new_std = log_to_std(self.rho) * self.prior_sd
+        kl_div = self.kl_div_p_q(new_mean, new_std, prior_mean, prior_std)
+
+        new_mean = self.b_mu
+        new_std = log_to_std(self.b_rho) * self.prior_sd
+        kl_div += self.kl_div_p_q(new_mean, new_std, prior_mean, prior_std)
+
+        return kl_div
+
+    def kl_div_prior_new(self):
+        prior_mean = 0.
+        prior_std = self.prior_sd
+        new_mean = self.mu
+        new_std = log_to_std(self.rho) * self.prior_sd
+        kl_div = self.kl_div_p_q(prior_mean, prior_std, new_mean, new_std)
+
+        new_mean = self.b_mu
+        new_std = log_to_std(self.b_rho) * self.prior_sd
+        kl_div += self.kl_div_p_q(prior_mean, prior_std, new_mean, new_std)
+
+        return kl_div
+
     def get_output_shape_for(self, input_shape):
         return (input_shape[0], self.num_units)
 
 
-class VBNN(LasagnePowered, Serializable):
+class ProbNN:
     """Neural network with weight uncertainty
 
     """
@@ -279,15 +241,16 @@ class VBNN(LasagnePowered, Serializable):
                  out_func=lasagne.nonlinearities.linear,
                  batch_size=100,
                  n_samples=10,
-                 prior_sd=0.5,
+                 prior_sd=0.05,
                  type='regression',
+                 reverse_update_kl=False,
                  symbolic_prior_kl=True,
                  use_reverse_kl_reg=False,
                  reverse_kl_reg_factor=0.1,
-                 likelihood_sd=0.5,
-                 second_order_update=False
+                 stochastic_output=False
                  ):
 
+        self._srng = RandomStreams()
         assert len(layers_type) == len(n_hidden) + 1
 
         self.n_in = n_in
@@ -301,60 +264,109 @@ class VBNN(LasagnePowered, Serializable):
         self.layers_type = layers_type
         self.type = type
         self.n_batches = n_batches
+        self.reverse_update_kl = reverse_update_kl
         self.symbolic_prior_kl = symbolic_prior_kl
         self.use_reverse_kl_reg = use_reverse_kl_reg
         self.reverse_kl_reg_factor = reverse_kl_reg_factor
         if self.use_reverse_kl_reg:
             assert self.symbolic_prior_kl == True
-        self.likelihood_sd = likelihood_sd
-        self.second_order_update = second_order_update
+        self.stochastic_output = stochastic_output
 
-        # Build network architecture.
-        self.build_network()
-
-        # Build model might depend on this.
-        LasagnePowered.__init__(self, [self.network])
-
-        # Compile theano functions.
-        self.build_model()
+    def _get_prob_layers(self):
+        if self.stochastic_output:
+            layers_mean = filter(lambda l: l.name == VBNN_LAYER_TAG,
+                                 lasagne.layers.get_all_layers(self.network_mean)[1:])
+            layers_stdn = filter(lambda l: l.name == VBNN_LAYER_TAG,
+                                 lasagne.layers.get_all_layers(self.network_stdn)[1:])
+            layers = layers_mean + layers_stdn
+        else:
+            layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+                            lasagne.layers.get_all_layers(self.network)[1:])
+        return layers
 
     def save_old_params(self):
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
-        for layer in layers:
+        for layer in self._get_prob_layers():
             layer.save_old_params()
+
+    def reset_to_old_params(self):
+        for layer in self._get_prob_layers():
+            layer.reset_to_old_params()
+
+    def get_kl_div_sampled(self):
+        """Sampled KL calculation"""
+        kl_div = 0.
+        # Calculate variational posterior log(q(w)) and prior log(p(w)).
+        for layer in self._get_prob_layers():
+            if layer.name == VBNN_LAYER_TAG:
+                W = layer.get_W()
+                b = layer.get_b()
+                kl_div += self._log_prob_normal(W,
+                                                layer.mu, T.log(1 + T.exp(layer.rho)) * self.prior_sd)
+                kl_div += self._log_prob_normal(b,
+                                                layer.b_mu, T.log(1 + T.exp(layer.b_rho)) * self.prior_sd)
+                kl_div -= self._log_prob_normal(W,
+                                                layer.mu_old, T.log(1 + T.exp(layer.rho_old)) * self.prior_sd)
+                kl_div -= self._log_prob_normal(b,
+                                                layer.b_mu_old, T.log(1 + T.exp(layer.b_rho_old)) * self.prior_sd)
+        return kl_div
+
+    def rev_kl_div(self):
+        """KL divergence KL[old_param||new_param]"""
+        return sum(l.kl_div_old_new() for l in self._get_prob_layers())
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
-        return sum(l.kl_div_new_old() for l in layers)
+        return sum(l.kl_div_new_old() for l in self._get_prob_layers())
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
-        return sum(l.kl_div_new_prior() for l in layers)
+        return sum(l.kl_div_new_prior() for l in self._get_prob_layers())
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
-        return sum(l.kl_div_prior_new() for l in layers)
+        return sum(l.kl_div_prior_new() for l in self._get_prob_layers())
 
-    def _log_prob_normal(self, input, mu=0., sigma=1.):
+    def _log_prob_normal(self, input, mu=0., sigma=0.01):
         log_normal = - \
             T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - \
             T.square(input - mu) / (2 * T.square(sigma))
         return T.sum(log_normal)
 
-    def pred_sym(self, input):
+    def _log_prob_spike_and_slab(self, input, pi, mu, sigma0, sigma1):
+        """sigma0 > sigma1"""
+        log_prob = pi * self._log_prob_normal(input, mu=mu, sigma=sigma0) + (
+            1 - pi) * self._log_prob_normal(input, mu=mu, sigma=sigma1)
+        return log_prob
+
+    def pred_sym_default(self, input):
+        """Default output"""
         return lasagne.layers.get_output(self.network, input)
 
+    # For stochastic output
+    # ---------------------
+    def pred_mean(self, input):
+        return lasagne.layers.get_output(self.network_mean, input)
+
+    def pred_stdn(self, input):
+        return log_to_std(lasagne.layers.get_output(self.network_stdn, input))
+    # ---------------------
+
+    def pred_sym_stochastic(self, input):
+        """Gaussian output sampled."""
+        # Mean is a matrix of batch_size rows.
+        mean = self.pred_mean(input)
+        stdn = self.pred_stdn(input)
+        epsilon = self._srng.normal(size=(1,), avg=0., std=1.)
+        out = mean + epsilon * stdn
+        return out
+
+    def pred_sym(self, input):
+        if self.stochastic_output:
+            return self.pred_sym_stochastic(input)
+        else:
+            return self.pred_sym_default(input)
+
     def get_loss_sym_sym(self, input, target):
-        # TODO: would it speed up things if we repeat input,target over matrix
-        # of n_samples, make sure we create a matrix of n_samples epsilon
-        # values and calculate the objective batch-wise?
 
         log_p_D_given_w = 0.
 
@@ -363,8 +375,16 @@ class VBNN(LasagnePowered, Serializable):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
-            log_p_D_given_w += self._log_prob_normal(
-                target, prediction, self.likelihood_sd)
+            if self.type == 'regression':
+                if self.stochastic_output:
+                    log_p_D_given_w += self._log_prob_normal(
+                        target, self.pred_mean(input), self.pred_stdn(input))
+                else:
+                    log_p_D_given_w += self._log_prob_normal(
+                        target, prediction, self.prior_sd)
+            elif self.type == 'classification':
+                log_p_D_given_w += T.sum(
+                    T.log(prediction)[T.arange(target.shape[0]), T.cast(target[:, 0], dtype='int64')])
 
         # Calculate variational posterior log(q(w)) and prior log(p(w)).
         kl = self.log_p_w_q_w_kl()
@@ -392,8 +412,16 @@ class VBNN(LasagnePowered, Serializable):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
-            log_p_D_given_w += self._log_prob_normal(
-                target, prediction, self.likelihood_sd)
+            if self.type == 'regression':
+                if self.stochastic_output:
+                    log_p_D_given_w += self._log_prob_normal(
+                        target, self.pred_mean(input), self.pred_stdn(input))
+                else:
+                    log_p_D_given_w += self._log_prob_normal(
+                        target, prediction, self.prior_sd)
+            elif self.type == 'classification':
+                log_p_D_given_w += T.sum(
+                    T.log(prediction)[T.arange(target.shape[0]), T.cast(target[:, 0], dtype='int64')])
 
         # Calculate variational posterior log(q(w)) and prior log(p(w)).
         kl = self.kl_div()
@@ -408,31 +436,98 @@ class VBNN(LasagnePowered, Serializable):
 
         return loss
 
+    def get_loss_sym(self, input, target):
+        raise Exception("Deprecated")
+
+        log_q_w, log_p_w, log_p_D_given_w = 0., 0., 0.
+
+        # MC samples.
+        for _ in xrange(self.n_samples):
+            # Make prediction.
+            prediction = self.pred_sym(input)
+            # Calculate model likelihood log(P(D|w)).
+            if self.type == 'regression':
+                if self.stochastic_output:
+                    log_p_D_given_w += self._log_prob_normal(
+                        target, self.pred_mean(input), self.pred_stdn(input))
+                else:
+                    log_p_D_given_w += self._log_prob_normal(
+                        target, prediction, self.prior_sd)
+            elif self.type == 'classification':
+                log_p_D_given_w += T.sum(
+                    T.log(prediction)[T.arange(target.shape[0]), T.cast(target[:, 0], dtype='int64')])
+            # Calculate variational posterior log(q(w)) and prior log(p(w)).
+            layers = lasagne.layers.get_all_layers(self.network)[1:]
+            for layer in layers:
+                if layer.name == VBNN_LAYER_TAG:
+                    W = layer.W
+                    b = layer.b
+                    log_q_w += self._log_prob_normal(W,
+                                                     layer.mu, T.log(1 + T.exp(layer.rho)) * self.prior_sd)
+                    log_q_w += self._log_prob_normal(b,
+                                                     layer.b_mu, T.log(1 + T.exp(layer.b_rho)) * self.prior_sd)
+                    log_p_w += self._log_prob_normal(W, 0., self.prior_sd)
+                    log_p_w += self._log_prob_normal(b, 0., self.prior_sd)
+
+        # Calculate loss function.
+        loss = ((log_q_w - log_p_w) / self.n_batches -
+                log_p_D_given_w) / self.batch_size
+        loss /= self.n_samples
+
+        return loss
+
     def build_network(self):
 
         # Input layer
-        network = lasagne.layers.InputLayer(shape=(1, self.n_in))
+        input = lasagne.layers.InputLayer(shape=(self.batch_size, self.n_in))
 
         # Hidden layers
+        network = input
         for i in xrange(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             if self.layers_type[i] == 1:
-                network = VBNNLayer(
+                network = ProbLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, name=VBNN_LAYER_TAG)
             else:
                 network = lasagne.layers.DenseLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf)
 
-        # Output layer
-        if self.layers_type[len(self.n_hidden)] == 1:
-            # Probabilistic layer (1) or deterministic layer (0).
-            network = VBNNLayer(
-                network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=VBNN_LAYER_TAG)
-        else:
-            network = lasagne.layers.DenseLayer(
-                network, self.n_out, nonlinearity=self.outf)
+        if self.stochastic_output:
+            # Gaussian output
+            # ---------------
+            # Mean output subnet: actual network
+            if self.layers_type[len(self.n_hidden)] == 1:
+                network = ProbLayer(
+                    network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=VBNN_LAYER_TAG)
+            else:
+                network = lasagne.layers.DenseLayer(
+                    network, self.n_out, nonlinearity=self.outf)
 
-        self.network = network
+            self.network_mean = network
+
+            # Stdn output subnet: this connects directly to input
+            network = input
+            if self.layers_type[len(self.n_hidden)] == 1:
+                network = ProbLayer(
+                    network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=VBNN_LAYER_TAG)
+            else:
+                network = lasagne.layers.DenseLayer(
+                    network, self.n_out, nonlinearity=self.outf)
+
+            self.network_stdn = network
+            # ---------------
+
+        else:
+            # Nonstochastic output
+            # --------------------
+            if self.layers_type[len(self.n_hidden)] == 1:
+                network = ProbLayer(
+                    network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=VBNN_LAYER_TAG)
+            else:
+                network = lasagne.layers.DenseLayer(
+                    network, self.n_out, nonlinearity=self.outf)
+            self.network = network
+            # --------------------
 
     def build_model(self):
 
@@ -450,53 +545,34 @@ class VBNN(LasagnePowered, Serializable):
             input_var, target_var)
 
         # Create update methods.
-        params = lasagne.layers.get_all_params(self.network, trainable=True)
+        if self.stochastic_output:
+            params_mean = lasagne.layers.get_all_params(
+                self.network_mean, trainable=True)
+            params_stnd = lasagne.layers.get_all_params(
+                self.network_stdn, trainable=True)
+            params = params_mean + params_stnd
+        else:
+            params = lasagne.layers.get_all_params(
+                self.network, trainable=True)
         updates = lasagne.updates.adam(
             loss, params, learning_rate=0.001)
 
         # Train/val fn.
-        self.pred_fn = ext.compile_function(
-            [input_var], self.pred_sym(input_var), log_name='pred_fn')
-        self.train_fn = ext.compile_function(
-            [input_var, target_var], loss, updates=updates, log_name='train_fn')
+        self.pred_fn = theano.function(
+            [input_var], self.pred_sym(input_var), allow_input_downcast=True)
+        self.train_fn = theano.function(
+            [input_var, target_var], loss, updates=updates, allow_input_downcast=True)
+        self.train_update_fn = theano.function(
+            [input_var, target_var], loss_only_last_sample, updates=updates, allow_input_downcast=True)
 
-        if self.second_order_update:
-
-            oldparams = lasagne.layers.get_all_params(
-                self.network, oldparam=True)
-
-            def sgd(loss_or_grads, params, oldparams):
-                grads = T.grad(loss_or_grads, params)
-                updates = OrderedDict()
-                for i in xrange(len(params)):
-                    param = params[i]
-                    grad = grads[i]
-                    if param.name == 'mu' or param.name == 'b_mu':
-                        oldparam_rho = oldparams[i + 1]
-                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    else:
-                        oldparam_rho = oldparams[i]
-                        invH = \
-                            T.square(T.exp(param) + 1) * T.square(T.log(T.exp(oldparam_rho) + 1)) * T.square(T.log(T.exp(param) + 1)) / \
-                            (T.exp(param) * (-T.square(T.log(T.exp(oldparam_rho)) + 1) * T.log(T.exp(param) + 1) + T.exp(param) * T.square(
-                                T.log(oldparam_rho) + 1) + T.log(T.exp(param) + 1)**3 + T.exp(param) * T.square(T.log(T.exp(param) + 1))))
-                    updates[param] = param - invH * grad
-
-                return updates
-
-            updates_kl = sgd(
-                loss, params, oldparams)
-            self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
+        self.train_err_fn = theano.function(
+            [input_var, target_var], loss, allow_input_downcast=True)
+        if self.reverse_update_kl:
+            self.f_kl_div_closed_form = theano.function(
+                [], self.get_kl_div_closed_form_reversed(), allow_input_downcast=True)
         else:
-            self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates, log_name='train_update_fn')
-
-        self.train_err_fn = ext.compile_function(
-            [input_var, target_var], loss, log_name='train_err_fn')
-
-        self.f_kl_div_closed_form = ext.compile_function(
-            [], self.kl_div(), log_name='kl_div_fn')
+            self.f_kl_div_closed_form = theano.function(
+                [], self.kl_div(), allow_input_downcast=True)
 
     def train(self, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None):
 
@@ -509,11 +585,12 @@ class VBNN(LasagnePowered, Serializable):
         kl_div_stdns = []
         kl_all_values = []
 
-        ##########################
-        ### PLOT FUNCTIONALITY ###
-        ##########################
+        # Plotting
+        # ---------------------
+
         # Print weights from this layer.
-        layer = lasagne.layers.get_all_layers(self.network)[-1]
+#         layer = lasagne.layers.get_all_layers(self.network)[-1]
+
         if PLOT_WEIGHTS_TOTAL:
             import matplotlib.pyplot as plt
             plt.ion()
@@ -568,6 +645,7 @@ class VBNN(LasagnePowered, Serializable):
             except:
                 pass
             plt.show()
+            plt.pause(0.0001)
 
         elif PLOT_KL:
             import matplotlib.pyplot as plt
@@ -579,6 +657,7 @@ class VBNN(LasagnePowered, Serializable):
             ax.grid()
             plt.draw()
             plt.show()
+        # ---------------------
 
         # Finally, launch the training loop.
         print("Starting training...")
@@ -602,6 +681,9 @@ class VBNN(LasagnePowered, Serializable):
 
                 # Calculate current minibatch KL.
                 kl_mb_closed_form = self.f_kl_div_closed_form()
+
+#                 a = self.calc_gradients(inputs, targets)
+#                 print(len(a), len(a[0]))
 
                 kl_values.append(kl_mb_closed_form)
                 kl_all_values.append(kl_mb_closed_form)
@@ -636,7 +718,7 @@ class VBNN(LasagnePowered, Serializable):
                 y = [self.pred_fn(x[None, :])[0][0] for x in X_test]
                 painter_output.set_ydata(y)
                 plt.draw()
-                plt.pause(0.00001)
+                plt.pause(0.0001)
 
             elif PLOT_OUTPUT_REGIONS and epoch % 30 == 0 and epoch != 0:
                 import matplotlib.pyplot as plt

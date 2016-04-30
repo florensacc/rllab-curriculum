@@ -149,7 +149,7 @@ class BatchPolopt(RLAlgorithm):
             use_kl_ratio_q=False,
             unn_n_hidden=[32],
             unn_layers_type=[1, 1],
-            unn_learning_rate=0.0001,
+            unn_learning_rate=0.001,
             stochastic_output=False,
             second_order_update=False,
             **kwargs
@@ -482,7 +482,6 @@ class BatchPolopt(RLAlgorithm):
 
                     # Update model weights based on current minibatch.
                     for _ in xrange(self.n_itr_update):
-                        #                     import ipdb; ipdb.set_trace()
                         outp = self.vbnn.train_update_fn(
                             _inputs[start:end], _targets[start:end])
                     # Calculate current minibatch KL.

@@ -12,34 +12,6 @@ def main():
     num_epochs = 1000
     batch_size = 1
 
-    ###########################
-    ### UNCOMMENT FOR MNIST ###
-    ###########################
-#     prob_nn.PLOT_OUTPUT = False
-#     prob_nn.PLOT_WEIGHTS_INDIVIDUAL = False
-#     prob_nn.PLOT_WEIGHTS_TOTAL = True
-#     print("Loading data ...")
-#     X_train, T_train, X_test, T_test = load_dataset_MNIST()
-#     n_batches = np.ceil(len(X_train) / float(batch_size))
-#     # Create neural network model
-#     print("Building model and compiling functions ...")
-#     vbnn = VBNN(
-#         n_in=28 * 28,
-#         n_hidden=[50],
-#         n_out=10,
-#         n_batches=n_batches,
-#         layers_type=[1, 1],
-#         trans_func=lasagne.nonlinearities.tanh,
-#         out_func=lasagne.nonlinearities.softmax,
-#         batch_size=batch_size,
-#         n_samples=1,
-#         type='classification',
-#         prior_sd=0.15
-#     )
-
-    ################################
-    ### UNCOMMENT FOR REGRESSION ###
-    ################################
     print("Loading data ...")
     (X_train, T_train), (X_test, T_test) = load_dataset_1Dregression()
     n_batches = int(np.ceil(len(X_train) / float(batch_size)))
@@ -54,11 +26,9 @@ def main():
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
         n_samples=10,
-        type='regression',
-        prior_sd=0.05,
+        prior_sd=0.5,
         use_reverse_kl_reg=True,
-        reverse_kl_reg_factor=0.1,
-        stochastic_output=False
+        reverse_kl_reg_factor=1e-4
     )
 
     # Train the model.
