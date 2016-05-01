@@ -29,8 +29,8 @@ baseline1 = [LinearFeatureSNNBaseline(env_spec=env.spec), 'SNNbaseline']
 # baseline2 = [LinearFeatureBaseline(env_spec=env.spec), 'baseline']
 
 for base in [baseline1]:
-    for latent_dim in [0,1,2,5,11]:
-        for n_samples in [0,1,5,13]:
+    for latent_dim in [0,1,5]:
+        for n_samples in [0,1,5]:
             # for hid_latent in [1, 2, 5]:
                 if latent_dim == 0:
                     latents_def = None
@@ -54,7 +54,7 @@ for base in [baseline1]:
                     env=env,
                     policy=policy,
                     baseline=baseline,
-                    self_normalize=True,
+                    self_normalize=False,
                     # hallucinator = None,
                     hallucinator=PriorHallucinator(env_spec=env.spec, policy=policy, n_hallucinate_samples=n_samples),
                     # hallucinator=PosteriorHallucinator(env_spec=env.spec, policy=policy, n_hallucinate_samples=n_samples),
@@ -72,8 +72,8 @@ for base in [baseline1]:
                         n_parallel=1,
                         snapshot_mode="last",
                         seed=s,
-                        exp_prefix='bimod2D-snn-prior-hallucinate',
-                        exp_name='bimod2D_trpo_{}_{}Blatent_{}halluPrior_{:04d}'.format(
+                        exp_prefix='bimod2D-noNormalized-snn-prior-hallucinate',
+                        exp_name='bimod2D-noNormalized_trpo_{}_{}Blatent_{}halluPrior_{:04d}'.format(
                             base[1], latent_dim, n_samples, s),
                     )
                     # sys.exit(0)
