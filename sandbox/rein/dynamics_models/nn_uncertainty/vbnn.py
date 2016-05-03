@@ -184,59 +184,31 @@ class VBNNLayer(lasagne.layers.Layer):
             numerator / denominator + T.log(q_std) - T.log(p_std))
 
     def kl_div_new_old(self):
-        old_mean = self.mu_old
-        old_std = log_to_std(self.rho_old)
-        new_mean = self.mu
-        new_std = log_to_std(self.rho)
-        kl_div = self.kl_div_p_q(new_mean, new_std, old_mean, old_std)
-
-        old_mean = self.b_mu_old
-        old_std = log_to_std(self.b_rho_old)
-        new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho)
-        kl_div += self.kl_div_p_q(new_mean, new_std, old_mean, old_std)
-
+        kl_div = self.kl_div_p_q(
+            self.mu, log_to_std(self.rho), self.mu_old, log_to_std(self.rho_old))
+        kl_div += self.kl_div_p_q(self.b_mu, log_to_std(self.b_rho),
+                                  self.b_mu_old, log_to_std(self.b_rho_old))
         return kl_div
 
     def kl_div_old_new(self):
-        old_mean = self.mu_old
-        old_std = log_to_std(self.rho_old)
-        new_mean = self.mu
-        new_std = log_to_std(self.rho)
-        kl_div = self.kl_div_p_q(old_mean, old_std, new_mean, new_std)
-
-        old_mean = self.b_mu_old
-        old_std = log_to_std(self.b_rho_old)
-        new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho)
-        kl_div += self.kl_div_p_q(old_mean, old_std, new_mean, new_std)
-
+        kl_div = self.kl_div_p_q(
+            self.mu_old, log_to_std(self.rho_old), self.mu, log_to_std(self.rho))
+        kl_div += self.kl_div_p_q(self.b_mu_old,
+                                  log_to_std(self.b_rho_old), self.b_mu, log_to_std(self.b_rho))
         return kl_div
 
     def kl_div_new_prior(self):
-        prior_mean = 0.
-        prior_std = self.prior_sd
-        new_mean = self.mu
-        new_std = log_to_std(self.rho)
-        kl_div = self.kl_div_p_q(new_mean, new_std, prior_mean, prior_std)
-
-        new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho)
-        kl_div += self.kl_div_p_q(new_mean, new_std, prior_mean, prior_std)
-
+        kl_div = self.kl_div_p_q(
+            self.mu, log_to_std(self.rho), 0., self.prior_sd)
+        kl_div += self.kl_div_p_q(self.b_mu,
+                                  log_to_std(self.b_rho), 0., self.prior_sd)
         return kl_div
 
     def kl_div_prior_new(self):
-        prior_mean = 0.
-        prior_std = self.prior_sd
-        new_mean = self.mu
-        new_std = log_to_std(self.rho)
-        kl_div = self.kl_div_p_q(prior_mean, prior_std, new_mean, new_std)
-
-        new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho)
-        kl_div += self.kl_div_p_q(prior_mean, prior_std, new_mean, new_std)
-
+        kl_div = self.kl_div_p_q(
+            0., self.prior_sd, self.mu,  log_to_std(self.rho))
+        kl_div += self.kl_div_p_q(0., self.prior_sd,
+                                  self.b_mu, log_to_std(self.b_rho))
         return kl_div
 
     def get_output_for(self, input, **kwargs):
@@ -277,7 +249,8 @@ class VBNN(LasagnePowered, Serializable):
                  reverse_kl_reg_factor=0.1,
                  likelihood_sd=0.5,
                  second_order_update=False,
-                 learning_rate=0.001
+                 learning_rate=0.001,
+                 target_kl=1e-2,
                  ):
 
         assert len(layers_type) == len(n_hidden) + 1
@@ -297,6 +270,7 @@ class VBNN(LasagnePowered, Serializable):
         self.likelihood_sd = likelihood_sd
         self.second_order_update = second_order_update
         self.learning_rate = learning_rate
+        self.target_kl = target_kl
 
         # Build network architecture.
         self.build_network()
@@ -346,13 +320,9 @@ class VBNN(LasagnePowered, Serializable):
     def pred_sym(self, input):
         return lasagne.layers.get_output(self.network, input)
 
-    def get_loss_sym_sym(self, input, target):
-        # TODO: would it speed up things if we repeat input,target over matrix
-        # of n_samples, make sure we create a matrix of n_samples epsilon
-        # values and calculate the objective batch-wise?
+    def loss(self, input, target):
 
         log_p_D_given_w = 0.
-
         # MC samples.
         for _ in xrange(self.n_samples):
             # Make prediction.
@@ -368,40 +338,25 @@ class VBNN(LasagnePowered, Serializable):
                 self.reverse_log_p_w_q_w_kl()
 
         # Calculate loss function.
-        loss = (kl / self.n_batches -
-                log_p_D_given_w) / self.batch_size
-        loss /= self.n_samples
+        return kl / self.n_batches - log_p_D_given_w / self.n_samples
 
-        return loss
-
-    def get_loss_only_last_sample(self, input, target):
+    def loss_last_sample(self, input, target):
         """The difference with the original loss is that we only update based on the latest sample.
         This means that instead of using the prior p(w), we use the previous approximated posterior
         q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
         """
 
         log_p_D_given_w = 0.
-
         # MC samples.
         for _ in xrange(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
-            # Calculate model likelihood log(P(D|w)).
+            # Calculate model likelihood log(P(sample|w)).
             log_p_D_given_w += self._log_prob_normal(
                 target, prediction, self.likelihood_sd)
 
-        # Calculate variational posterior log(q(w)) and prior log(p(w)).
-        kl = self.kl_div()
-        if self.use_reverse_kl_reg:
-            kl += self.reverse_kl_reg_factor * \
-                self.reverse_log_p_w_q_w_kl()
-
         # Calculate loss function.
-        loss = (kl / self.n_batches -
-                log_p_D_given_w) / self.batch_size
-        loss /= self.n_samples
-
-        return loss
+        return self.kl_div() - log_p_D_given_w / self.n_samples
 
     def build_network(self):
 
@@ -439,10 +394,8 @@ class VBNN(LasagnePowered, Serializable):
                               dtype=theano.config.floatX)  # @UndefinedVariable
 
         # Loss function.
-        loss = self.get_loss_sym_sym(
-            input_var, target_var)
-        loss_only_last_sample = self.get_loss_only_last_sample(
-            input_var, target_var)
+        loss = self.loss(input_var, target_var)
+        loss_only_last_sample = self.loss_last_sample(input_var, target_var)
 
         # Create update methods.
         params = lasagne.layers.get_all_params(self.network, trainable=True)
@@ -463,24 +416,37 @@ class VBNN(LasagnePowered, Serializable):
             def sgd(loss_or_grads, params, oldparams):
                 grads = T.grad(loss_or_grads, params)
                 updates = OrderedDict()
+                interms = []
+                invHs = []
                 for i in xrange(len(params)):
                     param = params[i]
                     grad = grads[i]
                     if param.name == 'mu' or param.name == 'b_mu':
+                        # @rein correct
                         oldparam_rho = oldparams[i + 1]
                         invH = T.square(T.log(1 + T.exp(oldparam_rho)))
                     else:
                         oldparam_rho = oldparams[i]
-                        invH = \
-                            T.square(T.exp(param) + 1) * T.square(T.log(T.exp(oldparam_rho) + 1)) * T.square(T.log(T.exp(param) + 1)) / \
-                            (T.exp(param) * (-T.square(T.log(T.exp(oldparam_rho)) + 1) * T.log(T.exp(param) + 1) + T.exp(param) * T.square(
-                                T.log(oldparam_rho) + 1) + T.log(T.exp(param) + 1)**3 + T.exp(param) * T.square(T.log(T.exp(param) + 1))))
-                    updates[param] = param - invH * grad
+                        p, q = param, oldparam_rho
+
+                        H = 2. * (T.exp(2 * p)) / \
+                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                        invH = 1. / H
+                        invHs.append(invH)
+
+                        interm = 0.5 * T.sum(grad * invH * (grad))
+                        interms.append(interm)
+#                 import ipdb; ipdb.set_trace()
+                unnorm_kl = T.sum(interms)
+                lr = T.sqrt(self.target_kl / unnorm_kl)
+                for param, invH, grad in zip(params, invHs, grads):
+                    updates[param] = param - 0.01 * invH * grad
+#                         lr * invH * grad
 
                 return updates
 
             updates_kl = sgd(
-                loss, params, oldparams)
+                loss_only_last_sample, params, oldparams)
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
         else:

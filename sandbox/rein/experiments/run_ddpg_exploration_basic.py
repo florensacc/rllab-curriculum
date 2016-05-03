@@ -6,10 +6,8 @@ from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
 from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
 from rllab.envs.box2d.mountain_car_env import MountainCarEnv
-from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from sandbox.rein.algos.trpo_unn import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.q_functions.continuous_mlp_q_function import ContinuousMLPQFunction
 from rllab.exploration_strategies.ou_strategy import OUStrategy
@@ -20,25 +18,23 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
-normalize_rewards = [False, True]
+etas = [0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
 kl_ratios = [False]
-mdp_classes = [CartpoleSwingupEnv,
-               DoublePendulumEnv, MountainCarEnv]
+mdp_classes = [DoublePendulumEnv]
 
 # seeds = [0]
 # etas = [0.01]
 # normalize_rewards = [False]
-# kl_ratios = [True]
-# mdp_classes = [MountainCarEnv]
+# kl_ratios = [False]
+# mdp_classes = [DoublePendulumEnv]
 
 mdps = [NormalizedEnv(env=mdp_class())
         for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
-    kl_ratios, normalize_rewards, mdps, etas, seeds
+    kl_ratios, mdps, etas, seeds
 )
 
-for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
+for kl_ratio, mdp, eta, seed in param_cart_product:
 
     policy = DeterministicMLPPolicy(env_spec=mdp.spec)
 
@@ -59,29 +55,29 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         qf_learning_rate=0.001,
         policy_learning_rate=0.001,
         max_path_length=500,
-        n_epochs=1000,
+        n_epochs=200,
         eta=eta,
         eta_discount=1.0,
         snn_n_samples=10,
-        use_reverse_kl_reg=True,
+        use_reverse_kl_reg=False,
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         n_itr_update=5,
-        kl_batch_size=5,
-        normalize_reward=normalize_reward,
-        dyn_replay_pool_size=100000,
-        n_updates_per_sample=50,
+        normalize_reward=False,
         second_order_update=False,
         unn_n_hidden=[32],
         unn_layers_type=[1, 1],
         unn_learning_rate=0.001,
-        dyn_replay_freq=100
+        dyn_replay_pool_size=100000,
+        dyn_n_updates_per_sample=1,
+        dyn_replay_freq=10,
+        batch_size=4,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="ddpg-expl-basic-a1",
+        exp_prefix="ddpg-expl-basic-d2",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

@@ -267,7 +267,7 @@ class BatchPolopt(RLAlgorithm):
             prior_sd=self.prior_sd,
             use_reverse_kl_reg=self.use_reverse_kl_reg,
             reverse_kl_reg_factor=self.reverse_kl_reg_factor,
-            stochastic_output=self.stochastic_output,
+#             stochastic_output=self.stochastic_output,
             second_order_update=self.second_order_update,
             learning_rate=self.unn_learning_rate
         )

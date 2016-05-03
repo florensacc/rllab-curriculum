@@ -213,7 +213,7 @@ class DDPG(RLAlgorithm):
             use_replay_pool=True,
             dyn_replay_pool_size=100000,
             dyn_min_pool_size=500,
-            dyn_n_updates_per_sample=50,
+            dyn_n_updates_per_sample=10,
             pool_batch_size=10,
             eta_discount=1.0,
             n_itr_update=5,
@@ -291,7 +291,7 @@ class DDPG(RLAlgorithm):
         self.q_averages = []
         self.y_averages = []
         self.paths = []
-        self.es_path_returns = []
+#         self.es_path_returns = []
         self.paths_samples_cnt = 0
 
         self.scale_reward = scale_reward
@@ -404,16 +404,15 @@ class DDPG(RLAlgorithm):
         terminal = False
         observation = self.env.reset()
 
+        # We need explolration policy, Qf
         sample_policy = pickle.loads(pickle.dumps(self.policy))
-
-        obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
 
         itr_counter = 0
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
 
-            rewards, kls = [], []
+            rewards = []
             for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
                 # Execute policy
                 if terminal:  # or path_length > self.max_path_length:
@@ -421,80 +420,31 @@ class DDPG(RLAlgorithm):
                     # last state and observation will be ignored and not added
                     # to the replay pool
                     observation = self.env.reset()
-                    self.es.reset()
-                    sample_policy.reset()
-                    self.es_path_returns.append(path_return)
                     path_length = 0
                     path_return = 0
 
-                action = self.es.get_action(
-                    itr, observation, policy=sample_policy)  # qf=qf)
+                action, _ = sample_policy.get_action(observation)
 
                 next_observation, reward, terminal, _ = self.env.step(action)
                 path_length += 1
                 path_return += reward
                 rewards.append(reward)
 
-                # Computing intrinsic rewards.
-                # ----------------------------
-                # Iterate over all paths and compute intrinsic reward by updating the
-                # model on each observation, calculating the KL divergence of the new
-                # params to the old ones, and undoing this operation.
-
-                obs = (observation - obs_mean) / (obs_std + 1e-8)
-                obs_nxt = (next_observation - obs_mean) / (obs_std + 1e-8)
-                act = (action - act_mean) / (act_std + 1e-8)
-
-                # Save old params for every update.
-                self.vbnn.save_old_params()
-
-                # Update model weights based on current minibatch.
-                for _ in xrange(self.n_itr_update):
-                    self.vbnn.train_update_fn(
-                        np.expand_dims(np.hstack((obs, act)), axis=0),
-                        np.expand_dims(obs_nxt, axis=0))
-
-                kl_div = float(self.vbnn.f_kl_div_closed_form())
-                kls.append(kl_div)
-
-                # If using replay pool, undo updates.
-                if self.use_replay_pool:
-                    self.vbnn.reset_to_old_params()
-
-                if epoch > 0:
-                    # Perform normlization of the intrinsic rewards.
-                    if self.use_kl_ratio and self.use_kl_ratio_q:
-                        previous_mean_kl = np.mean(
-                            np.asarray(self.kl_previous))
-                        # Add KL ass intrinsic reward to external reward
-                        reward += self.eta * kl_div / previous_mean_kl
-                    else:
-                        reward += self.eta * kl_div
-
-                # Discount eta
-                self.eta *= self.eta_discount
-                # ---------------------------
-
                 # Exploration code
                 # ----------------
                 if itr_counter % self.dyn_replay_freq == 0:
                     if self.use_replay_pool:
-                        # Fill replay pool.
                         # Now we train the dynamics model using the replay self.pool; only
                         # if self.pool is large enough.
                         if self.pool.size >= self.dyn_min_pool_size:
-                            obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
                             _inputss = []
                             _targetss = []
                             for _ in xrange(self.dyn_n_updates_per_sample):
                                 batch = self.pool.random_batch(
                                     self.pool_batch_size)
-                                obs = (batch['observations'] - obs_mean) / \
-                                    (obs_std + 1e-8)
-                                next_obs = (
-                                    batch['next_observations'] - obs_mean) / (obs_std + 1e-8)
-                                act = (
-                                    batch['actions'] - act_mean) / (act_std + 1e-8)
+                                obs = batch['observations']
+                                next_obs = batch['next_observations']
+                                act = batch['actions']
                                 _inputs = np.hstack(
                                     [obs, act])
                                 _targets = next_obs
@@ -525,24 +475,99 @@ class DDPG(RLAlgorithm):
                 observation = next_observation
 
                 if pool.size >= self.min_pool_size:
+                    kls = []
+                    
+                    # Here we train actual policy.
                     for update_itr in xrange(self.n_updates_per_sample):
                         # Train policy
                         batch = pool.random_batch(self.batch_size)
                         self.do_training(itr, batch)
-                    sample_policy.set_param_values(
-                        self.policy.get_param_values())
+                        
+                    # Every n iterations, set sample policy to match actual policy
+                    if itr_counter % 1000 == 0:
+                        sample_policy.set_param_values(
+                            self.policy.get_param_values())
+
+                    # Here we train exploration policy.
+                    for update_itr in xrange(self.n_updates_per_sample):
+                        # Train policy
+                        batch = pool.random_batch(self.batch_size)
+                        
+                        # ----------------------------
+                        # Iterate over all paths and compute intrinsic reward by updating the
+                        # model on each observation, calculating the KL divergence of the new
+                        # params to the old ones, and undoing this operation.
+                        obs = batch['observations']
+                        act = batch['actions']
+                        rew = batch['rewards']
+                        obs_next = batch['next_observations']
+
+                        # inputs = (o,a), target = o'
+                        _inputs = np.hstack((obs, act))
+                        _targets = obs_next
+
+                        # KL vector assumes same shape as reward.
+                        kl = np.zeros(rew.shape)
+
+                        for j in xrange(obs.shape[0]):
+
+                            # Save old params for every update.
+                            self.vbnn.save_old_params()
+
+                            start = j * self.kl_batch_size
+                            end = np.minimum(
+                                (j + 1) * self.kl_batch_size, obs.shape[0] - 1)
+
+                            # Update model weights based on current minibatch.
+                            for _ in xrange(self.n_itr_update):
+                                self.vbnn.train_update_fn(
+                                    _inputs[start:end], _targets[start:end])
+                            # Calculate current minibatch KL.
+                            kl_div = float(self.vbnn.f_kl_div_closed_form())
+                            for k in xrange(start, end):
+                                kl[k] = kl_div
+
+                            # If using replay pool, undo updates.
+                            if self.use_replay_pool:
+                                self.vbnn.reset_to_old_params()
+
+                        kls.append(kl)
+
+                        # Perform normlization of the intrinsic rewards.
+                        if self.use_kl_ratio:
+                            if self.use_kl_ratio_q:
+                                # Update kl Q
+                                previous_mean_kl = np.mean(
+                                    np.asarray(self.kl_previous))
+                                kl /= previous_mean_kl
+
+                        # Add KL ass intrinsic reward to external reward
+                        batch['rewards'] = batch['rewards'] + self.eta * kl
+                        # ----------------------------
+                        
+                        # Train exploration policy.
+                        self.do_exploration_training(itr, batch)
+
 
                 itr += 1
                 itr_counter += 1
 
-            # Update kl Q
-            self.kl_previous.append(np.median(np.hstack(kls)))
+            if self.use_kl_ratio and self.use_kl_ratio_q:
+                # Update kl Q
+                self.kl_previous.append(np.median(np.hstack(kls)))
+
+            # Discount eta
+            self.eta *= self.eta_discount
 
             logger.log("Training finished")
             if pool.size >= self.min_pool_size:
                 self.evaluate(epoch, pool)
                 params = self.get_epoch_snapshot(epoch)
                 logger.save_itr_params(epoch, params)
+                logger.record_tabular('VBNN_MeanKL', np.mean(np.hstack(kls)))
+                logger.record_tabular(
+                    'VBNN_MedianKL', np.median(np.hstack(kls)))
+                logger.record_tabular('VBNN_StdKL', np.std(np.hstack(kls)))
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
 
@@ -686,15 +711,15 @@ class DDPG(RLAlgorithm):
                               np.max(returns))
         logger.record_tabular('MinReturn',
                               np.min(returns))
-        if len(self.es_path_returns) > 0:
-            logger.record_tabular('AverageEsReturn',
-                                  np.mean(self.es_path_returns))
-            logger.record_tabular('StdEsReturn',
-                                  np.std(self.es_path_returns))
-            logger.record_tabular('MaxEsReturn',
-                                  np.max(self.es_path_returns))
-            logger.record_tabular('MinEsReturn',
-                                  np.min(self.es_path_returns))
+#         if len(self.es_path_returns) > 0:
+#             logger.record_tabular('AverageEsReturn',
+#                                   np.mean(self.es_path_returns))
+#             logger.record_tabular('StdEsReturn',
+#                                   np.std(self.es_path_returns))
+#             logger.record_tabular('MaxEsReturn',
+#                                   np.max(self.es_path_returns))
+#             logger.record_tabular('MinEsReturn',
+#                                   np.min(self.es_path_returns))
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
         logger.record_tabular('AverageQLoss', average_q_loss)
@@ -720,7 +745,7 @@ class DDPG(RLAlgorithm):
 
         self.q_averages = []
         self.y_averages = []
-        self.es_path_returns = []
+#         self.es_path_returns = []
 
     def get_epoch_snapshot(self, epoch):
         return dict(

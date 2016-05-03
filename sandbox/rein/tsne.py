@@ -27,12 +27,18 @@ X = np.vstack((X1, X2))
 # tsne = manifold.TSNE(
 #     n_components=n_components, init='pca', random_state=0)
 # Y = tsne.fit_transform(X)
-# rp = SparseRandomProjection(n_components)
-# rpf = rp.fit(X)
+rp = SparseRandomProjection(n_components)
+rpf = rp.fit(X)
+X = rpf.transform(X)
 # X1 = rpf.transform(X1)
 # X2 = rpf.transform(X2)
+# X = np.vstack((X1,X2))
 color = [
-    'blue' if i <= n_samples else 'red' for i in xrange(X1.shape[0])]
+    'blue' if i <= n_samples else 'red' for i in xrange(X.shape[0])]
+f = plt.figure()
+plt.scatter(
+    X[:, 0], X[:, 1], c=color, cmap=plt.cm.Spectral, lw=0, alpha=0.05)
+plt.show()
 
 from mpl_toolkits.mplot3d import Axes3D
 

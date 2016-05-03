@@ -12,7 +12,6 @@ from rllab.algos.ddpg import DDPG
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
-from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 
 from rllab.misc.instrument import stub, run_experiment_lite
@@ -50,12 +49,13 @@ for mdp, seed in param_cart_product:
         qf_learning_rate=0.001,
         policy_learning_rate=0.001,
         max_path_length=500,
-        n_epochs=1000
+        n_epochs=200,
+        batch_size=4,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="ddpg-basic-a1",
+        exp_prefix="ddpg-basic-d1",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

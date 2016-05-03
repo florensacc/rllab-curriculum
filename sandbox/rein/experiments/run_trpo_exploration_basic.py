@@ -23,7 +23,7 @@ stub(globals())
 #                DoublePendulumEnv, MountainCarEnv]
 
 seeds = range(1)
-etas = [0.01]
+etas = [1.0]
 normalize_rewards = [False]
 kl_ratios = [False]
 mdp_classes = [MountainCarEnv]
@@ -60,17 +60,17 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         eta_discount=1.0,
         snn_n_samples=10,
         subsample_factor=1.0,
-        use_reverse_kl_reg=True,
+        use_reverse_kl_reg=False,
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         n_itr_update=1,
-        kl_batch_size=5,
+        kl_batch_size=1,
         normalize_reward=normalize_reward,
-        stochastic_output=False,
+#         stochastic_output=False,
         replay_pool_size=100000,
         n_updates_per_sample=500,
-        second_order_update=False,
+        second_order_update=True,
         unn_n_hidden=[32],
         unn_layers_type=[1, 1],
         unn_learning_rate=0.0001
@@ -78,7 +78,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-expl-basic-h1",
+        exp_prefix="trpo-expl-basic-d2",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

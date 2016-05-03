@@ -234,7 +234,7 @@ def main():
     print("Building model and compiling functions ...")
     vbnn = VBNN(
         n_in=4,
-        n_hidden=[32],
+        n_hidden=[128],
         n_out=1,
         n_batches=n_batches,
         layers_type=[1, 1],
@@ -243,7 +243,7 @@ def main():
         batch_size=batch_size,
         n_samples=10,
         prior_sd=0.5,
-        use_reverse_kl_reg=True,
+        use_reverse_kl_reg=False,
         reverse_kl_reg_factor=1e-2
     )
 
