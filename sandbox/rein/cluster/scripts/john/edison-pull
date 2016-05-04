@@ -1,4 +1,0 @@
-#!/usr/bin/env python
-import edison
-config = edison.load_config()
-edison.call_and_print("aws s3 sync %s %s"%(config["aws"]["s3_path"], config["expt_dir"]))
