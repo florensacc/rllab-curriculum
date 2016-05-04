@@ -54,7 +54,7 @@ for mdp, seed in param_cart_product:
         policy_learning_rate=0.001,
         max_path_length=500,
         n_epochs=200,
-        batch_size=4,
+        batch_size=32,
     )
 
     run_experiment_lite(

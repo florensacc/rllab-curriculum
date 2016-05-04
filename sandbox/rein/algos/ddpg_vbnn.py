@@ -292,7 +292,7 @@ class DDPG(RLAlgorithm):
         self.q_averages = []
         self.y_averages = []
         self.paths = []
-#         self.es_path_returns = []
+        self.es_path_returns = []
         self.paths_samples_cnt = 0
 
         self.scale_reward = scale_reward
@@ -420,10 +420,13 @@ class DDPG(RLAlgorithm):
                     # last state and observation will be ignored and not added
                     # to the replay pool
                     observation = self.env.reset()
+                    self.es.reset()
+                    self.expl_policy.reset()
+                    self.es_path_returns.append(path_return)
                     path_length = 0
                     path_return = 0
 
-                action, _ = self.expl_policy.get_action(observation)
+                action = self.es.get_action(itr, observation, policy=self.expl_policy)  # qf=qf
 
                 next_observation, reward, terminal, _ = self.env.step(action)
                 path_length += 1
@@ -492,7 +495,6 @@ class DDPG(RLAlgorithm):
                 if pool.size > self.batch_size:
                     # Here we train exploration policy.
                     for update_itr in xrange(self.n_updates_per_sample):
-                        # Train policy
                         batch = pool.random_batch(self.batch_size)
 
                         # ----------------------------
@@ -534,6 +536,8 @@ class DDPG(RLAlgorithm):
                             if self.use_replay_pool:
                                 self.vbnn.reset_to_old_params()
 
+                        # Store original KL values for averaging through kl
+                        # ratios.
                         kls.append(kl)
 
                         # Perform normlization of the intrinsic rewards.
@@ -818,6 +822,15 @@ class DDPG(RLAlgorithm):
                               np.min(returns))
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
+        if len(self.es_path_returns) > 0:
+            logger.record_tabular('AverageEsReturn',
+                                  np.mean(self.es_path_returns))
+            logger.record_tabular('StdEsReturn',
+                                  np.std(self.es_path_returns))
+            logger.record_tabular('MaxEsReturn',
+                                  np.max(self.es_path_returns))
+            logger.record_tabular('MinEsReturn',
+                                  np.min(self.es_path_returns))
         logger.record_tabular('AverageQLoss', average_q_loss)
         logger.record_tabular('AveragePolicySurr', average_policy_surr)
         logger.record_tabular('AverageQ', np.mean(all_qs))
@@ -841,7 +854,7 @@ class DDPG(RLAlgorithm):
 
         self.q_averages = []
         self.y_averages = []
-#         self.es_path_returns = []
+        self.es_path_returns = []
 
     def get_epoch_snapshot(self, epoch):
         return dict(

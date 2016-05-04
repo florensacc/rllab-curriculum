@@ -70,9 +70,9 @@ for kl_ratio, mdp, eta, seed in param_cart_product:
         unn_layers_type=[1, 1],
         unn_learning_rate=0.0001,
         dyn_replay_pool_size=100000,
-        dyn_n_updates_per_sample=1,
+        dyn_n_updates_per_sample=10,
         dyn_replay_freq=10,
-        batch_size=4,
+        batch_size=32,
     )
 
     run_experiment_lite(
