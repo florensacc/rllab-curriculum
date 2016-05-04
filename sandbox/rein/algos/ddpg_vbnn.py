@@ -409,11 +409,11 @@ class DDPG(RLAlgorithm):
         terminal = False
         observation = self.env.reset()
 
-        kls = []
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
 
+            kls = []
             for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
                 # Execute policy
                 if terminal:  # or path_length > self.max_path_length:
@@ -422,16 +422,33 @@ class DDPG(RLAlgorithm):
                     # to the replay pool
                     observation = self.env.reset()
                     self.es.reset()
-                    self.expl_policy.reset()
                     self.es_path_returns.append(path_return)
                     path_length = 0
                     path_return = 0
 
-                action = self.es.get_action(itr, observation, policy=self.expl_policy)  # qf=qf
+                action = self.es.get_action(
+                    itr, observation, policy=self.expl_policy)  # qf=qf
 
                 next_observation, reward, terminal, _ = self.env.step(action)
                 path_length += 1
                 path_return += reward
+
+                if not terminal and path_length >= self.max_path_length:
+                    terminal = True
+                    # only include the terminal transition in this case if the
+                    # flag was set
+                    if self.include_horizon_terminal_transitions:
+                        pool.add_sample(
+                            observation, action, reward * self.scale_reward, terminal)
+                    if self.use_replay_pool:
+                        dyn_pool.add_sample(
+                            observation, action, reward, terminal)
+                else:
+                    pool.add_sample(
+                        observation, action, reward * self.scale_reward, terminal)
+                    if self.use_replay_pool:
+                        dyn_pool.add_sample(
+                            observation, action, reward, terminal)
 
                 # Training dynamics model
                 # -----------------------
@@ -458,26 +475,9 @@ class DDPG(RLAlgorithm):
                                 self.vbnn.train_fn(_inputs, _targets)
                 # -----------------------
 
-                if not terminal and path_length >= self.max_path_length:
-                    terminal = True
-                    # only include the terminal transition in this case if the
-                    # flag was set
-                    if self.include_horizon_terminal_transitions:
-                        pool.add_sample(
-                            observation, action, reward * self.scale_reward, terminal)
-                    if self.use_replay_pool:
-                        dyn_pool.add_sample(
-                            observation, action, reward, terminal)
-                else:
-                    pool.add_sample(
-                        observation, action, reward * self.scale_reward, terminal)
-                    if self.use_replay_pool:
-                        dyn_pool.add_sample(
-                            observation, action, reward, terminal)
-
+                # Update next observation
                 observation = next_observation
 
-                
                 if pool.size >= self.min_pool_size:
                     # Here we train actual policy.
                     for update_itr in xrange(self.n_updates_per_sample):
@@ -493,8 +493,6 @@ class DDPG(RLAlgorithm):
                         self.expl_policy.set_param_values(
                             self.policy.get_param_values())
 
-                if pool.size > self.batch_size:
-                   
                     for update_itr in xrange(self.n_updates_per_sample):
                         batch = pool.random_batch(self.batch_size)
 
@@ -530,7 +528,7 @@ class DDPG(RLAlgorithm):
                                     _inputs[start:end], _targets[start:end], 0.01)
                             # Calculate current minibatch KL.
                             kl_div = np.clip(
-                                float(self.vbnn.f_kl_div_closed_form()), 0, np.inf)
+                                float(self.vbnn.f_kl_div_closed_form()), 0, 1000)
                             for k in xrange(start, end):
                                 kl[k] = kl_div
 
@@ -548,7 +546,6 @@ class DDPG(RLAlgorithm):
                             if len(self.kl_previous) > 0:
                                 previous_mean_kl = np.mean(
                                     np.asarray(self.kl_previous))
-                                print(previous_mean_kl)
                                 # Add KL ass intrinsic reward to external
                                 # reward
                                 batch['rewards'] = batch['rewards'] + \
@@ -558,15 +555,15 @@ class DDPG(RLAlgorithm):
                             batch['rewards'] = batch['rewards'] + self.eta * kl
                         # ----------------------------
 
-                        if pool.size >= self.min_pool_size:
-                            # Train exploration policy.
-                            self.do_training_exploration(itr, batch)
+                        # Train exploration policy.
+                        self.do_training_exploration(itr, batch)
 
                 itr += 1
 
-            if epoch >= 10 and self.use_kl_ratio and self.use_kl_ratio_q:
+            if len(kls) != 0 and self.use_kl_ratio and self.use_kl_ratio_q:
                 # Update kl Q at the end of each epoch.
                 self.kl_previous.append(np.median(np.hstack(kls)))
+                print(self.kl_previous)
 
             # Discount eta at the end of each epoch.
             self.eta *= self.eta_discount
@@ -577,15 +574,13 @@ class DDPG(RLAlgorithm):
                 params = self.get_epoch_snapshot(epoch)
                 logger.save_itr_params(epoch, params)
                 logger.record_tabular('VBNN_MeanKL', np.mean(np.hstack(kls)))
-                logger.record_tabular(
-                    'VBNN_MedianKL', np.median(np.hstack(kls)))
+                logger.record_tabular('VBNN_MedianKL',
+                                      np.median(np.hstack(kls)))
                 logger.record_tabular('VBNN_StdKL', np.std(np.hstack(kls)))
+                logger.record_tabular('VBNN_MinKL', np.min(np.hstack(kls)))
+                logger.record_tabular('VBNN_MaxKL', np.max(np.hstack(kls)))
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
-            
-            # Reset kls array.
-            if epoch >= 10 and self.use_kl_ratio and self.use_kl_ratio_q:
-                kls = []
 
     def init_opt(self):
 

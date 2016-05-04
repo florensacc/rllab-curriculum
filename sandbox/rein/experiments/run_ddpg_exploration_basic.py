@@ -71,7 +71,7 @@ for kl_ratio, mdp, eta, seed in param_cart_product:
         unn_learning_rate=0.0001,
         dyn_replay_pool_size=100000,
         dyn_n_updates_per_sample=1,
-        dyn_replay_freq=10,
+        dyn_replay_freq=1,
         batch_size=4,
     )
 
