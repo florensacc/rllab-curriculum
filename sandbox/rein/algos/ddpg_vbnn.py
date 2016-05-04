@@ -409,6 +409,7 @@ class DDPG(RLAlgorithm):
         terminal = False
         observation = self.env.reset()
 
+        kls = []
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
@@ -476,7 +477,7 @@ class DDPG(RLAlgorithm):
 
                 observation = next_observation
 
-                kls = []
+                
                 if pool.size >= self.min_pool_size:
                     # Here we train actual policy.
                     for update_itr in xrange(self.n_updates_per_sample):
@@ -493,10 +494,11 @@ class DDPG(RLAlgorithm):
                             self.policy.get_param_values())
 
                 if pool.size > self.batch_size:
-                    # Here we train exploration policy.
+                   
                     for update_itr in xrange(self.n_updates_per_sample):
                         batch = pool.random_batch(self.batch_size)
 
+                        # Calculate intrinsic rewards.
                         # ----------------------------
                         # Iterate over all paths and compute intrinsic reward by updating the
                         # model on each observation, calculating the KL divergence of the new
@@ -528,7 +530,7 @@ class DDPG(RLAlgorithm):
                                     _inputs[start:end], _targets[start:end], 0.01)
                             # Calculate current minibatch KL.
                             kl_div = np.clip(
-                                float(self.vbnn.f_kl_div_closed_form()), 0, 100)
+                                float(self.vbnn.f_kl_div_closed_form()), 0, np.inf)
                             for k in xrange(start, end):
                                 kl[k] = kl_div
 
@@ -546,6 +548,7 @@ class DDPG(RLAlgorithm):
                             if len(self.kl_previous) > 0:
                                 previous_mean_kl = np.mean(
                                     np.asarray(self.kl_previous))
+                                print(previous_mean_kl)
                                 # Add KL ass intrinsic reward to external
                                 # reward
                                 batch['rewards'] = batch['rewards'] + \
@@ -561,7 +564,7 @@ class DDPG(RLAlgorithm):
 
                 itr += 1
 
-            if self.use_kl_ratio and self.use_kl_ratio_q:
+            if epoch >= 10 and self.use_kl_ratio and self.use_kl_ratio_q:
                 # Update kl Q at the end of each epoch.
                 self.kl_previous.append(np.median(np.hstack(kls)))
 
@@ -579,6 +582,10 @@ class DDPG(RLAlgorithm):
                 logger.record_tabular('VBNN_StdKL', np.std(np.hstack(kls)))
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
+            
+            # Reset kls array.
+            if epoch >= 10 and self.use_kl_ratio and self.use_kl_ratio_q:
+                kls = []
 
     def init_opt(self):
 

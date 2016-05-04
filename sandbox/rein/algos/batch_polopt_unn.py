@@ -486,7 +486,7 @@ class BatchPolopt(RLAlgorithm):
                             if loss_value < best_loss_value:
                                 best_loss_value = loss_value
                             kl_div = np.clip(
-                                float(self.vbnn.f_kl_div_closed_form()), 0, 100)
+                                float(self.vbnn.f_kl_div_closed_form()), 0, 1000)
                             # If using replay pool, undo updates.
                             if self.use_replay_pool:
                                 self.vbnn.reset_to_old_params()
@@ -498,7 +498,7 @@ class BatchPolopt(RLAlgorithm):
 
                         # Calculate current minibatch KL.
                         kl_div = np.clip(
-                            float(self.vbnn.f_kl_div_closed_form()), 0, 100)
+                            float(self.vbnn.f_kl_div_closed_form()), 0, 1000)
 
                     for k in xrange(start, end):
                         kl[k] = kl_div
