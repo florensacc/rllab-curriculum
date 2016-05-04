@@ -226,7 +226,8 @@ class DDPG(RLAlgorithm):
             unn_layers_type=[1, 1],
             unn_learning_rate=0.001,
             second_order_update=False,
-            dyn_replay_freq=100
+            dyn_replay_freq=100,
+            reset_expl_policy_freq=1e10
     ):
         """
         :param env: Environment
@@ -324,6 +325,9 @@ class DDPG(RLAlgorithm):
         self.unn_learning_rate = unn_learning_rate
         self.second_order_update = second_order_update
         self.dyn_replay_freq = dyn_replay_freq
+        self.reset_expl_policy_freq = reset_expl_policy_freq
+        self.expl_policy = pickle.loads(pickle.dumps(self.policy))
+        self.expl_qf = pickle.loads(pickle.dumps(self.qf))
         # ----------------------
 
         # Params to keep track of moving average (both intrinsic and external
@@ -382,7 +386,7 @@ class DDPG(RLAlgorithm):
             "Model built ({:.1f} sec).".format((time.time() - start_time)))
 
         if self.use_replay_pool:
-            self.pool = DynamicsSimpleReplayPool(
+            dyn_pool = DynamicsSimpleReplayPool(
                 max_pool_size=self.dyn_replay_pool_size,
                 observation_shape=self.env.observation_space.shape,
                 action_dim=act_dim
@@ -398,21 +402,17 @@ class DDPG(RLAlgorithm):
         self.start_worker()
 
         self.init_opt()
+        self.init_opt_exploration()
         itr = 0
         path_length = 0
         path_return = 0
         terminal = False
         observation = self.env.reset()
 
-        # We need explolration policy, Qf
-        sample_policy = pickle.loads(pickle.dumps(self.policy))
-
-        itr_counter = 0
         for epoch in xrange(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
 
-            rewards = []
             for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
                 # Execute policy
                 if terminal:  # or path_length > self.max_path_length:
@@ -423,24 +423,23 @@ class DDPG(RLAlgorithm):
                     path_length = 0
                     path_return = 0
 
-                action, _ = sample_policy.get_action(observation)
+                action, _ = self.expl_policy.get_action(observation)
 
                 next_observation, reward, terminal, _ = self.env.step(action)
                 path_length += 1
                 path_return += reward
-                rewards.append(reward)
 
-                # Exploration code
-                # ----------------
-                if itr_counter % self.dyn_replay_freq == 0:
+                # Training dynamics model
+                # -----------------------
+                if itr % self.dyn_replay_freq == 0:
                     if self.use_replay_pool:
-                        # Now we train the dynamics model using the replay self.pool; only
-                        # if self.pool is large enough.
-                        if self.pool.size >= self.dyn_min_pool_size:
+                        # Now we train the dynamics model using the replay dyn_pool; only
+                        # if dyn_pool is large enough.
+                        if dyn_pool.size >= self.dyn_min_pool_size:
                             _inputss = []
                             _targetss = []
                             for _ in xrange(self.dyn_n_updates_per_sample):
-                                batch = self.pool.random_batch(
+                                batch = dyn_pool.random_batch(
                                     self.pool_batch_size)
                                 obs = batch['observations']
                                 next_obs = batch['next_observations']
@@ -453,7 +452,7 @@ class DDPG(RLAlgorithm):
 
                             for _inputs, _targets in zip(_inputss, _targetss):
                                 self.vbnn.train_fn(_inputs, _targets)
-                    # ----------------
+                # -----------------------
 
                 if not terminal and path_length >= self.max_path_length:
                     terminal = True
@@ -463,36 +462,39 @@ class DDPG(RLAlgorithm):
                         pool.add_sample(
                             observation, action, reward * self.scale_reward, terminal)
                     if self.use_replay_pool:
-                        self.pool.add_sample(
+                        dyn_pool.add_sample(
                             observation, action, reward, terminal)
                 else:
                     pool.add_sample(
                         observation, action, reward * self.scale_reward, terminal)
                     if self.use_replay_pool:
-                        self.pool.add_sample(
+                        dyn_pool.add_sample(
                             observation, action, reward, terminal)
 
                 observation = next_observation
 
+                kls = []
                 if pool.size >= self.min_pool_size:
-                    kls = []
-                    
                     # Here we train actual policy.
                     for update_itr in xrange(self.n_updates_per_sample):
                         # Train policy
                         batch = pool.random_batch(self.batch_size)
                         self.do_training(itr, batch)
-                        
-                    # Every n iterations, set sample policy to match actual policy
-                    if itr_counter % 1000 == 0:
-                        sample_policy.set_param_values(
+
+                    # Every n iterations, set sample policy to match actual
+                    # policy
+                    if itr % self.reset_expl_policy_freq == 0:
+                        logger.log(
+                            'Copying policy params over to exploration policy.')
+                        self.expl_policy.set_param_values(
                             self.policy.get_param_values())
 
+                if pool.size > self.batch_size:
                     # Here we train exploration policy.
                     for update_itr in xrange(self.n_updates_per_sample):
                         # Train policy
                         batch = pool.random_batch(self.batch_size)
-                        
+
                         # ----------------------------
                         # Iterate over all paths and compute intrinsic reward by updating the
                         # model on each observation, calculating the KL divergence of the new
@@ -514,16 +516,17 @@ class DDPG(RLAlgorithm):
                             # Save old params for every update.
                             self.vbnn.save_old_params()
 
-                            start = j * self.kl_batch_size
+                            start = j
                             end = np.minimum(
-                                (j + 1) * self.kl_batch_size, obs.shape[0] - 1)
+                                (j + 1), obs.shape[0] - 1)
 
                             # Update model weights based on current minibatch.
                             for _ in xrange(self.n_itr_update):
                                 self.vbnn.train_update_fn(
-                                    _inputs[start:end], _targets[start:end])
+                                    _inputs[start:end], _targets[start:end], 0.01)
                             # Calculate current minibatch KL.
-                            kl_div = float(self.vbnn.f_kl_div_closed_form())
+                            kl_div = np.clip(
+                                float(self.vbnn.f_kl_div_closed_form()), 0, 100)
                             for k in xrange(start, end):
                                 kl[k] = kl_div
 
@@ -534,29 +537,31 @@ class DDPG(RLAlgorithm):
                         kls.append(kl)
 
                         # Perform normlization of the intrinsic rewards.
-                        if self.use_kl_ratio:
-                            if self.use_kl_ratio_q:
-                                # Update kl Q
+                        if self.use_kl_ratio and self.use_kl_ratio_q:
+                            # Update kl Q
+                            if len(self.kl_previous) > 0:
                                 previous_mean_kl = np.mean(
                                     np.asarray(self.kl_previous))
-                                kl /= previous_mean_kl
-
-                        # Add KL ass intrinsic reward to external reward
-                        batch['rewards'] = batch['rewards'] + self.eta * kl
+                                # Add KL ass intrinsic reward to external
+                                # reward
+                                batch['rewards'] = batch['rewards'] + \
+                                    self.eta * kl / previous_mean_kl
+                        else:
+                            # Add KL ass intrinsic reward to external reward
+                            batch['rewards'] = batch['rewards'] + self.eta * kl
                         # ----------------------------
-                        
-                        # Train exploration policy.
-                        self.do_exploration_training(itr, batch)
 
+                        if pool.size >= self.min_pool_size:
+                            # Train exploration policy.
+                            self.do_training_exploration(itr, batch)
 
                 itr += 1
-                itr_counter += 1
 
             if self.use_kl_ratio and self.use_kl_ratio_q:
-                # Update kl Q
+                # Update kl Q at the end of each epoch.
                 self.kl_previous.append(np.median(np.hstack(kls)))
 
-            # Discount eta
+            # Discount eta at the end of each epoch.
             self.eta *= self.eta_discount
 
             logger.log("Training finished")
@@ -635,6 +640,106 @@ class DDPG(RLAlgorithm):
             target_policy=target_policy,
         )
 
+    def init_opt_exploration(self):
+
+        # First, create "target" policy and Q functions
+        target_policy = pickle.loads(pickle.dumps(self.expl_policy))
+        target_qf = pickle.loads(pickle.dumps(self.expl_qf))
+
+        # y need to be computed first
+        obs = self.env.observation_space.new_tensor_variable(
+            'obs',
+            extra_dims=1,
+        )
+
+        # The yi values are computed separately as above and then passed to
+        # the training functions below
+        action = self.env.action_space.new_tensor_variable(
+            'action',
+            extra_dims=1,
+        )
+        yvar = TT.vector('ys')
+
+        qf_weight_decay_term = 0.5 * self.qf_weight_decay * \
+            sum([TT.sum(TT.square(param)) for param in
+                 self.expl_qf.get_params(regularizable=True)])
+
+        qval = self.expl_qf.get_qval_sym(obs, action)
+
+        qf_loss = TT.mean(TT.square(yvar - qval))
+        qf_reg_loss = qf_loss + qf_weight_decay_term
+
+        policy_weight_decay_term = 0.5 * self.policy_weight_decay * \
+            sum([TT.sum(TT.square(param))
+                 for param in self.expl_policy.get_params(regularizable=True)])
+        policy_qval = self.expl_qf.get_qval_sym(
+            obs, self.expl_policy.get_action_sym(obs),
+            deterministic=True
+        )
+        policy_surr = -TT.mean(policy_qval)
+
+        policy_reg_surr = policy_surr + policy_weight_decay_term
+
+        qf_updates = self.qf_update_method(
+            qf_reg_loss, self.expl_qf.get_params(trainable=True))
+        policy_updates = self.policy_update_method(
+            policy_reg_surr, self.expl_policy.get_params(trainable=True))
+
+        f_train_qf = ext.compile_function(
+            inputs=[yvar, obs, action],
+            outputs=[qf_loss, qval],
+            updates=qf_updates
+        )
+
+        f_train_policy = ext.compile_function(
+            inputs=[obs],
+            outputs=policy_surr,
+            updates=policy_updates
+        )
+
+        self.expl_opt_info = dict(
+            f_train_qf=f_train_qf,
+            f_train_policy=f_train_policy,
+            target_qf=target_qf,
+            target_policy=target_policy,
+        )
+
+    def do_training_exploration(self, itr, batch):
+
+        obs, actions, rewards, next_obs, terminals = ext.extract(
+            batch,
+            "observations", "actions", "rewards", "next_observations",
+            "terminals"
+        )
+
+        # compute the on-policy y values
+        target_qf = self.expl_opt_info["target_qf"]
+        target_policy = self.expl_opt_info["target_policy"]
+
+        next_actions, _ = target_policy.get_actions(next_obs)
+        next_qvals = target_qf.get_qval(next_obs, next_actions)
+
+        ys = rewards + (1. - terminals) * self.discount * next_qvals
+
+        f_train_qf = self.expl_opt_info["f_train_qf"]
+        f_train_policy = self.expl_opt_info["f_train_policy"]
+
+        qf_loss, qval = f_train_qf(ys, obs, actions)
+
+        policy_surr = f_train_policy(obs)
+
+        target_policy.set_param_values(
+            target_policy.get_param_values() * (1.0 - self.soft_target_tau) +
+            self.expl_policy.get_param_values() * self.soft_target_tau)
+        target_qf.set_param_values(
+            target_qf.get_param_values() * (1.0 - self.soft_target_tau) +
+            self.expl_qf.get_param_values() * self.soft_target_tau)
+
+#         self.qf_loss_averages.append(qf_loss)
+#         self.policy_surr_averages.append(policy_surr)
+#         self.q_averages.append(qval)
+#         self.y_averages.append(ys)
+
     def do_training(self, itr, batch):
 
         obs, actions, rewards, next_obs, terminals = ext.extract(
@@ -711,15 +816,6 @@ class DDPG(RLAlgorithm):
                               np.max(returns))
         logger.record_tabular('MinReturn',
                               np.min(returns))
-#         if len(self.es_path_returns) > 0:
-#             logger.record_tabular('AverageEsReturn',
-#                                   np.mean(self.es_path_returns))
-#             logger.record_tabular('StdEsReturn',
-#                                   np.std(self.es_path_returns))
-#             logger.record_tabular('MaxEsReturn',
-#                                   np.max(self.es_path_returns))
-#             logger.record_tabular('MinEsReturn',
-#                                   np.min(self.es_path_returns))
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
         logger.record_tabular('AverageQLoss', average_q_loss)

@@ -170,6 +170,7 @@ class VBNNLayer(lasagne.layers.Layer):
         self.b_rho_old.set_value(self.b_rho.get_value())
 
     def reset_to_old_params(self):
+        """Reset to old parameter values for KL calculation."""
         self.mu.set_value(self.mu_old.get_value())
         self.rho.set_value(self.rho_old.get_value())
         self.b_mu.set_value(self.b_mu_old.get_value())
@@ -249,8 +250,7 @@ class VBNN(LasagnePowered, Serializable):
                  reverse_kl_reg_factor=0.1,
                  likelihood_sd=0.5,
                  second_order_update=False,
-                 learning_rate=0.001,
-                 target_kl=1e-2,
+                 learning_rate=0.0001,
                  ):
 
         assert len(layers_type) == len(n_hidden) + 1
@@ -270,7 +270,6 @@ class VBNN(LasagnePowered, Serializable):
         self.likelihood_sd = likelihood_sd
         self.second_order_update = second_order_update
         self.learning_rate = learning_rate
-        self.target_kl = target_kl
 
         # Build network architecture.
         self.build_network()
@@ -356,6 +355,7 @@ class VBNN(LasagnePowered, Serializable):
                 target, prediction, self.likelihood_sd)
 
         # Calculate loss function.
+        # self.kl_div() should be zero when taking second order step
         return self.kl_div() - log_p_D_given_w / self.n_samples
 
     def build_network(self):
@@ -412,43 +412,38 @@ class VBNN(LasagnePowered, Serializable):
 
             oldparams = lasagne.layers.get_all_params(
                 self.network, oldparam=True)
+            step_size = T.scalar('step_size',
+                                 dtype=theano.config.floatX)  # @UndefinedVariable
 
-            def sgd(loss_or_grads, params, oldparams):
+            def second_order_update(loss_or_grads, params, oldparams, step_size):
+                """Second-order update method for optimizing loss_last_sample, so basically,
+                KL term (new params || old params) + NLL of latest sample. The Hessian is
+                evaluated at the origin and provides curvature information to make a more
+                informed step in the correct descent direction."""
                 grads = T.grad(loss_or_grads, params)
                 updates = OrderedDict()
-                interms = []
-                invHs = []
                 for i in xrange(len(params)):
                     param = params[i]
                     grad = grads[i]
                     if param.name == 'mu' or param.name == 'b_mu':
-                        # @rein correct
                         oldparam_rho = oldparams[i + 1]
                         invH = T.square(T.log(1 + T.exp(oldparam_rho)))
                     else:
                         oldparam_rho = oldparams[i]
-                        p, q = param, oldparam_rho
+                        p = param
 
                         H = 2. * (T.exp(2 * p)) / \
                             (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                         invH = 1. / H
-                        invHs.append(invH)
-
-                        interm = 0.5 * T.sum(grad * invH * (grad))
-                        interms.append(interm)
-#                 import ipdb; ipdb.set_trace()
-                unnorm_kl = T.sum(interms)
-                lr = T.sqrt(self.target_kl / unnorm_kl)
-                for param, invH, grad in zip(params, invHs, grads):
-                    updates[param] = param - 0.01 * invH * grad
-#                         lr * invH * grad
+                        updates[param] = param - step_size * invH * grad
 
                 return updates
 
-            updates_kl = sgd(
-                loss_only_last_sample, params, oldparams)
+            updates_kl = second_order_update(
+                loss_only_last_sample, params, oldparams, step_size)
+
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
+                [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
         else:
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var], loss_only_last_sample, updates=updates, log_name='train_update_fn')

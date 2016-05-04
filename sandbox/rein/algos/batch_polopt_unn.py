@@ -214,6 +214,10 @@ class BatchPolopt(RLAlgorithm):
         self.second_order_update = second_order_update
         # ----------------------
 
+        if self.second_order_update:
+            assert self.kl_batch_size == 1
+            assert self.n_itr_update == 1
+
         # Params to keep track of moving average (both intrinsic and external
         # reward) mean/var.
         if self.normalize_reward:
@@ -267,7 +271,7 @@ class BatchPolopt(RLAlgorithm):
             prior_sd=self.prior_sd,
             use_reverse_kl_reg=self.use_reverse_kl_reg,
             reverse_kl_reg_factor=self.reverse_kl_reg_factor,
-#             stochastic_output=self.stochastic_output,
+            #             stochastic_output=self.stochastic_output,
             second_order_update=self.second_order_update,
             learning_rate=self.unn_learning_rate
         )
@@ -471,12 +475,31 @@ class BatchPolopt(RLAlgorithm):
                     end = np.minimum(
                         (j + 1) * self.kl_batch_size, obs.shape[0] - 1)
 
-                    # Update model weights based on current minibatch.
-                    for _ in xrange(self.n_itr_update):
-                        outp = self.vbnn.train_update_fn(
-                            _inputs[start:end], _targets[start:end])
-                    # Calculate current minibatch KL.
-                    kl_div = float(self.vbnn.f_kl_div_closed_form())
+                    if self.second_order_update:
+                        # We do a line search over the best step sizes using
+                        # step_size * invH * grad
+                        best_loss_value = np.inf
+                        for step_size in [0.01]:
+                            self.vbnn.save_old_params()
+                            loss_value = self.vbnn.train_update_fn(
+                                _inputs[start:end], _targets[start:end], step_size)
+                            if loss_value < best_loss_value:
+                                best_loss_value = loss_value
+                            kl_div = np.clip(
+                                float(self.vbnn.f_kl_div_closed_form()), 0, 100)
+                            # If using replay pool, undo updates.
+                            if self.use_replay_pool:
+                                self.vbnn.reset_to_old_params()
+                    else:
+                        # Update model weights based on current minibatch.
+                        for _ in xrange(self.n_itr_update):
+                            self.vbnn.train_update_fn(
+                                _inputs[start:end], _targets[start:end])
+
+                        # Calculate current minibatch KL.
+                        kl_div = np.clip(
+                            float(self.vbnn.f_kl_div_closed_form()), 0, 100)
+
                     for k in xrange(start, end):
                         kl[k] = kl_div
 
@@ -489,6 +512,8 @@ class BatchPolopt(RLAlgorithm):
                 kl[-1] = kl[-2]
                 # Add kl to list of kls
                 kls.append(kl)
+
+            kls_flat = np.hstack(kls)
 
             # Perform normlization of the intrinsic rewards.
             if self.use_kl_ratio:
@@ -652,7 +677,7 @@ class BatchPolopt(RLAlgorithm):
         # Exploration logged vars.
         # ------------------------
         if itr > 0:
-            kls_flat = np.hstack(kls)
+
             logger.record_tabular('VBNN_MedianKL', np.median(kls_flat))
             logger.record_tabular('VBNN_MeanKL', np.mean(kls_flat))
             logger.record_tabular('VBNN_StdKL', np.std(kls_flat))

@@ -20,9 +20,13 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(10)
-mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
-               DoublePendulumEnv, MountainCarEnv]
+# seeds = range(10)
+# mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
+#                DoublePendulumEnv, MountainCarEnv]
+
+seeds = [0]
+mdp_classes = [DoublePendulumEnv]
+
 mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
     mdps, seeds
@@ -59,6 +63,6 @@ for mdp, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
     )

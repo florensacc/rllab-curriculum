@@ -23,9 +23,9 @@ stub(globals())
 #                DoublePendulumEnv, MountainCarEnv]
 
 seeds = range(1)
-etas = [1.0]
+etas = [0.1]
 normalize_rewards = [False]
-kl_ratios = [False]
+kl_ratios = [True]
 mdp_classes = [MountainCarEnv]
 
 mdps = [NormalizedEnv(env=mdp_class())
