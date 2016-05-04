@@ -22,14 +22,14 @@ stub(globals())
 
 # env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False)
 # env = normalize(CartpoleEnv())
-env = normalize(CartpoleSwingupEnv())
+env = CartpoleSwingupEnv()
 
 # baseline1 = [LinearFeatureSNNBaseline(env_spec=env.spec),'baseline']
 baseline2 = [LinearFeatureBaseline(env_spec=env.spec),'SNNbaseline']
 
 for base in [baseline2]:
-    for latent_dim in [0,1,2,5,11]:
-        for n_samples in [0,1,5,13]:
+    for latent_dim in [0,2]:#[0,1,2,5,11]:
+        for n_samples in [0,1,5]:
             # for hid_latent in [1, 2, 5]:
                 if latent_dim == 0:
                     latents_def = None
@@ -65,14 +65,14 @@ for base in [baseline2]:
                     step_size=0.01,
                 )
 
-                for s in [4,15,23,120]:
+                for s in [4,15,23]:
                     run_experiment_lite(
                         stub_method_call=algo.train(),
                         n_parallel=1,
                         snapshot_mode="last",
                         seed=s,
-                        exp_prefix='cartSwing-snn-posterior-hallucinate',
-                        exp_name='cartSwing_trpo_{}_{}Blatent_{}halluPost_{:04d}'.format(
+                        exp_prefix='cartSwing-notNormalized-snn-prior-hallucinate',
+                        exp_name='cartSwing-notNormalized_trpo_{}_{}Blatent_{}halluPost_{:04d}'.format(
                             base[1], latent_dim, n_samples, s),
                         # exp_name='trpo_lbase_{}lat_{}nsamp_{:04d}'.format(latent_dim,n_samples,s),
                     )

@@ -24,7 +24,6 @@ from rllab.viskit.core import flatten
 
 
 class StubBase(object):
-
     def __getitem__(self, item):
         return StubMethodCall(self, "__getitem__", args=[item], kwargs=dict())
 
@@ -364,7 +363,8 @@ def run_experiment_lite(
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         for task in batch_tasks:
-            task.pop('env')
+            if 'env' in task:
+                assert task.pop('env') is None
             task["resources"] = params.pop("resouces", config.KUBE_DEFAULT_RESOURCES)
             task["node_selector"] = params.pop("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
             task["exp_prefix"] = exp_prefix
@@ -509,6 +509,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         spot_price=config.AWS_SPOT_PRICE,
         iam_instance_profile_name=config.AWS_IAM_INSTANCE_PROFILE_NAME,
         security_groups=config.AWS_SECURITY_GROUPS,
+
     )
 
     if aws_config is None:
@@ -621,6 +622,8 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
             Name=aws_config["iam_instance_profile_name"],
         ),
     )
+    if aws_config.get("placement", None) is not None:
+        instance_args["Placement"] = aws_config["placement"]
     if not aws_config["spot"]:
         instance_args["MinCount"] = 1
         instance_args["MaxCount"] = 1
