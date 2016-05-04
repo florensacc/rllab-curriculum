@@ -227,7 +227,7 @@ class DDPG(RLAlgorithm):
             unn_learning_rate=0.001,
             second_order_update=False,
             dyn_replay_freq=100,
-            reset_expl_policy_freq=1e10
+            reset_expl_policy_freq=3000
     ):
         """
         :param env: Environment
@@ -562,7 +562,7 @@ class DDPG(RLAlgorithm):
 
             if len(kls) != 0 and self.use_kl_ratio and self.use_kl_ratio_q:
                 # Update kl Q at the end of each epoch.
-                self.kl_previous.append(np.median(np.hstack(kls)))
+                self.kl_previous.append(np.mean(np.hstack(kls)))
                 print(self.kl_previous)
 
             # Discount eta at the end of each epoch.

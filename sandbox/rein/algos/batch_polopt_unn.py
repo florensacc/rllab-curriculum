@@ -519,7 +519,7 @@ class BatchPolopt(RLAlgorithm):
             if self.use_kl_ratio:
                 if self.use_kl_ratio_q:
                     # Update kl Q
-                    self.kl_previous.append(np.median(np.hstack(kls)))
+                    self.kl_previous.append(np.mean(np.hstack(kls)))
                     previous_mean_kl = np.mean(np.asarray(self.kl_previous))
                     for i in xrange(len(kls)):
                         kls[i] = kls[i] / previous_mean_kl
