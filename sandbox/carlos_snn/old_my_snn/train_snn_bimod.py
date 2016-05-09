@@ -1,12 +1,9 @@
-
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from sandbox.carlos_snn.bimod_env_tunable import BimodEnv
-from rllab.envs.normalized_env import normalize
-from sandbox.carlos_snn.s_mlp_policy import GaussianMLPPolicy_snn
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.carlos_snn.npo_snn import NPO_snn
-from sandbox.carlos_snn.trpo_snn import TRPO_snn
 
+from sandbox.carlos_snn.old_my_snn.npo_snn import NPO_snn
+from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
+from sandbox.carlos_snn.bimod_env_tunable import BimodEnv
 
 stub(globals())
 
@@ -35,7 +32,7 @@ algo = NPO_snn(
 )
 
 
-for s in [4,5,155]:
+for s in [4]:
     run_experiment_lite(
         stub_method_call=algo.train(),
         # Number of parallel workers for sampling
@@ -47,6 +44,6 @@ for s in [4,5,155]:
         seed=s,
         # plot=True,
         # Save to data/local/exp_prefix/exp_name/
-        exp_prefix='snn_2bino4',
+        exp_prefix='snn_test',
         exp_name='snn_npo_{}batch_{}latent_bino4_{:04d}'.format(500,2,s),
     )
