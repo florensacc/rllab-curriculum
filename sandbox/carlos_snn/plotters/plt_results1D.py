@@ -91,7 +91,7 @@ def plot_snn_at0(data_unpickle, itr=0, color=(1,0.1,0.1),fig_dir=None):
     #recover the policy
     poli = data_unpickle['policy']
     env  = data_unpickle['env']
-    x0 = np.zeros_like(env.wrapped_env.initial_state)
+    # x0 = np.zeros_like(env.wrapped_env.initial_state)
     #range to plot it
     bound = 3
     num_bins=600
@@ -145,21 +145,21 @@ def plot_all_exp(datadir):
         #fix a color for plots of this exp
         color = np.array(colors[i%3 ])
         #plot everything
-        # print 'Plotting for: ',exp_name
-        # plt.figure( 1 + (i/3)*6 )
-        # plot_reward(first_data_unpickle,color,fig_dir)
+        print 'Plotting for: ',exp_name
+        plt.figure( 1 + (i/3)*6 )
+        plot_reward(first_data_unpickle,color,fig_dir)
         print 'Plotting learning curve'
         plt.figure(2 +(i/3)*6 )
         plot_learning_curve(exp,color,fig_dir)
-        # print 'Plotting last policy'
-        # plt.figure(3+(i/3)*6 )
-        # plot_policy_learned(last_data_unpickle,color,fig_dir=fig_dir)
+        print 'Plotting last policy'
+        plt.figure(3+(i/3)*6 )
+        plot_policy_learned(last_data_unpickle,color,fig_dir=fig_dir)
         # print 'Plotting policy progress'
         # plt.figure(4+(i/3)*6 )
         # plot_all_policy_at0(path_experiment,color,num_iter=last_iter+1,fig_dir=fig_dir)
-        print 'Plotting last policy MC'
-        plt.figure(5+(i/3)*6 )
-        plot_snn_at0(last_data_unpickle, itr=last_iter+1, color=color,fig_dir=fig_dir)
+        # print 'Plotting last policy MC'
+        # plt.figure(5+(i/3)*6 )
+        # plot_snn_at0(last_data_unpickle, itr=last_iter+1, color=color,fig_dir=fig_dir)
         # print 'Plotting first policy MC'
         # plt.figure(6+(i/3)*6 )
         # plot_snn_at0(first_data_unpickle, itr=0, color=color,fig_dir=fig_dir)

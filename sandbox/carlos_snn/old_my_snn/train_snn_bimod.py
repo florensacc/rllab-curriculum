@@ -1,9 +1,9 @@
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 
+from bimod_env_tunable import BimodEnv
 from sandbox.carlos_snn.old_my_snn.npo_snn import NPO_snn
 from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
-from sandbox.carlos_snn.bimod_env_tunable import BimodEnv
 
 stub(globals())
 

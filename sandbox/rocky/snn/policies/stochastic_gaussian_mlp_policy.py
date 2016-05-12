@@ -113,6 +113,10 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
             latent_vals.append(state_infos["latent_%d" % idx])
         return self._f_dist_info_givens(*[obs] + latent_vals)
 
+    def reset(self):  #here I would sample a latent var.
+        pass
+
+
     def dist_info_sym(self, obs_var, state_info_vars=None):
         if state_info_vars is not None:
             latent_givens = {

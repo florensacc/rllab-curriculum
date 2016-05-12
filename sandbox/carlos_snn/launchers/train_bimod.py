@@ -1,12 +1,8 @@
 from rllab.algos.trpo import TRPO
-from rllab.algos.npo import NPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-
-from rllab.envs.normalized_env import normalize
-from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-# from sandbox.carlos_snn.bimod_env_tunable import BimodEnv
 from sandbox.carlos_snn.multiMod2D_env import MultiModEnv
 
 stub(globals())
@@ -27,7 +23,7 @@ env = MultiModEnv(mu=[1,0], sigma=0.01,n=5,rand_init=False)
 # print np.any(np.isnan(policy.get_param_values()))
 # print policy
 
-policy = GaussianMLPPolicy(
+policy = GaussianMLPPolicy(  # this is not SNN!!
     env_spec=env.spec,
     hidden_sizes=(8,8)
 )
