@@ -534,7 +534,8 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         spot_price=config.AWS_SPOT_PRICE,
         iam_instance_profile_name=config.AWS_IAM_INSTANCE_PROFILE_NAME,
         security_groups=config.AWS_SECURITY_GROUPS,
-
+        security_group_ids=config.AWS_SECURITY_GROUP_IDS,
+        network_interfaces=config.AWS_NETWORK_INTERFACES,
     )
 
     if aws_config is None:
@@ -643,6 +644,8 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         InstanceType=aws_config["instance_type"],
         EbsOptimized=True,
         SecurityGroups=aws_config["security_groups"],
+        SecurityGroupIds=aws_config["security_group_ids"],
+        NetworkInterfaces=aws_config["network_interfaces"],
         IamInstanceProfile=dict(
             Name=aws_config["iam_instance_profile_name"],
         ),

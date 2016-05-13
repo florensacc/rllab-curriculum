@@ -57,7 +57,7 @@ def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
                 pygame.event.pump()
                 keys = pygame.key.get_pressed()
                 action = env.action_from_keys(keys)
-                ob, r, done = env.step(action)
+                ob, r, done, _ = env.step(action)
                 tr += r
                 env.render()
                 time.sleep(timestep / speedup)
