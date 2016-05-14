@@ -3,25 +3,29 @@ from __future__ import absolute_import
 
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from sandbox.rocky.snn.baselines.linear_feature_snn_baseline import LinearFeatureSNNBaseline
-# from sandbox.rocky.snn.bimod_env import BimodEnv
 # from rllab.envs.box2d.cartpole_env import CartpoleEnv
-from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
+# from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
+from rllab.envs.gym_env import GymEnv
 
 from rllab.envs.normalized_env import normalize
-from sandbox.rocky.snn.policies.stochastic_gaussian_mlp_policy import StochasticGaussianMLPPolicy
+
+from sandbox.carlos_snn.policies.stochastic_gaussian_mlp_policy import StochasticGaussianMLPPolicy
+
 from sandbox.rocky.snn.algos.snn_algos import TRPO_snn
 from sandbox.rocky.snn.hallucinators.prior_hallucinator import PriorHallucinator
 from sandbox.rocky.snn.hallucinators.posterior_hallucinator import PosteriorHallucinator
 from rllab.misc.instrument import stub, run_experiment_lite
-from rllab.algos.trpo import TRPO
-import sys
+
+import datetime
+import dateutil.tz
+now = datetime.datetime.now(dateutil.tz.tzlocal())
+timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
 
 stub(globals())
 
 
-
-# env = normalize(CartpoleEnv())
-env = CartpoleSwingupEnv()
+env_name='Hopper-v1'
+env = normalize(GymEnv(env_name))
 
 # baseline1 = [LinearFeatureSNNBaseline(env_spec=env.spec),'SNNbaseline']
 baseline2 = [LinearFeatureBaseline(env_spec=env.spec),'baseline']
@@ -59,20 +63,20 @@ for base in [baseline2]:
                     batch_size=2000,
                     whole_paths=True,
                     max_path_length=100,
-                    n_itr=100,
+                    n_itr=3,
                     discount=0.99,
                     step_size=0.01,
                 )
 
                 for s in [4]:
+                    timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
                     run_experiment_lite(
                         stub_method_call=algo.train(),
                         n_parallel=1,
                         snapshot_mode="last",
                         seed=s,
-                        exp_prefix='halluciante_when_no_latents',
-                        exp_name='2cartSwing-notNormalized_trpo_{}_{}Blatent_{}halluPrior_{:04d}'.format(
-                            base[1], latent_dim, n_samples, s),
-                        # exp_name='trpo_lbase_{}lat_{}nsamp_{:04d}'.format(latent_dim,n_samples,s),
+                        exp_prefix=env_name + '_test',
+                        exp_name='{}_{}_{}Blatent_{}halluPrior_{:04d}'.format(
+                            env_name,base[1], latent_dim, n_samples, s),
                     )
                     # sys.exit(0)

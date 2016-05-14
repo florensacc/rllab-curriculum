@@ -1,13 +1,13 @@
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 
-from bimod_env_tunable import BimodEnv
+from sandbox.carlos_snn.envs.bimod_env_tunable import BimodEnv
 from sandbox.carlos_snn.old_my_snn.npo_snn import NPO_snn
 from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
 
 stub(globals())
 
-env = BimodEnv(mu1=-1,mu2=1,sigma1=0.01,sigma2=0.01,rand_init=False)
+env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False)
 # env = BimodEnv(mu1=[1,0],mu2=[-1,0],sigma1=0.01,sigma2=0.01,rand_init=False)
 
 policy = GaussianMLPPolicy_snn(

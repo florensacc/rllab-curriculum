@@ -31,12 +31,12 @@ for eps in [0.01]:
 
         for base in [baseline]:
             for latent_dim in [0, 1, 2]:
-                for n_samples in [0, 1, 5]:
+                for n_samples in [5]:
                     # for hid_latent in [1, 2, 5]:
                         if latent_dim == 0:
                             latents_def = None
                         else:
-                            latents_def = [('independent_bernoulli', latent_dim)]
+                            latents_def = [('independent_gaussian', latent_dim)]
                         policy = StochasticGaussianMLPPolicy(
                             env_spec=env.spec,
                             input_latent_vars=latents_def,
@@ -66,7 +66,7 @@ for eps in [0.01]:
                             step_size=0.01,
                         )
 
-                        for s in [4,5,155]:
+                        for s in [4,5,155,21,56,13]:
                             now = datetime.datetime.now(dateutil.tz.tzlocal())
                             timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
 
@@ -76,6 +76,7 @@ for eps in [0.01]:
                                 snapshot_mode="last",
                                 seed=s,
                                 exp_prefix='SNNtrpo-local-opt',
-                                exp_name='SNNtrpo-local-opt_eps{}_latBer{}_hallu{}_s{:04d}_{}'.format(
-                                    ''.join(str(eps).split('.')), latent_dim, n_samples, s, timestamp),
+                                exp_name='SNNtrpo-local-opt_eps{}_disp{}_latGau{}_hallu{}_s{:04d}_{}'.format(
+                                    ''.join(str(eps).split('.')), ''.join(str(disp).split('.')),
+                                    latent_dim, n_samples, s, timestamp),
                             )

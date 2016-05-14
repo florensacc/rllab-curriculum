@@ -100,7 +100,7 @@ def plot_snn_at0(data_unpickle, itr=0, color=(1,0.1,0.1),fig_dir=None):
     x = np.arange(-bound,bound+step, step)
     px = np.zeros(np.size(x))
     for _ in xrange(samples):
-        a = poli.get_action( np.array([0,0]))[0]
+        a = poli.get_action( np.array([0,]))[0]
         idx=int(np.floor(a/step) + bound/step)
         if idx>=0 and idx<len(px):
             px[idx]+=1
@@ -157,9 +157,9 @@ def plot_all_exp(datadir):
         # print 'Plotting policy progress'
         # plt.figure(4+(i/3)*6 )
         # plot_all_policy_at0(path_experiment,color,num_iter=last_iter+1,fig_dir=fig_dir)
-        # print 'Plotting last policy MC'
-        # plt.figure(5+(i/3)*6 )
-        # plot_snn_at0(last_data_unpickle, itr=last_iter+1, color=color,fig_dir=fig_dir)
+        print 'Plotting last policy MC'
+        plt.figure(5+(i/3)*6 )
+        plot_snn_at0(last_data_unpickle, itr=last_iter+1, color=color, fig_dir=fig_dir)
         # print 'Plotting first policy MC'
         # plt.figure(6+(i/3)*6 )
         # plot_snn_at0(first_data_unpickle, itr=0, color=color,fig_dir=fig_dir)

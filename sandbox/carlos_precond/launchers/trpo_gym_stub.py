@@ -1,4 +1,5 @@
-from rllab.algos.trpo import TRPO
+from sandbox.carlos_precond.algos.trpo import TRPO
+
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 # from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.normalized_env import normalize
@@ -6,7 +7,6 @@ from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.gym_env import GymEnv
 # from rllab.envs.mujoco.hopper_env import HopperEnv  # if Gym don't import this!!
-import gym
 
 import datetime
 import dateutil.tz
@@ -32,14 +32,14 @@ algo = TRPO(
     baseline=baseline,
     batch_size=10000,
     max_path_length=500,
-    n_itr=400,
+    n_itr=4,
     discount=0.99,
     step_size=0.01,
     # Uncomment both lines (this and the plot parameter below) to enable plotting
     # plot=True,
 )
 
-for seed in [2,4,19,33]:
+for seed in [2]:
     timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
     run_experiment_lite(  #the scripts/run_experiment_lite.py takes care of initializing the logger and passing args!
         algo.train(),

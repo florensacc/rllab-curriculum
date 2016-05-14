@@ -59,7 +59,7 @@ KUBE_DEFAULT_NODE_SELECTOR = {
 
 try:
     from config_personal import *
-except:
+except Exception:
     print "Creating your personal config from template..."
     from subprocess import call
     call(["cp", osp.join(PROJECT_PATH, "rllab/config_personal_template.py"), osp.join(PROJECT_PATH, "rllab/config_personal.py")])
