@@ -37,7 +37,7 @@ color = [
     'blue' if i <= n_samples else 'red' for i in xrange(X.shape[0])]
 f = plt.figure()
 plt.scatter(
-    X[:, 0], X[:, 1], c=color, cmap=plt.cm.Spectral, lw=0, alpha=0.05)
+    X[:, 0], X[:, 1], c=color, cmap=plt.cm.Spectral, lw=0, alpha=1)#0.05)
 plt.show()
 
 from mpl_toolkits.mplot3d import Axes3D

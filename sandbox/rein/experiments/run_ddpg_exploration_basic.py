@@ -17,16 +17,16 @@ import itertools
 stub(globals())
 
 # Param ranges
-# seeds = range(10)
-# etas = [0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
-# kl_ratios = [False]
-# mdp_classes = [DoublePendulumEnv]
-
-seeds = [0]
-etas = [0.01]
-normalize_rewards = [False]
+seeds = range(10)
+etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0]
 kl_ratios = [True]
-mdp_classes = [DoublePendulumEnv]
+mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv, MountainCarEnv]
+
+# seeds = range(10)
+# etas = [0.01]
+# normalize_rewards = [False]
+# kl_ratios = [True]
+# mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv, MountainCarEnv]
 
 mdps = [NormalizedEnv(env=mdp_class())
         for mdp_class in mdp_classes]
@@ -72,16 +72,18 @@ for kl_ratio, mdp, eta, seed in param_cart_product:
         dyn_replay_pool_size=100000,
         dyn_n_updates_per_sample=1,
         dyn_replay_freq=1,
-        batch_size=4,
+        batch_size=32,
+        reset_expl_policy_freq=1e10,
+        exploration=True
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="ddpg-expl-basic-d2",
+        exp_prefix="ddpg-expl-basic-e5",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         script="scripts/run_experiment_lite.py",
     )

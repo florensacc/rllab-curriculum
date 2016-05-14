@@ -227,7 +227,8 @@ class DDPG(RLAlgorithm):
             unn_learning_rate=0.001,
             second_order_update=False,
             dyn_replay_freq=100,
-            reset_expl_policy_freq=3000
+            reset_expl_policy_freq=1000,
+            exploration=True
     ):
         """
         :param env: Environment
@@ -298,6 +299,7 @@ class DDPG(RLAlgorithm):
         self.scale_reward = scale_reward
 
         self.opt_info = None
+        self.expl_opt_info = None
 
         # Set exploration params
         # ----------------------
@@ -328,6 +330,7 @@ class DDPG(RLAlgorithm):
         self.reset_expl_policy_freq = reset_expl_policy_freq
         self.expl_policy = pickle.loads(pickle.dumps(self.policy))
         self.expl_qf = pickle.loads(pickle.dumps(self.qf))
+        self.exploration = exploration
         # ----------------------
 
         # Params to keep track of moving average (both intrinsic and external
@@ -422,6 +425,7 @@ class DDPG(RLAlgorithm):
                     # to the replay pool
                     observation = self.env.reset()
                     self.es.reset()
+                    self.expl_policy.reset()
                     self.es_path_returns.append(path_return)
                     path_length = 0
                     path_return = 0
@@ -450,30 +454,31 @@ class DDPG(RLAlgorithm):
                         dyn_pool.add_sample(
                             observation, action, reward, terminal)
 
-                # Training dynamics model
-                # -----------------------
-                if itr % self.dyn_replay_freq == 0:
-                    if self.use_replay_pool:
-                        # Now we train the dynamics model using the replay dyn_pool; only
-                        # if dyn_pool is large enough.
-                        if dyn_pool.size >= self.dyn_min_pool_size:
-                            _inputss = []
-                            _targetss = []
-                            for _ in xrange(self.dyn_n_updates_per_sample):
-                                batch = dyn_pool.random_batch(
-                                    self.pool_batch_size)
-                                obs = batch['observations']
-                                next_obs = batch['next_observations']
-                                act = batch['actions']
-                                _inputs = np.hstack(
-                                    [obs, act])
-                                _targets = next_obs
-                                _inputss.append(_inputs)
-                                _targetss.append(_targets)
+                if self.exploration:
+                    # Training dynamics model
+                    # -----------------------
+                    if itr % self.dyn_replay_freq == 0:
+                        if self.use_replay_pool:
+                            # Now we train the dynamics model using the replay dyn_pool; only
+                            # if dyn_pool is large enough.
+                            if dyn_pool.size >= self.dyn_min_pool_size:
+                                _inputss = []
+                                _targetss = []
+                                for _ in xrange(self.dyn_n_updates_per_sample):
+                                    batch = dyn_pool.random_batch(
+                                        self.pool_batch_size)
+                                    obs = batch['observations']
+                                    next_obs = batch['next_observations']
+                                    act = batch['actions']
+                                    _inputs = np.hstack(
+                                        [obs, act])
+                                    _targets = next_obs
+                                    _inputss.append(_inputs)
+                                    _targetss.append(_targets)
 
-                            for _inputs, _targets in zip(_inputss, _targetss):
-                                self.vbnn.train_fn(_inputs, _targets)
-                # -----------------------
+                                for _inputs, _targets in zip(_inputss, _targetss):
+                                    self.vbnn.train_fn(_inputs, _targets)
+                    # -----------------------
 
                 # Update next observation
                 observation = next_observation
@@ -485,85 +490,92 @@ class DDPG(RLAlgorithm):
                         batch = pool.random_batch(self.batch_size)
                         self.do_training(itr, batch)
 
-                    # Every n iterations, set sample policy to match actual
-                    # policy
-                    if itr % self.reset_expl_policy_freq == 0:
-                        logger.log(
-                            'Copying policy params over to exploration policy.')
-                        self.expl_policy.set_param_values(
-                            self.policy.get_param_values())
+                    if self.exploration:
+                        # Every n iterations, set sample policy to match actual
+                        # policy
+                        if itr % self.reset_expl_policy_freq == 0:
+                            logger.log(
+                                'Copying policy params over to exploration policy.')
+                            self.expl_policy.set_param_values(
+                                self.policy.get_param_values())
 
-                    for update_itr in xrange(self.n_updates_per_sample):
-                        batch = pool.random_batch(self.batch_size)
+                        for update_itr in xrange(self.n_updates_per_sample):
+                            batch = pool.random_batch(self.batch_size)
 
-                        # Calculate intrinsic rewards.
-                        # ----------------------------
-                        # Iterate over all paths and compute intrinsic reward by updating the
-                        # model on each observation, calculating the KL divergence of the new
-                        # params to the old ones, and undoing this operation.
-                        obs = batch['observations']
-                        act = batch['actions']
-                        rew = batch['rewards']
-                        obs_next = batch['next_observations']
+                            # Calculate intrinsic rewards.
+                            # ----------------------------
+                            # Iterate over all paths and compute intrinsic reward by updating the
+                            # model on each observation, calculating the KL divergence of the new
+                            # params to the old ones, and undoing this
+                            # operation.
+                            obs = batch['observations']
+                            act = batch['actions']
+                            rew = batch['rewards']
+                            obs_next = batch['next_observations']
 
-                        # inputs = (o,a), target = o'
-                        _inputs = np.hstack((obs, act))
-                        _targets = obs_next
+                            # inputs = (o,a), target = o'
+                            _inputs = np.hstack((obs, act))
+                            _targets = obs_next
 
-                        # KL vector assumes same shape as reward.
-                        kl = np.zeros(rew.shape)
+                            # KL vector assumes same shape as reward.
+                            kl = np.zeros(rew.shape)
 
-                        for j in xrange(obs.shape[0]):
+                            for j in xrange(obs.shape[0]):
 
-                            # Save old params for every update.
-                            self.vbnn.save_old_params()
+                                # Save old params for every update.
+                                self.vbnn.save_old_params()
 
-                            start = j
-                            end = np.minimum(
-                                (j + 1), obs.shape[0] - 1)
+                                start = j
+                                end = np.minimum(
+                                    (j + 1), obs.shape[0] - 1)
 
-                            # Update model weights based on current minibatch.
-                            for _ in xrange(self.n_itr_update):
-                                self.vbnn.train_update_fn(
-                                    _inputs[start:end], _targets[start:end], 0.01)
-                            # Calculate current minibatch KL.
-                            kl_div = np.clip(
-                                float(self.vbnn.f_kl_div_closed_form()), 0, 1000)
-                            for k in xrange(start, end):
-                                kl[k] = kl_div
+                                # Update model weights based on current
+                                # minibatch.
+                                for _ in xrange(self.n_itr_update):
+                                    self.vbnn.train_update_fn(
+                                        _inputs[start:end], _targets[start:end], 0.01)
+                                # Calculate current minibatch KL.
+                                kl_div = np.clip(
+                                    float(self.vbnn.f_kl_div_closed_form()), 0, 1000)
+                                for k in xrange(start, end):
+                                    kl[k] = kl_div
 
-                            # If using replay pool, undo updates.
-                            if self.use_replay_pool:
-                                self.vbnn.reset_to_old_params()
+                                # If using replay pool, undo updates.
+                                if self.use_replay_pool:
+                                    self.vbnn.reset_to_old_params()
 
-                        # Store original KL values for averaging through kl
-                        # ratios.
-                        kls.append(kl)
+                            # Store original KL values for averaging through kl
+                            # ratios.
+                            kls.append(kl)
 
-                        # Perform normlization of the intrinsic rewards.
-                        if self.use_kl_ratio and self.use_kl_ratio_q:
-                            # Update kl Q
-                            if len(self.kl_previous) > 0:
-                                previous_mean_kl = np.mean(
-                                    np.asarray(self.kl_previous))
+                            # Perform normlization of the intrinsic rewards.
+                            if self.use_kl_ratio and self.use_kl_ratio_q:
+                                # Update kl Q
+                                if len(self.kl_previous) > 0:
+                                    previous_mean_kl = np.median(
+                                        np.asarray(self.kl_previous))
+                                    # Add KL ass intrinsic reward to external
+                                    # reward
+                                    batch['rewards'] = batch['rewards'] + \
+                                        self.eta * kl / previous_mean_kl #* np.mean(self.q_averages[-1000:])
+                            else:
                                 # Add KL ass intrinsic reward to external
                                 # reward
-                                batch['rewards'] = batch['rewards'] + \
-                                    self.eta * kl / previous_mean_kl
-                        else:
-                            # Add KL ass intrinsic reward to external reward
-                            batch['rewards'] = batch['rewards'] + self.eta * kl
-                        # ----------------------------
+                                batch['rewards'] = batch[
+                                    'rewards'] + self.eta * kl
+                            # ----------------------------
 
-                        # Train exploration policy.
+                        # Train exploration policy
                         self.do_training_exploration(itr, batch)
+                    else:
+                        self.expl_policy.set_param_values(
+                            self.policy.get_param_values())
 
                 itr += 1
 
             if len(kls) != 0 and self.use_kl_ratio and self.use_kl_ratio_q:
                 # Update kl Q at the end of each epoch.
                 self.kl_previous.append(np.mean(np.hstack(kls)))
-                print(self.kl_previous)
 
             # Discount eta at the end of each epoch.
             self.eta *= self.eta_discount
@@ -573,12 +585,14 @@ class DDPG(RLAlgorithm):
                 self.evaluate(epoch, pool)
                 params = self.get_epoch_snapshot(epoch)
                 logger.save_itr_params(epoch, params)
-                logger.record_tabular('VBNN_MeanKL', np.mean(np.hstack(kls)))
-                logger.record_tabular('VBNN_MedianKL',
-                                      np.median(np.hstack(kls)))
-                logger.record_tabular('VBNN_StdKL', np.std(np.hstack(kls)))
-                logger.record_tabular('VBNN_MinKL', np.min(np.hstack(kls)))
-                logger.record_tabular('VBNN_MaxKL', np.max(np.hstack(kls)))
+                if self.exploration:
+                    logger.record_tabular(
+                        'VBNN_MeanKL', np.mean(np.hstack(kls)))
+                    logger.record_tabular('VBNN_MedianKL',
+                                          np.median(np.hstack(kls)))
+                    logger.record_tabular('VBNN_StdKL', np.std(np.hstack(kls)))
+                    logger.record_tabular('VBNN_MinKL', np.min(np.hstack(kls)))
+                    logger.record_tabular('VBNN_MaxKL', np.max(np.hstack(kls)))
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
 
@@ -730,9 +744,9 @@ class DDPG(RLAlgorithm):
         f_train_qf = self.expl_opt_info["f_train_qf"]
         f_train_policy = self.expl_opt_info["f_train_policy"]
 
-        qf_loss, qval = f_train_qf(ys, obs, actions)
+        f_train_qf(ys, obs, actions)
 
-        policy_surr = f_train_policy(obs)
+        f_train_policy(obs)
 
         target_policy.set_param_values(
             target_policy.get_param_values() * (1.0 - self.soft_target_tau) +
@@ -740,11 +754,6 @@ class DDPG(RLAlgorithm):
         target_qf.set_param_values(
             target_qf.get_param_values() * (1.0 - self.soft_target_tau) +
             self.expl_qf.get_param_values() * self.soft_target_tau)
-
-#         self.qf_loss_averages.append(qf_loss)
-#         self.policy_surr_averages.append(policy_surr)
-#         self.q_averages.append(qval)
-#         self.y_averages.append(ys)
 
     def do_training(self, itr, batch):
 

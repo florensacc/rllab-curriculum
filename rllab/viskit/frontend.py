@@ -9,7 +9,7 @@ from rllab.misc import ext
 import sys
 import argparse
 import json
-import numpy as np
+import numpy as np  
 # import threading, webbrowser
 import plotly.offline as po
 import plotly.graph_objs as go
@@ -51,9 +51,13 @@ def send_css(path):
 
 def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None):
     data = []
+    p25, p50, p75 = [], [], []
     for idx, plt in enumerate(plot_list):
         color = core.color_defaults[idx % len(core.color_defaults)]
         if use_median:
+            p25.append(np.mean(plt.percentile25))
+            p50.append(np.mean(plt.percentile50))
+            p75.append(np.mean(plt.percentile75))
             x = range(len(plt.percentile50))
             y = list(plt.percentile50)
             y_upper = list(plt.percentile75)
@@ -81,6 +85,19 @@ def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None):
             legendgroup=plt.legend,
             line=dict(color=core.hex_to_rgb(color)),
         ))
+    p25str = '['
+    p50str = '['
+    p75str = '['
+    for p25e, p50e, p75e in zip(p25, p50, p75):
+        p25str += (str(p25e) + ',')
+        p50str += (str(p50e) + ',')
+        p75str += (str(p75e) + ',')
+    p25str += ']'
+    p50str += ']'
+    p75str += ']'
+    print(p25str)
+    print(p50str)
+    print(p75str)
 
     layout = go.Layout(
         legend=dict(
@@ -113,8 +130,9 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
             y_lower = list(plt.means - plt.stds)
         plt.legend = plt.legend.replace('rllab.algos.trpo.TRPO', 'TRPO')
         plt.legend = plt.legend.replace('rllab.algos.vpg.VPG', 'R')
+        plt.legend = plt.legend.replace('rllab.algos.erwr.ERWR', 'ERWR')
         plt.legend = plt.legend.replace('sandbox.rein.algos.trpo_unn.TRPO', 'TRPO+EX')
-        plt.legend = plt.legend.replace('sandbox.rein.algos.vpg_unn.VPG', 'R+EX')
+        plt.legend = plt.legend.replace('sandbox.rein.algos.erwr_bnn.ERWR', 'ERWR+EX')
         plt.legend = plt.legend.replace('0.0001', '1e-4')
         ax.fill_between(
             x, y_lower, y_upper, interpolate=True, facecolor=color, linewidth=0.0, alpha=0.3)
@@ -124,18 +142,18 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
         ax.spines['top'].set_visible(False)
         if counter == 1:
 #                 ax.set_xlim([0, 1000])
-            ax.set_ylim([0, 2000])
-            loc = 'upper left'
+#             ax.set_ylim([0, 2000])
+            loc = 'lower right'
         elif counter == 2:
             ax.set_xlim([0, 1000])
-            loc = 'upper left'
+            loc = 'lower right'
         elif counter == 3:
             ax.set_xlim([0, 1000])
             loc = 'upper left'
         elif counter == 4:
-            ax.set_xlim([0, 1000])
-            ax.set_ylim([0, 2])
-            loc= 'upper left'
+            ax.set_xlim([0, 200])
+#             ax.set_ylim([0, 2])
+            loc= 'center right'
         leg = ax.legend(loc=loc, prop={'size':12}, ncol=1)
         for legobj in leg.legendHandles:
             legobj.set_linewidth(5.0)
@@ -144,7 +162,7 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
             return str(int(np.round(x/1000.0)))+'k'
 
         import matplotlib.ticker as tick
-        ax.xaxis.set_major_formatter(tick.FuncFormatter(y_fmt))
+#         ax.xaxis.set_major_formatter(tick.FuncFormatter(y_fmt))
         _plt.savefig('tmp' + str(counter) + '.pdf', bbox_inches='tight')
 
 
@@ -226,6 +244,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                         if len(data) > 0:
                             progresses = [
                                 exp.progress.get(plot_key, np.array([np.nan])) for exp in data]
+#                             progresses = [progress[:500] for progress in progresses ]
                             sizes = map(len, progresses)
                             max_size = max(sizes)
                             progresses = [
@@ -256,6 +275,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                     if best_regret != -np.inf:
                         progresses = [
                             exp.progress.get(plot_key, np.array([np.nan])) for exp in data_best_regret]
+#                         progresses = [progress[:500] for progress in progresses ]
                         sizes = map(len, progresses)
                         # more intelligent:
                         max_size = max(sizes)

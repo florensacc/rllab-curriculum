@@ -205,6 +205,13 @@ class VBNNLayer(lasagne.layers.Layer):
                                   log_to_std(self.b_rho), 0., self.prior_sd)
         return kl_div
 
+    def kl_div_old_prior(self):
+        kl_div = self.kl_div_p_q(
+            self.mu_old, log_to_std(self.rho_old), 0., self.prior_sd)
+        kl_div += self.kl_div_p_q(self.b_mu_old,
+                                  log_to_std(self.b_rho_old), 0., self.prior_sd)
+        return kl_div
+
     def kl_div_prior_new(self):
         kl_div = self.kl_div_p_q(
             0., self.prior_sd, self.mu,  log_to_std(self.rho))
@@ -251,6 +258,8 @@ class VBNN(LasagnePowered, Serializable):
                  likelihood_sd=5.0,
                  second_order_update=False,
                  learning_rate=0.0001,
+                 compression=False,
+                 information_gain=True,
                  ):
 
         assert len(layers_type) == len(n_hidden) + 1
@@ -270,6 +279,10 @@ class VBNN(LasagnePowered, Serializable):
         self.likelihood_sd = likelihood_sd
         self.second_order_update = second_order_update
         self.learning_rate = learning_rate
+        self.compression = compression
+        self.information_gain = information_gain
+
+        assert self.information_gain or self.compression
 
         # Build network architecture.
         self.build_network()
@@ -291,6 +304,26 @@ class VBNN(LasagnePowered, Serializable):
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.reset_to_old_params()
+
+    def compression_improvement(self):
+        """KL divergence KL[old_param||new_param]"""
+        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+                        lasagne.layers.get_all_layers(self.network)[1:])
+        return sum(l.kl_div_old_new() for l in layers)
+
+    def inf_gain(self):
+        """KL divergence KL[new_param||old_param]"""
+        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+                        lasagne.layers.get_all_layers(self.network)[1:])
+        return sum(l.kl_div_new_old() for l in layers)
+
+    def surprise(self):
+        surpr = 0.
+        if self.compression:
+            surpr += self.compression_improvement()
+        if self.information_gain:
+            surpr += self.inf_gain()
+        return surpr
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
@@ -451,8 +484,9 @@ class VBNN(LasagnePowered, Serializable):
         self.train_err_fn = ext.compile_function(
             [input_var, target_var], loss, log_name='train_err_fn')
 
+        # called kl div closed form but should be called surprise
         self.f_kl_div_closed_form = ext.compile_function(
-            [], self.kl_div(), log_name='kl_div_fn')
+            [], self.surprise(), log_name='kl_div_fn')
 
 if __name__ == '__main__':
     pass

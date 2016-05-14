@@ -21,7 +21,7 @@ def initialize(n_parallel):
 def _worker_populate_task(G, env, policy, dynamics):
     G.env = env
     G.policy = policy
-    G.dynamics = dynamics
+#     G.dynamics = dynamics
 
 
 def populate_task(env, policy, dynamics):
@@ -89,18 +89,28 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
             start = j * kl_batch_size
             end = np.minimum(
                 (j + 1) * kl_batch_size, obs.shape[0] - 1)
-            # Update model weights based on current minibatch.
+
             if second_order_update:
-                # Not sure if this is correct... FIXME: it probably isn't.
-                # Getting NaN in cost. FIXME
-                G.dynamics.train_update_fn(
-                    (_inputs[start:end], _targets[start:end]))
+                # We do a line search over the best step sizes using
+                # step_size * invH * grad
+                best_loss_value = np.inf
+                for step_size in [0.01]:
+                    G.dynamics.save_old_params()
+                    loss_value = G.dynamics.train_update_fn(
+                        _inputs[start:end], _targets[start:end], step_size)
+                    if loss_value < best_loss_value:
+                        best_loss_value = loss_value
+                    kl_div = np.clip(
+                        float(G.dynamics.f_kl_div_closed_form()), 0, 1000)
+                    # If using replay pool, undo updates.
+                    if use_replay_pool:
+                        G.dynamics.reset_to_old_params()
             else:
+                # Update model weights based on current minibatch.
                 for _ in xrange(n_itr_update):
                     G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end])
-            # Calculate current minibatch KL.
-            kl_div = float(G.dynamics.f_kl_div_closed_form())
+
             for k in xrange(start, end):
                 kl[k] = kl_div
             # If using replay pool, undo updates.
@@ -148,6 +158,7 @@ def sample_paths(
         _worker_set_policy_params,
         [(policy_params,)] * singleton_pool.n_parallel
     )
+
     # Set dynamics params.
     # --------------------
     singleton_pool.run_each(
