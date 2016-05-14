@@ -114,6 +114,8 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
         return self._f_dist_info_givens(*[obs] + latent_vals)
 
     def reset(self):  #here I would sample a latent var.
+        # sample latent
+        # store it in self.something that then goes to all the others
         pass
 
 

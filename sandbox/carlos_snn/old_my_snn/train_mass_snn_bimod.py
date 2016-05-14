@@ -1,14 +1,11 @@
-
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from sandbox.carlos_snn.bimod_env_tunable import BimodEnv
-from rllab.envs.normalized_env import normalize
-from sandbox.carlos_snn.s_mlp_policy import GaussianMLPPolicy_snn
-from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.carlos_snn.npo_snn import NPO_snn
-from sandbox.carlos_snn.trpo_snn import TRPO_snn
-from rllab.algos.trpo import TRPO
 from rllab.algos.npo import NPO
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+
+from sandbox.carlos_snn.envs.bimod_env_tunable import BimodEnv
+from sandbox.carlos_snn.old_my_snn.npo_snn import NPO_snn
+from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
 
 stub(globals())
 

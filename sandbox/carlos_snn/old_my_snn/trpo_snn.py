@@ -1,7 +1,8 @@
 # from rllab.algos.npo import NPO
-from sandbox.carlos_snn.npo_snn import NPO_snn
-from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.core.serializable import Serializable
+from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+
+from sandbox.carlos_snn.old_my_snn.npo_snn import NPO_snn
 
 
 class TRPO_snn(NPO_snn, Serializable):

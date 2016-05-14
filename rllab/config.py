@@ -5,6 +5,8 @@ PROJECT_PATH = osp.abspath(osp.join(osp.dirname(__file__), '..'))
 
 LOG_DIR = PROJECT_PATH + "/data"
 
+TF = False
+
 DOCKER_IMAGE = "DOCKER_IMAGE"
 
 KUBE_PREFIX = "rllab_"
@@ -33,6 +35,10 @@ AWS_IAM_INSTANCE_PROFILE_NAME = "rllab"
 
 AWS_SECURITY_GROUPS = ["rllab"]
 
+AWS_SECURITY_GROUP_IDS = []
+
+AWS_NETWORK_INTERFACES = []
+
 AWS_REGION_NAME = "us-east-1"
 
 CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*.pod/*"]
@@ -53,7 +59,7 @@ KUBE_DEFAULT_NODE_SELECTOR = {
 
 try:
     from config_personal import *
-except:
+except Exception:
     print "Creating your personal config from template..."
     from subprocess import call
     call(["cp", osp.join(PROJECT_PATH, "rllab/config_personal_template.py"), osp.join(PROJECT_PATH, "rllab/config_personal.py")])

@@ -13,6 +13,7 @@ dependencies:
     - joblib
     - mako
     - ipywidgets
+    - numba
     - flask
     - pybox2d
     - pygame

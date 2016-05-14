@@ -66,7 +66,7 @@ class GymEnv(Env, Serializable):
             else:
                 if video_schedule is None:
                     video_schedule = CappedCubicVideoSchedule()
-            self.env.monitor.start(log_dir, video_schedule)
+            self.env.monitor.start(log_dir, video_schedule)  # add 'force=True' if want overwrite dirs
             self.monitoring = True
 
         self._observation_space = convert_gym_space(env.observation_space)

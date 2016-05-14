@@ -34,7 +34,7 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
 
     def __init__(
             self,
-            env_spec,
+            env,
             policy,
             # how many samples to estimate marginal p(s'|s,g)
             n_subgoal_samples=10,
@@ -53,6 +53,8 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
         # assert isinstance(policy.subgoal_space, Discrete)
         # assert isinstance(policy.high_policy.distribution, Categorical)
         # assert isinstance(policy.low_policy.distribution, Categorical)
+
+        env_spec = env.spec
 
         if component_idx is not None:
             assert isinstance(env_spec.observation_space, Product)

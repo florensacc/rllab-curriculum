@@ -24,6 +24,7 @@ class BatchHRL(BatchPolopt, Serializable):
             high_algo,
             low_algo,
             mi_coeff=0.1,
+            reward_coeff=1.,
             bonus_gradient=False,
             **kwargs):
         """
@@ -34,6 +35,7 @@ class BatchHRL(BatchPolopt, Serializable):
         :param high_algo: algorithm for high-level policy
         :param low_algo: algorithm for low-level policy
         :param mi_coeff: coefficient for mutual information
+        :param reward_coeff: coefficient for the true reward (when training the low-level policy)
         :param bonus_gradient: whether to differentiate through the bonus reward
         :param kwargs:
         :return:
@@ -47,6 +49,7 @@ class BatchHRL(BatchPolopt, Serializable):
         self.high_algo = high_algo
         self.low_algo = low_algo
         self.mi_coeff = mi_coeff
+        self.reward_coeff = reward_coeff
         self.bonus_gradient = bonus_gradient
 
     @overrides
@@ -93,6 +96,9 @@ class BatchHRL(BatchPolopt, Serializable):
         # self.bonus_evaluator.computed = False
         # self.bonus_evaluator.update_cache()
 
+        with logger.prefix("MI | "), logger.tabular_prefix("MI_"):
+            self.bonus_evaluator.fit(paths)
+
         for path in paths:
             rewards = path['rewards']
             actions = path['actions']
@@ -110,7 +116,7 @@ class BatchHRL(BatchPolopt, Serializable):
             )
             chunked_high_path = hrl_utils.downsample_path(high_path, self.policy.subgoal_interval)
             bonuses = self.bonus_evaluator.predict(path)
-            low_rewards = rewards + self.mi_coeff * bonuses
+            low_rewards = self.reward_coeff * rewards + self.mi_coeff * bonuses
             all_bonuses.extend(bonuses)
             bonus_returns.append(np.sum(bonuses))
             low_path = dict(
@@ -145,8 +151,6 @@ class BatchHRL(BatchPolopt, Serializable):
         # mi_action_goal = self._compute_mi_action_goal(self.env.spec, self.policy, high_samples_data, low_samples_data)
         # logger.record_tabular("I(action,goal|state)", mi_action_goal)
         # We need to train the predictor for p(s'|g, s)
-        with logger.prefix("MI | "), logger.tabular_prefix("MI_"):
-            self.bonus_evaluator.fit(paths)
 
 
 

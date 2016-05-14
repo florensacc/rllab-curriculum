@@ -39,7 +39,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     def __init__(
             self,
             env_spec,
-            ##CF - latent units a the bottom
+            ##CF - latent units a the input
             latent_dim = 2,
             latent_type='normal',
             hidden_sizes=(32, 32),
@@ -113,7 +113,8 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     ##
     
     ##CF - the mean and var now also depend on the particular latent sampled
-    def dist_info_sym(self, obs_var, latent_var, action_var):
+
+    def dist_info_sym(self, obs_var, latent_var ):
         #generate the generalized input (append latent to obs.)
         extended_obs_var = TT.concatenate( [obs_var,latent_var], axis=1 )
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], extended_obs_var)
@@ -126,16 +127,22 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     @overrides
     def get_action(self, observation):
         ##CF
-        if self.latent_type=='normal':
-            latent = np.random.randn(self.latent_dim,)  
-        elif self.latent_type=='binomial':
-            latent = np.random.binomial(4,0.5,(self.latent_dim,))
+        if self.resample:
+            if self.latent_type=='normal':
+                latent = np.random.randn(self.latent_dim,)
+            elif self.latent_type=='binomial':
+                latent = np.random.binomial(4,0.5,(self.latent_dim,))
+        else:
+            latent = self.dist_info()
         extended_obs = np.concatenate( (observation,latent) )
         #make mean, log_std also depend on the latent (as observ.)
         mean, log_std = [x[0] for x in self._f_dist([extended_obs])]
         rnd = np.random.randn(len(mean))
         action = rnd * np.exp(log_std) + mean
         return action, dict(mean=mean, log_std=log_std, latent=latent)
+
+    def reset(self):
+        pass
 
     def log_diagnostics(self, paths):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])

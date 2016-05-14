@@ -39,47 +39,132 @@ Double Pendulum: scale reward 0.1, qf lr 0.0005, policy lr 0.0005. need about 35
 #    dict(qf_learning_rate=1e-3, policy_learning_rate=1e-3, use_replay_pool=True, batch_size=32, ),
 #
 # ]
+
+
+
+inverted_double_pendulum_env = normalize(InvertedDoublePendulumEnv())
+swimmer_env = normalize(SwimmerEnv())
+cartpole_swingup_env = normalize(CartpoleSwingupEnv())
+ant_env = normalize(AntEnv())
+
+reward_scaling = {
+    # inverted_double_pendulum_env: 0.01,
+    # swimmer_env: 1,
+    # cartpole_swingup_env: 0.1,
+    ant_env: 0.01,
+}
+
 if ASYNC:
-    # , normalize_obs=True)#CartpoleEnv())#DoublePendulumEnv())
     vg = instrument.VariantGenerator()
-    vg.add("env", map(normalize, [InvertedDoublePendulumEnv(), SwimmerEnv(), CartpoleSwingupEnv(), AntEnv()]))
-    vg.add("soft_target_tau", [1e-3, 1e-4])
-    vg.add("qf_learning_rate", [1e-3, 1e-4, 1e-5])
-    vg.add("policy_lr_ratio", [0.1, 1])
-    vg.add("scale_reward", [0.001, 0.01, 0.1, 1])
-    vg.add("use_replay_pool", [False, True])
-    vg.add("batch_size", lambda use_replay_pool: [32] if use_replay_pool else [4, 16, 32])
+
+    vg.add("env", reward_scaling.keys())
+    vg.add("soft_target_tau", [1e-3])  # , 1e-4])
+    vg.add("n_workers", [1, 4])#, 8, 16])
+    vg.add("qf_learning_rate", [1e-4, 1e-5])#lambda n_workers: [1e-3, 1e-4] if n_workers <= 4 else [1e-4, 1e-5])
+    vg.add("policy_lr_ratio", [0.1])
+    vg.add("scale_reward", lambda env: [reward_scaling[env]])
+    vg.add("use_replay_pool", [True])  # False, True])
+    vg.add("batch_size", [32])  # lambda use_replay_pool: [32] if use_replay_pool else [4])  # , 16, 32])
     vg.add("hidden_sizes", [(400, 300)])
-    vg.add("seed", [11, 111, 211])
-    vg.add("n_workers", [1, 4, 8, 16])
+    vg.add("seed", [511, 611, 711, 811, 911])  # 11, 111, 211, 311, 411])
     vg.add("qf_weight_decay", [1e-7])
     vg.add("target_update_method", ['soft'])
     vg.add("hard_target_interval", [40000])
 
     print "#Experiments:", len(vg.variants())
     variants = vg.variants()
-    np.random.shuffle(variants)
 
     config.AWS_INSTANCE_TYPE = 'c4.4xlarge'
-    config.AWS_SPOT_PRICE = '0.49'
+    config.AWS_SPOT_PRICE = '2.0'
 
-    total_machines = 50
+    # total_machines = 160
+    #
+    # runs_per_machine = int(np.ceil(len(variants) * 1.0 / total_machines))
+    # print("Runs per machine: %d" % runs_per_machine)
 
-    runs_per_machine = int(np.ceil(len(variants) * 1.0 / total_machines))
+    regions = [
+        "us-west-1",
+        "us-east-1"
+    ]
 
-    for start_idx in xrange(0, len(variants), runs_per_machine):
+    zones = {
+        "us-west-1": [
+            "us-west-1a",
+            "us-west-1c",
+        ],
+        "us-east-1": [
+            "us-east-1a",
+            "us-east-1c",
+            "us-east-1d",
+            # "us-east-1e",
+        ]
+    }
 
-        slice_variants = variants[start_idx:start_idx + runs_per_machine]
+    ami_ids = {
+        "us-west-1": "ami-0c78066c",
+        "us-east-1": "ami-67c5d00d",
+    }
 
-        tasks = []
+    key_names = {
+        "us-west-1": "research_north_california",
+        "us-east-1": "research_virginia",
+    }
 
-        for variant in slice_variants:
+    # rest_ids = [
+    #     82, 83, 88, 89, 92, 99, 108
+    #     # 84,
+    #     # 87,
+    #     # 90,
+    #     # 96,
+    #     # 98,
+    #     # 103,
+    #     # 104,
+    #     # 105,
+    #     # 107
+    # ]
+    #
+    # rest_ids = [x - 1 for x in rest_ids]
+    #
+    # variants = [variants[i] for i in rest_ids]
+
+    n_zones = sum(map(len, zones.values()))
+
+    zones = sum(zones.values(), [])
+
+    runs_per_zone = int(np.ceil(len(variants) * 1.0 / n_zones))
+
+    print("runs per zone: %d" % runs_per_zone)
+
+    for zone, zone_start_idx in zip(zones, range(0, len(variants), runs_per_zone)):
+
+        region = zone[:-1]
+
+        # 6 zones, 160 jobs = around 30 jobs per zone
+
+        for variant_idx in xrange(zone_start_idx, zone_start_idx + runs_per_zone):
+
+            if variant_idx >= len(variants):
+                sys.exit(0)
+
+            print("*************************************************************")
+            print("*************************************************************")
+            print("Launching task #%d" % variant_idx)
+            print("*************************************************************")
+            print("*************************************************************")
+
+            variant = variants[variant_idx]
+
+            # slice_variants = variants[start_idx:start_idx + runs_per_machine]
+
+            # tasks = []
+
+            # for variant in slice_variants:
             env = variant["env"]
             policy = DeterministicMLPPolicy(env_spec=env.spec, hidden_sizes=variant["hidden_sizes"])
             qf = ContinuousMLPQFunction(env_spec=env.spec, hidden_sizes=variant["hidden_sizes"])
             variant["policy_learning_rate"] = variant["qf_learning_rate"] * variant["policy_lr_ratio"]
             es = OUStrategy(env_spec=env.spec)
-            max_samples = variant["n_workers"] * 1000000
+            max_samples = 4000000 #max(2000000, variant["n_workers"] * 1000000)
             algo = AsyncDDPG(
                 env=env, policy=policy, qf=qf, n_workers=variant["n_workers"], es=es,
                 scale_reward=variant["scale_reward"],
@@ -99,12 +184,22 @@ if ASYNC:
                 seed=variant["seed"],
                 env=dict(OMP_NUM_THREADS=str(num_threads))
             )
-            tasks.append(task)
-        run_experiment_lite(
-            exp_prefix="async_ddpg_final_search",
-            mode="ec2",
-            batch_tasks=tasks,
-        )
+            config.AWS_REGION_NAME = region
+            config.AWS_KEY_NAME = key_names[region]
+            run_experiment_lite(
+                exp_prefix="async_ddpg_ant_only",
+                mode="ec2",
+                batch_tasks=[task],  # tasks,
+                terminate_machine=True,
+                aws_config=dict(
+                    placement=dict(
+                        AvailabilityZone=zone,
+                    ),
+                    image_id=ami_ids[region],
+                )
+            )
+            # break
+            # sys.exit(0)
 else:
     for seed in [11, 21, 31]:
         for env in map(normalize, [DoublePendulumEnv(), SwimmerEnv(), CartpoleEnv()]):
