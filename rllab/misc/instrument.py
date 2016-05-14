@@ -549,7 +549,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         die() { status=$1; shift; echo "FATAL: $*"; exit $status; }
     """)
     sio.write("""
-        EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id`"
+        EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
     """)
     sio.write("""
         aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={exp_name} --region {aws_region}
@@ -598,7 +598,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
 
     if terminate_machine:
         sio.write("""
-            EC2_INSTANCE_ID="`wget -q -O - http://instance-data/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
+            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
             aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {aws_region}
         """.format(aws_region=config.AWS_REGION_NAME))
     sio.write("} >> /home/ubuntu/user_data.log 2>&1\n")
