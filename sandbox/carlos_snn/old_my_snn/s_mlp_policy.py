@@ -163,7 +163,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
 
     @overrides
     def reset(self):
-        print 'enter reset'
+        # print 'enter reset'
         if not self.resample:
             if self.latent_type=='normal':
                 self.latent_fix = np.random.randn(self.latent_dim,)
@@ -171,7 +171,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
                 self.latent_fix = np.random.binomial(4, 0.5, (self.latent_dim,))
             elif self.latent_type=='bernoulli':
                 self.latent_fix = np.random.binomial(n=1, p=0.5, size=(self.latent_dim,))
-            print self.latent_fix
+            # print self.latent_fix
         else:
             pass
 

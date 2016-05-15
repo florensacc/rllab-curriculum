@@ -48,9 +48,11 @@ for resample in [True, False]:
 
                 for s in [4,5,155]:
                     if resample:
-                        exp_name = 'snn_{}_{}batch_{}latent_{}_{:04d}'.format('Resamp', 100, latent_dim, latent_type, s)
+                        exp_name = 'snn_{}_{}batch_{}latent_{}_{}hallu_{:04d}'.format(
+                            'Resamp', 100, latent_dim, latent_type, n_samples, s)
                     else:
-                        exp_name = 'snn_{}_{}batch_{}latent_{}_{:04d}'.format('NoResamp', 100, latent_dim, latent_type, s)
+                        exp_name = 'snn_{}_{}batch_{}latent_{}_{}hallu_{:04d}'.format(
+                            'NoResamp', 100, latent_dim, latent_type, n_samples, s)
                     run_experiment_lite(
                         stub_method_call=algo.train(),
                         mode='local',
