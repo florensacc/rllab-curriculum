@@ -21,7 +21,7 @@ class PriorHallucinator(Serializable):
         self.policy = policy
         self.n_hallucinate_samples = n_hallucinate_samples
 
-    def hallucinate(self, samples_data):
+    def hallucinate(self, samples_data):  # here samples data have already been processed, so it has all Adv, Ret,..
         # we'd like to extend the experience with extra trajectories
         observations = samples_data["observations"]
         actions = samples_data["actions"]
@@ -29,6 +29,7 @@ class PriorHallucinator(Serializable):
         h_samples = []
         old_logli = self.policy.log_likelihood(actions, agent_infos, action_only=True)
         for _ in xrange(self.n_hallucinate_samples):
+            self.policy.reset()  # this will sample a new fixed latent if needed (resample False)
             new_actions, new_agent_infos = self.policy.get_actions(observations)
             new_logli = self.policy.log_likelihood(actions, new_agent_infos, action_only=True)
             # We'd need to compute the importance ratio. This is given by p(a|h_new) / p(a|h_old)

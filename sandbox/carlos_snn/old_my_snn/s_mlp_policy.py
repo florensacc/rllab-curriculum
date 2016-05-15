@@ -42,6 +42,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             ##CF - latent units a the input
             latent_dim = 2,
             latent_type='normal',
+            resample=True,
             hidden_sizes=(32, 32),
             learn_std=True,
             init_std=1.0,
@@ -54,6 +55,8 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     ):
         self.latent_dim = latent_dim  ##could I avoid needing this self for the get_action?
         self.latent_type=latent_type
+        self.resample = resample
+        self.latent_fix = None # this will hold the latent variable sampled in reset()
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
@@ -126,23 +129,39 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
 
     @overrides
     def get_action(self, observation):
+        actions, outputs = self.get_actions([observation])
+        return actions[0], {k: v[0] for k, v in outputs.iteritems()}
+
+    def get_actions(self, observations):
         ##CF
         if self.resample:
             if self.latent_type=='normal':
-                latent = np.random.randn(self.latent_dim,)
+                latents = np.random.randn(len(observations), self.latent_dim)  # sample all latents at once
             elif self.latent_type=='binomial':
-                latent = np.random.binomial(4,0.5,(self.latent_dim,))
+                latents = np.random.binomial(4, 0.5, (len(observations), self.latent_dim))
+            elif self.latent_type=='bernoulli':
+                latents = np.random.binomial(n=1, p=0.5, size=(len(observations), self.latent_dim))
+            else:
+                raise NameError("This type of latent is not defined")
         else:
-            latent = self.dist_info()
-        extended_obs = np.concatenate( (observation,latent) )
-        #make mean, log_std also depend on the latent (as observ.)
-        mean, log_std = [x[0] for x in self._f_dist([extended_obs])]
-        rnd = np.random.randn(len(mean))
-        action = rnd * np.exp(log_std) + mean
-        return action, dict(mean=mean, log_std=log_std, latent=latent)
+            latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation would be better...
+        extended_obs = np.concatenate([observations, latents], axis=1)
+        # make mean, log_std also depend on the latent (as observ.)
+        mean, log_std = self._f_dist(extended_obs)
+        rnd = np.random.normal(size=mean.shape)
+        actions = rnd * np.exp(log_std) + mean
+        return actions, dict(mean=mean, log_std=log_std, latent=latents)
 
     def reset(self):
-        pass
+        if not self.resample:
+            if self.latent_type=='normal':
+                self.latent_fix = np.random.randn(self.latent_dim,)
+            elif self.latent_type=='binomial':
+                self.latent_fix = np.random.binomial(4, 0.5, (self.latent_dim,))
+            elif self.latent_type=='bernoulli':
+                self.latent_fix = np.random.binomial(n=1, p=0.5, size=(self.latent_dim,))
+        else:
+            pass
 
     def log_diagnostics(self, paths):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])
@@ -150,4 +169,23 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
 
     @property
     def distribution(self):
+        """
+        We set the distribution to the policy itself since we need some behavior different from a usual diagonal
+        Gaussian distribution.
+        """
         return self._dist
+
+    def log_likelihood(self, actions, agent_infos, action_only=True):
+        # First compute logli of the action. This assumes the latent FIX to whatever was sampled, and hence we only
+        # need to use the mean and log_std, but not any information about the latent
+        logli = self._dist.log_likelihood(actions, agent_infos)
+        if not action_only:
+            raise NotImplementedError
+         #   if not action_only:
+         #       for idx, latent_dist in enumerate(self._latent_distributions):
+         #           latent_var = dist_info["latent_%d" % idx]
+         #           prefix = "latent_%d_" % idx
+         #           latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.iteritems() if k.startswith(
+         #               prefix)}
+         #           logli += latent_dist.log_likelihood(latent_var, latent_dist_info)
+        return logli
