@@ -20,7 +20,7 @@ stub(globals())
 seeds = range(10)
 # mdp_classes = [MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
-mdps = [DoublePendulumEnvX]
+mdps = [DoublePendulumEnvX()]
 param_cart_product = itertools.product(
     mdps, seeds
 )
@@ -45,17 +45,17 @@ for mdp, seed in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=200,
+        n_itr=1000,
         step_size=0.01,
         subsample_factor=1.0,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="x-trpo-basic-d1",
+        exp_prefix="x-trpo-basic-d2",
         n_parallel=4,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
     )

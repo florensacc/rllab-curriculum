@@ -21,7 +21,7 @@ def initialize(n_parallel):
 def _worker_populate_task(G, env, policy, dynamics):
     G.env = env
     G.policy = policy
-#     G.dynamics = dynamics
+    G.dynamics = dynamics
 
 
 def populate_task(env, policy, dynamics):
@@ -64,11 +64,6 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     path['rewards_orig'] = np.array(path['rewards'])
 
     if itr > 0:
-        if normalize_reward:
-            # Normalize rewards.
-            path['rewards'] = (
-                path['rewards'] - reward_mean) / (reward_std + 1e-8)
-
         # Iterate over all paths and compute intrinsic reward by updating the
         # model on each observation, calculating the KL divergence of the new
         # params to the old ones, and undoing this operation.
@@ -110,6 +105,9 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 for _ in xrange(n_itr_update):
                     G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end])
+                # Calculate current minibatch KL.
+                kl_div = np.clip(
+                    float(G.dynamics.f_kl_div_closed_form()), 0, 1000)
 
             for k in xrange(start, end):
                 kl[k] = kl_div

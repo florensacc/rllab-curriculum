@@ -9,6 +9,7 @@ from rllab.policies.deterministic_mlp_policy import DeterministicMLPPolicy
 
 
 from rllab.algos.ddpg import DDPG
+from sandbox.rein.envs.walker2d_env_x import Walker2DEnvX
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
@@ -20,14 +21,14 @@ import itertools
 stub(globals())
 
 # Param ranges
-# seeds = range(10)
+seeds = range(10)
 # mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
 #                DoublePendulumEnv, MountainCarEnv]
 
-seeds = [0]
-mdp_classes = [DoublePendulumEnv]
+# mdp_classes = [DoublePendulumEnv]
 
-mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
+# mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
+mdps = [Walker2DEnvX()]
 param_cart_product = itertools.product(
     mdps, seeds
 )
@@ -59,7 +60,7 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="ddpg-basic-d1",
+        exp_prefix="x-ddpg-basic-a1",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

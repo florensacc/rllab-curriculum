@@ -228,7 +228,10 @@ class DDPG(RLAlgorithm):
             second_order_update=False,
             dyn_replay_freq=100,
             reset_expl_policy_freq=1000,
-            exploration=True
+            exploration=True,
+            compression=False,
+            information_gain=True,
+            vime=True,
     ):
         """
         :param env: Environment
@@ -330,7 +333,9 @@ class DDPG(RLAlgorithm):
         self.reset_expl_policy_freq = reset_expl_policy_freq
         self.expl_policy = pickle.loads(pickle.dumps(self.policy))
         self.expl_qf = pickle.loads(pickle.dumps(self.qf))
-        self.exploration = exploration
+        self.compression = compression
+        self.information_gain = information_gain
+        self.vime = vime
         # ----------------------
 
         # Params to keep track of moving average (both intrinsic and external
@@ -356,7 +361,7 @@ class DDPG(RLAlgorithm):
     @overrides
     def train(self):
 
-        # Variational Bayes neural network (VBNN) init
+        # Uncertain neural network (UNN) initialization.
         # ------------------------------------------------
         batch_size = 1
         n_batches = 5  # FIXME, there is no correct value!
@@ -381,8 +386,11 @@ class DDPG(RLAlgorithm):
             prior_sd=self.prior_sd,
             use_reverse_kl_reg=self.use_reverse_kl_reg,
             reverse_kl_reg_factor=self.reverse_kl_reg_factor,
+            #             stochastic_output=self.stochastic_output,
             second_order_update=self.second_order_update,
-            learning_rate=self.unn_learning_rate
+            learning_rate=self.unn_learning_rate,
+            compression=self.compression,
+            information_gain=self.information_gain
         )
 
         logger.log(
@@ -454,7 +462,7 @@ class DDPG(RLAlgorithm):
                         dyn_pool.add_sample(
                             observation, action, reward, terminal)
 
-                if self.exploration:
+                if self.vime:
                     # Training dynamics model
                     # -----------------------
                     if itr % self.dyn_replay_freq == 0:
@@ -490,7 +498,7 @@ class DDPG(RLAlgorithm):
                         batch = pool.random_batch(self.batch_size)
                         self.do_training(itr, batch)
 
-                    if self.exploration:
+                    if self.vime:
                         # Every n iterations, set sample policy to match actual
                         # policy
                         if itr % self.reset_expl_policy_freq == 0:
@@ -529,14 +537,32 @@ class DDPG(RLAlgorithm):
                                 end = np.minimum(
                                     (j + 1), obs.shape[0] - 1)
 
-                                # Update model weights based on current
-                                # minibatch.
-                                for _ in xrange(self.n_itr_update):
-                                    self.vbnn.train_update_fn(
-                                        _inputs[start:end], _targets[start:end], 0.01)
-                                # Calculate current minibatch KL.
-                                kl_div = np.clip(
-                                    float(self.vbnn.f_kl_div_closed_form()), 0, 1000)
+                                if self.second_order_update:
+                                    # We do a line search over the best step sizes using
+                                    # step_size * invH * grad
+                                    best_loss_value = np.inf
+                                    for step_size in [0.01]:
+                                        self.vbnn.save_old_params()
+                                        loss_value = self.vbnn.train_update_fn(
+                                            _inputs[start:end], _targets[start:end], step_size)
+                                        if loss_value < best_loss_value:
+                                            best_loss_value = loss_value
+                                        kl_div = np.clip(
+                                            float(self.vbnn.f_kl_div_closed_form()), 0, 1000)
+                                        # If using replay pool, undo updates.
+                                        if self.use_replay_pool:
+                                            self.vbnn.reset_to_old_params()
+                                else:
+                                    # Update model weights based on current
+                                    # minibatch.
+                                    for _ in xrange(self.n_itr_update):
+                                        self.vbnn.train_update_fn(
+                                            _inputs[start:end], _targets[start:end])
+
+                                    # Calculate current minibatch KL.
+                                    kl_div = np.clip(
+                                        float(self.vbnn.f_kl_div_closed_form()), 0, 1000)
+
                                 for k in xrange(start, end):
                                     kl[k] = kl_div
 
@@ -557,7 +583,8 @@ class DDPG(RLAlgorithm):
                                     # Add KL ass intrinsic reward to external
                                     # reward
                                     batch['rewards'] = batch['rewards'] + \
-                                        self.eta * kl / previous_mean_kl #* np.mean(self.q_averages[-1000:])
+                                        self.eta * kl / \
+                                        previous_mean_kl  # * np.mean(self.q_averages[-1000:])
                             else:
                                 # Add KL ass intrinsic reward to external
                                 # reward
@@ -585,7 +612,7 @@ class DDPG(RLAlgorithm):
                 self.evaluate(epoch, pool)
                 params = self.get_epoch_snapshot(epoch)
                 logger.save_itr_params(epoch, params)
-                if self.exploration:
+                if self.vime:
                     logger.record_tabular(
                         'VBNN_MeanKL', np.mean(np.hstack(kls)))
                     logger.record_tabular('VBNN_MedianKL',

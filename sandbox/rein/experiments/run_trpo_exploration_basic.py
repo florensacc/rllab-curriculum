@@ -68,7 +68,6 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         n_itr_update=1,
         kl_batch_size=1,
         normalize_reward=normalize_reward,
-#         stochastic_output=False,
         replay_pool_size=100000,
         n_updates_per_sample=500,
         second_order_update=True,
@@ -79,11 +78,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="x-trpo-expl-basic-d1",
-        n_parallel=2,
+        exp_prefix="x-trpo-expl-basic-d2-par",
+        n_parallel=4,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         script="sandbox/rein/run_experiment_lite.py",
     )

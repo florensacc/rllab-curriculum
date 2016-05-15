@@ -455,15 +455,22 @@ class BatchPolopt(RLAlgorithm):
             return paths_truncated
 
     def process_samples(self, itr, paths):
-
+        
         if self.normalize_reward:
             # Update reward mean/std Q.
             rewards = []
             for i in xrange(len(paths)):
-                rewards.append(paths[i]['rewards_orig'])
+                rewards.append(paths[i]['rewards'])
             rewards_flat = np.hstack(rewards)
             self._reward_mean.append(np.mean(rewards_flat))
             self._reward_std.append(np.std(rewards_flat))
+
+            # Normalize rewards.
+            reward_mean = np.mean(np.asarray(self._reward_mean))
+            reward_std = np.mean(np.asarray(self._reward_std))
+            for i in xrange(len(paths)):
+                paths[i]['rewards'] = (
+                    paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
 
         if itr > 0:
             kls = []

@@ -1,5 +1,8 @@
 import os
 from sandbox.rein.algos.ddpg_vbnn import DDPG
+from sandbox.rein.envs.walker2d_env_x import Walker2DEnvX
+from sandbox.rein.envs.swimmer_env_x import SwimmerEnvX
+from sandbox.rein.envs.half_cheetah_env_x import HalfCheetahEnvX
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
@@ -18,9 +21,10 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0]
+# etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0]
+etas = [0.001]
 kl_ratios = [True]
-mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv, MountainCarEnv]
+# mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv, MountainCarEnv]
 
 # seeds = range(10)
 # etas = [0.01]
@@ -28,8 +32,9 @@ mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv, MountainCarEn
 # kl_ratios = [True]
 # mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv, MountainCarEnv]
 
-mdps = [NormalizedEnv(env=mdp_class())
-        for mdp_class in mdp_classes]
+# mdps = [NormalizedEnv(env=mdp_class())
+#         for mdp_class in mdp_classes]
+mdps = [HalfCheetahEnvX()]
 param_cart_product = itertools.product(
     kl_ratios, mdps, etas, seeds
 )
@@ -73,17 +78,16 @@ for kl_ratio, mdp, eta, seed in param_cart_product:
         dyn_n_updates_per_sample=1,
         dyn_replay_freq=1,
         batch_size=32,
-        reset_expl_policy_freq=1e10,
-        exploration=True
+        reset_expl_policy_freq=1e10
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="ddpg-expl-basic-e5",
+        exp_prefix="x-ddpg-expl-basic-a1",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         script="scripts/run_experiment_lite.py",
     )

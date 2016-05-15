@@ -1,7 +1,8 @@
 import os
-from rllab.envs.mujoco.ant_env import AntEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from rllab.envs.mujoco.simple_humanoid_env import SimpleHumanoidEnv
+from sandbox.rein.envs.walker2d_env_x import Walker2DEnvX
+from sandbox.rein.envs.swimmer_env_x import SwimmerEnvX
+from sandbox.rein.envs.half_cheetah_env_x import HalfCheetahEnvX
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
@@ -15,9 +16,10 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-mdp_classes = [SimpleHumanoidEnv]
-mdps = [NormalizedEnv(env=mdp_class())
-        for mdp_class in mdp_classes]
+# mdp_classes = [SimpleHumanoidEnv]
+# mdps = [NormalizedEnv(env=mdp_class())
+#         for mdp_class in mdp_classes]
+mdps = [HalfCheetahEnvX()]
 param_cart_product = itertools.product(
     mdps, seeds
 )
@@ -37,7 +39,7 @@ for mdp, seed in param_cart_product:
         mdp.spec,
     )
 
-    batch_size = 1000
+    batch_size = 5000
     algo = TRPO(
         env=mdp,
         policy=policy,
@@ -45,17 +47,17 @@ for mdp, seed in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=10000,
+        n_itr=5000,
         step_size=0.01,
         subsample_factor=1.0,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-loco-c1",
-        n_parallel=1,
-        snapshot_mode="last",
+        exp_prefix="x-trpo-loco-h1",
+        n_parallel=4,
+        snapshot_mode="all",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
     )

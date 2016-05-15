@@ -15,20 +15,6 @@ USE_REPARAMETRIZATION_TRICK = True
 # ----------------
 
 
-def log_to_std(rho):
-    """Transformation for allowing rho in \mathbb{R}, rather than \mathbb{R}_+
-
-    This makes sure that we don't get negative stds. However, a downside might be
-    that we have little gradient on close to 0 std (= -inf using this transformation).
-    """
-    return T.log(1 + T.exp(rho))
-
-
-def std_to_log(sigma):
-    """Reverse log_to_std transformation."""
-    return np.log(np.exp(sigma) - 1)
-
-
 class VBNNLayer(lasagne.layers.Layer):
     """Probabilistic layer that uses Gaussian weights.
 
@@ -51,7 +37,7 @@ class VBNNLayer(lasagne.layers.Layer):
         self.num_units = num_units
         self.prior_sd = prior_sd
 
-        prior_rho = std_to_log(self.prior_sd)
+        prior_rho = self.std_to_log(self.prior_sd)
 
         self.W = np.random.normal(0., prior_sd,
                                   (self.num_inputs, self.num_units))  # @UndefinedVariable
@@ -119,13 +105,25 @@ class VBNNLayer(lasagne.layers.Layer):
             oldparam=True
         )
 
+    def log_to_std(self, rho):
+        """Transformation for allowing rho in \mathbb{R}, rather than \mathbb{R}_+
+
+        This makes sure that we don't get negative stds. However, a downside might be
+        that we have little gradient on close to 0 std (= -inf using this transformation).
+        """
+        return T.log(1 + T.exp(rho))
+
+    def std_to_log(self, sigma):
+        """Reverse log_to_std transformation."""
+        return np.log(np.exp(sigma) - 1)
+
     def get_W(self):
         # Here we generate random epsilon values from a normal distribution
         epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
         # Here we calculate weights based on shifting and rescaling according
         # to mean and variance (paper step 2)
-        W = self.mu + log_to_std(self.rho) * epsilon
+        W = self.mu + self.log_to_std(self.rho) * epsilon
         self.W = W
         return W
 
@@ -133,7 +131,7 @@ class VBNNLayer(lasagne.layers.Layer):
         # Here we generate random epsilon values from a normal distribution
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
-        b = self.b_mu + log_to_std(self.b_rho) * epsilon
+        b = self.b_mu + self.log_to_std(self.b_rho) * epsilon
         self.b = b
         return b
 
@@ -153,8 +151,8 @@ class VBNNLayer(lasagne.layers.Layer):
             input = input.flatten(2)
 
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-        delta = T.dot(T.square(input), T.square(log_to_std(
-            self.rho))) + T.square(log_to_std(self.b_rho)).dimshuffle('x', 0)
+        delta = T.dot(T.square(input), T.square(self.log_to_std(
+            self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
 
@@ -186,37 +184,37 @@ class VBNNLayer(lasagne.layers.Layer):
 
     def kl_div_new_old(self):
         kl_div = self.kl_div_p_q(
-            self.mu, log_to_std(self.rho), self.mu_old, log_to_std(self.rho_old))
-        kl_div += self.kl_div_p_q(self.b_mu, log_to_std(self.b_rho),
-                                  self.b_mu_old, log_to_std(self.b_rho_old))
+            self.mu, self.log_to_std(self.rho), self.mu_old, self.log_to_std(self.rho_old))
+        kl_div += self.kl_div_p_q(self.b_mu, self.log_to_std(self.b_rho),
+                                  self.b_mu_old, self.log_to_std(self.b_rho_old))
         return kl_div
 
     def kl_div_old_new(self):
         kl_div = self.kl_div_p_q(
-            self.mu_old, log_to_std(self.rho_old), self.mu, log_to_std(self.rho))
+            self.mu_old, self.log_to_std(self.rho_old), self.mu, self.log_to_std(self.rho))
         kl_div += self.kl_div_p_q(self.b_mu_old,
-                                  log_to_std(self.b_rho_old), self.b_mu, log_to_std(self.b_rho))
+                                  self.log_to_std(self.b_rho_old), self.b_mu, self.log_to_std(self.b_rho))
         return kl_div
 
     def kl_div_new_prior(self):
         kl_div = self.kl_div_p_q(
-            self.mu, log_to_std(self.rho), 0., self.prior_sd)
+            self.mu, self.log_to_std(self.rho), 0., self.prior_sd)
         kl_div += self.kl_div_p_q(self.b_mu,
-                                  log_to_std(self.b_rho), 0., self.prior_sd)
+                                  self.log_to_std(self.b_rho), 0., self.prior_sd)
         return kl_div
 
     def kl_div_old_prior(self):
         kl_div = self.kl_div_p_q(
-            self.mu_old, log_to_std(self.rho_old), 0., self.prior_sd)
+            self.mu_old, self.log_to_std(self.rho_old), 0., self.prior_sd)
         kl_div += self.kl_div_p_q(self.b_mu_old,
-                                  log_to_std(self.b_rho_old), 0., self.prior_sd)
+                                  self.log_to_std(self.b_rho_old), 0., self.prior_sd)
         return kl_div
 
     def kl_div_prior_new(self):
         kl_div = self.kl_div_p_q(
-            0., self.prior_sd, self.mu,  log_to_std(self.rho))
+            0., self.prior_sd, self.mu,  self.log_to_std(self.rho))
         kl_div += self.kl_div_p_q(0., self.prior_sd,
-                                  self.b_mu, log_to_std(self.b_rho))
+                                  self.b_mu, self.log_to_std(self.b_rho))
         return kl_div
 
     def get_output_for(self, input, **kwargs):
@@ -262,6 +260,7 @@ class VBNN(LasagnePowered, Serializable):
                  information_gain=True,
                  ):
 
+        Serializable.quick_init(self, locals())
         assert len(layers_type) == len(n_hidden) + 1
 
         self.n_in = n_in
@@ -480,9 +479,6 @@ class VBNN(LasagnePowered, Serializable):
         else:
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var], loss_only_last_sample, updates=updates, log_name='train_update_fn')
-
-        self.train_err_fn = ext.compile_function(
-            [input_var, target_var], loss, log_name='train_err_fn')
 
         # called kl div closed form but should be called surprise
         self.f_kl_div_closed_form = ext.compile_function(
