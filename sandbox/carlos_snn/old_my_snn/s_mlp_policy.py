@@ -56,7 +56,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         self.latent_dim = latent_dim  ##could I avoid needing this self for the get_action?
         self.latent_type=latent_type
         self.resample = resample
-        self.latent_fix = None # this will hold the latent variable sampled in reset()
+        self.latent_fix = np.array([]) # this will hold the latent variable sampled in reset()
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
@@ -134,25 +134,36 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
 
     def get_actions(self, observations):
         ##CF
-        if self.resample:
-            if self.latent_type=='normal':
-                latents = np.random.randn(len(observations), self.latent_dim)  # sample all latents at once
-            elif self.latent_type=='binomial':
-                latents = np.random.binomial(4, 0.5, (len(observations), self.latent_dim))
-            elif self.latent_type=='bernoulli':
-                latents = np.random.binomial(n=1, p=0.5, size=(len(observations), self.latent_dim))
+        # how can I impose that I only reset for a whole rollout? before calling get_acitons!!
+        if self.latent_dim:
+            if self.resample:
+                if self.latent_type=='normal':
+                    latents = np.random.randn(len(observations), self.latent_dim)  # sample all latents at once
+                elif self.latent_type=='binomial':
+                    latents = np.random.binomial(4, 0.5, (len(observations), self.latent_dim))
+                elif self.latent_type=='bernoulli':
+                    latents = np.random.binomial(n=1, p=0.5, size=(len(observations), self.latent_dim))
+                else:
+                    raise NameError("This type of latent is not defined")
             else:
-                raise NameError("This type of latent is not defined")
+                if not len(self.latent_fix)==self.latent_dim:
+                    self.reset()
+                latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation would be better...
+                # print latents
+            extended_obs = np.concatenate([observations, latents], axis=1)
         else:
-            latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation would be better...
-        extended_obs = np.concatenate([observations, latents], axis=1)
+            latents = np.array([[]]*len(observations))
+            extended_obs = observations
+        # print extended_obs
         # make mean, log_std also depend on the latent (as observ.)
         mean, log_std = self._f_dist(extended_obs)
         rnd = np.random.normal(size=mean.shape)
         actions = rnd * np.exp(log_std) + mean
         return actions, dict(mean=mean, log_std=log_std, latent=latents)
 
+    @overrides
     def reset(self):
+        print 'enter reset'
         if not self.resample:
             if self.latent_type=='normal':
                 self.latent_fix = np.random.randn(self.latent_dim,)
@@ -160,6 +171,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
                 self.latent_fix = np.random.binomial(4, 0.5, (self.latent_dim,))
             elif self.latent_type=='bernoulli':
                 self.latent_fix = np.random.binomial(n=1, p=0.5, size=(self.latent_dim,))
+            print self.latent_fix
         else:
             pass
 

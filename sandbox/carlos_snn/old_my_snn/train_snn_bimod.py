@@ -46,7 +46,7 @@ for resample in [True, False]:
                 )
 
 
-                for s in [1,13,254]:
+                for s in [4,5,155]:
                     if resample:
                         exp_name = 'snn_{}_{}batch_{}latent_{}_{:04d}'.format('Resamp', 100, latent_dim, latent_type, s)
                     else:
@@ -63,6 +63,6 @@ for resample in [True, False]:
                         seed=s,
                         # plot=True,
                         # Save to data/local/exp_prefix/exp_name/
-                        exp_prefix='snn_test_bimod',
+                        exp_prefix='snn_test_bimod2',
                         exp_name=exp_name,
                     )
