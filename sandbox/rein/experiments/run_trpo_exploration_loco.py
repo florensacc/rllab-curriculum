@@ -19,7 +19,7 @@ seeds = range(10)
 # etas = [0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0]
 normalize_rewards = [False]
 kl_ratios = [True]
-etas = [0.001]
+etas = [0]
 # mdp_classes = [SimpleHumanoidEnv]
 
 # seeds = [0]
@@ -80,7 +80,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="x-trpo-expl-loco-h1",
+        exp_prefix="x-trpo-expl-loco-j1",
         n_parallel=8,
         snapshot_mode="last",
         seed=seed,

@@ -132,7 +132,7 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
         plt.legend = plt.legend.replace('rllab.algos.vpg.VPG', 'R')
         plt.legend = plt.legend.replace('rllab.algos.erwr.ERWR', 'ERWR')
         plt.legend = plt.legend.replace('sandbox.rein.algos.trpo_unn.TRPO', 'TRPO+VIME')
-        plt.legend = plt.legend.replace('sandbox.rein.algos.erwr_bnn.ERWR', 'ERWR+EX')
+        plt.legend = plt.legend.replace('sandbox.rein.algos.erwr_bnn.ERWR', 'ERWR+VIME')
         plt.legend = plt.legend.replace('0.0001', '1e-4')
         plt.legend = plt.legend.replace('True', 'TRPO+VIME')
         plt.legend = plt.legend.replace('False', 'TRPO')
@@ -142,13 +142,13 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
         ax.grid(True)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
-        if counter == 2:
+        if counter == 1:
 #                 ax.set_xlim([0, 1000])
-#             ax.set_ylim([0, 2000])
-            ax.set_xlim([0, 80])
+            ax.set_ylim([0, 60])
+#             ax.set_xlim([0, 80])
 
-            loc = 'lower right'
-        elif counter == 1:
+            loc = 'upper left'
+        elif counter == 2:
             loc = 'upper left'
         elif counter == 3:
             ax.set_xlim([0, 1000])

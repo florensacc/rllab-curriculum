@@ -54,10 +54,10 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="x-trpo-loco-h1",
-        n_parallel=4,
-        snapshot_mode="all",
+        exp_prefix="x-trpo-loco-i1",
+        n_parallel=8,
+        snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
     )

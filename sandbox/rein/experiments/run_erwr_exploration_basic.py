@@ -68,14 +68,14 @@ for mdp, eta, seed, normalize_reward in param_cart_product:
         unn_n_hidden=[32],
         unn_layers_type=[1, 1],
         unn_learning_rate=0.0001,
-        compression=True,
+        compression=False,
         information_gain=True
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="erwr-ci-expl-basic-a1",
-        n_parallel=1,
+        exp_prefix="erwr-expl-basic-aa1",
+        n_parallel=4,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

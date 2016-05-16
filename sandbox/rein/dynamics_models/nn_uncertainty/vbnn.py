@@ -467,15 +467,45 @@ class VBNN(LasagnePowered, Serializable):
                         H = 2. * (T.exp(2 * p)) / \
                             (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                         invH = 1. / H
-                        updates[param] = param - step_size * invH * grad
+                    updates[param] = param - step_size * invH * grad
 
                 return updates
 
-            updates_kl = second_order_update(
+            def fast_kl_div(loss, params, oldparams, step_size):
+
+                grads = T.grad(loss, params)
+
+                for i in xrange(len(params)):
+                    param = params[i]
+                    grad = grads[i]
+                    kl_component = []
+                    if param.name == 'mu' or param.name == 'b_mu':
+                        oldparam_rho = oldparams[i + 1]
+                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                    else:
+                        oldparam_rho = oldparams[i]
+                        p = param
+
+                        H = 2. * (T.exp(2 * p)) / \
+                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                        invH = 1. / H
+
+                    kl_component.append(
+                        T.square(step_size) * T.square(grad) * invH)
+
+                return T.sum(kl_component)
+
+            compute_fast_kl_div = fast_kl_div(
                 loss_only_last_sample, params, oldparams, step_size)
 
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
+                [input_var, target_var, step_size], compute_fast_kl_div, log_name='f_compute_fast_kl_div')
+
+#             updates_kl = second_order_update(
+#                 loss_only_last_sample, params, oldparams, step_size)
+# 
+#             self.train_update_fn = ext.compile_function(
+#                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
         else:
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var], loss_only_last_sample, updates=updates, log_name='train_update_fn')
