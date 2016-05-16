@@ -110,6 +110,7 @@ class NPO_snn(BatchPolopt):
 
     @overrides
     def init_opt(self):
+        assert not self.policy.recurrent
         is_recurrent = int(self.policy.recurrent)
         obs_var = self.env.observation_space.new_tensor_variable(
             'obs',
@@ -119,6 +120,7 @@ class NPO_snn(BatchPolopt):
             'action',
             extra_dims=1 + is_recurrent,
         )
+        importance_weights = TT.vector('importance_weights')  # for weighting the hallucinations
         ##
         latent_var = self.policy.latent_space.new_tensor_variable(
             'latent',
@@ -152,17 +154,18 @@ class NPO_snn(BatchPolopt):
 
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
         lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
-        if is_recurrent:
-            mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
-            surr_loss = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
-        else:
-            mean_kl = TT.mean(kl)
-            surr_loss = - TT.mean(lr * advantage_var)
+        # if is_recurrent:
+        #     mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
+        #     surr_loss = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
+        # else:
+        mean_kl = TT.mean(kl * importance_weights)
+        surr_loss = - TT.mean(lr * advantage_var * importance_weights)
 
         input_list = [                  ##these are sym var. the inputs in optimize_policy have to be in same order!
                          obs_var,
                          action_var,
                          advantage_var,
+                         importance_weights,
                          ##CF
                          latent_var,
                      ] + old_dist_info_vars_list  ##provide old mean and var, for the new states as they were sampled from it!
@@ -182,7 +185,7 @@ class NPO_snn(BatchPolopt):
     def optimize_policy(self, itr, samples_data):   ###make that samples_data comes with latents: see train in batch_polopt
         all_input_values = tuple(ext.extract(       ### it will be in agent_infos!!! under key "latents"
             samples_data,
-            "observations",  "actions", "advantages"
+            "observations",  "actions", "advantages", "importance_weights"
         ))
         agent_infos = samples_data["agent_infos"]
         ##CF
