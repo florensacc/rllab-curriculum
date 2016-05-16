@@ -42,7 +42,7 @@ def plot_learning_curve(exp,color,fig_dir):#######
 
 
 #final policy learned
-def plot_policy_learned(data_unpickle,color,fig_dir=None):
+def plot_policy_learned(data_unpickle, color, fig_dir=None):
     #recover the policy
     poli = data_unpickle['policy']
     #range to plot it
@@ -52,6 +52,8 @@ def plot_policy_learned(data_unpickle,color,fig_dir=None):
     for i,s in enumerate(x):
         means[i] = poli.get_action(np.array((s,)))[1]['mean']
         logstd[i] = poli.get_action(np.array((s,)))[1]['log_std']
+        # means[i] = poli.get_action(np.array([s,]))[1]['mean']
+        # logstd[i] = poli.get_action(np.array([s,]))[1]['log_std']
 
     plt.plot(x, means, color=color, label = 'mean')
     plt.plot(x, logstd, color=color * 0.7, label = 'logstd')
@@ -100,7 +102,8 @@ def plot_snn_at0(data_unpickle, itr=0, color=(1,0.1,0.1),fig_dir=None):
     x = np.arange(-bound,bound+step, step)
     px = np.zeros(np.size(x))
     for _ in xrange(samples):
-        a = poli.get_action( np.array([0,]))[0]
+        poli.reset()
+        a = poli.get_action(np.array([0,]))[0]
         idx=int(np.floor(a/step) + bound/step)
         if idx>=0 and idx<len(px):
             px[idx]+=1

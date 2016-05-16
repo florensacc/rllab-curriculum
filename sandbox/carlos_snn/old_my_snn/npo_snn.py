@@ -6,14 +6,15 @@ import theano
 import theano.tensor as TT
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 #imports from batch_polopt I might need as not I use here process_samples and others
-# import numpy as np
-# from rllab.algos.base import RLAlgorithm
-# from rllab.sampler import parallel_sampler
-# from rllab.misc import special
-# from rllab.misc import tensor_utils
-# from rllab.algos import util
-# import rllab.misc.logger as logger
-# import rllab.plotter as plotter
+import numpy as np
+from rllab.algos.base import RLAlgorithm
+from rllab.sampler import parallel_sampler
+from rllab.misc import special
+from rllab.misc import tensor_utils
+from rllab.algos import util
+import rllab.misc.logger as logger
+import rllab.plotter as plotter
+
 
 class NPO_snn(BatchPolopt):
     """
@@ -22,6 +23,9 @@ class NPO_snn(BatchPolopt):
 
     def __init__(
             self,
+            hallucinator=None,
+            self_normalize=False,
+            n_samples=0,
             optimizer=None,
             optimizer_args=None,
             step_size=0.01,
@@ -32,7 +36,50 @@ class NPO_snn(BatchPolopt):
             optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
         self.optimizer = optimizer
         self.step_size = step_size
+
+        self.hallucinator = hallucinator
+        self.self_normalize = self_normalize
+        self.n_samples=n_samples
         super(NPO_snn, self).__init__(**kwargs)
+
+    @overrides
+    def process_samples(self, itr, paths):  # commented parts here were Carlos debugging
+        # n_original = len(paths)
+        # for i, path in enumerate(paths[:n_original]):
+        #     for _ in range(self.n_samples):
+        #         paths.append(path)
+        # if True:
+        #     samples_data = BatchPolopt.process_samples(self, itr, paths)
+        #     samples_data["importance_weights"] = np.ones_like(samples_data["advantages"])
+        #     return samples_data
+            ## ------------------------------
+        real_samples = ext.extract_dict(
+            BatchPolopt.process_samples(self, itr, paths),   # I don't need to process the hallucinated samples: the R, A,.. same!
+            "observations", "actions", "advantages", "env_infos", "agent_infos"
+        )
+        real_samples["importance_weights"] = np.ones_like(real_samples["advantages"])
+        # if True:
+        #     real_samples = [real_samples] * self.n_samples
+        #     print (real_samples)
+        #     return tensor_utils.concat_tensor_dict_list(real_samples)
+            ## -------------------------------
+
+        # now, hallucinate some more...
+        if self.hallucinator is None:
+            return real_samples
+        else:
+            hallucinated = self.hallucinator.hallucinate(real_samples)
+            if len(hallucinated) == 0:
+                return real_samples
+            all_samples = [real_samples] + hallucinated
+            if self.self_normalize:
+                all_importance_weights = np.asarray([x["importance_weights"] for x in all_samples])
+                # It is important to use the mean instead of the sum. Otherwise, the computation of the weighted KL
+                # divergence will be incorrect
+                all_importance_weights = all_importance_weights / (np.mean(all_importance_weights, axis=0) + 1e-8)
+                for sample, weights in zip(all_samples, all_importance_weights):
+                    sample["importance_weights"] = weights
+            return tensor_utils.concat_tensor_dict_list(all_samples)
 
     @overrides
     def train(self):
@@ -101,7 +148,7 @@ class NPO_snn(BatchPolopt):
         ## this will have to change as now the pdist depends also on the particuar latent var h sampled!
         # dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)  ##returns dict with mean and log_std_var for this obs_var (action useless here!)
         ##CF
-        dist_info_vars = self.policy.dist_info_sym(obs_var, latent_var, action_var)
+        dist_info_vars = self.policy.dist_info_sym(obs_var, latent_var)
 
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
         lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
