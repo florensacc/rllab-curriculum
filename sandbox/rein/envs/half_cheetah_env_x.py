@@ -45,6 +45,8 @@ class HalfCheetahEnvX(MujocoEnv, Serializable):
         done = False
         if self.get_body_com("torso")[0] <= 5.0:
             reward = 0.
+        else:
+            reward = 1.0
         return Step(next_obs, reward, done)
 
     @overrides

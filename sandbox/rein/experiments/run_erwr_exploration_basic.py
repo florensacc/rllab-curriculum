@@ -74,8 +74,8 @@ for mdp, eta, seed, normalize_reward in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="erwr-expl-basic-aa1",
-        n_parallel=4,
+        exp_prefix="erwr-expl-basic-xx1",
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

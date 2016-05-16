@@ -475,10 +475,11 @@ class VBNN(LasagnePowered, Serializable):
 
                 grads = T.grad(loss, params)
 
+                kl_component = []
                 for i in xrange(len(params)):
                     param = params[i]
                     grad = grads[i]
-                    kl_component = []
+                    
                     if param.name == 'mu' or param.name == 'b_mu':
                         oldparam_rho = oldparams[i + 1]
                         invH = T.square(T.log(1 + T.exp(oldparam_rho)))
@@ -491,9 +492,9 @@ class VBNN(LasagnePowered, Serializable):
                         invH = 1. / H
 
                     kl_component.append(
-                        T.square(step_size) * T.square(grad) * invH)
+                        T.sum(T.square(step_size) * T.square(grad) * invH))
 
-                return T.sum(kl_component)
+                return sum(kl_component)
 
             compute_fast_kl_div = fast_kl_div(
                 loss_only_last_sample, params, oldparams, step_size)

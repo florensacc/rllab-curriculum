@@ -27,7 +27,7 @@ seeds = range(10)
 etas = [0.1]
 normalize_rewards = [False]
 kl_ratios = [True]
-mdp_classes = [MountainCarEnv]
+mdp_classes = [DoublePendulumEnv]
 mdps = [NormalizedEnv(env=mdp_class())
         for mdp_class in mdp_classes]
 # mdps = [DoublePendulumEnvX()]
@@ -78,8 +78,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-expl-basic-A1",
-        n_parallel=4,
+        exp_prefix="trpo-expl-basic-aa1",
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
         mode="local",

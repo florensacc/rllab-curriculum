@@ -88,14 +88,12 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
             if second_order_update:
                 # We do a line search over the best step sizes using
                 # step_size * invH * grad
-#                 best_loss_value = np.inf
-                for step_size in [1.]:
+                #                 best_loss_value = np.inf
+                for step_size in [0.1]:
                     G.dynamics.save_old_params()
                     loss_value = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
-                    kl_div = loss_value
-#                     if loss_value < best_loss_value:
-#                         best_loss_value = loss_value
+                    kl_div = np.clip(loss_value, 0, 1000)
 #                     kl_div = np.clip(
 #                         float(G.dynamics.f_kl_div_closed_form()), 0, 1000)
                     # If using replay pool, undo updates.
