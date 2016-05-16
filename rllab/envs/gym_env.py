@@ -74,6 +74,9 @@ class GymEnv(Env, Serializable):
         self._horizon = env.spec.timestep_limit
         self._log_dir = log_dir
 
+    def render(self):
+        self.env.render()
+        
     @property
     def observation_space(self):
         return self._observation_space
