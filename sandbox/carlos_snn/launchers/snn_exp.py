@@ -31,7 +31,7 @@ env = normalize(GymEnv(env_name))
 baseline2 = [LinearFeatureBaseline(env_spec=env.spec),'baseline']
 
 for base in [baseline2]:
-    for latent_dim in [0]:#[0,1,2,5,11]:
+    for latent_dim in [0,1,2,5,11]:
         for n_samples in [0,1,5,10]:
             # for hid_latent in [1, 2, 5]:
                 if latent_dim == 0:
