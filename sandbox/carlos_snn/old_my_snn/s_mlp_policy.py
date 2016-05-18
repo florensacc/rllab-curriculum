@@ -41,7 +41,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             env_spec,
             ##CF - latent units a the input
             latent_dim = 2,
-            latent_type='normal',
+            latent_dist='normal',
             resample=True,
             hidden_sizes=(32, 32),
             learn_std=True,
@@ -54,7 +54,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             output_nonlinearity=None,
     ):
         self.latent_dim = latent_dim  ##could I avoid needing this self for the get_action?
-        self.latent_type=latent_type
+        self.latent_dist=latent_dist
         self.resample = resample
         self.latent_fix = np.array([]) # this will hold the latent variable sampled in reset()
         Serializable.quick_init(self, locals())
@@ -137,14 +137,15 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         # how can I impose that I only reset for a whole rollout? before calling get_acitons!!
         if self.latent_dim:
             if self.resample:
-                if self.latent_type=='normal':
+                if self.latent_dist== 'normal':
                     latents = np.random.randn(len(observations), self.latent_dim)  # sample all latents at once
-                elif self.latent_type=='binomial':
+                elif self.latent_dist== 'binomial':
                     latents = np.random.binomial(4, 0.5, (len(observations), self.latent_dim))
-                elif self.latent_type=='bernoulli':
+                elif self.latent_dist== 'bernoulli':
                     latents = np.random.binomial(n=1, p=0.5, size=(len(observations), self.latent_dim))
                 else:
                     raise NameError("This type of latent is not defined")
+                # print 'resampling!:', latents
             else:
                 if not len(self.latent_fix)==self.latent_dim:
                     self.reset()
@@ -165,11 +166,11 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     def reset(self):
         # print 'enter reset'
         if not self.resample:
-            if self.latent_type=='normal':
+            if self.latent_dist== 'normal':
                 self.latent_fix = np.random.randn(self.latent_dim,)
-            elif self.latent_type=='binomial':
+            elif self.latent_dist== 'binomial':
                 self.latent_fix = np.random.binomial(4, 0.5, (self.latent_dim,))
-            elif self.latent_type=='bernoulli':
+            elif self.latent_dist== 'bernoulli':
                 self.latent_fix = np.random.binomial(n=1, p=0.5, size=(self.latent_dim,))
             # print self.latent_fix
         else:

@@ -12,10 +12,10 @@ from rllab.envs.gym_env import GymEnv
 
 stub(globals())
 
-env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False)
+# env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False)
 # env = BimodEnv(mu1=[1,0],mu2=[-1,0],sigma1=0.01,sigma2=0.01,rand_init=False)
 
-# env = GymEnv('Hopper-v1', record_video=False)
+env = GymEnv('Hopper-v1', record_video=False)
 
 for resample in [True, False]:
     for latent_dim in [0, 1, 2, 5]:
@@ -24,7 +24,7 @@ for resample in [True, False]:
                 policy = GaussianMLPPolicy_snn(
                     env_spec=env.spec,
                     latent_dim=latent_dim,
-                    latent_type=latent_type,
+                    latent_dist=latent_type,
                     resample=resample,
                     hidden_sizes=(8, 8)  # remember to change size if using Gym!!!!!!
                 )
@@ -37,6 +37,7 @@ for resample in [True, False]:
                     baseline=baseline,
                     self_normalize=True,
                     hallucinator=PriorHallucinator(env_spec=env.spec, policy=policy, n_hallucinate_samples=n_samples),
+                    # latent_predictor=LatentPredictor(env_spec=env.spec, policy=policy),
                     batch_size=500,
                     whole_paths=True,
                     max_path_length=100,

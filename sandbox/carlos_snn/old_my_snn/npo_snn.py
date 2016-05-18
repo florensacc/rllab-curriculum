@@ -24,6 +24,7 @@ class NPO_snn(BatchPolopt):
     def __init__(
             self,
             hallucinator=None,
+            latent_regressor=None,
             self_normalize=False,
             n_samples=0,
             optimizer=None,
@@ -38,6 +39,7 @@ class NPO_snn(BatchPolopt):
         self.step_size = step_size
 
         self.hallucinator = hallucinator
+        self.latent_regressor = latent_regressor
         self.self_normalize = self_normalize
         self.n_samples=n_samples
         super(NPO_snn, self).__init__(**kwargs)
@@ -64,6 +66,11 @@ class NPO_snn(BatchPolopt):
         #     return tensor_utils.concat_tensor_dict_list(real_samples)
             ## -------------------------------
 
+        #check the latents
+        for path in paths:
+            print 'the action: ', path['actions']
+            print 'the latent: ', path['agent_infos']['latent']
+        self.latent_regressor.fit(paths)
         # now, hallucinate some more...
         if self.hallucinator is None:
             return real_samples
