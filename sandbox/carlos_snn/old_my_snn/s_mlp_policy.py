@@ -16,6 +16,7 @@ from rllab.misc import logger
 from rllab.misc import ext
 from rllab.misc import autoargs
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
+from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
 
 
 class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
@@ -41,7 +42,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             env_spec,
             ##CF - latent units a the input
             latent_dim = 2,
-            latent_dist='normal',
+            latent_name='normal',
             resample=True,
             hidden_sizes=(32, 32),
             learn_std=True,
@@ -54,9 +55,18 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             output_nonlinearity=None,
     ):
         self.latent_dim = latent_dim  ##could I avoid needing this self for the get_action?
-        self.latent_dist=latent_dist
+        self.latent_name = latent_name
         self.resample = resample
         self.latent_fix = np.array([]) # this will hold the latent variable sampled in reset()
+        if latent_name == 'normal':
+            self.latent_dist = DiagonalGaussian()
+            self.latent_dist_info_vars = dict(mean=np.zeros(self.latent_dim), log_std=np.zeros(self.latent_dim))
+        elif latent_name == 'bernoulli':
+            self.latent_dist = Bernoulli()
+            self.latent_dist_info_vars = dict(p=0.5*np.ones(self.latent_dim))
+        else:
+            raise NotImplementedError
+
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
@@ -134,23 +144,16 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
 
     def get_actions(self, observations):
         ##CF
-        # how can I impose that I only reset for a whole rollout? before calling get_acitons!!
+        # how can I impose that I only reset for a whole rollout? before calling get_actions!!
         if self.latent_dim:
             if self.resample:
-                if self.latent_dist== 'normal':
-                    latents = np.random.randn(len(observations), self.latent_dim)  # sample all latents at once
-                elif self.latent_dist== 'binomial':
-                    latents = np.random.binomial(4, 0.5, (len(observations), self.latent_dim))
-                elif self.latent_dist== 'bernoulli':
-                    latents = np.random.binomial(n=1, p=0.5, size=(len(observations), self.latent_dim))
-                else:
-                    raise NameError("This type of latent is not defined")
-                # print 'resampling!:', latents
+                latents = [self.latent_dist.sample(self.latent_dist_info_vars) for _ in observations]
             else:
                 if not len(self.latent_fix)==self.latent_dim:
                     self.reset()
                 latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation would be better...
                 # print latents
+            # print latents, observations
             extended_obs = np.concatenate([observations, latents], axis=1)
         else:
             latents = np.array([[]]*len(observations))
@@ -166,13 +169,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     def reset(self):
         # print 'enter reset'
         if not self.resample:
-            if self.latent_dist== 'normal':
-                self.latent_fix = np.random.randn(self.latent_dim,)
-            elif self.latent_dist== 'binomial':
-                self.latent_fix = np.random.binomial(4, 0.5, (self.latent_dim,))
-            elif self.latent_dist== 'bernoulli':
-                self.latent_fix = np.random.binomial(n=1, p=0.5, size=(self.latent_dim,))
-            # print self.latent_fix
+            self.latent_fix = self.latent_dist.sample(self.latent_dist_info_vars)
         else:
             pass
 
@@ -195,10 +192,10 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         if not action_only:
             raise NotImplementedError
          #   if not action_only:
-         #       for idx, latent_dist in enumerate(self._latent_distributions):
+         #       for idx, latent_name in enumerate(self._latent_distributions):
          #           latent_var = dist_info["latent_%d" % idx]
          #           prefix = "latent_%d_" % idx
          #           latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.iteritems() if k.startswith(
          #               prefix)}
-         #           logli += latent_dist.log_likelihood(latent_var, latent_dist_info)
+         #           logli += latent_name.log_likelihood(latent_var, latent_dist_info)
         return logli

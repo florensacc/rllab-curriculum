@@ -25,6 +25,7 @@ class NPO_snn(BatchPolopt):
             self,
             hallucinator=None,
             latent_regressor=None,
+            reward_coef=0,
             self_normalize=False,
             n_samples=0,
             optimizer=None,

@@ -99,7 +99,7 @@ class BernoulliMLPRegressor(LasagnePowered, Serializable):
         predicted = p_var >= 0.5
 
         self._f_predict = ext.compile_function([xs_var], predicted)
-        self._f_p = ext.compile_function([xs_var], p_var)
+        self._f_p = ext.compile_function([xs_var], p_var)  # for consistency with gauss_mlp_reg this should be ._f_pdists
         self._l_p = l_p
 
         optimizer_args = dict(

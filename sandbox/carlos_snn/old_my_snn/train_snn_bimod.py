@@ -21,13 +21,13 @@ env = BimodEnv(mu1=-1, mu2=1, sigma1=0.01, sigma2=0.01, rand_init=False)
 # env = GymEnv('Hopper-v1', record_video=False)
 
 for resample in [True]:
-    for latent_dim in [2]:
-        for latent_dist in ['bernoulli']:
+    for latent_dim in [1]:
+        for latent_name in ['bernoulli']:
             for n_samples in [1]:
                 policy = GaussianMLPPolicy_snn(
                     env_spec=env.spec,
                     latent_dim=latent_dim,
-                    latent_dist=latent_dist,
+                    latent_name=latent_name,
                     resample=resample,
                     hidden_sizes=(8, 8)  # remember to change size if using Gym!!!!!!
                 )
@@ -62,10 +62,10 @@ for resample in [True]:
                 for s in [4]:
                     if resample:
                         exp_name = 'snn_{}_{}batch_{}latent_{}_{}hallu_{:04d}'.format(
-                            'Resamp', 500, latent_dim, latent_dist, n_samples, s)
+                            'Resamp', 500, latent_dim, latent_name, n_samples, s)
                     else:
                         exp_name = 'snn_{}_{}batch_{}latent_{}_{}hallu_{:04d}'.format(
-                            'NoResamp', 500, latent_dim, latent_dist, n_samples, s)
+                            'NoResamp', 500, latent_dim, latent_name, n_samples, s)
                     run_experiment_lite(
                         stub_method_call=algo.train(),
                         mode='local',

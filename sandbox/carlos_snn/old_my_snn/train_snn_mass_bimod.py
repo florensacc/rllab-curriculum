@@ -24,7 +24,7 @@ for resample in [True, False]:
                 policy = GaussianMLPPolicy_snn(
                     env_spec=env.spec,
                     latent_dim=latent_dim,
-                    latent_dist=latent_type,
+                    latent_name=latent_type,
                     resample=resample,
                     hidden_sizes=(8, 8)  # remember to change size if using Gym!!!!!!
                 )
