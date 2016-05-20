@@ -70,9 +70,9 @@ class NPO_snn(BatchPolopt):
         self.latent_regressor.fit(paths)
         for path in paths:
             print 'the action: ', path['actions']
-            print 'the latent: ', path['agent_infos']['latent']
+            print 'the latents: ', path['agent_infos']['latents']
             print 'the regressor distr: ', self.latent_regressor.get_output_p(path)
-            print 'latent entropy: ', self.policy.latent_dist.entropy(self.policy.latent_dist_info_vars)
+            print 'latents entropy: ', self.policy.latent_dist.entropy(self.policy.latent_dist_info_vars)
             print 'mutual info lb: ', self.latent_regressor.lowb_mutual(paths)
         # now, hallucinate some more...
         if self.hallucinator is None:
@@ -139,7 +139,7 @@ class NPO_snn(BatchPolopt):
         importance_weights = TT.vector('importance_weights')  # for weighting the hallucinations
         ##
         latent_var = self.policy.latent_space.new_tensor_variable(
-            'latent',
+            'latents',
             extra_dims=1 + is_recurrent,
         )
         ##
@@ -163,7 +163,7 @@ class NPO_snn(BatchPolopt):
         else:
             valid_var = None
 
-        ## this will have to change as now the pdist depends also on the particuar latent var h sampled!
+        ## this will have to change as now the pdist depends also on the particuar latents var h sampled!
         # dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)  ##returns dict with mean and log_std_var for this obs_var (action useless here!)
         ##CF
         dist_info_vars = self.policy.dist_info_sym(obs_var, latent_var)
@@ -205,7 +205,7 @@ class NPO_snn(BatchPolopt):
         ))
         agent_infos = samples_data["agent_infos"]
         ##CF
-        all_input_values += (agent_infos["latent"],)  #latent has already been processed and is the concat of all latents, but keeps key "latent"
+        all_input_values += (agent_infos["latents"],)  #latents has already been processed and is the concat of all latents, but keeps key "latents"
         #
         info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys] ##these are the mean and var used at rollout, corresponding to
         all_input_values += tuple(info_list)                                            # old_dist_info_vars_list as symbolic var

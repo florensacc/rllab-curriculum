@@ -41,40 +41,39 @@ class NPO_snn(BatchPolopt):
 
         self.hallucinator = hallucinator
         self.latent_regressor = latent_regressor
+        self.reward_coef = reward_coef
         self.self_normalize = self_normalize
         self.n_samples=n_samples
         super(NPO_snn, self).__init__(**kwargs)
 
     @overrides
-    def process_samples(self, itr, paths):  # commented parts here were Carlos debugging
-        # n_original = len(paths)
-        # for i, path in enumerate(paths[:n_original]):
-        #     for _ in range(self.n_samples):
-        #         paths.append(path)
-        # if True:
-        #     samples_data = BatchPolopt.process_samples(self, itr, paths)
-        #     samples_data["importance_weights"] = np.ones_like(samples_data["advantages"])
-        #     return samples_data
-            ## ------------------------------
+    def process_samples(self, itr, paths):
+        # save real undiscounted reward before changing them
+        undiscounted_returns = [sum(path["rewards"]) for path in paths]
+        logger.record_tabular('TrueAverageReturn', np.mean(undiscounted_returns))
+        #check the latents
+        if self.latent_regressor:
+            self.latent_regressor.fit(paths)
+            # for path in paths:
+            #     print 'the action: ', path['actions']
+            #     print 'the latents: ', path['agent_infos']['latents']
+            #     print 'the regressor distr: ', self.latent_regressor.get_output_p(path)
+            #     print 'latents entropy: ', self.policy.latent_dist.entropy(self.policy.latent_dist_info_vars)
+            #     print 'mutual info lb: ', self.latent_regressor.lowb_mutual(paths)
+
+            for path in paths:
+                path['logli_latent_regressor'] = self.latent_regressor.predict_log_likelihood(
+                                                    [path], [path['agent_infos']['latents']])[0] #this is for paths usually..
+                path['true_rewards'] = path['rewards']
+                path['rewards'] += self.reward_coef * path['logli_latent_regressor']  # the logli of the latent is the variable
+                                                                                        # of the mutual information
+
         real_samples = ext.extract_dict(
             BatchPolopt.process_samples(self, itr, paths),   # I don't need to process the hallucinated samples: the R, A,.. same!
             "observations", "actions", "advantages", "env_infos", "agent_infos"
         )
         real_samples["importance_weights"] = np.ones_like(real_samples["advantages"])
-        # if True:
-        #     real_samples = [real_samples] * self.n_samples
-        #     print (real_samples)
-        #     return tensor_utils.concat_tensor_dict_list(real_samples)
-            ## -------------------------------
 
-        #check the latents
-        self.latent_regressor.fit(paths)
-        for path in paths:
-            print 'the action: ', path['actions']
-            print 'the latent: ', path['agent_infos']['latent']
-            print 'the regressor distr: ', self.latent_regressor.get_output_p(path)
-            print 'latent entropy: ', self.policy.latent_dist.entropy(self.policy.latent_dist_info_vars)
-            print 'mutual info lb: ', self.latent_regressor.lowb_mutual(paths)
         # now, hallucinate some more...
         if self.hallucinator is None:
             return real_samples
@@ -121,8 +120,9 @@ class NPO_snn(BatchPolopt):
 
     @overrides
     def log_diagnostics(self, paths):
-        BatchPolopt.log_diagnostics(self, paths)
-        self.latent_regressor.log_diagnostics(paths)
+        BatchPolopt.log_diagnostics(self, paths) # call the diagnost of env, policy and baseline
+        if self.latent_regressor:
+            self.latent_regressor.log_diagnostics(paths)
 
     @overrides
     def init_opt(self):
@@ -140,7 +140,7 @@ class NPO_snn(BatchPolopt):
         importance_weights = TT.vector('importance_weights')  # for weighting the hallucinations
         ##
         latent_var = self.policy.latent_space.new_tensor_variable(
-            'latent',
+            'latents',
             extra_dims=1 + is_recurrent,
         )
         ##
@@ -164,7 +164,7 @@ class NPO_snn(BatchPolopt):
         else:
             valid_var = None
 
-        ## this will have to change as now the pdist depends also on the particuar latent var h sampled!
+        ## this will have to change as now the pdist depends also on the particuar latents var h sampled!
         # dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)  ##returns dict with mean and log_std_var for this obs_var (action useless here!)
         ##CF
         dist_info_vars = self.policy.dist_info_sym(obs_var, latent_var)
@@ -206,7 +206,7 @@ class NPO_snn(BatchPolopt):
         ))
         agent_infos = samples_data["agent_infos"]
         ##CF
-        all_input_values += (agent_infos["latent"],)  #latent has already been processed and is the concat of all latents, but keeps key "latent"
+        all_input_values += (agent_infos["latents"],)  #latents has already been processed and is the concat of all latents, but keeps key "latents"
         #
         info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys] ##these are the mean and var used at rollout, corresponding to
         all_input_values += tuple(info_list)                                            # old_dist_info_vars_list as symbolic var

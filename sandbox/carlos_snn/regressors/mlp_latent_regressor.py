@@ -31,7 +31,7 @@ class MLPLatent_regressor(Parameterized, Serializable):
                 output_dim=policy.latent_dim,
                 **regressor_args
             )
-        elif policy.latent_name == 'gaussian':
+        elif policy.latent_name == 'normal':
             self._regressor = GaussianMLPRegressor(
                 input_shape=(self.obs_act_dim,),
                 output_dim=policy.latent_dim,
@@ -44,7 +44,7 @@ class MLPLatent_regressor(Parameterized, Serializable):
         observations = np.concatenate([p["observations"] for p in paths])
         actions = np.concatenate([p["actions"] for p in paths])
         obs_actions = np.concatenate([observations, actions], axis=1)
-        latents = np.concatenate([p['agent_infos']["latent"] for p in paths])
+        latents = np.concatenate([p['agent_infos']["latents"] for p in paths])
         self._regressor.fit(obs_actions, latents.reshape((-1, self.latent_dim)))
 
     def predict(self, path):
@@ -55,7 +55,7 @@ class MLPLatent_regressor(Parameterized, Serializable):
         obs_actions = np.concatenate([path["observations"], path["actions"]], axis=1)
         if self.policy.latent_name == 'bernoulli':
             return self._regressor._f_p(obs_actions).flatten()
-        elif self.policy.latent_name == 'gaussian':
+        elif self.policy.latent_name == 'normal':
             return self._regressor._f_pdists(obs_actions).flatten()
 
     def get_param_values(self, **tags):
@@ -71,12 +71,21 @@ class MLPLatent_regressor(Parameterized, Serializable):
         return self._regressor.predict_log_likelihood(obs_actions, latents)
 
     def lowb_mutual(self, paths):
-        latents = np.concatenate([p["agent_infos"]["latent"] for p in paths])
-        observations = np.concatenate([p["observations"] for p in paths])
-        actions = np.concatenate([p["actions"] for p in paths])
-        obs_actions = np.concatenate([observations, actions], axis=1)
-        H_latent = self.policy.latent_dist.entropy(self.policy.latent_dist_info_vars)
-        return H_latent + np.mean(self._regressor.predict_log_likelihood(obs_actions, latents))
+        log_likelihoods = []
+        for path in paths:
+            obs_actions = np.concatenate([path["observations"],path["actions"]], axis=1)
+            log_likelihoods.append(self._regressor.predict_log_likelihood(
+                                                                obs_actions, path["agent_infos"]["latents"]))
+        H_latent = self.policy.latent_dist.entropy(self.policy.latent_dist_info_vars) # sum of entropies (assumes iid)
+        lowb = np.mean(np.sum(log_likelihoods, axis=1))
+        return H_latent + lowb
+
+        # latents = np.concatenate([p["agent_infos"]["latents"] for p in paths])
+        # observations = np.concatenate([p["observations"] for p in paths])
+        # actions = np.concatenate([p["actions"] for p in paths])
+        # obs_actions = np.concatenate([observations, actions], axis=1)
+        # H_latent = self.policy.latent_dist.entropy(self.policy.latent_dist_info_vars)
+        # return H_latent + np.mean(self._regressor.predict_log_likelihood(obs_actions, latents))
 
     def log_diagnostics(self, paths):
         logger.record_tabular('LowerB_MI', self.lowb_mutual(paths))

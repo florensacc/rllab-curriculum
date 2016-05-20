@@ -40,9 +40,9 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     def __init__(
             self,
             env_spec,
-            ##CF - latent units a the input
+            ##CF - latents units a the input
             latent_dim = 2,
-            latent_name='normal',
+            latent_name='bernoulli',
             resample=True,
             hidden_sizes=(32, 32),
             learn_std=True,
@@ -57,7 +57,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         self.latent_dim = latent_dim  ##could I avoid needing this self for the get_action?
         self.latent_name = latent_name
         self.resample = resample
-        self.latent_fix = np.array([]) # this will hold the latent variable sampled in reset()
+        self.latent_fix = np.array([]) # this will hold the latents variable sampled in reset()
         if latent_name == 'normal':
             self.latent_dist = DiagonalGaussian()
             self.latent_dist_info_vars = dict(mean=np.zeros(self.latent_dim), log_std=np.zeros(self.latent_dim))
@@ -125,10 +125,10 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         return Box(low= -np.inf, high=np.inf, shape=(1,))
     ##
     
-    ##CF - the mean and var now also depend on the particular latent sampled
+    ##CF - the mean and var now also depend on the particular latents sampled
 
     def dist_info_sym(self, obs_var, latent_var ):
-        #generate the generalized input (append latent to obs.)
+        #generate the generalized input (append latents to obs.)
         extended_obs_var = TT.concatenate( [obs_var,latent_var], axis=1 )
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], extended_obs_var)
         return dict(mean=mean_var, log_std=log_std_var)
@@ -159,11 +159,11 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             latents = np.array([[]]*len(observations))
             extended_obs = observations
         # print extended_obs
-        # make mean, log_std also depend on the latent (as observ.)
+        # make mean, log_std also depend on the latents (as observ.)
         mean, log_std = self._f_dist(extended_obs)
         rnd = np.random.normal(size=mean.shape)
         actions = rnd * np.exp(log_std) + mean
-        return actions, dict(mean=mean, log_std=log_std, latent=latents)
+        return actions, dict(mean=mean, log_std=log_std, latents=latents)
 
     @overrides
     def reset(self):
@@ -186,8 +186,8 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         return self._dist
 
     def log_likelihood(self, actions, agent_infos, action_only=True):
-        # First compute logli of the action. This assumes the latent FIX to whatever was sampled, and hence we only
-        # need to use the mean and log_std, but not any information about the latent
+        # First compute logli of the action. This assumes the latents FIX to whatever was sampled, and hence we only
+        # need to use the mean and log_std, but not any information about the latents
         logli = self._dist.log_likelihood(actions, agent_infos)
         if not action_only:
             raise NotImplementedError
