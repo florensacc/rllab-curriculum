@@ -8,9 +8,14 @@ import theano.tensor as TT
 
 
 class ProductDistribution(Distribution):
-    def __init__(self, distributions, dimensions):
+    def __init__(self, distributions):
         self.distributions = distributions
-        self.dimensions = dimensions
+        self.dimensions = [x.dim for x in self.distributions]
+        self._dim = sum(self.dimensions)
+
+    @property
+    def dim(self):
+        return self._dim
 
     def _split_x(self, x):
         """

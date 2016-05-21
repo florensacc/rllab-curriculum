@@ -32,7 +32,7 @@ class IndependentBernoulliLayer(L.Layer):
             N = input.shape[0]
             ret = self.srng.binomial(size=(N, self.num_units), p=0.5)
         return ret, dict(
-            distribution=StandardBernoulli(),
+            distribution=StandardBernoulli(self.num_units),
             dist_info=dict(shape_placeholder=TT.zeros_like(ret)),
         )
 
@@ -60,7 +60,7 @@ class IndependentGaussianLayer(L.Layer):
             N = input.shape[0]
             ret = self.srng.normal(size=(N, self.num_units), avg=0.0, std=1.0)
         return ret, dict(
-            distribution=StandardGaussian(),
+            distribution=StandardGaussian(self.num_units),
             dist_info=dict(shape_placeholder=TT.zeros_like(ret)),
         )
 
@@ -91,7 +91,7 @@ class BernoulliLayer(L.DenseLayer):
         else:
             ret = self.srng.binomial(size=activation.shape, p=activation)
         return ret, dict(
-            distribution=Bernoulli(),
+            distribution=Bernoulli(self.num_units),
             dist_info=dict(p=activation),
         )
 
@@ -161,11 +161,11 @@ class GaussianLayer(L.DenseLayer):
             ret = mean + epsilon * TT.exp(log_std)
         if self.reparameterize:
             return ret, dict(
-                distribution=StandardGaussian(),
+                distribution=StandardGaussian(self.num_units),
                 dist_info=dict(shape_placeholder=TT.zeros_like(ret), epsilon=epsilon),
             )
         else:
             return ret, dict(
-                distribution=DiagonalGaussian(),
+                distribution=DiagonalGaussian(self.num_units),
                 dist_info=dict(mean=mean, log_std=log_std),
             )

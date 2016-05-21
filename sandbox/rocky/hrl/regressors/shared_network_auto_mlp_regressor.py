@@ -26,14 +26,13 @@ def space_to_distribution(space):
     Build a distribution from the given space
     """
     if isinstance(space, Discrete):
-        return Categorical()
+        return Categorical(space.n)
     elif isinstance(space, Box):
-        return DiagonalGaussian()
+        return DiagonalGaussian(space.flat_dim)
     elif isinstance(space, Product):
         components = space.components
         component_dists = map(space_to_distribution, components)
-        dimensions = [x.flat_dim for x in components]
-        return ProductDistribution(component_dists, dimensions)
+        return ProductDistribution(component_dists)
     else:
         raise NotImplementedError
 

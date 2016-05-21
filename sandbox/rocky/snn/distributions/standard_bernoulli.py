@@ -6,6 +6,13 @@ from rllab.distributions.base import Distribution
 
 
 class StandardBernoulli(Distribution):
+    def __init__(self, dim):
+        self._dim = dim
+
+    @property
+    def dim(self):
+        return self._dim
+
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
         return TT.zeros_like(TT.sum(old_dist_info_vars["shape_placeholder"], axis=-1))
 

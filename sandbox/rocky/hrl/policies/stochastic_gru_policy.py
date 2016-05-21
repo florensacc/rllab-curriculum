@@ -16,6 +16,9 @@ class StochasticGRUPolicy(StochasticPolicy, Serializable):
     def __init__(self, env_spec, subgoal_spec):
         Serializable.quick_init(self, locals())
 
+    def reset(self):
+        self.hidden_state =
+
     def get_action(self, observation):
         pass
 
