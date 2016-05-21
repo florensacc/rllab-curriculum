@@ -3,7 +3,7 @@ from __future__ import absolute_import
 
 import matplotlib
 
-matplotlib.use('TKAgg')
+matplotlib.use('macosx')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
