@@ -7,7 +7,7 @@ from rllab.spaces.discrete import Discrete
 from rllab.spaces.product import Product
 from rllab.misc import logger
 from rllab.envs.grid_world_env import GridWorldEnv
-from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy, FixedGoalPolicy
+from sandbox.rocky.hrl.policies.subgoal_policy import SubgoalPolicy, FixedGoalPolicy
 from sandbox.rocky.hrl.sparray import sparray
 from rllab.sampler.utils import rollout
 import numpy as np
