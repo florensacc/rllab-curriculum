@@ -25,6 +25,7 @@ dependencies:
         - pyprind
         - ipdb
         - boto3
+        - PyOpenGL
         - nose2
         - pyzmq
         - msgpack-python

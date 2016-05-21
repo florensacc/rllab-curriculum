@@ -7,7 +7,7 @@ from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.spaces.discrete import Discrete
 from rllab.spaces.product import Product
 from rllab.misc import logger
-from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
+from sandbox.rocky.hrl.policies.subgoal_policy import SubgoalPolicy
 
 
 class ExactComputer(object):

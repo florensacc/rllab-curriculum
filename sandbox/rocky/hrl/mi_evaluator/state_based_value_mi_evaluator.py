@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
-from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
+from sandbox.rocky.hrl.policies.subgoal_policy import SubgoalPolicy
 from sandbox.rocky.hrl import hrl_utils
 import numpy as np
 import numba
