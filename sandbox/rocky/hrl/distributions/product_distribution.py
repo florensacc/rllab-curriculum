@@ -1,13 +1,12 @@
 from __future__ import print_function
 from __future__ import absolute_import
-from rllab.distributions.base import Distribution
+from .base import DistributionExt
 from rllab.distributions.categorical import Categorical
 import numpy as np
 import theano.tensor as TT
 
 
-
-class ProductDistribution(Distribution):
+class ProductDistribution(DistributionExt):
     def __init__(self, distributions):
         self.distributions = distributions
         self.dimensions = [x.dim for x in self.distributions]
