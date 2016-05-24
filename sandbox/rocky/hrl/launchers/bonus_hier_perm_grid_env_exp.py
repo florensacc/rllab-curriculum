@@ -6,6 +6,7 @@ from sandbox.rocky.hrl.policies.stochastic_gru_policy import StochasticGRUPolicy
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rocky.hrl.bonus_evaluators.marginal_parsimony_bonus_evaluator import MarginalParsimonyBonusEvaluator
+from sandbox.rocky.hrl.bonus_evaluators.hidden_aware_parsimony_bonus_evaluator import HiddenAwareParsimonyBonusEvaluator
 from sandbox.rocky.hrl.envs.perm_grid_env import PermGridEnv
 from sandbox.rocky.hrl.algos.bonus_algos import BonusTRPO
 
@@ -19,7 +20,7 @@ vg.add("grid_size", [5])#, 7, 9, 11])
 vg.add("batch_size", [4000, 10000, 20000])#4000])#, 10000, 20000])
 vg.add("seed", [11, 111, 211, 311, 411])
 vg.add("bonus_coeff", [0.1, 0.01, 0, 0.001, 1.0])
-vg.add("use_trust_region", [False])#True, False])
+vg.add("use_trust_region", [False])
 vg.add("step_size", [0.])#lambda use_trust_region: [0.] if not use_trust_region else [0.01, 0.1, 1.0, 10.0])
 vg.add("use_decision_nodes", [True, False])
 
@@ -31,13 +32,23 @@ for v in variants:
     policy = StochasticGRUPolicy(
         env_spec=env.spec,
         n_subgoals=v["grid_size"],
-        use_decision_nodes=False
+        use_decision_nodes=v["use_decision_nodes"],
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    bonus_evaluator = MarginalParsimonyBonusEvaluator(
+    # bonus_evaluator = MarginalParsimonyBonusEvaluator(
+    #     env_spec=env.spec,
+    #     policy=policy,
+    #     bonus_coeff=v["bonus_coeff"],
+    #     regressor_args=dict(
+    #         use_trust_region=v["use_trust_region"],
+    #         step_size=v["step_size"],
+    #     )
+    # )
+    bonus_evaluator = HiddenAwareParsimonyBonusEvaluator(
         env_spec=env.spec,
         policy=policy,
-        bonus_coeff=v["bonus_coeff"],
+        action_bonus_coeff=v["bonus_coeff"],
+        hidden_bonus_coeff=v["bonus_coeff"],
         regressor_args=dict(
             use_trust_region=v["use_trust_region"],
             step_size=v["step_size"],
@@ -56,7 +67,7 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hier_marginal_parsimony_2",
+        exp_prefix="hidden_aware_parsimony",
         n_parallel=1,
         seed=v["seed"],
         mode="lab_kube"
