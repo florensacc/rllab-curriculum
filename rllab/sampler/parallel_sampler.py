@@ -8,8 +8,9 @@ import numpy as np
 
 
 def _worker_init(G, id):
-    import os
-    os.environ['THEANO_FLAGS'] = 'device=cpu'
+    if singleton_pool.n_parallel > 1:
+        import os
+        os.environ['THEANO_FLAGS'] = 'device=cpu'
     G.worker_id = id
 
 

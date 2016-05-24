@@ -2,6 +2,8 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 import sys
+import os
+os.environ["THEANO_FLAGS"] = "device=cpu"
 from sandbox.rocky.hrl.policies.stochastic_gru_policy import StochasticGRUPolicy
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
@@ -17,12 +19,12 @@ from rllab.misc.instrument import VariantGenerator
 
 vg = VariantGenerator()
 vg.add("grid_size", [5])#, 7, 9, 11])
-vg.add("batch_size", [4000, 10000, 20000])#4000])#, 10000, 20000])
-vg.add("seed", [11, 111, 211, 311, 411])
-vg.add("bonus_coeff", [0.1, 0.01, 0, 0.001, 1.0])
+vg.add("batch_size", [4000])#20000])#4000, 10000, 20000])#4000])#, 10000, 20000])
+vg.add("seed", [11])#, 111, 211, 311, 411])
+vg.add("bonus_coeff", [1.0])#0.1, 0.01, 0, 0.001, 1.0])
 vg.add("use_trust_region", [False])
 vg.add("step_size", [0.])#lambda use_trust_region: [0.] if not use_trust_region else [0.01, 0.1, 1.0, 10.0])
-vg.add("use_decision_nodes", [True, False])
+vg.add("use_decision_nodes", [False])#True, False])
 
 variants = vg.variants()
 print("#Experiments:", len(variants))
@@ -70,7 +72,8 @@ for v in variants:
         exp_prefix="hidden_aware_parsimony",
         n_parallel=1,
         seed=v["seed"],
-        mode="lab_kube"
+        mode="local",
+        env=dict(THEANO_FLAGS="device=gpu0"),
     )
     # sys.exit(0)
 
