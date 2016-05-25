@@ -53,9 +53,9 @@ class CategoricalMLPRegressor(LayersPowered, Serializable):
 
             if optimizer is None:
                 if use_trust_region:
-                    optimizer = PenaltyLbfgsOptimizer("optimizer")
+                    optimizer = PenaltyLbfgsOptimizer(name="optimizer")
                 else:
-                    optimizer = LbfgsOptimizer("optimizer")
+                    optimizer = LbfgsOptimizer(name="optimizer")
 
             self.output_dim = output_dim
             self._optimizer = optimizer

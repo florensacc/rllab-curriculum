@@ -1,12 +1,9 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-# from contextlib import contextmanager
-
 from rllab.core.serializable import Serializable
 from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
 import tensorflow as tf
-from rllab.misc import logger
 
 
 class Parameterized(object):

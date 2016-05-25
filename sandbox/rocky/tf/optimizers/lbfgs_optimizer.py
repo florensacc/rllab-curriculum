@@ -1,7 +1,6 @@
 from __future__ import print_function
 from __future__ import absolute_import
 from rllab.misc import ext
-from rllab.misc import logger
 from sandbox.rocky.tf.misc import tensor_utils
 from rllab.core.serializable import Serializable
 import tensorflow as tf
@@ -14,8 +13,9 @@ class LbfgsOptimizer(Serializable):
     Performs unconstrained optimization via L-BFGS.
     """
 
-    def __init__(self, max_opt_itr=20, callback=None):
+    def __init__(self, name, max_opt_itr=20, callback=None):
         Serializable.quick_init(self, locals())
+        self._name = name
         self._max_opt_itr = max_opt_itr
         self._opt_fun = None
         self._target = None
@@ -60,11 +60,8 @@ class LbfgsOptimizer(Serializable):
             extra_inputs = list()
 
         def f_opt_wrapper(flat_params):
-            # logger.log("setting value")
             self._target.set_param_values(flat_params, trainable=True)
-            # logger.log("computing")
             ret = f_opt(*inputs)
-            # logger.log("computed")
             return ret
 
         itr = [0]
@@ -84,8 +81,7 @@ class LbfgsOptimizer(Serializable):
         else:
             opt_callback = None
 
-        ret = scipy.optimize.fmin_l_bfgs_b(
+        scipy.optimize.fmin_l_bfgs_b(
             func=f_opt_wrapper, x0=self._target.get_param_values(trainable=True),
             maxiter=self._max_opt_itr, callback=opt_callback,
         )
-        print(ret)
