@@ -31,10 +31,10 @@ def wrapped_conv(*args, **kwargs):
 
 
 class MLP(object):
-    def __init__(self, input_shape, output_dim, hidden_sizes, hidden_nonlinearity,
+    def __init__(self, output_dim, hidden_sizes, hidden_nonlinearity,
                  output_nonlinearity, hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
                  output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
-                 name=None, input_var=None, input_layer=None):
+                 name=None, input_var=None, input_layer=None, input_shape=None):
 
         if name is None:
             prefix = ""
@@ -68,7 +68,7 @@ class MLP(object):
         self._layers.append(l_out)
         self._l_in = l_in
         self._l_out = l_out
-        self._input_var = l_in.input_var
+        # self._input_var = l_in.input_var
         self._output = L.get_output(l_out)
 
     @property
@@ -79,9 +79,9 @@ class MLP(object):
     def output_layer(self):
         return self._l_out
 
-    @property
-    def input_var(self):
-        return self._l_in.input_var
+    # @property
+    # def input_var(self):
+    #     return self._l_in.input_var
 
     @property
     def layers(self):
