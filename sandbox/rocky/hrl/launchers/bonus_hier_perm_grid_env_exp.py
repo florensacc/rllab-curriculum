@@ -5,11 +5,11 @@ import sys
 import os
 # os.environ["THEANO_FLAGS"] = "device=cpu"
 from sandbox.rocky.hrl.policies.stochastic_gru_policy import StochasticGRUPolicy
-from sandbox.rocky.tf.envs.base import TfEnv
+# from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rocky.hrl.bonus_evaluators.marginal_parsimony_bonus_evaluator import MarginalParsimonyBonusEvaluator
-from sandbox.rocky.hrl.bonus_evaluators.hidden_aware_parsimony_bonus_evaluator import HiddenAwareParsimonyBonusEvaluator
+from sandbox.rocky.hrl.bonus_evaluators.discrete_bonus_evaluator import DiscreteBonusEvaluator, MODES
 from sandbox.rocky.hrl.envs.perm_grid_env import PermGridEnv
 from sandbox.rocky.hrl.algos.bonus_algos import BonusTRPO
 
@@ -19,19 +19,26 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator
 
 vg = VariantGenerator()
-vg.add("grid_size", [5])#, 7, 9, 11])
-vg.add("batch_size", [1000])#4000])#20000])#4000, 10000, 20000])#4000])#, 10000, 20000])
-vg.add("seed", [11])#, 111, 211, 311, 411])
-vg.add("bonus_coeff", [1.0])#0.1, 0.01, 0, 0.001, 1.0])
+vg.add("grid_size", [5])
+vg.add("batch_size", [20000])#1000])#20000])
+vg.add("seed", [11, 111, 211, 311, 411])
+vg.add("bonus_coeff", [10.0])
 vg.add("use_trust_region", [False])
-vg.add("step_size", [0.])#lambda use_trust_region: [0.] if not use_trust_region else [0.01, 0.1, 1.0, 10.0])
-vg.add("use_decision_nodes", [False])#True, False])
+vg.add("step_size", [0.])
+vg.add("use_decision_nodes", [False])
+vg.add("mode", [
+    MODES.MODE_MARGINAL_PARSIMONY,
+    MODES.MODE_JOINT_MI_PARSIMONY,
+    MODES.MODE_MI_FEUDAL_SYNC,
+    MODES.MODE_MI_FEUDAL,
+    MODES.MODE_HIDDEN_AWARE_PARSIMONY,
+])
 
 variants = vg.variants()
 print("#Experiments:", len(variants))
 
 for v in variants:
-    env = TfEnv(PermGridEnv(size=v["grid_size"], n_objects=v["grid_size"], object_seed=0))
+    env = PermGridEnv(size=v["grid_size"], n_objects=v["grid_size"], object_seed=0)
     policy = StochasticGRUPolicy(
         env_spec=env.spec,
         n_subgoals=v["grid_size"],
@@ -47,11 +54,11 @@ for v in variants:
     #         step_size=v["step_size"],
     #     )
     # )
-    bonus_evaluator = HiddenAwareParsimonyBonusEvaluator(
+    bonus_evaluator = DiscreteBonusEvaluator(
         env_spec=env.spec,
         policy=policy,
-        action_bonus_coeff=v["bonus_coeff"],
-        hidden_bonus_coeff=v["bonus_coeff"],
+        mode=v["mode"],
+        bonus_coeff=v["bonus_coeff"],
         regressor_args=dict(
             use_trust_region=v["use_trust_region"],
             step_size=v["step_size"],
@@ -70,11 +77,9 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hidden_aware_parsimony",
-        n_parallel=1,
+        exp_prefix="hrl_sanity_check",
+        n_parallel=2,
         seed=v["seed"],
-        mode="local",
-        # env=dict(THEANO_FLAGS="device=gpu0"),
+        mode="lab_kube",
     )
-    # # sys.exit(0)
-
+    # sys.exit(0)

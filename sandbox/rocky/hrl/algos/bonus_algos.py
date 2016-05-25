@@ -1,16 +1,26 @@
 from __future__ import print_function
 from __future__ import absolute_import
-from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
 import numpy as np
 from rllab.misc import special
-from sandbox.rocky.tf.misc import tensor_utils
 from rllab.misc import logger
 from rllab.misc import ext
 from rllab.algos import util
-from sandbox.rocky.tf.algos.npo import NPO
-from sandbox.rocky.tf.algos.trpo import TRPO
+from rllab import config
+
+if config.USE_TF:
+    from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
+    from sandbox.rocky.tf.misc import tensor_utils
+    from sandbox.rocky.tf.algos.npo import NPO
+    from sandbox.rocky.tf.algos.trpo import TRPO
+    from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+else:
+    from rllab.algos.batch_polopt import BatchPolopt
+    from rllab.misc import tensor_utils
+    from rllab.algos.npo import NPO
+    from rllab.algos.trpo import TRPO
+    from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+
 from rllab.core.serializable import Serializable
-from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from sandbox.rocky.hrl.bonus_evaluators.base import BonusEvaluator
 
 
