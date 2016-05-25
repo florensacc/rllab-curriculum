@@ -2,10 +2,10 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 from sandbox.rocky.hrl.bonus_evaluators.base import BonusEvaluator
-from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
+from sandbox.rocky.tf.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from rllab.envs.base import EnvSpec
 from rllab.core.serializable import Serializable
-from rllab.spaces.discrete import Discrete
+from sandbox.rocky.tf.spaces.discrete import Discrete
 from rllab.misc import tensor_utils
 from rllab.misc import logger
 from sandbox.rocky.hrl.policies.stochastic_gru_policy import StochasticGRUPolicy
@@ -32,31 +32,31 @@ class HiddenAwareParsimonyBonusEvaluator(BonusEvaluator, Serializable):
         self.hidden_given_prev_regressor = regressor_cls(
             input_shape=(policy.n_subgoals,),
             output_dim=policy.n_subgoals,
-            name="p(ht|ht-1)",
+            name="p_ht_given_ht1",
             **regressor_args
         )
         self.hidden_given_state_prev_regressor = regressor_cls(
             input_shape=(env_spec.observation_space.flat_dim + policy.n_subgoals,),
             output_dim=policy.n_subgoals,
-            name="p(ht|st,ht-1)",
+            name="p_ht_given_st_ht1",
             **regressor_args
         )
         self.action_given_hidden_regressor = regressor_cls(
             input_shape=(policy.n_subgoals,),
             output_dim=env_spec.action_space.n,
-            name="p(at|ht)",
+            name="p_at_given_ht",
             **regressor_args
         )
         self.action_given_state_regressor = regressor_cls(
             input_shape=(env_spec.observation_space.flat_dim,),
             output_dim=env_spec.action_space.n,
-            name="p(at|st)",
+            name="p_at_given_st",
             **regressor_args
         )
         self.action_given_state_hidden_regressor = regressor_cls(
             input_shape=(env_spec.observation_space.flat_dim + policy.n_subgoals,),
             output_dim=env_spec.action_space.n,
-            name="p(at|ht)",
+            name="p_at_given_st_ht",
             **regressor_args
         )
 
@@ -66,10 +66,15 @@ class HiddenAwareParsimonyBonusEvaluator(BonusEvaluator, Serializable):
         agent_infos = tensor_utils.concat_tensor_dict_list([p["agent_infos"] for p in paths])
         hidden_states = agent_infos["hidden_state"]
         prev_hiddens = agent_infos["prev_hidden"]
+        logger.log("fitting p(ht|ht-1) regressor")
         self.hidden_given_prev_regressor.fit(prev_hiddens, hidden_states)
+        logger.log("fitting p(ht|st,ht-1) regressor")
         self.hidden_given_state_prev_regressor.fit(np.concatenate([obs, prev_hiddens], axis=1), hidden_states)
+        logger.log("fitting p(at|ht) regressor")
         self.action_given_hidden_regressor.fit(hidden_states, actions)
+        logger.log("fitting p(at|st,ht) regressor")
         self.action_given_state_hidden_regressor.fit(np.concatenate([obs, hidden_states], axis=1), actions)
+        logger.log("fitting p(at|st) regressor")
         self.action_given_state_regressor.fit(obs, actions)
 
     def predict(self, path):
@@ -82,14 +87,14 @@ class HiddenAwareParsimonyBonusEvaluator(BonusEvaluator, Serializable):
         # so the reward should be log(p(ht|ht-1)) - log(p(ht|ht-1,st)) + log(p(at|ht)) - log(p(at|ht,st))
         log_p_ht_given_ht1 = self.hidden_given_prev_regressor.predict_log_likelihood(
             prev_hiddens, hidden_states)
-        log_p_ht_given_ht1_st = self.hidden_given_state_prev_regressor.predict_log_likelihood(
+        log_p_ht_given_st_ht1 = self.hidden_given_state_prev_regressor.predict_log_likelihood(
             np.concatenate([obs, prev_hiddens], axis=1), hidden_states)
         log_p_at_given_ht = self.action_given_hidden_regressor.predict_log_likelihood(
             hidden_states, actions)
-        log_p_at_given_ht_st = self.action_given_state_hidden_regressor.predict_log_likelihood(
+        log_p_at_given_st_ht = self.action_given_state_hidden_regressor.predict_log_likelihood(
             np.concatenate([obs, hidden_states], axis=1), actions)
-        return self.hidden_bonus_coeff * (log_p_ht_given_ht1 - log_p_ht_given_ht1_st) + \
-               self.action_bonus_coeff * (log_p_at_given_ht - log_p_at_given_ht_st)
+        return self.hidden_bonus_coeff * (log_p_ht_given_ht1 - log_p_ht_given_st_ht1) + \
+               self.action_bonus_coeff * (log_p_at_given_ht - log_p_at_given_st_ht)
 
     def log_diagnostics(self, paths):
         obs = tensor_utils.concat_tensor_list([p["observations"] for p in paths])
@@ -103,16 +108,16 @@ class HiddenAwareParsimonyBonusEvaluator(BonusEvaluator, Serializable):
             hidden_states, actions))
         ent_ht_given_ht1 = np.mean(-self.hidden_given_prev_regressor.predict_log_likelihood(
             prev_hiddens, hidden_states))
-        ent_ht_given_ht1_st = np.mean(-self.hidden_given_state_prev_regressor.predict_log_likelihood(
+        ent_ht_given_st_ht1 = np.mean(-self.hidden_given_state_prev_regressor.predict_log_likelihood(
             np.concatenate([obs, prev_hiddens], axis=1), hidden_states))
-        ent_at_given_ht_st = np.mean(-self.action_given_state_hidden_regressor.predict_log_likelihood(
+        ent_at_given_st_ht = np.mean(-self.action_given_state_hidden_regressor.predict_log_likelihood(
             np.concatenate([obs, hidden_states], axis=1), actions))
         # so many terms lol
         logger.record_tabular("approx_H(at|st)", ent_at_given_st)
         logger.record_tabular("approx_H(at|ht)", ent_at_given_ht)
-        logger.record_tabular("approx_H(at|ht,st)", ent_at_given_ht_st)
+        logger.record_tabular("approx_H(at|st,ht)", ent_at_given_st_ht)
         logger.record_tabular("approx_H(ht|ht-1)", ent_ht_given_ht1)
-        logger.record_tabular("approx_H(ht|ht-1,st)", ent_ht_given_ht1_st)
-        logger.record_tabular("approx_I(at;st|ht)", ent_at_given_ht - ent_at_given_ht_st)
-        logger.record_tabular("approx_I(ht;st|ht-1)", ent_ht_given_ht1 - ent_ht_given_ht1_st)
-        logger.record_tabular("approx_I(at;ht|st)", ent_at_given_st - ent_at_given_ht_st)
+        logger.record_tabular("approx_H(ht|st,ht-1)", ent_ht_given_st_ht1)
+        logger.record_tabular("approx_I(at;st|ht)", ent_at_given_ht - ent_at_given_st_ht)
+        logger.record_tabular("approx_I(ht;st|ht-1)", ent_ht_given_ht1 - ent_ht_given_st_ht1)
+        logger.record_tabular("approx_I(at;ht|st)", ent_at_given_st - ent_at_given_st_ht)

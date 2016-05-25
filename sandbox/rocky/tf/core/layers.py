@@ -169,6 +169,11 @@ class ConcatLayer(MergeLayer):
         return tuple(output_shape)
 
     def get_output_for(self, inputs, **kwargs):
+        dtypes = [x.dtype.as_numpy_dtype for x in inputs]
+        if len(set(dtypes)) > 1:
+            # need to convert to common data type
+            common_dtype = np.core.numerictypes.find_common_type([], dtypes)
+            inputs = [tf.cast(x, common_dtype) for x in inputs]
         return tf.concat(concat_dim=self.axis, values=inputs)
 
 
@@ -183,7 +188,6 @@ def xavier_init(shape, dtype=tf.float32):
 
 
 class ParamLayer(Layer):
-
     def __init__(self, incoming, num_units, param=tf.zeros_initializer,
                  trainable=True, **kwargs):
         super(ParamLayer, self).__init__(incoming, **kwargs)
@@ -201,10 +205,9 @@ class ParamLayer(Layer):
     def get_output_for(self, input, **kwargs):
         ndim = input.get_shape().ndims
         reshaped_param = tf.reshape(self.param, (1,) * (ndim - 1) + (self.num_units,))
-        tile_arg = tf.concat(0, [tf.shape(input)[:ndim-1], [1]])
+        tile_arg = tf.concat(0, [tf.shape(input)[:ndim - 1], [1]])
         tiled = tf.tile(reshaped_param, tile_arg)
         return tiled
-
 
 
 class DenseLayer(Layer):

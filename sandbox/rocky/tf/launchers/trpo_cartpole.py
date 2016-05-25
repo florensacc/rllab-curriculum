@@ -8,14 +8,10 @@ from rllab.envs.normalized_env import normalize
 from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.misc.instrument import stub, run_experiment_lite
-# from sandbox.rocky.tf.misc.instrument import run_experiment_lite
 
 stub(globals())
-# from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 env = TfEnv(normalize(CartpoleEnv()))
-
-# with tf.Session() as sess:
 
 policy = GaussianMLPPolicy(
     name="policy",
@@ -41,5 +37,3 @@ run_experiment_lite(
     n_parallel=4,
     seed=1,
 )
-    # sess.run(tf.initialize_all_variables())
-    # algo.train()

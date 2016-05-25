@@ -33,3 +33,24 @@ def new_tensor(name, ndim, dtype):
 
 def new_tensor_like(name, arr_like):
     return new_tensor(name, arr_like.get_shape().ndims, arr_like.dtype.base_dtype)
+
+
+def concat_tensor_list(tensor_list):
+    return np.concatenate(tensor_list, axis=0)
+
+
+def concat_tensor_dict_list(tensor_dict_list):
+    keys = tensor_dict_list[0].keys()
+    ret = dict()
+    for k in keys:
+        example = tensor_dict_list[0][k]
+        if isinstance(example, dict):
+            v = concat_tensor_dict_list([x[k] for x in tensor_dict_list])
+        else:
+            v = concat_tensor_list([x[k] for x in tensor_dict_list])
+        ret[k] = v
+    return ret
+
+
+def to_onehot_sym(inds, dim):
+    return tf.one_hot(inds, depth=dim, on_value=1, off_value=0)

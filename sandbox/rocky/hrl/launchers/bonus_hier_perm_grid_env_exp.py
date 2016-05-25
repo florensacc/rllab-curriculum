@@ -3,8 +3,9 @@ from __future__ import absolute_import
 
 import sys
 import os
-os.environ["THEANO_FLAGS"] = "device=cpu"
+# os.environ["THEANO_FLAGS"] = "device=cpu"
 from sandbox.rocky.hrl.policies.stochastic_gru_policy import StochasticGRUPolicy
+from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rocky.hrl.bonus_evaluators.marginal_parsimony_bonus_evaluator import MarginalParsimonyBonusEvaluator
@@ -19,7 +20,7 @@ from rllab.misc.instrument import VariantGenerator
 
 vg = VariantGenerator()
 vg.add("grid_size", [5])#, 7, 9, 11])
-vg.add("batch_size", [4000])#20000])#4000, 10000, 20000])#4000])#, 10000, 20000])
+vg.add("batch_size", [1000])#4000])#20000])#4000, 10000, 20000])#4000])#, 10000, 20000])
 vg.add("seed", [11])#, 111, 211, 311, 411])
 vg.add("bonus_coeff", [1.0])#0.1, 0.01, 0, 0.001, 1.0])
 vg.add("use_trust_region", [False])
@@ -30,7 +31,7 @@ variants = vg.variants()
 print("#Experiments:", len(variants))
 
 for v in variants:
-    env = PermGridEnv(size=v["grid_size"], n_objects=v["grid_size"], object_seed=0)
+    env = TfEnv(PermGridEnv(size=v["grid_size"], n_objects=v["grid_size"], object_seed=0))
     policy = StochasticGRUPolicy(
         env_spec=env.spec,
         n_subgoals=v["grid_size"],
@@ -73,7 +74,7 @@ for v in variants:
         n_parallel=1,
         seed=v["seed"],
         mode="local",
-        env=dict(THEANO_FLAGS="device=gpu0"),
+        # env=dict(THEANO_FLAGS="device=gpu0"),
     )
     # sys.exit(0)
 

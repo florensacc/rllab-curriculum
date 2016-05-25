@@ -1,18 +1,17 @@
 from __future__ import print_function
 from __future__ import absolute_import
-from rllab.algos.batch_polopt import BatchPolopt
+from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
 import numpy as np
 from rllab.misc import special
-from rllab.misc import tensor_utils
+from sandbox.rocky.tf.misc import tensor_utils
 from rllab.misc import logger
 from rllab.misc import ext
 from rllab.algos import util
-from rllab.algos.npo import NPO
-from rllab.algos.trpo import TRPO
+from sandbox.rocky.tf.algos.npo import NPO
+from sandbox.rocky.tf.algos.trpo import TRPO
 from rllab.core.serializable import Serializable
-from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from sandbox.rocky.hrl.bonus_evaluators.base import BonusEvaluator
-import theano.tensor as TT
 
 
 class BonusBatchPolopt(BatchPolopt, Serializable):
@@ -117,8 +116,8 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
 
 class BonusNPO(NPO, BonusBatchPolopt):
     def __init__(self, *args, **kwargs):
-        BonusBatchPolopt.__init__(self, *args, **kwargs)
         NPO.__init__(self, *args, **kwargs)
+        BonusBatchPolopt.__init__(self, *args, **kwargs)
 
     def get_itr_snapshot(self, itr, samples_data):
         return dict(
