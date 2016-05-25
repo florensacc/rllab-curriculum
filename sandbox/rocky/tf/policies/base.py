@@ -1,4 +1,7 @@
-from rllab.core.parameterized import Parameterized
+from __future__ import print_function
+from __future__ import absolute_import
+
+from sandbox.rocky.tf.core.parameterized import Parameterized
 
 
 class Policy(Parameterized):
@@ -41,6 +44,14 @@ class Policy(Parameterized):
         Return keys for the information related to the policy's state when taking an action.
         :return:
         """
+        return [k for k, _ in self.state_info_specs]
+
+    @property
+    def state_info_specs(self):
+        """
+        Return keys and shapes for the information related to the policy's state when taking an action.
+        :return:
+        """
         return list()
 
     def terminate(self):
@@ -51,7 +62,6 @@ class Policy(Parameterized):
 
 
 class StochasticPolicy(Policy):
-
     @property
     def distribution(self):
         """
