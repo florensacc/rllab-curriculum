@@ -12,26 +12,31 @@ import tensorflow as tf
 
 env = TfEnv(normalize(CartpoleEnv()))
 
-with tf.Session() as sess:
+with tf.device("cpu"):
+    with tf.Session() as sess:
 
-    policy = GaussianMLPPolicy(
-        name="policy",
-        env_spec=env.spec,
-        # The neural network policy should have two hidden layers, each with 32 hidden units.
-        hidden_sizes=(32, 32)
-    )
+        policy = GaussianMLPPolicy(
+            name="policy",
+            env_spec=env.spec,
+            # The neural network policy should have two hidden layers, each with 32 hidden units.
+            hidden_sizes=(32, 32)
+        )
 
-    baseline = LinearFeatureBaseline(env_spec=env.spec)
+        baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-    algo = VPG(
-        env=env,
-        policy=policy,
-        baseline=baseline,
-        batch_size=4000,
-        max_path_length=100,
-        n_itr=40,
-        discount=0.99,
-        learning_rate=0.01,
-        # step_size=0.01,
-    )
-    algo.train()
+        algo = VPG(
+            env=env,
+            policy=policy,
+            baseline=baseline,
+            batch_size=4000,
+            max_path_length=100,
+            n_itr=40,
+            discount=0.99,
+            optimizer_args=dict(
+                tf_optimizer_args=dict(
+                    learning_rate=0.01,
+                )
+            )
+        )
+        sess.run(tf.initialize_all_variables())
+        algo.train()

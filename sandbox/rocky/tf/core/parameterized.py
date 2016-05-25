@@ -48,6 +48,7 @@ class Parameterized(object):
 
     def get_param_values(self, **tags):
         params = self.get_params(**tags)
+        # import ipdb; ipdb.set_trace()
         param_values = tf.get_default_session().run(params)
         return flatten_tensors(param_values)
 
@@ -75,4 +76,5 @@ class Parameterized(object):
 
     def __setstate__(self, d):
         Serializable.__setstate__(self, d)
+        tf.get_default_session().run(tf.initialize_variables(self.get_params()))
         self.set_param_values(d["params"])

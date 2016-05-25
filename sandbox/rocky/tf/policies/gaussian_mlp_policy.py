@@ -115,7 +115,6 @@ class GaussianMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
                 inputs=[obs_var],
                 outputs=[mean_var, log_std_var],
             )
-            tf.get_default_session().run(tf.initialize_all_variables())
 
     def dist_info_sym(self, obs_var, state_info_vars=None):
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)

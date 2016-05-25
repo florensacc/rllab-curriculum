@@ -1,47 +1,37 @@
 from __future__ import print_function
 from __future__ import absolute_import
-from rllab.misc import logger
+
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
+import rllab.misc.logger as logger
+from sandbox.rocky.tf.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
-from sandbox.rocky.tf.optimizers.first_order_optimizer import FirstOrderOptimizer
 from sandbox.rocky.tf.misc import tensor_utils
-from rllab.core.serializable import Serializable
 import tensorflow as tf
 
 
-class VPG(BatchPolopt, Serializable):
+class NPO(BatchPolopt):
     """
-    Vanilla Policy Gradient.
+    Natural Policy Optimization.
     """
 
     def __init__(
             self,
-            env,
-            policy,
-            baseline,
             optimizer=None,
             optimizer_args=None,
+            step_size=0.01,
             **kwargs):
-        Serializable.quick_init(self, locals())
         if optimizer is None:
-            default_args = dict(
-                batch_size=None,
-                max_epochs=1,
-            )
             if optimizer_args is None:
-                optimizer_args = default_args
-            else:
-                optimizer_args = dict(default_args, **optimizer_args)
-            optimizer = FirstOrderOptimizer(**optimizer_args)
+                optimizer_args = dict()
+            optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
         self.optimizer = optimizer
-        self.opt_info = None
-        super(VPG, self).__init__(env=env, policy=policy, baseline=baseline, **kwargs)
+        self.step_size = step_size
+        super(NPO, self).__init__(**kwargs)
 
     @overrides
     def init_opt(self):
         is_recurrent = int(self.policy.recurrent)
-
         obs_var = self.env.observation_space.new_tensor_variable(
             'obs',
             extra_dims=1 + is_recurrent,
@@ -51,7 +41,7 @@ class VPG(BatchPolopt, Serializable):
             extra_dims=1 + is_recurrent,
         )
         advantage_var = tensor_utils.new_tensor(
-            name='advantage',
+            'advantage',
             ndim=1 + is_recurrent,
             dtype=tf.float32,
         )
@@ -75,56 +65,53 @@ class VPG(BatchPolopt, Serializable):
             valid_var = None
 
         dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
-        logli = dist.log_likelihood_sym(action_var, dist_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
-
-        # formulate as a minimization problem
-        # The gradient of the surrogate objective is the policy gradient
+        lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
         if is_recurrent:
-            surr_obj = - tf.reduce_sum(logli * advantage_var * valid_var) / tf.reduce_sum(valid_var)
             mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
-            max_kl = tf.reduce_max(kl * valid_var)
+            surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var)
         else:
-            surr_obj = - tf.reduce_mean(logli * advantage_var)
             mean_kl = tf.reduce_mean(kl)
-            max_kl = tf.reduce_max(kl)
+            surr_loss = - tf.reduce_mean(lr * advantage_var)
 
-        input_list = [obs_var, action_var, advantage_var] + state_info_vars_list
+        input_list = [
+                         obs_var,
+                         action_var,
+                         advantage_var,
+                     ] + state_info_vars_list + old_dist_info_vars_list
         if is_recurrent:
             input_list.append(valid_var)
 
-        self.optimizer.update_opt(surr_obj, target=self.policy, inputs=input_list)
-
-        f_kl = tensor_utils.compile_function(
-            inputs=input_list + old_dist_info_vars_list,
-            outputs=[mean_kl, max_kl],
+        self.optimizer.update_opt(
+            loss=surr_loss,
+            target=self.policy,
+            leq_constraint=(mean_kl, self.step_size),
+            inputs=input_list,
+            constraint_name="mean_kl"
         )
-        self.opt_info = dict(
-            f_kl=f_kl,
-        )
+        return dict()
 
     @overrides
     def optimize_policy(self, itr, samples_data):
-        logger.log("optimizing policy")
-        inputs = ext.extract(
+        all_input_values = tuple(ext.extract(
             samples_data,
             "observations", "actions", "advantages"
-        )
+        ))
         agent_infos = samples_data["agent_infos"]
         state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
-        inputs += tuple(state_info_list)
-        if self.policy.recurrent:
-            inputs += (samples_data["valids"],)
         dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
-        loss_before = self.optimizer.loss(inputs)
-        self.optimizer.optimize(inputs)
-        loss_after = self.optimizer.loss(inputs)
-        logger.record_tabular("LossBefore", loss_before)
-        logger.record_tabular("LossAfter", loss_after)
-
-        mean_kl, max_kl = self.opt_info['f_kl'](*(list(inputs) + dist_info_list))
+        all_input_values += tuple(state_info_list) + tuple(dist_info_list)
+        if self.policy.recurrent:
+            all_input_values += (samples_data["valids"],)
+        loss_before = self.optimizer.loss(all_input_values)
+        self.optimizer.optimize(all_input_values)
+        mean_kl = self.optimizer.constraint_val(all_input_values)
+        loss_after = self.optimizer.loss(all_input_values)
+        logger.record_tabular('LossBefore', loss_before)
+        logger.record_tabular('LossAfter', loss_after)
         logger.record_tabular('MeanKL', mean_kl)
-        logger.record_tabular('MaxKL', max_kl)
+        logger.record_tabular('dLoss', loss_before - loss_after)
+        return dict()
 
     @overrides
     def get_itr_snapshot(self, itr, samples_data):
