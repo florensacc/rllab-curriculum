@@ -6,6 +6,7 @@ from __future__ import absolute_import
 from rllab.core.serializable import Serializable
 from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
 import tensorflow as tf
+from rllab.misc import logger
 
 
 class Parameterized(object):
@@ -13,6 +14,8 @@ class Parameterized(object):
         self._cached_params = {}
         self._cached_param_dtypes = {}
         self._cached_param_shapes = {}
+        self._cached_assign_ops = {}
+        self._cached_assign_placeholders = {}
 
     def get_params_internal(self, **tags):
         """
@@ -57,14 +60,21 @@ class Parameterized(object):
         param_values = unflatten_tensors(
             flattened_params, self.get_param_shapes(**tags))
         ops = []
+        feed_dict = dict()
         for param, dtype, value in zip(
                 self.get_params(**tags),
                 self.get_param_dtypes(**tags),
                 param_values):
-            ops.append(tf.assign(param, value.astype(dtype)))
+            if param not in self._cached_assign_ops:
+                assign_placeholder = tf.placeholder(dtype=param.dtype.base_dtype)
+                assign_op = tf.assign(param, assign_placeholder)
+                self._cached_assign_ops[param] = assign_op
+                self._cached_assign_placeholders[param] = assign_placeholder
+            ops.append(self._cached_assign_ops[param])
+            feed_dict[self._cached_assign_placeholders[param]] = value.astype(dtype)
             if debug:
                 print("setting value of %s" % param.name)
-        tf.get_default_session().run(ops)
+        tf.get_default_session().run(ops, feed_dict=feed_dict)
 
     def flat_to_params(self, flattened_params, **tags):
         return unflatten_tensors(flattened_params, self.get_param_shapes(**tags))

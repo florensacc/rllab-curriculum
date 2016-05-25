@@ -76,5 +76,5 @@ for v in variants:
         mode="local",
         # env=dict(THEANO_FLAGS="device=gpu0"),
     )
-    # sys.exit(0)
+    # # sys.exit(0)
 
