@@ -447,9 +447,9 @@ def reload_data():
     global plottable_keys
     global distinct_params
     exps_data = core.load_exps_data(args.data_path)
-    plottable_keys = list(
-        set(flatten(exp.progress.keys() for exp in exps_data)))
-    distinct_params = core.extract_distinct_params(exps_data)
+    plottable_keys = sorted(list(
+        set(flatten(exp.progress.keys() for exp in exps_data))))
+    distinct_params = sorted(core.extract_distinct_params(exps_data))
 
 
 if __name__ == "__main__":

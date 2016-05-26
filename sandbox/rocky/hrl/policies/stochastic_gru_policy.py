@@ -1,22 +1,39 @@
 from __future__ import print_function
 from __future__ import absolute_import
+from rllab import config
 
-from sandbox.rocky.tf.policies.base import StochasticPolicy
-from sandbox.rocky.tf.core.layers_powered import LayersPowered
-from rllab.core.serializable import Serializable
-from sandbox.rocky.tf.spaces.discrete import Discrete
-from sandbox.rocky.tf.distributions.categorical import Categorical
-from sandbox.rocky.tf.distributions.bernoulli import Bernoulli
-from sandbox.rocky.tf.misc import tensor_utils
-from rllab.envs.base import EnvSpec
-from rllab.misc import ext, special
-from sandbox.rocky.tf.core.network import MLP
-import sandbox.rocky.tf.core.layers as L
-import tensorflow as tf
+if config.USE_TF:
+    from sandbox.rocky.tf.policies.base import StochasticPolicy
+    from sandbox.rocky.tf.core.layers_powered import LayersPowered as Powered
+    from rllab.core.serializable import Serializable
+    from sandbox.rocky.tf.spaces.discrete import Discrete
+    from sandbox.rocky.tf.distributions.categorical import Categorical
+    from sandbox.rocky.tf.distributions.bernoulli import Bernoulli
+    from sandbox.rocky.tf.misc import tensor_utils
+    from rllab.envs.base import EnvSpec
+    from rllab.misc import ext, special
+    from sandbox.rocky.tf.core.network import MLP
+    import sandbox.rocky.tf.core.tensor as TT
+    import sandbox.rocky.tf.core.layers as L
+    import tensorflow as tf
+else:
+    from rllab.policies.base import StochasticPolicy
+    from rllab.core.lasagne_powered import LasagnePowered as Powered
+    from rllab.core.serializable import Serializable
+    from rllab.spaces.discrete import Discrete
+    from rllab.distributions.categorical import Categorical
+    from rllab.distributions.bernoulli import Bernoulli
+    from rllab.misc import tensor_utils
+    from rllab.envs.base import EnvSpec
+    from rllab.misc import ext as tensor_utils
+    from rllab.misc import special
+    from rllab.core.network import MLP
+    import lasagne.layers as L
+    import theano.tensor as TT
 import numpy as np
 
 
-class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
+class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
     """
     Structure the hierarchical policy as a recurrent network with stochastic gated recurrent unit, where the
     stochastic component of the hidden state will play the role of internal goals. Binary (or continuous) decision
@@ -36,7 +53,7 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
 
     def __init__(self, env_spec, n_subgoals, hidden_sizes=(32, 32), use_decision_nodes=True,
                  hid_hidden_sizes=None, decision_hidden_sizes=None, action_hidden_sizes=None,
-                 hidden_nonlinearity=tf.nn.tanh):
+                 hidden_nonlinearity=TT.tanh):
         """
         :type env_spec: EnvSpec
         :param use_decision_nodes: whether to have decision units, which governs whether the subgoals should be
@@ -70,7 +87,7 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             input_layer=L.concat([l_obs, l_prev_hidden], name="decision_network_input"),
             hidden_sizes=decision_hidden_sizes,
             hidden_nonlinearity=hidden_nonlinearity,
-            output_nonlinearity=tf.nn.sigmoid,
+            output_nonlinearity=TT.nnet.sigmoid,  # tf.nn.sigmoid,
             output_dim=1,
             name="decision_network",
         )
@@ -78,7 +95,7 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             input_layer=L.concat([l_obs, l_prev_hidden], name="hidden_network_input"),
             hidden_sizes=hid_hidden_sizes,
             hidden_nonlinearity=hidden_nonlinearity,
-            output_nonlinearity=tf.nn.softmax,
+            output_nonlinearity=TT.nnet.softmax,  # tf.nn.softmax,
             output_dim=n_subgoals,
             name="hidden_network"
         )
@@ -86,7 +103,7 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             input_layer=L.concat([l_obs, l_hidden], name="action_network_input"),
             hidden_sizes=action_hidden_sizes,
             hidden_nonlinearity=hidden_nonlinearity,
-            output_nonlinearity=tf.nn.softmax,
+            output_nonlinearity=TT.nnet.softmax,  # tf.nn.softmax,
             output_dim=env_spec.action_space.n,
             name="action_network"
         )
@@ -105,7 +122,7 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
         )
         self.f_decision_prob = tensor_utils.compile_function(
             [l_obs.input_var, l_prev_hidden.input_var],
-            tf.reshape(L.get_output(l_decision_prob), [-1])
+            TT.reshape(L.get_output(l_decision_prob), [-1])
         )
         self.f_action_prob = tensor_utils.compile_function(
             [l_obs.input_var, l_hidden.input_var],
@@ -114,9 +131,9 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
 
         StochasticPolicy.__init__(self, env_spec=env_spec)
         if self.use_decision_nodes:
-            LayersPowered.__init__(self, [l_hidden_prob, l_decision_prob, l_action_prob])
+            Powered.__init__(self, [l_hidden_prob, l_decision_prob, l_action_prob])
         else:
-            LayersPowered.__init__(self, [l_hidden_prob, l_action_prob])
+            Powered.__init__(self, [l_hidden_prob, l_action_prob])
 
         self.l_hidden_prob = l_hidden_prob
         self.l_decision_prob = l_decision_prob
@@ -136,6 +153,10 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
     @property
     def dist_info_keys(self):
         return [k for k, _ in self.dist_info_specs]
+
+    @property
+    def state_info_keys(self):
+        return [k for k, _ in self.state_info_specs]
 
     @property
     def state_info_specs(self):
@@ -191,7 +212,7 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
                 self.l_obs: obs_var,
                 self.l_prev_hidden: prev_hidden_var,
             })
-            cond = tf.tile(switch_goal_var, [1, self.n_subgoals])
+            cond = TT.tile(switch_goal_var, [1, self.n_subgoals])
             hidden_prob_var = hidden_prob_var * cond + prev_hidden_var * (1 - cond)
             ret["switch_goal"] = switch_goal_var
             ret["hidden_prob"] = hidden_prob_var
@@ -206,7 +227,7 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
         # only take hidden kl into account if switching goal
         if self.use_decision_nodes:
             cond = old_dist_info_vars["switch_goal"][:, 0]
-            hidden_kl = hidden_kl * cond + tf.zeros(tf.pack([tf.shape(hidden_kl)[0]])) * (1 - cond)
+            hidden_kl = hidden_kl * cond + TT.zeros([TT.shape(hidden_kl)[0]]) * (1 - cond)
         action_kl = self.action_dist.kl_sym(
             dict(prob=old_dist_info_vars["action_prob"]),
             dict(prob=new_dist_info_vars["action_prob"])
@@ -222,14 +243,14 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
 
     def likelihood_ratio_sym(self, action_var, old_dist_info_vars, new_dist_info_vars):
         hidden_lr = self.hidden_dist.likelihood_ratio_sym(
-            tf.cast(old_dist_info_vars["hidden_state"], tf.uint8),
+            TT.cast(old_dist_info_vars["hidden_state"], 'uint8'),
             dict(prob=old_dist_info_vars["hidden_prob"]),
             dict(prob=new_dist_info_vars["hidden_prob"])
         )
         # only take hidden kl into account if switching goal
         if self.use_decision_nodes:
             cond = old_dist_info_vars["switch_goal"][:, 0]
-            hidden_lr = hidden_lr * cond + tf.ones(tf.pack([tf.shape(hidden_lr)[0]])) * (1 - cond)
+            hidden_lr = hidden_lr * cond + TT.ones([TT.shape(hidden_lr)[0]]) * (1 - cond)
         action_lr = self.action_dist.likelihood_ratio_sym(
             action_var,
             dict(prob=old_dist_info_vars["action_prob"]),
@@ -238,7 +259,7 @@ class StochasticGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
         ret = hidden_lr * action_lr
         if self.use_decision_nodes:
             decision_lr = self.decision_dist.likelihood_ratio_sym(
-                tf.cast(old_dist_info_vars["switch_goal"], tf.uint8),
+                TT.cast(old_dist_info_vars["switch_goal"], 'uint8'),
                 dict(p=old_dist_info_vars["decision_prob"]),
                 dict(p=new_dist_info_vars["decision_prob"]),
             )
