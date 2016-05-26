@@ -77,7 +77,7 @@ class SupervisedRecurrentPolopt(RLAlgorithm):
         self.optimizer = optimizer
         self.discount = discount
         self.n_itr = n_itr
-        self.n_test_samples = n_on_policy_samples
+        self.n_on_policy_samples = n_on_policy_samples
         self.max_path_length = max_path_length
         self.bonus_coeff = bonus_coeff
 
@@ -191,7 +191,7 @@ class SupervisedRecurrentPolopt(RLAlgorithm):
         for itr in range(self.n_itr):
             paths = parallel_sampler.sample_paths(
                 policy_params=self.policy.get_param_values(),
-                max_samples=self.n_test_samples,
+                max_samples=self.n_on_policy_samples,
                 max_path_length=self.max_path_length
             )
             self.bonus_evaluator.fit(paths)
