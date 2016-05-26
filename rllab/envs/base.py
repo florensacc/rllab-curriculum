@@ -50,7 +50,7 @@ class Env(object):
     def action_dim(self):
         return self.action_space.flat_dim
 
-    def ender(self):
+    def render(self):
         pass
 
     def log_diagnostics(self, paths):
