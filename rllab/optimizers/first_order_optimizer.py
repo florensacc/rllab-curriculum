@@ -45,7 +45,7 @@ class FirstOrderOptimizer(Serializable):
         self._batch_size = batch_size
         self._verbose = verbose
 
-    def update_opt(self, loss, target, inputs, extra_inputs=None, **kwargs):
+    def update_opt(self, loss, target, inputs, extra_inputs=None, gradients=None, **kwargs):
         """
         :param loss: Symbolic expression for the loss function.
         :param target: A parameterized object to optimize over. It should implement methods of the
@@ -57,7 +57,10 @@ class FirstOrderOptimizer(Serializable):
 
         self._target = target
 
-        updates = self._update_method(loss, target.get_params(trainable=True))
+        if gradients is None:
+            updates = self._update_method(loss, target.get_params(trainable=True))
+        else:
+            updates = self._update_method(gradients, target.get_params(trainable=True))
         updates = OrderedDict([(k, v.astype(k.dtype)) for k, v in updates.iteritems()])
 
         if extra_inputs is None:

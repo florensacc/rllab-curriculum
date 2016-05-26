@@ -19,19 +19,20 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator
 
 vg = VariantGenerator()
-vg.add("grid_size", [5])
+vg.add("grid_size", [5])#, 9])
 vg.add("batch_size", [20000])#1000])#20000])
 vg.add("seed", [11, 111, 211, 311, 411])
-vg.add("bonus_coeff", [10.0])
+vg.add("bonus_coeff", [0.1])#0., 0.001, 0.01, 0.1, 1.0, 10.0])
 vg.add("use_trust_region", [False])
 vg.add("step_size", [0.])
 vg.add("use_decision_nodes", [False])
+vg.add("random_reset", [True, False])
 vg.add("mode", [
-    MODES.MODE_MARGINAL_PARSIMONY,
-    MODES.MODE_JOINT_MI_PARSIMONY,
+    # MODES.MODE_MARGINAL_PARSIMONY,
+    # MODES.MODE_JOINT_MI_PARSIMONY,
     MODES.MODE_MI_FEUDAL_SYNC,
-    MODES.MODE_MI_FEUDAL,
-    MODES.MODE_HIDDEN_AWARE_PARSIMONY,
+    # MODES.MODE_MI_FEUDAL,
+    # MODES.MODE_HIDDEN_AWARE_PARSIMONY,
 ])
 
 variants = vg.variants()
@@ -43,6 +44,7 @@ for v in variants:
         env_spec=env.spec,
         n_subgoals=v["grid_size"],
         use_decision_nodes=v["use_decision_nodes"],
+        random_reset=v["random_reset"],
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     # bonus_evaluator = MarginalParsimonyBonusEvaluator(
@@ -77,7 +79,7 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hrl_sanity_check",
+        exp_prefix="hrl_random_reset",
         n_parallel=2,
         seed=v["seed"],
         mode="lab_kube",

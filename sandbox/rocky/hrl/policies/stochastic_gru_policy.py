@@ -53,11 +53,12 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
 
     def __init__(self, env_spec, n_subgoals, hidden_sizes=(32, 32), use_decision_nodes=True,
                  hid_hidden_sizes=None, decision_hidden_sizes=None, action_hidden_sizes=None,
-                 hidden_nonlinearity=TT.tanh):
+                 random_reset=False, hidden_nonlinearity=TT.tanh):
         """
         :type env_spec: EnvSpec
         :param use_decision_nodes: whether to have decision units, which governs whether the subgoals should be
         resampled
+        :param random_reset: whether to randomly set the first subgoal
         """
         Serializable.quick_init(self, locals())
 
@@ -69,6 +70,8 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
             decision_hidden_sizes = hidden_sizes
         if action_hidden_sizes is None:
             action_hidden_sizes = hidden_sizes
+
+        self.random_reset = random_reset
 
         l_prev_hidden = L.InputLayer(
             shape=(None, n_subgoals),
@@ -161,8 +164,8 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
     @property
     def state_info_specs(self):
         specs = [
-            ("action_prob", (self.action_space.n,)),
-            ("hidden_prob", (self.n_subgoals,)),
+            # ("action_prob", (self.action_space.n,)),
+            # ("hidden_prob", (self.n_subgoals,)),
             ("hidden_state", (self.n_subgoals,)),
             ("prev_hidden", (self.n_subgoals,))
         ]
@@ -266,14 +269,39 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
             ret *= decision_lr
         return ret
 
+    def log_likelihood_sym(self, action_var, dist_info_vars):
+        hidden_logli = self.hidden_dist.log_likelihood_sym(
+            TT.cast(dist_info_vars["hidden_state"], 'uint8'),
+            dict(prob=dist_info_vars["hidden_prob"]),
+        )
+        # only take hidden kl into account if switching goal
+        if self.use_decision_nodes:
+            cond = dist_info_vars["switch_goal"][:, 0]
+            hidden_logli = hidden_logli * cond + TT.zeros([TT.shape(hidden_logli)[0]]) * (1 - cond)
+        action_logli = self.action_dist.log_likelihood_sym(
+            action_var,
+            dict(prob=dist_info_vars["action_prob"]),
+        )
+        ret = hidden_logli + action_logli
+        if self.use_decision_nodes:
+            decision_logli = self.decision_dist.log_likelihood_sym(
+                TT.cast(dist_info_vars["switch_goal"], 'uint8'),
+                dict(p=dist_info_vars["decision_prob"]),
+            )
+            ret += decision_logli
+        return ret
+
     def entropy(self, dist_info):
         # the entropy is a bit difficult to estimate
         # for now we'll keep things simple and compute H(a|s,h)
         return self.action_dist.entropy(dict(prob=dist_info["action_prob"]))
 
     def reset(self):
-        # always start on the first hidden state
-        self.hidden_state = np.eye(self.n_subgoals)[0]
+        if self.random_reset:
+            self.hidden_state = np.eye(self.n_subgoals)[np.random.randint(low=0, high=self.n_subgoals)]
+        else:
+            # always start on the first hidden state
+            self.hidden_state = np.eye(self.n_subgoals)[0]
 
     def get_action(self, observation):
         flat_obs = self.observation_space.flatten(observation)

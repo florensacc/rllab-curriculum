@@ -201,6 +201,8 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             prev_hiddens, hidden_states))
         ent_ht_given_st_ht1 = np.mean(-self.hidden_given_state_prev_regressor.predict_log_likelihood(
             np.concatenate([obs, prev_hiddens], axis=1), hidden_states))
+        ent_ht_given_st = np.mean(-self.hidden_given_state_regressor.predict_log_likelihood(
+            obs, hidden_states))
         ent_at_given_st_ht = np.mean(-self.action_given_state_hidden_regressor.predict_log_likelihood(
             np.concatenate([obs, hidden_states], axis=1), actions))
         # so many terms lol
@@ -212,3 +214,4 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
         logger.record_tabular("approx_I(at;st|ht)", ent_at_given_ht - ent_at_given_st_ht)
         logger.record_tabular("approx_I(ht;st|ht-1)", ent_ht_given_ht1 - ent_ht_given_st_ht1)
         logger.record_tabular("approx_I(at;ht|st)", ent_at_given_st - ent_at_given_st_ht)
+        logger.record_tabular("approx_I(ht;ht-1|st)", ent_ht_given_st - ent_ht_given_st_ht1)

@@ -62,6 +62,10 @@ class Categorical(Distribution):
         probs = info["prob"]
         return -np.sum(probs * np.log(probs + TINY), axis=1)
 
+    def entropy_sym(self, dist_info_vars):
+        prob_var = dist_info_vars["prob"]
+        return -TT.sum(prob_var * TT.log(prob_var + TINY), axis=1)
+
     def log_likelihood_sym(self, x_var, dist_info_vars):
         probs = dist_info_vars["prob"]
         # Assume layout is N * A

@@ -7,6 +7,8 @@ import theano.tensor as TT
 import theano
 from rllab.misc import ext
 from rllab.core.lasagne_layers import OpLayer
+from rllab.core.lasagne_powered import LasagnePowered
+
 import numpy as np
 
 
@@ -30,7 +32,7 @@ def wrapped_conv(*args, **kwargs):
         return theano.tensor.nnet.conv2d(*args, **kwargs)
 
 
-class MLP(object):
+class MLP(LasagnePowered):
     def __init__(self, output_dim, hidden_sizes, hidden_nonlinearity,
                  output_nonlinearity, hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
                  output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
@@ -70,6 +72,7 @@ class MLP(object):
         self._l_out = l_out
         # self._input_var = l_in.input_var
         self._output = L.get_output(l_out)
+        LasagnePowered.__init__(self, [l_out])
 
     @property
     def input_layer(self):

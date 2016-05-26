@@ -33,6 +33,7 @@ class Env(object):
     def action_space(self):
         """
         Returns a Space object
+        :rtype: rllab.spaces.base.Space
         """
         raise NotImplementedError
 
@@ -40,6 +41,7 @@ class Env(object):
     def observation_space(self):
         """
         Returns a Space object
+        :rtype: rllab.spaces.base.Space
         """
         raise NotImplementedError
 
@@ -48,7 +50,7 @@ class Env(object):
     def action_dim(self):
         return self.action_space.flat_dim
 
-    def render(self):
+    def ender(self):
         pass
 
     def log_diagnostics(self, paths):
