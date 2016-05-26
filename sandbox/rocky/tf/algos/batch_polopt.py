@@ -18,7 +18,6 @@ def worker_init_tf(G):
     G.sess = tf.Session()
     G.sess.__enter__()
 
-
 class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
