@@ -305,4 +305,6 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             ent_st_given_st_raw = np.mean(-self.bottleneck_given_state_regressor.predict_log_likelihood(
                 raw_obs, bottleneck
             ))
+            logger.record_tabular("approx_H(st)", ent_st)
+            logger.record_tabular("approx_H(st|st_raw)", ent_st_given_st_raw)
             logger.record_tabular("approx_I(st;st_raw)", ent_st - ent_st_given_st_raw)
