@@ -40,7 +40,9 @@ class SupervisedRecurrentPolopt(RLAlgorithm):
                  optimizer=None,
                  discount=0.99,
                  n_itr=100,
+                 bonus_mode=MODES.MODE_MI_FEUDAL_SYNC,
                  bonus_coeff=1.,
+                 bottleneck_coeff=1.,
                  learning_rate=1e-3,
                  n_gradient_updates=1,
                  n_on_policy_samples=10000,
@@ -67,10 +69,12 @@ class SupervisedRecurrentPolopt(RLAlgorithm):
             env_spec=env.spec,
             policy=policy,
             # doesn't really matter which mode we pick here; we're only using it for logging
-            mode=MODES.MODE_MI_FEUDAL_SYNC,
+            mode=bonus_mode,
             regressor_args=dict(
                 use_trust_region=False,
-            )
+            ),
+            bonus_coeff=bonus_coeff,
+            bottleneck_coeff=bottleneck_coeff,
         )
 
         self.baseline = LinearFeatureBaseline(env_spec=env.spec)

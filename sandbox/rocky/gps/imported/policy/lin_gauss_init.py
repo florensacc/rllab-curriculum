@@ -3,9 +3,28 @@ import copy
 import numpy as np
 import scipy as sp
 
-from gps.algorithm.dynamics.dynamics_utils import guess_dynamics
-from gps.algorithm.policy.lin_gauss_policy import LinearGaussianPolicy
-from gps.algorithm.policy.config import INIT_LG_PD, INIT_LG_LQR
+from sandbox.rocky.gps.imported.dynamics.dynamics_utils import guess_dynamics
+from sandbox.rocky.gps.imported.policy.lin_gauss_policy import LinearGaussianPolicy
+
+# Initial Linear Gaussian Trajectory Distributions, PD-based initializer.
+# Note, PD is the default initializer type.
+INIT_LG_PD = {
+    'init_var': 10.0,
+    'pos_gains': 10.0,  # position gains
+    'vel_gains_mult': 0.01,  # velocity gains multiplier on pos_gains
+    'init_action_offset': None,
+}
+
+# Initial Linear Gaussian Trajectory distribution, LQR-based initializer.
+INIT_LG_LQR = {
+    'init_var': 1.0,
+    'stiffness': 1.0,
+    'stiffness_vel': 0.5,
+    'final_weight': 1.0,
+    # Parameters for guessing dynamics
+    'init_acc': [],  # dU vector of accelerations, default zeros.
+    'init_gains': [],  # dU vector of gains, default ones.
+}
 
 
 def init_lqr(hyperparams):
@@ -19,7 +38,7 @@ def init_lqr(hyperparams):
     x0, dX, dU = config['x0'], config['dX'], config['dU']
     dt, T = config['dt'], config['T']
 
-    #TODO: Use packing instead of assuming which indices are the joint
+    # TODO: Use packing instead of assuming which indices are the joint
     #      angles.
 
     # Notation notes:
@@ -33,7 +52,7 @@ def init_lqr(hyperparams):
 
     # Constants.
     idx_x = slice(dX)  # Slices out state.
-    idx_u = slice(dX, dX+dU)  # Slices out actions.
+    idx_u = slice(dX, dX + dU)  # Slices out actions.
 
     if len(config['init_acc']) == 0:
         config['init_acc'] = np.zeros(dU)
@@ -51,7 +70,7 @@ def init_lqr(hyperparams):
     Ltt = np.diag(np.hstack([
         config['stiffness'] * np.ones(dU),
         config['stiffness'] * config['stiffness_vel'] * np.ones(dU),
-        np.zeros(dX - dU*2), np.ones(dU)
+        np.zeros(dX - dU * 2), np.ones(dU)
     ]))
     Ltt = Ltt / config['init_var']  # Cost function - quadratic term.
     lt = -Ltt.dot(np.r_[x0, np.zeros(dU)])  # Cost function - linear term.
@@ -65,7 +84,7 @@ def init_lqr(hyperparams):
     vx_t = np.zeros(dX)  # Vx = dV/dX. Derivative of value function.
     Vxx_t = np.zeros((dX, dX))  # Vxx = ddV/dXdX.
 
-    #TODO: A lot of this code is repeated with traj_opt_lqr_python.py
+    # TODO: A lot of this code is repeated with traj_opt_lqr_python.py
     #      backward pass.
     for t in range(T - 1, -1, -1):
         # Compute Q function at this step.
@@ -104,7 +123,7 @@ def init_lqr(hyperparams):
     return LinearGaussianPolicy(K, k, PSig, cholPSig, invPSig)
 
 
-#TODO: Fix docstring
+# TODO: Fix docstring
 def init_pd(hyperparams):
     """
     This function initializes the linear-Gaussian controller as a
@@ -123,15 +142,15 @@ def init_pd(hyperparams):
     Kv = config['vel_gains_mult']
     if dU < dQ:
         K = -config['pos_gains'] * np.tile(
-            [np.eye(dU) * Kp, np.zeros((dU, dQ-dU)),
-             np.eye(dU) * Kv, np.zeros((dU, dQ-dU))],
+            [np.eye(dU) * Kp, np.zeros((dU, dQ - dU)),
+             np.eye(dU) * Kv, np.zeros((dU, dQ - dU))],
             [T, 1, 1]
         )
     else:
         K = -config['pos_gains'] * np.tile(
             np.hstack([
                 np.eye(dU) * Kp, np.eye(dU) * Kv,
-                np.zeros((dU, dX - dU*2))
+                np.zeros((dU, dX - dU * 2))
             ]), [T, 1, 1]
         )
     k = np.tile(-K[0, :, :].dot(x0), [T, 1])

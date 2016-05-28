@@ -20,6 +20,7 @@ dependencies:
     - h5py
     - matplotlib
     - opencv
+    - scikit-learn
     - pip:
         - atari-py
         - pyprind
@@ -29,7 +30,6 @@ dependencies:
         - nose2
         - pyzmq
         - msgpack-python
-        - https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.8.0-cp27-none-linux_x86_64.whl
         - git+https://github.com/Theano/Theano.git@9d0c52b9254c0d30dacbf1e2a231112ee3e3b99a#egg=Theano
         - git+https://github.com/Lasagne/Lasagne.git@19b9d958507e7300e355d7cd1a6bbff2c7726c07#egg=Lasagne
         - git+https://github.com/plotly/plotly.py.git@2594076e29584ede2d09f2aa40a8a195b3f3fc66#egg=plotly

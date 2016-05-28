@@ -2,38 +2,23 @@ from __future__ import print_function
 from __future__ import absolute_import
 from rllab import config
 
-if config.USE_TF:
-    from sandbox.rocky.tf.policies.base import StochasticPolicy
-    from sandbox.rocky.tf.core.layers_powered import LayersPowered as Powered
-    from rllab.core.serializable import Serializable
-    from sandbox.rocky.tf.spaces.discrete import Discrete
-    from sandbox.rocky.tf.distributions.categorical import Categorical
-    from sandbox.rocky.tf.distributions.bernoulli import Bernoulli
-    from sandbox.rocky.tf.misc import tensor_utils
-    from rllab.envs.base import EnvSpec
-    from rllab.misc import ext, special
-    from sandbox.rocky.tf.core.network import MLP
-    import sandbox.rocky.tf.core.tensor as TT
-    import sandbox.rocky.tf.core.layers as L
-    import tensorflow as tf
-else:
-    from rllab.policies.base import StochasticPolicy
-    from rllab.core.lasagne_powered import LasagnePowered as Powered
-    from rllab.core.serializable import Serializable
-    from rllab.spaces.discrete import Discrete
-    from rllab.distributions.categorical import Categorical
-    from rllab.distributions.bernoulli import Bernoulli
-    from rllab.misc import tensor_utils
-    from rllab.envs.base import EnvSpec
-    from rllab.misc import ext as tensor_utils
-    from rllab.misc import special
-    from rllab.core.network import MLP
-    import lasagne.layers as L
-    import theano.tensor as TT
+from rllab.policies.base import StochasticPolicy
+from rllab.core.lasagne_powered import LasagnePowered
+from rllab.core.serializable import Serializable
+from rllab.spaces.discrete import Discrete
+from rllab.distributions.categorical import Categorical
+from rllab.distributions.bernoulli import Bernoulli
+from rllab.misc import tensor_utils
+from rllab.envs.base import EnvSpec
+from rllab.misc import ext
+from rllab.misc import special
+from rllab.core.network import MLP
+import lasagne.layers as L
+import theano.tensor as TT
 import numpy as np
 
 
-class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
+class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
     """
     Structure the hierarchical policy as a recurrent network with stochastic gated recurrent unit, where the
     stochastic component of the hidden state will play the role of internal goals. Binary (or continuous) decision
@@ -51,9 +36,19 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
     - discrete decision nodes
     """
 
-    def __init__(self, env_spec, n_subgoals, hidden_sizes=(32, 32), use_decision_nodes=True,
-                 hid_hidden_sizes=None, decision_hidden_sizes=None, action_hidden_sizes=None,
-                 random_reset=False, hidden_nonlinearity=TT.tanh):
+    def __init__(self,
+                 env_spec,
+                 n_subgoals,
+                 hidden_sizes=(32, 32),
+                 use_decision_nodes=True,
+                 use_bottleneck=False,
+                 bottleneck_dim=5,
+                 hid_hidden_sizes=None,
+                 decision_hidden_sizes=None,
+                 action_hidden_sizes=None,
+                 bottleneck_hidden_sizes=None,
+                 random_reset=False,
+                 hidden_nonlinearity=TT.tanh):
         """
         :type env_spec: EnvSpec
         :param use_decision_nodes: whether to have decision units, which governs whether the subgoals should be
@@ -70,8 +65,15 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
             decision_hidden_sizes = hidden_sizes
         if action_hidden_sizes is None:
             action_hidden_sizes = hidden_sizes
+        if bottleneck_hidden_sizes is None:
+            bottleneck_hidden_sizes = hidden_sizes
 
+        self.hidden_state = None
+        self.n_subgoals = n_subgoals
+        self.use_decision_nodes = use_decision_nodes
         self.random_reset = random_reset
+        self.use_bottleneck = use_bottleneck
+        self.bottleneck_dim = bottleneck_dim
 
         l_prev_hidden = L.InputLayer(
             shape=(None, n_subgoals),
@@ -81,10 +83,26 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
             shape=(None, n_subgoals),
             name="hidden",
         )
-        l_obs = L.InputLayer(
+        l_raw_obs = L.InputLayer(
             shape=(None, env_spec.observation_space.flat_dim),
             name="obs",
         )
+
+        bottleneck_network = MLP(
+            input_layer=l_raw_obs,
+            hidden_sizes=bottleneck_hidden_sizes,
+            hidden_nonlinearity=hidden_nonlinearity,
+            output_nonlinearity=None,
+            output_dim=bottleneck_dim,
+            name="bottleneck_network"
+        )
+
+        l_bottleneck = bottleneck_network.output_layer
+
+        if self.use_bottleneck:
+            l_obs = l_bottleneck
+        else:
+            l_obs = l_raw_obs
 
         decision_network = MLP(
             input_layer=L.concat([l_obs, l_prev_hidden], name="decision_network_input"),
@@ -115,34 +133,36 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
         l_hidden_prob = hidden_network.output_layer
         l_action_prob = action_network.output_layer
 
-        self.hidden_state = None
-        self.n_subgoals = n_subgoals
-        self.use_decision_nodes = use_decision_nodes
-
-        self.f_hidden_prob = tensor_utils.compile_function(
-            [l_obs.input_var, l_prev_hidden.input_var],
+        self.f_hidden_prob = ext.compile_function(
+            [l_raw_obs.input_var, l_prev_hidden.input_var],
             L.get_output(l_hidden_prob),
         )
-        self.f_decision_prob = tensor_utils.compile_function(
-            [l_obs.input_var, l_prev_hidden.input_var],
+        self.f_decision_prob = ext.compile_function(
+            [l_raw_obs.input_var, l_prev_hidden.input_var],
             TT.reshape(L.get_output(l_decision_prob), [-1])
         )
-        self.f_action_prob = tensor_utils.compile_function(
-            [l_obs.input_var, l_hidden.input_var],
+        self.f_action_prob = ext.compile_function(
+            [l_raw_obs.input_var, l_hidden.input_var],
             L.get_output(l_action_prob),
+        )
+        self.f_bottleneck = ext.compile_function(
+            [l_raw_obs.input_var],
+            L.get_output(l_bottleneck),
         )
 
         StochasticPolicy.__init__(self, env_spec=env_spec)
         if self.use_decision_nodes:
-            Powered.__init__(self, [l_hidden_prob, l_decision_prob, l_action_prob])
+            LasagnePowered.__init__(self, [l_hidden_prob, l_decision_prob, l_action_prob])
         else:
-            Powered.__init__(self, [l_hidden_prob, l_action_prob])
+            LasagnePowered.__init__(self, [l_hidden_prob, l_action_prob])
 
         self.l_hidden_prob = l_hidden_prob
         self.l_decision_prob = l_decision_prob
         self.l_action_prob = l_action_prob
+        self.l_raw_obs = l_raw_obs
         self.l_obs = l_obs
         self.l_prev_hidden = l_prev_hidden
+        self.l_bottleneck = l_bottleneck
         self.l_hidden = l_hidden
 
         self.hidden_dist = Categorical(self.n_subgoals)
@@ -194,6 +214,12 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
         prev_hidden_var = state_info_vars["prev_hidden"]
         hidden_var = state_info_vars["hidden_state"]
 
+        if self.use_bottleneck:
+            obs_var = L.get_output(self.l_bottleneck, inputs={self.l_raw_obs: obs_var})
+            bottleneck_var = obs_var
+        else:
+            bottleneck_var = None
+
         hidden_prob_var = L.get_output(self.l_hidden_prob, inputs={
             self.l_obs: obs_var,
             self.l_prev_hidden: prev_hidden_var,
@@ -209,6 +235,8 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
             action_prob=action_prob_var,
             hidden_state=hidden_var,
         )
+        if self.use_bottleneck:
+            ret["bottleneck"] = bottleneck_var
         if self.use_decision_nodes:
             switch_goal_var = state_info_vars["switch_goal"]
             decision_prob_var = L.get_output(self.l_decision_prob, inputs={
@@ -330,4 +358,6 @@ class StochasticGRUPolicy(StochasticPolicy, Powered, Serializable):
         if self.use_decision_nodes:
             agent_info["switch_goal"] = np.asarray([switch_goal])
             agent_info["decision_prob"] = np.asarray([decision_prob])
+        if self.use_bottleneck:
+            agent_info["bottleneck"] = self.f_bottleneck([flat_obs])[0]
         return action, agent_info
