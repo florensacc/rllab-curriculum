@@ -7,6 +7,7 @@ from rllab.policies.base import StochasticPolicy
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from sandbox.rocky.hrl.envs.supervised_env import SupervisedEnv
 from rllab.sampler import parallel_sampler
+from rllab.sampler.utils import rollout
 from rllab.misc import logger
 import theano.tensor as TT
 import numpy as np
@@ -38,7 +39,7 @@ class SupervisedMarkovPolopt(RLAlgorithm):
 
     def train(self):
         training_paths = self.env.generate_training_paths()
-        self.env.test_mode()
+        # self.env.test_mode()
         parallel_sampler.populate_task(self.env, self.policy)
         obs_var = self.env.observation_space.new_tensor_variable(
             name="obs",
@@ -72,7 +73,9 @@ class SupervisedMarkovPolopt(RLAlgorithm):
                 np.sum(p["rewards"])
                 for p in paths
             ])
+            # import ipdb; ipdb.set_trace()
             logger.record_tabular("Itr", itr)
             logger.record_tabular("AverageDiscountedReturn", avg_discounted_return)
             logger.record_tabular("AverageReturn", avg_return)
             logger.dump_tabular()
+            # rollout(self.env, self.policy, max_path_length=100, animated=True)

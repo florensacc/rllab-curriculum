@@ -16,7 +16,7 @@ vg = VariantGenerator()
 vg.add("seed", [11, 111, 211, 311, 411])
 vg.add("bonus_coeff", [0.0])#0., 0.1, 0.01, 1.0, 10.0, 100.0])
 vg.add("bottleneck_coeff", [0.0])#0., 0.1, 0.01, 1.0, 10.0, 100.0])
-vg.add("learning_rate", [1e-4])#, 1e-2, 5e-2])#1e-3, 5e-3, 1e-4, 5e-4])
+vg.add("learning_rate", [1e-3])#, 1e-2, 5e-2])#1e-3, 5e-3, 1e-4, 5e-4])
 
 variants = vg.variants()
 
@@ -29,7 +29,7 @@ for v in variants:
         n_objects=5,
         object_seed=0,
         random_restart=False,
-        training_paths_ratio=0.5
+        training_paths_ratio=0.5,#1.0#0.5
     )
 
     policy = StochasticGRUPolicy(

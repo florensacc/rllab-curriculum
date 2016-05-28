@@ -9,10 +9,13 @@ from rllab.core.serializable import Serializable
 import matplotlib.pyplot as plt
 import numpy as np
 import itertools
+import sys
 
 
 class PermGridEnv(SupervisedEnv, Serializable):
     def __init__(self, size=5, n_objects=5, object_seed=None, training_paths_ratio=0.5, random_restart=True):
+        if object_seed is None:
+            object_seed = np.random.randint(sys.maxint)
         Serializable.quick_init(self, locals())
         self.size = size
         # initialize object positions

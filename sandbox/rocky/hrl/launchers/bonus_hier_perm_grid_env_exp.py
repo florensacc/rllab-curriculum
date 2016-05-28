@@ -23,10 +23,13 @@ vg.add("grid_size", [5])#, 9])
 vg.add("batch_size", [20000])#1000])#20000])
 vg.add("seed", [11, 111, 211, 311, 411])
 vg.add("bonus_coeff", [0.1])#0., 0.001, 0.01, 0.1, 1.0, 10.0])
+vg.add("bottleneck_coeff", [0.0])#0.1])#0., 0.001, 0.01, 0.1, 1.0, 10.0])
 vg.add("use_trust_region", [False])
 vg.add("step_size", [0.])
 vg.add("use_decision_nodes", [False])
-vg.add("random_reset", [True, False])
+vg.add("random_reset", [False])
+vg.add("use_bottleneck", [True])
+vg.add("bottleneck_dim", [1, 3, 5, 7])
 vg.add("mode", [
     # MODES.MODE_MARGINAL_PARSIMONY,
     # MODES.MODE_JOINT_MI_PARSIMONY,
@@ -45,6 +48,8 @@ for v in variants:
         n_subgoals=v["grid_size"],
         use_decision_nodes=v["use_decision_nodes"],
         random_reset=v["random_reset"],
+        use_bottleneck=v["use_bottleneck"],
+        bottleneck_dim=v["bottleneck_dim"],
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     # bonus_evaluator = MarginalParsimonyBonusEvaluator(
@@ -61,10 +66,11 @@ for v in variants:
         policy=policy,
         mode=v["mode"],
         bonus_coeff=v["bonus_coeff"],
+        bottleneck_coeff=v["bottleneck_coeff"],
         regressor_args=dict(
             use_trust_region=v["use_trust_region"],
             step_size=v["step_size"],
-        )
+        ),
     )
     algo = BonusTRPO(
         env=env,
@@ -79,9 +85,9 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hrl_random_reset",
-        n_parallel=2,
+        exp_prefix="hrl_bottleneck",
+        n_parallel=4,
         seed=v["seed"],
-        mode="lab_kube",
+        mode="local",
     )
-    # sys.exit(0)
+    sys.exit(0)
