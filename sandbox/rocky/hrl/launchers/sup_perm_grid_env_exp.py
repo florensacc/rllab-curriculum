@@ -29,30 +29,30 @@ for v in variants:
         n_objects=5,
         object_seed=0,
         random_restart=False,
-        training_paths_ratio=1.0
+        training_paths_ratio=0.5
     )
 
-    # policy = StochasticGRUPolicy(
-    #     env_spec=env.spec,
-    #     n_subgoals=5,
-    #     use_decision_nodes=False,
-    #     random_reset=False,
-    #     # use_bottleneck=True,
-    #     # bottleneck_dim=5,
-    # )
-    policy = CategoricalMLPPolicy(env_spec=env.spec)
-    # algo = SupervisedRecurrentPolopt(
-    #     env,
-    #     policy,
-    #     n_on_policy_samples=10000,
-    #     max_path_length=100,
-    #     bonus_mode=MODES.MODE_MI_FEUDAL_SYNC,
-    #     bonus_coeff=v["bonus_coeff"],
-    #     bottleneck_coeff=v["bottleneck_coeff"],
-    #     learning_rate=v["learning_rate"],
-    #     n_gradient_updates=100,
-    # )
-    algo = SupervisedMarkovPolopt(env, policy, n_test_samples=10000)
+    policy = StochasticGRUPolicy(
+        env_spec=env.spec,
+        n_subgoals=5,
+        use_decision_nodes=False,
+        random_reset=False,
+        # use_bottleneck=True,
+        # bottleneck_dim=5,
+    )
+    # policy = CategoricalMLPPolicy(env_spec=env.spec)
+    algo = SupervisedRecurrentPolopt(
+        env,
+        policy,
+        n_on_policy_samples=10000,
+        max_path_length=100,
+        bonus_mode=MODES.MODE_MI_FEUDAL_SYNC,
+        bonus_coeff=v["bonus_coeff"],
+        bottleneck_coeff=v["bottleneck_coeff"],
+        learning_rate=v["learning_rate"],
+        n_gradient_updates=100,
+    )
+    # algo = SupervisedMarkovPolopt(env, policy, n_test_samples=10000)
 
     run_experiment_lite(
         algo.train(),

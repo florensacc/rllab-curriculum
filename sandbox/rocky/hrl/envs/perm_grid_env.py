@@ -17,7 +17,7 @@ class PermGridEnv(SupervisedEnv, Serializable):
         self.size = size
         # initialize object positions
         rng_state = None
-        if object_seed:
+        if object_seed is not None:
             rng_state = np.random.get_state()
             np.random.seed(object_seed)
         # ensure objects are all in different positions
@@ -40,8 +40,7 @@ class PermGridEnv(SupervisedEnv, Serializable):
         self.in_test_mode = False
 
     def test_mode(self):
-        pass
-        # self.in_test_mode = True
+        self.in_test_mode = True
 
     def __getstate__(self):
         d = Serializable.__getstate__(self)
