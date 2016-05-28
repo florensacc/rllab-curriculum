@@ -29,7 +29,7 @@ class SupervisedMarkovPolopt(RLAlgorithm):
         self.env = env
         self.policy = policy
         if optimizer is None:
-            optimizer = LbfgsOptimizer(max_opt_itr=20)
+            optimizer = LbfgsOptimizer(max_opt_itr=100)
         self.optimizer = optimizer
         self.discount = discount
         self.n_itr = n_itr

@@ -40,7 +40,8 @@ class PermGridEnv(SupervisedEnv, Serializable):
         self.in_test_mode = False
 
     def test_mode(self):
-        self.in_test_mode = True
+        pass
+        # self.in_test_mode = True
 
     def __getstate__(self):
         d = Serializable.__getstate__(self)
