@@ -1,17 +1,14 @@
 import numpy as np
+from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
-from rllab.distributions.categorical import Categorical
-from rllab.misc.special import to_onehot
-from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
-from rllab.spaces.discrete import Discrete
+from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from rllab.spaces.box import Box
+from rllab.spaces.discrete import Discrete
 from rllab.spaces.product import Product
 from sandbox.rocky.hrl import hrl_utils
-from sandbox.rocky.hrl.grid_world_hrl_utils import ExactComputer
-from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 
 
 class GoalBasedMIEvaluator(LasagnePowered, Serializable):

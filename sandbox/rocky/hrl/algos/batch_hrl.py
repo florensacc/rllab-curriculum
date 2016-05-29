@@ -4,14 +4,9 @@ from rllab.algos.batch_polopt import BatchPolopt
 from rllab.core.serializable import Serializable
 from rllab.distributions.categorical import Categorical
 from rllab.misc import logger
-from rllab.misc import tensor_utils
-from rllab.misc import ext
 from rllab.misc.overrides import overrides
 from rllab.misc.special import to_onehot
-from sandbox.rocky.hrl import hrl_utils
-import theano.tensor as TT
-import theano
-from rllab.distributions.categorical import from_onehot_sym
+from sandbox.rocky.hrl.misc import hrl_utils
 
 
 class BatchHRL(BatchPolopt, Serializable):

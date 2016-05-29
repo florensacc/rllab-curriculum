@@ -1,9 +1,9 @@
 import numpy as np
 
-from sandbox.rocky.hrl import hrl_utils
 from rllab.misc import logger
-from sandbox.rocky.hrl.grid_world_hrl_utils import ExactComputer
 from rllab.spaces.product import Product
+from sandbox.rocky.hrl import hrl_utils
+from sandbox.rocky.hrl.misc.grid_world_hrl_utils import ExactComputer
 
 
 class ExactStateBasedMIEvaluator(object):

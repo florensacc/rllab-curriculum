@@ -8,12 +8,15 @@ from rllab.core.serializable import Serializable
 from rllab.spaces.discrete import Discrete
 from rllab.distributions.categorical import Categorical
 from rllab.distributions.bernoulli import Bernoulli
+from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 from rllab.misc import tensor_utils
 from rllab.envs.base import EnvSpec
 from rllab.misc import ext
 from rllab.misc import special
 from rllab.core.network import MLP
+from rllab.core.lasagne_layers import OpLayer
 import lasagne.layers as L
+import lasagne.nonlinearities as NL
 import theano.tensor as TT
 import numpy as np
 
@@ -88,16 +91,30 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             name="obs",
         )
 
-        bottleneck_network = MLP(
-            input_layer=l_raw_obs,
+        bottleneck_mean_network = MLP(
+            input_layer=L.concat([l_raw_obs, l_prev_hidden], name="bottleneck_mean_network_input"),
             hidden_sizes=bottleneck_hidden_sizes,
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=None,
             output_dim=bottleneck_dim,
-            name="bottleneck_network"
+            name="bottleneck_mean_network"
+        )
+        bottleneck_log_std_network = MLP(
+            input_layer=L.concat([l_raw_obs, l_prev_hidden], name="bottleneck_log_std_network_input"),
+            hidden_sizes=bottleneck_hidden_sizes,
+            hidden_nonlinearity=hidden_nonlinearity,
+            output_nonlinearity=None,
+            output_dim=bottleneck_dim,
+            name="bottleneck_log_std_network"
         )
 
-        l_bottleneck = bottleneck_network.output_layer
+        l_bottleneck_mean = bottleneck_mean_network.output_layer
+        l_bottleneck_log_std = bottleneck_log_std_network.output_layer
+
+        l_bottleneck = L.InputLayer(
+            shape=(None, bottleneck_dim),
+            name="bottleneck"
+        )
 
         if self.use_bottleneck:
             l_obs = l_bottleneck
@@ -134,27 +151,30 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         l_action_prob = action_network.output_layer
 
         self.f_hidden_prob = ext.compile_function(
-            [l_raw_obs.input_var, l_prev_hidden.input_var],
+            [l_obs.input_var, l_prev_hidden.input_var],
             L.get_output(l_hidden_prob),
         )
         self.f_decision_prob = ext.compile_function(
-            [l_raw_obs.input_var, l_prev_hidden.input_var],
+            [l_obs.input_var, l_prev_hidden.input_var],
             TT.reshape(L.get_output(l_decision_prob), [-1])
         )
         self.f_action_prob = ext.compile_function(
-            [l_raw_obs.input_var, l_hidden.input_var],
+            [l_obs.input_var, l_hidden.input_var],
             L.get_output(l_action_prob),
         )
-        self.f_bottleneck = ext.compile_function(
-            [l_raw_obs.input_var],
-            L.get_output(l_bottleneck),
+        self.f_bottleneck_dist = ext.compile_function(
+            [l_raw_obs.input_var, l_prev_hidden.input_var],
+            L.get_output([l_bottleneck_mean, l_bottleneck_log_std]),
         )
 
         StochasticPolicy.__init__(self, env_spec=env_spec)
+
+        used_layers = [l_hidden_prob, l_action_prob]
         if self.use_decision_nodes:
-            LasagnePowered.__init__(self, [l_hidden_prob, l_decision_prob, l_action_prob])
-        else:
-            LasagnePowered.__init__(self, [l_hidden_prob, l_action_prob])
+            used_layers += [l_decision_prob]
+        if self.use_bottleneck:
+            used_layers += [l_bottleneck_mean, l_bottleneck_log_std]
+        LasagnePowered.__init__(self, used_layers)
 
         self.l_hidden_prob = l_hidden_prob
         self.l_decision_prob = l_decision_prob
@@ -163,11 +183,14 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self.l_obs = l_obs
         self.l_prev_hidden = l_prev_hidden
         self.l_bottleneck = l_bottleneck
+        self.l_bottleneck_mean = l_bottleneck_mean
+        self.l_bottleneck_log_std = l_bottleneck_log_std
         self.l_hidden = l_hidden
 
         self.hidden_dist = Categorical(self.n_subgoals)
         self.action_dist = Categorical(self.action_space.n)
         self.decision_dist = Bernoulli(1)
+        self.bottleneck_dist = DiagonalGaussian(self.bottleneck_dim)
 
     @property
     def distribution(self):
@@ -184,8 +207,6 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @property
     def state_info_specs(self):
         specs = [
-            # ("action_prob", (self.action_space.n,)),
-            # ("hidden_prob", (self.n_subgoals,)),
             ("hidden_state", (self.n_subgoals,)),
             ("prev_hidden", (self.n_subgoals,))
         ]
@@ -193,6 +214,10 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             specs += [
                 ("decision_prob", (1,)),
                 ("switch_goal", (1,)),
+            ]
+        if self.use_bottleneck:
+            specs += [
+                ("bottleneck_epsilon", (self.bottleneck_dim,))
             ]
         return specs
 
@@ -208,6 +233,11 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 ("decision_prob", (1,)),
                 ("switch_goal", (1,)),
             ]
+        if self.use_bottleneck:
+            specs += [
+                ("bottleneck_mean", (self.bottleneck_dim,)),
+                ("bottleneck_log_std", (self.bottleneck_dim,)),
+            ]
         return specs
 
     def dist_info_sym(self, obs_var, state_info_vars):
@@ -215,10 +245,16 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         hidden_var = state_info_vars["hidden_state"]
 
         if self.use_bottleneck:
-            obs_var = L.get_output(self.l_bottleneck, inputs={self.l_raw_obs: obs_var})
-            bottleneck_var = obs_var
+            bottleneck_epsilon = state_info_vars["bottleneck_epsilon"]
+            bottleneck_mean_var, bottleneck_log_std_var = L.get_output(
+                [self.l_bottleneck_mean, self.l_bottleneck_log_std],
+                inputs={self.l_raw_obs: obs_var, self.l_prev_hidden: prev_hidden_var}
+            )
+            bottleneck_var = bottleneck_epsilon * TT.exp(bottleneck_log_std_var) + bottleneck_mean_var
+            obs_var = bottleneck_var
         else:
-            bottleneck_var = None
+            bottleneck_mean_var = None
+            bottleneck_log_std_var = None
 
         hidden_prob_var = L.get_output(self.l_hidden_prob, inputs={
             self.l_obs: obs_var,
@@ -236,7 +272,8 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             hidden_state=hidden_var,
         )
         if self.use_bottleneck:
-            ret["bottleneck"] = bottleneck_var
+            ret["bottleneck_mean"] = bottleneck_mean_var
+            ret["bottleneck_log_std"] = bottleneck_log_std_var
         if self.use_decision_nodes:
             switch_goal_var = state_info_vars["switch_goal"]
             decision_prob_var = L.get_output(self.l_decision_prob, inputs={
@@ -270,6 +307,11 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 dict(p=new_dist_info_vars["decision_prob"]),
             )
             ret += decision_kl
+        # if self.use_bottleneck:
+        #     ret += self.bottleneck_dist.kl_sym(
+        #         dict(mean=old_dist_info_vars["bottleneck_mean"], log_std=old_dist_info_vars["bottleneck_log_std"]),
+        #         dict(mean=new_dist_info_vars["bottleneck_mean"], log_std=new_dist_info_vars["bottleneck_log_std"]),
+        #     )
         return ret
 
     def likelihood_ratio_sym(self, action_var, old_dist_info_vars, new_dist_info_vars):
@@ -295,6 +337,7 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 dict(p=new_dist_info_vars["decision_prob"]),
             )
             ret *= decision_lr
+        # we don't need to compute the term for the bottleneck, since it will be handled by reparameterization
         return ret
 
     def log_likelihood_sym(self, action_var, dist_info_vars):
@@ -317,6 +360,7 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 dict(p=dist_info_vars["decision_prob"]),
             )
             ret += decision_logli
+        # we don't need to compute the term for the bottleneck, since it will be handled by reparameterization
         return ret
 
     def entropy(self, dist_info):
@@ -334,30 +378,38 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def get_action(self, observation):
         flat_obs = self.observation_space.flatten(observation)
         prev_hidden = self.hidden_state
+        agent_info = dict()
+        if self.use_bottleneck:
+            bottleneck_mean, bottleneck_log_std = [x[0] for x in self.f_bottleneck_dist([flat_obs], [prev_hidden])]
+            bottleneck_epsilon = np.random.standard_normal((self.bottleneck_dim,))
+            bottleneck = bottleneck_epsilon * np.exp(bottleneck_log_std) + bottleneck_mean
+            obs = bottleneck
+            agent_info["bottleneck_mean"] = bottleneck_mean
+            agent_info["bottleneck_log_std"] = bottleneck_log_std
+            agent_info["bottleneck_epsilon"] = bottleneck_epsilon
+            agent_info["bottleneck"] = bottleneck
+        else:
+            obs = flat_obs
         if self.use_decision_nodes:
-            decision_prob = self.f_decision_prob([flat_obs], [prev_hidden])[0]
+            decision_prob = self.f_decision_prob([obs], [prev_hidden])[0]
             switch_goal = np.random.binomial(n=1, p=decision_prob)
         else:
             switch_goal = True
             decision_prob = None
         if switch_goal:
-            hidden_prob = self.f_hidden_prob([flat_obs], [prev_hidden])[0]
+            hidden_prob = self.f_hidden_prob([obs], [prev_hidden])[0]
             self.hidden_state = np.eye(self.n_subgoals)[
                 special.weighted_sample(hidden_prob, np.arange(self.n_subgoals))
             ]
         else:
             hidden_prob = np.copy(self.hidden_state)
-        action_prob = self.f_action_prob([flat_obs], [self.hidden_state])[0]
+        action_prob = self.f_action_prob([obs], [self.hidden_state])[0]
         action = special.weighted_sample(action_prob, np.arange(self.action_space.n))
-        agent_info = dict(
-            action_prob=action_prob,
-            hidden_prob=hidden_prob,
-            hidden_state=self.hidden_state,
-            prev_hidden=prev_hidden,
-        )
+        agent_info["action_prob"] = action_prob
+        agent_info["hidden_prob"] = hidden_prob
+        agent_info["hidden_state"] = self.hidden_state
+        agent_info["prev_hidden"] = prev_hidden
         if self.use_decision_nodes:
             agent_info["switch_goal"] = np.asarray([switch_goal])
             agent_info["decision_prob"] = np.asarray([decision_prob])
-        if self.use_bottleneck:
-            agent_info["bottleneck"] = self.f_bottleneck([flat_obs])[0]
         return action, agent_info

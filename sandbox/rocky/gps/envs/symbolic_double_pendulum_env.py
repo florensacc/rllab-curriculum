@@ -2,6 +2,7 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
+from .symbolic_env import SymbolicEnv
 from rllab.spaces.box import Box
 import theano.tensor as TT
 import numpy as np
@@ -9,7 +10,7 @@ import numpy as np
 BIG = 1e6
 
 
-class SymbolicDoublePendulumEnv(DoublePendulumEnv):
+class SymbolicDoublePendulumEnv(DoublePendulumEnv, SymbolicEnv):
     def reset(self):
         self._set_state(self.initial_state)
         self._invalidate_state_caches()
@@ -24,7 +25,7 @@ class SymbolicDoublePendulumEnv(DoublePendulumEnv):
     def reward_sym(self, obs_var, action_var):
         tgt_pos = np.asarray([0, self.link_len * 2])
         cur_pos = obs_var[-2:]
-        dist = TT.sqrt(TT.sum(TT.square(cur_pos - tgt_pos))+1e-8)
+        dist = TT.sqrt(TT.sum(TT.square(cur_pos - tgt_pos)) + 1e-8)
         return -dist
 
     def get_current_obs(self):

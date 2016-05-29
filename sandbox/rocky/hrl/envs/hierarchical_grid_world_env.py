@@ -1,21 +1,23 @@
-from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import print_function
 
-from rllab.envs.base import Env, Step
-from rllab.core.serializable import Serializable
-from rllab.spaces.discrete import Discrete
-from rllab.spaces.product import Product
-from rllab.misc import logger
-from rllab.envs.grid_world_env import GridWorldEnv
-from sandbox.rocky.hrl.policies.subgoal_policy import SubgoalPolicy, FixedGoalPolicy
-from sandbox.rocky.hrl.sparray import sparray
-from rllab.sampler.utils import rollout
-import numpy as np
 import itertools
-import joblib
 import sys
+
+import joblib
+import numpy as np
 import theano
 import theano.tensor as TT
+
+from rllab.core.serializable import Serializable
+from rllab.envs.base import Env, Step
+from rllab.envs.grid_world_env import GridWorldEnv
+from rllab.misc import logger
+from rllab.sampler.utils import rollout
+from rllab.spaces.discrete import Discrete
+from rllab.spaces.product import Product
+from sandbox.rocky.hrl.misc.sparray import sparray
+from sandbox.rocky.hrl.policies.subgoal_policy import SubgoalPolicy, FixedGoalPolicy
 
 
 def expand_grid(high_grid, low_grid):

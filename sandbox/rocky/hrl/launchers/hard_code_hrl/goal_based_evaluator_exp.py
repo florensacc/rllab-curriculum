@@ -1,22 +1,19 @@
-from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import print_function
 
-from rllab.misc.instrument import stub, run_experiment_lite
+from sandbox.rocky.hrl.batch_hrl import BatchHRL
 from sandbox.rocky.hrl.hierarchical_grid_world_env import HierarchicalGridWorldEnv
+from sandbox.rocky.hrl.subgoal_baseline import SubgoalBaseline
+from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 
 from rllab.algos.trpo import TRPO
-from rllab.spaces.discrete import Discrete
-from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
-from sandbox.rocky.hrl.batch_hrl import BatchHRL
-from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
-from sandbox.rocky.hrl.subgoal_baseline import SubgoalBaseline
-from sandbox.rocky.hrl.trpo_bonus import TRPOBonus
-from sandbox.rocky.hrl.mi_evaluator.component_state_based_mi_evaluator import ComponentStateBasedMIEvaluator
-from sandbox.rocky.hrl.mi_evaluator.goal_based_mi_evaluator import GoalBasedMIEvaluator
+from rllab.spaces.discrete import Discrete
 from sandbox.rocky.hrl.mi_evaluator.exact_state_based_mi_evaluator import ExactStateBasedMIEvaluator
-import sys
+from sandbox.rocky.hrl.mi_evaluator.goal_based_mi_evaluator import GoalBasedMIEvaluator
 
 stub(globals())
 

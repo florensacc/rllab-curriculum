@@ -1,31 +1,24 @@
-from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import print_function
 
-from rllab.misc.instrument import stub, run_experiment_lite
+from sandbox.rocky.hrl.batch_hrl import BatchHRL
 from sandbox.rocky.hrl.hierarchical_grid_world_env import HierarchicalGridWorldEnv
+from sandbox.rocky.hrl.subgoal_baseline import SubgoalBaseline
+from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
 
 from rllab.algos.trpo import TRPO
-from rllab.algos.ppo import PPO
-from rllab.spaces.discrete import Discrete
-from rllab.spaces.box import Box
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
-from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
-from sandbox.rocky.hrl.batch_hrl import BatchHRL
-import lasagne.nonlinearities as NL
-from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
-from sandbox.rocky.hrl.subgoal_baseline import SubgoalBaseline
-from sandbox.rocky.hrl.trpo_bonus import TRPOBonus
-from sandbox.rocky.hrl.mi_evaluator.state_based_mi_evaluator import StateBasedMIEvaluator
-from sandbox.rocky.hrl.policies.state_goal_gaussian_mlp_policy import StateGoalCategoricalMLPPolicy
-from sandbox.rocky.hrl.regressors.state_goal_categorical_mlp_regressor import StateGoalCategoricalMLPRegressor
-from sandbox.rocky.hrl.mi_evaluator.goal_based_mi_evaluator import GoalBasedMIEvaluator
-from sandbox.rocky.hrl.mi_evaluator.exact_state_based_mi_evaluator import ExactStateBasedMIEvaluator
+from rllab.spaces.box import Box
+from rllab.spaces.discrete import Discrete
 from sandbox.rocky.hrl.mi_evaluator.continuous_exact_state_based_mi_evaluator import \
     ContinuousExactStateBasedMIEvaluator
-import sys
+from sandbox.rocky.hrl.mi_evaluator.exact_state_based_mi_evaluator import ExactStateBasedMIEvaluator
+from sandbox.rocky.hrl.mi_evaluator.state_based_mi_evaluator import StateBasedMIEvaluator
 
 stub(globals())
 

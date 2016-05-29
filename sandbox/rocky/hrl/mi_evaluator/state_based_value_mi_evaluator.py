@@ -1,12 +1,13 @@
-from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import print_function
+
+import numba
+import numpy as np
+
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from sandbox.rocky.hrl.policies.subgoal_policy import SubgoalPolicy
-from sandbox.rocky.hrl import hrl_utils
-import numpy as np
-import numba
 
 
 @numba.jit

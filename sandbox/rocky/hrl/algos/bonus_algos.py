@@ -5,23 +5,20 @@ from rllab.misc import special
 from rllab.misc import logger
 from rllab.misc import ext
 from rllab.algos import util
-from rllab import config
 
-if config.USE_TF:
-    from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
-    from sandbox.rocky.tf.misc import tensor_utils
-    from sandbox.rocky.tf.algos.npo import NPO
-    from sandbox.rocky.tf.algos.trpo import TRPO
-    from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
-else:
-    from rllab.algos.batch_polopt import BatchPolopt
-    from rllab.misc import tensor_utils
-    from rllab.algos.npo import NPO
-    from rllab.algos.trpo import TRPO
-    from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from rllab.algos.batch_polopt import BatchPolopt
+from rllab.misc import tensor_utils
+from rllab.misc.overrides import overrides
+from rllab.algos.npo import NPO
+from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 
 from rllab.core.serializable import Serializable
 from sandbox.rocky.hrl.bonus_evaluators.base import BonusEvaluator
+import theano
+import theano.tensor as TT
+
+
+floatX = theano.config.floatX
 
 
 class BonusBatchPolopt(BatchPolopt, Serializable):
@@ -37,6 +34,8 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
         Serializable.quick_init(self, locals())
         self.bonus_evaluator = bonus_evaluator
         self.fit_before_evaluate = fit_before_evaluate
+        self.adv_mean = theano.shared(np.cast[floatX](0.), "adv_mean")
+        self.adv_std = theano.shared(np.cast[floatX](1.), "adv_std")
         super(BonusBatchPolopt, self).__init__(*args, **kwargs)
 
     def log_diagnostics(self, paths):
@@ -44,6 +43,9 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
         self.bonus_evaluator.log_diagnostics(paths)
 
     def process_samples(self, itr, paths):
+
+        assert self.center_adv
+        assert not self.positive_adv
 
         baselines = []
         returns = []
@@ -80,15 +82,18 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
         average_discounted_return = \
             np.mean([path["raw_returns"][0] for path in paths])
 
+        average_bonus = np.mean([np.mean(path["bonuses"]) for path in paths])
+
         undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
 
         ent = np.mean(self.policy.distribution.entropy(agent_infos))
 
-        if self.center_adv:
-            advantages = util.center_advantages(advantages)
+        adv_mean = np.mean(advantages)
+        adv_std = np.std(advantages) + 1e-8
+        advantages = advantages - adv_mean
 
-        if self.positive_adv:
-            advantages = util.shift_advantages_to_positive(advantages)
+        self.adv_mean.set_value(np.cast[floatX](adv_mean))
+        self.adv_std.set_value(np.cast[floatX](adv_std))
 
         ev = special.explained_variance_1d(
             np.concatenate(baselines),
@@ -113,6 +118,7 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
         logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
+        logger.record_tabular('AverageBonus', average_bonus)
         logger.record_tabular('ExplainedVariance', ev)
         logger.record_tabular('NumTrajs', len(paths))
         logger.record_tabular('Entropy', ent)
@@ -128,6 +134,78 @@ class BonusNPO(NPO, BonusBatchPolopt):
     def __init__(self, *args, **kwargs):
         NPO.__init__(self, *args, **kwargs)
         BonusBatchPolopt.__init__(self, *args, **kwargs)
+
+    @overrides
+    def init_opt(self):
+        is_recurrent = int(self.policy.recurrent)
+        obs_var = self.env.observation_space.new_tensor_variable(
+            'obs',
+            extra_dims=1 + is_recurrent,
+        )
+        action_var = self.env.action_space.new_tensor_variable(
+            'action',
+            extra_dims=1 + is_recurrent,
+        )
+        advantage_var = ext.new_tensor(
+            'advantage',
+            ndim=1 + is_recurrent,
+            dtype=theano.config.floatX
+        )
+        dist = self.policy.distribution
+        old_dist_info_vars = {
+            k: ext.new_tensor(
+                'old_%s' % k,
+                ndim=2 + is_recurrent,
+                dtype=theano.config.floatX
+            ) for k in dist.dist_info_keys
+            }
+        old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
+
+        state_info_vars = {
+            k: ext.new_tensor(
+                k,
+                ndim=2 + is_recurrent,
+                dtype=theano.config.floatX
+            ) for k in self.policy.state_info_keys
+            }
+        state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
+
+        if is_recurrent:
+            valid_var = TT.matrix('valid')
+        else:
+            valid_var = None
+
+        dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
+        kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
+        lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
+
+        sym_bonus = self.bonus_evaluator.bonus_sym(obs_var, action_var, state_info_vars)
+        sym_bonus = sym_bonus / self.adv_std
+
+        if is_recurrent:
+            mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
+            surr_loss = - TT.sum(lr * advantage_var * valid_var + theano.gradient.zero_grad(lr) * sym_bonus *
+                                 valid_var) / TT.sum(valid_var)
+        else:
+            mean_kl = TT.mean(kl)
+            surr_loss = - TT.mean(lr * advantage_var + theano.gradient.zero_grad(lr) * sym_bonus)
+
+        input_list = [
+                         obs_var,
+                         action_var,
+                         advantage_var,
+                     ] + state_info_vars_list + old_dist_info_vars_list
+        if is_recurrent:
+            input_list.append(valid_var)
+
+        self.optimizer.update_opt(
+            loss=surr_loss,
+            target=self.policy,
+            leq_constraint=(mean_kl, self.step_size),
+            inputs=input_list,
+            constraint_name="mean_kl"
+        )
+        return dict()
 
     def get_itr_snapshot(self, itr, samples_data):
         return dict(
