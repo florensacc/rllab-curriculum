@@ -311,8 +311,8 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
                 )
             else:
                 self.bottleneck_given_state_prev_regressor = bottleneck_regressor_cls(
-                    input_shape=(obs_dim + policy.n_subgoals,),
-                    data_dim=policy.bottleneck_dim,
+                    input_shape=(env_spec.observation_space.flat_dim + policy.n_subgoals,),
+                    output_dim=policy.bottleneck_dim,
                     name="p_st_given_st_raw_ht1",
                     **bottleneck_regressor_args
                 )

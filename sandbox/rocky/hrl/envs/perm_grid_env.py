@@ -33,7 +33,7 @@ class PermGridEnv(SupervisedEnv, Serializable):
         n_training_perms = int(training_paths_ratio * len(all_perms))
         self.training_perms = all_perms[:n_training_perms]
         self.testing_perms = all_perms[n_training_perms:]
-        if object_seed:
+        if object_seed is not None:
             np.random.set_state(rng_state)
         self.fig = None
         self.agent_pos = None
@@ -65,6 +65,7 @@ class PermGridEnv(SupervisedEnv, Serializable):
             self.visit_order = self.testing_perms[np.random.choice(len(self.testing_perms))]
         else:
             self.visit_order = tuple(np.random.permutation(self.n_objects))
+        print(self.visit_order)
         self.n_visited = 0
         return self.get_current_obs()
 
