@@ -1,6 +1,5 @@
 from __future__ import print_function
 from __future__ import absolute_import
-from rllab import config
 
 from rllab.policies.base import StochasticPolicy
 from rllab.core.lasagne_powered import LasagnePowered

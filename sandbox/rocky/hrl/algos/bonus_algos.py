@@ -17,7 +17,6 @@ from sandbox.rocky.hrl.bonus_evaluators.base import BonusEvaluator
 import theano
 import theano.tensor as TT
 
-
 floatX = theano.config.floatX
 
 
@@ -72,43 +71,104 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
         if not self.fit_before_evaluate:
             self.bonus_evaluator.fit(paths)
 
-        observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
-        actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
-        rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
-        advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
-        env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
-        agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
+        if not self.policy.recurrent:
+            observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
+            actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
+            rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
+            advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
+            env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
+            agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
 
-        average_discounted_return = \
-            np.mean([path["raw_returns"][0] for path in paths])
+            average_discounted_return = \
+                np.mean([path["raw_returns"][0] for path in paths])
 
-        average_bonus = np.mean([np.mean(path["bonuses"]) for path in paths])
+            average_bonus = np.mean([np.mean(path["bonuses"]) for path in paths])
 
-        undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
+            undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
 
-        ent = np.mean(self.policy.distribution.entropy(agent_infos))
+            ent = np.mean(self.policy.distribution.entropy(agent_infos))
 
-        adv_mean = np.mean(advantages)
-        adv_std = np.std(advantages) + 1e-8
-        advantages = advantages - adv_mean
+            adv_mean = np.mean(advantages)
+            adv_std = np.std(advantages) + 1e-8
+            advantages = advantages - adv_mean
 
-        self.adv_mean.set_value(np.cast[floatX](adv_mean))
-        self.adv_std.set_value(np.cast[floatX](adv_std))
+            self.adv_mean.set_value(np.cast[floatX](adv_mean))
+            self.adv_std.set_value(np.cast[floatX](adv_std))
 
-        ev = special.explained_variance_1d(
-            np.concatenate(baselines),
-            np.concatenate(returns)
-        )
+            ev = special.explained_variance_1d(
+                np.concatenate(baselines),
+                np.concatenate(returns)
+            )
 
-        samples_data = dict(
-            observations=observations,
-            actions=actions,
-            rewards=rewards,
-            advantages=advantages,
-            env_infos=env_infos,
-            agent_infos=agent_infos,
-            paths=paths,
-        )
+            samples_data = dict(
+                observations=observations,
+                actions=actions,
+                rewards=rewards,
+                advantages=advantages,
+                env_infos=env_infos,
+                agent_infos=agent_infos,
+                paths=paths,
+            )
+        else:
+            max_path_length = max([len(path["advantages"]) for path in paths])
+
+            # make all paths the same length (pad extra advantages with 0)
+            obs = [path["observations"] for path in paths]
+            obs = np.array([tensor_utils.pad_tensor(ob, max_path_length) for ob in obs])
+
+            raw_adv = np.concatenate([path["advantages"] for path in paths])
+            adv_mean = np.mean(raw_adv)
+            adv_std = np.std(raw_adv) + 1e-8
+            adv = [(path["advantages"] - adv_mean) / adv_std for path in paths]
+
+            adv = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in adv])
+
+            self.adv_mean.set_value(np.cast[floatX](adv_mean))
+            self.adv_std.set_value(np.cast[floatX](adv_std))
+
+            actions = [path["actions"] for path in paths]
+            actions = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in actions])
+
+            rewards = [path["rewards"] for path in paths]
+            rewards = np.array([tensor_utils.pad_tensor(r, max_path_length) for r in rewards])
+
+            agent_infos = [path["agent_infos"] for path in paths]
+            agent_infos = tensor_utils.stack_tensor_dict_list(
+                [tensor_utils.pad_tensor_dict(p, max_path_length) for p in agent_infos]
+            )
+
+            env_infos = [path["env_infos"] for path in paths]
+            env_infos = tensor_utils.stack_tensor_dict_list(
+                [tensor_utils.pad_tensor_dict(p, max_path_length) for p in env_infos]
+            )
+
+            valids = [np.ones_like(path["returns"]) for path in paths]
+            valids = np.array([tensor_utils.pad_tensor(v, max_path_length) for v in valids])
+
+            average_discounted_return = \
+                np.mean([path["raw_returns"][0] for path in paths])
+
+            undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
+
+            average_bonus = np.mean([np.mean(path["bonuses"]) for path in paths])
+
+            ent = np.mean(self.policy.distribution.entropy(agent_infos))
+
+            ev = special.explained_variance_1d(
+                np.concatenate(baselines),
+                np.concatenate(returns)
+            )
+
+            samples_data = dict(
+                observations=obs,
+                actions=actions,
+                advantages=adv,
+                rewards=rewards,
+                valids=valids,
+                agent_infos=agent_infos,
+                env_infos=env_infos,
+                paths=paths,
+            )
 
         logger.log("fitting baseline...")
         self.baseline.fit(paths)

@@ -73,11 +73,13 @@ class ConjugateGradientOptimizer(Serializable):
 
         constraint_grads = theano.grad(constraint_term, wrt=params)
         xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
-        Hx_plain_splits = TT.grad(
-            TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
-            wrt=params,
-        )
-        Hx_plain = TT.concatenate([TT.flatten(s) for s in Hx_plain_splits])
+
+        def Hx_plain():
+            Hx_plain_splits = TT.grad(
+                TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
+                wrt=params,
+            )
+            return TT.concatenate([TT.flatten(s) for s in Hx_plain_splits])
 
         self._target = target
         self._max_constraint_val = constraint_value
@@ -105,7 +107,7 @@ class ConjugateGradientOptimizer(Serializable):
             ),
             f_Hx_plain=lambda: ext.compile_function(
                 inputs=inputs + extra_inputs + xs,
-                outputs=Hx_plain,
+                outputs=Hx_plain(),
                 log_name="f_Hx_plain",
                 mode=mode,
             ),

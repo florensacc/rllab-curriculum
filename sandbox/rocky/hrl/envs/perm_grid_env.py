@@ -65,7 +65,6 @@ class PermGridEnv(SupervisedEnv, Serializable):
             self.visit_order = self.testing_perms[np.random.choice(len(self.testing_perms))]
         else:
             self.visit_order = tuple(np.random.permutation(self.n_objects))
-        print(self.visit_order)
         self.n_visited = 0
         return self.get_current_obs()
 
