@@ -6,18 +6,24 @@ from rllab.misc import logger
 from rllab.misc import ext
 from rllab.algos import util
 
-from rllab.algos.batch_polopt import BatchPolopt
-from rllab.misc import tensor_utils
+from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
+from sandbox.rocky.tf.algos.npo import NPO
+from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from sandbox.rocky.tf.misc import tensor_utils
+# from rllab.misc import tensor_utils
 from rllab.misc.overrides import overrides
-from rllab.algos.npo import NPO
-from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+# from rllab.algos.npo import NPO
+# from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 
 from rllab.core.serializable import Serializable
 from sandbox.rocky.hrl.bonus_evaluators.base import BonusEvaluator
-import theano
-import theano.tensor as TT
+import tensorflow as tf
 
-floatX = theano.config.floatX
+
+# import theano
+# import theano.tensor as TT
+
+# floatX = theano.config.floatX
 
 
 class BonusBatchPolopt(BatchPolopt, Serializable):
@@ -33,8 +39,8 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
         Serializable.quick_init(self, locals())
         self.bonus_evaluator = bonus_evaluator
         self.fit_before_evaluate = fit_before_evaluate
-        self.adv_mean = theano.shared(np.cast[floatX](0.), "adv_mean")
-        self.adv_std = theano.shared(np.cast[floatX](1.), "adv_std")
+        self.adv_mean = tf.Variable(initial_value=0., dtype=tf.float32, name="adv_mean")
+        self.adv_std = tf.Variable(initial_value=1., dtype=tf.float32, name="adv_std")
         super(BonusBatchPolopt, self).__init__(*args, **kwargs)
 
     def log_diagnostics(self, paths):
@@ -90,10 +96,13 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
 
             adv_mean = np.mean(advantages)
             adv_std = np.std(advantages) + 1e-8
-            advantages = (advantages - adv_mean) / adv_std
+            advantages = advantages - adv_mean
 
-            self.adv_mean.set_value(np.cast[floatX](adv_mean))
-            self.adv_std.set_value(np.cast[floatX](adv_std))
+            sess = tf.get_default_session()
+            sess.run([
+                tf.assign(self.adv_mean, adv_mean),
+                tf.assign(self.adv_std, adv_std)
+            ])
 
             ev = special.explained_variance_1d(
                 np.concatenate(baselines),
@@ -123,8 +132,11 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
 
             adv = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in adv])
 
-            self.adv_mean.set_value(np.cast[floatX](adv_mean))
-            self.adv_std.set_value(np.cast[floatX](adv_std))
+            sess = tf.get_default_session()
+            sess.run([
+                tf.assign(self.adv_mean, adv_mean),
+                tf.assign(self.adv_std, adv_std)
+            ])
 
             actions = [path["actions"] for path in paths]
             actions = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in actions])
@@ -206,32 +218,27 @@ class BonusNPO(NPO, BonusBatchPolopt):
             'action',
             extra_dims=1 + is_recurrent,
         )
-        advantage_var = ext.new_tensor(
+        advantage_var = tensor_utils.new_tensor(
             'advantage',
             ndim=1 + is_recurrent,
-            dtype=theano.config.floatX
+            dtype=tf.float32,
         )
         dist = self.policy.distribution
+
         old_dist_info_vars = {
-            k: ext.new_tensor(
-                'old_%s' % k,
-                ndim=2 + is_recurrent,
-                dtype=theano.config.floatX
-            ) for k in dist.dist_info_keys
+            k: tf.placeholder(tf.float32, shape=[None] * (1 + is_recurrent) + list(shape), name='old_%s' % k)
+            for k, shape in dist.dist_info_specs
             }
         old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
 
         state_info_vars = {
-            k: ext.new_tensor(
-                k,
-                ndim=2 + is_recurrent,
-                dtype=theano.config.floatX
-            ) for k in self.policy.state_info_keys
+            k: tf.placeholder(tf.float32, shape=[None] * (1 + is_recurrent) + list(shape), name=k)
+            for k, shape in self.policy.state_info_specs
             }
         state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
 
         if is_recurrent:
-            valid_var = TT.matrix('valid')
+            valid_var = tf.placeholder(tf.float32, shape=[None, None], name="valid")
         else:
             valid_var = None
 
@@ -243,12 +250,12 @@ class BonusNPO(NPO, BonusBatchPolopt):
         sym_bonus = sym_bonus / self.adv_std
 
         if is_recurrent:
-            mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
-            surr_loss = - TT.sum(lr * advantage_var * valid_var + theano.gradient.zero_grad(lr) * sym_bonus *
-                                 valid_var) / TT.sum(valid_var)
+            mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
+            surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var + tf.stop_gradient(lr) * sym_bonus *
+                                        valid_var) / tf.reduce_sum(valid_var)
         else:
-            mean_kl = TT.mean(kl)
-            surr_loss = - TT.mean(lr * advantage_var + theano.gradient.zero_grad(lr) * sym_bonus)
+            mean_kl = tf.reduce_mean(kl)
+            surr_loss = - tf.reduce_mean(lr * advantage_var + tf.stop_gradient(lr) * sym_bonus)
 
         input_list = [
                          obs_var,

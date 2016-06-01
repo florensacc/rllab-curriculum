@@ -106,11 +106,13 @@ class NPO(BatchPolopt):
         if self.policy.recurrent:
             all_input_values += (samples_data["valids"],)
         loss_before = self.optimizer.loss(all_input_values)
+        mean_kl_before = self.optimizer.constraint_val(all_input_values)
         self.optimizer.optimize(all_input_values)
         mean_kl = self.optimizer.constraint_val(all_input_values)
         loss_after = self.optimizer.loss(all_input_values)
         logger.record_tabular('LossBefore', loss_before)
         logger.record_tabular('LossAfter', loss_after)
+        logger.record_tabular('MeanKLBefore', mean_kl_before)
         logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('dLoss', loss_before - loss_after)
         return dict()

@@ -14,6 +14,7 @@ from rllab.spaces.discrete import Discrete
 from rllab.misc import tensor_utils
 import theano.tensor as TT
 import lasagne.layers as L
+import cPickle as pickle
 
 
 class modes(object):
@@ -30,127 +31,126 @@ MODES = modes()
 
 
 class ExactHiddenRegressor(object):
-    def __init__(self, env_spec, policy, exact_entropy):
+    def __init__(self, env_spec, policy, exact_entropy, target_policy):
         """
         :type env_spec: EnvSpec
         :type policy: StochasticGRUPolicy
         :type exact_entropy: bool
         """
         self.env_spec = env_spec
-        self.policy = policy
         self.exact_entropy = exact_entropy
+        self.policy = policy
+        self.target_policy = target_policy
 
     def fit(self, xs, ys):
-        # no fitting needed
-        pass
+        self.target_policy.set_param_values(self.policy.get_param_values())
 
     def predict_log_likelihood(self, xs, ys):
         # xs: concatenation of state and previous hidden state
-        if self.policy.use_bottleneck:
-            split_idx = self.policy.bottleneck_dim
+        if self.target_policy.use_bottleneck:
+            split_idx = self.target_policy.bottleneck_dim
         else:
             split_idx = self.env_spec.observation_space.flat_dim
         obs, prev_hiddens = np.split(xs, [split_idx], axis=1)
         hiddens = ys
-        hidden_prob = self.policy.f_hidden_prob(obs, prev_hiddens)
+        hidden_prob = self.target_policy.f_hidden_prob(obs, prev_hiddens)
         if self.exact_entropy:
-            return -self.policy.hidden_dist.entropy(dict(prob=hidden_prob))
+            return -self.target_policy.hidden_dist.entropy(dict(prob=hidden_prob))
         else:
-            return self.policy.hidden_dist.log_likelihood(hiddens, dict(prob=hidden_prob))
+            return self.target_policy.hidden_dist.log_likelihood(hiddens, dict(prob=hidden_prob))
 
     def log_likelihood_sym(self, x_var, y_var):
         # xs: concatenation of state and previous hidden state
-        if self.policy.use_bottleneck:
-            split_idx = self.policy.bottleneck_dim
+        if self.target_policy.use_bottleneck:
+            split_idx = self.target_policy.bottleneck_dim
         else:
             split_idx = self.env_spec.observation_space.flat_dim
         obs_var = x_var[:, :split_idx]
         prev_hidden_var = x_var[:, split_idx:]
         hidden_var = TT.cast(y_var, 'int32')
         hidden_prob_var = L.get_output(
-            self.policy.l_hidden_prob,
-            {self.policy.l_obs: obs_var, self.policy.l_prev_hidden: prev_hidden_var}
+            self.target_policy.l_hidden_prob,
+            {self.target_policy.l_obs: obs_var, self.target_policy.l_prev_hidden: prev_hidden_var}
         )
         if self.exact_entropy:
-            return -self.policy.hidden_dist.entropy_sym(dict(prob=hidden_prob_var))
+            return -self.target_policy.hidden_dist.entropy_sym(dict(prob=hidden_prob_var))
         else:
-            return self.policy.hidden_dist.log_likelihood_sym(hidden_var, dict(prob=hidden_prob_var))
+            return self.target_policy.hidden_dist.log_likelihood_sym(hidden_var, dict(prob=hidden_prob_var))
 
 
 class ExactActionRegressor(object):
-    def __init__(self, env_spec, policy, exact_entropy):
+    def __init__(self, env_spec, policy, exact_entropy, target_policy):
         """
         :type env_spec: EnvSpec
         :type policy: StochasticGRUPolicy
         :type exact_entropy: bool
         """
         self.env_spec = env_spec
-        self.policy = policy
         self.exact_entropy = exact_entropy
+        self.policy = policy
+        self.target_policy = target_policy
 
     def fit(self, xs, ys):
-        # no fitting needed
-        pass
+        self.target_policy.set_param_values(self.policy.get_param_values())
 
     def predict_log_likelihood(self, xs, ys):
         # xs: concatenation of state and hidden state
-        if self.policy.use_bottleneck:
-            split_idx = self.policy.bottleneck_dim
+        if self.target_policy.use_bottleneck:
+            split_idx = self.target_policy.bottleneck_dim
         else:
             split_idx = self.env_spec.observation_space.flat_dim
         obs, hiddens = np.split(xs, [split_idx], axis=1)
         actions = ys
-        action_prob = self.policy.f_action_prob(obs, hiddens)
+        action_prob = self.target_policy.f_action_prob(obs, hiddens)
         if self.exact_entropy:
-            return -self.policy.action_dist.entropy(dict(prob=action_prob))
+            return -self.target_policy.action_dist.entropy(dict(prob=action_prob))
         else:
-            return self.policy.action_dist.log_likelihood(actions, dict(prob=action_prob))
+            return self.target_policy.action_dist.log_likelihood(actions, dict(prob=action_prob))
 
     def log_likelihood_sym(self, x_var, y_var):
         # xs: concatenation of state and previous hidden state
-        if self.policy.use_bottleneck:
-            split_idx = self.policy.bottleneck_dim
+        if self.target_policy.use_bottleneck:
+            split_idx = self.target_policy.bottleneck_dim
         else:
             split_idx = self.env_spec.observation_space.flat_dim
         obs_var = x_var[:, :split_idx]
         hidden_var = x_var[:, split_idx:]
         action_var = TT.cast(y_var, 'int32')
         action_prob_var = L.get_output(
-            self.policy.l_action_prob,
-            {self.policy.l_obs: obs_var, self.policy.l_hidden: hidden_var}
+            self.target_policy.l_action_prob,
+            {self.target_policy.l_obs: obs_var, self.target_policy.l_hidden: hidden_var}
         )
         if self.exact_entropy:
-            return -self.policy.action_dist.entropy_sym(dict(prob=action_prob_var))
+            return -self.target_policy.action_dist.entropy_sym(dict(prob=action_prob_var))
         else:
-            return self.policy.action_dist.log_likelihood_sym(action_var, dict(prob=action_prob_var))
+            return self.target_policy.action_dist.log_likelihood_sym(action_var, dict(prob=action_prob_var))
 
 
 class ExactBottleneckRegressor(object):
-    def __init__(self, env_spec, policy, exact_entropy):
+    def __init__(self, env_spec, policy, exact_entropy, target_policy):
         """
         :type env_spec: EnvSpec
         :type policy: StochasticGRUPolicy
         :type exact_entropy: bool
         """
-        assert policy.use_bottleneck
         self.env_spec = env_spec
-        self.policy = policy
         self.exact_entropy = exact_entropy
+        self.policy = policy
+        self.target_policy = target_policy
 
     def fit(self, xs, ys):
-        # no fitting needed
-        pass
+        self.target_policy.set_param_values(self.policy.get_param_values())
 
     def predict_log_likelihood(self, xs, ys):
         # xs: concatenation of state and prev hidden state
         split_idx = self.env_spec.observation_space.flat_dim
         obs, prev_hiddens = np.split(xs, [split_idx], axis=1)
         bottlenecks = ys
-        means, log_stds = self.policy.f_bottleneck_dist(obs, prev_hiddens)
+        means, log_stds = self.target_policy.f_bottleneck_dist(obs, prev_hiddens)
         if self.exact_entropy:
-            return -self.policy.bottleneck_dist.entropy(dict(mean=means, log_std=log_stds))
+            return -self.target_policy.bottleneck_dist.entropy(dict(mean=means, log_std=log_stds))
         else:
-            return self.policy.bottleneck_dist.log_likelihood(bottlenecks, dict(mean=means, log_std=log_stds))
+            return self.target_policy.bottleneck_dist.log_likelihood(bottlenecks, dict(mean=means, log_std=log_stds))
 
     def log_likelihood_sym(self, x_var, y_var):
         # xs: concatenation of state and previous hidden state
@@ -159,23 +159,23 @@ class ExactBottleneckRegressor(object):
         prev_hidden_var = x_var[:, split_idx:]
         bottleneck_var = y_var
         mean_var, log_std_var = L.get_output(
-            [self.policy.l_bottleneck_mean, self.policy.l_bottleneck_log_std],
-            {self.policy.l_raw_obs: obs_var, self.policy.l_prev_hidden: prev_hidden_var}
+            [self.target_policy.l_bottleneck_mean, self.target_policy.l_bottleneck_log_std],
+            {self.target_policy.l_raw_obs: obs_var, self.target_policy.l_prev_hidden: prev_hidden_var}
         )
         if self.exact_entropy:
-            return -self.policy.bottleneck_dist.entropy_sym(dict(mean=mean_var, log_std=log_std_var))
+            return -self.target_policy.bottleneck_dist.entropy_sym(dict(mean=mean_var, log_std=log_std_var))
         else:
-            return self.policy.bottleneck_dist.log_likelihood_sym(bottleneck_var,
-                                                                  dict(mean=mean_var, log_std=log_std_var))
+            return self.target_policy.bottleneck_dist.log_likelihood_sym(bottleneck_var,
+                                                                         dict(mean=mean_var, log_std=log_std_var))
 
 
-def new_exact_regressor(env_spec, policy, regressor_type, exact_entropy):
+def new_exact_regressor(env_spec, policy, regressor_type, exact_entropy, target_policy):
     if regressor_type == "p_ht_given_st_ht1":
-        return ExactHiddenRegressor(env_spec, policy, exact_entropy)
+        return ExactHiddenRegressor(env_spec, policy, exact_entropy, target_policy)
     elif regressor_type == "p_at_given_st_ht":
-        return ExactActionRegressor(env_spec, policy, exact_entropy)
+        return ExactActionRegressor(env_spec, policy, exact_entropy, target_policy)
     elif regressor_type == "p_st_given_st_raw_ht1":
-        return ExactBottleneckRegressor(env_spec, policy, exact_entropy)
+        return ExactBottleneckRegressor(env_spec, policy, exact_entropy, target_policy)
     else:
         raise NotImplementedError
 
@@ -197,6 +197,7 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             bottleneck_regressor_args=None,
             use_exact_regressor=False,
             exact_entropy=False,
+            exact_stop_gradient=False,
     ):
         """
         :type env_spec: EnvSpec
@@ -224,6 +225,7 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
                 This mode will only compute the bottleneck term as the bonus, if a bottleneck is used. Otherwise the
                 bonus is 0
         :param use_exact_regressor: whether to use the exact quantity when available
+        :param exact_stop_gradient: whether to take gradient through the policy when using it for the regressor
         :param exact_entropy: when exact quantity is available, whether to use log probability or entropy
         """
         # assert mode in MODES
@@ -231,6 +233,9 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
         self.env_spec = env_spec
         self.policy = policy
         assert isinstance(env_spec.action_space, Discrete)
+        assert not policy.use_decision_nodes
+        assert policy.use_bottleneck
+        assert not policy.random_reset
         if regressor_args is None:
             regressor_args = dict()
         if hidden_regressor_cls is None:
@@ -258,9 +263,14 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             name="p_ht_given_ht-1",
             **hidden_regressor_args
         )
+        if exact_stop_gradient:
+            target_policy = pickle.loads(pickle.dumps(policy))
+            target_policy.set_param_values(policy.get_param_values())
+        else:
+            target_policy = policy
         if use_exact_regressor:
             self.hidden_given_state_prev_regressor = new_exact_regressor(
-                env_spec, policy, "p_ht_given_st_ht1", exact_entropy
+                env_spec, policy, "p_ht_given_st_ht1", exact_entropy, target_policy
             )
         else:
             self.hidden_given_state_prev_regressor = hidden_regressor_cls(
@@ -289,7 +299,7 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
         )
         if use_exact_regressor:
             self.action_given_state_hidden_regressor = new_exact_regressor(
-                env_spec, policy, "p_at_given_st_ht", exact_entropy
+                env_spec, policy, "p_at_given_st_ht", exact_entropy, target_policy
             )
         else:
             self.action_given_state_hidden_regressor = action_regressor_cls(
@@ -307,7 +317,7 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             )
             if use_exact_regressor:
                 self.bottleneck_given_state_prev_regressor = new_exact_regressor(
-                    env_spec, policy, "p_st_given_st_raw_ht1", exact_entropy
+                    env_spec, policy, "p_st_given_st_raw_ht1", exact_entropy, target_policy
                 )
             else:
                 self.bottleneck_given_state_prev_regressor = bottleneck_regressor_cls(

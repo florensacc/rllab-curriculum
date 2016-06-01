@@ -41,6 +41,7 @@ class BatchPolopt(RLAlgorithm):
             positive_adv=False,
             store_paths=False,
             whole_paths=True,
+            fixed_horizon=False,
             **kwargs
     ):
         """
@@ -77,6 +78,7 @@ class BatchPolopt(RLAlgorithm):
         self.positive_adv = positive_adv
         self.store_paths = store_paths
         self.whole_paths = whole_paths
+        self.fixed_horizon = fixed_horizon
         self.init_opt()
 
     def start_worker(self):
@@ -203,7 +205,10 @@ class BatchPolopt(RLAlgorithm):
                 paths=paths,
             )
         else:
-            max_path_length = max([len(path["advantages"]) for path in paths])
+            if self.fixed_horizon:
+                max_path_length = self.max_path_length
+            else:
+                max_path_length = max([len(path["advantages"]) for path in paths])
 
             # make all paths the same length (pad extra advantages with 0)
             obs = [path["observations"] for path in paths]

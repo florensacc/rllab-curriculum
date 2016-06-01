@@ -54,3 +54,21 @@ def concat_tensor_dict_list(tensor_dict_list):
 
 def to_onehot_sym(inds, dim):
     return tf.one_hot(inds, depth=dim, on_value=1, off_value=0)
+
+
+def pad_tensor(x, max_len):
+    return np.concatenate([
+        x,
+        np.tile(np.zeros_like(x[0]), (max_len - len(x),) + (1,) * np.ndim(x[0]))
+    ])
+
+
+def pad_tensor_dict(tensor_dict, max_len):
+    keys = tensor_dict.keys()
+    ret = dict()
+    for k in keys:
+        if isinstance(tensor_dict[k], dict):
+            ret[k] = pad_tensor_dict(tensor_dict[k], max_len)
+        else:
+            ret[k] = pad_tensor(tensor_dict[k], max_len)
+    return ret

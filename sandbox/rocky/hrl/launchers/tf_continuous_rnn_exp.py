@@ -1,13 +1,14 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-from sandbox.rocky.hrl.policies.continuous_rnn_policy import ContinuousRNNPolicy
+from sandbox.rocky.hrl.policies.tf_continuous_rnn_policy import ContinuousRNNPolicy
 # from sandbox.rocky.hrl.algos.alt_bonus_algos import AltNPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-# from sandbox.rocky.tf.algos.trpo import TRPO#hrl.algos.tf_bonus_algos import BonusTRPO
-from rllab.algos.ppo import PPO
+from sandbox.rocky.tf.algos.trpo import TRPO#hrl.algos.tf_bonus_algos import BonusTRPO
+# from rllab.algos.ppo import PPO
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rocky.hrl.envs.perm_grid_env import PermGridEnv
+from sandbox.rocky.tf.envs.base import TfEnv
 import sys
 
 stub(globals())
@@ -24,14 +25,15 @@ variants = vg.variants()
 print("#Experiments: %d" % len(variants))
 
 for v in variants:
-    env = PermGridEnv(size=v["grid_size"], n_objects=v["grid_size"], object_seed=0)
+    env = TfEnv(PermGridEnv(size=v["grid_size"], n_objects=v["grid_size"], object_seed=0))
     policy = ContinuousRNNPolicy(
         env_spec=env.spec,
         hidden_state_dim=v["grid_size"],
         bottleneck_dim=5,
+        fixed_horizon=100,
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    algo = PPO(
+    algo = TRPO(
         env=env,
         policy=policy,
         baseline=baseline,
@@ -39,14 +41,15 @@ for v in variants:
         step_size=0.01,
         max_path_length=100,
         n_itr=500,
+        fixed_horizon=True,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hier_cont_2",
+        exp_prefix="hier_cont_tf",
         n_parallel=1,
         seed=v["seed"],
-        mode="lab_kube",
+        mode="local",
         # env=dict(THEANO_FLAGS="optimizer=None,mode=FAST_COMPILE")
     )
     # sys.exit()

@@ -1,26 +1,23 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-from rllab.policies.base import StochasticPolicy
-from rllab.core.lasagne_powered import LasagnePowered
+from sandbox.rocky.tf.policies.base import StochasticPolicy
+from sandbox.rocky.tf.core.layers_powered import LayersPowered
+import sandbox.rocky.tf.core.layers as L
 from rllab.core.serializable import Serializable
-from rllab.spaces.discrete import Discrete
-from rllab.distributions.recurrent_categorical import RecurrentCategorical
-from rllab.distributions.recurrent_diagonal_gaussian import RecurrentDiagonalGaussian
-from rllab.misc import tensor_utils
+from sandbox.rocky.tf.spaces.discrete import Discrete
+from sandbox.rocky.tf.distributions.recurrent_diagonal_gaussian import RecurrentDiagonalGaussian
+from sandbox.rocky.tf.distributions.recurrent_categorical import RecurrentCategorical
+from sandbox.rocky.tf.misc import tensor_utils
+from sandbox.rocky.tf.core.network import MLP
 from rllab.envs.base import EnvSpec
 from rllab.misc import ext
 from rllab.misc import special
-from rllab.core.network import MLP
-from rllab.core.lasagne_layers import OpLayer
-import lasagne.layers as L
-import lasagne.nonlinearities as NL
-import theano
-import theano.tensor as TT
+import tensorflow as tf
 import numpy as np
 
 
-class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
+class ContinuousRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
     """
     Structure the hierarchical policy as a recurrent network with continuous stochastic hidden units, which will play
     the role of internal goals.
@@ -30,13 +27,14 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                  env_spec,
                  hidden_state_dim,
                  bottleneck_dim,
+                 fixed_horizon,
                  hidden_sizes=(32, 32),
                  use_decision_nodes=True,
                  hid_hidden_sizes=None,
                  decision_hidden_sizes=None,
                  action_hidden_sizes=None,
                  bottleneck_hidden_sizes=None,
-                 hidden_nonlinearity=TT.tanh):
+                 hidden_nonlinearity=tf.tanh):
         """
         :type env_spec: EnvSpec
         :param use_decision_nodes: whether to have decision units, which governs whether the subgoals should be
@@ -60,6 +58,7 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self.hidden_state_dim = hidden_state_dim
         self.use_decision_nodes = use_decision_nodes
         self.bottleneck_dim = bottleneck_dim
+        self.fixed_horizon = fixed_horizon
 
         l_prev_hidden = L.InputLayer(
             shape=(None, hidden_state_dim),
@@ -121,7 +120,7 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
             input_layer=L.concat([l_obs, l_hidden], name="action_network_input"),
             hidden_sizes=action_hidden_sizes,
             hidden_nonlinearity=hidden_nonlinearity,
-            output_nonlinearity=TT.nnet.softmax,  # tf.nn.softmax,
+            output_nonlinearity=tf.nn.softmax,
             output_dim=env_spec.action_space.n,
             name="action_network"
         )
@@ -131,15 +130,15 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         l_action_prob = action_network.output_layer
 
-        self.f_hidden_dist = ext.compile_function(
+        self.f_hidden_dist = tensor_utils.compile_function(
             [l_obs.input_var, l_prev_hidden.input_var],
             L.get_output([l_hidden_mean, l_hidden_log_std]),
         )
-        self.f_action_prob = ext.compile_function(
+        self.f_action_prob = tensor_utils.compile_function(
             [l_obs.input_var, l_hidden.input_var],
             L.get_output(l_action_prob),
         )
-        self.f_bottleneck_dist = ext.compile_function(
+        self.f_bottleneck_dist = tensor_utils.compile_function(
             [l_raw_obs.input_var, l_prev_hidden.input_var],
             L.get_output([l_bottleneck_mean, l_bottleneck_log_std]),
         )
@@ -147,7 +146,7 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         StochasticPolicy.__init__(self, env_spec=env_spec)
 
         used_layers = [l_hidden_mean, l_hidden_log_std, l_action_prob, l_bottleneck_mean, l_bottleneck_log_std]
-        LasagnePowered.__init__(self, used_layers)
+        LayersPowered.__init__(self, used_layers)
 
         self.l_hidden_mean = l_hidden_mean
         self.l_hidden_log_std = l_hidden_log_std
@@ -163,21 +162,6 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self.hidden_dist = RecurrentDiagonalGaussian(self.hidden_state_dim)
         self.action_dist = RecurrentCategorical(self.action_space.n)
         self.bottleneck_dist = RecurrentDiagonalGaussian(self.bottleneck_dim)
-
-        state_info_vars = {
-            k: ext.new_tensor(
-                k,
-                ndim=3,
-                dtype=theano.config.floatX
-            ) for k in self.state_info_keys
-            }
-        state_info_vars_list = [state_info_vars[k] for k in self.state_info_keys]
-        raw_obs_var = self.observation_space.new_tensor_variable(name="obs", extra_dims=2)
-
-        self.f_dist_info = ext.compile_function(
-            [raw_obs_var] + state_info_vars_list,
-            self.dist_info_sym(raw_obs_var, state_info_vars)
-        )
 
     @property
     def distribution(self):
@@ -210,49 +194,36 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
         ]
         return specs
 
-    def dist_info(self, obs, state_infos):
-        state_info_list = [state_infos[k] for k in self.state_info_keys]
-        return self.f_dist_info(obs, *state_info_list)
-
     def dist_info_sym(self, obs_var, state_info_vars):
         # obs: N * T * S
-        # prev_hidden_var = state_info_vars["prev_hidden"]
         bottleneck_epsilon = state_info_vars["bottleneck_epsilon"]
         hidden_epsilon = state_info_vars["hidden_epsilon"]
 
-        N = obs_var.shape[0]
+        N = tf.shape(obs_var)[0]
 
-        def rnn_step(cur_obs, cur_bottleneck_epsilon, cur_hidden_epsilon, prev_hidden, prev_action_prob):
+        prev_hidden = tf.zeros(tf.pack([N, self.hidden_state_dim]))
+        action_probs = []
+
+        for t in range(self.fixed_horizon):
+            cur_obs = obs_var[:, t, :]
+            cur_bottleneck_epsilon = bottleneck_epsilon[:, t, :]
+            cur_hidden_epsilon = hidden_epsilon[:, t, :]
             bottleneck_mean_var, bottleneck_log_std_var = L.get_output(
                 [self.l_bottleneck_mean, self.l_bottleneck_log_std],
                 inputs={self.l_raw_obs: cur_obs, self.l_prev_hidden: prev_hidden}
             )
-            bottleneck = cur_bottleneck_epsilon * TT.exp(bottleneck_log_std_var) + bottleneck_mean_var
-            # bottleneck = bottleneck_mean_var
+            bottleneck = cur_bottleneck_epsilon * tf.exp(bottleneck_log_std_var) + bottleneck_mean_var
             hidden_mean_var, hidden_log_std_var = L.get_output(
                 [self.l_hidden_mean, self.l_hidden_log_std],
                 inputs={self.l_obs: bottleneck, self.l_prev_hidden: prev_hidden}
             )
-            # hidden = hidden_mean_var
-            hidden = cur_hidden_epsilon * TT.exp(hidden_log_std_var) + hidden_mean_var
+            hidden = cur_hidden_epsilon * tf.exp(hidden_log_std_var) + hidden_mean_var
             action_prob_var = L.get_output(self.l_action_prob, inputs={self.l_obs: bottleneck, self.l_hidden: hidden})
-            return hidden, action_prob_var
 
-        all_hidden, all_action_prob = theano.scan(
-            rnn_step,
-            truncate_gradient=10,
-            sequences=[
-                obs_var.dimshuffle(1, 0, 2),
-                bottleneck_epsilon.dimshuffle(1, 0, 2),
-                hidden_epsilon.dimshuffle(1, 0, 2),
-            ],
-            outputs_info=[
-                TT.zeros((N, self.hidden_state_dim)),
-                TT.zeros((N, self.action_space.n)),
-            ]
-        )[0]
+            prev_hidden = hidden
+            action_probs.append(action_prob_var)
 
-        all_action_prob = all_action_prob.dimshuffle(1, 0, 2)
+        all_action_prob = tf.transpose(tf.pack(action_probs), [1, 0, 2])
 
         return dict(
             action_prob=all_action_prob,

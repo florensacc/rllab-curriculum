@@ -71,6 +71,7 @@ class ConjugateGradientOptimizer(Serializable):
 
         constraint_grads = tf.gradients(constraint_term, params)
         xs = tuple([tensor_utils.new_tensor_like("random", p) for p in params])
+
         Hx_plain_splits = tf.gradients(
             tf.reduce_sum(
                 tf.pack([tf.reduce_sum(g * x) for g, x in itertools.izip(constraint_grads, xs)])
