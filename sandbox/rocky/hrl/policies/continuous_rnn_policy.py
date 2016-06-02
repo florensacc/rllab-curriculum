@@ -31,7 +31,6 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                  hidden_state_dim,
                  bottleneck_dim,
                  hidden_sizes=(32, 32),
-                 use_decision_nodes=True,
                  hid_hidden_sizes=None,
                  decision_hidden_sizes=None,
                  action_hidden_sizes=None,
@@ -39,9 +38,6 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                  hidden_nonlinearity=TT.tanh):
         """
         :type env_spec: EnvSpec
-        :param use_decision_nodes: whether to have decision units, which governs whether the subgoals should be
-        resampled
-        :param random_reset: whether to randomly set the first subgoal
         """
         Serializable.quick_init(self, locals())
 
@@ -58,7 +54,6 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         self.hidden_state = None
         self.hidden_state_dim = hidden_state_dim
-        self.use_decision_nodes = use_decision_nodes
         self.bottleneck_dim = bottleneck_dim
 
         l_prev_hidden = L.InputLayer(
@@ -240,7 +235,7 @@ class ContinuousRNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         all_hidden, all_action_prob = theano.scan(
             rnn_step,
-            truncate_gradient=10,
+            # truncate_gradient=10,
             sequences=[
                 obs_var.dimshuffle(1, 0, 2),
                 bottleneck_epsilon.dimshuffle(1, 0, 2),

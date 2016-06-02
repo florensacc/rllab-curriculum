@@ -29,7 +29,7 @@ class ContinuousRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
                  bottleneck_dim,
                  fixed_horizon,
                  hidden_sizes=(32, 32),
-                 use_decision_nodes=True,
+                 deterministic_bottleneck=False,
                  hid_hidden_sizes=None,
                  decision_hidden_sizes=None,
                  action_hidden_sizes=None,
@@ -37,9 +37,6 @@ class ContinuousRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
                  hidden_nonlinearity=tf.tanh):
         """
         :type env_spec: EnvSpec
-        :param use_decision_nodes: whether to have decision units, which governs whether the subgoals should be
-        resampled
-        :param random_reset: whether to randomly set the first subgoal
         """
         Serializable.quick_init(self, locals())
 
@@ -56,9 +53,9 @@ class ContinuousRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
 
         self.hidden_state = None
         self.hidden_state_dim = hidden_state_dim
-        self.use_decision_nodes = use_decision_nodes
         self.bottleneck_dim = bottleneck_dim
         self.fixed_horizon = fixed_horizon
+        self.deterministic_bottleneck = deterministic_bottleneck
 
         l_prev_hidden = L.InputLayer(
             shape=(None, hidden_state_dim),
@@ -261,6 +258,8 @@ class ContinuousRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
         prev_hidden = self.hidden_state
         bottleneck_mean, bottleneck_log_std = [x[0] for x in self.f_bottleneck_dist([flat_obs], [prev_hidden])]
         bottleneck_epsilon = np.random.standard_normal((self.bottleneck_dim,))
+        if self.deterministic_bottleneck:
+            bottleneck_epsilon = np.zeros((self.bottleneck_dim,))
         bottleneck = bottleneck_epsilon * np.exp(bottleneck_log_std) + bottleneck_mean
         obs = bottleneck
         hidden_mean, hidden_log_std = [x[0] for x in self.f_hidden_dist([obs], [prev_hidden])]

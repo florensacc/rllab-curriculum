@@ -45,6 +45,7 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
                  hidden_sizes=(32, 32),
                  use_decision_nodes=False,
                  use_bottleneck=False,
+                 deterministic_bottleneck=False,
                  bottleneck_dim=5,
                  hid_hidden_sizes=None,
                  decision_hidden_sizes=None,
@@ -80,6 +81,7 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self.random_reset = random_reset
         self.use_bottleneck = use_bottleneck
         self.bottleneck_dim = bottleneck_dim
+        self.deterministic_bottleneck = deterministic_bottleneck
 
         l_prev_hidden = L.InputLayer(
             shape=(None, n_subgoals),
@@ -403,6 +405,8 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         if self.use_bottleneck:
             bottleneck_mean, bottleneck_log_std = [x[0] for x in self.f_bottleneck_dist([flat_obs], [prev_hidden])]
             bottleneck_epsilon = np.random.standard_normal((self.bottleneck_dim,))
+            if self.deterministic_bottleneck:
+                bottleneck_epsilon = np.zeros_like(bottleneck_mean)
             bottleneck = bottleneck_epsilon * np.exp(bottleneck_log_std) + bottleneck_mean
             obs = bottleneck
             agent_info["bottleneck_mean"] = bottleneck_mean

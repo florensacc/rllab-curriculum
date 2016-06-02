@@ -28,9 +28,10 @@ for v in variants:
     env = TfEnv(PermGridEnv(size=v["grid_size"], n_objects=v["grid_size"], object_seed=0))
     policy = ContinuousRNNPolicy(
         env_spec=env.spec,
-        hidden_state_dim=v["grid_size"],
-        bottleneck_dim=5,
+        hidden_state_dim=1,
+        bottleneck_dim=3,
         fixed_horizon=100,
+        deterministic_bottleneck=True,
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     algo = TRPO(
@@ -46,10 +47,10 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hier_cont_tf",
+        exp_prefix="hier_cont_tf_dethalf",
         n_parallel=1,
         seed=v["seed"],
-        mode="local",
+        mode="lab_kube",
         # env=dict(THEANO_FLAGS="optimizer=None,mode=FAST_COMPILE")
     )
     # sys.exit()

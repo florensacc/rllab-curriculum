@@ -460,10 +460,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("data_path", type=str)
     parser.add_argument("--debug", action="store_true", default=False)
+    parser.add_argument("--port", type=int, default=5000)
     args = parser.parse_args(sys.argv[1:])
     print("Importing data from {path}...".format(path=args.data_path))
     reload_data()
-    port = 5000
+    # port = 5000
     # url = "http://0.0.0.0:{0}".format(port)
-    print("Done! View http://localhost:5000 in your browser")
-    app.run(host='0.0.0.0', debug=args.debug)
+    print("Done! View http://localhost:%d in your browser" % args.port)
+    app.run(host='0.0.0.0', port=args.port, debug=args.debug)

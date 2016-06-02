@@ -27,7 +27,7 @@ for v in variants:
     env = PermGridEnv(size=v["grid_size"], n_objects=v["grid_size"], object_seed=0)
     policy = ContinuousRNNPolicy(
         env_spec=env.spec,
-        hidden_state_dim=v["grid_size"],
+        hidden_state_dim=1,#v["grid_size"],
         bottleneck_dim=5,
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
@@ -43,10 +43,8 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hier_cont_2",
+        exp_prefix="hier_cont_no_truncate",
         n_parallel=1,
         seed=v["seed"],
-        mode="lab_kube",
-        # env=dict(THEANO_FLAGS="optimizer=None,mode=FAST_COMPILE")
+        mode="local",
     )
-    # sys.exit()

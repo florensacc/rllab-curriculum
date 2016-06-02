@@ -16,23 +16,25 @@ vg = VariantGenerator()
 vg.add("grid_size", [5])  # , 9])
 vg.add("batch_size", [50000])  # 1000])#20000])
 vg.add("seed", [11, 111, 211, 311, 411])
-vg.add("bonus_coeff", [0., 0.001, 0.1, 0.01, 1.0, 10.0])
-vg.add("bottleneck_coeff", [0., 0.001, 0.1, 0.01, 1.0, 10.0])
+vg.add("bonus_coeff", [0.])#, 0.001, 0.1, 0.01, 1.0, 10.0])
+vg.add("bottleneck_coeff", [0.])#, 0.001, 0.1, 0.01, 1.0, 10.0])
 vg.add("use_trust_region", [False])
 vg.add("step_size", [0.])
 vg.add("use_decision_nodes", [False])
 vg.add("use_bottleneck", [True])
-vg.add("random_reset", [True])
-vg.add("bottleneck_dim", [10])
+vg.add("deterministic_bottleneck", [True])
+vg.add("random_reset", [False])
+vg.add("hidden_sizes", [(32, 32)])#, (64, 64), (128, 128), (256, 256), (64, 64, 64), (128, 128, 128), (256, 256, 256)])
+vg.add("bottleneck_dim", [10, 20, 30, 40])
 vg.add("use_exact_regressor", [True])#True, False])
 vg.add("exact_entropy", [False])#lambda use_exact_regressor: [True, False] if use_exact_regressor else [False])
 vg.add("mode", [
     # MODES.MODE_MARGINAL_PARSIMONY,
     # MODES.MODE_JOINT_MI_PARSIMONY,
-    MODES.MODE_MI_FEUDAL_SYNC,
+    # MODES.MODE_MI_FEUDAL_SYNC,
     # MODES.MODE_MI_FEUDAL,
     # MODES.MODE_HIDDEN_AWARE_PARSIMONY,
-    # MODES.MODE_BOTTLENECK_ONLY,
+    MODES.MODE_BOTTLENECK_ONLY,
 ])
 
 variants = vg.variants()
@@ -47,6 +49,8 @@ for v in variants:
         random_reset=v["random_reset"],
         use_bottleneck=v["use_bottleneck"],
         bottleneck_dim=v["bottleneck_dim"],
+        deterministic_bottleneck=v["deterministic_bottleneck"],
+        hidden_sizes=v["hidden_sizes"],
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     bonus_evaluator = DiscreteBonusEvaluator(
@@ -75,7 +79,7 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hrl_atari",
+        exp_prefix="hrl_atari_vary_bottleneck",
         n_parallel=2,
         seed=v["seed"],
         mode="lab_kube",

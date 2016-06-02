@@ -33,5 +33,6 @@ class GaussianDenstiyEstimator(DensityEstimator):
         return const - 0.5 * np.sum(np.square((xs - self.mean).dot(self.invL.T)), axis=1)
 
     def log_likelihood_sym(self, x_var):
+        raise NotImplementedError("need repair!")
         const = - 0.5 * np.log(2 * np.pi) * self.data_dim - 0.5 * self.log_det_cov
         return const - 0.5 * TT.sum(TT.square((x_var - self.mean).dot(self.invL.T)), axis=1)

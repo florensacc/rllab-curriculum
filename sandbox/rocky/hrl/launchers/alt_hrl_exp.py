@@ -15,18 +15,21 @@ from rllab.misc.instrument import VariantGenerator
 vg = VariantGenerator()
 vg.add("grid_size", [5])  # , 7, 9, 11])
 vg.add("batch_size", [20000])  # , 10000, 20000])
-vg.add("seed", [11, 111, 211])#, 311, 411])
+vg.add("seed", [11, 111, 211, 311, 411])
 vg.add("mode", [
     MODES.MODE_MI_FEUDAL_SYNC,
-    MODES.MODE_MI_FEUDAL,
-    MODES.MODE_BOTTLENECK_ONLY,
-    MODES.MODE_JOINT_MI_PARSIMONY,
-    MODES.MODE_MARGINAL_PARSIMONY,
-    MODES.MODE_HIDDEN_AWARE_PARSIMONY,
+    # MODES.MODE_MI_FEUDAL,
+    # MODES.MODE_BOTTLENECK_ONLY,
+    # MODES.MODE_JOINT_MI_PARSIMONY,
+    # MODES.MODE_MARGINAL_PARSIMONY,
+    # MODES.MODE_HIDDEN_AWARE_PARSIMONY,
+    MODES.MODE_MI_LOOKBACK,
+    # MODES.MODE_MI_FEUDAL_SYNC_NO_STATE,
+    # MODES.MODE_MARGINAL_PARSIMONY,
 ])
-vg.add("bottleneck_coeff", [0.1])
-vg.add("step_size", [0.1, 0.05, 0.01])
-vg.add("bonus_step_size", [0.1, 0.05, 0.01])
+vg.add("bottleneck_coeff", [0.])
+vg.add("step_size", [0.01])
+vg.add("bonus_step_size", [0.01, 0.0075, 0.005, 0.0025, 0.001])
 vg.add("exact_stop_gradient", [True, False])
 
 variants = vg.variants()
@@ -40,6 +43,7 @@ for v in variants:
         n_subgoals=v["grid_size"],
         bottleneck_dim=5,
         use_bottleneck=True,
+        deterministic_bottleneck=True,
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     bonus_baseline = LinearFeatureBaseline(env_spec=env.spec)
@@ -73,8 +77,8 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hier_alt_fixed2",
-        n_parallel=1,
+        exp_prefix="hier_alt_finetune_det",
+        n_parallel=2,
         seed=v["seed"],
         mode="lab_kube"
         # env=dict(THEANO_FLAGS="optimizer=None,mode=FAST_COMPILE")
