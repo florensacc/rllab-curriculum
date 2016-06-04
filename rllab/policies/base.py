@@ -3,6 +3,7 @@ from rllab.core.parameterized import Parameterized
 
 class Policy(Parameterized):
     def __init__(self, env_spec):
+        Parameterized.__init__(self)
         self._env_spec = env_spec
 
     # Should be implemented by all policies
