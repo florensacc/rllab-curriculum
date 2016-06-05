@@ -7,6 +7,7 @@ from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+import sys
 
 stub(globals())
 
@@ -46,5 +47,8 @@ for step_size in [0.01, 0.05, 0.1]:
             # Specifies the seed for the experiment. If this is not provided, a random seed
             # will be used
             seed=seed,
+            mode="local",
+            # mode="ec2",
             # plot=True,
         )
+        sys.exit()
