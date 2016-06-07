@@ -40,6 +40,7 @@ for step_size in [0.01, 0.05, 0.1]:
 
         run_experiment_lite(
             algo.train(),
+            exp_prefix="first_exp",
             # Number of parallel workers for sampling
             n_parallel=1,
             # Only keep the snapshot parameters for the last iteration
