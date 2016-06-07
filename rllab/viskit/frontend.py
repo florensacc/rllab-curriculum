@@ -206,7 +206,7 @@ def check_nan(exp):
 
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
                          only_show_best=False, gen_eps=False, clip_plot_value=None, plot_width=None,
-                         plot_height=None, filter_nan=False):
+                         plot_height=None, filter_nan=False, smooth_curve=False):
     print(plot_key, split_key, group_key, filters)
     if filter_nan:
         nonnan_exps_data = filter(check_nan, exps_data)
@@ -312,12 +312,13 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                 progresses, q=50, axis=0)
                             percentile75 = np.nanpercentile(
                                 progresses, q=75, axis=0)
-                            percentile25 = sliding_mean(percentile25,
-                                                        window=window_size)
-                            percentile50 = sliding_mean(percentile50,
-                                                        window=window_size)
-                            percentile75 = sliding_mean(percentile75,
-                                                        window=window_size)
+                            if smooth_curve:
+                                percentile25 = sliding_mean(percentile25,
+                                                            window=window_size)
+                                percentile50 = sliding_mean(percentile50,
+                                                            window=window_size)
+                                percentile75 = sliding_mean(percentile75,
+                                                            window=window_size)
                             if clip_plot_value is not None:
                                 percentile25 = np.clip(percentile25, -clip_plot_value, clip_plot_value)
                                 percentile50 = np.clip(percentile50, -clip_plot_value, clip_plot_value)
@@ -328,10 +329,11 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                         else:
                             means = np.nanmean(progresses, axis=0)
                             stds = np.nanstd(progresses, axis=0)
-                            means = sliding_mean(means,
-                                                 window=window_size)
-                            stds = sliding_mean(stds,
-                                                window=window_size)
+                            if smooth_curve:
+                                means = sliding_mean(means,
+                                                     window=window_size)
+                                stds = sliding_mean(stds,
+                                                    window=window_size)
                             if clip_plot_value is not None:
                                 means = np.clip(means, -clip_plot_value, clip_plot_value)
                                 stds = np.clip(stds, -clip_plot_value, clip_plot_value)
@@ -345,8 +347,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                     max_size = max(sizes)
                     progresses = [
                         np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-                    window_size = np.maximum(
-                        int(np.round(max_size / float(1000))), 1)
+                    window_size = np.maximum(int(np.round(max_size / float(1000))), 1)
 
                     if use_median:
                         percentile25 = np.nanpercentile(
@@ -355,12 +356,13 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                             progresses, q=50, axis=0)
                         percentile75 = np.nanpercentile(
                             progresses, q=75, axis=0)
-                        percentile25 = sliding_mean(percentile25,
-                                                    window=window_size)
-                        percentile50 = sliding_mean(percentile50,
-                                                    window=window_size)
-                        percentile75 = sliding_mean(percentile75,
-                                                    window=window_size)
+                        if smooth_curve:
+                            percentile25 = sliding_mean(percentile25,
+                                                        window=window_size)
+                            percentile50 = sliding_mean(percentile50,
+                                                        window=window_size)
+                            percentile75 = sliding_mean(percentile75,
+                                                        window=window_size)
                         if clip_plot_value is not None:
                             percentile25 = np.clip(percentile25, -clip_plot_value, clip_plot_value)
                             percentile50 = np.clip(percentile50, -clip_plot_value, clip_plot_value)
@@ -371,10 +373,11 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                     else:
                         means = np.nanmean(progresses, axis=0)
                         stds = np.nanstd(progresses, axis=0)
-                        means = sliding_mean(means,
-                                             window=window_size)
-                        stds = sliding_mean(stds,
-                                            window=window_size)
+                        if smooth_curve:
+                            means = sliding_mean(means,
+                                                 window=window_size)
+                            stds = sliding_mean(stds,
+                                                window=window_size)
                         if clip_plot_value is not None:
                             means = np.clip(means, -clip_plot_value, clip_plot_value)
                             stds = np.clip(stds, -clip_plot_value, clip_plot_value)
@@ -419,13 +422,14 @@ def plot_div():
     gen_eps = args.get("eps", "") == 'True'
     only_show_best = args.get("only_show_best", "") == 'True'
     filter_nan = args.get("filter_nan", "") == 'True'
+    smooth_curve = args.get("smooth_curve", "") == 'True'
     clip_plot_value = parse_float_arg(args, "clip_plot_value")
     plot_width = parse_float_arg(args, "plot_width")
     plot_height = parse_float_arg(args, "plot_height")
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, filter_nan=filter_nan,
                                     group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps,
                                     only_show_best=only_show_best, clip_plot_value=clip_plot_value,
-                                    plot_width=plot_width, plot_height=plot_height)
+                                    plot_width=plot_width, plot_height=plot_height, smooth_curve=smooth_curve)
     # print plot_div
     return plot_div
 
@@ -464,19 +468,20 @@ def reload_data():
     global plottable_keys
     global distinct_params
     exps_data = core.load_exps_data(args.data_path)
-    plottable_keys = list(
-        set(flatten(exp.progress.keys() for exp in exps_data)))
-    distinct_params = core.extract_distinct_params(exps_data)
+    plottable_keys = sorted(list(
+        set(flatten(exp.progress.keys() for exp in exps_data))))
+    distinct_params = sorted(core.extract_distinct_params(exps_data))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("data_path", type=str)
     parser.add_argument("--debug", action="store_true", default=False)
+    parser.add_argument("--port", type=int, default=5000)
     args = parser.parse_args(sys.argv[1:])
     print("Importing data from {path}...".format(path=args.data_path))
     reload_data()
-    port = 5000
+    # port = 5000
     # url = "http://0.0.0.0:{0}".format(port)
-    print("Done! View http://localhost:5000 in your browser")
-    app.run(host='0.0.0.0', debug=args.debug)
+    print("Done! View http://localhost:%d in your browser" % args.port)
+    app.run(host='0.0.0.0', port=args.port, debug=args.debug)

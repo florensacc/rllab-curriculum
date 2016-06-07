@@ -2,16 +2,14 @@ import numpy as np
 
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
-from rllab.distributions.categorical import Categorical
-from rllab.misc.special import to_onehot, from_onehot
-from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
+from rllab.misc.special import to_onehot
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
-from rllab.spaces.discrete import Discrete
+from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from rllab.spaces.box import Box
+from rllab.spaces.discrete import Discrete
 from rllab.spaces.product import Product
 from sandbox.rocky.hrl import hrl_utils
-from sandbox.rocky.hrl.grid_world_hrl_utils import ExactComputer
-from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
+from sandbox.rocky.hrl.policies.subgoal_policy import SubgoalPolicy
 
 
 def regressor_cls_from_space(space):
@@ -153,15 +151,21 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
         if self.state_regressor is not None:
             log_p_sprime_given_s = self.state_regressor.predict_log_likelihood(flat_obs, flat_next_obs)
         else:
-            p_sprime_given_s = 0.
+            # need a more numerically stable way
+            log_components = []
             if isinstance(self.subgoal_space, Discrete):
                 high_probs = downsampled_path["agent_infos"]["high"]["prob"]
                 n_subgoals = self.subgoal_space.n
                 for goal in range(n_subgoals):
                     goal_mat = np.tile(to_onehot(goal, n_subgoals), (N, 1))
                     xs_goal = np.concatenate([flat_obs, goal_mat], axis=1)
-                    p_sprime_given_s += high_probs[:-1, goal] * np.exp(self.regressor.predict_log_likelihood(xs_goal, ys))
+                    log_components.append(np.log(high_probs[:-1, goal]) + self.regressor.predict_log_likelihood(
+                        xs_goal, ys))
+                log_components = np.array(log_components)
+                log_p_sprime_given_s = np.log(np.sum(np.exp(log_components - log_components.max(axis=0)), axis=0)) + \
+                    log_components.max(axis=0)
             elif isinstance(self.subgoal_space, Box):
+                p_sprime_given_s = 0.
                 unflat_obs = self.env_spec.observation_space.unflatten_n(flat_obs)
                 # if subgoals are continuous, we'd need to sample instead of marginalize
                 for _ in xrange(self.n_subgoal_samples):
@@ -169,9 +173,9 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
                     xs_goal = np.concatenate([flat_obs, self.subgoal_space.flatten_n(goals)], axis=1)
                     p_sprime_given_s += np.exp(self.regressor.predict_log_likelihood(xs_goal, ys))
                 p_sprime_given_s /= self.n_subgoal_samples
+                log_p_sprime_given_s = np.log(p_sprime_given_s + 1e-8)
             else:
                 raise NotImplementedError
-            log_p_sprime_given_s = np.log(p_sprime_given_s + 1e-8)
         bonuses = np.append(log_p_sprime_given_g_s - log_p_sprime_given_s, 0)
         bonuses = np.tile(
             np.expand_dims(bonuses, axis=1),

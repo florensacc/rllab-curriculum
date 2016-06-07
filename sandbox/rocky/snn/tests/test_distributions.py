@@ -12,7 +12,7 @@ import theano.tensor as TT
 with such.A("Standard Bernoulli") as it:
     @it.should("work")
     def test_standard_bernoulli():
-        standard_bernoulli = StandardBernoulli()
+        standard_bernoulli = StandardBernoulli(2)
         it.assertEqual(
             np.sum(standard_bernoulli.entropy(dist_info=dict(shape_placeholder=np.zeros((3, 2))))),
             np.log(2) * 6
@@ -50,7 +50,7 @@ it.createTests(globals())
 with such.A("Standard Gaussian") as it:
     @it.should("work")
     def test_standard_gaussian():
-        standard_gaussian = StandardGaussian()
+        standard_gaussian = StandardGaussian(2)
         it.assertEqual(
             np.sum(standard_gaussian.entropy(dist_info=dict(shape_placeholder=np.zeros((3, 2))))),
             0.5 * (np.log(2 * np.pi) + 1) * 6
@@ -88,7 +88,7 @@ it.createTests(globals())
 with such.A("Bernoulli") as it:
     @it.should("work")
     def test_bernoulli():
-        bernoulli = Bernoulli()
+        bernoulli = Bernoulli(3)
 
         new_p = np.array([[0.5, 0.5, 0.5], [.9, .9, .9]])
         old_p = np.array([[.9, .9, .9], [.1, .1, .1]])

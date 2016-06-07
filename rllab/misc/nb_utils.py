@@ -4,6 +4,7 @@ import csv
 import matplotlib.pyplot as plt
 import json
 from glob import glob
+import os
 
 
 def plot_experiments(name_or_patterns, legend=False, post_processing=None, key='AverageReturn'):
@@ -93,15 +94,26 @@ class ExperimentDatabase(object):
             matched_files = glob(osp.join(data_folder, name_or_pattern)) #golb gives a list of all files satisfying pattern
             files += matched_files
         experiments = []
+        progress_f = None
+        params_f = None
         for f in files:
-            try:
-                progress = self._read_data(osp.join(f, "progress.csv"))
-                params = self._read_params(osp.join(f, "params.json"))
-                params["exp_name"] = osp.basename(f)
-                experiments.append(Experiment(progress, params))
-            except Exception as e:
-                print e
+            if os.path.isdir(f):
+                try:
+                    progress = self._read_data(osp.join(f, "progress.csv"))
+                    params = self._read_params(osp.join(f, "params.json"))
+                    params["exp_name"] = osp.basename(f)
+                    experiments.append(Experiment(progress, params))
+                except Exception as e:
+                    print e
+            elif 'progress.csv' in f:  # in case you're giving as datafolder the dir that contains the files!
+                progress_f = self._read_data(f)
+            elif 'params.json' in f:
+                params_f = self._read_params(f)
+        if params_f and progress_f:
+            experiments.append(Experiment(progress_f, params_f))
+
         self._experiments = experiments
+
 
     def plot_experiments(self, key=None, legend=None, color_key=None, filter_exp=None, **kwargs):
         experiments = list(self.filter_experiments(**kwargs))

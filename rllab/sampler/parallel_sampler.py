@@ -8,8 +8,9 @@ import numpy as np
 
 
 def _worker_init(G, id):
-    import os
-    os.environ['THEANO_FLAGS'] = 'device=cpu'
+    if singleton_pool.n_parallel > 1:
+        import os
+        os.environ['THEANO_FLAGS'] = 'device=cpu'
     G.worker_id = id
 
 
@@ -34,10 +35,15 @@ def _worker_terminate_task(G):
 
 def populate_task(env, policy):
     logger.log("Populating workers...")
-    singleton_pool.run_each(
-        _worker_populate_task,
-        [(pickle.dumps(env), pickle.dumps(policy))] * singleton_pool.n_parallel
-    )
+    if singleton_pool.n_parallel > 1:
+        singleton_pool.run_each(
+            _worker_populate_task,
+            [(pickle.dumps(env), pickle.dumps(policy))] * singleton_pool.n_parallel
+        )
+    else:
+        # avoid unnecessary copying
+        singleton_pool.G.env = env
+        singleton_pool.G.policy = policy
     logger.log("Populated")
 
 

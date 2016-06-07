@@ -68,21 +68,23 @@ class ConjugateGradientOptimizer(Serializable):
         constraint_term, constraint_value = leq_constraint
 
         params = target.get_params(trainable=True)
-        grads = theano.grad(loss, wrt=params)
+        grads = theano.grad(loss, wrt=params, disconnected_inputs='ignore')
         flat_grad = ext.flatten_tensor_variables(grads)
 
-        constraint_grads = theano.grad(constraint_term, wrt=params)
+        constraint_grads = theano.grad(constraint_term, wrt=params, disconnected_inputs='ignore')
         xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
-        Hx_plain_splits = TT.grad(
-            TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
-            wrt=params,
-        )
-        Hx_plain = TT.concatenate([TT.flatten(s) for s in Hx_plain_splits])
+
+        def Hx_plain():
+            Hx_plain_splits = TT.grad(
+                TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
+                wrt=params,
+                disconnected_inputs='ignore'
+            )
+            return TT.concatenate([TT.flatten(s) for s in Hx_plain_splits])
 
         self._target = target
         self._max_constraint_val = constraint_value
         self._constraint_name = constraint_name
-
 
         if self._debug_nan:
             from theano.compile.nanguardmode import NanGuardMode
@@ -105,7 +107,7 @@ class ConjugateGradientOptimizer(Serializable):
             ),
             f_Hx_plain=lambda: ext.compile_function(
                 inputs=inputs + extra_inputs + xs,
-                outputs=Hx_plain,
+                outputs=Hx_plain(),
                 log_name="f_Hx_plain",
                 mode=mode,
             ),
@@ -179,10 +181,10 @@ class ConjugateGradientOptimizer(Serializable):
             self._target.set_param_values(cur_param, trainable=True)
             loss, constraint_val = self._opt_fun["f_loss_constraint"](*(inputs + extra_inputs))
             if self._debug_nan and np.isnan(constraint_val):
-                import ipdb; ipdb.set_trace()
+                import ipdb;
+                ipdb.set_trace()
             if loss < loss_before and constraint_val <= self._max_constraint_val:
                 break
         logger.log("backtrack iters: %d" % n_iter)
         logger.log("computing loss after")
         logger.log("optimization finished")
-

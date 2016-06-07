@@ -137,7 +137,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         normalized_old_means_var = (old_means_var - y_mean_var) / y_std_var
         normalized_old_log_stds_var = old_log_stds_var - TT.log(y_std_var)
 
-        dist = self._dist = DiagonalGaussian()
+        dist = self._dist = DiagonalGaussian(output_dim)
 
         normalized_dist_info_vars = dict(mean=normalized_means_var, log_std=normalized_log_stds_var)
 
@@ -172,6 +172,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
 
         self._normalize_inputs = normalize_inputs
         self._normalize_outputs = normalize_outputs
+        self._mean_network = mean_network
         self._x_mean_var = x_mean_var
         self._x_std_var = x_std_var
         self._y_mean_var = y_mean_var
@@ -224,6 +225,17 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
     def predict_log_likelihood(self, xs, ys):
         means, log_stds = self._f_pdists(xs)
         return self._dist.log_likelihood(ys, dict(mean=means, log_std=log_stds))
+
+    def log_likelihood_sym(self, x_var, y_var):
+        normalized_xs_var = (x_var - self._x_mean_var) / self._x_std_var
+
+        normalized_means_var, normalized_log_stds_var = \
+            L.get_output([self._l_mean, self._l_log_std], {self._mean_network.input_layer: normalized_xs_var})
+
+        means_var = normalized_means_var * self._y_std_var + self._y_mean_var
+        log_stds_var = normalized_log_stds_var + TT.log(self._y_std_var)
+
+        return self._dist.log_likelihood_sym(y_var, dict(mean=means_var, log_std=log_stds_var))
 
     def get_param_values(self, **tags):
         return LasagnePowered.get_param_values(self, **tags)

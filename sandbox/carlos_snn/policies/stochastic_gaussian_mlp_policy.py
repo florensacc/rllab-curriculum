@@ -79,7 +79,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
 
         self._latent_keys = latent_keys
         self._latent_distributions = latent_distributions
-        self._dist = DiagonalGaussian()
+        self._dist = DiagonalGaussian(action_dim)
 
         self._f_dist_info = ext.compile_function(
             inputs=[obs_var],
@@ -113,8 +113,8 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
             latent_vals.append(state_infos["latent_%d" % idx])
         return self._f_dist_info_givens(*[obs] + latent_vals)
 
-    def reset(self):  #here I would sample a latent var.
-        # sample latent
+    def reset(self):  #here I would sample a latents var.
+        # sample latents
         # store it in self.something that then goes to all the others
         pass
 
@@ -160,11 +160,11 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
 
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
         """
-        Compute the symbolic KL divergence of distributions of both the actions and the latent variables
+        Compute the symbolic KL divergence of distributions of both the actions and the latents variables
         """
         kl = self._dist.kl_sym(old_dist_info_vars, new_dist_info_vars)
         for idx, latent_dist in enumerate(self._latent_distributions):
-            # collect dist info for each latent variable
+            # collect dist info for each latents variable
             prefix = "latent_%d_" % idx
             old_latent_dist_info = {k[len(prefix):]: v for k, v in old_dist_info_vars.iteritems() if k.startswith(
                 prefix)}
@@ -175,7 +175,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
 
     def likelihood_ratio_sym(self, action_var, old_dist_info_vars, new_dist_info_vars):
         """
-        Compute the symbolic likelihood ratio of both the actions and the latent variables.
+        Compute the symbolic likelihood ratio of both the actions and the latents variables.
         """
         lr = self._dist.likelihood_ratio_sym(action_var, old_dist_info_vars, new_dist_info_vars)
         for idx, latent_dist in enumerate(self._latent_distributions):
@@ -190,7 +190,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
 
     def log_likelihood(self, actions, dist_info, action_only=False):
         """
-        Computes the log likelihood of both the actions and the latent variables, unless action_only is set to True,
+        Computes the log likelihood of both the actions and the latents variables, unless action_only is set to True,
         in which case it will only compute the log likelihood of the actions.
         :return:
         """

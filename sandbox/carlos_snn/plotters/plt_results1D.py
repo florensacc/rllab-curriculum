@@ -129,6 +129,7 @@ def plot_all_exp(datadir):
     database = ExperimentDatabase(datadir,names_or_patterns='*')
     exps = database._experiments
     colors=[(1,0.1,0.1),(0.1,1,0.1),(0.1,0.1,1),(1,1,0)]
+    gather=1  # how many experiments to plot in the same image.
 
     for i, exp in enumerate(exps):
         #get the last pickle
@@ -146,27 +147,27 @@ def plot_all_exp(datadir):
         if not os.path.exists(fig_dir):
             os.makedirs(fig_dir)
         #fix a color for plots of this exp
-        color = np.array(colors[i%3 ])
+        color = np.array(colors[i%gather ])
         #plot everything
         print 'Plotting for: ',exp_name
-        plt.figure( 1 + (i/3)*6 )
+        plt.figure( 1 + (i/gather)*6 )
         plot_reward(first_data_unpickle,color,fig_dir)
         print 'Plotting learning curve'
-        plt.figure(2 +(i/3)*6 )
+        plt.figure(2 +(i/gather)*6 )
         plot_learning_curve(exp,color,fig_dir)
         print 'Plotting last policy'
-        plt.figure(3+(i/3)*6 )
+        plt.figure(3+(i/gather)*6 )
         plot_policy_learned(last_data_unpickle,color,fig_dir=fig_dir)
         # print 'Plotting policy progress'
         # plt.figure(4+(i/3)*6 )
         # plot_all_policy_at0(path_experiment,color,num_iter=last_iter+1,fig_dir=fig_dir)
         print 'Plotting last policy MC'
-        plt.figure(5+(i/3)*6 )
+        plt.figure(5+(i/gather)*6 )
         plot_snn_at0(last_data_unpickle, itr=last_iter+1, color=color, fig_dir=fig_dir)
         # print 'Plotting first policy MC'
         # plt.figure(6+(i/3)*6 )
         # plot_snn_at0(first_data_unpickle, itr=0, color=color,fig_dir=fig_dir)
-        if (i+1)/3 > i/3:
+        if (i+1)/gather > i/gather:
             plt.close('all')
 
 ## plot for all the experiments

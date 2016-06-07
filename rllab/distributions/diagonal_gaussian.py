@@ -4,6 +4,12 @@ from rllab.distributions.base import Distribution
 
 
 class DiagonalGaussian(Distribution):
+    def __init__(self, dim):
+        self._dim = dim
+
+    @property
+    def dim(self):
+        return self._dim
 
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
         old_means = old_dist_info_vars["mean"]
@@ -57,6 +63,10 @@ class DiagonalGaussian(Distribution):
     def entropy(self, dist_info):
         log_stds = dist_info["log_std"]
         return np.sum(log_stds + np.log(np.sqrt(2 * np.pi * np.e)), axis=-1)
+
+    def entropy_sym(self, dist_info_var):
+        log_std_var = dist_info_var["log_std"]
+        return TT.sum(log_std_var + TT.log(np.sqrt(2 * np.pi * np.e)), axis=-1)
 
     @property
     def dist_info_keys(self):

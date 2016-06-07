@@ -4,6 +4,7 @@ channels:
     - https://conda.binstar.org/tlatorre 
     - https://conda.anaconda.org/cjs14
     - https://conda.anaconda.org/menpo
+    - jjhelmus
 dependencies:
     - python==2.7.10
     - numpy==1.10.4
@@ -20,11 +21,14 @@ dependencies:
     - h5py
     - matplotlib
     - opencv
+    - scikit-learn
+    - tensorflow=0.8.0
     - pip:
         - atari-py
         - pyprind
         - ipdb
         - boto3
+        - PyOpenGL
         - nose2
         - pyzmq
         - msgpack-python

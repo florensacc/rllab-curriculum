@@ -9,7 +9,7 @@ from nose2.tools import such
 
 from sandbox.rocky.hrl.envs.hierarchical_grid_world_env import HierarchicalGridWorldEnv
 from sandbox.rocky.hrl.envs.hierarchical_grid_world_env import expand_grid
-from sandbox.rocky.hrl.subgoal_policy import SubgoalPolicy
+from sandbox.rocky.hrl.policies.subgoal_policy import SubgoalPolicy
 from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 import time
@@ -167,6 +167,6 @@ with such.A("hierarchical grid world analyzer") as it:
         hier_grid_world.analyzer.set_policy(policy)
         goal_probs = hier_grid_world.analyzer.compute_goal_transition_probabilities()
         print("computing goal probs took %s" % (time.time() - start_time))
-        np.testing.assert_allclose(np.sum(goal_probs, axis=-1), 1.)
+        np.testing.assert_allclose(np.sum(goal_probs, axis=-1), 1., rtol=1e-5)
 
 it.createTests(globals())

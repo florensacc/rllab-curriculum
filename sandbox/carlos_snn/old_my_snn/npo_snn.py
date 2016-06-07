@@ -24,6 +24,7 @@ class NPO_snn(BatchPolopt):
     def __init__(
             self,
             hallucinator=None,
+            latent_regressor=None,
             self_normalize=False,
             n_samples=0,
             optimizer=None,
@@ -38,6 +39,7 @@ class NPO_snn(BatchPolopt):
         self.step_size = step_size
 
         self.hallucinator = hallucinator
+        self.latent_regressor = latent_regressor
         self.self_normalize = self_normalize
         self.n_samples=n_samples
         super(NPO_snn, self).__init__(**kwargs)
@@ -64,6 +66,14 @@ class NPO_snn(BatchPolopt):
         #     return tensor_utils.concat_tensor_dict_list(real_samples)
             ## -------------------------------
 
+        #check the latents
+        self.latent_regressor.fit(paths)
+        for path in paths:
+            print 'the action: ', path['actions']
+            print 'the latents: ', path['agent_infos']['latents']
+            print 'the regressor distr: ', self.latent_regressor.get_output_p(path)
+            print 'latents entropy: ', self.policy.latent_dist.entropy(self.policy.latent_dist_info_vars)
+            print 'mutual info lb: ', self.latent_regressor.lowb_mutual(paths)
         # now, hallucinate some more...
         if self.hallucinator is None:
             return real_samples
@@ -109,8 +119,15 @@ class NPO_snn(BatchPolopt):
         self.shutdown_worker()
 
     @overrides
+    def log_diagnostics(self, paths):
+        BatchPolopt.log_diagnostics(self, paths)
+        self.latent_regressor.log_diagnostics(paths)
+
+    @overrides
     def init_opt(self):
+        assert not self.policy.recurrent
         is_recurrent = int(self.policy.recurrent)
+
         obs_var = self.env.observation_space.new_tensor_variable(
             'obs',
             extra_dims=1 + is_recurrent,
@@ -119,9 +136,10 @@ class NPO_snn(BatchPolopt):
             'action',
             extra_dims=1 + is_recurrent,
         )
+        importance_weights = TT.vector('importance_weights')  # for weighting the hallucinations
         ##
         latent_var = self.policy.latent_space.new_tensor_variable(
-            'latent',
+            'latents',
             extra_dims=1 + is_recurrent,
         )
         ##
@@ -145,24 +163,25 @@ class NPO_snn(BatchPolopt):
         else:
             valid_var = None
 
-        ## this will have to change as now the pdist depends also on the particuar latent var h sampled!
+        ## this will have to change as now the pdist depends also on the particuar latents var h sampled!
         # dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)  ##returns dict with mean and log_std_var for this obs_var (action useless here!)
         ##CF
         dist_info_vars = self.policy.dist_info_sym(obs_var, latent_var)
 
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
         lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
-        if is_recurrent:
-            mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
-            surr_loss = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
-        else:
-            mean_kl = TT.mean(kl)
-            surr_loss = - TT.mean(lr * advantage_var)
+        # if is_recurrent:
+        #     mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
+        #     surr_loss = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
+        # else:
+        mean_kl = TT.mean(kl * importance_weights)
+        surr_loss = - TT.mean(lr * advantage_var * importance_weights)
 
         input_list = [                  ##these are sym var. the inputs in optimize_policy have to be in same order!
                          obs_var,
                          action_var,
                          advantage_var,
+                         importance_weights,
                          ##CF
                          latent_var,
                      ] + old_dist_info_vars_list  ##provide old mean and var, for the new states as they were sampled from it!
@@ -182,11 +201,11 @@ class NPO_snn(BatchPolopt):
     def optimize_policy(self, itr, samples_data):   ###make that samples_data comes with latents: see train in batch_polopt
         all_input_values = tuple(ext.extract(       ### it will be in agent_infos!!! under key "latents"
             samples_data,
-            "observations",  "actions", "advantages"
+            "observations",  "actions", "advantages", "importance_weights"
         ))
         agent_infos = samples_data["agent_infos"]
         ##CF
-        all_input_values += (agent_infos["latent"],)  #latent has already been processed and is the concat of all latents, but keeps key "latent"
+        all_input_values += (agent_infos["latents"],)  #latents has already been processed and is the concat of all latents, but keeps key "latents"
         #
         info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys] ##these are the mean and var used at rollout, corresponding to
         all_input_values += tuple(info_list)                                            # old_dist_info_vars_list as symbolic var

@@ -3,6 +3,8 @@ import argparse
 import joblib
 import uuid
 import os
+import random
+import numpy as np
 
 filename = str(uuid.uuid4())
 
@@ -17,6 +19,8 @@ if __name__ == "__main__":
                         help='Speedup')
     parser.add_argument('--loop', type=int, default=1,
                         help='# of loops')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='seed')
     args = parser.parse_args()
 
     policy = None
@@ -26,6 +30,9 @@ if __name__ == "__main__":
             # fetch file using ssh
             os.system("rsync -avrz %s /tmp/%s.pkl" % (args.file, filename))
             data = joblib.load("/tmp/%s.pkl" % filename)
+            if parser.seed is not None:
+                random.seed(parser.seed)
+                np.random.seed(parser.seed)
             if policy:
                 new_policy = data['policy']
                 policy.set_param_values(new_policy.get_param_values())

@@ -2,7 +2,6 @@ from .base import Env
 
 
 class ProxyEnv(Env):
-
     def __init__(self, wrapped_env):
         self._wrapped_env = wrapped_env
 

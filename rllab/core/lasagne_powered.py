@@ -4,7 +4,6 @@ import lasagne.layers as L
 
 
 class LasagnePowered(Parameterized):
-
     def __init__(self, output_layers):
         self._output_layers = output_layers
         super(LasagnePowered, self).__init__()
@@ -18,4 +17,4 @@ class LasagnePowered(Parameterized):
         return L.get_all_params(
             L.concat(self._output_layers),
             **tags
-        )#, key=lambda x: x.name)
+        )

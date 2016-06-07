@@ -1,16 +1,20 @@
 from __future__ import print_function
 from __future__ import absolute_import
-from rllab.distributions.base import Distribution
+from .base import DistributionExt
 from rllab.distributions.categorical import Categorical
 import numpy as np
 import theano.tensor as TT
 
 
-
-class ProductDistribution(Distribution):
-    def __init__(self, distributions, dimensions):
+class ProductDistribution(DistributionExt):
+    def __init__(self, distributions):
         self.distributions = distributions
-        self.dimensions = dimensions
+        self.dimensions = [x.dim for x in self.distributions]
+        self._dim = sum(self.dimensions)
+
+    @property
+    def dim(self):
+        return self._dim
 
     def _split_x(self, x):
         """

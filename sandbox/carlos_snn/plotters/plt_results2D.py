@@ -81,12 +81,12 @@ def plot_policy_learned(data_unpickle,color,fig_dir=None):
         print "No directory for saving plots"
 
 ## estimate by MC the policy at 0!
-def plot_snn_at0(fig, data_unpickle, itr=0, color=(1,0.1,0.1),fig_dir=None):
+def plot_snn_at0(fig, data_unpickle, itr='_last', color=(1,0.1,0.1),fig_dir=None):
     #recover the policy
     poli = data_unpickle['policy']
     #range to plot it
     bound = 3
-    num_bins=600
+    num_bins=100
     step = (2.*bound)/num_bins
     samples=(num_bins)**2
     x = np.arange(-bound,bound+step, step)
@@ -151,14 +151,22 @@ def plot_all_policy_at0(path_experiment,color,num_iter=100,fig_dir=None):
 ## plot for all the experiments
 def plot_all_exp(datadir):
     database = ExperimentDatabase(datadir,names_or_patterns='*')
+    #check if you're giving the final dir of an experiment
+
     exps = database._experiments
+    if not len(exps):
+        database = ExperimentDatabase(datadir, )
     colors=[(1,0.1,0.1),(0.1,1,0.1),(0.1,0.1,1),(1,1,0)]
+    gather=1
 
     for i, exp in enumerate(exps):
         #get the last pickle
         exp_name=exp.params['exp_name']
-        path_experiment=os.path.join(datadir,exp_name)
-        last_iter = np.size(exp.progress['Iteration']) - 1
+        if os.path.isdir(os.path.join(datadir,exp_name)):
+            path_experiment=os.path.join(datadir,exp_name)
+        else:
+            path_experiment=datadir
+        # last_iter = np.size(exp.progress['Iteration']) - 1
         # pkl_name= 'itr_{}'.format(last_iter)
         # last_data_unpickle = joblib.load(os.path.join(path_experiment,pkl_name+'.pkl'))
         # first_data_unpickle = joblib.load(os.path.join(path_experiment,'itr_0.pkl'))
@@ -170,22 +178,22 @@ def plot_all_exp(datadir):
         if not os.path.exists(fig_dir):
             os.makedirs(fig_dir)
         #fix a color for plots of this exp
-        color = np.array(colors[i%3])
+        color = np.array(colors[i%gather])
         #plot everything
         print 'Plotting for: ',exp_name
-        fig1=plt.figure(1+(i/4)*6)
+        fig1=plt.figure(1+(i/gather)*6)
         plot_reward(fig1,first_data_unpickle,color,fig_dir)
         print 'Plotting learning curve'
-        fig2=plt.figure(2+i*6)#(2+(i/3)*6)
+        fig2=plt.figure(2+(i/gather)*6)
         plot_learning_curve(exp,color,fig_dir)
         print 'Plotting last policy'
-        fig3=plt.figure(3+i*6)#(3+(i/3)*6)
+        fig3=plt.figure(3+(i/gather)*6)
         # plot_policy_learned(last_data_unpickle, color, fig_dir=fig_dir)
         plot_snn_at0(fig3, last_data_unpickle, color=color, fig_dir=fig_dir)
         # print 'Plotting policy progress'
         # plt.figure(4)
         # plot_all_policy_at0(path_experiment,color,num_iter=last_iter+1,fig_dir=fig_dir)
-        if (i+1)/3 > i/3:
+        if (i+1)/gather > i/gather:
             plt.close('all')
 
 ## plot for all the experiments

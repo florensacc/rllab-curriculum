@@ -6,6 +6,7 @@ from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
+from rllab.policies.base import Policy
 
 
 class BatchPolopt(RLAlgorithm):
@@ -36,6 +37,7 @@ class BatchPolopt(RLAlgorithm):
         """
         :param env: Environment
         :param policy: Policy
+        :type policy: Policy
         :param baseline: Baseline
         :param n_itr: Number of iterations.
         :param start_itr: Starting iteration.

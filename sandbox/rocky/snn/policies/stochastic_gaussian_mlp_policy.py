@@ -79,7 +79,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
 
         self._latent_keys = latent_keys
         self._latent_distributions = latent_distributions
-        self._dist = DiagonalGaussian()
+        self._dist = DiagonalGaussian(action_dim)
 
         self._f_dist_info = ext.compile_function(
             inputs=[obs_var],
