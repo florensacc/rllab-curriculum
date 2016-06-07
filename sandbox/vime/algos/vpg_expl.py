@@ -3,7 +3,7 @@ import theano
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
 from rllab.misc import ext
-from sandbox.rein.algos.batch_polopt_unn import BatchPolopt
+from sandbox.vime.algos.batch_polopt_expl import BatchPolopt
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 from rllab.core.serializable import Serializable
 

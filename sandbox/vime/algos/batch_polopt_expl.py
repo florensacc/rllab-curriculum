@@ -1,7 +1,7 @@
 import numpy as np
 
 from rllab.algos.base import RLAlgorithm
-from sandbox.rein.sampler import parallel_sampler_vbnn as parallel_sampler
+from sandbox.vime.sampler import parallel_sampler_expl as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
@@ -14,11 +14,8 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.rein.dynamics_models.nn_uncertainty import vbnn
+from sandbox.vime.dynamics_models import bnn
 # -------------------
-
-TSNE_PLOT = False
-
 
 class SimpleReplayPool(object):
     """Replay pool"""
@@ -219,7 +216,7 @@ class BatchPolopt(RLAlgorithm):
         # ----------------------
 
         if self.second_order_update:
-#             assert self.kl_batch_size == 1
+            #             assert self.kl_batch_size == 1
             assert self.n_itr_update == 1
 
         # Params to keep track of moving average (both intrinsic and external
@@ -236,9 +233,6 @@ class BatchPolopt(RLAlgorithm):
             # over them and divide current kl values by it. This counters the
             # exploding kl value problem.
             self.kl_previous = deque(maxlen=self.kl_q_len)
-
-        if TSNE_PLOT:
-            self.all_observations, self.all_actions = [], []
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy, self.vbnn)
@@ -259,10 +253,10 @@ class BatchPolopt(RLAlgorithm):
         obs_dim = np.sum(self.env.observation_space.shape)
         act_dim = np.sum(self.env.action_space.shape)
 
-        logger.log("Building UNN model (eta={}) ...".format(self.eta))
+        logger.log("Building BNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
 
-        self.vbnn = vbnn.VBNN(
+        self.vbnn = bnn.VBNN(
             n_in=(obs_dim + act_dim),
             n_hidden=self.unn_n_hidden,
             n_out=obs_dim,
@@ -302,15 +296,6 @@ class BatchPolopt(RLAlgorithm):
 
             paths = self.obtain_samples(itr)
             samples_data = self.process_samples(itr, paths)
-
-            if TSNE_PLOT:
-                # Keep track of all observations for T-SNE calc.
-                for path in paths:
-                    self.all_observations.append(path['observations'])
-                    self.all_actions.append(path['actions'])
-                array = np.hstack(
-                    [np.vstack(self.all_observations), np.vstack(self.all_actions)])
-                np.save('data/obs-act_vbnn.npy', array)
 
             # Exploration code
             # ----------------
@@ -363,9 +348,9 @@ class BatchPolopt(RLAlgorithm):
                     new_acc /= len(_inputss)
 
                     logger.record_tabular(
-                        'SNN_DynModelSqLossBefore', old_acc)
+                        'BNN_DynModelSqLossBefore', old_acc)
                     logger.record_tabular(
-                        'SNN_DynModelSqLossAfter', new_acc)
+                        'BNN_DynModelSqLossAfter', new_acc)
             # ----------------
 
             self.env.log_diagnostics(paths)
@@ -455,7 +440,7 @@ class BatchPolopt(RLAlgorithm):
             return paths_truncated
 
     def process_samples(self, itr, paths):
-        
+
         if self.normalize_reward:
             # Update reward mean/std Q.
             rewards = []
@@ -479,10 +464,10 @@ class BatchPolopt(RLAlgorithm):
 
             kls_flat = np.hstack(kls)
 
-            logger.record_tabular('VBNN_MeanKL', np.mean(kls_flat))
-            logger.record_tabular('VBNN_StdKL', np.std(kls_flat))
-            logger.record_tabular('VBNN_MinKL', np.min(kls_flat))
-            logger.record_tabular('VBNN_MaxKL', np.max(kls_flat))
+            logger.record_tabular('Expl_MeanKL', np.mean(kls_flat))
+            logger.record_tabular('Expl_StdKL', np.std(kls_flat))
+            logger.record_tabular('Expl_MinKL', np.min(kls_flat))
+            logger.record_tabular('Expl_MaxKL', np.max(kls_flat))
 
             # Perform normlization of the intrinsic rewards.
             if self.use_kl_ratio:
@@ -501,10 +486,10 @@ class BatchPolopt(RLAlgorithm):
             self.eta *= self.eta_discount
 
         else:
-            logger.record_tabular('VBNN_MeanKL', 0.)
-            logger.record_tabular('VBNN_StdKL', 0.)
-            logger.record_tabular('VBNN_MinKL', 0.)
-            logger.record_tabular('VBNN_MaxKL', 0.)
+            logger.record_tabular('Expl_MeanKL', 0.)
+            logger.record_tabular('Expl_StdKL', 0.)
+            logger.record_tabular('Expl_MinKL', 0.)
+            logger.record_tabular('Expl_MaxKL', 0.)
 
         baselines = []
         returns = []
@@ -645,6 +630,5 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('StdReturn', np.std(undiscounted_returns))
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
-        logger.record_tabular('Expl_eta', self.eta)
 
         return samples_data

@@ -14,7 +14,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(2)
-etas = [0.0001, 0.001]
+etas = [0.0001]
 # SwimmerGather hierarchical task
 mdp_classes = [SwimmerGatherEnv]
 mdps = [NormalizedEnv(env=mdp_class())
