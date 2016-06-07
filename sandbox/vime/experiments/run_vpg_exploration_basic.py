@@ -1,5 +1,5 @@
 import os
-from sandbox.rein.algos.erwr_bnn import ERWR
+from sandbox.rein.algos.vpg_unn import VPG
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
@@ -15,16 +15,15 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(10)
-# etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
-etas = [0]
-normalize_rewards = [False]
-mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
-               DoublePendulumEnv, MountainCarEnv]
-# seeds = [1]
-# mdp_classes = [DoublePendulumEnv]
-# etas = [0.1]
-# normalize_rewards = [False]
+# seeds = range(10)
+# etas = [0.0001, 0.0003, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
+# normalize_rewards = [False, True]
+# mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
+#                DoublePendulumEnv, MountainCarEnv]
+seeds = [1]
+mdp_classes = [DoublePendulumEnv]
+etas = [0.1]
+normalize_rewards = [True]
 
 mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
 param_cart_product = itertools.product(
@@ -44,7 +43,7 @@ for mdp, eta, seed, normalize_reward in param_cart_product:
     )
 
     batch_size=5000
-    algo = ERWR(
+    algo = VPG(
         env=mdp,
         policy=policy,
         baseline=baseline,
@@ -55,31 +54,29 @@ for mdp, eta, seed, normalize_reward in param_cart_product:
         eta=eta,
         eta_discount=1.0,
         snn_n_samples=10,
-        use_reverse_kl_reg=False,
+        use_reverse_kl_reg=True,
         use_replay_pool=True,
         use_kl_ratio=True,
         use_kl_ratio_q=True,
-        n_itr_update=1,
-        kl_batch_size=1,
+        n_itr_update=5,
+        kl_batch_size=5,
         normalize_reward=normalize_reward,
         stochastic_output=False,
-        second_order_update=True,
         replay_pool_size=100000,
         n_updates_per_sample=500,
+        #         second_order_update=True,
         unn_n_hidden=[32],
         unn_layers_type=[1, 1],
-        unn_learning_rate=0.0001,
-        compression=True,
-        information_gain=False
+        unn_learning_rate=0.001
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="erwr-expl-basic-xx2",
+        exp_prefix="vpg-expl-basic-v1x",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         script="sandbox/rein/run_experiment_lite.py"
     )

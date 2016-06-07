@@ -129,40 +129,57 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
             y_upper = list(plt.means + plt.stds)
             y_lower = list(plt.means - plt.stds)
         plt.legend = plt.legend.replace('rllab.algos.trpo.TRPO', 'TRPO')
-        plt.legend = plt.legend.replace('rllab.algos.vpg.VPG', 'R')
+        plt.legend = plt.legend.replace('rllab.algos.vpg.VPG', 'REINFORCE')
         plt.legend = plt.legend.replace('rllab.algos.erwr.ERWR', 'ERWR')
         plt.legend = plt.legend.replace('sandbox.rein.algos.trpo_unn.TRPO', 'TRPO+VIME')
+        plt.legend = plt.legend.replace('sandbox.rein.algos.vpg_unn.VPG', 'REINFORCE+VIME')
         plt.legend = plt.legend.replace('sandbox.rein.algos.erwr_bnn.ERWR', 'ERWR+VIME')
         plt.legend = plt.legend.replace('0.0001', '1e-4')
-        plt.legend = plt.legend.replace('True', 'TRPO+VIME')
-        plt.legend = plt.legend.replace('False', 'TRPO')
+#         plt.legend = plt.legend.replace('0.001', 'TRPO+VIME')
+#         plt.legend = plt.legend.replace('0', 'TRPO')
+#         plt.legend = plt.legend.replace('0.005', 'TRPO+L2')
+
+        if idx == 0:
+            plt.legend = 'TRPO (0.0)'
+        if idx == 1:
+            plt.legend = 'TRPO+VIME (103.7)'
+        if idx == 2:
+            plt.legend = 'TRPO+L2 (0.0)'
+
         ax.fill_between(
             x, y_lower, y_upper, interpolate=True, facecolor=color, linewidth=0.0, alpha=0.3)
-        ax.plot(x, y, color=color, label=plt.legend)
+        if idx == 2:
+            ax.plot(x, y, color=color, label=plt.legend, linewidth=2.0, linestyle="--")
+        else:
+            ax.plot(x, y, color=color, label=plt.legend, linewidth=2.0)
         ax.grid(True)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         if counter == 1:
-#                 ax.set_xlim([0, 1000])
-            ax.set_ylim([0, 60])
+#             ax.set_xlim([0, 120])
+            ax.set_ylim([-3, 60])
 #             ax.set_xlim([0, 80])
 
             loc = 'upper left'
         elif counter == 2:
+            ax.set_ylim([-0.04, 0.4])
+
+#             ax.set_ylim([-0.1, 0.4])
+            ax.set_xlim([0, 2000])
             loc = 'upper left'
         elif counter == 3:
-            ax.set_xlim([0, 1000])
-            loc = 'upper left'
+#             ax.set_xlim([0, 1000])
+            loc = 'lower right'
         elif counter == 4:
-            ax.set_xlim([0, 200])
+#             ax.set_xlim([0, 800])
 #             ax.set_ylim([0, 2])
-            loc= 'center right'
+            loc= 'lower right'
         leg = ax.legend(loc=loc, prop={'size':12}, ncol=1)
         for legobj in leg.legendHandles:
             legobj.set_linewidth(5.0)
             
         def y_fmt(x, y):
-            return str(int(np.round(x/1000.0)))+'k'
+            return str(int(np.round(x/1000.0)))+'K'
 
         import matplotlib.ticker as tick
 #         ax.xaxis.set_major_formatter(tick.FuncFormatter(y_fmt))
@@ -255,7 +272,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
 
                             if use_median:
                                 medians = np.nanmedian(progresses, axis=0)
-                                regret = np.median(medians)
+                                regret = np.mean(medians)
                             else:
                                 means = np.nanmean(progresses, axis=0)
                                 regret = np.mean(means)

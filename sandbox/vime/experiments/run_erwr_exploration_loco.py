@@ -1,11 +1,8 @@
 import os
 from sandbox.rein.algos.erwr_bnn import ERWR
+from rllab.envs.mujoco.hopper_env import HopperEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
-from rllab.envs.box2d.cartpole_env import CartpoleEnv
-from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
-from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
-from rllab.envs.box2d.mountain_car_env import MountainCarEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
@@ -16,11 +13,9 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-# etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
-etas = [0]
-normalize_rewards = [False]
-mdp_classes = [CartpoleEnv, CartpoleSwingupEnv,
-               DoublePendulumEnv, MountainCarEnv]
+etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
+normalize_rewards = [False, True]
+mdp_classes = [HopperEnv]
 # seeds = [1]
 # mdp_classes = [DoublePendulumEnv]
 # etas = [0.1]
@@ -35,15 +30,15 @@ for mdp, eta, seed, normalize_reward in param_cart_product:
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
-        hidden_sizes=(32,),
+        hidden_sizes=(64, 32),
     )
 
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(hidden_sizes=(32,)),
+        regressor_args=dict(hidden_sizes=(64, 32)),
     )
 
-    batch_size=5000
+    batch_size = 5000
     algo = ERWR(
         env=mdp,
         policy=policy,
@@ -51,7 +46,7 @@ for mdp, eta, seed, normalize_reward in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=1000,
+        n_itr=10000,
         eta=eta,
         eta_discount=1.0,
         snn_n_samples=10,
@@ -66,16 +61,14 @@ for mdp, eta, seed, normalize_reward in param_cart_product:
         second_order_update=True,
         replay_pool_size=100000,
         n_updates_per_sample=500,
-        unn_n_hidden=[32],
-        unn_layers_type=[1, 1],
-        unn_learning_rate=0.0001,
-        compression=True,
-        information_gain=False
+        unn_n_hidden=[64, 64],
+        unn_layers_type=[1, 1, 1],
+        unn_learning_rate=0.0001
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="erwr-expl-basic-xx2",
+        exp_prefix="erwr-expl-loco-a1",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

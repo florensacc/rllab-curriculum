@@ -33,22 +33,23 @@ import matplotlib.pyplot as _plt
 f, ax = _plt.subplots(figsize=(8, 5))
 color = core.color_defaults[1 % len(core.color_defaults)]
 
+LW = 2.0
+# ax.fill_between(
+#     eta, TRPO_25x, TRPO_75x, interpolate=True, facecolor=core.color_defaults[3 % len(core.color_defaults)], linewidth=0.0, alpha=0.3)
+# ax.plot(eta, TRPO_50x, color=core.color_defaults[
+#         3 % len(core.color_defaults)], label='TRPO')
 ax.fill_between(
-    eta, TRPO_25x, TRPO_75x, interpolate=True, facecolor=core.color_defaults[3 % len(core.color_defaults)], linewidth=0.0, alpha=0.3)
-ax.plot(eta, TRPO_50x, color=core.color_defaults[
-        3 % len(core.color_defaults)], label='TRPO')
-ax.fill_between(
-    eta, TRPO_25, TRPO_75, interpolate=True, facecolor=core.color_defaults[0 % len(core.color_defaults)], linewidth=0.0, alpha=0.3)
+    eta, TRPO_25, TRPO_75, interpolate=True, facecolor=core.color_defaults[2 % len(core.color_defaults)], linewidth=0.0, alpha=0.3)
 ax.plot(eta, TRPO_50, color=core.color_defaults[
-        0 % len(core.color_defaults)], label='TRPO 100')
+        2 % len(core.color_defaults)], label='TRPO',linewidth=LW)
 ax.fill_between(
-    eta, ERWR_25, ERWR_75, interpolate=True, facecolor=core.color_defaults[2 % len(core.color_defaults)], linewidth=0.0, alpha=0.3)
+    eta, ERWR_25, ERWR_75, interpolate=True, facecolor=core.color_defaults[3 % len(core.color_defaults)], linewidth=0.0, alpha=0.3)
 ax.plot(eta, ERWR_50, color=core.color_defaults[
-        2 % len(core.color_defaults)], label='ERWR')
+        3 % len(core.color_defaults)], label='ERWR', linestyle='-.',linewidth=LW)
 ax.fill_between(
-    eta, REINFORCE_25, REINFORCE_75, interpolate=True, facecolor=core.color_defaults[1 % len(core.color_defaults)], linewidth=0.0, alpha=0.3)
+    eta, REINFORCE_25, REINFORCE_75, interpolate=True, facecolor=core.color_defaults[4 % len(core.color_defaults)], linewidth=0.0, alpha=0.3)
 ax.plot(eta, REINFORCE_50, color=core.color_defaults[
-        1 % len(core.color_defaults)], label='REINFORCE')
+        4 % len(core.color_defaults)], label='REINFORCE', linestyle='--',linewidth=LW)
 ax.grid(True)
 ax.spines['right'].set_visible(False)
 ax.spines['top'].set_visible(False)
