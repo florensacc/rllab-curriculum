@@ -10,12 +10,12 @@ from collections import OrderedDict
 import theano
 
 # ----------------
-VBNN_LAYER_TAG = 'vbnnlayer'
+BNN_LAYER_TAG = 'BNNLayer'
 USE_REPARAMETRIZATION_TRICK = True
 # ----------------
 
 
-class VBNNLayer(lasagne.layers.Layer):
+class BNNLayer(lasagne.layers.Layer):
     """Probabilistic layer that uses Gaussian weights.
 
     Each weight has two parameters: mean and standard deviation (std).
@@ -27,7 +27,7 @@ class VBNNLayer(lasagne.layers.Layer):
                  nonlinearity=lasagne.nonlinearities.rectify,
                  prior_sd=None,
                  **kwargs):
-        super(VBNNLayer, self).__init__(incoming, **kwargs)
+        super(BNNLayer, self).__init__(incoming, **kwargs)
 
         self._srng = RandomStreams()
 
@@ -238,8 +238,8 @@ class VBNNLayer(lasagne.layers.Layer):
         return (input_shape[0], self.num_units)
 
 
-class VBNN(LasagnePowered, Serializable):
-    """Variational Bayes neural network (VBNN), see Blundell2016."""
+class BNN(LasagnePowered, Serializable):
+    """Bayesian neural network (BNN) based on Blundell2016."""
 
     def __init__(self, n_in,
                  n_hidden,
@@ -293,26 +293,26 @@ class VBNN(LasagnePowered, Serializable):
         self.build_model()
 
     def save_old_params(self):
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_old_params()
 
     def reset_to_old_params(self):
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.reset_to_old_params()
 
     def compression_improvement(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_old_new() for l in layers)
 
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
@@ -326,19 +326,19 @@ class VBNN(LasagnePowered, Serializable):
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
+        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_prior_new() for l in layers)
 
@@ -399,8 +399,8 @@ class VBNN(LasagnePowered, Serializable):
         for i in xrange(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             if self.layers_type[i] == 1:
-                network = VBNNLayer(
-                    network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, name=VBNN_LAYER_TAG)
+                network = BNNLayer(
+                    network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, name=BNN_LAYER_TAG)
             else:
                 network = lasagne.layers.DenseLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf)
@@ -408,8 +408,8 @@ class VBNN(LasagnePowered, Serializable):
         # Output layer
         if self.layers_type[len(self.n_hidden)] == 1:
             # Probabilistic layer (1) or deterministic layer (0).
-            network = VBNNLayer(
-                network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=VBNN_LAYER_TAG)
+            network = BNNLayer(
+                network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=BNN_LAYER_TAG)
         else:
             network = lasagne.layers.DenseLayer(
                 network, self.n_out, nonlinearity=self.outf)
@@ -504,7 +504,7 @@ class VBNN(LasagnePowered, Serializable):
 
 #             updates_kl = second_order_update(
 #                 loss_only_last_sample, params, oldparams, step_size)
-# 
+#
 #             self.train_update_fn = ext.compile_function(
 #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
         else:

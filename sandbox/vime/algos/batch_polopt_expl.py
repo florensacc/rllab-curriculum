@@ -17,6 +17,7 @@ import time
 from sandbox.vime.dynamics import bnn
 # -------------------
 
+
 class SimpleReplayPool(object):
     """Replay pool"""
 
@@ -216,7 +217,7 @@ class BatchPolopt(RLAlgorithm):
         # ----------------------
 
         if self.second_order_update:
-            #             assert self.kl_batch_size == 1
+            assert self.kl_batch_size == 1
             assert self.n_itr_update == 1
 
         # Params to keep track of moving average (both intrinsic and external
@@ -235,7 +236,7 @@ class BatchPolopt(RLAlgorithm):
             self.kl_previous = deque(maxlen=self.kl_q_len)
 
     def start_worker(self):
-        parallel_sampler.populate_task(self.env, self.policy, self.vbnn)
+        parallel_sampler.populate_task(self.env, self.policy, self.bnn)
         if self.plot:
             plotter.init_plot(self.env, self.policy)
 
@@ -244,10 +245,10 @@ class BatchPolopt(RLAlgorithm):
 
     def train(self):
 
-        # Uncertain neural network (UNN) initialization.
+        # Bayesian neural network (BNN) initialization.
         # ------------------------------------------------
-        batch_size = 1
-        n_batches = 5  # FIXME, there is no correct value!
+        batch_size = 1  # Redundant
+        n_batches = 5  # Hardcode or annealing scheme \pi_i.
 
         # MDP observation and action dimensions.
         obs_dim = np.sum(self.env.observation_space.shape)
@@ -256,7 +257,7 @@ class BatchPolopt(RLAlgorithm):
         logger.log("Building BNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
 
-        self.vbnn = bnn.VBNN(
+        self.bnn = bnn.BNN(
             n_in=(obs_dim + act_dim),
             n_hidden=self.unn_n_hidden,
             n_out=obs_dim,
@@ -334,16 +335,16 @@ class BatchPolopt(RLAlgorithm):
 
                     old_acc = 0.
                     for _inputs, _targets in zip(_inputss, _targetss):
-                        _out = self.vbnn.pred_fn(_inputs)
+                        _out = self.bnn.pred_fn(_inputs)
                         old_acc += np.mean(np.square(_out - _targets))
                     old_acc /= len(_inputss)
 
                     for _inputs, _targets in zip(_inputss, _targetss):
-                        self.vbnn.train_fn(_inputs, _targets)
+                        self.bnn.train_fn(_inputs, _targets)
 
                     new_acc = 0.
                     for _inputs, _targets in zip(_inputss, _targetss):
-                        _out = self.vbnn.pred_fn(_inputs)
+                        _out = self.bnn.pred_fn(_inputs)
                         new_acc += np.mean(np.square(_out - _targets))
                     new_acc /= len(_inputss)
 
@@ -402,7 +403,7 @@ class BatchPolopt(RLAlgorithm):
 
     def obtain_samples(self, itr):
         cur_params = self.policy.get_param_values()
-        cur_dynamics_params = self.vbnn.get_param_values()
+        cur_dynamics_params = self.bnn.get_param_values()
 
         reward_mean = None
         reward_std = None
