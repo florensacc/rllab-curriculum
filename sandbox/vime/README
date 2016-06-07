@@ -1,6 +1,0 @@
-How to run VIME
-===============
-
-Testing the Bayesian neural network (BNN): run_bnn.py
-
-Testing TRPO+VIME on SwimmerGather environment: run_trpo_expl.py
