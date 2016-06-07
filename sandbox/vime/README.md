@@ -4,4 +4,4 @@ Variational Information Maximizing Exploration (VIME) as presented in Curiosity-
 
 Train a Bayesian neural network (BNN) on a simple regression task via `python vime/dynamics/run_bnn.py`.
 
-Execute TRPO+VIME on the hierarchical SwimmerGather environment `python vime/experiments/run_trpo_expl.py`.
+Execute TRPO+VIME on the hierarchical SwimmerGather environment via `python vime/experiments/run_trpo_expl.py`.
