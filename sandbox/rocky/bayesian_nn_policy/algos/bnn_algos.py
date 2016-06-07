@@ -79,17 +79,11 @@ class BNNNPO(NPO):
 
     def optimize_policy(self, itr, samples_data):
         paths = samples_data["paths"]
-        # param_mean = self.policy.mean_var.get_value()
-        # param_log_std = self.policy.log_std_var.get_value()
-        # for path in old_paths:
-        #     path["param_epsilon"] = (path["param_val"] - param_mean) / np.exp(param_log_std)
-        # paths = new_paths + old_paths
         all_advantages = np.concatenate([path["advantages"] for path in paths])
         adv_mean = np.mean(all_advantages)
         adv_std = np.std(all_advantages) + 1e-8
         for path in paths:
             path["advantages"] = (path["advantages"] - adv_mean) / adv_std
-        # recompute epsilon for earlier paths
         loss_before = self.optimizer.loss(self.policy, paths)
         mean_kl_before = self.optimizer.constraint_val(self.policy, paths)
         self.optimizer.optimize(self.policy, paths)
@@ -100,7 +94,6 @@ class BNNNPO(NPO):
         logger.record_tabular('MeanKLBefore', mean_kl_before)
         logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('dLoss', loss_before - loss_after)
-        # rescale back the advantages
         for path in paths:
             path["advantages"] = path["advantages"] * adv_std + adv_mean
         return dict()

@@ -119,7 +119,7 @@ class BayesianNNPolicy(StochasticPolicy, Serializable):
         std = self._get_std()
         epsilon = np.random.standard_normal((self.n_params,))
         epsilon = np.cast['float32'](epsilon)
-        param_val = mean + std * epsilon
+        param_val = mean + np.maximum(0, std) * epsilon
         self.param_epsilon_var.set_value(epsilon)
         self.wrapped_policy.set_param_values(param_val)
 
@@ -141,7 +141,7 @@ class BayesianNNPolicy(StochasticPolicy, Serializable):
             std_var = self.std_param_var
         else:
             raise NotImplementedError
-        param_var = self.mean_var + std_var * self.param_epsilon_var
+        param_var = self.mean_var + TT.maximum(0, std_var) * self.param_epsilon_var
         origi_params = self.wrapped_policy.get_params()
         unflat_params = ext.unflatten_tensor_variables(param_var, self.wrapped_policy.get_param_shapes(), origi_params)
         dict_items = wrapped_dist_info_sym.items()
@@ -163,4 +163,4 @@ class BayesianNNPolicy(StochasticPolicy, Serializable):
 
     def log_diagnostics(self, paths):
         logger.record_tabular("AveragePolicyParamAbsMean", np.mean(np.abs(self.mean_var.get_value())))
-        logger.record_tabular("AveragePolicyParamStd", np.mean(np.abs(self._get_std())))
+        logger.record_tabular("AveragePolicyParamStd", np.mean(np.maximum(0, self._get_std())))
