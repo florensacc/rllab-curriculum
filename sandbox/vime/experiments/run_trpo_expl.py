@@ -69,5 +69,5 @@ for mdp, eta, seed in param_cart_product:
         snapshot_mode="last",
         seed=seed,
         mode="local",
-        script="sandbox/rein/run_experiment_lite.py",
+        script="sandbox/vime/experiments/run_experiment_lite.py",
     )

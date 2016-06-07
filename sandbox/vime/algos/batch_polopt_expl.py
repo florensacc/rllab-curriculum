@@ -14,7 +14,7 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.vime.dynamics_models import bnn
+from sandbox.vime.dynamics import bnn
 # -------------------
 
 class SimpleReplayPool(object):
