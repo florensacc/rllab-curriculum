@@ -6,6 +6,7 @@ from rllab.optimizers.minibatch_dataset import BatchDataset
 from collections import OrderedDict
 import time
 import lasagne.updates
+import theano
 from functools import partial
 
 
@@ -58,9 +59,8 @@ class FirstOrderOptimizer(Serializable):
         self._target = target
 
         if gradients is None:
-            updates = self._update_method(loss, target.get_params(trainable=True))
-        else:
-            updates = self._update_method(gradients, target.get_params(trainable=True))
+            gradients = theano.grad(loss, target.get_params(trainable=True), disconnected_inputs='ignore')
+        updates = self._update_method(gradients, target.get_params(trainable=True))
         updates = OrderedDict([(k, v.astype(k.dtype)) for k, v in updates.iteritems()])
 
         if extra_inputs is None:

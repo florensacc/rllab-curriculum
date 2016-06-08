@@ -2,6 +2,8 @@ from __future__ import print_function
 from __future__ import absolute_import
 from rllab.misc import tensor_utils
 import numpy as np
+import random
+from contextlib import contextmanager
 
 
 def downsample_tensor_dict(tensor_dict, interval):
@@ -42,3 +44,15 @@ def downsample_path(path, downsample_interval):
             new_dict[k] = val[::downsample_interval]
 
     return new_dict
+
+
+@contextmanager
+def using_seed(seed):
+    assert seed is not None
+    npr_state = np.random.get_state()
+    random_state = random.getstate()
+    np.random.seed(seed)
+    random.seed(seed)
+    yield
+    np.random.set_state(npr_state)
+    random.setstate(random_state)

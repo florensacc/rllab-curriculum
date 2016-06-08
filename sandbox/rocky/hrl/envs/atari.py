@@ -90,9 +90,9 @@ class AtariEnv(Env, Serializable):
     @property
     def observation_space(self):
         if self._obs_type == "ram":
-            return spaces.Box(low=np.zeros(128), high=np.zeros(128) + 255)
+            return spaces.Box(low=-1, high=1, shape=(128,))#np.zeros(128), high=np.ones(128))# + 255)
         elif self._obs_type == "image":
-            return spaces.Box(low=0, high=255, shape=IMG_WH[::-1])
+            return spaces.Box(low=-1, high=1, shape=IMG_WH[::-1])
 
     def _get_image(self):
         return to_rgb(self.ale)
@@ -106,11 +106,20 @@ class AtariEnv(Env, Serializable):
 
     def _get_obs(self):
         if self._obs_type == "ram":
-            return self._get_ram()
+            ram = self._get_ram()
+            # scale to [0, 1]
+            ram = ram / 255.0
+            # scale to [-1, 1]
+            ram = ram * 2.0 - 1.0
+            return ram
         elif self._obs_type == "image":
             img = self._get_image()[1:-1, :, :]
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img = cv2.resize(img, IMG_WH, interpolation=cv2.INTER_AREA)
+            # scale to [0, 1]
+            img = img / 255.0
+            # scale to [-1, 1]
+            img = img * 2.0 - 1.0
             return img
 
     # return: (states, observations)

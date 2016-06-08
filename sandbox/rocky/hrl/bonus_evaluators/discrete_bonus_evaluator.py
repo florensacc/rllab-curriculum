@@ -23,6 +23,7 @@ class modes(object):
     MODE_HIDDEN_AWARE_PARSIMONY = "min I(at;st|ht) + I(ht;st|ht-1)"
     MODE_MI_FEUDAL = "max I(at;ht|st)"
     MODE_MI_FEUDAL_SYNC = "max I(at;ht|st) + I(ht;ht-1|st)"
+    MODE_MI_FEUDAL_SYNC_ENT_BONUS = "max I(at;ht|st) + I(ht;ht-1|st) + H(at|st_raw)"
     MODE_JOINT_MI_PARSIMONY = "max I(at;ht|st) + I(ht;ht-1|st) - I(at;st|ht) - I(ht;st|ht-1)"
     MODE_MI_FEUDAL_SYNC_NO_STATE = "max I(at;ht) + I(ht;ht-1)"
     MODE_MI_LOOKBACK = "max I(at;ht-1|st)"
@@ -37,6 +38,7 @@ class ExactHiddenRegressor(object):
         """
         :type env_spec: EnvSpec
         :type policy: StochasticGRUPolicy
+        :type target_policy: StochasticGRUPolicy
         :type exact_entropy: bool
         """
         self.env_spec = env_spec
@@ -50,7 +52,7 @@ class ExactHiddenRegressor(object):
     def predict_log_likelihood(self, xs, ys):
         # xs: concatenation of state and previous hidden state
         if self.target_policy.use_bottleneck:
-            split_idx = self.target_policy.bottleneck_dim
+            split_idx = self.target_policy.hidden_bottleneck_dim
         else:
             split_idx = self.env_spec.observation_space.flat_dim
         obs, prev_hiddens = np.split(xs, [split_idx], axis=1)
@@ -64,16 +66,13 @@ class ExactHiddenRegressor(object):
     def log_likelihood_sym(self, x_var, y_var):
         # xs: concatenation of state and previous hidden state
         if self.target_policy.use_bottleneck:
-            split_idx = self.target_policy.bottleneck_dim
+            split_idx = self.target_policy.hidden_bottleneck_dim
         else:
             split_idx = self.env_spec.observation_space.flat_dim
         obs_var = x_var[:, :split_idx]
         prev_hidden_var = x_var[:, split_idx:]
         hidden_var = TT.cast(y_var, 'int32')
-        hidden_prob_var = L.get_output(
-            self.target_policy.l_hidden_prob,
-            {self.target_policy.l_obs: obs_var, self.target_policy.l_prev_hidden: prev_hidden_var}
-        )
+        hidden_prob_var = self.target_policy.hidden_prob_sym(obs_var, prev_hidden_var)
         if self.exact_entropy:
             return -self.target_policy.hidden_dist.entropy_sym(dict(prob=hidden_prob_var))
         else:
@@ -85,6 +84,7 @@ class ExactActionRegressor(object):
         """
         :type env_spec: EnvSpec
         :type policy: StochasticGRUPolicy
+        :type target_policy: StochasticGRUPolicy
         :type exact_entropy: bool
         """
         self.env_spec = env_spec
@@ -98,7 +98,7 @@ class ExactActionRegressor(object):
     def predict_log_likelihood(self, xs, ys):
         # xs: concatenation of state and hidden state
         if self.target_policy.use_bottleneck:
-            split_idx = self.target_policy.bottleneck_dim
+            split_idx = self.target_policy.action_bottleneck_dim
         else:
             split_idx = self.env_spec.observation_space.flat_dim
         obs, hiddens = np.split(xs, [split_idx], axis=1)
@@ -112,16 +112,13 @@ class ExactActionRegressor(object):
     def log_likelihood_sym(self, x_var, y_var):
         # xs: concatenation of state and previous hidden state
         if self.target_policy.use_bottleneck:
-            split_idx = self.target_policy.bottleneck_dim
+            split_idx = self.target_policy.action_bottleneck_dim
         else:
             split_idx = self.env_spec.observation_space.flat_dim
         obs_var = x_var[:, :split_idx]
         hidden_var = x_var[:, split_idx:]
         action_var = TT.cast(y_var, 'int32')
-        action_prob_var = L.get_output(
-            self.target_policy.l_action_prob,
-            {self.target_policy.l_obs: obs_var, self.target_policy.l_hidden: hidden_var}
-        )
+        action_prob_var = self.target_policy.action_prob_sym(obs_var, hidden_var)
         if self.exact_entropy:
             return -self.target_policy.action_dist.entropy_sym(dict(prob=action_prob_var))
         else:
@@ -177,6 +174,7 @@ def new_exact_regressor(env_spec, policy, regressor_type, exact_entropy, target_
     elif regressor_type == "p_at_given_st_ht":
         return ExactActionRegressor(env_spec, policy, exact_entropy, target_policy)
     elif regressor_type == "p_st_given_st_raw_ht1":
+        raise NotImplementedError
         return ExactBottleneckRegressor(env_spec, policy, exact_entropy, target_policy)
     else:
         raise NotImplementedError
@@ -189,7 +187,7 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             policy,
             mode,
             bonus_coeff=1.,
-            bottleneck_coeff=1.,
+            bottleneck_coeff=0.,
             hidden_regressor_cls=None,
             action_regressor_cls=None,
             bottleneck_regressor_cls=None,
@@ -242,9 +240,10 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
         self.env_spec = env_spec
         self.policy = policy
         assert isinstance(env_spec.action_space, Discrete)
-        assert not policy.use_decision_nodes
+        # assert not policy.use_decision_nodes
         assert policy.use_bottleneck
         assert not policy.random_reset
+        assert bottleneck_coeff == 0.
         if regressor_args is None:
             regressor_args = dict()
         if hidden_regressor_cls is None:
@@ -271,9 +270,11 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
         self.bottleneck_coeff = bottleneck_coeff
         self.mode = mode
         if policy.use_bottleneck:
-            obs_dim = policy.bottleneck_dim
+            action_obs_dim = policy.action_bottleneck_dim
+            hidden_obs_dim = policy.hidden_bottleneck_dim
         else:
-            obs_dim = env_spec.observation_space.flat_dim
+            action_obs_dim = env_spec.observation_space.flat_dim
+            hidden_obs_dim = env_spec.observation_space.flat_dim
         self.hidden_given_prev_regressor = hidden_regressor_cls(
             input_shape=(policy.n_subgoals,),
             output_dim=policy.n_subgoals,
@@ -291,13 +292,13 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             )
         else:
             self.hidden_given_state_prev_regressor = hidden_regressor_cls(
-                input_shape=(obs_dim + policy.n_subgoals,),
+                input_shape=(hidden_obs_dim + policy.n_subgoals,),
                 output_dim=policy.n_subgoals,
                 name="p_ht_given_st_ht1",
                 **hidden_regressor_args
             )
         self.hidden_given_state_regressor = hidden_regressor_cls(
-            input_shape=(obs_dim,),
+            input_shape=(hidden_obs_dim,),
             output_dim=policy.n_subgoals,
             name="p_ht_given_st",
             **hidden_regressor_args
@@ -309,13 +310,19 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             **action_regressor_args
         )
         self.action_given_state_regressor = action_regressor_cls(
-            input_shape=(obs_dim,),
+            input_shape=(action_obs_dim,),
             output_dim=env_spec.action_space.n,
             name="p_at_given_st",
             **action_regressor_args
         )
+        self.action_given_raw_state_regressor = action_regressor_cls(
+            input_shape=(env_spec.observation_space.flat_dim,),
+            output_dim=env_spec.action_space.n,
+            name="p_at_given_st_raw",
+            **action_regressor_args
+        )
         self.action_given_state_prev_regressor = action_regressor_cls(
-            input_shape=(obs_dim + policy.n_subgoals,),
+            input_shape=(action_obs_dim + policy.n_subgoals,),
             output_dim=env_spec.action_space.n,
             name="p_at_given_st_ht1",
             **action_regressor_args
@@ -336,32 +343,32 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             )
         else:
             self.action_given_state_hidden_regressor = action_regressor_cls(
-                input_shape=(obs_dim + policy.n_subgoals,),
+                input_shape=(action_obs_dim + policy.n_subgoals,),
                 output_dim=env_spec.action_space.n,
                 name="p_at_given_st_ht",
                 **action_regressor_args
             )
-        if policy.use_bottleneck:
-            self.bottleneck_given_prev_regressor = bottleneck_regressor_cls(
-                input_shape=(policy.n_subgoals,),
-                output_dim=policy.bottleneck_dim,
-                name="p_st_given_ht1",
-                **bottleneck_regressor_args
-            )
-            if use_exact_regressor:
-                self.bottleneck_given_state_prev_regressor = new_exact_regressor(
-                    env_spec, policy, "p_st_given_st_raw_ht1", exact_entropy, target_policy
-                )
-            else:
-                self.bottleneck_given_state_prev_regressor = bottleneck_regressor_cls(
-                    input_shape=(env_spec.observation_space.flat_dim + policy.n_subgoals,),
-                    output_dim=policy.bottleneck_dim,
-                    name="p_st_given_st_raw_ht1",
-                    **bottleneck_regressor_args
-                )
-        else:
-            self.bottleneck_given_prev_regressor = None
-            self.bottleneck_given_state_prev_regressor = None
+            # if policy.use_bottleneck:
+            #     self.bottleneck_given_prev_regressor = bottleneck_regressor_cls(
+            #         input_shape=(policy.n_subgoals,),
+            #         output_dim=policy.bottleneck_dim,
+            #         name="p_st_given_ht1",
+            #         **bottleneck_regressor_args
+            #     )
+            #     if use_exact_regressor:
+            #         self.bottleneck_given_state_prev_regressor = new_exact_regressor(
+            #             env_spec, policy, "p_st_given_st_raw_ht1", exact_entropy, target_policy
+            #         )
+            #     else:
+            #         self.bottleneck_given_state_prev_regressor = bottleneck_regressor_cls(
+            #             input_shape=(env_spec.observation_space.flat_dim + policy.n_subgoals,),
+            #             output_dim=policy.bottleneck_dim,
+            #             name="p_st_given_st_raw_ht1",
+            #             **bottleneck_regressor_args
+            #         )
+            # else:
+            #     self.bottleneck_given_prev_regressor = None
+            #     self.bottleneck_given_state_prev_regressor = None
 
     def fit(self, paths):
         raw_obs = tensor_utils.concat_tensor_list([p["observations"] for p in paths])
@@ -370,28 +377,33 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
         hidden_states = agent_infos["hidden_state"]
         prev_hiddens = agent_infos["prev_hidden"]
         if self.policy.use_bottleneck:
-            bottleneck = agent_infos["bottleneck"]
-            logger.log("fitting p(st|ht1) regressor")
-            self.bottleneck_given_prev_regressor.fit(prev_hiddens, bottleneck)
-            logger.log("fitting p(st|st_raw_ht1) regressor")
-            self.bottleneck_given_state_prev_regressor.fit(np.concatenate([raw_obs, prev_hiddens], axis=1), bottleneck)
-            obs = bottleneck
+            action_bottleneck = agent_infos["action_bottleneck"]
+            hidden_bottleneck = agent_infos["hidden_bottleneck"]
+            # logger.log("fitting p(st|ht1) regressor")
+            # self.bottleneck_given_prev_regressor.fit(prev_hiddens, bottleneck)
+            # logger.log("fitting p(st|st_raw_ht1) regressor")
+            # self.bottleneck_given_state_prev_regressor.fit(np.concatenate([raw_obs, prev_hiddens], axis=1), bottleneck)
+            action_obs = action_bottleneck
+            hidden_obs = hidden_bottleneck
         else:
-            obs = raw_obs
+            action_obs = raw_obs
+            hidden_obs = raw_obs
         logger.log("fitting p(ht|ht-1) regressor")
         self.hidden_given_prev_regressor.fit(prev_hiddens, hidden_states)
         logger.log("fitting p(ht|st,ht-1) regressor")
-        self.hidden_given_state_prev_regressor.fit(np.concatenate([obs, prev_hiddens], axis=1), hidden_states)
+        self.hidden_given_state_prev_regressor.fit(np.concatenate([hidden_obs, prev_hiddens], axis=1), hidden_states)
         logger.log("fitting p(ht|st) regressor")
-        self.hidden_given_state_regressor.fit(obs, hidden_states)
+        self.hidden_given_state_regressor.fit(hidden_obs, hidden_states)
         logger.log("fitting p(at|ht) regressor")
         self.action_given_hidden_regressor.fit(hidden_states, actions)
         logger.log("fitting p(at|st,ht) regressor")
-        self.action_given_state_hidden_regressor.fit(np.concatenate([obs, hidden_states], axis=1), actions)
+        self.action_given_state_hidden_regressor.fit(np.concatenate([action_obs, hidden_states], axis=1), actions)
         logger.log("fitting p(at|st) regressor")
-        self.action_given_state_regressor.fit(obs, actions)
+        self.action_given_state_regressor.fit(action_obs, actions)
+        logger.log("fitting p(at|st_raw) regressor")
+        self.action_given_raw_state_regressor.fit(raw_obs, actions)
         logger.log("fitting p(at|st,ht-1) regressor")
-        self.action_given_state_prev_regressor.fit(np.concatenate([obs, prev_hiddens], axis=1), actions)
+        self.action_given_state_prev_regressor.fit(np.concatenate([action_obs, prev_hiddens], axis=1), actions)
         logger.log("fitting p(at) density estimator")
         self.action_density_estimator.fit(actions)
         logger.log("fitting p(ht) density estimator")
@@ -404,16 +416,20 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
         hidden_states = agent_infos["hidden_state"]
         prev_hiddens = agent_infos["prev_hidden"]
         if self.policy.use_bottleneck:
-            bottleneck = agent_infos["bottleneck"]
-            obs = bottleneck
+            action_bottleneck = agent_infos["action_bottleneck"]
+            hidden_bottleneck = agent_infos["hidden_bottleneck"]
+            action_obs = action_bottleneck
+            hidden_obs = hidden_bottleneck
         else:
-            bottleneck = None
-            obs = raw_obs
+            action_obs = raw_obs
+            hidden_obs = raw_obs
+            action_bottleneck = None
+            hidden_bottleneck = None
         if self.mode == MODES.MODE_MARGINAL_PARSIMONY:
             # The bonus will be computed as log(p(at)) - log(p(at|st))
             log_p_at = self.action_density_estimator.predict_log_likelihood(actions)
             log_p_at_given_st = self.action_given_state_regressor.predict_log_likelihood(
-                obs, actions)
+                action_obs, actions)
             bonus = self.bonus_coeff * (log_p_at - log_p_at_given_st)
         elif self.mode == MODES.MODE_HIDDEN_AWARE_PARSIMONY:
             # what we want is penalty = H(ht|ht-1) - H(ht|ht-1,st) + H(at|ht) - H(at|ht,st)
@@ -421,44 +437,60 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             log_p_ht_given_ht1 = self.hidden_given_prev_regressor.predict_log_likelihood(
                 prev_hiddens, hidden_states)
             log_p_ht_given_st_ht1 = self.hidden_given_state_prev_regressor.predict_log_likelihood(
-                np.concatenate([obs, prev_hiddens], axis=1), hidden_states)
+                np.concatenate([hidden_obs, prev_hiddens], axis=1), hidden_states)
             log_p_at_given_ht = self.action_given_hidden_regressor.predict_log_likelihood(
                 hidden_states, actions)
             log_p_at_given_st_ht = self.action_given_state_hidden_regressor.predict_log_likelihood(
-                np.concatenate([obs, hidden_states], axis=1), actions)
+                np.concatenate([action_obs, hidden_states], axis=1), actions)
             bonus = self.bonus_coeff * (log_p_ht_given_ht1 - log_p_ht_given_st_ht1) + \
                     self.bonus_coeff * (log_p_at_given_ht - log_p_at_given_st_ht)
         elif self.mode == MODES.MODE_MI_FEUDAL:
             # The bonus will be computed as log(p(at|ht,st)) - log(p(at|st))
             log_p_at_given_st = self.action_given_state_regressor.predict_log_likelihood(
-                obs, actions)
+                action_obs, actions)
             log_p_at_given_st_ht = self.action_given_state_hidden_regressor.predict_log_likelihood(
-                np.concatenate([obs, hidden_states], axis=1), actions)
+                np.concatenate([action_obs, hidden_states], axis=1), actions)
             bonus = self.bonus_coeff * (log_p_at_given_st_ht - log_p_at_given_st)
         elif self.mode == MODES.MODE_MI_FEUDAL_SYNC:
             # The bonus will be computed as
             # log(p(at|ht,st)) - log(p(at|st)) + log(p(ht|ht-1,st)) - log(p(ht|st))
             log_p_at_given_st = self.action_given_state_regressor.predict_log_likelihood(
-                obs, actions)
+                action_obs, actions)
             log_p_at_given_st_ht = self.action_given_state_hidden_regressor.predict_log_likelihood(
-                np.concatenate([obs, hidden_states], axis=1), actions)
+                np.concatenate([action_obs, hidden_states], axis=1), actions)
             log_p_ht_given_st_ht1 = self.hidden_given_state_prev_regressor.predict_log_likelihood(
-                np.concatenate([obs, prev_hiddens], axis=1), hidden_states)
+                np.concatenate([hidden_obs, prev_hiddens], axis=1), hidden_states)
             log_p_ht_given_st = self.hidden_given_state_regressor.predict_log_likelihood(
-                obs, hidden_states)
+                hidden_obs, hidden_states)
             bonus = self.bonus_coeff * (log_p_at_given_st_ht - log_p_at_given_st) + \
                     self.bonus_coeff * (log_p_ht_given_st_ht1 - log_p_ht_given_st)
+        elif self.mode == MODES.MODE_MI_FEUDAL_SYNC_ENT_BONUS:
+            # The bonus will be computed as
+            # log(p(at|ht,st)) - log(p(at|st)) + log(p(ht|ht-1,st)) - log(p(ht|st)) - log(p(at|st_raw))
+            log_p_at_given_st = self.action_given_state_regressor.predict_log_likelihood(
+                action_obs, actions)
+            log_p_at_given_st_ht = self.action_given_state_hidden_regressor.predict_log_likelihood(
+                np.concatenate([action_obs, hidden_states], axis=1), actions)
+            log_p_at_given_st_raw = self.action_given_raw_state_regressor.predict_log_likelihood(
+                raw_obs, actions)
+            log_p_ht_given_st_ht1 = self.hidden_given_state_prev_regressor.predict_log_likelihood(
+                np.concatenate([hidden_obs, prev_hiddens], axis=1), hidden_states)
+            log_p_ht_given_st = self.hidden_given_state_regressor.predict_log_likelihood(
+                hidden_obs, hidden_states)
+            bonus = self.bonus_coeff * (log_p_at_given_st_ht - log_p_at_given_st) + \
+                    self.bonus_coeff * (log_p_ht_given_st_ht1 - log_p_ht_given_st) + \
+                    self.bonus_coeff * (-log_p_at_given_st_raw)
         elif self.mode == MODES.MODE_JOINT_MI_PARSIMONY:
             # The bonus will be computed as
             # log(p(at|ht)) - log(p(at|st)) + log(p(ht|ht-1)) - log(p(ht|st))
             log_p_at_given_st = self.action_given_state_regressor.predict_log_likelihood(
-                obs, actions)
+                action_obs, actions)
             log_p_at_given_ht = self.action_given_hidden_regressor.predict_log_likelihood(
                 hidden_states, actions)
             log_p_ht_given_ht1 = self.hidden_given_prev_regressor.predict_log_likelihood(
                 prev_hiddens, hidden_states)
             log_p_ht_given_st = self.hidden_given_state_regressor.predict_log_likelihood(
-                obs, hidden_states)
+                hidden_obs, hidden_states)
             bonus = self.bonus_coeff * (log_p_at_given_ht - log_p_at_given_st) + \
                     self.bonus_coeff * (log_p_ht_given_ht1 - log_p_ht_given_st)
         elif self.mode == MODES.MODE_MI_FEUDAL_SYNC_NO_STATE:
@@ -475,26 +507,15 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             # The bonus will be computed as
             # log(p(at|st,ht-1)) - log(p(at|st))
             log_p_at_given_st = self.action_given_state_regressor.predict_log_likelihood(
-                obs, actions)
+                action_obs, actions)
             log_p_at_given_st_ht1 = self.action_given_state_prev_regressor.predict_log_likelihood(
-                np.concatenate([obs, prev_hiddens], axis=1), actions)
+                np.concatenate([action_obs, prev_hiddens], axis=1), actions)
             bonus = self.bonus_coeff * (log_p_at_given_st_ht1 - log_p_at_given_st)
         elif self.mode == MODES.MODE_BOTTLENECK_ONLY:
             bonus = 0.
         else:
             raise NotImplementedError
 
-        if self.policy.use_bottleneck:
-            # need to add the information bottleneck term
-            # min I(st;st_raw|ht-1) = H(st|ht-1) - H(st|st_raw,ht-1)
-            # hence the bonus should be
-            # log(p(st|ht-1)) - log(p(st|st_raw,ht-1))
-            log_p_st_given_ht1 = self.bottleneck_given_prev_regressor.predict_log_likelihood(
-                prev_hiddens, bottleneck)
-            log_p_st_given_st_raw_ht1 = self.bottleneck_given_state_prev_regressor.predict_log_likelihood(
-                np.concatenate([raw_obs, prev_hiddens], axis=1), bottleneck
-            )
-            bonus += self.bottleneck_coeff * (log_p_st_given_ht1 - log_p_st_given_st_raw_ht1)
         return bonus
 
     def bonus_sym(self, raw_obs_var, action_var, state_info_vars):
@@ -502,17 +523,18 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
         prev_hidden_var = state_info_vars["prev_hidden"]
         if self.policy.use_bottleneck:
             dist_info = self.policy.dist_info_sym(raw_obs_var, state_info_vars)
-            bottleneck_mean = dist_info["bottleneck_mean"]
-            bottleneck_log_std = dist_info["bottleneck_log_std"]
-            bottleneck_epsilon = state_info_vars["bottleneck_epsilon"]
-            bottleneck_var = bottleneck_epsilon * TT.exp(bottleneck_log_std) + bottleneck_mean
-            obs_var = bottleneck_var
+            action_bottleneck_var = dist_info["action_bottleneck"]
+            hidden_bottleneck_var = dist_info["hidden_bottleneck"]
+            action_obs_var = action_bottleneck_var
+            hidden_obs_var = hidden_bottleneck_var
         else:
-            bottleneck_var = None
-            obs_var = raw_obs_var
+            action_bottleneck_var = None
+            hidden_bottleneck_var = None
+            action_obs_var = raw_obs_var
+            hidden_obs_var = raw_obs_var
         if self.mode == MODES.MODE_MARGINAL_PARSIMONY:
             # The bonus will be computed as - log(p(at|st))
-            log_p_at_given_st = self.action_given_state_regressor.log_likelihood_sym(obs_var, action_var)
+            log_p_at_given_st = self.action_given_state_regressor.log_likelihood_sym(action_obs_var, action_var)
             bonus = self.bonus_coeff * (-log_p_at_given_st)
         elif self.mode == MODES.MODE_HIDDEN_AWARE_PARSIMONY:
             # what we want is penalty = H(ht|ht-1) - H(ht|ht-1,st) + H(at|ht) - H(at|ht,st)
@@ -520,44 +542,60 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             log_p_ht_given_ht1 = self.hidden_given_prev_regressor.log_likelihood_sym(
                 prev_hidden_var, hidden_state_var)
             log_p_ht_given_st_ht1 = self.hidden_given_state_prev_regressor.log_likelihood_sym(
-                TT.concatenate([obs_var, hidden_state_var], axis=1), hidden_state_var)
+                TT.concatenate([hidden_obs_var, hidden_state_var], axis=1), hidden_state_var)
             log_p_at_given_ht = self.action_given_hidden_regressor.log_likelihood_sym(
                 hidden_state_var, action_var)
             log_p_at_given_st_ht = self.action_given_state_hidden_regressor.log_likelihood_sym(
-                TT.concatenate([obs_var, hidden_state_var], axis=1), action_var)
+                TT.concatenate([action_obs_var, hidden_state_var], axis=1), action_var)
             bonus = self.bonus_coeff * (log_p_ht_given_ht1 - log_p_ht_given_st_ht1) + \
                     self.bonus_coeff * (log_p_at_given_ht - log_p_at_given_st_ht)
         elif self.mode == MODES.MODE_MI_FEUDAL:
             # The bonus will be computed as log(p(at|ht,st)) - log(p(at|st))
             log_p_at_given_st = self.action_given_state_regressor.log_likelihood_sym(
-                obs_var, action_var)
+                action_obs_var, action_var)
             log_p_at_given_st_ht = self.action_given_state_hidden_regressor.log_likelihood_sym(
-                TT.concatenate([obs_var, hidden_state_var], axis=1), action_var)
+                TT.concatenate([action_obs_var, hidden_state_var], axis=1), action_var)
             bonus = self.bonus_coeff * (log_p_at_given_st_ht - log_p_at_given_st)
         elif self.mode == MODES.MODE_MI_FEUDAL_SYNC:
             # The bonus will be computed as
             # log(p(at|ht,st)) - log(p(at|st)) + log(p(ht|ht-1,st)) - log(p(ht|st))
             log_p_at_given_st = self.action_given_state_regressor.log_likelihood_sym(
-                obs_var, action_var)
+                action_obs_var, action_var)
             log_p_at_given_st_ht = self.action_given_state_hidden_regressor.log_likelihood_sym(
-                TT.concatenate([obs_var, hidden_state_var], axis=1), action_var)
+                TT.concatenate([action_obs_var, hidden_state_var], axis=1), action_var)
             log_p_ht_given_st_ht1 = self.hidden_given_state_prev_regressor.log_likelihood_sym(
-                TT.concatenate([obs_var, prev_hidden_var], axis=1), hidden_state_var)
+                TT.concatenate([hidden_obs_var, prev_hidden_var], axis=1), hidden_state_var)
             log_p_ht_given_st = self.hidden_given_state_regressor.log_likelihood_sym(
-                obs_var, hidden_state_var)
+                hidden_obs_var, hidden_state_var)
             bonus = self.bonus_coeff * (log_p_at_given_st_ht - log_p_at_given_st) + \
                     self.bonus_coeff * (log_p_ht_given_st_ht1 - log_p_ht_given_st)
+        elif self.mode == MODES.MODE_MI_FEUDAL_SYNC_ENT_BONUS:
+            # The bonus will be computed as
+            # log(p(at|ht,st)) - log(p(at|st)) + log(p(ht|ht-1,st)) - log(p(ht|st)) - log(p(at|st_raw))
+            log_p_at_given_st = self.action_given_state_regressor.log_likelihood_sym(
+                action_obs_var, action_var)
+            log_p_at_given_st_ht = self.action_given_state_hidden_regressor.log_likelihood_sym(
+                TT.concatenate([action_obs_var, hidden_state_var], axis=1), action_var)
+            log_p_at_given_st_raw = self.action_given_raw_state_regressor.log_likelihood_sym(
+                raw_obs_var, action_var)
+            log_p_ht_given_st_ht1 = self.hidden_given_state_prev_regressor.log_likelihood_sym(
+                TT.concatenate([hidden_obs_var, prev_hidden_var], axis=1), hidden_state_var)
+            log_p_ht_given_st = self.hidden_given_state_regressor.log_likelihood_sym(
+                hidden_obs_var, hidden_state_var)
+            bonus = self.bonus_coeff * (log_p_at_given_st_ht - log_p_at_given_st) + \
+                    self.bonus_coeff * (log_p_ht_given_st_ht1 - log_p_ht_given_st) + \
+                    self.bonus_coeff * (- log_p_at_given_st_raw)
         elif self.mode == MODES.MODE_JOINT_MI_PARSIMONY:
             # The bonus will be computed as
             # log(p(at|ht)) - log(p(at|st)) + log(p(ht|ht-1)) - log(p(ht|st))
             log_p_at_given_st = self.action_given_state_regressor.log_likelihood_sym(
-                obs_var, action_var)
+                action_obs_var, action_var)
             log_p_at_given_ht = self.action_given_hidden_regressor.log_likelihood_sym(
                 hidden_state_var, action_var)
             log_p_ht_given_ht1 = self.hidden_given_prev_regressor.log_likelihood_sym(
                 prev_hidden_var, hidden_state_var)
             log_p_ht_given_st = self.hidden_given_state_regressor.log_likelihood_sym(
-                obs_var, hidden_state_var)
+                hidden_obs_var, hidden_state_var)
             bonus = self.bonus_coeff * (log_p_at_given_ht - log_p_at_given_st) + \
                     self.bonus_coeff * (log_p_ht_given_ht1 - log_p_ht_given_st)
         elif self.mode == MODES.MODE_MI_FEUDAL_SYNC_NO_STATE:
@@ -572,26 +610,26 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
             # The bonus will be computed as
             # log(p(at|st,ht-1)) - log(p(at|st))
             log_p_at_given_st = self.action_given_state_regressor.log_likelihood_sym(
-                obs_var, action_var)
+                action_obs_var, action_var)
             log_p_at_given_st_ht1 = self.action_given_state_prev_regressor.log_likelihood_sym(
-                TT.concatenate([obs_var, prev_hidden_var], axis=1), action_var)
+                TT.concatenate([action_obs_var, prev_hidden_var], axis=1), action_var)
             bonus = self.bonus_coeff * (log_p_at_given_st_ht1 - log_p_at_given_st)
         elif self.mode == MODES.MODE_BOTTLENECK_ONLY:
             bonus = 0.
         else:
             raise NotImplementedError
 
-        if self.policy.use_bottleneck:
-            # need to add the information bottleneck term
-            # min I(st;st_raw|ht-1) = H(st|ht-1) - H(st|st_raw,ht-1)
-            # hence the bonus should be
-            # log(p(st|ht-1)) - log(p(st|st_raw,ht-1))
-            log_p_st_given_ht1 = self.bottleneck_given_prev_regressor.log_likelihood_sym(
-                prev_hidden_var, bottleneck_var)
-            log_p_st_given_st_raw_ht1 = self.bottleneck_given_state_prev_regressor.log_likelihood_sym(
-                TT.concatenate([raw_obs_var, prev_hidden_var], axis=1), bottleneck_var
-            )
-            bonus += self.bottleneck_coeff * (log_p_st_given_ht1 - log_p_st_given_st_raw_ht1)
+        # if self.policy.use_bottleneck:
+        #     # need to add the information bottleneck term
+        #     # min I(st;st_raw|ht-1) = H(st|ht-1) - H(st|st_raw,ht-1)
+        #     # hence the bonus should be
+        #     # log(p(st|ht-1)) - log(p(st|st_raw,ht-1))
+        #     log_p_st_given_ht1 = self.bottleneck_given_prev_regressor.log_likelihood_sym(
+        #         prev_hidden_var, bottleneck_var)
+        #     log_p_st_given_st_raw_ht1 = self.bottleneck_given_state_prev_regressor.log_likelihood_sym(
+        #         TT.concatenate([raw_obs_var, prev_hidden_var], axis=1), bottleneck_var
+        #     )
+        #     bonus += self.bottleneck_coeff * (log_p_st_given_ht1 - log_p_st_given_st_raw_ht1)
         return bonus
 
     def log_diagnostics(self, paths):
@@ -601,31 +639,38 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
         hidden_states = agent_infos["hidden_state"]
         prev_hiddens = agent_infos["prev_hidden"]
         if self.policy.use_bottleneck:
-            bottleneck = agent_infos["bottleneck"]
-            obs = bottleneck
+            action_bottleneck = agent_infos["action_bottleneck"]
+            hidden_bottleneck = agent_infos["hidden_bottleneck"]
+            action_obs = action_bottleneck
+            hidden_obs = hidden_bottleneck
         else:
-            bottleneck = None
-            obs = raw_obs
+            action_bottleneck = None
+            hidden_bottleneck = None
+            action_obs = raw_obs
+            hidden_obs = raw_obs
         ent_at = np.mean(-self.action_density_estimator.predict_log_likelihood(actions))
         ent_ht = np.mean(-self.hidden_density_estimator.predict_log_likelihood(hidden_states))
         ent_at_given_st = np.mean(-self.action_given_state_regressor.predict_log_likelihood(
-            obs, actions))
+            action_obs, actions))
+        ent_at_given_st_raw = np.mean(-self.action_given_raw_state_regressor.predict_log_likelihood(
+            raw_obs, actions))
         ent_at_given_ht = np.mean(-self.action_given_hidden_regressor.predict_log_likelihood(
             hidden_states, actions))
         ent_ht_given_ht1 = np.mean(-self.hidden_given_prev_regressor.predict_log_likelihood(
             prev_hiddens, hidden_states))
         ent_ht_given_st_ht1 = np.mean(-self.hidden_given_state_prev_regressor.predict_log_likelihood(
-            np.concatenate([obs, prev_hiddens], axis=1), hidden_states))
+            np.concatenate([hidden_obs, prev_hiddens], axis=1), hidden_states))
         ent_at_given_st_ht1 = np.mean(-self.action_given_state_prev_regressor.predict_log_likelihood(
-            np.concatenate([obs, prev_hiddens], axis=1), actions))
+            np.concatenate([action_obs, prev_hiddens], axis=1), actions))
         ent_ht_given_st = np.mean(-self.hidden_given_state_regressor.predict_log_likelihood(
-            obs, hidden_states))
+            hidden_obs, hidden_states))
         ent_at_given_st_ht = np.mean(-self.action_given_state_hidden_regressor.predict_log_likelihood(
-            np.concatenate([obs, hidden_states], axis=1), actions))
+            np.concatenate([action_obs, hidden_states], axis=1), actions))
         # so many terms lol
         logger.record_tabular("H(at)", ent_at)
         logger.record_tabular("H(ht)", ent_ht)
         logger.record_tabular("H(at|st)", ent_at_given_st)
+        logger.record_tabular("H(at|st_raw)", ent_at_given_st_raw)
         logger.record_tabular("H(at|ht)", ent_at_given_ht)
         logger.record_tabular("H(at|st,ht)", ent_at_given_st_ht)
         logger.record_tabular("H(ht|ht-1)", ent_ht_given_ht1)
@@ -639,13 +684,13 @@ class DiscreteBonusEvaluator(BonusEvaluator, Serializable):
         logger.record_tabular("I(at;ht|st)", ent_at_given_st - ent_at_given_st_ht)
         logger.record_tabular("I(ht;ht-1|st)", ent_ht_given_st - ent_ht_given_st_ht1)
         logger.record_tabular("I(at;ht-1|st)", ent_at_given_st - ent_at_given_st_ht1)
-        if self.policy.use_bottleneck:
-            ent_st_given_ht1 = np.mean(-self.bottleneck_given_prev_regressor.predict_log_likelihood(
-                prev_hiddens, bottleneck
-            ))
-            ent_st_given_st_raw_ht1 = np.mean(-self.bottleneck_given_state_prev_regressor.predict_log_likelihood(
-                np.concatenate([raw_obs, prev_hiddens], axis=1), bottleneck
-            ))
-            logger.record_tabular("H(st|ht-1)", ent_st_given_ht1)
-            logger.record_tabular("H(st|st_raw,ht-1)", ent_st_given_st_raw_ht1)
-            logger.record_tabular("I(st;st_raw|ht-1)", ent_st_given_ht1 - ent_st_given_st_raw_ht1)
+        # if self.policy.use_bottleneck:
+        #     ent_st_given_ht1 = np.mean(-self.bottleneck_given_prev_regressor.predict_log_likelihood(
+        #         prev_hiddens, bottleneck
+        #     ))
+        #     ent_st_given_st_raw_ht1 = np.mean(-self.bottleneck_given_state_prev_regressor.predict_log_likelihood(
+        #         np.concatenate([raw_obs, prev_hiddens], axis=1), bottleneck
+        #     ))
+        #     logger.record_tabular("H(st|ht-1)", ent_st_given_ht1)
+        #     logger.record_tabular("H(st|st_raw,ht-1)", ent_st_given_st_raw_ht1)
+        #     logger.record_tabular("I(st;st_raw|ht-1)", ent_st_given_ht1 - ent_st_given_st_raw_ht1)

@@ -1,6 +1,7 @@
 from __future__ import print_function
 from __future__ import absolute_import
 from sandbox.rocky.hrl.envs.supervised_env import SupervisedEnv
+from sandbox.rocky.hrl.misc.hrl_utils import using_seed
 from rllab.envs.base import Step
 from sandbox.rocky.hrl.envs.env_util import GridPlot
 from rllab.spaces.product import Product
@@ -8,51 +9,62 @@ from rllab.spaces.discrete import Discrete
 from rllab.core.serializable import Serializable
 import matplotlib.pyplot as plt
 import numpy as np
+import random
 import itertools
 import sys
 
 
 class PermGridEnv(SupervisedEnv, Serializable):
-    def __init__(self, size=5, n_objects=5, object_seed=None, training_paths_ratio=0.5, random_restart=True):
+    def __init__(self, size=5, n_objects=5, order_length=None, object_seed=None, perm_seed=None, n_fixed_perm=None,
+                 random_restart=True):
+        """
+        :param size: Size of the grid world
+        :param n_objects: Number of objects in the grid world
+        :param order_length: Length of the instruction. By default it is equal to the number of objects
+        :param object_seed: Seed used to sample object positions. Setting the seed will ensure consistent object
+        positions.
+        :param perm_seed: Seed used to sample permutations. Only used if fixed_perm is True.
+        :param n_fixed_perm: number of fixed permutations to use. If set to None (default), each time a completely
+        random permutation will be used
+        :param random_restart: Whether to randomly sample the agent's position every episode. If false, agent will
+        always start from the top left corner.
+        """
         if object_seed is None:
             object_seed = np.random.randint(sys.maxint)
+        if perm_seed is None:
+            perm_seed = np.random.randint(sys.maxint)
         Serializable.quick_init(self, locals())
         self.size = size
-        # initialize object positions
-        rng_state = None
-        if object_seed is not None:
-            rng_state = np.random.get_state()
-            np.random.seed(object_seed)
-        # ensure objects are all in different positions
         self.n_objects = n_objects
-        self.object_positions = [
-            (x / self.size, x % self.size) for x in np.random.permutation(self.size * self.size)[:self.n_objects]
-            ]
-        all_perms = list(itertools.permutations(range(self.n_objects)))
-        np.random.shuffle(all_perms)
-        n_training_perms = int(training_paths_ratio * len(all_perms))
-        self.training_perms = all_perms[:n_training_perms]
-        self.testing_perms = all_perms[n_training_perms:]
-        if object_seed is not None:
-            np.random.set_state(rng_state)
+        if order_length is None:
+            order_length = n_objects
+        assert order_length <= n_objects, "Cannot have order length greater than the number of objects"
+        # initialize object positions
+        with using_seed(object_seed):
+            # ensure objects are all in different positions
+            self.object_positions = [
+                (x / self.size, x % self.size) for x in np.random.permutation(self.size * self.size)[:self.n_objects]
+                ]
+        if n_fixed_perm is not None:
+            assert n_fixed_perm >= 1
+            with using_seed(perm_seed):
+                self.perms = [tuple(np.random.permutation(self.n_objects)[:order_length]) for _ in xrange(n_fixed_perm)]
+        else:
+            self.perms = None
+        self.n_fixed_perm = n_fixed_perm
+        self.order_length = order_length
         self.fig = None
         self.agent_pos = None
         self.visit_order = None
-        self.n_visited = 0
+        self.n_visited = None
         self.random_restart = random_restart
-        self.in_test_mode = False
-
-    def test_mode(self):
-        self.in_test_mode = True
-
-    def __getstate__(self):
-        d = Serializable.__getstate__(self)
-        d["in_test_mode"] = self.in_test_mode
-        return d
-
-    def __setstate__(self, d):
-        Serializable.__setstate__(self, d)
-        self.in_test_mode = d["in_test_mode"]
+        self._observation_space = Product([
+            Product([Discrete(self.size), Discrete(self.size)]),
+            Product([Discrete(self.n_objects) for _ in xrange(self.order_length)]),
+            Product([Discrete(2) for _ in xrange(self.order_length)]),
+        ])
+        self._action_space = Discrete(4)
+        self.reset()
 
     def reset(self):
         if self.random_restart:
@@ -61,47 +73,13 @@ class PermGridEnv(SupervisedEnv, Serializable):
                 self.agent_pos = tuple(np.random.randint(low=0, high=self.size, size=(2,)))
         else:
             self.agent_pos = (0, 0)
-        if self.in_test_mode:
-            self.visit_order = self.testing_perms[np.random.choice(len(self.testing_perms))]
+        if self.n_fixed_perm is not None:
+            assert self.perms is not None
+            self.visit_order = random.choice(self.perms)
         else:
-            self.visit_order = tuple(np.random.permutation(self.n_objects))
+            self.visit_order = tuple(np.random.permutation(self.n_objects))[:self.order_length]
         self.n_visited = 0
         return self.get_current_obs()
-
-    def generate_training_paths(self):
-        assert not self.random_restart
-        ret = []
-        for train_perm in self.training_perms:
-            init_pos = (0, 0)
-            ret.append(self.generate_training_path(init_pos, train_perm))
-        return ret
-
-    def generate_training_path(self, init_pos, perm):
-        self.agent_pos = init_pos
-        self.visit_order = perm
-        self.n_visited = 0
-        observations = []
-        actions = []
-        for obj_idx in perm:
-            obj_pos = self.object_positions[obj_idx]
-            ox, oy = obj_pos
-            while self.agent_pos != obj_pos:
-                ax, ay = self.agent_pos
-                if ax < ox:
-                    action = 1
-                elif ax > ox:
-                    action = 3
-                elif ay < oy:
-                    action = 2
-                else:
-                    action = 0
-                observations.append(self.get_current_obs())
-                self.step(action)
-                actions.append(action)
-        return dict(
-            observations=self.observation_space.flatten_n(observations),
-            actions=self.action_space.flatten_n(actions),
-        )
 
     @staticmethod
     def action_from_direction(d):
@@ -122,7 +100,7 @@ class PermGridEnv(SupervisedEnv, Serializable):
         return (
             self.agent_pos,
             self.visit_order,
-            tuple([1] * self.n_visited + [0] * (self.n_objects - self.n_visited)),
+            tuple([1] * self.n_visited + [0] * (self.order_length - self.n_visited)),
         )
 
     def step(self, action):
@@ -137,20 +115,16 @@ class PermGridEnv(SupervisedEnv, Serializable):
             reward = 1
         else:
             reward = 0
-        done = self.n_visited == self.n_objects
+        done = self.n_visited == self.order_length
         return Step(observation=self.get_current_obs(), reward=reward, done=done)
 
     @property
     def observation_space(self):
-        return Product([
-            Product([Discrete(self.size), Discrete(self.size)]),
-            Product([Discrete(self.n_objects) for _ in xrange(self.n_objects)]),
-            Product([Discrete(2) for _ in xrange(self.n_objects)]),
-        ])
+        return self._observation_space
 
     @property
     def action_space(self):
-        return Discrete(4)
+        return self._action_space
 
     def render(self):
         if self.fig is None:

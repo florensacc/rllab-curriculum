@@ -12,10 +12,43 @@ from rllab.algos.npo import NPO
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.core.serializable import Serializable
+from rllab.sampler.stateful_pool import singleton_pool
+from rllab.sampler.utils import rollout
 import theano
 import theano.tensor as TT
+import cPickle as pickle
 
 floatX = theano.config.floatX
+
+
+def _worker_populate_test_env(G, test_env):
+    G.test_env = pickle.loads(test_env)
+
+
+def _worker_terminate_test_env(G):
+    if getattr(G, "test_env", None):
+        G.test_env.terminate()
+        G.test_env = None
+
+
+def populate_test_env(test_env):
+    if singleton_pool.n_parallel > 1:
+        singleton_pool.run_each(_worker_populate_test_env, [(pickle.dumps(test_env),)] * singleton_pool.n_parallel)
+    else:
+        singleton_pool.G.test_env = test_env
+
+
+def terminate_test_env():
+    singleton_pool.run_each(_worker_terminate_test_env, [tuple()] * singleton_pool.n_parallel)
+
+
+def _worker_set_policy_params(G, params):
+    G.policy.set_param_values(params)
+
+
+def _worker_collect_one_test_path(G, max_path_length):
+    path = rollout(G.test_env, G.policy, max_path_length)
+    return path, len(path["rewards"])
 
 
 class AltBonusBatchPolopt(BatchPolopt, Serializable):
@@ -24,6 +57,9 @@ class AltBonusBatchPolopt(BatchPolopt, Serializable):
             bonus_evaluator,
             bonus_baseline,
             fit_before_evaluate=True,
+            test_env=None,
+            n_test_samples=None,
+            test_max_path_length=None,
             *args,
             **kwargs):
         """
@@ -38,11 +74,46 @@ class AltBonusBatchPolopt(BatchPolopt, Serializable):
         self.bonus_adv_mean = theano.shared(np.cast[floatX](0.), "bonus_adv_mean")
         self.bonus_adv_std = theano.shared(np.cast[floatX](1.), "bonus_adv_std")
         super(AltBonusBatchPolopt, self).__init__(*args, **kwargs)
+        self.test_env = test_env
+        if test_env is not None:
+            assert n_test_samples is not None, "Must specify n_test_samples if test_env is specified!"
+            if test_max_path_length is None:
+                test_max_path_length = self.max_path_length
+        self.test_max_path_length = test_max_path_length
+        self.n_test_samples = n_test_samples
+
+    def start_worker(self):
+        super(AltBonusBatchPolopt, self).start_worker()
+        if self.test_env is not None:
+            populate_test_env(self.test_env)
+
+    def shutdown_worker(self):
+        super(AltBonusBatchPolopt, self).shutdown_worker()
+        if self.test_env is not None:
+            terminate_test_env()
 
     def log_diagnostics(self, paths):
         super(AltBonusBatchPolopt, self).log_diagnostics(paths)
         self.bonus_evaluator.log_diagnostics(paths)
         self.bonus_baseline.log_diagnostics(paths)
+        if self.test_env is not None:
+            singleton_pool.run_each(
+                _worker_set_policy_params,
+                [(self.policy.get_param_values(),)] * singleton_pool.n_parallel
+            )
+            logger.log("Sampling trajectories for test environment")
+            test_paths = singleton_pool.run_collect(
+                _worker_collect_one_test_path,
+                threshold=self.n_test_samples,
+                args=(self.test_max_path_length,),
+                show_prog_bar=True
+            )
+            for path in test_paths:
+                path["returns"] = special.discount_cumsum(path["rewards"], self.discount)
+            test_average_discounted_return = np.mean([path["returns"][0] for path in test_paths])
+            test_average_return = np.mean([sum(path["rewards"]) for path in test_paths])
+            logger.record_tabular("TestAverageReturn", test_average_return)
+            logger.record_tabular("TestAverageDiscountedReturn", test_average_discounted_return)
 
     def process_samples(self, itr, paths):
 
@@ -351,10 +422,10 @@ class AltBonusNPO(AltBonusBatchPolopt):
                          advantage_var,
                      ] + state_info_vars_list + old_dist_info_vars_list
         bonus_input_list = [
-                         obs_var,
-                         action_var,
-                         bonus_advantage_var,
-                     ] + state_info_vars_list + old_dist_info_vars_list + ref_dist_info_vars_list
+                               obs_var,
+                               action_var,
+                               bonus_advantage_var,
+                           ] + state_info_vars_list + old_dist_info_vars_list + ref_dist_info_vars_list
         if is_recurrent:
             input_list.append(valid_var)
             bonus_input_list.append(valid_var)

@@ -5,6 +5,8 @@ import numpy as np
 from rllab.spaces.discrete import Discrete
 from rllab.spaces.box import Box
 from rllab.spaces.product import Product
+from sandbox.rocky.hrl.misc.hrl_utils import using_seed
+import matplotlib.pyplot as plt
 
 # EMPTY = 0
 AGENT = 0
@@ -20,52 +22,74 @@ class SeaquestGridWorldEnv(Env):
 
     The observation is a 3D array where the last two dimensions encode the coordinate and the first dimension
     encode whether each type of objects is present in this grid.
+
+    To score in this environment, the agent must collect all the divers while avoiding all bombs.
     """
 
-    def __init__(self, size=10, n_bombs=None, guided_observation=False):
+    def __init__(self, size=10, n_bombs=None, n_divers=None, fixed_diver_slots=None, diver_pos_seed=None):
         """
         Create a new Seaquest-like grid world environment.
         :param size: Size of the grid world
         :param n_bombs: Number of bombs on the grid
-        :param guided_observation: whether to include additional information in the observation in the form of
-               categorical variables. This could potentially simplify the state predictor used in the MI bonus
-               evaluator.
-        :return:
+        :param n_divers: Number of divers on the grid
+        :param fixed_diver_slots: whether to have a fixed number of slots to sample the position of the divers from.
+        :param diver_pos_seed: Seed used to sample the diver slots. Must be provided if fixed_diver_slots is set
         """
         self.grid = None
         self.size = size
 
         if n_bombs is None:
             n_bombs = size / 2
+        if n_divers is None:
+            n_divers = size / 2
+
+        if fixed_diver_slots is not None:
+            assert diver_pos_seed is not None
+            with using_seed(diver_pos_seed):
+                self.diver_slots = [
+                    (max(1, idx / self.size), idx % self.size)
+                    for idx in np.random.choice(self.size * self.size, size=fixed_diver_slots, replace=False)
+                    ]
+        else:
+            self.diver_slots = None
+
         self.n_bombs = n_bombs
+        self.n_divers = n_divers
         self.agent_position = None
-        self.diver_position = None
-        self.guided_observation = guided_observation
-        self.diver_picked_up = False
+        self.diver_positions = None
+        self.bomb_positions = None
+
+        self.diver_picked_up = None
         self.reset()
         self.fig = None
 
         visual_obs_space = Box(low=0, high=N_OBJECT_TYPES, shape=(N_OBJECT_TYPES, self.size, self.size))
-        if guided_observation:
-            guided_obs_space = Product(Discrete(self.size), Discrete(self.size), Discrete(2))
-            self._observation_space = Product(visual_obs_space, guided_obs_space)
-        else:
-            self._observation_space = visual_obs_space
+        self._observation_space = visual_obs_space
         self._action_space = Discrete(4)
 
     def reset(self):
         # agent starts at top left corner
-        self.agent_position = (0, 0)
+        self.agent_position = (1, 0)
         while True:
-            self.diver_position = tuple(np.random.randint(low=0, high=self.size, size=2))
+            all_pos_ids = np.random.choice(self.size * self.size, size=self.n_divers + self.n_bombs, replace=False)
+            if self.diver_slots is not None:
+                self.diver_positions = [
+                    self.diver_slots[idx]
+                    for idx in np.random.choice(len(self.diver_slots), size=self.n_divers, replace=False)
+                    ]
+            else:
+                self.diver_positions = [
+                    (max(1, idx / self.size), idx % self.size)
+                    for idx in all_pos_ids[:self.n_divers]
+                    ]
             self.bomb_positions = [
-                tuple(np.random.randint(low=0, high=self.size, size=2))
-                for _ in xrange(self.n_bombs)
+                (max(1, idx / self.size), idx % self.size)
+                for idx in all_pos_ids[self.n_divers:]
                 ]
             # ensure that there's a path from the agent to the diver
             if self.feasible():
                 break
-        self.diver_picked_up = False
+        self.diver_picked_up = [False] * self.n_divers
         return self.get_current_obs()
 
     def feasible(self):
@@ -81,20 +105,21 @@ class SeaquestGridWorldEnv(Env):
             node = queue.pop()
             visited[node] = True
             for inc in incs:
-                next = tuple(np.clip(np.array(node) + inc, [0, 0], [self.size - 1, self.size - 1]))
+                next = tuple(np.clip(np.array(node) + inc, [1, 0], [self.size - 1, self.size - 1]))
                 if next not in self.bomb_positions and not visited[next]:
                     queue.append(next)
-        return visited[self.diver_position]
+        return all(visited[pos] for pos in self.diver_positions)
 
     def get_current_obs(self):
         grid = np.zeros((N_OBJECT_TYPES, self.size, self.size), dtype='uint8')
         grid[(AGENT,) + self.agent_position] = 1
-        if not self.diver_picked_up:
-            grid[(DIVER,) + self.diver_position] = 1
+        for diver_pos, picked_up in zip(self.diver_positions, self.diver_picked_up):
+            if not picked_up:
+                grid[(DIVER,) + diver_pos] = 1
         for bomb_position in self.bomb_positions:
             grid[(BOMB,) + bomb_position] = 1
-        if self.guided_observation:
-            return (grid, self.agent_position + (int(self.diver_picked_up),))
+        # if self.guided_observation:
+        #     return (grid, self.agent_position + (int(self.diver_picked_up),))
         return grid
 
     def step(self, action):
@@ -106,11 +131,15 @@ class SeaquestGridWorldEnv(Env):
             [self.size - 1, self.size - 1]
         ))
         if self.agent_position in self.bomb_positions:
-            return Step(observation=self.get_current_obs(), reward=0, done=True)
-        if self.agent_position == self.diver_position:
-            self.diver_picked_up = True
-        if self.diver_picked_up and self.agent_position[0] == 0:
-            return Step(observation=self.get_current_obs(), reward=1, done=True)
+            return Step(observation=self.get_current_obs(), reward=-1, done=True)
+        if self.agent_position in self.diver_positions:
+            diver_idx = self.diver_positions.index(self.agent_position)
+            self.diver_picked_up[diver_idx] = True
+        if self.agent_position[0] == 0:
+            if all(self.diver_picked_up):
+                return Step(observation=self.get_current_obs(), reward=1, done=True)
+            else:
+                return Step(observation=self.get_current_obs(), reward=0, done=True)
         return Step(observation=self.get_current_obs(), reward=0, done=False)
 
     @staticmethod
@@ -134,9 +163,10 @@ class SeaquestGridWorldEnv(Env):
         self.fig.reset_grid()
         self.fig.color_grid(self.agent_position[0], self.agent_position[1], 'g')
         self.fig.add_text(self.agent_position[0], self.agent_position[1], 'Agent')
-        if not self.diver_picked_up:
-            self.fig.color_grid(self.diver_position[0], self.diver_position[1], 'b')
-            self.fig.add_text(self.diver_position[0], self.diver_position[1], 'Diver')
+        for diver_pos, picked_up in zip(self.diver_positions, self.diver_picked_up):
+            if not picked_up:
+                self.fig.color_grid(diver_pos[0], diver_pos[1], 'b')
+                self.fig.add_text(diver_pos[0], diver_pos[1], 'Diver')
         for bomb_position in self.bomb_positions:
             self.fig.color_grid(bomb_position[0], bomb_position[1], 'r')
             self.fig.add_text(bomb_position[0], bomb_position[1], 'Bomb')

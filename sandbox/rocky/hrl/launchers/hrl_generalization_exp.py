@@ -7,54 +7,53 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rocky.hrl.envs.perm_grid_env import PermGridEnv
 from sandbox.rocky.hrl.bonus_evaluators.discrete_bonus_evaluator import DiscreteBonusEvaluator, MODES
-import sys
 
 stub(globals())
 
 from rllab.misc.instrument import VariantGenerator
 
 vg = VariantGenerator()
-vg.add("grid_size", [5, 7])  # , 7, 9, 11])
-vg.add("batch_size", [])#20000])  # , 10000, 20000])
+vg.add("grid_size", [10])
+vg.add("order_length", [4])
+vg.add("n_training_perm", [40])
+vg.add("n_test_perm", [100])
+vg.add("batch_size", [20000])
 vg.add("seed", [11, 111, 211, 311, 411])
 vg.add("mode", [
     MODES.MODE_MI_FEUDAL_SYNC,
-    # MODES.MODE_MI_FEUDAL,
-    # MODES.MODE_BOTTLENECK_ONLY,
-    # MODES.MODE_JOINT_MI_PARSIMONY,
-    # MODES.MODE_MARGINAL_PARSIMONY,
-    # MODES.MODE_HIDDEN_AWARE_PARSIMONY,
-    # MODES.MODE_MI_LOOKBACK,
-    # MODES.MODE_MI_FEUDAL_SYNC_NO_STATE,
-    # MODES.MODE_MARGINAL_PARSIMONY,
 ])
 vg.add("bottleneck_coeff", [0.])
 vg.add("step_size", [0.01])
-vg.add("bonus_step_size", [0.01])
-vg.add("exact_stop_gradient", [True])#, False])
-vg.add("bottleneck_nonlinear", [True])#lambda deterministic_bottleneck: [True, False] if deterministic_bottleneck else [
-    # False])
-vg.add("deterministic_bottleneck", [True])#, False])
-vg.add("separate_bottlenecks", [True])#, False])#, False])
-vg.add("use_decision_nodes", [True])#, False])#, False])
+vg.add("bonus_step_size", [0.01, 0.005, 0.001, 0.0001])
 
 variants = vg.variants()
 
 print("#Experiments: %d" % len(variants))
 
 for v in variants:
-    env = PermGridEnv(size=v["grid_size"], n_objects=v["grid_size"], object_seed=0)
+    env = PermGridEnv(
+        size=v["grid_size"],
+        n_objects=v["grid_size"],
+        object_seed=0,
+        perm_seed=0,
+        n_fixed_perm=v["n_training_perm"],
+        order_length=v["order_length"],
+    )
+    test_env = PermGridEnv(
+        size=v["grid_size"],
+        n_objects=v["grid_size"],
+        object_seed=0,
+        perm_seed=1,  # use different permutations for testing
+        n_fixed_perm=v["n_test_perm"],
+        order_length=v["order_length"],
+    )
     policy = StochasticGRUPolicy(
         env_spec=env.spec,
         n_subgoals=v["grid_size"],
-        action_bottleneck_dim=5,
-        hidden_bottleneck_dim=6,
-        bottleneck_dim=7,
+        bottleneck_dim=5,
         use_bottleneck=True,
-        deterministic_bottleneck=v["deterministic_bottleneck"],
-        bottleneck_nonlinear=v["bottleneck_nonlinear"],
-        separate_bottlenecks=v["separate_bottlenecks"],
-        use_decision_nodes=v["use_decision_nodes"]
+        deterministic_bottleneck=True,
+        bottleneck_nonlinear=True,
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     bonus_baseline = LinearFeatureBaseline(env_spec=env.spec)
@@ -64,34 +63,46 @@ for v in variants:
         policy=policy,
         mode=v["mode"],
         bonus_coeff=1.0,
-        bottleneck_coeff=v["bottleneck_coeff"],
+        bottleneck_coeff=0.,
         regressor_args=dict(
             use_trust_region=False,
-            step_size=0.01,
+            step_size=0,
         ),
         use_exact_regressor=True,
-        exact_stop_gradient=v["exact_stop_gradient"],
+        exact_stop_gradient=False,
         exact_entropy=False,
     )
     algo = AltBonusTRPO(
         env=env,
+        test_env=test_env,
         policy=policy,
         baseline=baseline,
         bonus_baseline=bonus_baseline,
         bonus_evaluator=bonus_evaluator,
         batch_size=v["batch_size"],
-        step_size=v["step_size"],#0.01,
-        bonus_step_size=v["bonus_step_size"],#0.005,
+        n_test_samples=10000,
+        test_max_path_length=100,
+        step_size=v["step_size"],  # 0.01,
+        bonus_step_size=v["bonus_step_size"],  # 0.005,
         max_path_length=100,
         n_itr=500,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="hrl_sep_bottleneck_2",
-        n_parallel=2,
+        exp_prefix="hier_gen",
+        n_parallel=3,
         seed=v["seed"],
-        mode="local"
-        # env=dict(THEANO_FLAGS="optimizer=None,mode=FAST_COMPILE")
+        mode="lab_kube",
+        resources=dict(
+            requests=dict(
+                cpu=3.3,
+            ),
+            limits=dict(
+                cpu=3.3,
+            )
+        ),
+        node_selector={
+            "aws/type": "m4.xlarge",
+        }
     )
-    # sys.exit()
