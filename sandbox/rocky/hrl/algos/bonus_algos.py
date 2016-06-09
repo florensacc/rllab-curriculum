@@ -25,6 +25,7 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
             self,
             bonus_evaluator,
             fit_before_evaluate=True,
+            reward_coeff=1.,
             *args,
             **kwargs):
         """
@@ -33,6 +34,7 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
         Serializable.quick_init(self, locals())
         self.bonus_evaluator = bonus_evaluator
         self.fit_before_evaluate = fit_before_evaluate
+        self.reward_coeff = reward_coeff
         self.adv_mean = theano.shared(np.cast[floatX](0.), "adv_mean")
         self.adv_std = theano.shared(np.cast[floatX](1.), "adv_std")
         super(BonusBatchPolopt, self).__init__(*args, **kwargs)
@@ -56,7 +58,7 @@ class BonusBatchPolopt(BatchPolopt, Serializable):
             bonuses = self.bonus_evaluator.predict(path)
             path["raw_rewards"] = path["rewards"]
             path["bonuses"] = bonuses
-            path["rewards"] = path["rewards"] + bonuses
+            path["rewards"] = self.reward_coeff * path["rewards"] + bonuses
             path_baselines = np.append(self.baseline.predict(path), 0)
             deltas = path["rewards"] + \
                      self.discount * path_baselines[1:] - \

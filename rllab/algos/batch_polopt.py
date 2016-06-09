@@ -20,6 +20,7 @@ class BatchPolopt(RLAlgorithm):
             env,
             policy,
             baseline,
+            scope=None,
             n_itr=500,
             start_itr=0,
             batch_size=5000,
@@ -39,6 +40,8 @@ class BatchPolopt(RLAlgorithm):
         :param policy: Policy
         :type policy: Policy
         :param baseline: Baseline
+        :param scope: Scope for identifying the algorithm. Must be specified if running multiple algorithms
+        simultaneously, each using different environments and policies
         :param n_itr: Number of iterations.
         :param start_itr: Starting iteration.
         :param batch_size: Number of samples per iteration.
@@ -56,6 +59,7 @@ class BatchPolopt(RLAlgorithm):
         self.env = env
         self.policy = policy
         self.baseline = baseline
+        self.scope = scope
         self.n_itr = n_itr
         self.start_itr = start_itr
         self.batch_size = batch_size
@@ -70,12 +74,12 @@ class BatchPolopt(RLAlgorithm):
         self.whole_paths = whole_paths
 
     def start_worker(self):
-        parallel_sampler.populate_task(self.env, self.policy)
+        parallel_sampler.populate_task(self.env, self.policy, scope=self.scope)
         if self.plot:
             plotter.init_plot(self.env, self.policy)
 
     def shutdown_worker(self):
-        parallel_sampler.terminate_task()
+        parallel_sampler.terminate_task(scope=self.scope)
 
     def train(self):
         self.start_worker()
@@ -133,6 +137,7 @@ class BatchPolopt(RLAlgorithm):
             policy_params=cur_params,
             max_samples=self.batch_size,
             max_path_length=self.max_path_length,
+            scope=self.scope,
         )
         if self.whole_paths:
             return paths

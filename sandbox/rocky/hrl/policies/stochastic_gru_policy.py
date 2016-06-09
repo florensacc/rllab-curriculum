@@ -201,6 +201,11 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 used_layers += [l_hidden_bottleneck_out]
         LasagnePowered.__init__(self, used_layers)
 
+        self.hid_hidden_sizes = hid_hidden_sizes
+        self.action_hidden_sizes = action_hidden_sizes
+        self.bottleneck_hidden_sizes = bottleneck_hidden_sizes
+        self.hidden_nonlinearity = hidden_nonlinearity
+
         self.l_hidden_prob = l_hidden_prob
         self.l_decision_prob = l_decision_prob
         self.l_action_prob = l_action_prob
