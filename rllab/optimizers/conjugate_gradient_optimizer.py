@@ -137,16 +137,20 @@ class ConjugateGradientOptimizer(Serializable):
             extra_inputs = tuple()
         return self._opt_fun["f_constraint"](*(inputs + extra_inputs))
 
-    def optimize(self, inputs, extra_inputs=None):
+    def optimize(self, inputs, extra_inputs=None, subsample_grouped_inputs=None):
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()
 
         if self._subsample_factor < 1:
-            n_samples = len(inputs[0])
-            inds = np.random.choice(
-                n_samples, n_samples * self._subsample_factor, replace=False)
-            subsample_inputs = tuple([x[inds] for x in inputs])
+            if subsample_grouped_inputs is None:
+                subsample_grouped_inputs = [inputs]
+            subsample_inputs = tuple()
+            for inputs_grouped in subsample_grouped_inputs:
+                n_samples = len(inputs_grouped[0])
+                inds = np.random.choice(
+                    n_samples, n_samples * self._subsample_factor, replace=False)
+                subsample_inputs += tuple([x[inds] for x in inputs_grouped])
         else:
             subsample_inputs = inputs
 

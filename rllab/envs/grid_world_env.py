@@ -35,11 +35,11 @@ MAPS = {
 
 class GridWorldEnv(Env, Serializable):
     """
-    S : starting point
-    F : free space
-    W : wall
-    H : hole (terminates episode)
-    G : goal
+    'S' : starting point
+    'F' or '.': free space
+    'W' or 'x': wall
+    'H' or 'o': hole (terminates episode)
+    'G' : goal
 
 
     """
@@ -48,7 +48,11 @@ class GridWorldEnv(Env, Serializable):
         Serializable.quick_init(self, locals())
         if isinstance(desc, basestring):
             desc = MAPS[desc]
-        self.desc = desc = np.array(map(list, desc))
+        desc = np.array(map(list, desc))
+        desc[desc == '.'] = 'F'
+        desc[desc == 'o'] = 'H'
+        desc[desc == 'x'] = 'W'
+        self.desc = desc
         self.n_row, self.n_col = desc.shape
         (start_x,), (start_y,) = np.nonzero(desc == 'S')
         self.start_state = start_x * self.n_col + start_y

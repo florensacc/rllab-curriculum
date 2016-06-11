@@ -9,7 +9,7 @@ from rllab.misc import ext
 import sys
 import argparse
 import json
-import numpy as np  
+import numpy as np
 # import threading, webbrowser
 import plotly.offline as po
 import plotly.graph_objs as go
@@ -135,9 +135,9 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
         plt.legend = plt.legend.replace('sandbox.rein.algos.vpg_unn.VPG', 'REINFORCE+VIME')
         plt.legend = plt.legend.replace('sandbox.rein.algos.erwr_bnn.ERWR', 'ERWR+VIME')
         plt.legend = plt.legend.replace('0.0001', '1e-4')
-#         plt.legend = plt.legend.replace('0.001', 'TRPO+VIME')
-#         plt.legend = plt.legend.replace('0', 'TRPO')
-#         plt.legend = plt.legend.replace('0.005', 'TRPO+L2')
+        #         plt.legend = plt.legend.replace('0.001', 'TRPO+VIME')
+        #         plt.legend = plt.legend.replace('0', 'TRPO')
+        #         plt.legend = plt.legend.replace('0.005', 'TRPO+L2')
 
         if idx == 0:
             plt.legend = 'TRPO (0.0)'
@@ -156,33 +156,33 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         if counter == 1:
-#             ax.set_xlim([0, 120])
+            #             ax.set_xlim([0, 120])
             ax.set_ylim([-3, 60])
-#             ax.set_xlim([0, 80])
+            #             ax.set_xlim([0, 80])
 
             loc = 'upper left'
         elif counter == 2:
             ax.set_ylim([-0.04, 0.4])
 
-#             ax.set_ylim([-0.1, 0.4])
+            #             ax.set_ylim([-0.1, 0.4])
             ax.set_xlim([0, 2000])
             loc = 'upper left'
         elif counter == 3:
-#             ax.set_xlim([0, 1000])
+            #             ax.set_xlim([0, 1000])
             loc = 'lower right'
         elif counter == 4:
-#             ax.set_xlim([0, 800])
-#             ax.set_ylim([0, 2])
-            loc= 'lower right'
-        leg = ax.legend(loc=loc, prop={'size':12}, ncol=1)
+            #             ax.set_xlim([0, 800])
+            #             ax.set_ylim([0, 2])
+            loc = 'lower right'
+        leg = ax.legend(loc=loc, prop={'size': 12}, ncol=1)
         for legobj in leg.legendHandles:
             legobj.set_linewidth(5.0)
-            
+
         def y_fmt(x, y):
-            return str(int(np.round(x/1000.0)))+'K'
+            return str(int(np.round(x / 1000.0))) + 'K'
 
         import matplotlib.ticker as tick
-#         ax.xaxis.set_major_formatter(tick.FuncFormatter(y_fmt))
+        #         ax.xaxis.set_major_formatter(tick.FuncFormatter(y_fmt))
         _plt.savefig('tmp' + str(counter) + '.pdf', bbox_inches='tight')
 
 
@@ -206,7 +206,7 @@ def check_nan(exp):
 
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
                          only_show_best=False, gen_eps=False, clip_plot_value=None, plot_width=None,
-                         plot_height=None, filter_nan=False, smooth_curve=False):
+                         plot_height=None, filter_nan=False, smooth_curve=False, custom_filter=None):
     print(plot_key, split_key, group_key, filters)
     if filter_nan:
         nonnan_exps_data = filter(check_nan, exps_data)
@@ -217,6 +217,8 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
         filters = dict()
     for k, v in filters.iteritems():
         selector = selector.where(k, str(v))
+    if custom_filter is not None:
+        selector = selector.custom_filter(custom_filter)
     # print selector._filters
     if split_key is not None:
         vs = [vs for k, vs in distinct_params if k == split_key][0]
@@ -264,7 +266,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                         if len(data) > 0:
                             progresses = [
                                 exp.progress.get(plot_key, np.array([np.nan])) for exp in data]
-#                             progresses = [progress[:500] for progress in progresses ]
+                            #                             progresses = [progress[:500] for progress in progresses ]
                             sizes = map(len, progresses)
                             max_size = max(sizes)
                             progresses = [
@@ -295,7 +297,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                     if best_regret != -np.inf:
                         progresses = [
                             exp.progress.get(plot_key, np.array([np.nan])) for exp in data_best_regret]
-#                         progresses = [progress[:500] for progress in progresses ]
+                        #                         progresses = [progress[:500] for progress in progresses ]
                         sizes = map(len, progresses)
                         # more intelligent:
                         max_size = max(sizes)
@@ -404,7 +406,7 @@ def parse_float_arg(args, key):
 
 @app.route("/plot_div")
 def plot_div():
-#     reload_data()
+    #     reload_data()
     args = flask.request.args
     plot_key = args.get("plot_key")
     split_key = args.get("split_key", "")
@@ -426,10 +428,16 @@ def plot_div():
     clip_plot_value = parse_float_arg(args, "clip_plot_value")
     plot_width = parse_float_arg(args, "plot_width")
     plot_height = parse_float_arg(args, "plot_height")
+    custom_filter = args.get("custom_filter", None)
+    if custom_filter is not None and len(custom_filter.strip()) > 0:
+        custom_filter = eval(custom_filter)
+    else:
+        custom_filter = None
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, filter_nan=filter_nan,
                                     group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps,
                                     only_show_best=only_show_best, clip_plot_value=clip_plot_value,
-                                    plot_width=plot_width, plot_height=plot_height, smooth_curve=smooth_curve)
+                                    plot_width=plot_width, plot_height=plot_height, smooth_curve=smooth_curve,
+                                    custom_filter=custom_filter)
     # print plot_div
     return plot_div
 

@@ -76,9 +76,9 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         assert isinstance(env_spec.action_space, Discrete)
         # assert not use_decision_nodes
         assert not random_reset
-        assert use_bottleneck
-        assert deterministic_bottleneck
-        assert bottleneck_nonlinear
+        # assert use_bottleneck
+        # assert deterministic_bottleneck
+        # assert bottleneck_nonlinear
 
         if not separate_bottlenecks:
             action_bottleneck_dim = bottleneck_dim
@@ -322,29 +322,30 @@ class StochasticGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
         prev_hidden_var = state_info_vars["prev_hidden"]
         hidden_var = state_info_vars["hidden_state"]
 
+        ret = dict()
+
         if self.use_bottleneck:
             action_bottleneck_var, hidden_bottleneck_var = L.get_output(
                 [self.l_action_bottleneck_out, self.l_hidden_bottleneck_out],
                 inputs={self.l_raw_obs: obs_var, self.l_prev_hidden: prev_hidden_var}
             )
+            ret["action_bottleneck"] = action_bottleneck_var
+            ret["hidden_bottleneck"] = hidden_bottleneck_var
             action_obs = action_bottleneck_var
             hidden_obs = hidden_bottleneck_var
         else:
             action_obs = obs_var
             hidden_obs = obs_var
-            action_bottleneck_var = None
-            hidden_bottleneck_var = None
+            # action_bottleneck_var = None
+            # hidden_bottleneck_var = None
 
         hidden_prob_var = self.hidden_prob_sym(hidden_obs_var=hidden_obs, prev_hidden_var=prev_hidden_var)
         action_prob_var = self.action_prob_sym(action_obs_var=action_obs, hidden_var=hidden_var)
 
-        ret = dict(
-            hidden_prob=hidden_prob_var,
-            action_prob=action_prob_var,
-            hidden_state=hidden_var,
-            action_bottleneck=action_bottleneck_var,
-            hidden_bottleneck=hidden_bottleneck_var,
-        )
+        ret["hidden_prob"] = hidden_prob_var
+        ret["action_prob"] = action_prob_var
+        ret["hidden_state"] = hidden_var
+
         return ret
 
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):

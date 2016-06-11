@@ -46,7 +46,7 @@ def to_json(stub_object):
         for k, v in stub_object.kwargs.iteritems():
             data[k] = to_json(v)
         data["_name"] = stub_object.proxy_class.__module__ + \
-            "." + stub_object.proxy_class.__name__
+                        "." + stub_object.proxy_class.__name__
         return data
     elif isinstance(stub_object, StubAttr):
         return dict(
@@ -135,20 +135,28 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
 
 
 class Selector(object):
-
-    def __init__(self, exps_data, filters=None):
+    def __init__(self, exps_data, filters=None, custom_filters=None):
         self._exps_data = exps_data
         if filters is None:
             self._filters = tuple()
         else:
             self._filters = tuple(filters)
+        if custom_filters is None:
+            self._custom_filters = []
+        else:
+            self._custom_filters = custom_filters
 
     def where(self, k, v):
-        return Selector(self._exps_data, self._filters + ((k, v),))
+        return Selector(self._exps_data, self._filters + ((k, v),), self._custom_filters)
+
+    def custom_filter(self, filter):
+        return Selector(self._exps_data, self._filters, self._custom_filters + [filter])
 
     def _check_exp(self, exp):
         # or exp.flat_params.get(k, None) is None
-        return all(((str(exp.flat_params.get(k, None)) == str(v) or (k not in exp.flat_params)) for k, v in self._filters))
+        return all(
+            ((str(exp.flat_params.get(k, None)) == str(v) or (k not in exp.flat_params)) for k, v in self._filters)
+        ) and all(custom_filter(exp) for custom_filter in self._custom_filters)
 
     def extract(self):
         return filter(self._check_exp, self._exps_data)
@@ -168,16 +176,15 @@ color_defaults = [
     '#e377c2',  # raspberry yogurt pink
     '#7f7f7f',  # middle gray
     '#bcbd22',  # curry yellow-green
-    '#17becf'   # blue-teal
+    '#17becf'  # blue-teal
 ]
 
 
 def hex_to_rgb(hex, opacity=1.0):
     if hex[0] == '#':
         hex = hex[1:]
-    assert(len(hex) == 6)
+    assert (len(hex) == 6)
     return "rgba({0},{1},{2},{3})".format(int(hex[:2], 16), int(hex[2:4], 16), int(hex[4:6], 16), opacity)
-
 
 # class VisApp(object):
 #
