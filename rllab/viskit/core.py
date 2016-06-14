@@ -71,7 +71,10 @@ def flatten_dict(d):
 def load_params(params_json_path):
     with open(params_json_path, 'r') as f:
         data = json.loads(f.read())
-        del data['args_data']
+        if "args_data" in data:
+            del data["args_data"]
+        if "exp_name" not in data:
+            data["exp_name"] = params_json_path.split("/")[-2]
     return data
 
 
@@ -96,9 +99,13 @@ def load_exps_data(exp_folder_path):
         try:
             exp_path = exp
             params_json_path = os.path.join(exp_path, "params.json")
+            variant_json_path = os.path.join(exp_path, "variant.json")
             progress_csv_path = os.path.join(exp_path, "progress.csv")
             progress = load_progress(progress_csv_path)
-            params = load_params(params_json_path)
+            try:
+                params = load_params(variant_json_path)
+            except IOError:
+                params = load_params(params_json_path)
             exps_data.append(ext.AttrDict(
                 progress=progress, params=params, flat_params=flatten_dict(params)))
         except IOError as e:

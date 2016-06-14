@@ -119,8 +119,8 @@ class GridWorldEnv(Env, Serializable):
         :param action: action
         :return: a list of pairs (s', p(s'|s,a))
         """
-        assert self.observation_space.contains(state)
-        assert self.action_space.contains(action)
+        # assert self.observation_space.contains(state)
+        # assert self.action_space.contains(action)
 
         x = state / self.n_col
         y = state % self.n_col

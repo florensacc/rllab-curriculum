@@ -286,3 +286,9 @@ def log_parameters_lite(log_file, args):
     with open(log_file, "w") as f:
         json.dump(log_params, f, indent=2, sort_keys=True)
 
+
+def log_variant(log_file, variant_data):
+    mkdir_p(os.path.dirname(log_file))
+    variant_json = stub_to_json(variant_data)
+    with open(log_file, "w") as f:
+        json.dump(variant_json, f, indent=2, sort_keys=True)

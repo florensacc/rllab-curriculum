@@ -94,26 +94,26 @@ def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
                     print e
             return
 
-        assert hasattr(env, "action_from_key") and hasattr(env, "matplotlib_figure"), \
-            "The environment must implement the method action_from_key and have the matplotlib_figure attribute " \
-            "available"
+        assert hasattr(env, "start_interactive"), "The environment must implement method start_interactive"
+
+        env.start_interactive()
         # Assume using matplotlib
         # TODO - make this logic more legit
 
-        env.render()
-        import matplotlib.pyplot as plt
-        def handle_key_pressed(event):
-            action = env.action_from_key(event.key)
-            if action is not None:
-                _, _, done, _ = env.step(action)
-                if done:
-                    plt.close()
-                    return
-                env.render()
-
-        env.matplotlib_figure.canvas.mpl_connect('key_press_event', handle_key_pressed)
-        plt.ioff()
-        plt.show()
+        # env.render()
+        # import matplotlib.pyplot as plt
+        # def handle_key_pressed(event):
+        #     action = env.action_from_key(event.key)
+        #     if action is not None:
+        #         _, _, done, _ = env.step(action)
+        #         if done:
+        #             plt.close()
+        #             return
+        #         env.render()
+        #
+        # env.matplotlib_figure.canvas.mpl_connect('key_press_event', handle_key_pressed)
+        # plt.ioff()
+        # plt.show()
 
     else:
         raise ValueError('Unsupported mode: %s' % mode)

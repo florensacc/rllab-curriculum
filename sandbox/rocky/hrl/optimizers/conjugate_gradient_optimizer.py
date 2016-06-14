@@ -2,10 +2,110 @@ from rllab.misc import ext
 from rllab.misc import krylov
 from rllab.misc import logger
 from rllab.core.serializable import Serializable
+from rllab.misc.ext import flatten_tensor_variables
 import theano.tensor as TT
 import theano
 import itertools
 import numpy as np
+
+floatX = theano.config.floatX
+
+
+class PerlmutterHvp(object):
+    def __init__(self):
+        self.target = None
+        self.reg_coeff = None
+        self.opt_fun = None
+
+    def update_opt(self, f, target, inputs, reg_coeff):
+        self.target = target
+        self.reg_coeff = reg_coeff
+        params = target.get_params(trainable=True)
+
+        constraint_grads = theano.grad(f, wrt=params, disconnected_inputs='ignore')
+        xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
+
+        def Hx_plain():
+            Hx_plain_splits = TT.grad(
+                TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
+                wrt=params,
+                disconnected_inputs='ignore'
+            )
+            return TT.concatenate([TT.flatten(s) for s in Hx_plain_splits])
+
+        self.opt_fun = ext.lazydict(
+            f_Hx_plain=lambda: ext.compile_function(
+                inputs=inputs + xs,
+                outputs=Hx_plain(),
+                log_name="f_Hx_plain",
+            ),
+        )
+
+    def build_eval(self, inputs):
+        def eval(x):
+            xs = tuple(self.target.flat_to_params(x, trainable=True))
+            ret = self.opt_fun["f_Hx_plain"](*(inputs + xs)) + self.reg_coeff * x
+            return ret
+
+        return eval
+
+
+class FiniteDifferenceHvp(object):
+    def __init__(self, base_eps=1e-8, symmetric=True, grad_clip=None):
+        self.base_eps = base_eps
+        self.symmetric = symmetric
+        self.grad_clip = grad_clip
+
+    def update_opt(self, f, target, inputs, reg_coeff):
+        self.target = target
+        self.reg_coeff = reg_coeff
+
+        params = target.get_params(trainable=True)
+
+        param_norm = TT.sqrt(TT.sum(map(TT.sum, (map(TT.square, params)))))
+
+        eps = TT.cast(self.base_eps / (theano.gradient.zero_grad(param_norm) + 1e-8), floatX)
+
+        constraint_grads = theano.grad(f, wrt=params, disconnected_inputs='ignore')
+        xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
+
+        grad_dvplus = theano.clone(
+            constraint_grads,
+            replace=zip(params, [p + eps * x for p, x in zip(params, xs)]),
+        )
+
+        flat_grad_dvplus = flatten_tensor_variables(grad_dvplus)
+
+        if self.grad_clip is not None:
+            flat_grad_dvplus = TT.clip(flat_grad_dvplus, -self.grad_clip, self.grad_clip)
+
+        if self.symmetric:
+            grad_dvminus = theano.clone(
+                constraint_grads,
+                replace=zip(params, [p - eps * x for p, x in zip(params, xs)]),
+            )
+            flat_grad_dvminus = flatten_tensor_variables(grad_dvminus)
+            if self.grad_clip is not None:
+                flat_grad_dvminus = TT.clip(flat_grad_dvminus, -self.grad_clip, self.grad_clip)
+            hx = (flat_grad_dvplus - flat_grad_dvminus) / (2 * eps)
+        else:
+            hx = (flat_grad_dvplus  - flatten_tensor_variables(constraint_grads)) / eps
+
+        self.opt_fun = ext.lazydict(
+            f_Hx_plain=lambda: ext.compile_function(
+                inputs=inputs + xs,
+                outputs=hx,
+                log_name="f_Hx_plain",
+            ),
+        )
+
+    def build_eval(self, inputs):
+        def eval(x):
+            xs = tuple(self.target.flat_to_params(x, trainable=True))
+            ret = self.opt_fun["f_Hx_plain"](*(inputs + xs)) + self.reg_coeff * x
+            return ret
+
+        return eval
 
 
 class ConjugateGradientOptimizer(Serializable):
@@ -19,10 +119,11 @@ class ConjugateGradientOptimizer(Serializable):
             self,
             cg_iters=10,
             reg_coeff=1e-5,
-            subsample_factor=0.1,
+            subsample_factor=1.,
             backtrack_ratio=0.8,
             max_backtracks=15,
-            debug_nan=False):
+            debug_nan=False,
+            hvp_approach=None):
         """
 
         :param cg_iters: The number of CG iterations used to calculate A^-1 g
@@ -45,6 +146,9 @@ class ConjugateGradientOptimizer(Serializable):
         self._max_constraint_val = None
         self._constraint_name = None
         self._debug_nan = debug_nan
+        if hvp_approach is None:
+            hvp_approach = PerlmutterHvp()
+        self._hvp_approach = hvp_approach
 
     def update_opt(self, loss, target, leq_constraint, inputs, extra_inputs=None, constraint_name="constraint", *args,
                    **kwargs):
@@ -71,16 +175,8 @@ class ConjugateGradientOptimizer(Serializable):
         grads = theano.grad(loss, wrt=params, disconnected_inputs='ignore')
         flat_grad = ext.flatten_tensor_variables(grads)
 
-        constraint_grads = theano.grad(constraint_term, wrt=params, disconnected_inputs='ignore')
-        xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
-
-        def Hx_plain():
-            Hx_plain_splits = TT.grad(
-                TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
-                wrt=params,
-                disconnected_inputs='ignore'
-            )
-            return TT.concatenate([TT.flatten(s) for s in Hx_plain_splits])
+        self._hvp_approach.update_opt(f=constraint_term, target=target, inputs=inputs + extra_inputs,
+                                      reg_coeff=self._reg_coeff)
 
         self._target = target
         self._max_constraint_val = constraint_value
@@ -103,12 +199,6 @@ class ConjugateGradientOptimizer(Serializable):
                 inputs=inputs + extra_inputs,
                 outputs=flat_grad,
                 log_name="f_grad",
-                mode=mode,
-            ),
-            f_Hx_plain=lambda: ext.compile_function(
-                inputs=inputs + extra_inputs + xs,
-                outputs=Hx_plain(),
-                log_name="f_Hx_plain",
                 mode=mode,
             ),
             f_constraint=lambda: ext.compile_function(
@@ -161,13 +251,7 @@ class ConjugateGradientOptimizer(Serializable):
 
         flat_g = self._opt_fun["f_grad"](*(inputs + extra_inputs))
 
-        def Hx(x):
-            xs = tuple(self._target.flat_to_params(x, trainable=True))
-            #     rop = f_Hx_rop(*(inputs + xs))
-            plain = self._opt_fun["f_Hx_plain"](*(subsample_inputs + extra_inputs + xs)) + self._reg_coeff * x
-            # assert np.allclose(rop, plain)
-            return plain
-            # alternatively we can do finite difference on flat_grad
+        Hx = self._hvp_approach.build_eval(subsample_inputs + extra_inputs)
 
         descent_direction = krylov.cg(Hx, flat_g, cg_iters=self._cg_iters)
 
@@ -179,6 +263,7 @@ class ConjugateGradientOptimizer(Serializable):
         logger.log("descent direction computed")
 
         prev_param = self._target.get_param_values(trainable=True)
+        n_iter = 0
         for n_iter, ratio in enumerate(self._backtrack_ratio ** np.arange(self._max_backtracks)):
             cur_step = ratio * flat_descent_step
             cur_param = prev_param - cur_step

@@ -15,7 +15,7 @@ from rllab.core.parameterized import Parameterized
 from rllab.misc import tensor_utils
 from rllab.misc.overrides import overrides
 from rllab.algos.npo import NPO
-from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from sandbox.rocky.hrl.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 
 from rllab.core.serializable import Serializable
@@ -57,16 +57,15 @@ class MultiJointBatchPolopt(RLAlgorithm, Serializable):
         :type bonus_evaluators: list[BonusEvaluator]
         """
         Serializable.quick_init(self, locals())
-        self.envs = [x for _, x in sorted(envs.items())]
-        self.policies = [x for _, x in sorted(policies.items())]
-        self.baselines = [x for _, x in sorted(baselines.items())]
+        self.envs = envs
+        self.policies = policies
+        self.baselines = baselines
         self.scopes = scopes
         self.reward_coeffs = reward_coeffs
-        self.bonus_evaluators = [x for _, x in sorted(bonus_evaluators.items())]
+        self.bonus_evaluators = bonus_evaluators
         self.max_path_length = max_path_length
         self.batch_size = batch_size
         self.n_itr = n_itr
-        # self.reward_coeff = reward_coeff
 
         assert len(envs) == len(policies) == len(baselines) == len(bonus_evaluators) == len(scopes) == len(
             reward_coeffs)
@@ -127,8 +126,12 @@ class MultiJointBatchPolopt(RLAlgorithm, Serializable):
         self.shutdown_worker()
 
     def log_diagnostics(self, paths):
-        for scope, bonus_evaluator in zip(self.scopes, self.bonus_evaluators):
+        for scope, env, policy, baseline, bonus_evaluator in zip(self.scopes, self.envs,
+                                                                 self.policies, self.baselines, self.bonus_evaluators):
             with logger.tabular_prefix('%s_' % scope), logger.prefix('%s | ' % scope):
+                env.log_diagnostics(paths[scope])
+                policy.log_diagnostics(paths[scope])
+                baseline.log_diagnostics(paths[scope])
                 bonus_evaluator.log_diagnostics(paths[scope])
 
     def process_samples(self, itr, all_paths):
@@ -141,8 +144,6 @@ class MultiJointBatchPolopt(RLAlgorithm, Serializable):
         ):
             with logger.tabular_prefix('%s_' % scope), logger.prefix('%s | ' % scope):
                 paths = all_paths[scope]
-
-                assert not policy.recurrent
 
                 baselines = []
                 returns = []
@@ -165,43 +166,105 @@ class MultiJointBatchPolopt(RLAlgorithm, Serializable):
                     baselines.append(path_baselines[:-1])
                     returns.append(path["returns"])
 
-                observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
-                actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
-                rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
-                advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
-                env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
-                agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
+                if not policy.recurrent:
 
-                average_discounted_return = \
-                    np.mean([path["raw_returns"][0] for path in paths])
+                    observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
+                    actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
+                    rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
+                    advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
+                    env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
+                    agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
 
-                average_bonus = np.mean([np.mean(path["bonuses"]) for path in paths])
+                    average_discounted_return = \
+                        np.mean([path["raw_returns"][0] for path in paths])
 
-                undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
+                    average_bonus = np.mean([np.mean(path["bonuses"]) for path in paths])
 
-                ent = np.mean(policy.distribution.entropy(agent_infos))
+                    undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
 
-                adv_mean_val = np.mean(advantages)
-                adv_std_val = np.std(advantages) + 1e-8
-                advantages = (advantages - adv_mean_val) / adv_std_val
+                    ent = np.mean(policy.distribution.entropy(agent_infos))
 
-                adv_mean.set_value(np.cast[floatX](adv_mean_val))
-                adv_std.set_value(np.cast[floatX](adv_std_val))
+                    adv_mean_val = np.mean(advantages)
+                    adv_std_val = np.std(advantages) + 1e-8
+                    advantages = (advantages - adv_mean_val) / adv_std_val
 
-                ev = special.explained_variance_1d(
-                    np.concatenate(baselines),
-                    np.concatenate(returns)
-                )
+                    adv_mean.set_value(np.cast[floatX](adv_mean_val))
+                    adv_std.set_value(np.cast[floatX](adv_std_val))
 
-                samples_data = dict(
-                    observations=observations,
-                    actions=actions,
-                    rewards=rewards,
-                    advantages=advantages,
-                    env_infos=env_infos,
-                    agent_infos=agent_infos,
-                    paths=paths,
-                )
+                    ev = special.explained_variance_1d(
+                        np.concatenate(baselines),
+                        np.concatenate(returns)
+                    )
+
+                    samples_data = dict(
+                        observations=observations,
+                        actions=actions,
+                        rewards=rewards,
+                        advantages=advantages,
+                        env_infos=env_infos,
+                        agent_infos=agent_infos,
+                        paths=paths,
+                    )
+                else:
+                    max_path_length = max([len(path["advantages"]) for path in paths])
+
+                    # make all paths the same length (pad extra advantages with 0)
+                    obs = [path["observations"] for path in paths]
+                    obs = np.array([tensor_utils.pad_tensor(ob, max_path_length) for ob in obs])
+
+                    # process advantages
+                    raw_adv = np.concatenate([path["advantages"] for path in paths])
+                    adv_mean_val = np.mean(raw_adv)
+                    adv_std_val = np.std(raw_adv) + 1e-8
+                    adv = [(path["advantages"] - adv_mean_val) / adv_std_val for path in paths]
+                    adv = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in adv])
+
+                    adv_mean.set_value(np.cast[floatX](adv_mean_val))
+                    adv_std.set_value(np.cast[floatX](adv_std_val))
+
+                    actions = [path["actions"] for path in paths]
+                    actions = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in actions])
+
+                    rewards = [path["rewards"] for path in paths]
+                    rewards = np.array([tensor_utils.pad_tensor(r, max_path_length) for r in rewards])
+
+                    agent_infos = [path["agent_infos"] for path in paths]
+                    agent_infos = tensor_utils.stack_tensor_dict_list(
+                        [tensor_utils.pad_tensor_dict(p, max_path_length) for p in agent_infos]
+                    )
+
+                    env_infos = [path["env_infos"] for path in paths]
+                    env_infos = tensor_utils.stack_tensor_dict_list(
+                        [tensor_utils.pad_tensor_dict(p, max_path_length) for p in env_infos]
+                    )
+
+                    valids = [np.ones_like(path["returns"]) for path in paths]
+                    valids = np.array([tensor_utils.pad_tensor(v, max_path_length) for v in valids])
+
+                    average_discounted_return = \
+                        np.mean([path["raw_returns"][0] for path in paths])
+
+                    average_bonus = np.mean([np.mean(path["bonuses"]) for path in paths])
+
+                    undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
+
+                    ent = np.mean(policy.distribution.entropy(agent_infos))
+
+                    ev = special.explained_variance_1d(
+                        np.concatenate(baselines),
+                        np.concatenate(returns)
+                    )
+
+                    samples_data = dict(
+                        observations=obs,
+                        actions=actions,
+                        advantages=adv,
+                        rewards=rewards,
+                        valids=valids,
+                        agent_infos=agent_infos,
+                        env_infos=env_infos,
+                        paths=paths,
+                    )
 
                 logger.log("fitting baseline...")
                 baseline.fit(paths)
@@ -259,25 +322,25 @@ class MultiJointNPO(MultiJointBatchPolopt):
         for env, policy, bonus_evaluator, adv_std, scope, loss_weight, kl_weight in zip(
                 self.envs, self.policies, self.bonus_evaluators, self.adv_stds, self.scopes, self.loss_weights,
                 self.kl_weights):
-            assert not policy.recurrent
+            is_recurrent = int(policy.recurrent)
             obs_var = env.observation_space.new_tensor_variable(
                 '%s_obs' % scope,
-                extra_dims=1,
+                extra_dims=1 + is_recurrent,
             )
             action_var = env.action_space.new_tensor_variable(
                 '%s_action' % scope,
-                extra_dims=1,
+                extra_dims=1 + is_recurrent,
             )
             advantage_var = ext.new_tensor(
                 '%s_advantage' % scope,
-                ndim=1,
+                ndim=1 + is_recurrent,
                 dtype=theano.config.floatX
             )
             dist = policy.distribution
             old_dist_info_vars = {
                 k: ext.new_tensor(
                     '%s_old_%s' % (scope, k),
-                    ndim=2,
+                    ndim=2 + is_recurrent,
                     dtype=theano.config.floatX
                 ) for k in dist.dist_info_keys
                 }
@@ -286,11 +349,16 @@ class MultiJointNPO(MultiJointBatchPolopt):
             state_info_vars = {
                 k: ext.new_tensor(
                     '%s_%s' % (scope, k),
-                    ndim=2,
+                    ndim=2 + is_recurrent,
                     dtype=theano.config.floatX
                 ) for k in policy.state_info_keys
                 }
             state_info_vars_list = [state_info_vars[k] for k in policy.state_info_keys]
+
+            if is_recurrent:
+                valid_var = TT.matrix('valid')
+            else:
+                valid_var = None
 
             dist_info_vars = policy.dist_info_sym(obs_var, state_info_vars)
             kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
@@ -299,8 +367,13 @@ class MultiJointNPO(MultiJointBatchPolopt):
             sym_bonus = bonus_evaluator.bonus_sym(obs_var, action_var, state_info_vars)
             sym_bonus = sym_bonus / adv_std
 
-            mean_kl = TT.mean(kl)
-            surr_loss = - TT.mean(lr * advantage_var + theano.gradient.zero_grad(lr) * sym_bonus)
+            if is_recurrent:
+                mean_kl = TT.sum(kl * valid_var) / (TT.sum(valid_var) + 1e-8)
+                surr_loss = - TT.sum(lr * advantage_var * valid_var + theano.gradient.zero_grad(lr) * sym_bonus *
+                                     valid_var) / (TT.sum(valid_var) + 1e-8)
+            else:
+                mean_kl = TT.mean(kl)
+                surr_loss = - TT.mean(lr * advantage_var + theano.gradient.zero_grad(lr) * sym_bonus)
 
             total_surr_loss += loss_weight * surr_loss
             total_mean_kl += kl_weight * mean_kl
@@ -310,6 +383,8 @@ class MultiJointNPO(MultiJointBatchPolopt):
                              action_var,
                              advantage_var,
                          ] + state_info_vars_list + old_dist_info_vars_list
+            if is_recurrent:
+                input_list.append(valid_var)
 
             all_input_list += input_list
 
@@ -353,6 +428,8 @@ class MultiJointNPO(MultiJointBatchPolopt):
             state_info_list = [agent_infos[k] for k in policy.state_info_keys]
             dist_info_list = [agent_infos[k] for k in policy.distribution.dist_info_keys]
             all_input_values += tuple(state_info_list) + tuple(dist_info_list)
+            if policy.recurrent:
+                all_input_values += (samples_data[scope]["valids"],)
             total_all_input_values += all_input_values
             grouped_inputs.append(all_input_values)
         loss_before = self.optimizer.loss(total_all_input_values)

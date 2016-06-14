@@ -206,13 +206,16 @@ def check_nan(exp):
 
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
                          only_show_best=False, gen_eps=False, clip_plot_value=None, plot_width=None,
-                         plot_height=None, filter_nan=False, smooth_curve=False, custom_filter=None):
+                         plot_height=None, filter_nan=False, smooth_curve=False, custom_filter=None,
+                         legend_post_processor=None):
     print(plot_key, split_key, group_key, filters)
     if filter_nan:
         nonnan_exps_data = filter(check_nan, exps_data)
         selector = core.Selector(nonnan_exps_data)
     else:
         selector = core.Selector(exps_data)
+    if legend_post_processor is None:
+        legend_post_processor = lambda x: x
     if filters is None:
         filters = dict()
     for k, v in filters.iteritems():
@@ -327,7 +330,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                 percentile75 = np.clip(percentile75, -clip_plot_value, clip_plot_value)
                             to_plot.append(
                                 ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
-                                             percentile75=percentile75, legend=legend))
+                                             percentile75=percentile75, legend=legend_post_processor(legend)))
                         else:
                             means = np.nanmean(progresses, axis=0)
                             stds = np.nanstd(progresses, axis=0)
@@ -340,7 +343,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                 means = np.clip(means, -clip_plot_value, clip_plot_value)
                                 stds = np.clip(stds, -clip_plot_value, clip_plot_value)
                             to_plot.append(
-                                ext.AttrDict(means=means, stds=stds, legend=legend))
+                                ext.AttrDict(means=means, stds=stds, legend=legend_post_processor(legend)))
                 else:
                     progresses = [
                         exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
@@ -371,7 +374,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                             percentile75 = np.clip(percentile75, -clip_plot_value, clip_plot_value)
                         to_plot.append(
                             ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
-                                         percentile75=percentile75, legend=group_legend))
+                                         percentile75=percentile75, legend=legend_post_processor(group_legend)))
                     else:
                         means = np.nanmean(progresses, axis=0)
                         stds = np.nanstd(progresses, axis=0)
@@ -384,7 +387,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                             means = np.clip(means, -clip_plot_value, clip_plot_value)
                             stds = np.clip(stds, -clip_plot_value, clip_plot_value)
                         to_plot.append(
-                            ext.AttrDict(means=means, stds=stds, legend=group_legend))
+                            ext.AttrDict(means=means, stds=stds, legend=legend_post_processor(group_legend)))
 
         if len(to_plot) > 0 and not gen_eps:
             plots.append("<div>%s: %s</div>" % (split_key, split_legend))
@@ -433,11 +436,16 @@ def plot_div():
         custom_filter = eval(custom_filter)
     else:
         custom_filter = None
+    legend_post_processor = args.get("legend_post_processor", None)
+    if legend_post_processor is not None and len(legend_post_processor.strip()) > 0:
+        legend_post_processor = eval(legend_post_processor)
+    else:
+        legend_post_processor = None
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, filter_nan=filter_nan,
                                     group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps,
                                     only_show_best=only_show_best, clip_plot_value=clip_plot_value,
                                     plot_width=plot_width, plot_height=plot_height, smooth_curve=smooth_curve,
-                                    custom_filter=custom_filter)
+                                    custom_filter=custom_filter, legend_post_processor=legend_post_processor)
     # print plot_div
     return plot_div
 

@@ -291,6 +291,7 @@ def run_experiment_lite(
         docker_image=None,
         aws_config=None,
         env=None,
+        variant=None,
         use_gpu=False,
         confirm_remote=True,
         terminate_machine=True,
@@ -307,11 +308,13 @@ def run_experiment_lite(
     :param aws_config: configuration for AWS. Only used under EC2 mode
     :param env: extra environment variables
     :param kwargs: All other parameters will be passed directly to the entrance python script.
+    :param variant: If provided, should be a dictionary of parameters
     """
     assert stub_method_call is not None or batch_tasks is not None, "Must provide at least either stub_method_call or batch_tasks"
     if batch_tasks is None:
         batch_tasks = [
-            dict(kwargs, stub_method_call=stub_method_call, exp_name=exp_name, log_dir=log_dir, env=env)
+            dict(kwargs, stub_method_call=stub_method_call, exp_name=exp_name, log_dir=log_dir, env=env,
+                 variant=variant)
         ]
 
     global exp_count
@@ -329,6 +332,13 @@ def run_experiment_lite(
             task["exp_name"] = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
         if task.get("log_dir", None) is None:
             task["log_dir"] = config.LOG_DIR + "/local/" + exp_prefix.replace("_", "-") + "/" + task["exp_name"]
+        if task.get("variant", None) is not None:
+            variant = task.pop("variant")
+            if "exp_name" not in variant:
+                variant["exp_name"] = task["exp_name"]
+            task["variant_data"] = base64.b64encode(pickle.dumps(variant))
+        elif "variant" in task:
+            del task["variant"]
         task["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), task["exp_name"])
 
     if mode not in ["local", "local_docker"] and not remote_confirmed and not dry and confirm_remote:

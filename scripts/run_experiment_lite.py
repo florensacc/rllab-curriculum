@@ -46,6 +46,8 @@ def run_experiment(argv):
                         help='Name of the text log file (in pure text).')
     parser.add_argument('--params_log_file', type=str, default='params.json',
                         help='Name of the parameter log file (in json).')
+    parser.add_argument('--variant_log_file', type=str, default='variant.json',
+                        help='Name of the variant log file (in json).')
     parser.add_argument('--plot', type=ast.literal_eval, default=False,
                         help='Whether to plot the iteration results')
     parser.add_argument('--log_tabular_only', type=ast.literal_eval, default=False,
@@ -54,6 +56,8 @@ def run_experiment(argv):
                         help='Random seed for numpy')
     parser.add_argument('--args_data', type=str,
                         help='Pickled data for stub objects')
+    parser.add_argument('--variant_data', type=str,
+                        help='Pickled data for variant configuration')
 
     args = parser.parse_args(argv[1:])
 
@@ -76,6 +80,11 @@ def run_experiment(argv):
     tabular_log_file = osp.join(log_dir, args.tabular_log_file)
     text_log_file = osp.join(log_dir, args.text_log_file)
     params_log_file = osp.join(log_dir, args.params_log_file)
+
+    if args.variant_data is not None:
+        variant_data = pickle.loads(base64.b64decode(args.variant_data))
+        variant_log_file = osp.join(log_dir, args.variant_log_file)
+        logger.log_variant(variant_log_file, variant_data)
 
     logger.log_parameters_lite(params_log_file, args)
     logger.add_text_output(text_log_file)

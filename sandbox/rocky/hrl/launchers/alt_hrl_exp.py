@@ -7,6 +7,7 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rocky.hrl.envs.perm_grid_env import PermGridEnv
 from sandbox.rocky.hrl.bonus_evaluators.discrete_bonus_evaluator import DiscreteBonusEvaluator, MODES
+
 import sys
 
 stub(globals())
