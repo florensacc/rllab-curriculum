@@ -80,7 +80,7 @@ class FirstOrderOptimizer(Serializable):
             extra_inputs = tuple()
         return self._opt_fun["f_loss"](*(tuple(inputs) + extra_inputs))
 
-    def optimize(self, inputs, extra_inputs=None, callback=None):
+    def optimize_gen(self, inputs, extra_inputs=None, callback=None, yield_itr=None):
 
         if len(inputs) == 0:
             # Assumes that we should always sample mini-batches
@@ -98,11 +98,15 @@ class FirstOrderOptimizer(Serializable):
 
         dataset = BatchDataset(inputs, self._batch_size, extra_inputs=extra_inputs)
 
+        itr = 0
         for epoch in xrange(self._max_epochs):
             if self._verbose:
                 logger.log("Epoch %d" % epoch)
             for batch in dataset.iterate(update=True):
                 f_opt(*batch)
+                if yield_itr is not None and (itr % (yield_itr+1)) == 0:
+                    yield
+                itr += 1
 
             new_loss = f_loss(*(tuple(inputs) + extra_inputs))
 
@@ -122,3 +126,7 @@ class FirstOrderOptimizer(Serializable):
             if abs(last_loss - new_loss) < self._tolerance:
                 break
             last_loss = new_loss
+
+    def optimize(self, inputs, **kwargs):
+        for _ in self.optimize_gen(inputs, **kwargs):
+            pass
