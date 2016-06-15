@@ -258,6 +258,8 @@ class ConjugateGradientOptimizer(Serializable):
         initial_step_size = np.sqrt(
             2.0 * self._max_constraint_val * (1. / (descent_direction.dot(Hx(descent_direction)) + 1e-8))
         )
+        if np.isnan(initial_step_size):
+            initial_step_size = 1.
         flat_descent_step = initial_step_size * descent_direction
 
         logger.log("descent direction computed")

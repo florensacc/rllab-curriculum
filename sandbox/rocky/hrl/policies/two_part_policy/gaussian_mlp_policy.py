@@ -18,7 +18,11 @@ from rllab.misc.overrides import overrides
 from rllab.misc import logger
 from rllab.misc import ext
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
+import theano
 import theano.tensor as TT
+
+
+floatX = np.cast[theano.config.floatX]
 
 
 class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
@@ -70,7 +74,6 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 output_nonlinearity=output_nonlinearity,
                 name="mean_network"
             )
-        self._mean_network = mean_network
 
         l_mean = mean_network.output_layer
         obs_var = mean_network.input_layer.input_var
@@ -108,32 +111,32 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                     trainable=learn_std,
                 )
 
-        self.min_std = min_std
-
         mean_var, log_std_var = L.get_output([l_mean, l_log_std])
 
-        if self.min_std is not None:
-            log_std_var = TT.maximum(log_std_var, np.log(min_std))
+        if min_std is not None:
+            log_std_var = TT.maximum(log_std_var, floatX(np.log(min_std)))
 
-        self._mean_var, self._log_std_var = mean_var, log_std_var
-
-        self._l_mean = l_mean
-        self._l_log_std = l_log_std
-
-        self._dist = DiagonalGaussian(action_dim)
+        self.mean_network = mean_network
+        self.min_std = min_std
+        self.mean_var, self.log_std_var = mean_var, log_std_var
+        self.l_mean = l_mean
+        self.l_log_std = l_log_std
+        self.dist = DiagonalGaussian(action_dim)
+        self.hidden_nonlinearity = hidden_nonlinearity
+        self.output_nonlinearity = output_nonlinearity
 
         LasagnePowered.__init__(self, [l_mean, l_log_std])
         super(GaussianMLPPolicy, self).__init__(env_spec)
 
-        self._f_dist = ext.compile_function(
+        self.f_dist = ext.compile_function(
             inputs=[obs_var],
             outputs=[mean_var, log_std_var],
         )
 
     def dist_info_sym(self, obs_var, state_info_vars=None):
-        mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
+        mean_var, log_std_var = L.get_output([self.l_mean, self.l_log_std], obs_var)
         if self.min_std is not None:
-            log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
+            log_std_var = TT.maximum(log_std_var, floatX(np.log(self.min_std)))
         return dict(mean=mean_var, log_std=log_std_var)
 
     @property
@@ -146,14 +149,14 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @overrides
     def get_action(self, observation):
         flat_obs = self.observation_space.flatten(observation)
-        mean, log_std = [x[0] for x in self._f_dist([flat_obs])]
+        mean, log_std = [x[0] for x in self.f_dist([flat_obs])]
         rnd = np.random.normal(size=mean.shape)
         action = rnd * np.exp(log_std) + mean
         return action, dict(mean=mean, log_std=log_std, epsilon=rnd)
 
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)
-        means, log_stds = self._f_dist(flat_obs)
+        means, log_stds = self.f_dist(flat_obs)
         rnd = np.random.normal(size=means.shape)
         actions = rnd * np.exp(log_stds) + means
         return actions, dict(mean=means, log_std=log_stds, epsilon=rnd)
@@ -174,4 +177,4 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
     @property
     def distribution(self):
-        return self._dist
+        return self.dist

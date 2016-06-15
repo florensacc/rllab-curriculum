@@ -251,11 +251,20 @@ class PointGridEnv(GridWorldEnv, Serializable):
                         color=(0, 0, 255)
                     )
                 if entry == 'G':
-                    self.viewer.draw_circle(
-                        radius=0.05,
-                        center=(col_idx + 0.5, self.n_row - row_idx - 0.5),
+                    self.viewer.draw_polygon(
+                        v=[
+                            (col_idx, self.n_row - row_idx),
+                            (col_idx, self.n_row - row_idx - 1),
+                            (col_idx + 1, self.n_row - row_idx - 1),
+                            (col_idx + 1, self.n_row - row_idx),
+                        ],
                         color=(0, 255, 0)
                     )
+                    # self.viewer.draw_circle(
+                    #     radius=0.05,
+                    #     center=(col_idx + 0.5, self.n_row - row_idx - 0.5),
+                    #     color=(0, 255, 0)
+                    # )
                 elif entry == 'H':
                     self.viewer.draw_polygon(
                         v=[

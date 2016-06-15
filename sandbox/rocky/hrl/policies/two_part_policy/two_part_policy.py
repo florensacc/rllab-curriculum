@@ -7,10 +7,13 @@ from rllab.core.serializable import Serializable
 from rllab.envs.base import EnvSpec
 from rllab.policies.base import StochasticPolicy
 from rllab.spaces.box import Box
+from rllab.spaces.discrete import Discrete
 from rllab.spaces.product import Product
 from rllab.misc import logger
 from sandbox.rocky.hrl.policies.two_part_policy.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.hrl.policies.two_part_policy.deterministic_mlp_policy import DeterministicMLPPolicy
+from sandbox.rocky.hrl.policies.two_part_policy.categorical_mlp_policy import CategoricalMLPPolicy
+from sandbox.rocky.hrl.policies.two_part_policy.reflective_stochastic_mlp_policy import ReflectiveStochasticMLPPolicy
 
 
 class TwoPartPolicy(StochasticPolicy, Serializable):
@@ -24,7 +27,7 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
             low_policy_args,
             high_policy=None,
             low_policy=None,
-            reparametrize_high_actions=True,
+            reparametrize_high_actions=None,
     ):
         """
         :param reparametrize_high_actions: whether to reparametrize high-level actions. If reparametrized,
@@ -32,12 +35,27 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
         :return:
         """
         Serializable.quick_init(self, locals())
+        if high_policy_cls == CategoricalMLPPolicy or \
+                high_policy_cls == ReflectiveStochasticMLPPolicy and high_policy_args.get("action_policy_cls",
+                                                                                          None) == CategoricalMLPPolicy:
+            high_action_space = Discrete(subgoal_dim)
+        else:
+            high_action_space = Box(low=-1, high=1, shape=(subgoal_dim,))
+
+        if reparametrize_high_actions is None:
+            if high_policy_cls == CategoricalMLPPolicy or \
+                high_policy_cls == ReflectiveStochasticMLPPolicy and high_policy_args.get("action_policy_cls",
+                                                                                          None) == CategoricalMLPPolicy:
+                reparametrize_high_actions = False
+            else:
+                reparametrize_high_actions = True
+
         high_env_spec = EnvSpec(
             observation_space=env_spec.observation_space,
-            action_space=Box(low=-1, high=1, shape=(subgoal_dim,))
+            action_space=high_action_space,
         )
         low_env_spec = EnvSpec(
-            observation_space=Product(env_spec.observation_space, high_env_spec.action_space),
+            observation_space=Product(env_spec.observation_space, high_action_space),
             action_space=env_spec.action_space,
         )
         if high_policy is None:
@@ -50,7 +68,7 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
                 env_spec=low_env_spec,
                 **low_policy_args
             )
-        self.high_policy = high_policy  # type: DeterministicMLPPolicy|GaussianMLPPolicy
+        self.high_policy = high_policy  # type: DeterministicMLPPolicy|GaussianMLPPolicy|ReflectiveStochasticMLPPolicy
         self.low_policy = low_policy  # type: GaussianMLPPolicy
         self.subgoal_dim = subgoal_dim
         self.high_policy_cls = high_policy_cls
@@ -112,7 +130,7 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
             return self._merge_dict(dict(), low_dist_info)
         else:
             assert isinstance(self.high_policy, StochasticPolicy)
-            assert not self.recurrent
+            # assert not self.recurrent
             high_dist_info = self.high_policy.dist_info_sym(
                 obs_var=obs_var,
                 state_info_vars=high_state_info_vars
@@ -131,7 +149,10 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
     def get_action(self, observation):
         high_action, high_agent_info = self.high_policy.get_action(observation)
         low_action, low_agent_info = self.low_policy.get_action((observation, high_action))
-        return low_action, dict(self._merge_dict(high_agent_info, low_agent_info), _high_action=high_action)
+        return low_action, dict(
+            self._merge_dict(high_agent_info, low_agent_info),
+            _high_action=self.high_env_spec.action_space.flatten(high_action)
+        )
 
     @property
     def distribution(self):
@@ -212,15 +233,21 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
 
 
 class DuelTwoPartPolicy(TwoPartPolicy):
-    def __init__(self, env_spec, master_policy):
+    def __init__(self, env_spec, master_policy, share_gate=True):
         """
         :type master_policy: TwoPartPolicy
         :type env_spec: EnvSpec
+        :param share_gate: whether to share the gate policy if the high-level policy of master_policy is recurrent
         """
         Serializable.quick_init(self, locals())
+        if isinstance(master_policy.high_policy, ReflectiveStochasticMLPPolicy) and share_gate:
+            # in this case, reuse the gate policy
+            high_policy_args = dict(master_policy.high_policy_args, gate_policy=master_policy.high_policy.gate_policy)
+        else:
+            high_policy_args = master_policy.high_policy_args
         high_policy = master_policy.high_policy_cls(
             env_spec=master_policy.high_env_spec,
-            **master_policy.high_policy_args
+            **high_policy_args
         )
         low_policy = master_policy.low_policy
         TwoPartPolicy.__init__(

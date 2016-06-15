@@ -15,7 +15,7 @@ if __name__ == "__main__":
                         help='path to the snapshot file')
     parser.add_argument('--max_length', type=int, default=1000,
                         help='Max length of rollout')
-    parser.add_argument('--speedup', type=int, default=1,
+    parser.add_argument('--speedup', type=float, default=1,
                         help='Speedup')
     parser.add_argument('--loop', type=int, default=1,
                         help='# of loops')

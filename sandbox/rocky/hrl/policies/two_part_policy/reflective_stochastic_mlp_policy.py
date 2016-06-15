@@ -7,12 +7,15 @@ from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.core.network import MLP
 from rllab.core.parameterized import Parameterized
-from rllab.spaces import Box
+from rllab.spaces.box import Box
+from rllab.spaces.discrete import Discrete
 from rllab.misc import ext
 from rllab.policies.base import StochasticPolicy
 from rllab.envs.base import EnvSpec
 from rllab.spaces.product import Product
 from sandbox.rocky.hrl.policies.two_part_policy.gaussian_mlp_policy import GaussianMLPPolicy
+from sandbox.rocky.hrl.policies.two_part_policy.categorical_mlp_policy import CategoricalMLPPolicy
+from sandbox.rocky.hrl.policies.two_part_policy.deterministic_mlp_policy import DeterministicMLPPolicy
 import theano
 import theano.tensor as TT
 import numpy as np
@@ -20,6 +23,9 @@ import numpy as np
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
+
+
+floatX = theano.config.floatX
 
 
 class ReflectiveStochasticMLPPolicy(StochasticPolicy, Parameterized, Serializable):
@@ -30,51 +36,71 @@ class ReflectiveStochasticMLPPolicy(StochasticPolicy, Parameterized, Serializabl
     def __init__(
             self,
             env_spec,
+            action_policy=None,
             action_policy_cls=None,
             action_policy_args=None,
+            gate_policy=None,
             gate_policy_cls=None,
             gate_policy_args=None,
             gated=True,
             init_state=None,
-            init_state_trainable=True,
+            init_state_trainable=None,  # True,
             truncate_gradient=-1,
     ):
         Serializable.quick_init(self, locals())
-        assert isinstance(env_spec.action_space, Box)
+        # assert isinstance(env_spec.action_space, Box)
 
         obs_dim = env_spec.observation_space.flat_dim
         action_dim = env_spec.action_space.flat_dim
 
-        if action_policy_cls is None:
-            action_policy_cls = GaussianMLPPolicy
-        if action_policy_args is None:
-            action_policy_args = dict()
-        action_policy = action_policy_cls(
-            env_spec=EnvSpec(
-                observation_space=Product(env_spec.observation_space, env_spec.action_space),
-                action_space=env_spec.action_space,
-            ),
-            **action_policy_args
-        )
-
-        if gated:
-            if gate_policy_cls is None:
-                gate_policy_cls = GaussianMLPPolicy
-            if gate_policy_args is None:
-                gate_policy_args = dict()
-            gate_policy = gate_policy_cls(
+        if action_policy is None:
+            if action_policy_cls is None:
+                action_policy_cls = GaussianMLPPolicy
+            if action_policy_args is None:
+                action_policy_args = dict()
+            action_policy = action_policy_cls(
                 env_spec=EnvSpec(
                     observation_space=Product(env_spec.observation_space, env_spec.action_space),
-                    action_space=Box(low=0, high=1, shape=(1,))
+                    action_space=env_spec.action_space,
                 ),
-                **gate_policy_args
+                **action_policy_args
             )
+
+        if gated:
+            if gate_policy is None:
+                if gate_policy_cls is None:
+                    gate_policy_cls = GaussianMLPPolicy
+                if gate_policy_args is None:
+                    gate_policy_args = dict()
+                gate_policy = gate_policy_cls(
+                    env_spec=EnvSpec(
+                        observation_space=Product(env_spec.observation_space, env_spec.action_space),
+                        action_space=Box(low=0, high=1, shape=(1,))
+                    ),
+                    **gate_policy_args
+                )
         else:
             gate_policy = None
 
+        if isinstance(action_policy, CategoricalMLPPolicy) and gate_policy is not None:
+            assert isinstance(gate_policy, DeterministicMLPPolicy)
+        if gate_policy is not None:
+            assert gate_policy.output_nonlinearity is None
+
+        if init_state_trainable is None:
+            # set default value based on type of action space
+            if isinstance(env_spec.action_space, Discrete):
+                init_state_trainable = False
+            else:
+                init_state_trainable = True
+
         if init_state is None:
-            init_state = np.random.uniform(low=-1, high=1, size=(action_dim,))
-        self.init_state_var = theano.shared(init_state, name="init_state")
+            if isinstance(env_spec.action_space, Discrete):
+                init_state = np.eye(action_dim)[0]
+                assert not init_state_trainable
+            else:
+                init_state = np.random.uniform(low=-1, high=1, size=(action_dim,))
+        self.init_state_var = theano.shared(np.cast[floatX](init_state), name="init_state")
         self.init_state_trainable = init_state_trainable
         self.prev_action = None
         self.action_policy = action_policy
@@ -84,7 +110,7 @@ class ReflectiveStochasticMLPPolicy(StochasticPolicy, Parameterized, Serializabl
         super(ReflectiveStochasticMLPPolicy, self).__init__(env_spec)
 
     def reset(self):
-        self.prev_action = self.init_state_var.get_value()
+        self.prev_action = self.action_space.unflatten(self.init_state_var.get_value())
         self.action_policy.reset()
         if self.gate_policy is not None:
             self.gate_policy.reset()
@@ -108,21 +134,40 @@ class ReflectiveStochasticMLPPolicy(StochasticPolicy, Parameterized, Serializabl
         return action_dict, gate_dict
 
     def get_action(self, observation):
-        action, action_info = self.action_policy.get_action((observation, self.prev_action))
-        if self.gate_policy is not None:
-            gate, gate_info = self.gate_policy.get_action((observation, self.prev_action))
-            gate = sigmoid(gate)
-            action = action * gate + self.prev_action * (1 - gate)
+        if isinstance(self.action_policy, CategoricalMLPPolicy):
+            # Special treatment
+            action, action_info = self.action_policy.get_action((observation, self.prev_action))
+            prev_action_repr = self.action_space.flatten(self.prev_action)
+            if self.gate_policy is not None:
+                gate, gate_info = self.gate_policy.get_action((observation, self.prev_action))
+                gate = sigmoid(gate)
+                action_prob = action_info["prob"] * gate + prev_action_repr * (1 - gate)
+                if np.random.uniform() > gate:
+                    action = self.prev_action
+                action_info = dict(prob=action_prob)
+            action_info = dict(action_info, prev_action=prev_action_repr)
+            self.prev_action = action
+            return action, action_info
         else:
-            gate_info = dict()
-        self.prev_action = action
-        return action, self._merge_dict(action_info, gate_info)
+            action, action_info = self.action_policy.get_action((observation, self.prev_action))
+            if self.gate_policy is not None:
+                gate, gate_info = self.gate_policy.get_action((observation, self.prev_action))
+                gate = sigmoid(gate)
+                action = action * gate + self.prev_action * (1 - gate)
+            else:
+                gate_info = dict()
+            self.prev_action = action
+            return action, self._merge_dict(action_info, gate_info)
 
     @property
     def recurrent(self):
+        # if discrete, stochastic actions, can treat as non-recurrent since we can't reparametrize anyways
+        if isinstance(self.action_policy, CategoricalMLPPolicy):
+            return False
         return True
 
     def get_reparam_action_sym(self, obs_var, state_info_vars):
+        assert not isinstance(self.action_policy, CategoricalMLPPolicy)
         # obs_var: N * T * S
         action_info, gate_info = self._split_dict(state_info_vars)
         N = obs_var.shape[0]
@@ -155,7 +200,7 @@ class ReflectiveStochasticMLPPolicy(StochasticPolicy, Parameterized, Serializabl
                 gate_sym = self.gate_policy.get_reparam_action_sym(joint_obs, cur_gate_info)
                 gate_sym = TT.nnet.sigmoid(gate_sym)
                 gate_sym = TT.tile(gate_sym, [1] * (gate_sym.ndim - 1) + [action_sym.shape[-1]])
-                action_sym = action_sym * gate_sym + prev_action * (1. - gate_sym)
+                action_sym = action_sym * gate_sym + prev_action * (1 - gate_sym)
             return action_sym
 
         permuted_actions, _ = theano.scan(
@@ -168,6 +213,8 @@ class ReflectiveStochasticMLPPolicy(StochasticPolicy, Parameterized, Serializabl
 
     @property
     def distribution(self):
+        if isinstance(self.action_policy, CategoricalMLPPolicy):
+            return self.action_policy.distribution
         return self
 
     @property
@@ -179,6 +226,8 @@ class ReflectiveStochasticMLPPolicy(StochasticPolicy, Parameterized, Serializabl
 
     @property
     def state_info_keys(self):
+        if isinstance(self.action_policy, CategoricalMLPPolicy):
+            return self.action_policy.state_info_keys + ["prev_action"]
         keys = ["action_%s" % k for k in self.action_policy.state_info_keys]
         if self.gate_policy is not None:
             keys += ["gate_%s" % k for k in self.gate_policy.state_info_keys]
@@ -191,3 +240,18 @@ class ReflectiveStochasticMLPPolicy(StochasticPolicy, Parameterized, Serializabl
         if self.init_state_trainable or tags.get("trainable", False):
             params = params + [self.init_state_var]
         return params
+
+    def dist_info_sym(self, obs_var, state_info_vars):
+        assert isinstance(self.action_policy, CategoricalMLPPolicy)
+        # action_state_info_vars, _ = self._split_dict(state_info_vars)
+        prev_action_var = state_info_vars["prev_action"]
+        joint_obs_var = TT.concatenate([obs_var, prev_action_var], axis=-1)
+        dist_info = self.action_policy.dist_info_sym(joint_obs_var, state_info_vars)
+        if self.gate_policy is not None:
+            assert isinstance(self.gate_policy, DeterministicMLPPolicy)
+            action_prob = dist_info["prob"]
+            gate_var = TT.nnet.sigmoid(self.gate_policy.get_reparam_action_sym(joint_obs_var, state_info_vars))
+            gate_var = TT.tile(gate_var, [1] * (gate_var.ndim - 1) + [action_prob.shape[-1]])
+            action_prob = action_prob * gate_var + prev_action_var * (1 - gate_var)
+            dist_info = dict(prob=action_prob)
+        return dist_info

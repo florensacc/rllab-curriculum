@@ -32,6 +32,7 @@ class ReflectiveDeterministicMLPPolicy(Policy, LasagnePowered, Serializable):
             init_state_trainable=True,
             gated=True,
     ):
+        raise DeprecationWarning("Deprecated. Use ReflectiveStochasticMLPPolicy!")
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
