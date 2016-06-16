@@ -7,6 +7,7 @@ from collections import OrderedDict
 import time
 import lasagne.updates
 import theano
+import pyprind
 from functools import partial
 
 
@@ -24,6 +25,7 @@ class FirstOrderOptimizer(Serializable):
             batch_size=32,
             callback=None,
             verbose=False,
+            randomized=False,
             **kwargs):
         """
 
@@ -45,6 +47,7 @@ class FirstOrderOptimizer(Serializable):
         self._tolerance = tolerance
         self._batch_size = batch_size
         self._verbose = verbose
+        self._randomized = randomized
 
     def update_opt(self, loss, target, inputs, extra_inputs=None, gradients=None, **kwargs):
         """
@@ -96,10 +99,13 @@ class FirstOrderOptimizer(Serializable):
 
         start_time = time.time()
 
-        dataset = BatchDataset(inputs, self._batch_size, extra_inputs=extra_inputs)
+        dataset = BatchDataset(
+            inputs, self._batch_size,
+            extra_inputs=extra_inputs, randomized=self._randomized
+        )
 
         itr = 0
-        for epoch in xrange(self._max_epochs):
+        for epoch in pyprind.prog_bar(range(self._max_epochs)):
             if self._verbose:
                 logger.log("Epoch %d" % epoch)
             for batch in dataset.iterate(update=True):
@@ -130,3 +136,4 @@ class FirstOrderOptimizer(Serializable):
     def optimize(self, inputs, **kwargs):
         for _ in self.optimize_gen(inputs, **kwargs):
             pass
+

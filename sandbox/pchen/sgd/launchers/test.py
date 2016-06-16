@@ -14,7 +14,7 @@ from sandbox.pchen.sgd.penalty_optimizer import PenaltyOptimizer
 from sandbox.rocky.hrl.optimizers.conjugate_gradient_optimizer import \
     ConjugateGradientOptimizer, PerlmutterHvp, FiniteDifferenceHvp
 
-stub(globals())
+# stub(globals())
 
 from rllab.misc.instrument import VariantGenerator, variant
 
@@ -86,20 +86,32 @@ algo = PPO(
     policy=policy,
     baseline=baseline,
     batch_size=50000,
-    max_path_length=500,
+    max_path_length=100,
     n_itr=500,
     step_size=0.01,
+    # step_size=2.,
     optimizer=PenaltyOptimizer(
         FirstOrderOptimizer(
-            update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
-            max_epochs=50,
-        )
+            # update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
+            update_method=partial(lasagne.updates.rmsprop, learning_rate=1e-4),
+            # max_epochs=1,
+            max_epochs=1000,
+            batch_size=50000,
+            randomized=True,
+        ),
+        initial_penalty=1e0,
+        data_split=0.7,
+        max_penalty=1e22,
     ),
+    # optimizer_args=dict(
+    #     max_opt_itr=100,
+    #     decrease_penalty_factor=0.8,
+    # )
 )
 run_experiment_lite(
     algo.train(),
     exp_prefix="sgd_test",
-    n_parallel=1,
+    n_parallel=3,
     snapshot_mode="last",
     mode="local",
     seed=42,

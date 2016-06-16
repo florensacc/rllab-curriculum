@@ -18,7 +18,9 @@ class PenaltyOptimizer(Serializable):
             max_penalty=1e6,
             increase_penalty_factor=2,
             decrease_penalty_factor=0.5,
-            adapt_penalty=True
+            adapt_penalty=True,
+            adapt_itr=32,
+            data_split=None,
     ):
         Serializable.quick_init(self, locals())
         self._optimizer = optimizer
@@ -36,6 +38,8 @@ class PenaltyOptimizer(Serializable):
         self._max_constraint_val = None
         self._min_constraint_val = None
         self._constraint_name = None
+        self._adapt_itr = adapt_itr
+        self._data_split = data_split
 
     def update_opt(self, loss, target, leq_constraint, inputs, constraint_name="constraint", *args, **kwargs):
         """
@@ -47,8 +51,10 @@ class PenaltyOptimizer(Serializable):
         :return: No return value.
         """
         constraint_term, constraint_value = leq_constraint
-        penalty_var = theano.shared(0., 'penalty_coeff') # TT.scalar("penalty")
-        penalized_loss = loss + penalty_var * constraint_term
+        penalty_var = theano.shared(self._initial_penalty, 'penalty_coeff') # TT.scalar("penalty")
+        penalized_loss = loss + 0.*penalty_var * constraint_term #+ \
+                         # -TT.log(constraint_value*1.3 - constraint_term)
+                        #penalty_var*(constraint_term > constraint_value)*(constraint_value - constraint_term)**2
 
         self._target = target
         self._max_constraint_val = constraint_value
@@ -88,18 +94,44 @@ class PenaltyOptimizer(Serializable):
     def optimize(self, inputs):
 
         inputs = tuple(inputs)
+        if self._data_split is not None:
+            maxlen = len(inputs[0])
+            cutoff = int(maxlen * self._data_split)
+            val_inputs = tuple(
+                inp[cutoff:] for inp in inputs
+            )
+            inputs = tuple(
+                inp[:cutoff] for inp in inputs
+            )
         f_penalized_loss = self._opt_fun["f_penalized_loss"]
 
         try_penalty = np.clip(
             self._penalty_var.get_value(), self._min_penalty, self._max_penalty)
 
-        for _ in self._optimizer.optimize_gen(inputs, yield_itr=15):
-            logger.log('trying penalty=%.3f...' % try_penalty)
+        train = []
+        val = []
+        _, try_loss, try_constraint_val = f_penalized_loss(*inputs)
+        _, val_loss, val_constraint_val = f_penalized_loss(*val_inputs)
+        train.append((try_loss, try_constraint_val))
+        val.append((val_loss, val_constraint_val))
+        logger.log('before optim penalty %f => loss %f (%f), %s %f (%f)' %
+                   (try_penalty, try_loss, val_loss,
+                    self._constraint_name, try_constraint_val, val_constraint_val))
+        for _ in self._optimizer.optimize_gen(inputs, yield_itr=self._adapt_itr):
+            # logger.log('trying penalty=%.3f...' % try_penalty)
 
-            _, try_loss, try_constraint_val = f_penalized_loss(*inputs)
+            # _, try_loss, try_constraint_val = f_penalized_loss(*inputs)
 
-            logger.log('penalty %f => loss %f, %s %f' %
-                       (try_penalty, try_loss, self._constraint_name, try_constraint_val))
+            # logger.log('penalty %f => loss %f, %s %f' %
+            #            (try_penalty, try_loss, self._constraint_name, try_constraint_val))
+            if self._data_split is not None:
+                _, try_loss, try_constraint_val = f_penalized_loss(*inputs)
+                _, val_loss, val_constraint_val = f_penalized_loss(*val_inputs)
+                train.append((try_loss, try_constraint_val))
+                val.append((val_loss, val_constraint_val))
+                logger.log('penalty %f => loss %f (%f), %s %f (%f)' %
+                           (try_penalty, try_loss, val_loss,
+                            self._constraint_name, try_constraint_val, val_constraint_val))
 
             if not self._adapt_penalty:
                 break
@@ -116,4 +148,10 @@ class PenaltyOptimizer(Serializable):
             try_penalty *= penalty_scale_factor
             try_penalty = np.clip(try_penalty, self._min_penalty, self._max_penalty)
             self._penalty_var.set_value(try_penalty)
+
+        import matplotlib.pyplot as plt;
+        plt.plot(xrange(len(train)), [v[0] for v in train]);
+        plt.plot(xrange(len(train)), [v[0] for v in val]);
+        # plt.show()
+        import ipdb; ipdb.set_trace()
 
