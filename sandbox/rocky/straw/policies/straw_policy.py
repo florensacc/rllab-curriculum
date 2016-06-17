@@ -216,7 +216,7 @@ class UpdateCLayer(L.MergeLayer):
 
 
 class STRAWPolicy(StochasticPolicy, LasagnePowered, Serializable):
-    def __init__(self, env_spec):
+    def __init__(self, env_spec, truncate_gradient=40):
         Serializable.quick_init(self, locals())
         self.T = T = 500
         self.K = K = 10
@@ -225,6 +225,8 @@ class STRAWPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self.c = None
 
         feature_dim = 128
+
+        self.truncate_gradient = truncate_gradient
 
         feature_network = ConvNetwork(
             name="feature_network",
@@ -397,17 +399,11 @@ class STRAWPolicy(StochasticPolicy, LasagnePowered, Serializable):
             )
             return TT.unbroadcast(next_A_var, *range(next_A_var.ndim)), TT.unbroadcast(next_c_var,
                                                                                        *range(next_c_var.ndim))
-            # a_prob_var = TT.nnet.softmax(next_A_var[:, :, 0])
-            # self.f_new_A_c_prob = ext.compile_function(
-            # inputs=[l_obs.input_var, l_A_in.input_var, l_c_in.input_var, l_g_in.input_var],
-            # import ipdb; ipdb.set_trace()
-            #
-            # pass
-
         (all_A, all_c), _ = theano.scan(
             step,
             sequences=[obs_var.dimshuffle(1, 0, 2), g_var.dimshuffle(1, 0, 2)],
-            outputs_info=[init_A, init_c]
+            outputs_info=[init_A, init_c],
+            truncate_gradient=self.truncate_gradient
         )
         all_A = all_A.dimshuffle(1, 0, 2, 3)
         N, T, A, _ = all_A.shape
