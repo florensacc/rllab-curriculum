@@ -241,6 +241,19 @@ class ReflectiveStochasticMLPPolicy(StochasticPolicy, Parameterized, Serializabl
             params = params + [self.init_state_var]
         return params
 
+    def dist_info(self, obs, state_infos):
+        assert isinstance(self.action_policy, CategoricalMLPPolicy)
+        prev_actions = state_infos["prev_action"]
+        joint_obs = np.concatenate([obs, prev_actions], axis=-1)
+        dist_info = self.action_policy.dist_info(joint_obs, state_infos)
+        if self.gate_policy is not None:
+            assert isinstance(self.gate_policy, DeterministicMLPPolicy)
+            action_prob = dist_info["prob"]
+            gates = sigmoid(self.gate_policy.f_action(joint_obs))
+            action_prob = action_prob * gates + prev_actions * (1 - gates)
+            dist_info = dict(prob=action_prob)
+        return dist_info
+
     def dist_info_sym(self, obs_var, state_info_vars):
         assert isinstance(self.action_policy, CategoricalMLPPolicy)
         # action_state_info_vars, _ = self._split_dict(state_info_vars)

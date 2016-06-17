@@ -25,6 +25,80 @@ def create_param(spec, shape, name, trainable=True, regularizable=True):
     )
 
 
+def as_tuple(x, N, t=None):
+    try:
+        X = tuple(x)
+    except TypeError:
+        X = (x,) * N
+
+    if (t is not None) and not all(isinstance(v, t) for v in X):
+        raise TypeError("expected a single value or an iterable "
+                        "of {0}, got {1} instead".format(t.__name__, x))
+
+    if len(X) != N:
+        raise ValueError("expected a single value or an iterable "
+                         "with length {0}, got {1} instead".format(N, x))
+
+    return X
+
+
+def conv_output_length(input_length, filter_size, stride, pad=0):
+    """Helper function to compute the output size of a convolution operation
+    This function computes the length along a single axis, which corresponds
+    to a 1D convolution. It can also be used for convolutions with higher
+    dimensionalities by using it individually for each axis.
+    Parameters
+    ----------
+    input_length : int or None
+        The size of the input.
+    filter_size : int
+        The size of the filter.
+    stride : int
+        The stride of the convolution operation.
+    pad : int, 'full' or 'same' (default: 0)
+        By default, the convolution is only computed where the input and the
+        filter fully overlap (a valid convolution). When ``stride=1``, this
+        yields an output that is smaller than the input by ``filter_size - 1``.
+        The `pad` argument allows you to implicitly pad the input with zeros,
+        extending the output size.
+        A single integer results in symmetric zero-padding of the given size on
+        both borders.
+        ``'full'`` pads with one less than the filter size on both sides. This
+        is equivalent to computing the convolution wherever the input and the
+        filter overlap by at least one position.
+        ``'same'`` pads with half the filter size on both sides (one less on
+        the second side for an even filter size). When ``stride=1``, this
+        results in an output size equal to the input size.
+    Returns
+    -------
+    int or None
+        The output size corresponding to the given convolution parameters, or
+        ``None`` if `input_size` is ``None``.
+    Raises
+    ------
+    ValueError
+        When an invalid padding is specified, a `ValueError` is raised.
+    """
+    if input_length is None:
+        return None
+    if pad == 'valid':
+        output_length = input_length - filter_size + 1
+    elif pad == 'full':
+        output_length = input_length + filter_size - 1
+    elif pad == 'same':
+        output_length = input_length
+    elif isinstance(pad, int):
+        output_length = input_length + 2 * pad - filter_size + 1
+    else:
+        raise ValueError('Invalid pad: {0}'.format(pad))
+
+    # This is the integer arithmetic equivalent to
+    # np.ceil(output_length / stride)
+    output_length = (output_length + stride - 1) // stride
+
+    return output_length
+
+
 class Layer(object):
     def __init__(self, incoming, name, **kwargs):
         if isinstance(incoming, tuple):
@@ -239,6 +313,225 @@ class DenseLayer(Layer):
         if self.b is not None:
             activation = activation + tf.expand_dims(self.b, 0)
         return self.nonlinearity(activation)
+
+
+class BaseConvLayer(Layer):
+    def __init__(self, incoming, num_filters, filter_size, stride=1, pad=0,
+                 untie_biases=False,
+                 W=xavier_init, b=tf.zeros_initializer,
+                 nonlinearity=tf.nn.relu, flip_filters=True,
+                 n=None, **kwargs):
+        super(BaseConvLayer, self).__init__(incoming, **kwargs)
+        if nonlinearity is None:
+            self.nonlinearity = tf.identity
+        else:
+            self.nonlinearity = nonlinearity
+
+        if n is None:
+            n = len(self.input_shape) - 2
+        elif n != len(self.input_shape) - 2:
+            raise ValueError("Tried to create a %dD convolution layer with "
+                             "input shape %r. Expected %d input dimensions "
+                             "(batchsize, channels, %d spatial dimensions)." %
+                             (n, self.input_shape, n + 2, n))
+        self.n = n
+        self.num_filters = num_filters
+        self.filter_size = as_tuple(filter_size, n, int)
+        self.flip_filters = flip_filters
+        self.stride = as_tuple(stride, n, int)
+        self.untie_biases = untie_biases
+
+        if pad == 'same':
+            if any(s % 2 == 0 for s in self.filter_size):
+                raise NotImplementedError(
+                    '`same` padding requires odd filter size.')
+        if pad == 'valid':
+            self.pad = as_tuple(0, n)
+        elif pad in ('full', 'same'):
+            self.pad = pad
+        else:
+            self.pad = as_tuple(pad, n, int)
+
+        self.W = self.add_param(W, self.get_W_shape(), name="W")
+        if b is None:
+            self.b = None
+        else:
+            if self.untie_biases:
+                biases_shape = (num_filters,) + self.output_shape[2:]
+            else:
+                biases_shape = (num_filters,)
+            self.b = self.add_param(b, biases_shape, name="b",
+                                    regularizable=False)
+
+    def get_W_shape(self):
+        """Get the shape of the weight matrix `W`.
+        Returns
+        -------
+        tuple of int
+            The shape of the weight matrix.
+        """
+        num_input_channels = self.input_shape[1]
+        return (self.num_filters, num_input_channels) + self.filter_size
+
+    def get_output_shape_for(self, input_shape):
+        pad = self.pad if isinstance(self.pad, tuple) else (self.pad,) * self.n
+        batchsize = input_shape[0]
+        return ((batchsize, self.num_filters) +
+                tuple(conv_output_length(input, filter, stride, p)
+                      for input, filter, stride, p
+                      in zip(input_shape[2:], self.filter_size,
+                             self.stride, pad)))
+
+    def get_output_for(self, input, **kwargs):
+        conved = self.convolve(input, **kwargs)
+
+        if self.b is None:
+            activation = conved
+        elif self.untie_biases:
+            raise NotImplementedError
+            activation = conved + T.shape_padleft(self.b, 1)
+        else:
+            activation = conved + self.b.dimshuffle(('x', 0) + ('x',) * self.n)
+
+        return self.nonlinearity(activation)
+
+    def convolve(self, input, **kwargs):
+        """
+        Symbolically convolves `input` with ``self.W``, producing an output of
+        shape ``self.output_shape``. To be implemented by subclasses.
+        Parameters
+        ----------
+        input : Theano tensor
+            The input minibatch to convolve
+        **kwargs
+            Any additional keyword arguments from :meth:`get_output_for`
+        Returns
+        -------
+        Theano tensor
+            `input` convolved according to the configuration of this layer,
+            without any bias or nonlinearity applied.
+        """
+        raise NotImplementedError("BaseConvLayer does not implement the "
+                                  "convolve() method. You will want to "
+                                  "use a subclass such as Conv2DLayer.")
+
+
+class Conv2DLayer(BaseConvLayer):
+    def __init__(self, incoming, num_filters, filter_size, stride=(1, 1),
+                 pad=0, untie_biases=False,
+                 W=xavier_init, b=tf.zeros_initializer,
+                 nonlinearity=tf.nn.relu, flip_filters=True,
+                 convolution=tf.nn.conv2d, **kwargs):
+        super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size,
+                                          stride, pad, untie_biases, W, b,
+                                          nonlinearity, flip_filters, n=2,
+                                          **kwargs)
+        self.convolution = convolution
+
+    def convolve(self, input, **kwargs):
+        border_mode = 'half' if self.pad == 'same' else self.pad
+        conved = self.convolution(input, self.W,
+                                  self.input_shape, self.get_W_shape(),
+                                  subsample=self.stride,
+                                  border_mode=border_mode,
+                                  filter_flip=self.flip_filters)
+        return conved
+
+
+# TODO: add Conv3DLayer
+
+
+class ReshapeLayer(Layer):
+    def __init__(self, incoming, shape, name, **kwargs):
+        super(ReshapeLayer, self).__init__(incoming, name=name, **kwargs)
+        shape = tuple(shape)
+        for s in shape:
+            if isinstance(s, int):
+                if s == 0 or s < - 1:
+                    raise ValueError("`shape` integers must be positive or -1")
+            elif isinstance(s, list):
+                if len(s) != 1 or not isinstance(s[0], int) or s[0] < 0:
+                    raise ValueError("`shape` input references must be "
+                                     "single-element lists of int >= 0")
+            elif isinstance(s, (tf.Tensor, tf.Variable)):  # T.TensorVariable):
+                raise NotImplementedError
+                # if s.ndim != 0:
+                #     raise ValueError(
+                #         "A symbolic variable in a shape specification must be "
+                #         "a scalar, but had %i dimensions" % s.ndim)
+            else:
+                raise ValueError("`shape` must be a tuple of int and/or [int]")
+        if sum(s == -1 for s in shape) > 1:
+            raise ValueError("`shape` cannot contain multiple -1")
+        self.shape = shape
+        # try computing the output shape once as a sanity check
+        self.get_output_shape_for(self.input_shape)
+
+    def get_output_shape_for(self, input_shape, **kwargs):
+        # Initialize output shape from shape specification
+        output_shape = list(self.shape)
+        # First, replace all `[i]` with the corresponding input dimension, and
+        # mask parts of the shapes thus becoming irrelevant for -1 inference
+        masked_input_shape = list(input_shape)
+        masked_output_shape = list(output_shape)
+        for dim, o in enumerate(output_shape):
+            if isinstance(o, list):
+                if o[0] >= len(input_shape):
+                    raise ValueError("specification contains [%d], but input "
+                                     "shape has %d dimensions only" %
+                                     (o[0], len(input_shape)))
+                output_shape[dim] = input_shape[o[0]]
+                masked_output_shape[dim] = input_shape[o[0]]
+                if (input_shape[o[0]] is None) \
+                        and (masked_input_shape[o[0]] is None):
+                    # first time we copied this unknown input size: mask
+                    # it, we have a 1:1 correspondence between out[dim] and
+                    # in[o[0]] and can ignore it for -1 inference even if
+                    # it is unknown.
+                    masked_input_shape[o[0]] = 1
+                    masked_output_shape[dim] = 1
+        # Secondly, replace all symbolic shapes with `None`, as we cannot
+        # infer their size here.
+        for dim, o in enumerate(output_shape):
+            if isinstance(o, (tf.Tensor, tf.Variable)):  # T.TensorVariable):
+                raise NotImplementedError
+                # output_shape[dim] = None
+                # masked_output_shape[dim] = None
+        # From the shapes, compute the sizes of the input and output tensor
+        input_size = (None if any(x is None for x in masked_input_shape)
+                      else np.prod(masked_input_shape))
+        output_size = (None if any(x is None for x in masked_output_shape)
+                       else np.prod(masked_output_shape))
+        del masked_input_shape, masked_output_shape
+        # Finally, infer value for -1 if needed
+        if -1 in output_shape:
+            dim = output_shape.index(-1)
+            if (input_size is None) or (output_size is None):
+                output_shape[dim] = None
+                output_size = None
+            else:
+                output_size *= -1
+                output_shape[dim] = input_size // output_size
+                output_size *= output_shape[dim]
+        # Sanity check
+        if (input_size is not None) and (output_size is not None) \
+                and (input_size != output_size):
+            raise ValueError("%s cannot be reshaped to specification %s. "
+                             "The total size mismatches." %
+                             (input_shape, self.shape))
+        return tuple(output_shape)
+
+    def get_output_for(self, input, **kwargs):
+        # Replace all `[i]` with the corresponding input dimension
+        output_shape = list(self.shape)
+        for dim, o in enumerate(output_shape):
+            if isinstance(o, list):
+                output_shape[dim] = input.shape[o[0]]
+        # Everything else is handled by Theano
+        return input.reshape(tuple(output_shape))
+
+
+reshape = ReshapeLayer  # shortcut
 
 
 def get_all_layers(layer, treat_as_input=None):

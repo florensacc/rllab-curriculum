@@ -57,6 +57,10 @@ class DeterministicMLPPolicy(Policy, LasagnePowered, Serializable):
         action = self.f_action([flat_obs])[0]
         return action, dict()
 
+    # def get_actions(self, observations):
+    #     flat_obs = self.observation_space.flatten_n(observations)
+    #     return self.f_action(flat_obs), dict()
+
     def get_reparam_action_sym(self, obs_var, state_info_vars):
         return L.get_output(self.l_output, {self.l_obs: obs_var})
 

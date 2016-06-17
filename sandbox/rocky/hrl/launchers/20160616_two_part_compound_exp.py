@@ -10,8 +10,7 @@ from sandbox.rocky.hrl.policies.two_part_policy.reflective_stochastic_mlp_policy
 from sandbox.rocky.hrl.envs.compound_action_sequence_env import CompoundActionSequenceEnv
 from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rocky.hrl.bonus_evaluators.duel_discrete_bonus_evaluator import DiscreteBonusEvaluator, MODES
-from sandbox.rocky.hrl.bonus_evaluators.zero_bonus_evaluator import ZeroBonusEvaluator
+from sandbox.rocky.hrl.bonus_evaluators.two_part_bonus_evaluator import TwoPartBonusEvaluator
 import sys
 
 stub(globals())
@@ -20,21 +19,19 @@ from rllab.misc.instrument import VariantGenerator
 
 N_ITR = 500
 
-# algo_cls = MultiJointTRPO
-
 vg = VariantGenerator()
 vg.add("use_decision_nodes", [True, False])
 vg.add("seed", [11, 111, 211, 311, 411])
 vg.add("algo_cls", [MultiJointTRPO])
 vg.add("bonus_loss_weight", [0.1, 0.01, 0.001, 0.])
-# vg.add("weights", lambda bonus_loss_weight: [
-#     dict(loss_weights=[1., 1., 1., 1., bonus_loss_weight], kl_weights=[1., 1., 1., 1., int(bonus_loss_weight > 0)]),
-#     dict(loss_weights=[0., 1., 1., 1., bonus_loss_weight], kl_weights=[0., 1., 1., 1., int(bonus_loss_weight > 0)]),
-#     dict(loss_weights=[0., 0., 1., 1., bonus_loss_weight], kl_weights=[0., 0., 1., 1., int(bonus_loss_weight > 0)]),
-#     dict(loss_weights=[0., 0., 0., 1., bonus_loss_weight], kl_weights=[0., 0., 0., 1., int(bonus_loss_weight > 0)]),
-# ])
-# vg.add("loss_weights", lambda weights: [weights["loss_weights"]])
-# vg.add("kl_weights", lambda weights: [weights["kl_weights"]])
+vg.add("weights", lambda bonus_loss_weight: [
+    dict(loss_weights=[1., 1., 1., 1., bonus_loss_weight], kl_weights=[1., 1., 1., 1., int(bonus_loss_weight > 0)]),
+    dict(loss_weights=[0., 1., 1., 1., bonus_loss_weight], kl_weights=[0., 1., 1., 1., int(bonus_loss_weight > 0)]),
+    dict(loss_weights=[0., 0., 1., 1., bonus_loss_weight], kl_weights=[0., 0., 1., 1., int(bonus_loss_weight > 0)]),
+    dict(loss_weights=[0., 0., 0., 1., bonus_loss_weight], kl_weights=[0., 0., 0., 1., int(bonus_loss_weight > 0)]),
+])
+vg.add("loss_weights", lambda weights: [weights["loss_weights"]])
+vg.add("kl_weights", lambda weights: [weights["kl_weights"]])
 variants = vg.variants()
 
 print("#Experiments: %d" % len(variants))
@@ -48,34 +45,34 @@ for v in variants:
             ".....",
             ".....",
         ],
-        # [
-        #     "S....",
-        #     ".o...",
-        #     "..G..",
-        #     ".....",
-        #     ".....",
-        # ],
-        # [
-        #     "S....",
-        #     ".o...",
-        #     "..o..",
-        #     "...G.",
-        #     ".....",
-        # ],
-        # [
-        #     "S....",
-        #     ".o.o.",
-        #     ".....",
-        #     "...oo",
-        #     "....G",
-        # ],
-        # [
-        #     "S....",
-        #     ".....",
-        #     ".....",
-        #     ".....",
-        #     ".....",
-        # ],
+        [
+            "S....",
+            ".o...",
+            "..G..",
+            ".....",
+            ".....",
+        ],
+        [
+            "S....",
+            ".o...",
+            "..o..",
+            "...G.",
+            ".....",
+        ],
+        [
+            "S....",
+            ".o.o.",
+            ".....",
+            "...oo",
+            "....G",
+        ],
+        [
+            "S....",
+            ".....",
+            ".....",
+            ".....",
+            ".....",
+        ],
     ]
     env_configs = []
     for idx, map in enumerate(maps):
@@ -113,7 +110,7 @@ for v in variants:
             gate_policy_args=dict(
                 output_nonlinearity=None
             ),
-            gated=True,
+            gated=v["use_decision_nodes"],
         ),
         low_policy_cls=CategoricalMLPPolicy,
         low_policy_args=dict(),
@@ -131,22 +128,16 @@ for v in variants:
             share_gate=True
         )
         env_baseline = LinearFeatureBaseline(env_spec=env_config["env"].spec)
-        env_bonus_evaluator = ZeroBonusEvaluator(env_spec=env_config["env"].spec, policy=env_policy)
+        env_bonus_evaluator = TwoPartBonusEvaluator(
+            env_spec=env_config["env"].spec,
+            policy=env_policy,
+            regressor_args=dict(
+                use_trust_region=False,
+            ),
+            exact_stop_gradient=True,
+            bonus_coeff=env_config["bonus_coeff"],
+        )
 
-        # env_bonus_evaluator = DiscreteBonusEvaluator(
-        #     bonus_coeff=env_config["bonus_coeff"],
-        #     policy=env_policy,
-        #     env_spec=env_config["env"].spec,
-        #     mode=MODES.MODE_MI_FEUDAL_SYNC,
-        #     bottleneck_coeff=0.,
-        #     regressor_args=dict(
-        #         use_trust_region=False,
-        #         step_size=0.01,
-        #     ),
-        #     use_exact_regressor=True,
-        #     exact_stop_gradient=True,
-        #     exact_entropy=False,
-        # )
         policies.append(env_policy)
         baselines.append(env_baseline)
         bonus_evaluators.append(env_bonus_evaluator)
@@ -156,10 +147,10 @@ for v in variants:
         policies=policies,
         baselines=baselines,
         bonus_evaluators=bonus_evaluators,
-        loss_weights=[1] * len(env_configs),#v["loss_weights"],
-        kl_weights=[1] * len(env_configs),#v["kl_weights"],
+        loss_weights=v["loss_weights"],
+        kl_weights=v["kl_weights"],
         step_size=0.01,
-        batch_size=1000,
+        batch_size=20000,
         max_path_length=100,
         reward_coeffs=[cfg["reward_coeff"] for cfg in env_configs],
         scopes=[cfg["name"] for cfg in env_configs],
@@ -169,10 +160,10 @@ for v in variants:
     run_experiment_lite(
         algo.train(),
         exp_prefix="two_part_compound_exp",
-        n_parallel=1,
+        n_parallel=3,
         snapshot_mode="last",
         seed=v["seed"],
-        mode="local",
+        mode="lab_kube",
         variant=v,
     )
-    sys.exit()
+    # sys.exit()

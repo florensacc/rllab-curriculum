@@ -36,16 +36,18 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
         """
         Serializable.quick_init(self, locals())
         if high_policy_cls == CategoricalMLPPolicy or \
-                high_policy_cls == ReflectiveStochasticMLPPolicy and high_policy_args.get("action_policy_cls",
-                                                                                          None) == CategoricalMLPPolicy:
+                                high_policy_cls == ReflectiveStochasticMLPPolicy and high_policy_args.get(
+                    "action_policy_cls",
+                    None) == CategoricalMLPPolicy:
             high_action_space = Discrete(subgoal_dim)
         else:
             high_action_space = Box(low=-1, high=1, shape=(subgoal_dim,))
 
         if reparametrize_high_actions is None:
             if high_policy_cls == CategoricalMLPPolicy or \
-                high_policy_cls == ReflectiveStochasticMLPPolicy and high_policy_args.get("action_policy_cls",
-                                                                                          None) == CategoricalMLPPolicy:
+                                    high_policy_cls == ReflectiveStochasticMLPPolicy and high_policy_args.get(
+                        "action_policy_cls",
+                        None) == CategoricalMLPPolicy:
                 reparametrize_high_actions = False
             else:
                 reparametrize_high_actions = True
@@ -105,6 +107,14 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
     def recurrent(self):
         return self.high_policy.recurrent or self.low_policy.recurrent
 
+    def action_dist_info_sym(self, obs_var, high_action_var):
+        joint_obs_var = TT.concatenate([obs_var, high_action_var], axis=-1)
+        return self.low_policy.dist_info_sym(joint_obs_var, dict())
+
+    @property
+    def action_dist(self):
+        return self.low_policy.distribution
+
     def dist_info_sym(self, obs_var, state_info_vars):
         high_state_info_vars, low_state_info_vars = self._split_dict(state_info_vars)
         if self.recurrent:
@@ -135,12 +145,12 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
                 obs_var=obs_var,
                 state_info_vars=high_state_info_vars
             )
-            high_action = state_info_vars["_high_action"]
+            high_action = state_info_vars["high_action"]
             low_dist_info = self.low_policy.dist_info_sym(
                 obs_var=TT.concatenate([obs_var, high_action], axis=-1),
                 state_info_vars=low_state_info_vars
             )
-            return dict(self._merge_dict(high_dist_info, low_dist_info), _high_action=high_action)
+            return dict(self._merge_dict(high_dist_info, low_dist_info), high_action=high_action)
 
     def reset(self):
         self.high_policy.reset()
@@ -151,7 +161,7 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
         low_action, low_agent_info = self.low_policy.get_action((observation, high_action))
         return low_action, dict(
             self._merge_dict(high_agent_info, low_agent_info),
-            _high_action=self.high_env_spec.action_space.flatten(high_action)
+            high_action=self.high_env_spec.action_space.flatten(high_action)
         )
 
     @property
@@ -162,12 +172,12 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
     def dist_info_keys(self):
         high_dist = self.high_policy.distribution
         low_dist = self.low_policy.distribution
-        return ["high_%s" % k for k in high_dist.dist_info_keys] + ["_high_action"] + \
+        return ["high_%s" % k for k in high_dist.dist_info_keys] + ["high_action"] + \
                ["low_%s" % k for k in low_dist.dist_info_keys]
 
     @property
     def state_info_keys(self):
-        return ["high_%s" % k for k in self.high_policy.state_info_keys] + ["_high_action"] + \
+        return ["high_%s" % k for k in self.high_policy.state_info_keys] + ["high_action"] + \
                ["low_%s" % k for k in self.low_policy.state_info_keys]
 
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
@@ -195,7 +205,7 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
         new_high, new_low = self._split_dict(new_dist_info_vars)
         if not self.reparametrize_high_actions:
             assert isinstance(self.high_policy, StochasticPolicy)
-            high_action_var = old_dist_info_vars["_high_action"]
+            high_action_var = old_dist_info_vars["high_action"]
             if not self.high_policy.recurrent and self.low_policy.recurrent:
                 raise NotImplementedError
             high_lr = self.high_policy.distribution.likelihood_ratio_sym(high_action_var, old_high, new_high)
