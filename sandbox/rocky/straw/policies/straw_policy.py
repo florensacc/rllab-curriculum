@@ -5,6 +5,7 @@ import numpy as np
 from rllab.core.network import ConvNetwork, MLP
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
+from rllab.core.serializable import Serializable
 from rllab.misc import ext
 from rllab.misc import special
 from rllab.distributions.recurrent_categorical import RecurrentCategorical
@@ -214,8 +215,9 @@ class UpdateCLayer(L.MergeLayer):
         return shift_c * (1 - g) + g * TT.nnet.sigmoid(self.b + write_c)
 
 
-class STRAWPolicy(StochasticPolicy, LasagnePowered):
+class STRAWPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def __init__(self, env_spec):
+        Serializable.quick_init(self, locals())
         self.T = T = 500
         self.K = K = 10
         self.action_dim = action_dim = env_spec.action_space.flat_dim
