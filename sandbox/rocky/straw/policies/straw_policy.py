@@ -8,57 +8,26 @@ from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc import ext
 from rllab.misc import special
-from rllab.distributions.recurrent_categorical import RecurrentCategorical
+# from rllab.distributions.recurrent_categorical import RecurrentCategorical
+# from sandbox.rocky.tf.core.network import ConvNetwork, MLP
+from sandbox.rocky.tf.distributions.recurrent_categorical import RecurrentCategorical
+import sandbox.rocky.tf.core.layers as L
+from sandbox.rocky.tf.core.layers_powered import LayersPowered
 import theano.tensor as TT
 import theano
 import lasagne
-from theano.tensor.opt import register_canonicalize
 # import tensorflow as tf
 
 
 import lasagne.layers as L
-import lasagne.nonlinearities as NL
+# import lasagne.nonlinearities as NL
 
-floatX = theano.config.floatX
+# floatX = theano.config.floatX
 
 
 def time_shift(mat):
     m, n = mat.shape
     return np.concatenate([mat[:, 1:], np.zeros((m, 1))], axis=-1)
-
-
-class CustomGrad(theano.compile.ViewOp):
-    def make_node(self, x, known):
-        return theano.gof.Apply(self, [x, known], [x.type()])
-
-    def perform(self, node, inp, out):
-        x, _ = inp
-        z, = out
-        z[0] = x
-
-    def c_code(self, node, nodename, inp, out, sub):
-        # import ipdb; ipdb.set_trace()
-        iname, _ = inp
-        oname, = out
-        fail = sub['fail']
-
-        itype = node.inputs[0].type.__class__
-        if itype in self.c_code_and_version:
-            code, version = self.c_code_and_version[itype]
-            return code % locals()
-
-        # Else, no C code
-        return super(CustomGrad, self).c_code(node, nodename, inp, out, sub)
-
-    def grad(self, args, g_outs):
-        return [g_outs[0], g_outs[0]]
-
-    def infer_shape(self, node, shapes):
-        return [shapes[0]]
-
-
-custom_grad = CustomGrad()
-register_canonicalize(theano.gof.PatternSub((custom_grad, 'x', 'y'), 'x'), name='remove_custom_grad')
 
 
 def my_batched_dot(A, B):
@@ -399,6 +368,7 @@ class STRAWPolicy(StochasticPolicy, LasagnePowered, Serializable):
             )
             return TT.unbroadcast(next_A_var, *range(next_A_var.ndim)), TT.unbroadcast(next_c_var,
                                                                                        *range(next_c_var.ndim))
+
         (all_A, all_c), _ = theano.scan(
             step,
             sequences=[obs_var.dimshuffle(1, 0, 2), g_var.dimshuffle(1, 0, 2)],

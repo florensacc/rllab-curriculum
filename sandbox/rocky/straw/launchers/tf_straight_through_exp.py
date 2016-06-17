@@ -3,70 +3,63 @@ from __future__ import absolute_import
 
 # We'd like to compute the gradient w.r.t. a discrete random variable, using the straight-through estimator.
 from rllab.misc import ext
-import theano
-import theano.tensor as TT
+from sandbox.rocky.tf.misc import tensor_utils
+import tensorflow as tf
+
 import numpy as np
-import lasagne.updates
-from theano.tensor.opt import register_canonicalize
 
-A = theano.shared(np.random.uniform(low=-1, high=1, size=(100, 50)))
-b = theano.shared(np.random.uniform(low=-1, high=1, size=(50,)))
+A = tf.Variable(initial_value=np.random.uniform(low=-1, high=1, size=(100, 50)), dtype=tf.float32)
+b = tf.Variable(np.random.uniform(low=-1, high=1, size=(50,)), dtype=tf.float32)
 
-act = TT.nnet.sigmoid(A.dot(b))
+act = tf.nn.sigmoid(tf.matmul(A, tf.reshape(b, (50, 1))))[:, 0]
 
-bits_var = TT.vector("bits")
+bits_var = tf.placeholder(dtype=tf.float32, shape=[None], name="bits")
 
-
-class CustomGrad(theano.compile.ViewOp):
-    def make_node(self, x, known):
-        return theano.gof.Apply(self, [x, known], [x.type()])
-
-    def perform(self, node, inp, out):
-        x, = inp
-        z, = out
-        z[0] = x
-
-    def grad(self, args, g_outs):
-        return [g_outs[0], g_outs[0]]
-
-    def infer_shape(self, node, shapes):
-        return [shapes[0]]
+custom_py_cnt = 0
 
 
-custom_grad = CustomGrad()
-register_canonicalize(theano.gof.PatternSub((custom_grad, 'x', 'y'), 'x'), name='remove_custom_grad')
+def custom_grad(x, y):
+    global custom_py_cnt
+    custom_py_cnt += 1
+    func_name = "CustomPyFunc%d" % custom_py_cnt
 
-loss = TT.mean(TT.square(custom_grad(bits_var, act)))
+    def _func(x, y):
+        return x
 
-# we want to get the gradient of loss w.r.t. A and b
+    @tf.RegisterGradient(func_name)
+    def _grad(op, grad):
+        return grad, grad
 
-grads = theano.grad(loss, wrt=[A, b])  # , known_grads={act: theano.grad(loss, bits_var)})
+    @tf.RegisterShape(func_name)
+    def _shape(op):
+        return [op.inputs[0].get_shape(), op.inputs[0].get_shape()]
 
-updates = lasagne.updates.adam(grads, params=[A, b])
+    g = tf.get_default_graph()
+    with g.gradient_override_map({"PyFunc": func_name}):
+        return tf.py_func(_func, [x, y], [x.dtype])
 
-train = ext.compile_function(
+
+loss = tf.reduce_mean(tf.square(custom_grad(bits_var, act)))
+
+optimizer = tf.train.AdamOptimizer()
+train_op = optimizer.minimize(loss, var_list=[A, b])
+
+train = tensor_utils.compile_function(
     inputs=[bits_var],
-    outputs=[loss, TT.sum(TT.square(A)) + TT.sum(TT.square(b))],
-    updates=updates,
+    outputs=[train_op, loss, tf.reduce_sum(tf.square(A)) + tf.reduce_sum(tf.square(b))],
     log_name="train"
 )
 
-f_act = ext.compile_function(
+f_act = tensor_utils.compile_function(
     inputs=[],
     outputs=act,
     log_name="f_act"
 )
 
-for _ in range(1000):
-    result = f_act()
-    bits = np.cast['int'](np.random.uniform(low=0, high=1, size=(100,)) < result)
-    loss_val, param_norm = train(bits)
-    print(loss_val, param_norm)  # train(bits))
-
-
-# import ipdb;
-#
-# ipdb.set_trace()
-
-
-# b =
+with tf.Session() as sess:
+    sess.run(tf.initialize_all_variables())
+    for _ in range(1000):
+        result = f_act()
+        bits = np.cast['int'](np.random.uniform(low=0, high=1, size=(100,)) < result)
+        _, loss_val, param_norm = train(bits)
+        print(loss_val, param_norm)

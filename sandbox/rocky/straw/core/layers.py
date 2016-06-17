@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import numpy as np
 import math
 import tensorflow as tf
+# from sandbox.rocky.straw import backend as BK
 from collections import OrderedDict
 from collections import deque
 from itertools import chain
@@ -175,7 +176,7 @@ class InputLayer(Layer):
 
 
 class MergeLayer(Layer):
-    def __init__(self, incomings, name, **kwargs):
+    def __init__(self, incomings, name):
         self.input_shapes = [incoming if isinstance(incoming, tuple)
                              else incoming.output_shape
                              for incoming in incomings]
@@ -255,28 +256,23 @@ concat = ConcatLayer  # shortcut
 
 
 def xavier_init(shape, dtype=tf.float32):
-    if len(shape) == 2:
-        n_inputs, n_outputs = shape
-    else:
-        receptive_field_size = np.prod(shape[:2])
-        n_inputs = shape[-2] * receptive_field_size
-        n_outputs = shape[-1] * receptive_field_size
+    assert len(shape) == 2
+    n_inputs, n_outputs = shape
     init_range = math.sqrt(6.0 / (n_inputs + n_outputs))
     return tf.random_uniform_initializer(-init_range, init_range, dtype=dtype)(shape)
 
 
 class ParamLayer(Layer):
-    def __init__(self, incoming, name, num_units, param=tf.zeros_initializer,
+    def __init__(self, incoming, num_units, param=tf.zeros_initializer,
                  trainable=True, **kwargs):
-        super(ParamLayer, self).__init__(incoming, name, **kwargs)
+        super(ParamLayer, self).__init__(incoming, **kwargs)
         self.num_units = num_units
-        with tf.variable_scope(name):
-            self.param = self.add_param(
-                param,
-                (num_units,),
-                name="param",
-                trainable=trainable
-            )
+        self.param = self.add_param(
+            param,
+            (num_units,),
+            name="param",
+            trainable=trainable
+        )
 
     def get_output_shape_for(self, input_shape):
         return input_shape[:-1] + (self.num_units,)
@@ -287,24 +283,6 @@ class ParamLayer(Layer):
         tile_arg = tf.concat(0, [tf.shape(input)[:ndim - 1], [1]])
         tiled = tf.tile(reshaped_param, tile_arg)
         return tiled
-
-
-class OpLayer(MergeLayer):
-    def __init__(self, incoming, name, op,
-                 shape_op=lambda x: x, extras=None, **kwargs):
-        if extras is None:
-            extras = []
-        incomings = [incoming] + extras
-        super(OpLayer, self).__init__(incomings, name, **kwargs)
-        self.op = op
-        self.shape_op = shape_op
-        self.incomings = incomings
-
-    def get_output_shape_for(self, input_shapes):
-        return self.shape_op(*input_shapes)
-
-    def get_output_for(self, inputs, **kwargs):
-        return self.op(*inputs)
 
 
 class DenseLayer(Layer):
@@ -339,10 +317,11 @@ class DenseLayer(Layer):
 
 
 class BaseConvLayer(Layer):
-    def __init__(self, incoming, num_filters, filter_size, stride=1, pad="VALID",
+    def __init__(self, incoming, num_filters, filter_size, stride=1, pad=0,
                  untie_biases=False,
                  W=xavier_init, b=tf.zeros_initializer,
-                 nonlinearity=tf.nn.relu, n=None, **kwargs):
+                 nonlinearity=tf.nn.relu, flip_filters=True,
+                 n=None, **kwargs):
         super(BaseConvLayer, self).__init__(incoming, **kwargs)
         if nonlinearity is None:
             self.nonlinearity = tf.identity
@@ -359,28 +338,27 @@ class BaseConvLayer(Layer):
         self.n = n
         self.num_filters = num_filters
         self.filter_size = as_tuple(filter_size, n, int)
+        self.flip_filters = flip_filters
         self.stride = as_tuple(stride, n, int)
         self.untie_biases = untie_biases
 
-        self.pad = pad
-
-        if pad == 'SAME':
+        if pad == 'same':
             if any(s % 2 == 0 for s in self.filter_size):
                 raise NotImplementedError(
                     '`same` padding requires odd filter size.')
-        # if pad == 'VALID':
-        #     self.pad = as_tuple(0, n)
-        # elif pad in ('full', 'same'):
-        #     self.pad = pad
-        # else:
-        #     self.pad = as_tuple(pad, n, int)
+        if pad == 'valid':
+            self.pad = as_tuple(0, n)
+        elif pad in ('full', 'same'):
+            self.pad = pad
+        else:
+            self.pad = as_tuple(pad, n, int)
 
         self.W = self.add_param(W, self.get_W_shape(), name="W")
         if b is None:
             self.b = None
         else:
             if self.untie_biases:
-                biases_shape = self.output_shape[1:3] + (num_filters,)  # + self.output_shape[2:]
+                biases_shape = (num_filters,) + self.output_shape[2:]
             else:
                 biases_shape = (num_filters,)
             self.b = self.add_param(b, biases_shape, name="b",
@@ -393,26 +371,17 @@ class BaseConvLayer(Layer):
         tuple of int
             The shape of the weight matrix.
         """
-        num_input_channels = self.input_shape[-1]
-        return self.filter_size + (num_input_channels, self.num_filters)
+        num_input_channels = self.input_shape[1]
+        return (self.num_filters, num_input_channels) + self.filter_size
 
     def get_output_shape_for(self, input_shape):
-        if self.pad == 'SAME':
-            pad = ('same',) * self.n
-        elif self.pad == 'VALID':
-            pad = (0,) * self.n
-        else:
-            import ipdb;
-            ipdb.set_trace()
-            raise NotImplementedError
-
-        # pad = self.pad if isinstance(self.pad, tuple) else (self.pad,) * self.n
+        pad = self.pad if isinstance(self.pad, tuple) else (self.pad,) * self.n
         batchsize = input_shape[0]
-        return ((batchsize,) +
+        return ((batchsize, self.num_filters) +
                 tuple(conv_output_length(input, filter, stride, p)
                       for input, filter, stride, p
-                      in zip(input_shape[1:3], self.filter_size,
-                             self.stride, pad))) + (self.num_filters,)
+                      in zip(input_shape[2:], self.filter_size,
+                             self.stride, pad)))
 
     def get_output_for(self, input, **kwargs):
         conved = self.convolve(input, **kwargs)
@@ -420,10 +389,10 @@ class BaseConvLayer(Layer):
         if self.b is None:
             activation = conved
         elif self.untie_biases:
-            # raise NotImplementedError
-            activation = conved + tf.expand_dims(self.b, 0)
+            raise NotImplementedError
+            activation = conved + T.shape_padleft(self.b, 1)
         else:
-            activation = conved + tf.reshape(self.b, (1, 1, 1, self.num_filters))
+            activation = conved + self.b.dimshuffle(('x', 0) + ('x',) * self.n)
 
         return self.nonlinearity(activation)
 
@@ -450,63 +419,27 @@ class BaseConvLayer(Layer):
 
 class Conv2DLayer(BaseConvLayer):
     def __init__(self, incoming, num_filters, filter_size, stride=(1, 1),
-                 pad="VALID", untie_biases=False,
+                 pad=0, untie_biases=False,
                  W=xavier_init, b=tf.zeros_initializer,
-                 nonlinearity=tf.nn.relu,
+                 nonlinearity=tf.nn.relu, flip_filters=True,
                  convolution=tf.nn.conv2d, **kwargs):
         super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size,
                                           stride, pad, untie_biases, W, b,
-                                          nonlinearity, n=2, **kwargs)
+                                          nonlinearity, flip_filters, n=2,
+                                          **kwargs)
         self.convolution = convolution
 
     def convolve(self, input, **kwargs):
-        conved = self.convolution(input, self.W, strides=(1,) + self.stride + (1,), padding=self.pad)
+        border_mode = 'half' if self.pad == 'same' else self.pad
+        conved = self.convolution(input, self.W,
+                                  self.input_shape, self.get_W_shape(),
+                                  subsample=self.stride,
+                                  border_mode=border_mode,
+                                  filter_flip=self.flip_filters)
         return conved
 
 
 # TODO: add Conv3DLayer
-
-class FlattenLayer(Layer):
-    """
-    A layer that flattens its input. The leading ``outdim-1`` dimensions of
-    the output will have the same shape as the input. The remaining dimensions
-    are collapsed into the last dimension.
-    Parameters
-    ----------
-    incoming : a :class:`Layer` instance or a tuple
-        The layer feeding into this layer, or the expected input shape.
-    outdim : int
-        The number of dimensions in the output.
-    See Also
-    --------
-    flatten  : Shortcut
-    """
-
-    def __init__(self, incoming, name, outdim=2, **kwargs):
-        super(FlattenLayer, self).__init__(incoming, name=name, **kwargs)
-        self.outdim = outdim
-
-        if outdim < 1:
-            raise ValueError('Dim must be >0, was %i', outdim)
-
-    def get_output_shape_for(self, input_shape):
-        to_flatten = input_shape[self.outdim - 1:]
-
-        if any(s is None for s in to_flatten):
-            flattened = None
-        else:
-            flattened = int(np.prod(to_flatten))
-
-        return input_shape[:self.outdim - 1] + (flattened,)
-
-    def get_output_for(self, input, **kwargs):
-        # total_entries = tf.reduce_prod(tf.shape(input))
-        pre_shape = tf.shape(input)[:self.outdim - 1]
-        to_flatten = tf.reduce_prod(tf.shape(input)[self.outdim - 1:])
-        return tf.reshape(input, tf.concat(0, [pre_shape, [to_flatten]]))
-
-
-flatten = FlattenLayer  # shortcut
 
 
 class ReshapeLayer(Layer):
@@ -594,9 +527,9 @@ class ReshapeLayer(Layer):
         output_shape = list(self.shape)
         for dim, o in enumerate(output_shape):
             if isinstance(o, list):
-                output_shape[dim] = tf.shape(input)[o[0]]
+                output_shape[dim] = input.shape[o[0]]
         # Everything else is handled by Theano
-        return tf.reshape(input, tf.pack(output_shape))
+        return input.reshape(tuple(output_shape))
 
 
 reshape = ReshapeLayer  # shortcut

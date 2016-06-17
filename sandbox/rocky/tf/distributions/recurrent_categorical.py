@@ -62,10 +62,10 @@ class RecurrentCategorical(Distribution):
         a_dim = tf.shape(probs)[2]
         # a_dim = TT.printing.Print("lala")(a_dim)
         flat_logli = self._cat.log_likelihood_sym(
-            xs.reshape((-1, a_dim)),
-            dict(prob=probs.reshape((-1, a_dim)))
+            tf.reshape(xs, tf.pack([-1, a_dim])),
+            dict(prob=tf.reshape(probs, tf.pack((-1, a_dim))))
         )
-        return flat_logli.reshape(probs.shape[:2])
+        return tf.reshape(flat_logli, tf.shape(probs)[:2])
 
     def log_likelihood(self, xs, dist_info):
         probs = dist_info["prob"]
@@ -78,5 +78,6 @@ class RecurrentCategorical(Distribution):
         return flat_logli.reshape(probs.shape[:2])
 
     @property
-    def dist_info_keys(self):
-        return ["prob"]
+    def dist_info_specs(self):
+        return [("prob", (self.dim,))]
+
