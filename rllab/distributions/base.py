@@ -1,3 +1,5 @@
+import theano.tensor as TT
+
 class Distribution(object):
 
     @property
@@ -24,6 +26,9 @@ class Distribution(object):
 
     def log_likelihood_sym(self, x_var, dist_info_vars):
         raise NotImplementedError
+
+    def likelihood_sym(self, x_var, dist_info_vars):
+        return TT.exp(self.log_likelihood_sym(x_var, dist_info_vars))
 
     def log_likelihood(self, xs, dist_info):
         raise NotImplementedError

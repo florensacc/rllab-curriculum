@@ -32,6 +32,9 @@ class DiagonalGaussian(Distribution):
         denominator = 2 * TT.square(new_std) + 1e-8
         return TT.sum(
             numerator / denominator + new_log_stds - old_log_stds, axis=-1)
+        # more lossy version
+        # return TT.sum(
+        #     numerator / denominator + TT.log(new_std) - TT.log(old_std ), axis=-1)
 
     def likelihood_ratio_sym(self, x_var, old_dist_info_vars, new_dist_info_vars):
         logli_new = self.log_likelihood_sym(x_var, new_dist_info_vars)
@@ -71,3 +74,4 @@ class DiagonalGaussian(Distribution):
     @property
     def dist_info_keys(self):
         return ["mean", "log_std"]
+

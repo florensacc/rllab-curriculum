@@ -25,7 +25,6 @@ class FirstOrderOptimizer(Serializable):
             batch_size=32,
             callback=None,
             verbose=False,
-            randomized=False,
             **kwargs):
         """
 
@@ -47,7 +46,6 @@ class FirstOrderOptimizer(Serializable):
         self._tolerance = tolerance
         self._batch_size = batch_size
         self._verbose = verbose
-        self._randomized = randomized
 
     def update_opt(self, loss, target, inputs, extra_inputs=None, gradients=None, **kwargs):
         """
@@ -101,7 +99,8 @@ class FirstOrderOptimizer(Serializable):
 
         dataset = BatchDataset(
             inputs, self._batch_size,
-            extra_inputs=extra_inputs, randomized=self._randomized
+            extra_inputs=extra_inputs
+            #, randomized=self._randomized
         )
 
         itr = 0

@@ -6,7 +6,6 @@ import theano
 import numpy as np
 import scipy.optimize
 
-
 class PenaltyOptimizer(Serializable):
 
     def __init__(
@@ -21,6 +20,8 @@ class PenaltyOptimizer(Serializable):
             adapt_penalty=True,
             adapt_itr=32,
             data_split=None,
+            max_penalty_itr=10,
+            barrier_coeff=0.,
     ):
         Serializable.quick_init(self, locals())
         self._optimizer = optimizer
@@ -40,6 +41,8 @@ class PenaltyOptimizer(Serializable):
         self._constraint_name = None
         self._adapt_itr = adapt_itr
         self._data_split = data_split
+        self._max_penalty_itr = max_penalty_itr
+        self._barrier_coeff = barrier_coeff
 
     def update_opt(self, loss, target, leq_constraint, inputs, constraint_name="constraint", *args, **kwargs):
         """
@@ -52,9 +55,10 @@ class PenaltyOptimizer(Serializable):
         """
         constraint_term, constraint_value = leq_constraint
         penalty_var = theano.shared(self._initial_penalty, 'penalty_coeff') # TT.scalar("penalty")
-        penalized_loss = loss + 0.*penalty_var * constraint_term #+ \
-                         # -TT.log(constraint_value*1.3 - constraint_term)
-                        #penalty_var*(constraint_term > constraint_value)*(constraint_value - constraint_term)**2
+        penalized_loss = loss + penalty_var * constraint_term + \
+            self._barrier_coeff*(constraint_term > constraint_value)*\
+            (constraint_value - constraint_term)**2
+        # -TT.log(constraint_value*1.3 - constraint_term)
 
         self._target = target
         self._max_constraint_val = constraint_value
@@ -93,6 +97,10 @@ class PenaltyOptimizer(Serializable):
 
     def optimize(self, inputs):
 
+        ob_no = inputs[0]
+        action_na = inputs[1]
+        advantage_n = inputs[2]
+
         inputs = tuple(inputs)
         if self._data_split is not None:
             maxlen = len(inputs[0])
@@ -108,16 +116,30 @@ class PenaltyOptimizer(Serializable):
         try_penalty = np.clip(
             self._penalty_var.get_value(), self._min_penalty, self._max_penalty)
 
+        cur_params = self._target.get_param_values(trainable=True).astype('float64')
+
         train = []
         val = []
-        _, try_loss, try_constraint_val = f_penalized_loss(*inputs)
-        _, val_loss, val_constraint_val = f_penalized_loss(*val_inputs)
-        train.append((try_loss, try_constraint_val))
-        val.append((val_loss, val_constraint_val))
+        _, init_try_loss, init_try_constraint_val = f_penalized_loss(*inputs)
+        _, init_val_loss, init_val_constraint_val = f_penalized_loss(*val_inputs)
+        train.append((init_try_loss, init_try_constraint_val))
+        val.append((init_val_loss, init_val_constraint_val))
         logger.log('before optim penalty %f => loss %f (%f), %s %f (%f)' %
-                   (try_penalty, try_loss, val_loss,
-                    self._constraint_name, try_constraint_val, val_constraint_val))
-        for _ in self._optimizer.optimize_gen(inputs, yield_itr=self._adapt_itr):
+                   (try_penalty, init_try_loss, init_val_loss,
+                    self._constraint_name, init_try_constraint_val, init_val_constraint_val))
+        for penalty_itr in range(self._max_penalty_itr):
+            tried_kl = try_penalty
+            def dbp(itr, **kwargs):
+                _, try_loss, try_constraint_val = f_penalized_loss(*inputs)
+                _, val_loss, val_constraint_val = f_penalized_loss(*val_inputs)
+                logger.log('[epoch %i] penalty %f => loss %f (%f), %s %f (%f)' %
+                           (itr, try_penalty, try_loss, val_loss,
+                            self._constraint_name, try_constraint_val, val_constraint_val))
+
+            self._target.set_param_values(cur_params, trainable=True)
+            self._optimizer.optimize(inputs, callback=dbp)
+
+        # for _ in self._optimizer.optimize_gen(inputs, yield_itr=self._adapt_itr):
             # logger.log('trying penalty=%.3f...' % try_penalty)
 
             # _, try_loss, try_constraint_val = f_penalized_loss(*inputs)
@@ -144,14 +166,13 @@ class PenaltyOptimizer(Serializable):
                 penalty_scale_factor = self._decrease_penalty_factor
             else:
                 # if things are good, keep current penalty
-                penalty_scale_factor = 1.
+                break
             try_penalty *= penalty_scale_factor
             try_penalty = np.clip(try_penalty, self._min_penalty, self._max_penalty)
             self._penalty_var.set_value(try_penalty)
 
-        import matplotlib.pyplot as plt;
-        plt.plot(xrange(len(train)), [v[0] for v in train]);
-        plt.plot(xrange(len(train)), [v[0] for v in val]);
-        # plt.show()
-        import ipdb; ipdb.set_trace()
+        logger.record_tabular('KLCoeff', tried_kl)
+        logger.record_tabular('TrainSrrReduction', init_try_loss - try_loss)
+        logger.record_tabular('ValiSrrReduction', init_val_loss - val_loss)
+
 

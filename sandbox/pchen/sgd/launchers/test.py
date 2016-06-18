@@ -4,13 +4,17 @@ from __future__ import print_function
 from functools import partial
 
 from rllab.algos.ppo import PPO
+from rllab.envs.gym_env import GymEnv
 from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
+from rllab.envs.mujoco.hopper_env import HopperEnv
+from rllab.envs.normalized_env import normalize
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer, lasagne
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.algos.trpo import TRPO
-from sandbox.pchen.sgd.penalty_optimizer import PenaltyOptimizer
+from sandbox.pchen.sgd.online_penalty_optimizer import OnlinePenaltyOptimizer
+from sandbox.pchen.sgd.penalty_optimier import PenaltyOptimizer
 from sandbox.rocky.hrl.optimizers.conjugate_gradient_optimizer import \
     ConjugateGradientOptimizer, PerlmutterHvp, FiniteDifferenceHvp
 
@@ -78,35 +82,47 @@ from rllab.misc.instrument import VariantGenerator, variant
 #         seed=v["seed"],
 #     )
 
-env = HalfCheetahEnv()
-policy = GaussianMLPPolicy(env_spec=env.spec)
+# env = normalize(HopperEnv())
+env = (GymEnv("Hopper-v1"))
+policy = GaussianMLPPolicy(
+    env_spec=env.spec,
+    init_std=1.,
+)
 baseline = LinearFeatureBaseline(env_spec=env.spec)
 algo = PPO(
     env=env,
     policy=policy,
     baseline=baseline,
-    batch_size=50000,
+    # batch_size=50000,
+    batch_size=10000,
     max_path_length=100,
     n_itr=500,
     step_size=0.01,
+    discount=0.995,
     # step_size=2.,
     optimizer=PenaltyOptimizer(
         FirstOrderOptimizer(
-            # update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
-            update_method=partial(lasagne.updates.rmsprop, learning_rate=1e-4),
+            update_method=partial(lasagne.updates.adam, learning_rate=1e-3),
+            # update_method=partial(lasagne.updates.rmsprop, learning_rate=1e-4),
             # max_epochs=1,
-            max_epochs=1000,
-            batch_size=50000,
-            randomized=True,
+            max_epochs=10,
+            batch_size=128,
         ),
-        initial_penalty=1e0,
-        data_split=0.7,
-        max_penalty=1e22,
+        data_split=0.5,
+        max_penalty=1e5,
+        adapt_penalty=True,
+        adapt_itr=10,
+        max_penalty_itr=3,
+
+        # initial_penalty=0.,
+        # min_penalty=0.,
     ),
     # optimizer_args=dict(
     #     max_opt_itr=100,
     #     decrease_penalty_factor=0.8,
     # )
+    # truncate_local_is_ratio=10.,
+    lossy_lr=False,
 )
 run_experiment_lite(
     algo.train(),
@@ -114,5 +130,5 @@ run_experiment_lite(
     n_parallel=3,
     snapshot_mode="last",
     mode="local",
-    seed=42,
+    seed=422,
 )

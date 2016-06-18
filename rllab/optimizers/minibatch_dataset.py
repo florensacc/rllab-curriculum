@@ -3,13 +3,10 @@ import numpy as np
 
 class BatchDataset(object):
 
-    def __init__(self, inputs, batch_size, extra_inputs=None, randomized=False):
+    def __init__(self, inputs, batch_size, extra_inputs=None):
         self._inputs = [
             i for i in inputs
         ]
-        if randomized:
-            for inp in self._inputs:
-                np.random.shuffle(inp)
         self._batch_size = batch_size
         self._extra_inputs = extra_inputs
         self._ids = np.arange(self._inputs[0].shape[0])
