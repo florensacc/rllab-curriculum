@@ -180,7 +180,15 @@ class UpdateCLayer(L.MergeLayer):
 
 
 class STRAWPolicy(StochasticPolicy, LayersPowered, Serializable):
-    def __init__(self, name, env_spec, planning_horizon=20, patch_horizon=10, feature_dim=128):
+    def __init__(
+            self,
+            name,
+            env_spec,
+            planning_horizon=20,
+            patch_horizon=10,
+            feature_dim=128,
+            feature_network_cls=None,
+            feature_network_args=None):
         Serializable.quick_init(self, locals())
         self.T = T = planning_horizon
         self.K = K = patch_horizon
@@ -190,19 +198,23 @@ class STRAWPolicy(StochasticPolicy, LayersPowered, Serializable):
         self.c = None
 
         with tf.variable_scope(name):
-            feature_network = ConvNetwork(
-                name="feature_network",
-                input_shape=env_spec.observation_space.shape,
-                output_dim=feature_dim,
-                conv_filters=(16, 16),
-                conv_filter_sizes=(3, 3),
-                conv_strides=(1, 1),
-                conv_pads=('SAME', 'SAME'),
-                hidden_sizes=tuple(),
-                hidden_nonlinearity=tf.nn.relu,
-                # TODO not yet sure about this
-                output_nonlinearity=tf.nn.tanh,
-            )
+            if feature_network_cls is None:
+                feature_network_cls = ConvNetwork
+            if feature_network_args is None:
+                feature_network_args = dict(
+                    name="feature_network",
+                    input_shape=env_spec.observation_space.shape,
+                    output_dim=feature_dim,
+                    conv_filters=(16, 16),
+                    conv_filter_sizes=(3, 3),
+                    conv_strides=(1, 1),
+                    conv_pads=('SAME', 'SAME'),
+                    hidden_sizes=tuple(),
+                    hidden_nonlinearity=tf.nn.relu,
+                    # TODO not yet sure about this
+                    output_nonlinearity=tf.nn.tanh,
+                )
+            feature_network = feature_network_cls(**feature_network_args)
 
             l_obs = feature_network.input_layer
 
@@ -356,6 +368,8 @@ class STRAWPolicy(StochasticPolicy, LayersPowered, Serializable):
     def dist_info_sym(self, obs_var, state_info_vars):
         # obs_var: N*T*S
         # g_var: N*T*1
+        obs_var = tf.cast(obs_var, tf.float32)
+
         N = tf.shape(obs_var)[0]
         g_var = state_info_vars["g"]
 
@@ -403,7 +417,7 @@ class STRAWPolicy(StochasticPolicy, LayersPowered, Serializable):
         # size: NxTxAxT
         return dict(prob=tf.reshape(
             tf.nn.softmax(
-                tf.reshape(all_A[:, :, :, 0], ((N * T, A)))
+                tf.reshape(all_A[:, :, :, 0], tf.pack((N * T, A)))
             ),
-            (N, T, A)
+            tf.pack((N, T, A))
         ))

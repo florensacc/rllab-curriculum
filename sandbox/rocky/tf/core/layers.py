@@ -503,7 +503,7 @@ class FlattenLayer(Layer):
         # total_entries = tf.reduce_prod(tf.shape(input))
         pre_shape = tf.shape(input)[:self.outdim - 1]
         to_flatten = tf.reduce_prod(tf.shape(input)[self.outdim - 1:])
-        return tf.reshape(input, tf.concat(0, [pre_shape, [to_flatten]]))
+        return tf.reshape(input, tf.concat(0, [pre_shape, tf.pack([to_flatten])]))
 
 
 flatten = FlattenLayer  # shortcut
