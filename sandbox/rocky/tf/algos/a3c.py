@@ -1,28 +1,29 @@
 from __future__ import print_function
 from __future__ import absolute_import
-from rllab.misc import logger
-from rllab.misc import ext
-from rllab.misc.overrides import overrides
-from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
-from sandbox.rocky.tf.optimizers.first_order_optimizer import FirstOrderOptimizer
+from rllab.algos.base import RLAlgorithm
 from sandbox.rocky.tf.misc import tensor_utils
+from sandbox.rocky.tf.optimizers.first_order_optimizer import FirstOrderOptimizer
 from rllab.core.serializable import Serializable
 import tensorflow as tf
+import threading
+import cPickle as pickle
+import numpy as np
 
 
-class VPG(BatchPolopt, Serializable):
-    """
-    Vanilla Policy Gradient.
-    """
+def run_algo(algo, worker_id):
+    algo.worker_train(worker_id)
 
+
+class A3C(RLAlgorithm, Serializable):
     def __init__(
             self,
             env,
             policy,
-            baseline,
+            max_path_length=100,
+            batch_size=32,
+            scale_reward=1.,
             optimizer=None,
-            optimizer_args=None,
-            **kwargs):
+            optimizer_args=None):
         Serializable.quick_init(self, locals())
         if optimizer is None:
             default_args = dict(
@@ -36,9 +37,14 @@ class VPG(BatchPolopt, Serializable):
             optimizer = FirstOrderOptimizer(**optimizer_args)
         self.optimizer = optimizer
         self.opt_info = None
-        super(VPG, self).__init__(env=env, policy=policy, baseline=baseline, **kwargs)
+        self.env = env
+        self.policy = policy
+        self.max_path_length = max_path_length
+        self.batch_size = batch_size
+        self.scale_reward = scale_reward
+        self.worker_envs = None
+        self.T = 0
 
-    @overrides
     def init_opt(self):
         is_recurrent = int(self.policy.recurrent)
 
@@ -93,7 +99,7 @@ class VPG(BatchPolopt, Serializable):
         if is_recurrent:
             input_list.append(valid_var)
 
-        self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=input_list)
+        self.optimizer.update_opt(surr_obj, target=self.policy, inputs=input_list)
 
         f_kl = tensor_utils.compile_function(
             inputs=input_list + old_dist_info_vars_list,
@@ -103,34 +109,69 @@ class VPG(BatchPolopt, Serializable):
             f_kl=f_kl,
         )
 
-    @overrides
-    def optimize_policy(self, itr, samples_data):
-        logger.log("optimizing policy")
-        inputs = ext.extract(
-            samples_data,
-            "observations", "actions", "advantages"
-        )
-        agent_infos = samples_data["agent_infos"]
-        state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
-        inputs += tuple(state_info_list)
-        if self.policy.recurrent:
-            inputs += (samples_data["valids"],)
-        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
-        loss_before = self.optimizer.loss(inputs)
-        self.optimizer.optimize(inputs)
-        loss_after = self.optimizer.loss(inputs)
-        logger.record_tabular("LossBefore", loss_before)
-        logger.record_tabular("LossAfter", loss_after)
+    def worker_train(self, worker_id):
+        # create a worker-specific copy
+        env = self.worker_envs[worker_id]
 
-        mean_kl, max_kl = self.opt_info['f_kl'](*(list(inputs) + dist_info_list))
-        logger.record_tabular('MeanKL', mean_kl)
-        logger.record_tabular('MaxKL', max_kl)
+        terminal = False
+        obs = self.env.reset()
+        t = 0
 
-    @overrides
-    def get_itr_snapshot(self, itr, samples_data):
-        return dict(
-            itr=itr,
-            policy=self.policy,
-            baseline=self.baseline,
-            env=self.env,
-        )
+        observations = []
+        next_observations = []
+        actions = []
+        rewards = []
+        terminals = []
+
+
+        while True:
+            if terminal:
+                obs = self.env.reset()
+                t = 0
+                # es.reset()
+            # increment global counter
+            self.T += 1
+
+            # get action
+            action, action_info = self.policy.get_action(obs)
+            next_obs, reward, terminal, env_info = self.env.step(action)
+
+            if not terminal and t >= self.max_path_length:
+                terminal = True
+            else:
+                observations.append(self.env.observation_space.flatten(obs))
+                next_observations.append(self.env.observation_space.flatten(next_obs))
+                actions.append(self.env.action_space.flatten(action))
+                rewards.append(reward * self.scale_reward)
+                terminals.append(terminal)
+            obs = next_obs
+            if len(observations) >= self.batch_size:
+                observations = np.array(observations)
+                next_observations = np.array(next_observations)
+                actions = np.array(actions)
+                rewards = np.array(rewards)
+                terminals = np.array(terminals)
+
+                observations = []
+                next_observations = []
+                actions = []
+                rewards = []
+                terminals = []
+
+            pass
+        print("lala")
+
+    def train(self):
+        self.init_opt()
+        n_workers = 4
+        self.worker_envs = [pickle.loads(pickle.dumps(self.env)) for _ in range(n_workers)]
+
+        workers = []
+
+        for idx in range(n_workers):
+            # worker_env =
+            t = threading.Thread(target=run_algo, args=(self, idx))
+            t.start()
+            workers.append(t)
+        for worker in workers:
+            worker.join()

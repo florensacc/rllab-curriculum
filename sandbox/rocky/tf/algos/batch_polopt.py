@@ -18,6 +18,9 @@ def worker_init_tf(G):
     G.sess = tf.Session()
     G.sess.__enter__()
 
+def worker_init_tf_vars(G):
+    G.sess.run(tf.initialize_all_variables())
+
 class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
@@ -87,6 +90,9 @@ class BatchPolopt(RLAlgorithm):
         parallel_sampler.populate_task(self.env, self.policy)
         if self.plot:
             plotter.init_plot(self.env, self.policy)
+        if singleton_pool.n_parallel > 1:
+            singleton_pool.run_each(worker_init_tf_vars)
+
 
     def shutdown_worker(self):
         parallel_sampler.terminate_task()

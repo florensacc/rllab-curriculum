@@ -2,13 +2,11 @@ from rllab.misc import ext
 from rllab.misc import krylov
 from rllab.misc import logger
 from rllab.core.serializable import Serializable
-from rllab.misc.ext import flatten_tensor_variables
-import theano.tensor as TT
-import theano
+# from rllab.misc.ext import flatten_tensor_variables
 import itertools
 import numpy as np
-
-floatX = theano.config.floatX
+import tensorflow as tf
+from sandbox.rocky.tf.misc import tensor_utils
 
 
 class PerlmutterHvp(object):
@@ -22,19 +20,20 @@ class PerlmutterHvp(object):
         self.reg_coeff = reg_coeff
         params = target.get_params(trainable=True)
 
-        constraint_grads = theano.grad(f, wrt=params, disconnected_inputs='ignore')
-        xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
+        constraint_grads = tf.gradients(f, xs=params)
+        xs = tuple([tensor_utils.new_tensor_like("%s x" % p.name, p) for p in params])
 
         def Hx_plain():
-            Hx_plain_splits = TT.grad(
-                TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
-                wrt=params,
-                disconnected_inputs='ignore'
+            Hx_plain_splits = tf.gradients(
+                tf.reduce_sum(
+                    tf.pack([tf.reduce_sum(g * x) for g, x in itertools.izip(constraint_grads, xs)])
+                ),
+                params
             )
-            return TT.concatenate([TT.flatten(s) for s in Hx_plain_splits])
+            return tensor_utils.flatten_tensor_variables(Hx_plain_splits)
 
         self.opt_fun = ext.lazydict(
-            f_Hx_plain=lambda: ext.compile_function(
+            f_Hx_plain=lambda: tensor_utils.compile_function(
                 inputs=inputs + xs,
                 outputs=Hx_plain(),
                 log_name="f_Hx_plain",
@@ -62,41 +61,64 @@ class FiniteDifferenceHvp(object):
 
         params = target.get_params(trainable=True)
 
-        param_norm = TT.sqrt(TT.sum(map(TT.sum, (map(TT.square, params)))))
+        # param_norm = tf.sqrt(tf.reduce_sum(tf.square(tensor_utils.flatten_tensor_variables(params))))
+        #
+        # eps = tf.cast(self.base_eps / (tf.stop_gradient(param_norm) + 1e-8), tf.float32)
 
-        eps = TT.cast(self.base_eps / (theano.gradient.zero_grad(param_norm) + 1e-8), floatX)
 
-        constraint_grads = theano.grad(f, wrt=params, disconnected_inputs='ignore')
-        xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
+        constraint_grads = tf.gradients(f, xs=params)
+        flat_grad = tensor_utils.flatten_tensor_variables(constraint_grads)
 
-        grad_dvplus = theano.clone(
-            constraint_grads,
-            replace=zip(params, [p + eps * x for p, x in zip(params, xs)]),
-        )
+        # xs = tuple([tensor_utils.new_tensor_like("%s x" % p.name, p) for p in params])
 
-        flat_grad_dvplus = flatten_tensor_variables(grad_dvplus)
+        # grad_dvplus = theano.clone(
+        #     constraint_grads,
+        #     replace=zip(params, [p + eps * x for p, x in zip(params, xs)]),
+        # )
 
-        if self.grad_clip is not None:
-            flat_grad_dvplus = TT.clip(flat_grad_dvplus, -self.grad_clip, self.grad_clip)
+        # flat_grad_dvplus = flatten_tensor_variables(grad_dvplus)
+        #
+        # if self.grad_clip is not None:
+        #     flat_grad_dvplus = tf.clip_by_value(flat_grad_dvplus, -self.grad_clip, self.grad_clip)
+        #
+        # if self.symmetric:
+        #     grad_dvminus = theano.clone(
+        #         constraint_grads,
+        #         replace=zip(params, [p - eps * x for p, x in zip(params, xs)]),
+        #     )
+        #     flat_grad_dvminus = flatten_tensor_variables(grad_dvminus)
+        #     if self.grad_clip is not None:
+        #         flat_grad_dvminus = tf.clip_by_value(flat_grad_dvminus, -self.grad_clip, self.grad_clip)
+        #     hx = (flat_grad_dvplus - flat_grad_dvminus) / (2 * eps)
+        # else:
+        #     hx = (flat_grad_dvplus - flatten_tensor_variables(constraint_grads)) / eps
 
-        if self.symmetric:
-            grad_dvminus = theano.clone(
-                constraint_grads,
-                replace=zip(params, [p - eps * x for p, x in zip(params, xs)]),
-            )
-            flat_grad_dvminus = flatten_tensor_variables(grad_dvminus)
-            if self.grad_clip is not None:
-                flat_grad_dvminus = TT.clip(flat_grad_dvminus, -self.grad_clip, self.grad_clip)
-            hx = (flat_grad_dvplus - flat_grad_dvminus) / (2 * eps)
-        else:
-            hx = (flat_grad_dvplus  - flatten_tensor_variables(constraint_grads)) / eps
+        def f_Hx_plain(*args):
+            inputs_ = args[:len(inputs)]
+            xs = args[len(inputs):]
+            flat_xs = np.concatenate(map(lambda x: np.reshape(x, (-1,)), xs))
+            # flat_xs = ext.flatten(xs)
+            param_val = self.target.get_param_values()
+            eps = np.cast['float32'](self.base_eps / (np.linalg.norm(param_val) + 1e-8))
+            self.target.set_param_values(param_val + eps * flat_xs)
+            flat_grad_dvplus = self.opt_fun["f_grad"](*inputs_)
+            self.target.set_param_values(param_val)
+            if self.symmetric:
+                self.target.set_param_values(param_val - eps * flat_xs)
+                flat_grad_dvminus = self.opt_fun["f_grad"](*inputs_)
+                hx = (flat_grad_dvplus - flat_grad_dvminus) / (2 * eps)
+            else:
+                flat_grad = self.opt_fun["f_grad"](*inputs_)
+                hx = (flat_grad_dvplus - flat_grad) / eps
+            return hx
 
         self.opt_fun = ext.lazydict(
-            f_Hx_plain=lambda: ext.compile_function(
-                inputs=inputs + xs,
-                outputs=hx,
-                log_name="f_Hx_plain",
+            f_grad=lambda: tensor_utils.compile_function(
+                inputs=inputs,
+                outputs=flat_grad,
+                log_name="f_grad",
             ),
+            f_Hx_plain=lambda: f_Hx_plain,
         )
 
     def build_eval(self, inputs):
@@ -172,8 +194,8 @@ class ConjugateGradientOptimizer(Serializable):
         constraint_term, constraint_value = leq_constraint
 
         params = target.get_params(trainable=True)
-        grads = theano.grad(loss, wrt=params, disconnected_inputs='ignore')
-        flat_grad = ext.flatten_tensor_variables(grads)
+        grads = tf.gradients(loss, xs=params)
+        flat_grad = tensor_utils.flatten_tensor_variables(grads)
 
         self._hvp_approach.update_opt(f=constraint_term, target=target, inputs=inputs + extra_inputs,
                                       reg_coeff=self._reg_coeff)
@@ -182,36 +204,26 @@ class ConjugateGradientOptimizer(Serializable):
         self._max_constraint_val = constraint_value
         self._constraint_name = constraint_name
 
-        if self._debug_nan:
-            from theano.compile.nanguardmode import NanGuardMode
-            mode = NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True)
-        else:
-            mode = None
-
         self._opt_fun = ext.lazydict(
-            f_loss=lambda: ext.compile_function(
+            f_loss=lambda: tensor_utils.compile_function(
                 inputs=inputs + extra_inputs,
                 outputs=loss,
                 log_name="f_loss",
-                mode=mode,
             ),
-            f_grad=lambda: ext.compile_function(
+            f_grad=lambda: tensor_utils.compile_function(
                 inputs=inputs + extra_inputs,
                 outputs=flat_grad,
                 log_name="f_grad",
-                mode=mode,
             ),
-            f_constraint=lambda: ext.compile_function(
+            f_constraint=lambda: tensor_utils.compile_function(
                 inputs=inputs + extra_inputs,
                 outputs=constraint_term,
                 log_name="constraint",
-                mode=mode,
             ),
-            f_loss_constraint=lambda: ext.compile_function(
+            f_loss_constraint=lambda: tensor_utils.compile_function(
                 inputs=inputs + extra_inputs,
                 outputs=[loss, constraint_term],
                 log_name="f_loss_constraint",
-                mode=mode,
             ),
         )
 

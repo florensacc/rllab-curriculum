@@ -11,6 +11,7 @@ from sandbox.rocky.hrl.envs.point_grid_env import PointGridEnv
 from sandbox.rocky.hrl.policies.two_part_policy.two_part_policy import TwoPartPolicy, DuelTwoPartPolicy
 from sandbox.rocky.hrl.policies.two_part_policy.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.hrl.policies.two_part_policy.deterministic_mlp_policy import DeterministicMLPPolicy
+from sandbox.rocky.hrl.policies.two_part_policy.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rocky.hrl.policies.two_part_policy.reflective_deterministic_mlp_policy import ReflectiveDeterministicMLPPolicy
 from sandbox.rocky.hrl.policies.two_part_policy.reflective_stochastic_mlp_policy import ReflectiveStochasticMLPPolicy
 import lasagne.nonlinearities as NL
@@ -58,7 +59,7 @@ MAPS = [
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [11, 111, 211, 311, 411]
+        return [100*x+11 for x in range(10)]
 
     @variant
     def speed(self):
@@ -70,56 +71,89 @@ class VG(VariantGenerator):
 
     @variant
     def high_policy_cls(self):
-        return [ReflectiveStochasticMLPPolicy]#ReflectiveDeterministicMLPPolicy]#DeterministicMLPPolicy,
-        # GaussianMLPPolicy]
+        return [CategoricalMLPPolicy]#ReflectiveStochasticMLPPolicy]
+        # return [DeterministicMLPPolicy, GaussianMLPPolicy, ReflectiveStochasticMLPPolicy]
 
     @variant
-    def high_policy_args(self, high_policy_cls):
-        if high_policy_cls == DeterministicMLPPolicy:
-            yield dict(
-                output_nonlinearity=NL.tanh,
-            )
-        elif high_policy_cls == GaussianMLPPolicy:
-            yield dict(
-                adaptive_std=True,
-                std_share_network=False,
-                output_nonlinearity=NL.tanh,
-            )
-        elif high_policy_cls == ReflectiveDeterministicMLPPolicy:
-            yield dict(
-                output_nonlinearity=NL.tanh,
-                gated=True,
-            )
-        elif high_policy_cls == ReflectiveStochasticMLPPolicy:
-            yield dict(
-                # action_policy_cls=GaussianMLPPolicy,
-                action_policy_cls=DeterministicMLPPolicy,
-                action_policy_args=dict(
-                    output_nonlinearity=NL.tanh,
-                ),
-                # gate_policy_cls=GaussianMLPPolicy,
-                gate_policy_cls=DeterministicMLPPolicy,
-                gate_policy_args=dict(
-                    output_nonlinearity=None,
-                ),
-                gated=True,
-                truncate_gradient=10,
-            )
-        else:
-            raise NotImplementedError
+    def gated(self, high_policy_cls):
+        return [True]
+        # if high_policy_cls == ReflectiveStochasticMLPPolicy:
+        #     return [True, False]
+        # else:
+        #     return [None]
+
+    @variant
+    def share_gate(self, high_policy_cls, gated):
+        return [True]
+        # if high_policy_cls == ReflectiveStochasticMLPPolicy and gated:
+        #     return [True, False]
+        # else:
+        #     return [True]
+
+    @variant
+    def reflective_stochastic(self, high_policy_cls):
+        yield True
+        # if high_policy_cls == ReflectiveStochasticMLPPolicy:
+        #     return [True, False]
+        # else:
+        #     return [None]
+
+    @variant
+    def high_policy_args(self, high_policy_cls, gated, reflective_stochastic):
+        yield dict()
+        # yield dict(
+        #     action_policy_cls=CategoricalMLPPolicy,
+        #     action_policy_args=dict(
+        #         # output_nonlinearity=NL.tanh,
+        #     ),
+        #     gate_policy_cls=DeterministicMLPPolicy,
+        #     gate_policy_args=dict(
+        #         output_nonlinearity=None,
+        #     ),
+        #     gated=gated,
+        #     # truncate_gradient=10,
+        # )
+        # if high_policy_cls == DeterministicMLPPolicy:
+        #     yield dict(
+        #         output_nonlinearity=NL.tanh,
+        #     )
+        # elif high_policy_cls == GaussianMLPPolicy:
+        #     yield dict(
+        #         adaptive_std=True,
+        #         std_share_network=False,
+        #         output_nonlinearity=NL.tanh,
+        #     )
+        # elif high_policy_cls == ReflectiveStochasticMLPPolicy:
+        #     if reflective_stochastic:
+        #         policy_cls = GaussianMLPPolicy
+        #     else:
+        #         policy_cls = DeterministicMLPPolicy
+        #     yield dict(
+        #         action_policy_cls=policy_cls,
+        #         action_policy_args=dict(
+        #             output_nonlinearity=NL.tanh,
+        #         ),
+        #         gate_policy_cls=policy_cls,
+        #         gate_policy_args=dict(
+        #             output_nonlinearity=None,
+        #         ),
+        #         gated=gated,
+        #         # truncate_gradient=10,
+        #     )
+        # else:
+        #     raise NotImplementedError
 
     @variant
     def reparametrize_high_actions(self, high_policy_cls):
-        if high_policy_cls == DeterministicMLPPolicy:
-            return [True]
-        elif high_policy_cls == GaussianMLPPolicy:
-            return [True, False]
-        elif high_policy_cls == ReflectiveDeterministicMLPPolicy:
-            return [True]
-        elif high_policy_cls == ReflectiveStochasticMLPPolicy:
-            return [True]
-        else:
-            raise NotImplementedError
+        yield False
+        # if high_policy_cls == DeterministicMLPPolicy:
+        #     return [True]
+        # elif high_policy_cls == GaussianMLPPolicy:
+        #     return [True, False]
+        # elif high_policy_cls == ReflectiveStochasticMLPPolicy:
+        #     return [True, False]
+        # else:
+        #     raise NotImplementedError
 
 
 variants = VG().variants()#randomized=True)
@@ -138,6 +172,7 @@ for v in variants:
             adaptive_std=True,
             std_share_network=False,
         ),
+        reparametrize_high_actions=v["reparametrize_high_actions"],
     )
     policies = []
     baselines = []
@@ -147,6 +182,7 @@ for v in variants:
         policy = DuelTwoPartPolicy(
             env_spec=env.spec,
             master_policy=master_policy,
+            share_gate=v["share_gate"],
         )
         baseline = LinearFeatureBaseline(env_spec=env.spec)
         bonus_evaluator = ZeroBonusEvaluator(env_spec=env.spec, policy=policy)
@@ -164,9 +200,9 @@ for v in variants:
         reward_coeffs=[1.] * len(envs),
         bonus_evaluators=bonus_evaluators,
         scopes=["Master_%d" % idx for idx in range(len(envs))],
-        batch_size=5000,
+        batch_size=500,
         max_path_length=500,
-        n_itr=10,
+        n_itr=500,
         optimizer=ConjugateGradientOptimizer(
             hvp_approach=FiniteDifferenceHvp(grad_clip=10),
             subsample_factor=.1,
@@ -175,13 +211,13 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="two_part_rnn_exp",
+        exp_prefix="discrete_rnn_exp",
         snapshot_mode="last",
         n_parallel=1,
         seed=v["seed"],
         mode="local",
         variant=v,
-        env=dict(THEANO_FLAGS="mode=FAST_COMPILE"),
+        env=dict(THEANO_FLAGS="mode=FAST_COMPILE,optimizer=None"),
     )
 
     sys.exit()

@@ -395,6 +395,7 @@ class MultiJointNPO(MultiJointBatchPolopt):
             inputs=all_input_list,
             constraint_name="mean_kl"
         )
+        self.all_input_list = all_input_list
         return dict()
 
     def get_itr_snapshot(self, itr, samples_data):

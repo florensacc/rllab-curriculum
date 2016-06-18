@@ -11,7 +11,7 @@ def flatten_tensors(tensors):
 
 
 def unflatten_tensors(flattened, tensor_shapes):
-    tensor_sizes = map(lambda shape: reduce(operator.mul, shape), tensor_shapes)
+    tensor_sizes = map(np.prod, tensor_shapes)
     indices = np.cumsum(tensor_sizes)[:-1]
     return map(lambda pair: np.reshape(pair[0], pair[1]), zip(np.split(flattened, indices), tensor_shapes))
 

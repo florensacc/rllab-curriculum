@@ -53,12 +53,7 @@ class Discrete(Space):
         return special.weighted_sample(weights, xrange(self.n))
 
     def new_tensor_variable(self, name, extra_dims):
-        if self.n <= 2 ** 8:
-            return tf.placeholder(dtype=tf.uint8, shape=[None] * extra_dims + [self.flat_dim], name=name)
-        elif self.n <= 2 ** 16:
-            return tf.placeholder(dtype=tf.uint16, shape=[None] * extra_dims + [self.flat_dim], name=name)
-        else:
-            return tf.placeholder(dtype=tf.int32, shape=[None] * extra_dims + [self.flat_dim], name=name)
+        return tf.placeholder(dtype=tf.int32, shape=[None] * extra_dims + [self.flat_dim], name=name)
 
     def __eq__(self, other):
         if not isinstance(other, Discrete):

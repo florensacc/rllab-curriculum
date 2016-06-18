@@ -98,7 +98,6 @@ class ConvNetwork(object):
                     name="conv_hidden_%d" % idx,
                     # convolution=wrapped_conv,
                 )
-            l_hid = L.flatten(l_hid, name="conv_flatten")
             for idx, hidden_size in enumerate(hidden_sizes):
                 l_hid = L.DenseLayer(
                     l_hid,

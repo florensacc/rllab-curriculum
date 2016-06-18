@@ -21,9 +21,9 @@ def weighted_sample(weights, objects):
 
 # compute softmax for each row
 def softmax(x):
-    shifted = x - np.max(x, axis=1, keepdims=True)
+    shifted = x - np.max(x, axis=-1, keepdims=True)
     expx = np.exp(shifted)
-    return expx / np.sum(expx, axis=1, keepdims=True)
+    return expx / np.sum(expx, axis=-1, keepdims=True)
 
 
 def softmax_sym(x):
@@ -32,7 +32,7 @@ def softmax_sym(x):
 
 # compute entropy for each row
 def cat_entropy(x):
-    return -np.sum(x * np.log(x), axis=1)
+    return -np.sum(x * np.log(x), axis=-1)
 
 
 # compute perplexity for each row

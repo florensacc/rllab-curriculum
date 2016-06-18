@@ -72,5 +72,6 @@ class Categorical(Distribution):
         return np.log(probs[np.arange(N), from_onehot(np.asarray(xs))] + TINY)
 
     @property
-    def dist_info_keys(self):
-        return ["prob"]
+    def dist_info_specs(self):
+        return [("prob", (self.dim,))]
+
