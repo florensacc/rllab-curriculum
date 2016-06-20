@@ -31,6 +31,7 @@ class GaussianMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
             output_nonlinearity=None,
             mean_network=None,
             std_network=None,
+            std_parametrization='exp'
     ):
         """
         :param env_spec:
@@ -46,6 +47,9 @@ class GaussianMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
         :param output_nonlinearity: nonlinearity for the output layer
         :param mean_network: custom network for the output mean
         :param std_network: custom network for the output log std
+        :param std_parametrization: how the std should be parametrized. There are a few options:
+            - exp: the logarithm of the std will be stored, and applied a exponential transformation
+            - softplus: the std will be computed as log(1+exp(x))
         :return:
         """
         Serializable.quick_init(self, locals())
@@ -72,7 +76,7 @@ class GaussianMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
             obs_var = mean_network.input_layer.input_var
 
             if std_network is not None:
-                l_log_std = std_network.output_layer
+                l_std_param = std_network.output_layer
             else:
                 if adaptive_std:
                     std_network = MLP(
@@ -84,32 +88,51 @@ class GaussianMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
                         hidden_nonlinearity=std_hidden_nonlinearity,
                         output_nonlinearity=None,
                     )
-                    l_log_std = std_network.output_layer
+                    l_std_param = std_network.output_layer
                 else:
-                    l_log_std = L.ParamLayer(
+                    if std_parametrization == 'exp':
+                        init_std_param = np.log(init_std)
+                    elif std_parametrization == 'softplus':
+                        init_std_param = np.log(np.exp(init_std) - 1)
+                    else:
+                        raise NotImplementedError
+                    l_std_param = L.ParamLayer(
                         mean_network.input_layer,
                         num_units=action_dim,
-                        param=tf.constant_initializer(np.log(init_std)),
-                        name="output_log_std",
+                        param=tf.constant_initializer(init_std_param),
+                        name="output_std_param",
                         trainable=learn_std,
                     )
 
-            self.min_std = min_std
+            self.std_parametrization = std_parametrization
 
-            mean_var, log_std_var = L.get_output([l_mean, l_log_std])
+            if std_parametrization == 'exp':
+                min_std_param = np.log(min_std)
+            elif std_parametrization == 'softplus':
+                min_std_param = np.log(np.exp(min_std) - 1)
+            else:
+                raise NotImplementedError
 
-            if self.min_std is not None:
-                log_std_var = tf.maximum(log_std_var, np.log(min_std))
+            self.min_std_param = min_std_param
 
-            self._mean_var, self._log_std_var = mean_var, log_std_var
+            # mean_var, log_std_var = L.get_output([l_mean, l_std_param])
+            #
+            # if self.min_std_param is not None:
+            #     log_std_var = tf.maximum(log_std_var, np.log(min_std))
+            #
+            # self._mean_var, self._log_std_var = mean_var, log_std_var
 
             self._l_mean = l_mean
-            self._l_log_std = l_log_std
+            self._l_std_param = l_std_param
 
             self._dist = DiagonalGaussian(action_dim)
 
-            LayersPowered.__init__(self, [l_mean, l_log_std])
+            LayersPowered.__init__(self, [l_mean, l_std_param])
             super(GaussianMLPPolicy, self).__init__(env_spec)
+
+            dist_info_sym = self.dist_info_sym(mean_network.input_layer.input_var, dict())
+            mean_var = dist_info_sym["mean"]
+            log_std_var = dist_info_sym["log_std"]
 
             self._f_dist = tensor_utils.compile_function(
                 inputs=[obs_var],
@@ -117,9 +140,15 @@ class GaussianMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
             )
 
     def dist_info_sym(self, obs_var, state_info_vars=None):
-        mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
-        if self.min_std is not None:
-            log_std_var = tf.maximum(log_std_var, np.log(self.min_std))
+        mean_var, std_param_var = L.get_output([self._l_mean, self._l_std_param], obs_var)
+        if self.min_std_param is not None:
+            std_param_var = tf.maximum(std_param_var, self.min_std_param)
+        if self.std_parametrization == 'exp':
+            log_std_var = std_param_var
+        elif self.std_parametrization == 'softplus':
+            log_std_var = tf.log(tf.log(1. + tf.exp(std_param_var)))
+        else:
+            raise NotImplementedError
         return dict(mean=mean_var, log_std=log_std_var)
 
     @overrides

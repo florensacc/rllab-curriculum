@@ -70,4 +70,3 @@ run_experiment_lite(
     exp_prefix="straw",
     # env=dict(THEANO_FLAGS="optimizer=fast_compile"),
 )
-
