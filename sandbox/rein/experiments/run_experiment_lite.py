@@ -57,7 +57,7 @@ def run_experiment(argv):
 
     args = parser.parse_args(argv[1:])
 
-    from sandbox.rein.sampler import parallel_sampler_vbnn as parallel_sampler
+    from sandbox.rein.sampler import parallel_sampler_vime as parallel_sampler
     parallel_sampler.initialize(n_parallel=args.n_parallel)
 
     if args.seed is not None:

@@ -10,7 +10,7 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
-from sandbox.rein.algos.trpo_unn import TRPO
+from sandbox.rein.algos.trpo_vime import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
 

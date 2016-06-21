@@ -1,7 +1,7 @@
 import numpy as np
 
 from rllab.algos.base import RLAlgorithm
-from sandbox.vime.sampler import parallel_sampler_expl as parallel_sampler
+from sandbox.rein.sampler import parallel_sampler_vime as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
@@ -14,9 +14,8 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.vime.dynamics import bnn
+from sandbox.rein.dynamics_models.nn_uncertainty import bnn
 # -------------------
-
 
 class SimpleReplayPool(object):
     """Replay pool"""
@@ -247,12 +246,12 @@ class BatchPolopt(RLAlgorithm):
 
         # Bayesian neural network (BNN) initialization.
         # ------------------------------------------------
-        batch_size = 1  # Redundant
-        n_batches = 5  # Hardcode or annealing scheme \pi_i.
+        batch_size = 1
+        n_batches = 5  # FIXME, there is no correct value!
 
         # MDP observation and action dimensions.
         obs_dim = np.sum(self.env.observation_space.shape)
-        act_dim = np.sum(self.env.action_space.shape)
+        act_dim = self.env.action_dim
 
         logger.log("Building BNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
@@ -441,7 +440,7 @@ class BatchPolopt(RLAlgorithm):
             return paths_truncated
 
     def process_samples(self, itr, paths):
-
+        
         if self.normalize_reward:
             # Update reward mean/std Q.
             rewards = []
@@ -465,10 +464,10 @@ class BatchPolopt(RLAlgorithm):
 
             kls_flat = np.hstack(kls)
 
-            logger.record_tabular('Expl_MeanKL', np.mean(kls_flat))
-            logger.record_tabular('Expl_StdKL', np.std(kls_flat))
-            logger.record_tabular('Expl_MinKL', np.min(kls_flat))
-            logger.record_tabular('Expl_MaxKL', np.max(kls_flat))
+            logger.record_tabular('BNN_MeanKL', np.mean(kls_flat))
+            logger.record_tabular('BNN_StdKL', np.std(kls_flat))
+            logger.record_tabular('BNN_MinKL', np.min(kls_flat))
+            logger.record_tabular('BNN_MaxKL', np.max(kls_flat))
 
             # Perform normlization of the intrinsic rewards.
             if self.use_kl_ratio:
@@ -487,10 +486,10 @@ class BatchPolopt(RLAlgorithm):
             self.eta *= self.eta_discount
 
         else:
-            logger.record_tabular('Expl_MeanKL', 0.)
-            logger.record_tabular('Expl_StdKL', 0.)
-            logger.record_tabular('Expl_MinKL', 0.)
-            logger.record_tabular('Expl_MaxKL', 0.)
+            logger.record_tabular('BNN_MeanKL', 0.)
+            logger.record_tabular('BNN_StdKL', 0.)
+            logger.record_tabular('BNN_MinKL', 0.)
+            logger.record_tabular('BNN_MaxKL', 0.)
 
         baselines = []
         returns = []
@@ -631,5 +630,6 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('StdReturn', np.std(undiscounted_returns))
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
+        logger.record_tabular('Expl_eta', self.eta)
 
         return samples_data

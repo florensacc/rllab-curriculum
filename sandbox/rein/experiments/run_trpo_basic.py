@@ -5,6 +5,8 @@ from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
 from rllab.envs.box2d.mountain_car_env import MountainCarEnv
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
 from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
+from rllab.envs.gym_env import GymEnv
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
@@ -21,16 +23,21 @@ stub(globals())
 seeds = range(10)
 # mdp_classes = [MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
-mdps = [CartpoleSwingupEnvX()]
+mdps = [GymEnv("SpaceInvaders-ram-v0")]
 param_cart_product = itertools.product(
     mdps, seeds
 )
 
 for mdp, seed in param_cart_product:
 
-    policy = GaussianMLPPolicy(
+    #     policy = GaussianMLPPolicy(
+    #         env_spec=mdp.spec,
+    #         hidden_sizes=(32,),
+    #     )
+
+    policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
-        hidden_sizes=(32,),
+        hidden_sizes=(32,)
     )
 
     baseline = GaussianMLPBaseline(
@@ -53,10 +60,10 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="x-trpo-basic-yy1",
+        exp_prefix="trpo-basic-a",
         n_parallel=4,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
     )

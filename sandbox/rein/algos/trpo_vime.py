@@ -1,4 +1,4 @@
-from sandbox.vime.algos.npo_expl import NPO
+from sandbox.rein.algos.npo_vime import NPO
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from rllab.core.serializable import Serializable
 

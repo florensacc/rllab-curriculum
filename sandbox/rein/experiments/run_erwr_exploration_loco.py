@@ -1,5 +1,5 @@
 import os
-from sandbox.rein.algos.erwr_bnn import ERWR
+from sandbox.rein.algos.erwr_vime import ERWR
 from rllab.envs.mujoco.hopper_env import HopperEnv
 os.environ["THEANO_FLAGS"] = "device=cpu"
 

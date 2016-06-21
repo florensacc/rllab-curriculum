@@ -1,5 +1,5 @@
 import os
-from sandbox.rein.algos.ddpg_vbnn import DDPG
+from sandbox.rein.algos.ddpg_vime import DDPG
 from sandbox.rein.envs.walker2d_env_x import Walker2DEnvX
 from sandbox.rein.envs.swimmer_env_x import SwimmerEnvX
 from sandbox.rein.envs.half_cheetah_env_x import HalfCheetahEnvX

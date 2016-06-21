@@ -4,6 +4,9 @@ from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
 from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
 from sandbox.rein.envs.half_cheetah_env_x import HalfCheetahEnvX
 os.environ["THEANO_FLAGS"] = "device=cpu"
+from rllab.envs.gym_env import GymEnv
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
@@ -12,7 +15,7 @@ from rllab.envs.box2d.mountain_car_env import MountainCarEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from sandbox.rein.algos.trpo_unn import TRPO
+from sandbox.rein.algos.trpo_vime import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
 
@@ -29,19 +32,22 @@ seeds = range(10)
 etas = [0.001]
 normalize_rewards = [False]
 kl_ratios = [True]
-# mdp_classes = [DoublePendulumEnv]
-# mdps = [NormalizedEnv(env=mdp_class())
-#         for mdp_class in mdp_classes]
-mdps = [HalfCheetahEnvX()]
+# mdps = [NormalizedEnv(MountainCarEnv())]
+mdps = [GymEnv("SpaceInvaders-ram-v0")]
 param_cart_product = itertools.product(
     kl_ratios, normalize_rewards, mdps, etas, seeds
 )
 
 for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
-    policy = GaussianMLPPolicy(
+#     policy = GaussianMLPPolicy(
+#         env_spec=mdp.spec,
+#         hidden_sizes=(32,),
+#     )
+
+    policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
-        hidden_sizes=(32,),
+        hidden_sizes=(32,)
     )
 
     baseline = GaussianMLPBaseline(
@@ -68,7 +74,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         n_itr_update=1,
-        kl_batch_size=64,
+        kl_batch_size=1,
         normalize_reward=normalize_reward,
         replay_pool_size=100000,
         n_updates_per_sample=500,
@@ -80,11 +86,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="x-brad-trpo-expl-loco-a2",
+        exp_prefix="trpo-vime-a",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
-        script="sandbox/rein/run_experiment_lite.py",
+        script="sandbox/rein/experiments/run_experiment_lite.py",
     )

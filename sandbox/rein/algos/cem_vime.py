@@ -15,7 +15,7 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.rein.dynamics_models.nn_uncertainty import vbnn
+from sandbox.rein.dynamics_models.nn_uncertainty import bnn
 # -------------------
 
 
@@ -256,7 +256,7 @@ class CEM(RLAlgorithm, Serializable):
         logger.log("Building UNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
 
-        self.vbnn = vbnn.VBNN(
+        self.vbnn = bnn.VBNN(
             n_in=(obs_dim + act_dim),
             n_hidden=self.unn_n_hidden,
             n_out=obs_dim,

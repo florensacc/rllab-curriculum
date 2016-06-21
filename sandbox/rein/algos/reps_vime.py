@@ -4,7 +4,7 @@ import scipy.optimize
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
 from rllab.misc import ext
-from sandbox.rein.algos.batch_polopt_unn import BatchPolopt
+from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
 from rllab.core.serializable import Serializable
 import numpy as np
 from rllab.misc import tensor_utils
