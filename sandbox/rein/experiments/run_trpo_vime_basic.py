@@ -34,6 +34,7 @@ normalize_rewards = [False]
 kl_ratios = [True]
 # mdps = [NormalizedEnv(MountainCarEnv())]
 mdps = [GymEnv("SpaceInvaders-ram-v0")]
+# mdps = [GymEnv("SpaceInvaders-v0")]
 param_cart_product = itertools.product(
     kl_ratios, normalize_rewards, mdps, etas, seeds
 )

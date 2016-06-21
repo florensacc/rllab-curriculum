@@ -39,10 +39,13 @@ RUN pip install --upgrade pip
 #RUN conda install --yes -c https://conda.anaconda.org/kne pybox2d
 #RUN conda install --yes -c https://conda.binstar.org/tlatorre pygame
 RUN apt-get build-dep -y python-pygame
+
+# ========== OpenAI Gym ==========
 RUN pip install gym
+RUN apt-get -y install ffmpeg
+RUN apt-get -y install libav-tools
 
 # ========== Add codebase stub ==========
-
 CMD mkdir /root/code
 ADD environment.yml /root/code/environment.yml
 RUN conda env create -f /root/code/environment.yml

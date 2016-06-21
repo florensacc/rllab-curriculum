@@ -29,6 +29,7 @@ class SimpleReplayPool(object):
         self._observation_dtype = observation_dtype
         self._action_dtype = action_dtype
         self._max_pool_size = max_pool_size
+        import ipdb; ipdb.set_trace()
 
         self._observations = np.zeros(
             (max_pool_size,) + observation_shape,

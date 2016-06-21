@@ -23,7 +23,8 @@ stub(globals())
 seeds = range(10)
 # mdp_classes = [MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
-mdps = [GymEnv("SpaceInvaders-ram-v0")]
+# mdps = [GymEnv("SpaceInvaders-ram-v0")]
+mdps = [GymEnv("SpaceInvaders-v0")]
 param_cart_product = itertools.product(
     mdps, seeds
 )
