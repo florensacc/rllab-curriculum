@@ -5,19 +5,9 @@ import lasagne
 from utils import sliding_mean, iterate_minibatches, plot_mnist_digit
 import time
 
-# Plotting params.
-# ----------------
-PLOT_WEIGHTS_INDIVIDUAL = False
-PLOT_WEIGHTS_TOTAL = False
-PLOT_OUTPUT = True
-PLOT_OUTPUT_REGIONS = False
-PLOT_KL = False
 
 def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None):
     # Train convolutional BNN to autoencode MNIST digits.
-
-    training_data_start = 1000
-    training_data_end = 1100
 
     print('Training ...')
 
@@ -78,27 +68,28 @@ def main():
     X_train, T_train, X_test, T_test = load_dataset_MNIST()
     n_batches = int(np.ceil(len(X_train) / float(batch_size)))
 
-    plot_mnist_digit(X_train[0].reshape(28,28))
-    
+    plot_mnist_digit(X_train[0].reshape(28, 28))
+
     print("Building model and compiling functions ...")
     bnn = ConvBNN(
-        n_in=4,
-        n_hidden=[128],
+        layers_disc=[
+            dict(name='input', in_shape=(None, 1, 28, 28)),
+            dict(name='convolution', n_filters=16, filter_size=(5, 5)),
+            dict(name='pool', pool_size=(2, 2)),
+            dict(name='gaussian', n_units=32)
+        ],
         n_out=1,
         n_batches=n_batches,
-        layers_type=[1, 1],
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
         n_samples=10,
-        prior_sd=0.5,
-        use_reverse_kl_reg=False,
-        reverse_kl_reg_factor=1e-2
+        prior_sd=0.5
     )
 
     # Train the model.
     train(bnn, num_epochs=num_epochs, X_train=X_train,
-              T_train=T_train, X_test=X_test, T_test=T_test)
+          T_train=T_train, X_test=X_test, T_test=T_test)
     print('Done.')
 
 if __name__ == '__main__':

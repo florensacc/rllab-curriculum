@@ -30,10 +30,10 @@ mdp_classes = [MountainCarEnv]
 mdps = [NormalizedEnv(mdp()) for mdp in mdp_classes]
 
 # seeds = range(10)
-# etas = [0.01]
+etas = [0.01]
 # normalize_rewards = [False]
 # kl_ratios = [True]
-# mdps = [GymEnv("SpaceInvaders-ram-v0")]
+mdps = [GymEnv("SpaceInvaders-ram-v0")]
 # mdps = [GymEnv("SpaceInvaders-v0")]
 
 param_cart_product = itertools.product(
@@ -57,15 +57,15 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         regressor_args=dict(hidden_sizes=(64, 32)),
     )
 
-    batch_size = 5000
+    batch_size = 25000
     algo = TRPO(
         env=mdp,
         policy=policy,
         baseline=baseline,
         batch_size=batch_size,
         whole_paths=True,
-        max_path_length=500,
-        n_itr=200,
+        max_path_length=2500,
+        n_itr=1000,
         step_size=0.01,
         eta=eta,
         eta_discount=1.0,
@@ -76,10 +76,10 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         n_itr_update=1,
-        kl_batch_size=1,
+        kl_batch_size=64,
         normalize_reward=normalize_reward,
         replay_pool_size=100000,
-        n_updates_per_sample=500,
+        n_updates_per_sample=2500,
         second_order_update=True,
         unn_n_hidden=[64, 32, 64],
         unn_layers_type=['gaussian', 'gaussian', 'gaussian', 'gaussian'],
@@ -89,7 +89,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-b",
+        exp_prefix="trpo-vime-c",
         n_parallel=4,
         snapshot_mode="last",
         seed=seed,

@@ -14,8 +14,9 @@ BNN_LAYER_TAG = 'bnnlayer'
 USE_REPARAMETRIZATION_TRICK = True
 # ----------------
 
+
 class PoolLayer(lasagne.layers.Layer):
-    
+
     def __init__(self, incoming, pool_size, stride=None, pad=(0, 0),
                  ignore_border=True, mode='max', **kwargs):
         super(PoolLayer, self).__init__(incoming, **kwargs)
@@ -42,30 +43,37 @@ class PoolLayer(lasagne.layers.Layer):
         output_shape = list(input_shape)  # copy / convert to mutable list
 
         output_shape[2] = lasagne.layers.pool.pool_output_length(input_shape[2],
-                                             pool_size=self.pool_size[0],
-                                             stride=self.stride[0],
-                                             pad=self.pad[0],
-                                             ignore_border=self.ignore_border,
-                                             )
+                                                                 pool_size=self.pool_size[
+                                                                     0],
+                                                                 stride=self.stride[
+                                                                     0],
+                                                                 pad=self.pad[
+                                                                     0],
+                                                                 ignore_border=self.ignore_border,
+                                                                 )
 
         output_shape[3] = lasagne.layers.pool.pool_output_length(input_shape[3],
-                                             pool_size=self.pool_size[1],
-                                             stride=self.stride[1],
-                                             pad=self.pad[1],
-                                             ignore_border=self.ignore_border,
-                                             )
+                                                                 pool_size=self.pool_size[
+                                                                     1],
+                                                                 stride=self.stride[
+                                                                     1],
+                                                                 pad=self.pad[
+                                                                     1],
+                                                                 ignore_border=self.ignore_border,
+                                                                 )
 
         return tuple(output_shape)
 
     def get_output_for(self, input, **kwargs):
-        pooled = T.signal.pool_2d(input,
-                         ds=self.pool_size,
-                         st=self.stride,
-                         ignore_border=self.ignore_border,
-                         padding=self.pad,
-                         mode=self.mode,
-                         )
+        pooled = theano.tensor.signal.pool.pool_2d(input,
+                                  ds=self.pool_size,
+                                  st=self.stride,
+                                  ignore_border=self.ignore_border,
+                                  padding=self.pad,
+                                  mode=self.mode,
+                                  )
         return pooled
+
 
 class ConvLayer(lasagne.layers.Layer):
 
@@ -86,7 +94,7 @@ class ConvLayer(lasagne.layers.Layer):
         super(ConvLayer, self).__init__(incoming, **kwargs)
 
         self.n = len(self.input_shape) - 2
-
+        self.nonlinearity=nonlinearity
         self.num_filters = num_filters
         self.filter_size = lasagne.utils.as_tuple(filter_size, self.n, int)
         self.flip_filters = flip_filters
@@ -135,6 +143,7 @@ class ConvLayer(lasagne.layers.Layer):
                              self.stride, pad)))
 
     def convolve(self, input, **kwargs):
+        # Input should be (batch_size, n_in_filters, img_h, img_w).
         border_mode = 'half' if self.pad == 'same' else self.pad
         conved = T.nnet.conv2d(input, self.W,
                                self.input_shape, self.get_W_shape(),
@@ -382,10 +391,9 @@ class BNNLayer(lasagne.layers.Layer):
 class ConvBNN(LasagnePowered, Serializable):
     """Bayesian neural network (BNN), according to Blundell2016."""
 
-    def __init__(self, n_in,
-                 n_hidden,
+    def __init__(self,
+                 layers_disc,
                  n_out,
-                 layers_type,
                  n_batches,
                  trans_func=lasagne.nonlinearities.rectify,
                  out_func=lasagne.nonlinearities.linear,
@@ -402,17 +410,14 @@ class ConvBNN(LasagnePowered, Serializable):
                  ):
 
         Serializable.quick_init(self, locals())
-        assert len(layers_type) == len(n_hidden) + 1
 
-        self.n_in = n_in
-        self.n_hidden = n_hidden
-        self.n_out = n_out
         self.batch_size = batch_size
         self.transf = trans_func
+        self.n_out = n_out
         self.outf = out_func
         self.n_samples = n_samples
         self.prior_sd = prior_sd
-        self.layers_type = layers_type
+        self.layers_disc = layers_disc
         self.n_batches = n_batches
         self.use_reverse_kl_reg = use_reverse_kl_reg
         self.reverse_kl_reg_factor = reverse_kl_reg_factor
@@ -533,31 +538,32 @@ class ConvBNN(LasagnePowered, Serializable):
 
     def build_network(self):
 
-        # Input layer
-        network = lasagne.layers.InputLayer(shape=(1, self.n_in))
+        # Layers
+        for i, layer_disc in enumerate(self.layers_disc):
+            if i == 0:
+                assert(layer_disc['name'] == 'input')
 
-        # Hidden layers
-        for i in xrange(len(self.n_hidden)):
-            if self.layers_type[i] == 'gaussian':
+            print(layer_disc)
+            if layer_disc['name'] == 'input':
+                network = lasagne.layers.InputLayer(
+                    shape=layer_disc['in_shape'])
+            elif layer_disc['name'] == 'convolution':
+                network = ConvLayer(network, num_filters=layer_disc[
+                                    'n_filters'], filter_size=layer_disc['filter_size'])
+            elif layer_disc['name'] == 'pool':
+                network = PoolLayer(network, pool_size=layer_disc['pool_size'])
+            elif layer_disc['name'] == 'gaussian':
                 network = BNNLayer(
-                    network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, name=BNN_LAYER_TAG)
-            elif self.layers_type[i] == 'convolutional':
-                network = ConvLayer(network, 16, 3)
-            elif self.layers_type[i] == 'pool':
-                network = PoolLayer(network, 16, 3)
-            elif self.layers_type[i] == 'deterministic':
+                    network, num_units=layer_disc['n_units'], nonlinearity=self.transf, prior_sd=self.prior_sd, name=BNN_LAYER_TAG)
+            elif layer_disc['name'] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
-                    network, self.n_hidden[i], nonlinearity=self.transf)
+                    network, num_units=layer_disc['n_units'], nonlinearity=self.transf)
+            else:
+                raise(Exception('Unknown layer!'))
 
         # Output layer
-        if self.layers_type[len(self.n_hidden)] == 'gaussian':
-            network = BNNLayer(
-                network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=BNN_LAYER_TAG)
-        elif self.layers_type[len(self.n_hidden)] == 'convolutional':
-            network = ConvLayer(network, 16, 3)
-        elif self.layers_type[len(self.n_hidden)] == 'deterministic':
-            network = lasagne.layers.DenseLayer(
-                network, self.n_out, nonlinearity=self.outf)
+        network = BNNLayer(
+            network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=BNN_LAYER_TAG)
 
         self.network = network
 
@@ -565,7 +571,7 @@ class ConvBNN(LasagnePowered, Serializable):
 
         # Prepare Theano variables for inputs and targets
         # Same input for classification as regression.
-        input_var = T.matrix('inputs',
+        input_var = T.tensor4('inputs',
                              dtype=theano.config.floatX)  # @UndefinedVariable
         target_var = T.matrix('targets',
                               dtype=theano.config.floatX)  # @UndefinedVariable
