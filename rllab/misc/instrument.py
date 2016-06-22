@@ -676,7 +676,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
             InstanceCount=1,
             LaunchSpecification=instance_args,
             SpotPrice=aws_config["spot_price"],
-            ClientToken=params_list[0]["exp_name"],
+            # ClientToken=params_list[0]["exp_name"],
         )
         import pprint
         pprint.pprint(spot_args)
