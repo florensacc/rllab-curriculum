@@ -24,7 +24,7 @@ seeds = range(10)
 # mdp_classes = [MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
 # mdps = [GymEnv("SpaceInvaders-ram-v0")]
-mdps = [GymEnv("SpaceInvaders-v0")]
+mdps = [GymEnv("SpaceInvaders-ram-v0")]
 param_cart_product = itertools.product(
     mdps, seeds
 )
@@ -46,7 +46,7 @@ for mdp, seed in param_cart_product:
         regressor_args=dict(hidden_sizes=(32,)),
     )
 
-    batch_size = 5000
+    batch_size = 50000
     algo = TRPO(
         env=mdp,
         policy=policy,
@@ -54,7 +54,7 @@ for mdp, seed in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=1000,
+        n_itr=250,
         step_size=0.01,
         subsample_factor=1.0,
     )

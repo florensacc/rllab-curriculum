@@ -4,7 +4,7 @@ import numpy as np
 import theano.tensor as T
 import lasagne
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-from utils import sliding_mean, iterate_minibatches
+from sandbox.rein.dynamics_models.bnn.utils import sliding_mean, iterate_minibatches
 import theano
 
 # Plotting params.

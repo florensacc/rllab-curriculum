@@ -93,7 +93,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     G.dynamics.save_old_params()
                     loss_value = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
-                    kl_div = np.clip(loss_value, 0, 100000)
+                    kl_div = loss_value
                     # If using replay pool, undo updates.
                     if use_replay_pool:
                         G.dynamics.reset_to_old_params()
@@ -103,8 +103,8 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end])
                 # Calculate current minibatch KL.
-                kl_div = np.clip(
-                    float(G.dynamics.f_kl_div_closed_form()), 0, 100000)
+                kl_div = G.dynamics.f_kl_div_closed_form()
+                
 
             for k in xrange(start, end):
                 kl[k] = kl_div

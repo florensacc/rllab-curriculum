@@ -1,6 +1,6 @@
 import numpy as np
 from prob_nn import ProbNN
-from utils import load_dataset_1Dregression, load_dataset_MNIST
+from sandbox.rein.dynamics_models.bnn.utils import load_dataset_1Dregression, load_dataset_MNIST
 import lasagne
 # import theano
 # theano.config.mode='FAST_COMPILE'

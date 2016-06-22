@@ -1,5 +1,5 @@
 import numpy as np
-from sandbox.rein.dynamics_models.nn_uncertainty.bnn import VBNN
+from sandbox.rein.dynamics_models.bnn.bnn import VBNN
 from utils import load_dataset_1Dregression
 import lasagne
 from utils import sliding_mean, iterate_minibatches

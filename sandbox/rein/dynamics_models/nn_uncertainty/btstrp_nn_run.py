@@ -1,5 +1,5 @@
 from btstrp_nn import BootstrapNetwork
-from utils import load_dataset_1Dregression
+from sandbox.rein.dynamics_models.bnn.utils import load_dataset_1Dregression
 import lasagne
 import numpy as np
 

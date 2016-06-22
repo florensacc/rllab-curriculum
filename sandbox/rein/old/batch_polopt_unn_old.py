@@ -14,7 +14,7 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.rein.dynamics_models.nn_uncertainty import bnn
+from sandbox.rein.dynamics_models.bnn import bnn
 # -------------------
 
 TSNE_PLOT = False

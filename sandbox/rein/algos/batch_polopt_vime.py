@@ -14,8 +14,9 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.rein.dynamics_models.nn_uncertainty import bnn
+from sandbox.rein.dynamics_models.bnn import bnn
 # -------------------
+
 
 class SimpleReplayPool(object):
     """Replay pool"""
@@ -29,7 +30,6 @@ class SimpleReplayPool(object):
         self._observation_dtype = observation_dtype
         self._action_dtype = action_dtype
         self._max_pool_size = max_pool_size
-        import ipdb; ipdb.set_trace()
 
         self._observations = np.zeros(
             (max_pool_size,) + observation_shape,
@@ -149,6 +149,7 @@ class BatchPolopt(RLAlgorithm):
             second_order_update=False,
             compression=False,
             information_gain=True,
+            surprise_transform=None,
             **kwargs
     ):
         """
@@ -214,10 +215,10 @@ class BatchPolopt(RLAlgorithm):
         self.second_order_update = second_order_update
         self.compression = compression
         self.information_gain = information_gain
+        self.surprise_transform = surprise_transform
         # ----------------------
 
         if self.second_order_update:
-            assert self.kl_batch_size == 1
             assert self.n_itr_update == 1
 
         # Params to keep track of moving average (both intrinsic and external
@@ -379,6 +380,8 @@ class BatchPolopt(RLAlgorithm):
                               "continue...")
 
         self.shutdown_worker()
+        self.env.terminate()
+        self.policy.terminate()
 
     def init_opt(self):
         """
@@ -441,7 +444,7 @@ class BatchPolopt(RLAlgorithm):
             return paths_truncated
 
     def process_samples(self, itr, paths):
-        
+
         if self.normalize_reward:
             # Update reward mean/std Q.
             rewards = []
@@ -463,12 +466,26 @@ class BatchPolopt(RLAlgorithm):
             for i in xrange(len(paths)):
                 kls.append(paths[i]['KL'])
 
+            if self.surprise_transform == 'log(1+surprise)':
+                # Transform surprise into (positive) log space.
+                for i in xrange(len(paths)):
+                    kls[i] = np.log(1 + kls[i])
+
             kls_flat = np.hstack(kls)
+
+#             # Cap the KL divergence as 90 percentile.
+#             kl_90perc = np.percentile(kls_flat, 90)
+#             for i in xrange(len(paths)):
+#                 kls[i] = np.minimum(kls[i], kl_90perc)
 
             logger.record_tabular('BNN_MeanKL', np.mean(kls_flat))
             logger.record_tabular('BNN_StdKL', np.std(kls_flat))
             logger.record_tabular('BNN_MinKL', np.min(kls_flat))
             logger.record_tabular('BNN_MaxKL', np.max(kls_flat))
+            logger.record_tabular('BNN_MedianKL', np.median(kls_flat))
+            logger.record_tabular('BNN_25percKL', np.percentile(kls_flat, 25))
+            logger.record_tabular('BNN_75percKL', np.percentile(kls_flat, 75))
+            logger.record_tabular('BNN_90percKL', np.percentile(kls_flat, 90))
 
             # Perform normlization of the intrinsic rewards.
             if self.use_kl_ratio:
@@ -491,6 +508,10 @@ class BatchPolopt(RLAlgorithm):
             logger.record_tabular('BNN_StdKL', 0.)
             logger.record_tabular('BNN_MinKL', 0.)
             logger.record_tabular('BNN_MaxKL', 0.)
+            logger.record_tabular('BNN_MedianKL', 0.)
+            logger.record_tabular('BNN_25percKL', 0.)
+            logger.record_tabular('BNN_75percKL', 0.)
+            logger.record_tabular('BNN_90percKL', 0.)
 
         baselines = []
         returns = []

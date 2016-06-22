@@ -48,7 +48,7 @@ def load_dataset_MNIST():
     PATH = '/media/ssd/MNIST/'
     import os
     if not os.path.isdir(PATH):
-        PATH = '/home/rein/PhD/MNIST/'
+        PATH = '/home/rein/openai/datasets/mnist/'
 
     X_train = load_mnist_images(PATH + 'train-images-idx3-ubyte.gz')
     y_train = load_mnist_labels(PATH + 'train-labels-idx1-ubyte.gz')
@@ -58,6 +58,18 @@ def load_dataset_MNIST():
     # We just return all the arrays in order, as expected in main().
     # (It doesn't matter how we do this as long as we can read them again.)
     return X_train, y_train, X_test, y_test
+
+
+def plot_mnist_digit(image):
+    """ Plot a single MNIST image."""
+    import matplotlib.pyplot as plt
+    import matplotlib
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.matshow(image, cmap = matplotlib.cm.binary)
+    plt.xticks(np.array([]))
+    plt.yticks(np.array([]))
+    plt.show()
 
 
 def load_dataset_1Dregression():

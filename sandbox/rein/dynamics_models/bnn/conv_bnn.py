@@ -14,6 +14,147 @@ BNN_LAYER_TAG = 'bnnlayer'
 USE_REPARAMETRIZATION_TRICK = True
 # ----------------
 
+class PoolLayer(lasagne.layers.Layer):
+    
+    def __init__(self, incoming, pool_size, stride=None, pad=(0, 0),
+                 ignore_border=True, mode='max', **kwargs):
+        super(PoolLayer, self).__init__(incoming, **kwargs)
+
+        self.pool_size = lasagne.utils.as_tuple(pool_size, 2)
+
+        if len(self.input_shape) != 4:
+            raise ValueError("Tried to create a 2D pooling layer with "
+                             "input shape %r. Expected 4 input dimensions "
+                             "(batchsize, channels, 2 spatial dimensions)."
+                             % (self.input_shape,))
+
+        if stride is None:
+            self.stride = self.pool_size
+        else:
+            self.stride = lasagne.utils.as_tuple(stride, 2)
+
+        self.pad = lasagne.utils.as_tuple(pad, 2)
+
+        self.ignore_border = ignore_border
+        self.mode = mode
+
+    def get_output_shape_for(self, input_shape):
+        output_shape = list(input_shape)  # copy / convert to mutable list
+
+        output_shape[2] = lasagne.layers.pool.pool_output_length(input_shape[2],
+                                             pool_size=self.pool_size[0],
+                                             stride=self.stride[0],
+                                             pad=self.pad[0],
+                                             ignore_border=self.ignore_border,
+                                             )
+
+        output_shape[3] = lasagne.layers.pool.pool_output_length(input_shape[3],
+                                             pool_size=self.pool_size[1],
+                                             stride=self.stride[1],
+                                             pad=self.pad[1],
+                                             ignore_border=self.ignore_border,
+                                             )
+
+        return tuple(output_shape)
+
+    def get_output_for(self, input, **kwargs):
+        pooled = T.signal.pool_2d(input,
+                         ds=self.pool_size,
+                         st=self.stride,
+                         ignore_border=self.ignore_border,
+                         padding=self.pad,
+                         mode=self.mode,
+                         )
+        return pooled
+
+class ConvLayer(lasagne.layers.Layer):
+
+    def __init__(
+        self,
+        incoming,
+        num_filters,
+        filter_size,
+        stride=(1, 1),
+        pad=0,
+        untie_biases=False,
+        W=lasagne.init.GlorotUniform(),
+        b=lasagne.init.Constant(0.),
+        nonlinearity=lasagne.nonlinearities.rectify,
+        flip_filters=True,
+        **kwargs
+    ):
+        super(ConvLayer, self).__init__(incoming, **kwargs)
+
+        self.n = len(self.input_shape) - 2
+
+        self.num_filters = num_filters
+        self.filter_size = lasagne.utils.as_tuple(filter_size, self.n, int)
+        self.flip_filters = flip_filters
+        self.stride = lasagne.utils.as_tuple(stride, self.n, int)
+        self.untie_biases = untie_biases
+
+        if pad == 'same':
+            if any(s % 2 == 0 for s in self.filter_size):
+                raise NotImplementedError(
+                    '`same` padding requires odd filter size.')
+        if pad == 'valid':
+            self.pad = lasagne.utils.as_tuple(0, self.n)
+        elif pad in ('full', 'same'):
+            self.pad = pad
+        else:
+            self.pad = lasagne.utils.as_tuple(pad, self.n, int)
+
+        self.W = self.add_param(W, self.get_W_shape(), name="W")
+        if b is None:
+            self.b = None
+        else:
+            if self.untie_biases:
+                biases_shape = (num_filters,) + self.output_shape[2:]
+            else:
+                biases_shape = (num_filters,)
+            self.b = self.add_param(b, biases_shape, name="b",
+                                    regularizable=False)
+
+    def get_W_shape(self):
+        """Get the shape of the weight matrix `W`.
+        Returns
+        -------
+        tuple of int
+            The shape of the weight matrix.
+        """
+        num_input_channels = self.input_shape[1]
+        return (self.num_filters, num_input_channels) + self.filter_size
+
+    def get_output_shape_for(self, input_shape):
+        pad = self.pad if isinstance(self.pad, tuple) else (self.pad,) * self.n
+        batchsize = input_shape[0]
+        return ((batchsize, self.num_filters) +
+                tuple(lasagne.layers.conv.conv_output_length(input, filter, stride, p)
+                      for input, filter, stride, p
+                      in zip(input_shape[2:], self.filter_size,
+                             self.stride, pad)))
+
+    def convolve(self, input, **kwargs):
+        border_mode = 'half' if self.pad == 'same' else self.pad
+        conved = T.nnet.conv2d(input, self.W,
+                               self.input_shape, self.get_W_shape(),
+                               subsample=self.stride,
+                               border_mode=border_mode,
+                               filter_flip=self.flip_filters)
+        return conved
+
+    def get_output_for(self, input, **kwargs):
+        conved = self.convolve(input, **kwargs)
+
+        if self.b is None:
+            activation = conved
+        elif self.untie_biases:
+            activation = conved + T.shape_padleft(self.b, 1)
+        else:
+            activation = conved + self.b.dimshuffle(('x', 0) + ('x',) * self.n)
+
+        return self.nonlinearity(activation)
+
 
 class BNNLayer(lasagne.layers.Layer):
     """Probabilistic layer that uses Gaussian weights.
@@ -238,7 +379,7 @@ class BNNLayer(lasagne.layers.Layer):
         return (input_shape[0], self.num_units)
 
 
-class BNN(LasagnePowered, Serializable):
+class ConvBNN(LasagnePowered, Serializable):
     """Bayesian neural network (BNN), according to Blundell2016."""
 
     def __init__(self, n_in,
@@ -397,20 +538,24 @@ class BNN(LasagnePowered, Serializable):
 
         # Hidden layers
         for i in xrange(len(self.n_hidden)):
-            # Probabilistic layer (1) or deterministic layer (0).
-            if self.layers_type[i] == 1:
+            if self.layers_type[i] == 'gaussian':
                 network = BNNLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, name=BNN_LAYER_TAG)
-            else:
+            elif self.layers_type[i] == 'convolutional':
+                network = ConvLayer(network, 16, 3)
+            elif self.layers_type[i] == 'pool':
+                network = PoolLayer(network, 16, 3)
+            elif self.layers_type[i] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf)
 
         # Output layer
-        if self.layers_type[len(self.n_hidden)] == 1:
-            # Probabilistic layer (1) or deterministic layer (0).
+        if self.layers_type[len(self.n_hidden)] == 'gaussian':
             network = BNNLayer(
                 network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=BNN_LAYER_TAG)
-        else:
+        elif self.layers_type[len(self.n_hidden)] == 'convolutional':
+            network = ConvLayer(network, 16, 3)
+        elif self.layers_type[len(self.n_hidden)] == 'deterministic':
             network = lasagne.layers.DenseLayer(
                 network, self.n_out, nonlinearity=self.outf)
 
@@ -504,7 +649,7 @@ class BNN(LasagnePowered, Serializable):
 
 #             updates_kl = second_order_update(
 #                 loss_only_last_sample, params, oldparams, step_size)
-# 
+#
 #             self.train_update_fn = ext.compile_function(
 #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
         else:

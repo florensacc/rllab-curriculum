@@ -23,37 +23,38 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-# etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
-# normalize_rewards = [False, True]
-# kl_ratios = [True]
-# mdp_classes = [DoublePendulumEnv, MountainCarEnv]
-
-# seeds = range(10)
-etas = [0.001]
+etas = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
 normalize_rewards = [False]
 kl_ratios = [True]
-# mdps = [NormalizedEnv(MountainCarEnv())]
-mdps = [GymEnv("SpaceInvaders-ram-v0")]
+mdp_classes = [MountainCarEnv]
+mdps = [NormalizedEnv(mdp()) for mdp in mdp_classes]
+
+# seeds = range(10)
+# etas = [0.01]
+# normalize_rewards = [False]
+# kl_ratios = [True]
+# mdps = [GymEnv("SpaceInvaders-ram-v0")]
 # mdps = [GymEnv("SpaceInvaders-v0")]
+
 param_cart_product = itertools.product(
     kl_ratios, normalize_rewards, mdps, etas, seeds
 )
 
 for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
-#     policy = GaussianMLPPolicy(
-#         env_spec=mdp.spec,
-#         hidden_sizes=(32,),
-#     )
-
-    policy = CategoricalMLPPolicy(
+    policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
-        hidden_sizes=(32,)
+        hidden_sizes=(32,),
     )
+
+#     policy = CategoricalMLPPolicy(
+#         env_spec=mdp.spec,
+#         hidden_sizes=(64, 32)
+#     )
 
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(hidden_sizes=(32,)),
+        regressor_args=dict(hidden_sizes=(64, 32)),
     )
 
     batch_size = 5000
@@ -64,7 +65,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=1000,
+        n_itr=200,
         step_size=0.01,
         eta=eta,
         eta_discount=1.0,
@@ -80,18 +81,19 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         replay_pool_size=100000,
         n_updates_per_sample=500,
         second_order_update=True,
-        unn_n_hidden=[32],
-        unn_layers_type=[1, 1],
-        unn_learning_rate=0.0001
+        unn_n_hidden=[64, 32, 64],
+        unn_layers_type=['gaussian', 'gaussian', 'gaussian', 'gaussian'],
+        unn_learning_rate=0.0001,
+        surprise_transform='log(1+surprise)'
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-a",
-        n_parallel=1,
+        exp_prefix="trpo-vime-b",
+        n_parallel=4,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         script="sandbox/rein/experiments/run_experiment_lite.py",
     )
