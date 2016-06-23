@@ -30,8 +30,11 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             model.save_old_params()
 
             # Train current minibatch.
-            inputs, targets = batch
-            _train_err = model.train_fn(inputs, targets)
+            inputs, _ = batch
+            _train_err = model.train_fn(inputs, inputs.reshape(model.batch_size, 28 * 28))
+#             pred = model.pred_fn(inputs)
+#             plot_mnist_digit(pred[0].reshape(28, 28))
+            
             train_err += _train_err
             train_batches += 1
 
@@ -56,13 +59,16 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         print(
             "  KL divergence:\t\t{:.6f} ({:.6f})".format(kl_mean, kl_stdn))
 
+
+    pred = model.pred_fn(inputs)
+    plot_mnist_digit(pred[0].reshape(28, 28))
     print("Done training.")
 
 
 def main():
 
     num_epochs = 1000
-    batch_size = 1
+    batch_size = 16
 
     print("Loading data ...")
     X_train, T_train, X_test, T_test = load_dataset_MNIST()
@@ -76,14 +82,16 @@ def main():
             dict(name='input', in_shape=(None, 1, 28, 28)),
             dict(name='convolution', n_filters=16, filter_size=(5, 5)),
             dict(name='pool', pool_size=(2, 2)),
+            dict(name='upscale', scale_factor=2),
+            dict(name='transconvolution', n_filters=16, filter_size=(5, 5)),
             dict(name='gaussian', n_units=32)
         ],
-        n_out=1,
+        n_out=28 * 28,
         n_batches=n_batches,
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=10,
+        n_samples=2,
         prior_sd=0.5
     )
 

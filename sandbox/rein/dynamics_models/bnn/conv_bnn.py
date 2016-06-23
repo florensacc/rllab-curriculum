@@ -15,6 +15,193 @@ USE_REPARAMETRIZATION_TRICK = True
 # ----------------
 
 
+def conv_input_length(output_length, filter_size, stride, pad=0):
+    """Helper function to compute the input size of a convolution operation
+    This function computes the length along a single axis, which corresponds
+    to a 1D convolution. It can also be used for convolutions with higher
+    dimensionalities by using it individually for each axis.
+    Parameters
+    ----------
+    output_length : int or None
+        The size of the output.
+    filter_size : int
+        The size of the filter.
+    stride : int
+        The stride of the convolution operation.
+    pad : int, 'full' or 'same' (default: 0)
+        By default, the convolution is only computed where the input and the
+        filter fully overlap (a valid convolution). When ``stride=1``, this
+        yields an output that is smaller than the input by ``filter_size - 1``.
+        The `pad` argument allows you to implicitly pad the input with zeros,
+        extending the output size.
+        A single integer results in symmetric zero-padding of the given size on
+        both borders.
+        ``'full'`` pads with one less than the filter size on both sides. This
+        is equivalent to computing the convolution wherever the input and the
+        filter overlap by at least one position.
+        ``'same'`` pads with half the filter size on both sides (one less on
+        the second side for an even filter size). When ``stride=1``, this
+        results in an output size equal to the input size.
+    Returns
+    -------
+    int or None
+        The smallest input size corresponding to the given convolution
+        parameters for the given output size, or ``None`` if `output_size` is
+        ``None``. For a strided convolution, any input size of up to
+        ``stride - 1`` elements larger than returned will still give the same
+        output size.
+    Raises
+    ------
+    ValueError
+        When an invalid padding is specified, a `ValueError` is raised.
+    Notes
+    -----
+    This can be used to compute the output size of a convolution backward pass,
+    also called transposed convolution, fractionally-strided convolution or
+    (wrongly) deconvolution in the literature.
+    """
+    if output_length is None:
+        return None
+    if pad == 'valid':
+        pad = 0
+    elif pad == 'full':
+        pad = filter_size - 1
+    elif pad == 'same':
+        pad = filter_size // 2
+    if not isinstance(pad, int):
+        raise ValueError('Invalid pad: {0}'.format(pad))
+    return (output_length - 1) * stride - 2 * pad + filter_size
+
+
+class TransConvLayer(lasagne.layers.Layer):
+
+    def __init__(self, incoming, num_filters, filter_size, stride=(1, 1),
+                 crop=0, untie_biases=False,
+                 W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0.),
+                 nonlinearity=lasagne.nonlinearities.rectify, flip_filters=False,
+                 **kwargs):
+        
+        super(TransConvLayer, self).__init__(
+            incoming, **kwargs)
+        
+        pad = crop
+        self.crop = crop
+        self.n = len(self.input_shape) - 2
+        self.nonlinearity = nonlinearity
+        self.num_filters = num_filters
+        self.filter_size = lasagne.utils.as_tuple(filter_size, self.n, int)
+        self.flip_filters = flip_filters
+        self.stride = lasagne.utils.as_tuple(stride, self.n, int)
+        self.untie_biases = untie_biases
+
+        if pad == 'same':
+            if any(s % 2 == 0 for s in self.filter_size):
+                raise NotImplementedError(
+                    '`same` padding requires odd filter size.')
+        if pad == 'valid':
+            self.pad = lasagne.utils.as_tuple(0, self.n)
+        elif pad in ('full', 'same'):
+            self.pad = pad
+        else:
+            self.pad = lasagne.utils.as_tuple(pad, self.n, int)
+
+        self.W = self.add_param(W, self.get_W_shape(), name="W")
+        if b is None:
+            self.b = None
+        else:
+            if self.untie_biases:
+                biases_shape = (num_filters,) + self.output_shape[2:]
+            else:
+                biases_shape = (num_filters,)
+            self.b = self.add_param(b, biases_shape, name="b",
+                                    regularizable=False)
+
+    def get_W_shape(self):
+        num_input_channels = self.input_shape[1]
+        # first two sizes are swapped compared to a forward convolution
+        return (num_input_channels, self.num_filters) + self.filter_size
+
+    def get_output_shape_for(self, input_shape):
+        # when called from the constructor, self.crop is still called self.pad:
+        crop = getattr(self, 'crop', getattr(self, 'pad', None))
+        crop = crop if isinstance(crop, tuple) else (crop,) * self.n
+        batchsize = input_shape[0]
+        return ((batchsize, self.num_filters) +
+                tuple(conv_input_length(input, filter, stride, p)
+                      for input, filter, stride, p
+                      in zip(input_shape[2:], self.filter_size,
+                             self.stride, crop)))
+
+    def convolve(self, input, **kwargs):
+        border_mode = 'half' if self.crop == 'same' else self.crop
+        op = T.nnet.abstract_conv.AbstractConv2d_gradInputs(
+            imshp=self.output_shape,
+            kshp=self.get_W_shape(),
+            subsample=self.stride, border_mode=border_mode,
+            filter_flip=not self.flip_filters)
+        output_size = self.output_shape[2:]
+        if any(s is None for s in output_size):
+            output_size = self.get_output_shape_for(input.shape)[2:]
+        conved = op(self.W, input, output_size)
+        return conved
+
+    def get_output_for(self, input, **kwargs):
+        conved = self.convolve(input, **kwargs)
+
+        if self.b is None:
+            activation = conved
+        elif self.untie_biases:
+            activation = conved + T.shape_padleft(self.b, 1)
+        else:
+            activation = conved + self.b.dimshuffle(('x', 0) + ('x',) * self.n)
+
+        return self.nonlinearity(activation)
+
+
+class UpscaleLayer(lasagne.layers.Layer):
+    """
+    2D upscaling layer
+    Performs 2D upscaling over the two trailing axes of a 4D input tensor.
+    Parameters
+    ----------
+    incoming : a :class:`Layer` instance or tuple
+        The layer feeding into this layer, or the expected input shape.
+    scale_factor : integer or iterable
+        The scale factor in each dimension. If an integer, it is promoted to
+        a square scale factor region. If an iterable, it should have two
+        elements.
+    **kwargs
+        Any additional keyword arguments are passed to the :class:`Layer`
+        superclass.
+    """
+
+    def __init__(self, incoming, scale_factor, **kwargs):
+        super(UpscaleLayer, self).__init__(incoming, **kwargs)
+
+        self.scale_factor = lasagne.utils.as_tuple(scale_factor, 2)
+
+        if self.scale_factor[0] < 1 or self.scale_factor[1] < 1:
+            raise ValueError('Scale factor must be >= 1, not {0}'.format(
+                self.scale_factor))
+
+    def get_output_shape_for(self, input_shape):
+        output_shape = list(input_shape)  # copy / convert to mutable list
+        if output_shape[2] is not None:
+            output_shape[2] *= self.scale_factor[0]
+        if output_shape[3] is not None:
+            output_shape[3] *= self.scale_factor[1]
+        return tuple(output_shape)
+
+    def get_output_for(self, input, **kwargs):
+        a, b = self.scale_factor
+        upscaled = input
+        if b > 1:
+            upscaled = T.extra_ops.repeat(upscaled, b, 3)
+        if a > 1:
+            upscaled = T.extra_ops.repeat(upscaled, a, 2)
+        return upscaled
+
+
 class PoolLayer(lasagne.layers.Layer):
 
     def __init__(self, incoming, pool_size, stride=None, pad=(0, 0),
@@ -66,12 +253,12 @@ class PoolLayer(lasagne.layers.Layer):
 
     def get_output_for(self, input, **kwargs):
         pooled = theano.tensor.signal.pool.pool_2d(input,
-                                  ds=self.pool_size,
-                                  st=self.stride,
-                                  ignore_border=self.ignore_border,
-                                  padding=self.pad,
-                                  mode=self.mode,
-                                  )
+                                                   ds=self.pool_size,
+                                                   st=self.stride,
+                                                   ignore_border=self.ignore_border,
+                                                   padding=self.pad,
+                                                   mode=self.mode,
+                                                   )
         return pooled
 
 
@@ -94,7 +281,7 @@ class ConvLayer(lasagne.layers.Layer):
         super(ConvLayer, self).__init__(incoming, **kwargs)
 
         self.n = len(self.input_shape) - 2
-        self.nonlinearity=nonlinearity
+        self.nonlinearity = nonlinearity
         self.num_filters = num_filters
         self.filter_size = lasagne.utils.as_tuple(filter_size, self.n, int)
         self.flip_filters = flip_filters
@@ -558,6 +745,12 @@ class ConvBNN(LasagnePowered, Serializable):
             elif layer_disc['name'] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, num_units=layer_disc['n_units'], nonlinearity=self.transf)
+            elif layer_disc['name'] == 'transconvolution':
+                network = TransConvLayer(network, num_filters=layer_disc[
+                    'n_filters'], filter_size=layer_disc['filter_size'])
+            elif layer_disc['name'] == 'upscale':
+                network = UpscaleLayer(
+                    network, scale_factor=layer_disc['scale_factor'])
             else:
                 raise(Exception('Unknown layer!'))
 
@@ -572,7 +765,7 @@ class ConvBNN(LasagnePowered, Serializable):
         # Prepare Theano variables for inputs and targets
         # Same input for classification as regression.
         input_var = T.tensor4('inputs',
-                             dtype=theano.config.floatX)  # @UndefinedVariable
+                              dtype=theano.config.floatX)  # @UndefinedVariable
         target_var = T.matrix('targets',
                               dtype=theano.config.floatX)  # @UndefinedVariable
 
