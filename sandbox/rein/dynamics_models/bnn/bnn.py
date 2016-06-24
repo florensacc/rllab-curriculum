@@ -10,7 +10,6 @@ from collections import OrderedDict
 import theano
 
 # ----------------
-BNN_LAYER_TAG = 'bnnlayer'
 USE_REPARAMETRIZATION_TRICK = True
 # ----------------
 
@@ -293,26 +292,26 @@ class BNN(LasagnePowered, Serializable):
         self.build_model()
 
     def save_old_params(self):
-        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
+        layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_old_params()
 
     def reset_to_old_params(self):
-        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
+        layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.reset_to_old_params()
 
     def compression_improvement(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
+        layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_old_new() for l in layers)
 
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
+        layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
@@ -326,19 +325,19 @@ class BNN(LasagnePowered, Serializable):
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
+        layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
+        layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: l.name == BNN_LAYER_TAG,
+        layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_prior_new() for l in layers)
 
@@ -399,7 +398,7 @@ class BNN(LasagnePowered, Serializable):
         for i in xrange(len(self.n_hidden)):
             if self.layers_type[i] == 'gaussian':
                 network = BNNLayer(
-                    network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, name=BNN_LAYER_TAG)
+                    network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd)
             elif self.layers_type[i] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf)
@@ -407,7 +406,7 @@ class BNN(LasagnePowered, Serializable):
         # Output layer
         if self.layers_type[len(self.n_hidden)] == 'gaussian':
             network = BNNLayer(
-                network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, name=BNN_LAYER_TAG)
+                network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd)
         elif self.layers_type[len(self.n_hidden)] == 'deterministic':
             network = lasagne.layers.DenseLayer(
                 network, self.n_out, nonlinearity=self.outf)

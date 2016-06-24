@@ -230,6 +230,8 @@ class BatchPolopt(RLAlgorithm):
             self._kl_mean = deque(maxlen=self.kl_q_len)
             self._kl_std = deque(maxlen=self.kl_q_len)
 
+        # If not Q, we use median of each batch, perhaps more stable? Because
+        # network is only updated between batches, might work out well.
         if self.use_kl_ratio_q:
             # Add Queue here to keep track of N last kl values, compute average
             # over them and divide current kl values by it. This counters the
@@ -466,17 +468,7 @@ class BatchPolopt(RLAlgorithm):
             for i in xrange(len(paths)):
                 kls.append(paths[i]['KL'])
 
-            if self.surprise_transform == 'log(1+surprise)':
-                # Transform surprise into (positive) log space.
-                for i in xrange(len(paths)):
-                    kls[i] = np.log(1 + kls[i])
-
             kls_flat = np.hstack(kls)
-
-#             # Cap the KL divergence as 90 percentile.
-#             kl_90perc = np.percentile(kls_flat, 90)
-#             for i in xrange(len(paths)):
-#                 kls[i] = np.minimum(kls[i], kl_90perc)
 
             logger.record_tabular('BNN_MeanKL', np.mean(kls_flat))
             logger.record_tabular('BNN_StdKL', np.std(kls_flat))
@@ -487,7 +479,32 @@ class BatchPolopt(RLAlgorithm):
             logger.record_tabular('BNN_75percKL', np.percentile(kls_flat, 75))
             logger.record_tabular('BNN_90percKL', np.percentile(kls_flat, 90))
 
-            # Perform normlization of the intrinsic rewards.
+            # Transform intrinsic rewards.
+            if self.surprise_transform == 'log(1+surprise)':
+                # Transform surprise into (positive) log space.
+                for i in xrange(len(paths)):
+                    kls[i] = np.log(1 + kls[i])
+            elif self.surprise_transform == 'cap90perc':
+                perc90 = np.percentile(np.hstack(kls), 90)
+                # Cap max KL for stabilization.
+                for i in xrange(len(paths)):
+                    kls[i] = np.minimum(kls[i], perc90)
+
+            kls_flat = np.hstack(kls)
+
+            logger.record_tabular('BNN_MeanKL_transf', np.mean(kls_flat))
+            logger.record_tabular('BNN_StdKL_transf', np.std(kls_flat))
+            logger.record_tabular('BNN_MinKL_transf', np.min(kls_flat))
+            logger.record_tabular('BNN_MaxKL_transf', np.max(kls_flat))
+            logger.record_tabular('BNN_MedianKL_transf', np.median(kls_flat))
+            logger.record_tabular(
+                'BNN_25percKL_transf', np.percentile(kls_flat, 25))
+            logger.record_tabular(
+                'BNN_75percKL_transf', np.percentile(kls_flat, 75))
+            logger.record_tabular(
+                'BNN_90percKL_transf', np.percentile(kls_flat, 90))
+
+            # Normalize intrinsic rewards.
             if self.use_kl_ratio:
                 if self.use_kl_ratio_q:
                     # Update kl Q
@@ -495,8 +512,26 @@ class BatchPolopt(RLAlgorithm):
                     previous_mean_kl = np.mean(np.asarray(self.kl_previous))
                     for i in xrange(len(kls)):
                         kls[i] = kls[i] / previous_mean_kl
+                else:
+                    median_KL_current_batch = np.median(np.hstack(kls))
+                    for i in xrange(len(kls)):
+                        kls[i] = kls[i] / median_KL_current_batch
 
-            # Add KL ass intrinsic reward to external reward
+            kls_flat = np.hstack(kls)
+
+            logger.record_tabular('BNN_MeanKL_norm', np.mean(kls_flat))
+            logger.record_tabular('BNN_StdKL_norm', np.std(kls_flat))
+            logger.record_tabular('BNN_MinKL_norm', np.min(kls_flat))
+            logger.record_tabular('BNN_MaxKL_norm', np.max(kls_flat))
+            logger.record_tabular('BNN_MedianKL_norm', np.median(kls_flat))
+            logger.record_tabular(
+                'BNN_25percKL_norm', np.percentile(kls_flat, 25))
+            logger.record_tabular(
+                'BNN_75percKL_norm', np.percentile(kls_flat, 75))
+            logger.record_tabular(
+                'BNN_90percKL_norm', np.percentile(kls_flat, 90))
+
+            # Add KL as intrinsic reward to external reward
             for i in xrange(len(paths)):
                 paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
 
@@ -512,6 +547,24 @@ class BatchPolopt(RLAlgorithm):
             logger.record_tabular('BNN_25percKL', 0.)
             logger.record_tabular('BNN_75percKL', 0.)
             logger.record_tabular('BNN_90percKL', 0.)
+
+            logger.record_tabular('BNN_MeanKL_transf', 0.)
+            logger.record_tabular('BNN_StdKL_transf', 0.)
+            logger.record_tabular('BNN_MinKL_transf', 0.)
+            logger.record_tabular('BNN_MaxKL_transf', 0.)
+            logger.record_tabular('BNN_MedianKL_transf', 0.)
+            logger.record_tabular('BNN_25percKL_transf', 0.)
+            logger.record_tabular('BNN_75percKL_transf', 0.)
+            logger.record_tabular('BNN_90percKL_transf', 0.)
+
+            logger.record_tabular('BNN_MeanKL_norm', 0.)
+            logger.record_tabular('BNN_StdKL_norm', 0.)
+            logger.record_tabular('BNN_MinKL_norm', 0.)
+            logger.record_tabular('BNN_MaxKL_norm', 0.)
+            logger.record_tabular('BNN_MedianKL_norm', 0.)
+            logger.record_tabular('BNN_25percKL_norm', 0.)
+            logger.record_tabular('BNN_75percKL_norm', 0.)
+            logger.record_tabular('BNN_90percKL_norm', 0.)
 
         baselines = []
         returns = []
@@ -617,7 +670,8 @@ class BatchPolopt(RLAlgorithm):
             average_discounted_return = \
                 np.mean([path["returns"][0] for path in paths])
 
-            undiscounted_returns = [sum(path["rewards"]) for path in paths]
+            undiscounted_returns = [
+                sum(path["rewards_orig"]) for path in paths]
 
             ent = np.mean(self.policy.distribution.entropy(agent_infos))
 
@@ -641,7 +695,17 @@ class BatchPolopt(RLAlgorithm):
         self.baseline.fit(paths)
         logger.log("fitted")
 
+        average_reward = np.mean(
+            [np.mean(path["rewards_orig"]) for path in paths])
+        min_reward = np.min(
+            [np.min(path["rewards_orig"]) for path in paths])
+        max_reward = np.min(
+            [np.min(path["rewards_orig"]) for path in paths])
+
         logger.record_tabular('Iteration', itr)
+        logger.record_tabular('AverageReward', average_reward)
+        logger.record_tabular('MinReward', min_reward)
+        logger.record_tabular('MaxReward', max_reward)
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
         logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))

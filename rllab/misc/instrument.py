@@ -522,6 +522,8 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     if env is not None:
         for k, v in env.iteritems():
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
+    command_prefix += " -v {local_mujoco_key_dir}:{docker_mujoco_key_dir}".format(
+        local_mujoco_key_dir=config.MUJOCO_KEY_PATH, docker_mujoco_key_dir='/root/.mujoco')
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
                                                                     docker_log_dir=docker_log_dir)
     if local_code_dir is None:
@@ -531,7 +533,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     params = dict(params, log_dir=docker_log_dir)
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
-    # command_list.append('sleep 9999999')
+#     command_list.append('sleep 9999999')
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")

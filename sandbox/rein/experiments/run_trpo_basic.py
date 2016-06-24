@@ -20,11 +20,11 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(1)
+seeds = range(10)
 # mdp_classes = [MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
 # mdps = [GymEnv("SpaceInvaders-ram-v0")]
-mdps = [GymEnv("Reacher-v1")]
+mdps = [GymEnv("Reacher-v1", record_video=False)]
 param_cart_product = itertools.product(
     mdps, seeds
 )
@@ -46,15 +46,16 @@ for mdp, seed in param_cart_product:
         regressor_args=dict(hidden_sizes=(64, 64)),
     )
 
-    batch_size = 15000
+    batch_size = 500
     algo = TRPO(
+        discount=0.995,
         env=mdp,
         policy=policy,
         baseline=baseline,
         batch_size=batch_size,
         whole_paths=True,
-        max_path_length=50,
-        n_itr=250,
+        max_path_length=500,
+        n_itr=500,
         step_size=0.01,
         subsample_factor=1.0,
     )
@@ -62,7 +63,7 @@ for mdp, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix="trpo-reacher-a",
-        n_parallel=1,
+        n_parallel=4,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

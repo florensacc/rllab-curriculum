@@ -80,10 +80,10 @@ class TransConvLayer(lasagne.layers.Layer):
                  W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0.),
                  nonlinearity=lasagne.nonlinearities.rectify, flip_filters=False,
                  **kwargs):
-        
+
         super(TransConvLayer, self).__init__(
             incoming, **kwargs)
-        
+
         pad = crop
         self.crop = crop
         self.n = len(self.input_shape) - 2
