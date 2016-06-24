@@ -250,8 +250,17 @@ class BatchPolopt(RLAlgorithm):
 
         # Bayesian neural network (BNN) initialization.
         # ------------------------------------------------
-        batch_size = 1
-        n_batches = 5  # FIXME, there is no correct value!
+
+        # If we don't use a replay pool, we could have correct values here, as
+        # it is purely Bayesian. We then divide the KL divergence term by the
+        # number of batches in each iteration `batch'. Also the batch size
+        # would be given correctly.
+        if self.use_replay_pool:
+            batch_size = 1
+            n_batches = 5  # FIXME, there is no correct value!
+        else:
+            batch_size = self.pool_batch_size
+            n_batches = float(self.batch_size) / self.pool_batch_size
 
         # MDP observation and action dimensions.
         obs_dim = np.sum(self.env.observation_space.shape)
@@ -273,7 +282,6 @@ class BatchPolopt(RLAlgorithm):
             prior_sd=self.prior_sd,
             use_reverse_kl_reg=self.use_reverse_kl_reg,
             reverse_kl_reg_factor=self.reverse_kl_reg_factor,
-            #             stochastic_output=self.stochastic_output,
             second_order_update=self.second_order_update,
             learning_rate=self.unn_learning_rate,
             compression=self.compression,
@@ -355,13 +363,38 @@ class BatchPolopt(RLAlgorithm):
                         'BNN_DynModelSqLossBefore', old_acc)
                     logger.record_tabular(
                         'BNN_DynModelSqLossAfter', new_acc)
+            else:
+                # Here we should take the current batch of samples and shuffle
+                # them for i.d.d. purposes.
+                
+                old_acc = 0.
+                for _inputs, _targets in zip(_inputss, _targetss):
+                    _out = self.bnn.pred_fn(_inputs)
+                    old_acc += np.mean(np.square(_out - _targets))
+                old_acc /= len(_inputss)
+
+                for _inputs, _targets in zip(_inputss, _targetss):
+                    self.bnn.train_fn(_inputs, _targets)
+
+                new_acc = 0.
+                for _inputs, _targets in zip(_inputss, _targetss):
+                    _out = self.bnn.pred_fn(_inputs)
+                    new_acc += np.mean(np.square(_out - _targets))
+                new_acc /= len(_inputss) 
+                
+                
+                logger.record_tabular(
+                        'BNN_DynModelSqLossBefore', old_acc)
+                logger.record_tabular(
+                        'BNN_DynModelSqLossAfter', new_acc) 
+                pass
             # ----------------
 
             self.env.log_diagnostics(paths)
             self.policy.log_diagnostics(paths)
             self.baseline.log_diagnostics(paths)
             self.optimize_policy(itr, samples_data)
-            logger.log("saving snapshot...")
+            logger.log("Saving snapshot ...")
             params = self.get_itr_snapshot(itr, samples_data)
             paths = samples_data["paths"]
             if self.store_paths:
@@ -372,7 +405,7 @@ class BatchPolopt(RLAlgorithm):
             params["episode_lengths"] = np.array(episode_lengths)
             params["algo"] = self
             logger.save_itr_params(itr, params)
-            logger.log("saved")
+            logger.log("Saved.")
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
             if self.plot:
@@ -381,6 +414,7 @@ class BatchPolopt(RLAlgorithm):
                     raw_input("Plotting evaluation run: Press Enter to "
                               "continue...")
 
+        # Training complete: terminate environment.
         self.shutdown_worker()
         self.env.terminate()
         self.policy.terminate()

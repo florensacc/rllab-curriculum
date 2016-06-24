@@ -252,7 +252,7 @@ class BNN(LasagnePowered, Serializable):
                  prior_sd=0.5,
                  use_reverse_kl_reg=False,
                  reverse_kl_reg_factor=0.1,
-                 likelihood_sd=5.0,
+                 likelihood_sd=0.05,
                  second_order_update=False,
                  learning_rate=0.0001,
                  compression=False,

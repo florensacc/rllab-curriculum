@@ -112,6 +112,46 @@ def load_dataset_1Dregression():
 
     return generate_synthetic_data(1e3)
 
+def load_dataset_4Dregression():
+    """Synthetic 1D regression data loader"""
+
+    def generate_synthetic_data(dat_size=1.e4):
+        rng = np.random.RandomState(1234)
+        x = rng.uniform(0.05, 0.95, dat_size).reshape((dat_size, 1))
+        v = rng.normal(0, 0.02, size=x.shape)
+        # TODO: Write y.
+        y = x + 0.3 * np.sin(2. * np.pi * (x + v)) + 0.3 * \
+            np.sin(4. * np.pi * (x + v)) + v
+#         y += np.random.randint(low=0, high=2, size=(len(y), 1))
+#         rand = np.zeros((len(x), 1))
+#         for i in xrange(rand.shape[0]):
+#             rand[i] = random.choice([-1,1])
+#         x += rand * 2
+        # 90% for training, 10% testing
+        train_x = x[:len(x) * 0.9]
+        train_y = y[:len(y) * 0.9]
+        test_x = x[len(x) * 0.9:]
+        test_y = y[len(y) * 0.9:]
+
+        x2 = rng.uniform(1., 11., dat_size).reshape((dat_size, 1))
+        y2 = x2 * 0. + 0.5
+        test_x = np.vstack([test_x, x2])
+        test_y = np.vstack([test_y, y2])
+        x2 = rng.uniform(-9., 1., dat_size).reshape((dat_size, 1))
+        y2 = x2 * 0. + 0.5
+        test_x = np.vstack([x2, test_x])
+        test_y = np.vstack([y2, test_y])
+        
+#         print(train_x.shape)
+        train_x = np.hstack([train_x, train_x**2, train_x**3, train_x**4])
+        test_x = np.hstack([test_x, test_x**2, test_x**3, test_x**4])
+#         print(new_train_x.shape)
+#         print(new_train_x[:,0][:,None].shape)
+#         print(train_x == new_train_x[:,0][:,None])
+        return (train_x, train_y), (test_x, test_y)
+
+    return generate_synthetic_data(1e3)
+
 
 def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
     assert len(inputs) == len(targets)

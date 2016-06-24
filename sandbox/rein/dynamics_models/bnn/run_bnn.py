@@ -1,5 +1,5 @@
 import numpy as np
-from sandbox.rein.dynamics_models.bnn.bnn import VBNN
+from sandbox.rein.dynamics_models.bnn.bnn import BNN
 from utils import load_dataset_1Dregression
 import lasagne
 from utils import sliding_mean, iterate_minibatches
@@ -232,23 +232,23 @@ def main():
     (X_train, T_train), (X_test, T_test) = load_dataset_1Dregression()
     n_batches = int(np.ceil(len(X_train) / float(batch_size)))
     print("Building model and compiling functions ...")
-    vbnn = VBNN(
+    bnn = BNN(
         n_in=4,
-        n_hidden=[128],
         n_out=1,
         n_batches=n_batches,
-        layers_type=[1, 1],
+        n_hidden=[32],
+        layers_type=['gaussian', 'gaussian'],
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
         n_samples=10,
-        prior_sd=0.5,
         use_reverse_kl_reg=False,
-        reverse_kl_reg_factor=1e-2
+        reverse_kl_reg_factor=1e-2,
+        learning_rate=0.001,
     )
 
     # Train the model.
-    train(vbnn, num_epochs=num_epochs, X_train=X_train,
+    train(bnn, num_epochs=num_epochs, X_train=X_train,
               T_train=T_train, X_test=X_test, T_test=T_test)
     print('Done.')
 

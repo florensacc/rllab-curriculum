@@ -54,7 +54,7 @@ for mdp, seed in param_cart_product:
         baseline=baseline,
         batch_size=batch_size,
         whole_paths=True,
-        max_path_length=500,
+        max_path_length=50,
         n_itr=500,
         step_size=0.01,
         subsample_factor=1.0,
