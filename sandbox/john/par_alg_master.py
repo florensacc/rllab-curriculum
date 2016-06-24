@@ -25,6 +25,8 @@ class ParAlgMaster(object):
 def _maybe_unpickle(x):
     if isinstance(x, str) and x.startswith('\x80'):
         return cPickle.loads(x)
+    else:
+        return x
 
 def _sync(futures):
     return [_maybe_unpickle(f.get()) for f in futures]
