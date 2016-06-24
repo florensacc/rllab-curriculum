@@ -3,6 +3,7 @@ from rllab.core.serializable import Serializable
 from rllab import spaces
 from rllab.misc import special
 import tensorflow as tf
+import tf_util as U
 from collections import defaultdict
 import numpy as np
 
@@ -13,8 +14,6 @@ def make_batch_variable(space, batch_size = None, name = None):
         return tf.placeholder(tf.int32, shape=[batch_size] + [space.flat_dim], name=name)
     else:
         raise NotImplementedError
-
-SESSION = tf.Session()
 
 class OnlineVPG(Serializable):
     def __init__(
@@ -62,7 +61,7 @@ class OnlineVPG(Serializable):
             avg_ent = total_ent / (horizon * batch_size) # create at least one var!!!
         self.losses_after = [vf_loss, pol_loss, loss, avg_ent]
         self.loss_names = ["vf", "pol", "total", "ent"]
-        SESSION.run(tf.initialize_all_variables())
+        U.initialize()
 
     def train(self, n_updates):
         batch_size = self.venv.num_envs
@@ -74,7 +73,7 @@ class OnlineVPG(Serializable):
         rets = np.zeros(batch_size, 'float32')
         for i_update in xrange(n_updates):
             total_rets = []
-            setup = SESSION.partial_run_setup(
+            setup = U.SESSION.partial_run_setup(
                 self.syms["ac"] + self.syms["vpred"] + self.losses_after,
                 self.syms["ob"] + self.syms["adv"] + self.syms["vtarg"], 
                 )
@@ -84,7 +83,7 @@ class OnlineVPG(Serializable):
             for t in xrange(self.horizon):
                 ob = (ob - ob_mean) / ob_scale
                 news[t] = new
-                ac, vpreds[t] = SESSION.partial_run(setup, [self.syms["ac"][t], self.syms["vpred"][t]], feed_dict={self.syms["ob"][t] : ob})
+                ac, vpreds[t] = U.SESSION.partial_run(setup, [self.syms["ac"][t], self.syms["vpred"][t]], feed_dict={self.syms["ob"][t] : ob})
                 ob, rews[t], new = self.venv.step(ac)
                 rets += rews[t]
                 if count > 0:
@@ -105,7 +104,7 @@ class OnlineVPG(Serializable):
                 advs[t1] += deltas[t1] + advs[t1 + 1] * q * (1 - news[t1 + 1])
             standardized_advs = (advs - advs.mean()) / advs.std()
             vtargs = vpreds[:-1] + advs
-            losses = SESSION.partial_run(setup, self.losses_after, feed_dict = dict(
+            losses = U.SESSION.partial_run(setup, self.losses_after, feed_dict = dict(
                 zip(self.syms["adv"], standardized_advs) +
                 zip(self.syms["vtarg"], vtargs)))
             losses_dict = dict(zip(self.loss_names, losses))
