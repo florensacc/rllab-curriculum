@@ -21,11 +21,11 @@ def cg(f_Ax, b, cg_iters=10, callback=None, verbose=False, residual_tol=1e-10):
             callback(x)
         if verbose: print fmtstr % (i, rdotr, np.linalg.norm(x))
         z = f_Ax(p)
-        v = rdotr / (p.dot(z) + 1e-8)
+        v = rdotr / p.dot(z)
         x += v * p
         r -= v * z
         newrdotr = r.dot(r)
-        mu = newrdotr / (rdotr + 1e-8)
+        mu = newrdotr / rdotr
         p = r + mu * p
 
         rdotr = newrdotr
