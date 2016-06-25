@@ -63,6 +63,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     # Save original reward.
     path['rewards_orig'] = np.array(path['rewards'])
 
+    # We skip first iteration as it is often difficult to normalize.
     if itr > 0:
         # Iterate over all paths and compute intrinsic reward by updating the
         # model on each observation, calculating the KL divergence of the new
@@ -78,9 +79,6 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
         kl = np.zeros(rew.shape)
         for j in xrange(int(np.ceil(obs.shape[0] / float(kl_batch_size)))):
 
-            # Save old params for every update.
-            G.dynamics.save_old_params()
-
             start = j * kl_batch_size
             end = np.minimum(
                 (j + 1) * kl_batch_size, obs.shape[0] - 1)
@@ -89,28 +87,55 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 # We do a line search over the best step sizes using
                 # step_size * invH * grad
                 #                 best_loss_value = np.inf
-                for step_size in [0.01]:
+                for step_size in [1e-8]:
+                    # Save old params for every update.
                     G.dynamics.save_old_params()
-                    loss_value = G.dynamics.train_update_fn(
+                    nll_before = G.dynamics.fn_dbg_nll(
+                    _inputs[start:end], _targets[start:end])
+                    kl_before = G.dynamics.fn_kl()
+                    kl_div = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
-                    kl_div = loss_value
-                    # If using replay pool, undo updates.
-                    if use_replay_pool:
-                        G.dynamics.reset_to_old_params()
+                    nll_after = G.dynamics.fn_dbg_nll(
+                    _inputs[start:end], _targets[start:end])
+                    kl_after = G.dynamics.fn_kl()
+
+                    # DEBUG
+                    # -----
+                    print('KL {} -> {}'.format(kl_before, kl_after))
+                    print('NLL {} -> {}'.format(nll_before, nll_after))
+                    print('')
+                    # -----
+
+                    # Reset to old params after each surprise calc.
+                    G.dynamics.reset_to_old_params()
             else:
+                # Save old params for every update.
+                G.dynamics.save_old_params()
+                nll_before = G.dynamics.fn_dbg_nll(
+                    _inputs[start:end], _targets[start:end])
+                kl_before = G.dynamics.fn_kl()
                 # Update model weights based on current minibatch.
                 for _ in xrange(n_itr_update):
                     G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end])
                 # Calculate current minibatch KL.
-                kl_div = G.dynamics.f_kl_div_closed_form()
-                
+                kl_div = G.dynamics.fn_surprise()
+                nll_after = G.dynamics.fn_dbg_nll(
+                    _inputs[start:end], _targets[start:end])
+                kl_after = G.dynamics.fn_kl()
+
+                # DEBUG
+                # -----
+                print('KL {} -> {}'.format(kl_before, kl_after))
+                print('NLL {} -> {}'.format(nll_before, nll_after))
+                print('')
+                # -----
+
+                # Reset to old params after each surprise calc.
+                G.dynamics.reset_to_old_params()
 
             for k in xrange(start, end):
                 kl[k] = kl_div
-            # If using replay pool, undo updates.
-            if use_replay_pool:
-                G.dynamics.reset_to_old_params()
 
         # Last element in KL vector needs to be replaced by second last one
         # because the actual last observation has no next observation.

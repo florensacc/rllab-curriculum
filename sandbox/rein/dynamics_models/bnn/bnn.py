@@ -257,6 +257,7 @@ class BNN(LasagnePowered, Serializable):
                  learning_rate=0.0001,
                  compression=False,
                  information_gain=True,
+                 update_prior=False,
                  ):
 
         Serializable.quick_init(self, locals())
@@ -279,6 +280,7 @@ class BNN(LasagnePowered, Serializable):
         self.learning_rate = learning_rate
         self.compression = compression
         self.information_gain = information_gain
+        self.update_prior = update_prior
 
         assert self.information_gain or self.compression
 
@@ -362,7 +364,10 @@ class BNN(LasagnePowered, Serializable):
                 target, prediction, self.likelihood_sd))
         log_p_D_given_w = sum(_log_p_D_given_w)
         # Calculate variational posterior log(q(w)) and prior log(p(w)).
-        kl = self.log_p_w_q_w_kl()
+        if self.update_prior:
+            kl = self.kl_div()
+        else:
+            kl = self.log_p_w_q_w_kl()
         if self.use_reverse_kl_reg:
             kl += self.reverse_kl_reg_factor * \
                 self.reverse_log_p_w_q_w_kl()
@@ -388,6 +393,18 @@ class BNN(LasagnePowered, Serializable):
         # Calculate loss function.
         # self.kl_div() should be zero when taking second order step
         return self.kl_div() - log_p_D_given_w / self.n_samples
+
+    def dbg_nll(self, input, target):
+        # MC samples.
+        _log_p_D_given_w = []
+        for _ in xrange(self.n_samples):
+            # Make prediction.
+            prediction = self.pred_sym(input)
+            # Calculate model likelihood log(P(sample|w)).
+            _log_p_D_given_w.append(self._log_prob_normal(
+                target, prediction, self.likelihood_sd))
+        log_p_D_given_w = sum(_log_p_D_given_w)
+        return - log_p_D_given_w / self.n_samples
 
     def build_network(self):
 
@@ -433,9 +450,9 @@ class BNN(LasagnePowered, Serializable):
 
         # Train/val fn.
         self.pred_fn = ext.compile_function(
-            [input_var], self.pred_sym(input_var), log_name='pred_fn')
+            [input_var], self.pred_sym(input_var), log_name='fn_pred')
         self.train_fn = ext.compile_function(
-            [input_var, target_var], loss, updates=updates, log_name='train_fn')
+            [input_var, target_var], loss, updates=updates, log_name='fn_train')
 
         if self.second_order_update:
 
@@ -460,7 +477,6 @@ class BNN(LasagnePowered, Serializable):
                     else:
                         oldparam_rho = oldparams[i]
                         p = param
-
                         H = 2. * (T.exp(2 * p)) / \
                             (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                         invH = 1. / H
@@ -483,7 +499,6 @@ class BNN(LasagnePowered, Serializable):
                     else:
                         oldparam_rho = oldparams[i]
                         p = param
-
                         H = 2. * (T.exp(2 * p)) / \
                             (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                         invH = 1. / H
@@ -493,24 +508,36 @@ class BNN(LasagnePowered, Serializable):
 
                 return sum(kl_component)
 
-            compute_fast_kl_div = fast_kl_div(
-                loss_only_last_sample, params, oldparams, step_size)
-
-            self.train_update_fn = ext.compile_function(
-                [input_var, target_var, step_size], compute_fast_kl_div, log_name='f_compute_fast_kl_div')
-
-#             updates_kl = second_order_update(
+#             compute_fast_kl_div = fast_kl_div(
 #                 loss_only_last_sample, params, oldparams, step_size)
-#
+# 
 #             self.train_update_fn = ext.compile_function(
-#                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='train_update_fn')
-        else:
-            self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates, log_name='train_update_fn')
+#                 [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast')
 
-        # called kl div closed form but should be called surprise
-        self.f_kl_div_closed_form = ext.compile_function(
-            [], self.surprise(), log_name='kl_div_fn')
+            updates_kl = second_order_update(
+                loss_only_last_sample, params, oldparams, step_size)
+ 
+            self.train_update_fn = ext.compile_function(
+                [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise')
+        else:
+            # Updates via SGD need significantly lower learning rate.
+            updates_kl = lasagne.updates.sgd(
+                loss, params, learning_rate=self.learning_rate * 0.01)
+
+            self.train_update_fn = ext.compile_function(
+                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise')
+
+        # Calculate surprise.
+        self.fn_surprise = ext.compile_function(
+            [], self.surprise(), log_name='fn_surprise')
+
+        # DEBUG
+        # -----
+        self.fn_dbg_nll = ext.compile_function(
+            [input_var, target_var], self.dbg_nll(input_var, target_var), log_name='fn_dbg_nll')
+        self.fn_kl = ext.compile_function(
+            [], self.kl_div(), log_name='fn_kl')
+        # -----
 
 if __name__ == '__main__':
     pass

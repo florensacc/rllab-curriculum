@@ -116,7 +116,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             train_batches += 1
 
             # Calculate current minibatch KL.
-            kl_mb_closed_form = model.f_kl_div_closed_form()
+            kl_mb_closed_form = model.fn_surprise()
 
             kl_values.append(kl_mb_closed_form)
             kl_all_values.append(kl_mb_closed_form)
@@ -245,6 +245,7 @@ def main():
         use_reverse_kl_reg=False,
         reverse_kl_reg_factor=1e-2,
         learning_rate=0.001,
+        likelihood_sd=0.5
     )
 
     # Train the model.

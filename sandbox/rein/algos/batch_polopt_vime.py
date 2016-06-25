@@ -7,6 +7,8 @@ from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
+from sandbox.rein.dynamics_models.bnn.utils import iterate_minibatches
+
 
 # exploration imports
 # -------------------
@@ -259,8 +261,13 @@ class BatchPolopt(RLAlgorithm):
             batch_size = 1
             n_batches = 5  # FIXME, there is no correct value!
         else:
-            batch_size = self.pool_batch_size
-            n_batches = float(self.batch_size) / self.pool_batch_size
+            batch_size = int(self.pool_batch_size)
+            n_batches = int(
+                np.ceil(float(self.batch_size) / self.pool_batch_size))
+            n_iterations = int(
+                np.ceil(float(self.n_updates_per_sample) / self.batch_size))
+            logger.log(
+                'Using {} BNN minibatches of size {} to train, each epoch has {} iterations.'.format(n_batches, batch_size, n_iterations))
 
         # MDP observation and action dimensions.
         obs_dim = np.sum(self.env.observation_space.shape)
@@ -285,7 +292,8 @@ class BatchPolopt(RLAlgorithm):
             second_order_update=self.second_order_update,
             learning_rate=self.unn_learning_rate,
             compression=self.compression,
-            information_gain=self.information_gain
+            information_gain=self.information_gain,
+            update_prior=self.use_replay_pool
         )
 
         logger.log(
@@ -360,34 +368,50 @@ class BatchPolopt(RLAlgorithm):
                     new_acc /= len(_inputss)
 
                     logger.record_tabular(
-                        'BNN_DynModelSqLossBefore', old_acc)
+                        'DynModelSqLossBefore', old_acc)
                     logger.record_tabular(
-                        'BNN_DynModelSqLossAfter', new_acc)
+                        'DynModelSqLossAfter', new_acc)
             else:
                 # Here we should take the current batch of samples and shuffle
                 # them for i.d.d. purposes.
-                
-                old_acc = 0.
-                for _inputs, _targets in zip(_inputss, _targetss):
-                    _out = self.bnn.pred_fn(_inputs)
-                    old_acc += np.mean(np.square(_out - _targets))
-                old_acc /= len(_inputss)
+                logger.log(
+                    "Fitting dynamics model to current sample batch ...")
+                list_obs, list_obs_nxt, list_act = [], [], []
+                for path in samples_data['paths']:
+                    len_path = len(path)
+                    for i in xrange(len_path - 1):
+                        list_obs.append(path['observations'][i])
+                        list_obs_nxt.append(
+                            path['observations'][i + 1])
+                        list_act.append(path['actions'][i])
 
-                for _inputs, _targets in zip(_inputss, _targetss):
-                    self.bnn.train_fn(_inputs, _targets)
+                # Stack into input and target set.
+                X_train = np.hstack((list_obs, list_act))
+                T_train = np.asarray(list_obs_nxt)
 
-                new_acc = 0.
-                for _inputs, _targets in zip(_inputss, _targetss):
-                    _out = self.bnn.pred_fn(_inputs)
-                    new_acc += np.mean(np.square(_out - _targets))
-                new_acc /= len(_inputss) 
+                old_acc, new_acc = 0., 0.
+                for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
+                    _out = self.bnn.pred_fn(X_train)
+                    old_acc += np.mean(np.square(_out - T_train))
+                old_acc /= n_batches
                 
-                
+                # Save old parameters as new prior.
+                self.bnn.save_old_params()
+                # Num of runs needed to get to n_updates_per_sample
+                for _ in xrange(n_iterations):
+                    # Num batches to traverse.
+                    for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
+                        self.bnn.train_fn(batch[0], batch[1])
+
+                for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
+                    _out = self.bnn.pred_fn(X_train)
+                new_acc += np.mean(np.square(_out - T_train))
+                new_acc /= n_batches
+
                 logger.record_tabular(
-                        'BNN_DynModelSqLossBefore', old_acc)
+                    'DynModelSqLossBefore', old_acc)
                 logger.record_tabular(
-                        'BNN_DynModelSqLossAfter', new_acc) 
-                pass
+                    'DynModelSqLossAfter', new_acc)
             # ----------------
 
             self.env.log_diagnostics(paths)
@@ -452,7 +476,10 @@ class BatchPolopt(RLAlgorithm):
             reward_std = np.mean(np.asarray(self._reward_std))
 
         # Mean/std obs/act based on replay pool.
-        obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
+        if self.use_replay_pool:
+            obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
+        else:
+            obs_mean, obs_std, act_mean, act_std = 0, 1, 0, 1
 
         paths = parallel_sampler.sample_paths(
             policy_params=cur_params,
