@@ -7,7 +7,7 @@ import tensorflow as tf # pylint: ignore-module
 # ================================================================
 
 from tensorflow import (
-    tanh, sigmoid, exp, greater, log, square, add_n, add, sqrt, abs, maximum, minimum,
+    tanh, sigmoid, exp, greater, log, square, add_n, add, sqrt, abs, maximum, minimum,    
     equal, not_equal,
     reshape,
     matmul, stop_gradient, tile, constant, pack, assign,
@@ -36,6 +36,10 @@ def mean(x, axis=None, keepdims=False):
     return tf.reduce_mean(x, reduction_indices=None if axis is None else [axis], keep_dims = keepdims)
 def std(x, axis=None, keepdims=False):
     return var(x, axis=axis, keepdims=keepdims)
+def max(x, axis=None, keepdims=False):
+    return tf.reduce_max(x, reduction_indices=None if axis is None else [axis], keep_dims = keepdims)
+def min(x, axis=None, keepdims=False):
+    return tf.reduce_min(x, reduction_indices=None if axis is None else [axis], keep_dims = keepdims)
 def var(x, axis=None, keepdims=False):
     meanx = mean(x, axis=axis, keepdims=True)
     return mean(square(x - meanx), axis=axis, keepdims=keepdims)

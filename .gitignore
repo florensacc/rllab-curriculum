@@ -37,3 +37,5 @@ blackbox
 rllab/config_personal.py
 *.swp
 *.dat
+*.sublime-project
+*.sublime-workspace
