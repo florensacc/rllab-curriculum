@@ -789,8 +789,8 @@ def to_lab_kube_pod(
                         (log_dir))
     pre_commands.append("""
         while /bin/true; do
-            aws s3 sync --exclude *.pkl {log_dir} {remote_log_dir} --region {aws_region}
-            sleep 5
+            aws s3 sync --exclude *.pkl --exclude gym_log {log_dir} {remote_log_dir} --region {aws_region}
+            sleep 15
         done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
                                              aws_region=config.AWS_REGION_NAME))
     # copy the file to s3 after execution
