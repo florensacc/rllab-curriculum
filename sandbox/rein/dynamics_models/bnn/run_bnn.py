@@ -219,6 +219,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             train_err / train_batches))
         print(
             "  KL divergence:\t\t{:.6f} ({:.6f})".format(kl_mean, kl_stdn))
+        print(model.likelihood_sd.eval())
 
     print("Done training.")
 
@@ -226,7 +227,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 def main():
 
     num_epochs = 1000
-    batch_size = 1
+    batch_size = 10
 
     print("Loading data ...")
     (X_train, T_train), (X_test, T_test) = load_dataset_1Dregression()
@@ -245,7 +246,7 @@ def main():
         use_reverse_kl_reg=False,
         reverse_kl_reg_factor=1e-2,
         learning_rate=0.001,
-        likelihood_sd=0.5
+        likelihood_sd=0.05
     )
 
     # Train the model.

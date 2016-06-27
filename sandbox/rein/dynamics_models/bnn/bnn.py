@@ -275,7 +275,7 @@ class BNN(LasagnePowered, Serializable):
         self.n_batches = n_batches
         self.use_reverse_kl_reg = use_reverse_kl_reg
         self.reverse_kl_reg_factor = reverse_kl_reg_factor
-        self.likelihood_sd = likelihood_sd
+        self.likelihood_sd_init = likelihood_sd
         self.second_order_update = second_order_update
         self.learning_rate = learning_rate
         self.compression = compression
@@ -352,7 +352,7 @@ class BNN(LasagnePowered, Serializable):
     def pred_sym(self, input):
         return lasagne.layers.get_output(self.network, input)
 
-    def loss(self, input, target):
+    def loss(self, input, target, likelihood_sd):
 
         # MC samples.
         _log_p_D_given_w = []
@@ -361,7 +361,7 @@ class BNN(LasagnePowered, Serializable):
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
             _log_p_D_given_w.append(self._log_prob_normal(
-                target, prediction, self.likelihood_sd))
+                target, prediction, likelihood_sd))
         log_p_D_given_w = sum(_log_p_D_given_w)
         # Calculate variational posterior log(q(w)) and prior log(p(w)).
         if self.update_prior:
@@ -375,7 +375,7 @@ class BNN(LasagnePowered, Serializable):
         # Calculate loss function.
         return kl / self.n_batches - log_p_D_given_w / self.n_samples
 
-    def loss_last_sample(self, input, target):
+    def loss_last_sample(self, input, target, likelihood_sd):
         """The difference with the original loss is that we only update based on the latest sample.
         This means that instead of using the prior p(w), we use the previous approximated posterior
         q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
@@ -388,13 +388,13 @@ class BNN(LasagnePowered, Serializable):
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(sample|w)).
             _log_p_D_given_w.append(self._log_prob_normal(
-                target, prediction, self.likelihood_sd))
+                target, prediction, likelihood_sd))
         log_p_D_given_w = sum(_log_p_D_given_w)
         # Calculate loss function.
         # self.kl_div() should be zero when taking second order step
         return self.kl_div() - log_p_D_given_w / self.n_samples
 
-    def dbg_nll(self, input, target):
+    def dbg_nll(self, input, target, likelihood_sd):
         # MC samples.
         _log_p_D_given_w = []
         for _ in xrange(self.n_samples):
@@ -402,7 +402,7 @@ class BNN(LasagnePowered, Serializable):
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(sample|w)).
             _log_p_D_given_w.append(self._log_prob_normal(
-                target, prediction, self.likelihood_sd))
+                target, prediction, likelihood_sd))
         log_p_D_given_w = sum(_log_p_D_given_w)
         return - log_p_D_given_w / self.n_samples
 
@@ -439,12 +439,20 @@ class BNN(LasagnePowered, Serializable):
         target_var = T.matrix('targets',
                               dtype=theano.config.floatX)  # @UndefinedVariable
 
+        # Make the likelihood standard deviation a trainable parameter.
+        self.likelihood_sd = theano.shared(
+            value=self.likelihood_sd_init,
+            name='likelihood_sd'
+        )
+
         # Loss function.
-        loss = self.loss(input_var, target_var)
-        loss_only_last_sample = self.loss_last_sample(input_var, target_var)
+        loss = self.loss(input_var, target_var, self.likelihood_sd)
+        loss_only_last_sample = self.loss_last_sample(
+            input_var, target_var, self.likelihood_sd)
 
         # Create update methods.
         params = lasagne.layers.get_all_params(self.network, trainable=True)
+        params.append(self.likelihood_sd)
         updates = lasagne.updates.adam(
             loss, params, learning_rate=self.learning_rate)
 
@@ -474,12 +482,15 @@ class BNN(LasagnePowered, Serializable):
                     if param.name == 'mu' or param.name == 'b_mu':
                         oldparam_rho = oldparams[i + 1]
                         invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    else:
+                    elif param.name == 'rho' or param.name == 'b_rho':
                         oldparam_rho = oldparams[i]
                         p = param
                         H = 2. * (T.exp(2 * p)) / \
                             (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                         invH = 1. / H
+                    elif param.name == 'likelihood_sd':
+                        print('test')
+                        invH = 0.
                     updates[param] = param - step_size * invH * grad
 
                 return updates
@@ -510,13 +521,13 @@ class BNN(LasagnePowered, Serializable):
 
 #             compute_fast_kl_div = fast_kl_div(
 #                 loss_only_last_sample, params, oldparams, step_size)
-# 
+#
 #             self.train_update_fn = ext.compile_function(
 #                 [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast')
 
             updates_kl = second_order_update(
                 loss_only_last_sample, params, oldparams, step_size)
- 
+
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise')
         else:
@@ -534,7 +545,7 @@ class BNN(LasagnePowered, Serializable):
         # DEBUG
         # -----
         self.fn_dbg_nll = ext.compile_function(
-            [input_var, target_var], self.dbg_nll(input_var, target_var), log_name='fn_dbg_nll')
+            [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll')
         self.fn_kl = ext.compile_function(
             [], self.kl_div(), log_name='fn_kl')
         # -----
