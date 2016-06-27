@@ -9,15 +9,17 @@ import tensorflow as tf
 alg = 3
 
 if alg == 1:
-    from sandbox.john.dummy_vec_env import DummyVecEnv as VecEnv
-    env = GymEnv("CartPole-v0")
-    ve = VecEnv(env, 4, 16, max_path_length=200)
+    # from sandbox.john.dummy_vec_env import DummyVecEnv as VecEnv 
+    from sandbox.john.rpc_vec_env import RpcVecEnv as VecEnv        
+    env = GymEnv("Pong-ram-v0")
+    ve = VecEnv(env, 4, 64, max_path_length=9999)
     n_actions = env.action_space.n
     batch_size = ve.num_envs
 
     @U.module
     def policy(ob):
         h1 = U.tanh(U.dense(ob, 128))
+        h2 = U.tanh(U.dense(h1, 128))
         u = U.dense(h1, n_actions+1, weight_init=U.NormalizedColumns(.1))
         vpred = u[:,0]*10.0
         logits = u[:,1:]
@@ -27,7 +29,7 @@ if alg == 1:
         ent = - U.sum(alllogp * tf.exp(alllogp), axis=1)
         return ac, logp, vpred, ent
 
-    alg = VPG(ve, policy, horizon=50, stepsize=0.01)
+    alg = VPG(ve, policy, horizon=50, stepsize=0.001)
     alg.train(1000)
 
 elif alg == 2:
@@ -58,17 +60,20 @@ elif alg == 2:
 
 elif alg == 3:
 
-    from sandbox.john.dummy_vec_env import DummyVecEnv as VecEnv
+    # from sandbox.john.dummy_vec_env import DummyVecEnv as VecEnv
+    from sandbox.john.rpc_vec_env import RpcVecEnv as VecEnv        
+
     from trpo import TRPO, LinearBaseline
-    env = GymEnv("CartPole-v0")
-    ve = VecEnv(env, 4, 16, max_path_length=200)
+    env = GymEnv("Breakout-ram-v0")
+    ve = VecEnv(env, 4, 64, max_path_length=10000)
     n_actions = env.action_space.n
     batch_size = ve.num_envs
 
     @U.module
     def _act(ob):
-        h1 = U.tanh(U.dense(ob, 32))
-        logits = U.dense(h1, n_actions, weight_init=U.NormalizedColumns(0.3))
+        h1 = U.tanh(U.dense(ob, 128))
+        h2 = U.tanh(U.dense(h1, 128))
+        logits = U.dense(h2, n_actions, weight_init=U.NormalizedColumns(0.3))
         logp = tf.nn.log_softmax(logits)
         ac = tf.multinomial(logits, 1)[:,0]
         return ac, logp
@@ -85,8 +90,8 @@ elif alg == 3:
         @property
         def vars(self):
             return self._vars
-        
+
     policy = Policy()
     baseline = LinearBaseline()
-    alg = TRPO(ve, policy, baseline, horizon=50)
-    alg.train(100)
+    alg = TRPO(ve, policy, baseline, horizon=50, discount=.98, gae_lambda=0.98, max_kl=0.001)
+    alg.train(10000)

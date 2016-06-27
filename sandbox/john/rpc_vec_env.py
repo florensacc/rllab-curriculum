@@ -48,7 +48,6 @@ class EnvProxy(object):
         f.write(dumps(env))
         f.close()
         pid = os.getpid()
-        subprocess.check_call(["rm", "-f", "/tmp/%i_*.ipc"%pid])        
         addr = "ipc:///tmp/%i_%0.2i.ipc"%(pid, i)
         self.popen = subprocess.Popen(["python", "-m", "sandbox.john.rpc_vec_env", f.name, addr, str(k), str(max_path_length)])
         self.client = zerorpc.Client()
@@ -62,6 +61,11 @@ class EnvProxy(object):
 
 class RpcVecEnv(VecEnv):
     def __init__(self, env, n, k, max_path_length = 999999):
+        """
+        env : original Env
+        n : number of processes
+        k : number of environments per process
+        """
         self.remotes = [EnvProxy(env, i, k, max_path_length) for i in xrange(n)]
         self.k = k
         self._action_space = env.action_space

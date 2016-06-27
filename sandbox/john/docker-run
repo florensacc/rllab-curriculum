@@ -1,0 +1,4 @@
+#!/bin/bash
+source docker-name
+RLLAB_ROOT=`readlink -f ../..`
+docker run -it -v $RLLAB_ROOT:/root/code/rllab $name /bin/bash
