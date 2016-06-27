@@ -1,5 +1,5 @@
 import os
-from sandbox.rein.algos.erwr_bnn import ERWR
+from sandbox.rein.algos.erwr_vime import ERWR
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv

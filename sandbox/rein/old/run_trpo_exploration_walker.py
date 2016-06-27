@@ -5,7 +5,7 @@ os.environ["THEANO_FLAGS"] = "device=cpu"
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from sandbox.rein.algos.trpo_unn import TRPO
+from sandbox.rein.algos.trpo_vime import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
 from rllab import config

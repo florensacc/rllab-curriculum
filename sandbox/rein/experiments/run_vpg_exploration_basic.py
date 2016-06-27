@@ -1,5 +1,5 @@
 import os
-from sandbox.rein.algos.vpg_unn import VPG
+from sandbox.rein.algos.vpg_vime import VPG
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv

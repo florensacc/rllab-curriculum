@@ -5,7 +5,7 @@ import theano
 import theano.tensor as T
 import lasagne
 import time
-from utils import iterate_minibatches, sliding_mean
+from sandbox.rein.dynamics_models.bnn.utils import iterate_minibatches, sliding_mean
 
 PLOT_OUTPUT_REGIONS = True
 

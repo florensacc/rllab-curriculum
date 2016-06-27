@@ -1,4 +1,4 @@
-FROM ubuntu:14.04
+FROM ubuntu:16.04
 
 # ========== Anaconda ==========
 # https://github.com/ContinuumIO/docker-images/blob/master/anaconda/Dockerfile
@@ -38,10 +38,14 @@ RUN pip install --upgrade pip
 # usual pip install pygame will fail
 #RUN conda install --yes -c https://conda.anaconda.org/kne pybox2d
 #RUN conda install --yes -c https://conda.binstar.org/tlatorre pygame
-RUN sudo apt-get build-dep -y python-pygame
+RUN apt-get build-dep -y python-pygame
+
+# ========== OpenAI Gym ==========
+RUN pip install gym
+RUN apt-get -y install ffmpeg
+RUN apt-get -y install libav-tools
 
 # ========== Add codebase stub ==========
-
 CMD mkdir /root/code
 ADD environment.yml /root/code/environment.yml
 RUN conda env create -f /root/code/environment.yml

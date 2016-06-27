@@ -25,6 +25,7 @@ from rllab.viskit.core import flatten
 
 
 class StubBase(object):
+
     def __getitem__(self, item):
         return StubMethodCall(self, "__getitem__", args=[item], kwargs=dict())
 
@@ -38,6 +39,7 @@ class StubBase(object):
 
 
 class StubAttr(StubBase):
+
     def __init__(self, obj, attr_name):
         self.__dict__["_obj"] = obj
         self.__dict__["_attr_name"] = attr_name
@@ -58,6 +60,7 @@ class StubAttr(StubBase):
 
 
 class StubMethodCall(StubBase, Serializable):
+
     def __init__(self, obj, method_name, args, kwargs):
         self._serializable_initialized = False
         Serializable.quick_init(self, locals())
@@ -72,6 +75,7 @@ class StubMethodCall(StubBase, Serializable):
 
 
 class StubClass(StubBase):
+
     def __init__(self, proxy_class):
         self.proxy_class = proxy_class
 
@@ -99,6 +103,7 @@ class StubClass(StubBase):
 
 
 class StubObject(StubBase):
+
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
             spec = inspect.getargspec(__proxy_class.__init__)
@@ -149,8 +154,10 @@ class VariantGenerator(object):
         self._variants.append((key, vals, kwargs))
 
     def _populate_variants(self):
-        methods = inspect.getmembers(self.__class__, predicate=inspect.ismethod)
-        methods = [x[1].__get__(self, self.__class__) for x in methods if getattr(x[1], '__is_variant', False)]
+        methods = inspect.getmembers(
+            self.__class__, predicate=inspect.ismethod)
+        methods = [x[1].__get__(self, self.__class__)
+                   for x in methods if getattr(x[1], '__is_variant', False)]
         for m in methods:
             self.add(m.__name__, m, **getattr(m, "__variant_config", dict()))
 
@@ -330,9 +337,11 @@ def run_experiment_lite(
         exp_count += 1
         params = dict(kwargs)
         if task.get("exp_name", None) is None:
-            task["exp_name"] = "%s_%s_%04d" % (exp_prefix, timestamp, exp_count)
+            task["exp_name"] = "%s_%s_%04d" % (
+                exp_prefix, timestamp, exp_count)
         if task.get("log_dir", None) is None:
-            task["log_dir"] = config.LOG_DIR + "/local/" + exp_prefix.replace("_", "-") + "/" + task["exp_name"]
+            task["log_dir"] = config.LOG_DIR + "/local/" + \
+                exp_prefix.replace("_", "-") + "/" + task["exp_name"]
         if task.get("variant", None) is not None:
             variant = task.pop("variant")
             if "exp_name" not in variant:
@@ -340,7 +349,8 @@ def run_experiment_lite(
             task["variant_data"] = base64.b64encode(pickle.dumps(variant))
         elif "variant" in task:
             del task["variant"]
-        task["remote_log_dir"] = osp.join(config.AWS_S3_PATH, exp_prefix.replace("_", "-"), task["exp_name"])
+        task["remote_log_dir"] = osp.join(
+            config.AWS_S3_PATH, exp_prefix.replace("_", "-"), task["exp_name"])
 
     if mode not in ["local", "local_docker"] and not remote_confirmed and not dry and confirm_remote:
         remote_confirmed = query_yes_no(
@@ -352,14 +362,16 @@ def run_experiment_lite(
         for task in batch_tasks:
             del task["remote_log_dir"]
             env = task.pop("env", None)
-            command = to_local_command(task, script=osp.join(config.PROJECT_PATH, script), use_gpu=use_gpu)
+            command = to_local_command(
+                task, script=osp.join(config.PROJECT_PATH, script), use_gpu=use_gpu)
             print(command)
             if dry:
                 return
             try:
                 if env is None:
                     env = dict()
-                subprocess.call(command, shell=True, env=dict(os.environ, **env))
+                subprocess.call(
+                    command, shell=True, env=dict(os.environ, **env))
             except Exception as e:
                 print e
                 if isinstance(e, KeyboardInterrupt):
@@ -370,7 +382,8 @@ def run_experiment_lite(
         for task in batch_tasks:
             del task["remote_log_dir"]
             env = task.pop("env", None)
-            command = to_docker_command(task, docker_image=docker_image, script=script, env=env)
+            command = to_docker_command(
+                task, docker_image=docker_image, script=script, env=env)
             print(command)
             if dry:
                 return
@@ -401,8 +414,10 @@ def run_experiment_lite(
         for task in batch_tasks:
             if 'env' in task:
                 assert task.pop('env') is None
-            task["resources"] = params.pop("resouces", config.KUBE_DEFAULT_RESOURCES)
-            task["node_selector"] = params.pop("node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
+            task["resources"] = params.pop(
+                "resouces", config.KUBE_DEFAULT_RESOURCES)
+            task["node_selector"] = params.pop(
+                "node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
             task["exp_prefix"] = exp_prefix
             pod_dict = to_lab_kube_pod(
                 task, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu)
@@ -507,6 +522,8 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     if env is not None:
         for k, v in env.iteritems():
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
+    command_prefix += " -v {local_mujoco_key_dir}:{docker_mujoco_key_dir}".format(
+        local_mujoco_key_dir=config.MUJOCO_KEY_PATH, docker_mujoco_key_dir='/root/.mujoco')
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
                                                                     docker_log_dir=docker_log_dir)
     if local_code_dir is None:
@@ -516,11 +533,12 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     params = dict(params, log_dir=docker_log_dir)
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
-    # command_list.append('sleep 9999999')
+#     command_list.append('sleep 9999999')
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
-    command_list.append(to_local_command(params, osp.join(config.DOCKER_CODE_DIR, script), use_gpu=use_gpu))
+    command_list.append(to_local_command(
+        params, osp.join(config.DOCKER_CODE_DIR, script), use_gpu=use_gpu))
     if post_commands is not None:
         command_list.extend(post_commands)
     return command_prefix + "'" + "; ".join(command_list) + "'"
@@ -676,7 +694,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
             InstanceCount=1,
             LaunchSpecification=instance_args,
             SpotPrice=aws_config["spot_price"],
-            ClientToken=params_list[0]["exp_name"],
+            # ClientToken=params_list[0]["exp_name"],
         )
         import pprint
         pprint.pprint(spot_args)
@@ -689,7 +707,8 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                 try:
                     ec2.create_tags(
                         Resources=[spot_request_id],
-                        Tags=[{'Key': 'Name', 'Value': params_list[0]["exp_name"]}],
+                        Tags=[
+                            {'Key': 'Name', 'Value': params_list[0]["exp_name"]}],
                     )
                     break
                 except botocore.exceptions.ClientError:
@@ -731,15 +750,21 @@ def s3_sync_code(config, dry=False):
     cache_cmds = ["aws", "s3", "sync"] + \
                  [cache_path, full_path]
     cmds = ["aws", "s3", "sync"] + \
-           flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+        flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
            [".", full_path]
     caching_cmds = ["aws", "s3", "sync"] + \
                    [full_path, cache_path]
-    print cache_cmds, cmds, caching_cmds
+    mujoco_key_cmd = [
+        "aws", "s3", "sync", config.MUJOCO_KEY_PATH, "{}/.mujoco/".format(base)]
+    print cache_cmds, cmds, caching_cmds, mujoco_key_cmd
     if not dry:
         subprocess.check_call(cache_cmds)
         subprocess.check_call(cmds)
         subprocess.check_call(caching_cmds)
+        try:
+            subprocess.check_call(mujoco_key_cmd)
+        except Exception:
+            print('Unable to sync mujoco keys!')
     S3_CODE_PATH = full_path
     return full_path
 
@@ -750,7 +775,8 @@ def upload_file_to_s3(script_content):
     f = tempfile.NamedTemporaryFile(delete=False)
     f.write(script_content)
     f.close()
-    remote_path = os.path.join(config.AWS_CODE_SYNC_S3_PATH, "oversize_bash_scripts", str(uuid.uuid4()))
+    remote_path = os.path.join(
+        config.AWS_CODE_SYNC_S3_PATH, "oversize_bash_scripts", str(uuid.uuid4()))
     subprocess.check_call(["aws", "s3", "cp", f.name, remote_path])
     os.unlink(f.name)
     return remote_path
@@ -775,12 +801,16 @@ def to_lab_kube_pod(
     mkdir_p(log_dir)
     pre_commands = list()
     pre_commands.append('mkdir -p ~/.aws')
+    pre_commands.append('mkdir ~/.mujoco')
     # fetch credentials from the kubernetes secret file
     pre_commands.append('echo "[default]" >> ~/.aws/credentials')
     pre_commands.append(
         "echo \"aws_access_key_id = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_KEY)
     pre_commands.append(
         "echo \"aws_secret_access_key = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_SECRET)
+    s3_mujoco_key_path = config.AWS_CODE_SYNC_S3_PATH + '/.mujoco/'
+    pre_commands.append(
+        'aws s3 cp --recursive {} {}'.format(s3_mujoco_key_path, '~/.mujoco'))
     pre_commands.append('aws s3 cp --recursive %s %s' %
                         (code_full_path, config.DOCKER_CODE_DIR))
     pre_commands.append('cd %s' %

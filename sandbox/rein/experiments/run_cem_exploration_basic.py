@@ -1,5 +1,5 @@
 import os
-from sandbox.rein.algos.cem_expl import CEM
+from sandbox.rein.algos.cem_vime import CEM
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
