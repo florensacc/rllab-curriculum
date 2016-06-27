@@ -2,13 +2,14 @@ from rllab.misc import special
 from rllab.envs.gym_env import GymEnv
 from rllab import spaces
 import numpy as np
-from online_vpg import OnlineVPG
+from vpg import VPG
 import tf_util as U
 import tensorflow as tf
 
+alg = 3
 
-if 0:
-    from dummy_vec_env import DummyVecEnv as VecEnv
+if alg == 1:
+    from sandbox.john.dummy_vec_env import DummyVecEnv as VecEnv
     env = GymEnv("CartPole-v0")
     ve = VecEnv(env, 4, 16, max_path_length=200)
     n_actions = env.action_space.n
@@ -19,7 +20,6 @@ if 0:
         h1 = U.tanh(U.dense(ob, 128))
         u = U.dense(h1, n_actions+1, weight_init=U.NormalizedColumns(.1))
         vpred = u[:,0]*10.0
-        # ac = tf.py_func(cat_sample, [p], [tf.float32])[0]
         logits = u[:,1:]
         ac = tf.multinomial(logits, 1)[:,0]
         alllogp = tf.nn.log_softmax(logits)
@@ -27,11 +27,11 @@ if 0:
         ent = - U.sum(alllogp * tf.exp(alllogp), axis=1)
         return ac, logp, vpred, ent
 
-    alg = OnlineVPG(ve, policy, horizon=50, stepsize=0.01)
+    alg = VPG(ve, policy, horizon=50, stepsize=0.01)
     alg.train(1000)
 
-elif 1:
-    from rpc_vec_env import RpcVecEnv as VecEnv    
+elif alg == 2:
+    from sandbox.john.rpc_vec_env import RpcVecEnv as VecEnv    
     env = GymEnv("Hopper-v1")
     ve = VecEnv(env, 4, 64, max_path_length=500)
     out_size = env.action_space.shape[0]
@@ -43,7 +43,6 @@ elif 1:
         h2 = U.tanh(U.dense(h1, 32))
         u = U.dense(h2, out_size+1, weight_init=U.NormalizedColumns(.1))
         vpred = u[:,0] * 10.0
-        # ac = tf.py_func(cat_sample, [p], [tf.float32])[0]
         mean = u[:,1:]
         logstdev = U.Variable(value=np.zeros((1, out_size), 'float32'))
         stdev = U.exp(logstdev)
@@ -54,6 +53,40 @@ elif 1:
         ent = U.mean(stdev)*batch_size # more interpretable than differential entropy
         return ac, logp, vpred, ent
 
-    alg = OnlineVPG(ve, policy, horizon=50, discount=0.995, gae_lambda=0.99, stepsize=0.01)
+    alg = VPG(ve, policy, horizon=50, discount=0.995, gae_lambda=0.99, stepsize=0.01)
     alg.train(1000)
 
+elif alg == 3:
+
+    from sandbox.john.dummy_vec_env import DummyVecEnv as VecEnv
+    from trpo import TRPO, LinearBaseline
+    env = GymEnv("CartPole-v0")
+    ve = VecEnv(env, 4, 16, max_path_length=200)
+    n_actions = env.action_space.n
+    batch_size = ve.num_envs
+
+    @U.module
+    def _act(ob):
+        h1 = U.tanh(U.dense(ob, 32))
+        logits = U.dense(h1, n_actions, weight_init=U.NormalizedColumns(0.3))
+        logp = tf.nn.log_softmax(logits)
+        ac = tf.multinomial(logits, 1)[:,0]
+        return ac, logp
+    class Policy(object):
+        def act(self, ob):
+            self._vars = _act.vars
+            return _act(ob)
+        def compute_entropy(self, logp):
+            return U.sum(- logp * U.exp(logp), axis=1)
+        def compute_kl(self, logp0, logp1):
+            return U.sum(U.exp(logp0) * (logp0 - logp1), axis=1)
+        def compute_loglik(self, logp, ac):
+            return U.fancy_slice_2d(logp, tf.range(logp.get_shape()[0]), ac)
+        @property
+        def vars(self):
+            return self._vars
+        
+    policy = Policy()
+    baseline = LinearBaseline()
+    alg = TRPO(ve, policy, baseline, horizon=50)
+    alg.train(100)
