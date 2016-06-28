@@ -252,12 +252,13 @@ class BNN(LasagnePowered, Serializable):
                  prior_sd=0.5,
                  use_reverse_kl_reg=False,
                  reverse_kl_reg_factor=0.1,
-                 likelihood_sd=0.05,
+                 likelihood_sd=1.0,
                  second_order_update=False,
                  learning_rate=0.0001,
                  compression=False,
                  information_gain=True,
                  update_prior=False,
+                 update_likelihood_sd=True
                  ):
 
         Serializable.quick_init(self, locals())
@@ -281,6 +282,7 @@ class BNN(LasagnePowered, Serializable):
         self.compression = compression
         self.information_gain = information_gain
         self.update_prior = update_prior
+        self.update_likelihood_sd = update_likelihood_sd
 
         assert self.information_gain or self.compression
 
@@ -298,12 +300,14 @@ class BNN(LasagnePowered, Serializable):
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_old_params()
+        self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
     def reset_to_old_params(self):
         layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.reset_to_old_params()
+        self.likelihood_sd.set_value(self.old_likelihood_sd.get_value())
 
     def compression_improvement(self):
         """KL divergence KL[old_param||new_param]"""
@@ -441,8 +445,12 @@ class BNN(LasagnePowered, Serializable):
 
         # Make the likelihood standard deviation a trainable parameter.
         self.likelihood_sd = theano.shared(
-            value=self.likelihood_sd_init,
+            value=5.0,#self.likelihood_sd_init,
             name='likelihood_sd'
+        )
+        self.old_likelihood_sd = theano.shared(
+            value=5.0,#self.likelihood_sd_init,
+            name='old_likelihood_sd'
         )
 
         # Loss function.
@@ -451,8 +459,11 @@ class BNN(LasagnePowered, Serializable):
             input_var, target_var, self.likelihood_sd)
 
         # Create update methods.
-        params = lasagne.layers.get_all_params(self.network, trainable=True)
-        params.append(self.likelihood_sd)
+        params_kl = lasagne.layers.get_all_params(self.network, trainable=True)
+        params = []
+        params.extend(params_kl)
+        if self.update_likelihood_sd:
+            params.append(self.likelihood_sd)
         updates = lasagne.updates.adam(
             loss, params, learning_rate=self.learning_rate)
 
@@ -469,16 +480,18 @@ class BNN(LasagnePowered, Serializable):
             step_size = T.scalar('step_size',
                                  dtype=theano.config.floatX)  # @UndefinedVariable
 
-            def second_order_update(loss_or_grads, params, oldparams, step_size):
+            def second_order_update(loss, params, oldparams, step_size):
                 """Second-order update method for optimizing loss_last_sample, so basically,
                 KL term (new params || old params) + NLL of latest sample. The Hessian is
                 evaluated at the origin and provides curvature information to make a more
                 informed step in the correct descent direction."""
-                grads = T.grad(loss_or_grads, params)
+                grads = theano.grad(loss, params)
                 updates = OrderedDict()
+
                 for i in xrange(len(params)):
                     param = params[i]
                     grad = grads[i]
+
                     if param.name == 'mu' or param.name == 'b_mu':
                         oldparam_rho = oldparams[i + 1]
                         invH = T.square(T.log(1 + T.exp(oldparam_rho)))
@@ -489,9 +502,9 @@ class BNN(LasagnePowered, Serializable):
                             (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                         invH = 1. / H
                     elif param.name == 'likelihood_sd':
-                        print('test')
                         invH = 0.
-                    updates[param] = param - step_size * invH * grad
+                    # So wtf is going wrong here?
+                    updates[param] = param - step_size * grad  # invH * grad
 
                 return updates
 
@@ -507,12 +520,14 @@ class BNN(LasagnePowered, Serializable):
                     if param.name == 'mu' or param.name == 'b_mu':
                         oldparam_rho = oldparams[i + 1]
                         invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    else:
+                    elif param.name == 'rho' or param.name == 'b_rho':
                         oldparam_rho = oldparams[i]
                         p = param
                         H = 2. * (T.exp(2 * p)) / \
                             (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                         invH = 1. / H
+                    elif param.name == 'likelihood_sd':
+                        invH = 0.
 
                     kl_component.append(
                         T.sum(T.square(step_size) * T.square(grad) * invH))
@@ -526,17 +541,33 @@ class BNN(LasagnePowered, Serializable):
 #                 [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast')
 
             updates_kl = second_order_update(
-                loss_only_last_sample, params, oldparams, step_size)
+                loss_only_last_sample, params_kl, oldparams, step_size)
 
-            self.train_update_fn = ext.compile_function(
-                [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise')
-        else:
-            # Updates via SGD need significantly lower learning rate.
             updates_kl = lasagne.updates.sgd(
-                loss, params, learning_rate=self.learning_rate * 0.01)
+                loss_only_last_sample, params_kl, learning_rate=step_size)
 
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise')
+                [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd')
+        else:
+            # Use SGD to update the model for a single sample, in order to
+            # calculate the surprise.
+
+            def sgd(loss, params, learning_rate):
+                grads = theano.grad(loss, params)
+                updates = OrderedDict()
+                for param, grad in zip(params, grads):
+                    if param.name == 'likelihood_sd':
+                        updates[param] = param
+                    else:
+                        updates[param] = param - learning_rate * grad
+
+                return updates
+
+            updates_kl = sgd(
+                loss_only_last_sample, params, learning_rate=self.learning_rate)
+
+            self.train_update_fn = ext.compile_function(
+                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st')
 
         # Calculate surprise.
         self.fn_surprise = ext.compile_function(

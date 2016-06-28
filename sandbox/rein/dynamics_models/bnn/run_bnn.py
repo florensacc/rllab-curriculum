@@ -246,7 +246,7 @@ def main():
         use_reverse_kl_reg=False,
         reverse_kl_reg_factor=1e-2,
         learning_rate=0.001,
-        likelihood_sd=0.05
+        likelihood_sd=5.0
     )
 
     # Train the model.
