@@ -14,6 +14,31 @@ class DiagonalGaussian(Distribution):
     def dim(self):
         return self._dim
 
+    def kl(self, old_dist_info, new_dist_info):
+        old_means = old_dist_info["mean"]
+        old_log_stds = old_dist_info["log_std"]
+        new_means = new_dist_info["mean"]
+        new_log_stds = new_dist_info["log_std"]
+        """
+        Compute the KL divergence of two multivariate Gaussian distribution with
+        diagonal covariance matrices
+        """
+        old_std = np.exp(old_log_stds)
+        new_std = np.exp(new_log_stds)
+        # means: (N*A)
+        # std: (N*A)
+        # formula:
+        # { (\mu_1 - \mu_2)^2 + \sigma_1^2 - \sigma_2^2 } / (2\sigma_2^2) +
+        # ln(\sigma_2/\sigma_1)
+        numerator = np.square(old_means - new_means) + \
+                    np.square(old_std) - np.square(new_std)
+        denominator = 2 * np.square(new_std) + 1e-8
+        return np.sum(
+            numerator / denominator + new_log_stds - old_log_stds, axis=-1)
+        # more lossy version
+        # return TT.sum(
+        #     numerator / denominator + TT.log(new_std) - TT.log(old_std ), axis=-1)
+
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
         old_means = old_dist_info_vars["mean"]
         old_log_stds = old_dist_info_vars["log_std"]
@@ -35,7 +60,7 @@ class DiagonalGaussian(Distribution):
         denominator = 2 * tf.square(new_std) + 1e-8
         ndims = numerator.get_shape().ndims
         return tf.reduce_sum(
-            numerator / denominator + new_log_stds - old_log_stds, reduction_indices=ndims-1)
+            numerator / denominator + new_log_stds - old_log_stds, reduction_indices=ndims - 1)
 
     def likelihood_ratio_sym(self, x_var, old_dist_info_vars, new_dist_info_vars):
         logli_new = self.log_likelihood_sym(x_var, new_dist_info_vars)
@@ -71,4 +96,3 @@ class DiagonalGaussian(Distribution):
     @property
     def dist_info_specs(self):
         return [("mean", (self.dim,)), ("log_std", (self.dim,))]
-
