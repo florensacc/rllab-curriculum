@@ -29,36 +29,37 @@ policy = STRAWPolicy(
     name="policy",
     env_spec=env.spec,
     feature_network_cls=MLP,
+    sample_decision=True,
     feature_network_args=dict(
         name="feature_network",
         input_shape=(env.observation_space.flat_dim,),
         output_dim=32,
         hidden_sizes=(32,),
-        hidden_nonlinearity=tf.nn.relu,
+        hidden_nonlinearity=tf.nn.tanh,
         output_nonlinearity=tf.nn.tanh,
     )
 )
 # policy = CategoricalMLPPolicy(name="policy", env_spec=env.spec)
 
-algo = VPG(
-    env=env,
-    policy=policy,
-    baseline=LinearFeatureBaseline(env_spec=env.spec),
-    # optimizer=ConjugateGradientOptimizer(hvp_approach=FiniteDifferenceHvp()),
-    batch_size=1000,
-    max_path_length=50,
-    discount=0.99,
-)
-
-# algo = TRPO(
+# algo = VPG(
 #     env=env,
 #     policy=policy,
 #     baseline=LinearFeatureBaseline(env_spec=env.spec),
-#     optimizer=ConjugateGradientOptimizer(hvp_approach=FiniteDifferenceHvp()),
+#     # optimizer=ConjugateGradientOptimizer(hvp_approach=FiniteDifferenceHvp()),
 #     batch_size=1000,
 #     max_path_length=50,
 #     discount=0.99,
 # )
+
+algo = TRPO(
+    env=env,
+    policy=policy,
+    baseline=LinearFeatureBaseline(env_spec=env.spec),
+    optimizer=ConjugateGradientOptimizer(hvp_approach=FiniteDifferenceHvp()),
+    batch_size=1000,
+    max_path_length=50,
+    discount=0.99,
+)
 
 # policy.get_action(env.reset())
 

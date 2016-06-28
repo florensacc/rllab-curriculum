@@ -187,6 +187,7 @@ class STRAWPolicy(StochasticPolicy, LayersPowered, Serializable):
             planning_horizon=20,
             patch_horizon=10,
             feature_dim=128,
+            sample_decision=True,
             feature_network_cls=None,
             feature_network_args=None):
         Serializable.quick_init(self, locals())
@@ -194,6 +195,7 @@ class STRAWPolicy(StochasticPolicy, LayersPowered, Serializable):
         self.K = K = patch_horizon
         self.feature_dim = feature_dim
         self.action_dim = action_dim = env_spec.action_space.flat_dim
+        self.sample_decision = sample_decision
         self.A = None
         self.c = None
 
@@ -210,7 +212,7 @@ class STRAWPolicy(StochasticPolicy, LayersPowered, Serializable):
                     conv_strides=(1, 1),
                     conv_pads=('SAME', 'SAME'),
                     hidden_sizes=tuple(),
-                    hidden_nonlinearity=tf.nn.relu,
+                    hidden_nonlinearity=tf.nn.tanh,
                     # TODO not yet sure about this
                     output_nonlinearity=tf.nn.tanh,
                 )
@@ -340,14 +342,17 @@ class STRAWPolicy(StochasticPolicy, LayersPowered, Serializable):
 
     def get_action(self, observation):
         # First sample gt~c_1^{t-1}
-        g = int(np.random.uniform() < self.c[0, 0])
         flat_obs = self.observation_space.flatten(observation)
-        if g == 1:  # update plan
-            new_A, new_c, a_prob = [x[0] for x in self.f_new_A_c_prob([flat_obs], [self.A], [self.c], [[g]])]
+        if self.sample_decision:
+            g = int(np.random.uniform() < self.c[0, 0])
         else:
-            new_A = time_shift(self.A)
-            new_c = time_shift(self.c)
-            a_prob = special.softmax(new_A[:, 0])
+            g = self.c[0, 0]
+        # if g == 1:  # update plan
+        new_A, new_c, a_prob = [x[0] for x in self.f_new_A_c_prob([flat_obs], [self.A], [self.c], [[g]])]
+        # else:
+        #     new_A = time_shift(self.A)
+        #     new_c = time_shift(self.c)
+        #     a_prob = special.softmax(new_A[:, 0])
         self.A = new_A
         self.c = new_c
         action = special.weighted_sample(a_prob, np.arange(self.action_dim))
@@ -396,7 +401,7 @@ class STRAWPolicy(StochasticPolicy, LayersPowered, Serializable):
                     self.l_obs: obs,
                     self.l_A_in: A,
                     self.l_c_in: c,
-                    self.l_g_in: custom_grad(g, c[:, :, 0])
+                    self.l_g_in: custom_grad(g, c[:, :, 0]) if self.sample_decision else c[:, :, 0]
                 }
             )
             return tf.concat(1, [next_A_var, next_c_var])
