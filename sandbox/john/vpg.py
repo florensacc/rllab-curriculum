@@ -112,7 +112,8 @@ class VPG(Serializable):
             logger.record_tabular("Entropy", ent)
             logger.record_tabular("Perplexity", np.exp(ent))
             logger.record_tabular("ExplainedVariance", special.explained_variance_1d(vpreds[:-1].ravel(), vtargs.ravel()))
-            logger.record_tabular("TotalTimesteps", total_timesteps)
+            logger.record_tabular("TotalTimesteps", total_timesteps)            
+            logger.record_tabular("TotalTimesteps", total_timesteps * batch_size)            
             logger.record_tabular("TotalEpisodes", total_episodes)
 
             logger.dump_tabular(with_prefix=False, with_timestamp=False)

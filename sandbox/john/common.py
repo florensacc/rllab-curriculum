@@ -21,6 +21,7 @@ class ZFilter(object):
         self.std = None
         self.count = 0
     def __call__(self, x):
+        x = x.astype('float32')
         if self.initialized:
             self.mean = (self.mean * self.count + x.mean(axis=0, keepdims=True)) / (self.count + 1)
             self.std = np.sqrt(
@@ -28,7 +29,7 @@ class ZFilter(object):
                 / (self.count + 1))
         else:
             self.mean = x.mean(axis=0, keepdims=True)
-            self.std = x.std(axis=0, keepdims=True)
+            self.std = x.std(axis=0, keepdims=True) + 1e-4
             self.initialized = True
         self.count += 1
         return np.clip((x - self.mean) / self.std, -10.0, 10.0)

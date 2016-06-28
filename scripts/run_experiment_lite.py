@@ -17,7 +17,6 @@ import uuid
 import cPickle as pickle
 import base64
 
-
 def run_experiment(argv):
 
     default_log_dir = config.LOG_DIR
@@ -30,7 +29,7 @@ def run_experiment(argv):
     default_exp_name = 'experiment_%s_%s' % (timestamp, rand_id)
     parser = argparse.ArgumentParser()
     parser.add_argument('--n_parallel', type=int, default=1,
-                        help='Number of parallel workers to perform rollouts.')
+                        help='Number of parallel workers to perform rollouts. 0 => don\'t start any workers')
     parser.add_argument(
         '--exp_name', type=str, default=default_exp_name, help='Name of the experiment.')
     parser.add_argument('--log_dir', type=str, default=default_log_dir,
@@ -61,11 +60,12 @@ def run_experiment(argv):
 
     args = parser.parse_args(argv[1:])
 
-    from rllab.sampler import parallel_sampler
-    parallel_sampler.initialize(n_parallel=args.n_parallel)
-
     if args.seed is not None:
         set_seed(args.seed)
+
+    if args.n_parallel > 0:
+        from rllab.sampler import parallel_sampler
+        parallel_sampler.initialize(n_parallel=args.n_parallel)
         parallel_sampler.set_seed(args.seed)
 
     if args.plot:

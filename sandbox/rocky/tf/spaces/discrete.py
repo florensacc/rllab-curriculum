@@ -53,7 +53,8 @@ class Discrete(Space):
         return special.weighted_sample(weights, xrange(self.n))
 
     def new_tensor_variable(self, name, extra_dims):
-        return tf.placeholder(dtype=tf.int32, shape=[None] * extra_dims + [self.flat_dim], name=name)
+        # needed for safe conversion to float32
+        return tf.placeholder(dtype=tf.uint8, shape=[None] * extra_dims + [self.flat_dim], name=name)
 
     def __eq__(self, other):
         if not isinstance(other, Discrete):

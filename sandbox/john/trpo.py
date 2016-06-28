@@ -52,8 +52,9 @@ class TRPO(Serializable):
             self.syms["new"].append(tf.placeholder(tf.int32, shape=[batch_size], name="new%i"%t))
 
         policy_vars = policy.vars
-        self.set_from_flat = U.SetFromFlat(policy_vars)
-        self.get_flat = U.GetFlat(policy_vars)
+        self.set_policy_from_flat = U.SetFromFlat(policy_vars)
+        self.get_policy_flat = U.GetFlat(policy_vars)
+
 
         catoldpsi = tf.concat(0, self.syms["oldpsi"])
         catpsi = tf.concat(0, self.syms["psi"])
@@ -63,7 +64,7 @@ class TRPO(Serializable):
         logpofa = policy.compute_loglik(catpsi, tf.concat(0, self.syms["ac2"]))
         logpoldofa = policy.compute_loglik(catoldpsi, tf.concat(0, self.syms["ac2"]))
         avg_ent = U.mean(policy.compute_entropy(catpsi))
-        avg_surr = - U.mean(tf.exp(logpofa - logpoldofa) * tf.concat(0, self.syms["adv"]))
+        avg_surr = - U.mean((logpofa - logpoldofa) * tf.concat(0, self.syms["adv"]))
 
         num_params = np.sum([np.prod(U.var_shape(v)) for v in policy_vars])
         self.pg = U.flatgrad(avg_surr, policy_vars)        
@@ -124,8 +125,15 @@ class TRPO(Serializable):
                     for i_env in np.flatnonzero(new):
                         episode_returns.append(rets[i_env])
                         rets[i_env] = 0
-                total_timesteps += batch_size
+                total_timesteps += 1
                 allacs.append(ac)
+
+            # _log("Fitting baseline")
+            rews1 = rews.copy()
+            rews1[-1] += self.baseline.predict(ob)
+            vtargs = common.discounted_future_sum(rews1, news, self.discount)
+            vtargs = np.clip(vtargs, -10, 10) # XXX
+            self.baseline.fit(obs.reshape(self.horizon*batch_size, -1), vtargs.reshape(-1))
 
             vpreds = np.zeros((self.horizon+1, batch_size), 'float32')
             vpreds[:self.horizon] = self.baseline.predict(obs.reshape(self.horizon*batch_size, -1)).reshape(self.horizon, batch_size)
@@ -138,12 +146,8 @@ class TRPO(Serializable):
             for t in xrange(self.horizon):
                 feed[self.syms["adv"][t]] = standardized_advs[t]
 
-            _log("Fitting baseline")
-            vtargs = vpreds[:-1] + common.discounted_future_sum(deltas, news, self.discount)
-            self.baseline.fit(obs.reshape(self.horizon*batch_size, -1), vtargs.reshape(-1))
-
-            _log("Updating policy")    
-            thprev = self.get_flat()
+            # _log("Updating policy")    
+            thprev = self.get_policy_flat()
             def fisher_vector_product(p):
                 feed[self.flat_tangent] = p
                 out = U.SESSION.run(self.fvp, feed) + self.cg_damping * p
@@ -152,7 +156,8 @@ class TRPO(Serializable):
             losses_before = U.SESSION.run(self.losses, feed)
             g = U.SESSION.run(self.pg, feed)
             if np.allclose(g, 0):
-                _log("got zero gradient. not updating")
+                _log("got zero gradient. not updating")                
+                # import IPython; IPython.embed();
             else:
                 stepdir = krylov.cg(fisher_vector_product, -g)
                 shs = .5*stepdir.dot(fisher_vector_product(stepdir))
@@ -161,12 +166,12 @@ class TRPO(Serializable):
                 fullstep = stepdir / lm
                 neggdotstepdir = -g.dot(stepdir) #pylint: disable=E1101
                 def loss(th):
-                    self.set_from_flat(th)
+                    self.set_policy_from_flat(th)
                     loss, kl =  U.SESSION.run(self.losses[0:2], feed)
                     return loss + 1e10 * (kl > self.max_kl * 1.5)
                 success, theta = _linesearch(loss, thprev, fullstep, neggdotstepdir/lm)
                 _log("success: %g"%success)
-                self.set_from_flat(theta)
+                self.set_policy_from_flat(theta)
             losses_after = U.SESSION.run(self.losses, feed)
 
             for (name, beforeval, afterval) in zip(self.loss_names, losses_before, losses_after):
@@ -187,8 +192,10 @@ class TRPO(Serializable):
             logger.record_tabular("Entropy", ent)
             logger.record_tabular("Perplexity", np.exp(ent))
             logger.record_tabular("ExplainedVariance", special.explained_variance_1d(vpreds[:-1].ravel(), vtargs.ravel()))
-            logger.record_tabular("TotalTimesteps", total_timesteps)
+            logger.record_tabular("Timesteps", total_timesteps)
+            logger.record_tabular("TotalTimesteps", total_timesteps * batch_size)
             logger.record_tabular("TotalEpisodes", total_episodes)
+            logger.record_tabular("MeanPredVal", vpreds.mean())
 
             logger.dump_tabular(**LOG_SETTINGS)
 
@@ -211,24 +218,45 @@ def _linesearch(f, x, fullstep, expected_improve_rate, max_backtracks=10, accept
     return False, x
 
 class LinearBaseline(object):
-    def __init__(self):
-        self.coeffs = None
+    def __init__(self, degree=1):
+        self.coef_ = None
+        self.intercept_ = None
+        self.degree = degree
     def fit(self, X, y):
+        if self.coef_ is None:
+            self.coef_ = np.zeros(X.shape[1])
+            self.intercept_ = 0
+
         assert X.ndim == 2 and y.ndim == 1
         feats = self.preproc(X)        
-        lscoeffs = np.linalg.lstsq(feats, y)[0]
-        p = .2
-        self.coeffs = lscoeffs if self.coeffs is None else p * lscoeffs + (1 - p) * self.coeffs
+        residual = y - self.predict1(feats)
+
+        from sklearn.linear_model import RidgeCV
+        newmodel = RidgeCV()
+        newmodel.fit(feats, residual)
+
+        if np.isfinite(self.coef_).all():
+            self.coef_ += newmodel.coef_
+            self.intercept_ += newmodel.intercept_
+        else:
+            import IPython; IPython.embed(); asdf
+
     def predict(self, X):
         assert X.ndim == 2
-        if self.coeffs is None:
+        if self.coef_ is None:
             return np.zeros(len(X))
         else:
-            feats = self.preproc(X)
-        return feats.dot(self.coeffs)
+            return self.predict1(self.preproc(X))
+    def predict1(self, feats):
+        return feats.dot(self.coef_) + self.intercept_
     def preproc(self, X):
-        n = X.shape[0]
-        return np.concatenate([X, X**2/2, np.ones((n, 1)), np.arange(n)[:,None]], 1)
+        return np.concatenate(compute_legendre_feats(X, self.degree), 1)
 
-
-
+def compute_legendre_feats(X,degree):
+    polynomials = [
+        lambda x:x,
+        lambda x:1.5*x**2-.5,
+        lambda x:2.5*x**3 - 1.5*x,
+        lambda x:4.375*x**4 - 3.75*x**2+.375]
+    assert 0 <= degree <= 4
+    return [p(X) for p in polynomials[:degree]]
