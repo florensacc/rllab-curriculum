@@ -445,11 +445,11 @@ class BNN(LasagnePowered, Serializable):
 
         # Make the likelihood standard deviation a trainable parameter.
         self.likelihood_sd = theano.shared(
-            value=5.0,#self.likelihood_sd_init,
+            value=5.0,  # self.likelihood_sd_init,
             name='likelihood_sd'
         )
         self.old_likelihood_sd = theano.shared(
-            value=5.0,#self.likelihood_sd_init,
+            value=5.0,  # self.likelihood_sd_init,
             name='old_likelihood_sd'
         )
 
@@ -504,9 +504,55 @@ class BNN(LasagnePowered, Serializable):
                     elif param.name == 'likelihood_sd':
                         invH = 0.
                     # So wtf is going wrong here?
-                    updates[param] = param - step_size * grad  # invH * grad
+                    updates[param] = param - step_size * invH * grad
 
                 return updates
+
+            def debug_H(loss, params, oldparams):
+                grads = theano.grad(loss, params)
+                updates = OrderedDict()
+
+                invHs = []
+                for i in xrange(len(params)):
+                    param = params[i]
+                    grad = grads[i]
+
+                    if param.name == 'mu' or param.name == 'b_mu':
+                        oldparam_rho = oldparams[i + 1]
+                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                    elif param.name == 'rho' or param.name == 'b_rho':
+                        oldparam_rho = oldparams[i]
+                        p = param
+                        H = 2. * (T.exp(2 * p)) / \
+                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                        invH = 1. / H
+#                     elif param.name == 'likelihood_sd':
+#                         invH = 0.
+                    invHs.append(invH)
+                return invHs
+
+            def debug_g(loss, params, oldparams):
+                grads = theano.grad(loss, params)
+                updates = OrderedDict()
+
+                invHs = []
+                for i in xrange(len(params)):
+                    param = params[i]
+                    grad = grads[i]
+
+                    if param.name == 'mu' or param.name == 'b_mu':
+                        oldparam_rho = oldparams[i + 1]
+                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                    elif param.name == 'rho' or param.name == 'b_rho':
+                        oldparam_rho = oldparams[i]
+                        p = param
+                        H = 2. * (T.exp(2 * p)) / \
+                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                        invH = 1. / H
+#                     elif param.name == 'likelihood_sd':
+#                         invH = 0.
+                    invHs.append(invH)
+                return grads
 
             def fast_kl_div(loss, params, oldparams, step_size):
 
@@ -541,13 +587,20 @@ class BNN(LasagnePowered, Serializable):
 #                 [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast')
 
             updates_kl = second_order_update(
-                loss_only_last_sample, params_kl, oldparams, step_size)
-
-            updates_kl = lasagne.updates.sgd(
-                loss_only_last_sample, params_kl, learning_rate=step_size)
+                loss_only_last_sample, params, oldparams, step_size)
 
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd')
+
+            self.debug_H = ext.compile_function(
+                [input_var, target_var], debug_H(
+                    loss_only_last_sample, params, oldparams),
+                log_name='fn_debug_grads')
+            self.debug_g = ext.compile_function(
+                [input_var, target_var], debug_g(
+                    loss_only_last_sample, params, oldparams),
+                log_name='fn_debug_grads')
+
         else:
             # Use SGD to update the model for a single sample, in order to
             # calculate the surprise.
@@ -557,7 +610,7 @@ class BNN(LasagnePowered, Serializable):
                 updates = OrderedDict()
                 for param, grad in zip(params, grads):
                     if param.name == 'likelihood_sd':
-                        updates[param] = param
+                        updates[param] = param# - learning_rate * grad
                     else:
                         updates[param] = param - learning_rate * grad
 
@@ -568,6 +621,9 @@ class BNN(LasagnePowered, Serializable):
 
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st')
+            
+        self.eval_loss = ext.compile_function(
+                [input_var, target_var], loss_only_last_sample,  log_name='fn_eval_loss')
 
         # Calculate surprise.
         self.fn_surprise = ext.compile_function(

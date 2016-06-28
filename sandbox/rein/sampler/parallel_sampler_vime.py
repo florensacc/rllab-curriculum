@@ -89,10 +89,17 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 # We do a line search over the best step sizes using
                 # step_size * invH * grad
                 #                 best_loss_value = np.inf
-                r = np.linspace(0., 0.01, 200)
+                r = np.linspace(0., 2., 200)
                 if FIRST:
                     path['all_kls'] = []
                     path['all_r'] = r
+                    g = G.dynamics.debug_g(_inputs[start:end], _targets[start:end])
+                    H = G.dynamics.debug_H(_inputs[start:end], _targets[start:end])
+                    print('H')
+                    print(H) 
+                    print('g')
+                    print(g)
+
                     for step_size in r:
                         # Save old params for every update.
                         G.dynamics.save_old_params()
@@ -143,7 +150,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 # First-order updates.
                 if FIRST:
                     path['all_kls'] = []
-                    n_itr_updates = range(0, 100, 100)
+                    n_itr_updates = range(0, 1000, 10)
                     path['all_r'] = n_itr_updates
                     for n_itr_update in n_itr_updates:
                         # Save old params for every update.
@@ -154,10 +161,11 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                             _inputs[start:end], _targets[start:end])
                         kl_before = G.dynamics.fn_kl()
                         # Update model weights based on current minibatch.
-                        loss = nll_before
+                        loss_before = G.dynamics.eval_loss(_inputs[start:end], _targets[start:end])
                         for _ in xrange(n_itr_update):
-                            loss = G.dynamics.train_update_fn(
+                            G.dynamics.train_update_fn(
                                 _inputs[start:end], _targets[start:end])
+                        loss_after = G.dynamics.eval_loss(_inputs[start:end], _targets[start:end])
 
                         # Calculate current minibatch KL.
                         kl_div = G.dynamics.fn_surprise()
@@ -171,13 +179,13 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                         print('ITR: {}'.format(n_itr_update))
                         print('KL {} -> {}'.format(kl_before, kl_after))
                         print('NLL {} -> {}'.format(nll_before, nll_after))
-                        print('loss {}'.format(loss))
+                        print('loss {} -> {}'.format(loss_before, loss_after))
                         print(
                             'lik_sd {} -> {}'.format(lik_sd_before, lik_sd_after))
                         print('')
                         # -----
 
-                        path['all_kls'].append(loss)
+                        path['all_kls'].append(loss_after)
 
                         # Reset to old params after each surprise calc.
                         G.dynamics.reset_to_old_params()
