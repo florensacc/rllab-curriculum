@@ -400,6 +400,7 @@ class BatchPolopt(RLAlgorithm):
 
                 # Save old parameters as new prior.
                 self.bnn.save_old_params()
+                
                 # Num of runs needed to get to n_updates_per_sample
                 for _ in xrange(n_iterations):
                     # Num batches to traverse.
@@ -505,15 +506,17 @@ class BatchPolopt(RLAlgorithm):
 
         # DEBUG
         # -----
-        if itr > 0:
-            r = paths[0]['all_r']
-            kls = paths[0]['all_kls']
-            print(r, kls)
-            import matplotlib.pyplot as plt
-            painter_weights_total, = plt.plot(
-                r, kls, '-', color=(1.0, 0, 0, 0.5))
-            plt.draw()
-            plt.show()
+        if itr > 0 and False:
+            for path in paths:
+                if 'all_r' in path.keys():
+                    r = path['all_r']
+                    kls = path['all_kls']
+                    print(r, kls)
+                    import matplotlib.pyplot as plt
+                    plt.plot(
+                        r, kls, '-', color=(1.0, 0, 0, 0.5))
+                    plt.draw()
+                    plt.show()
         # -----
 
         if self.whole_paths:
@@ -795,5 +798,6 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
         logger.record_tabular('Expl_eta', self.eta)
+        logger.record_tabular('LikelihoodStd', self.bnn.likelihood_sd.eval())
 
         return samples_data

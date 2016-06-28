@@ -152,6 +152,7 @@ class BNNLayer(lasagne.layers.Layer):
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
         delta = T.dot(T.square(input), T.square(self.log_to_std(
             self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
+
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
 
@@ -384,7 +385,7 @@ class BNN(LasagnePowered, Serializable):
         This means that instead of using the prior p(w), we use the previous approximated posterior
         q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
         """
-
+        # Fix sampled noise.
         # MC samples.
         _log_p_D_given_w = []
         for _ in xrange(self.n_samples):
@@ -445,11 +446,11 @@ class BNN(LasagnePowered, Serializable):
 
         # Make the likelihood standard deviation a trainable parameter.
         self.likelihood_sd = theano.shared(
-            value=5.0,  # self.likelihood_sd_init,
+            value=1.,  # self.likelihood_sd_init,
             name='likelihood_sd'
         )
         self.old_likelihood_sd = theano.shared(
-            value=5.0,  # self.likelihood_sd_init,
+            value=1.,  # self.likelihood_sd_init,
             name='old_likelihood_sd'
         )
 
@@ -470,6 +471,8 @@ class BNN(LasagnePowered, Serializable):
         # Train/val fn.
         self.pred_fn = ext.compile_function(
             [input_var], self.pred_sym(input_var), log_name='fn_pred')
+        # We want to resample when actually updating the BNN itself, otherwise
+        # you will fit to the specific noise.
         self.train_fn = ext.compile_function(
             [input_var, target_var], loss, updates=updates, log_name='fn_train')
 
@@ -580,26 +583,26 @@ class BNN(LasagnePowered, Serializable):
 
                 return sum(kl_component)
 
-#             compute_fast_kl_div = fast_kl_div(
-#                 loss_only_last_sample, params, oldparams, step_size)
-#
-#             self.train_update_fn = ext.compile_function(
-#                 [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast')
-
-            updates_kl = second_order_update(
+            compute_fast_kl_div = fast_kl_div(
                 loss_only_last_sample, params, oldparams, step_size)
 
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd')
+                [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=True)
 
-            self.debug_H = ext.compile_function(
-                [input_var, target_var], debug_H(
-                    loss_only_last_sample, params, oldparams),
-                log_name='fn_debug_grads')
-            self.debug_g = ext.compile_function(
-                [input_var, target_var], debug_g(
-                    loss_only_last_sample, params, oldparams),
-                log_name='fn_debug_grads')
+#             updates_kl = second_order_update(
+#                 loss_only_last_sample, params, oldparams, step_size)
+#
+#             self.train_update_fn = ext.compile_function(
+#                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=True)
+
+#             self.debug_H = ext.compile_function(
+#                 [input_var, target_var], debug_H(
+#                     loss_only_last_sample, params, oldparams),
+#                 log_name='fn_debug_grads')
+#             self.debug_g = ext.compile_function(
+#                 [input_var, target_var], debug_g(
+#                     loss_only_last_sample, params, oldparams),
+#                 log_name='fn_debug_grads')
 
         else:
             # Use SGD to update the model for a single sample, in order to
@@ -610,7 +613,7 @@ class BNN(LasagnePowered, Serializable):
                 updates = OrderedDict()
                 for param, grad in zip(params, grads):
                     if param.name == 'likelihood_sd':
-                        updates[param] = param# - learning_rate * grad
+                        updates[param] = param  # - learning_rate * grad
                     else:
                         updates[param] = param - learning_rate * grad
 
@@ -620,22 +623,22 @@ class BNN(LasagnePowered, Serializable):
                 loss_only_last_sample, params, learning_rate=self.learning_rate)
 
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st')
-            
-        self.eval_loss = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample,  log_name='fn_eval_loss')
+                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=True)
 
-        # Calculate surprise.
-        self.fn_surprise = ext.compile_function(
-            [], self.surprise(), log_name='fn_surprise')
-
-        # DEBUG
-        # -----
-        self.fn_dbg_nll = ext.compile_function(
-            [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll')
-        self.fn_kl = ext.compile_function(
-            [], self.kl_div(), log_name='fn_kl')
-        # -----
+#         self.eval_loss = ext.compile_function(
+#             [input_var, target_var], loss_only_last_sample,  log_name='fn_eval_loss', no_default_updates=True)
+# 
+#         # Calculate surprise.
+#         self.fn_surprise = ext.compile_function(
+#             [], self.surprise(), log_name='fn_surprise')
+# 
+#         # DEBUG
+#         # -----
+#         self.fn_dbg_nll = ext.compile_function(
+#             [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll', no_default_updates=True)
+#         self.fn_kl = ext.compile_function(
+#             [], self.kl_div(), log_name='fn_kl')
+#         # -----
 
 if __name__ == '__main__':
     pass

@@ -57,7 +57,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         regressor_args=dict(hidden_sizes=(64, 64)),
     )
 
-    batch_size = 20
+    batch_size = 5000
     algo = TRPO(
         discount=0.995,
         env=mdp,
@@ -65,7 +65,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         baseline=baseline,
         batch_size=batch_size,
         whole_paths=True,
-        max_path_length=10,
+        max_path_length=500,
         n_itr=500,
         step_size=0.01,
         eta=eta,
@@ -74,23 +74,23 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         use_replay_pool=False,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=False,
-        n_itr_update=1, # for SGD set to 20
+        n_itr_update=1,  # for SGD set to 10
         kl_batch_size=1,
         normalize_reward=normalize_reward,
         replay_pool_size=100000,
-        n_updates_per_sample=500,
-        second_order_update=False,
+        n_updates_per_sample=5000,
+        second_order_update=True,
         unn_n_hidden=[64, 64],
         unn_layers_type=['gaussian', 'gaussian', 'gaussian'],
         unn_learning_rate=0.01,
-        surprise_transform=None,  # 'cap90perc',
+        surprise_transform='cap90perc',
         pool_batch_size=10,
         update_likelihood_sd=True
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-reacher-a",
+        exp_prefix="trpo-mc-a",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
