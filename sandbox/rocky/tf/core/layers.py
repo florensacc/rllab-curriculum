@@ -12,6 +12,9 @@ from warnings import warn
 
 
 def create_param(spec, shape, name, trainable=True, regularizable=True):
+    if not hasattr(spec, '__call__'):
+        assert isinstance(spec, (tf.Tensor, tf.Variable))
+        return spec
     assert hasattr(spec, '__call__')
     if regularizable:
         # use the default regularizer
@@ -600,6 +603,131 @@ class ReshapeLayer(Layer):
 
 
 reshape = ReshapeLayer  # shortcut
+
+
+class SliceLayer(Layer):
+    def __init__(self, incoming, name, indices, axis=-1, **kwargs):
+        super(SliceLayer, self).__init__(incoming, name, **kwargs)
+        self.slice = indices
+        self.axis = axis
+
+    def get_output_shape_for(self, input_shape):
+        output_shape = list(input_shape)
+        if isinstance(self.slice, int):
+            del output_shape[self.axis]
+        elif input_shape[self.axis] is not None:
+            output_shape[self.axis] = len(
+                range(*self.slice.indices(input_shape[self.axis])))
+        else:
+            output_shape[self.axis] = None
+        return tuple(output_shape)
+
+    def get_output_for(self, input, **kwargs):
+        axis = self.axis
+        ndims = input.get_shape().ndims
+        if axis < 0:
+            axis += ndims
+        return input[(slice(None),) * axis + (self.slice,) + (slice(None),) * (ndims - axis - 1)]
+
+
+class GRULayer(Layer):
+    """
+    A gated recurrent unit implements the following update mechanism:
+    Reset gate:        r(t) = f_r(x(t) @ W_xr + h(t-1) @ W_hr + b_r)
+    Update gate:       u(t) = f_u(x(t) @ W_xu + h(t-1) @ W_hu + b_u)
+    Cell gate:         c(t) = f_c(x(t) @ W_xc + r(t) * (h(t-1) @ W_hc) + b_c)
+    New hidden state:  h(t) = (1 - u(t)) * h(t-1) + u_t * c(t)
+    Note that the reset, update, and cell vectors must have the same dimension as the hidden state
+    """
+
+    def __init__(self, incoming, name, num_units, hidden_nonlinearity,
+                 gate_nonlinearity=tf.nn.sigmoid, W_init=xavier_init, b_init=tf.zeros_initializer,
+                 hidden_init=tf.zeros_initializer, hidden_init_trainable=True):
+
+        if hidden_nonlinearity is None:
+            hidden_nonlinearity = tf.identity
+
+        if gate_nonlinearity is None:
+            gate_nonlinearity = tf.identity
+
+        super(GRULayer, self).__init__(incoming, name=name)
+
+        with tf.variable_scope(name):
+
+            input_shape = self.input_shape[2:]
+
+            input_dim = np.prod(input_shape)
+            # self._name = name
+            # Weights for the initial hidden state
+            self.h0 = self.add_param(hidden_init, (num_units,), name="h0", trainable=hidden_init_trainable,
+                                     regularizable=False)
+            # Weights for the reset gate
+            self.W_xr = self.add_param(W_init, (input_dim, num_units), name="W_xr")
+            self.W_hr = self.add_param(W_init, (num_units, num_units), name="W_hr")
+            self.b_r = self.add_param(b_init, (num_units,), name="b_r", regularizable=False)
+            # Weights for the update gate
+            self.W_xu = self.add_param(W_init, (input_dim, num_units), name="W_xu")
+            self.W_hu = self.add_param(W_init, (num_units, num_units), name="W_hu")
+            self.b_u = self.add_param(b_init, (num_units,), name="b_u", regularizable=False)
+            # Weights for the cell gate
+            self.W_xc = self.add_param(W_init, (input_dim, num_units), name="W_xc")
+            self.W_hc = self.add_param(W_init, (num_units, num_units), name="W_hc")
+            self.b_c = self.add_param(b_init, (num_units,), name="b_c", regularizable=False)
+            self.gate_nonlinearity = gate_nonlinearity
+            self.num_units = num_units
+            self.nonlinearity = hidden_nonlinearity
+
+    def step(self, hprev, x):
+        r = self.gate_nonlinearity(tf.matmul(x, self.W_xr) + tf.matmul(hprev, self.W_hr) + self.b_r)
+        u = self.gate_nonlinearity(tf.matmul(x, self.W_xu) + tf.matmul(hprev, self.W_hu) + self.b_u)
+        c = self.nonlinearity(tf.matmul(x, self.W_xc) + r * (tf.matmul(hprev, self.W_hc)) + self.b_c)
+        h = (1 - u) * hprev + u * c
+        return h  # .astype(theano.config.floatX)
+
+    def get_step_layer(self, l_in, l_prev_hidden, name):
+        return GRUStepLayer(incomings=[l_in, l_prev_hidden], gru_layer=self, name=name)
+
+    def get_output_shape_for(self, input_shape):
+        n_batch, n_steps = input_shape[:2]
+        return n_batch, n_steps, self.num_units
+
+    def get_output_for(self, input, **kwargs):
+        input_shape = tf.shape(input)
+        n_batches = input_shape[0]
+        n_steps = input_shape[1]
+        input = tf.reshape(input, tf.pack([n_batches, n_steps, -1]))
+        h0s = tf.tile(
+            tf.reshape(self.h0, (1, self.num_units)),
+            (n_batches, 1)
+        )
+        # flatten extra dimensions
+        shuffled_input = tf.transpose(input, (1, 0, 2))
+        hs = tf.scan(
+            self.step,
+            elems=shuffled_input,
+            initializer=h0s
+        )
+        shuffled_hs = tf.transpose(hs, (1, 0, 2))
+        return shuffled_hs
+
+
+class GRUStepLayer(MergeLayer):
+    def __init__(self, incomings, name, gru_layer):
+        super(GRUStepLayer, self).__init__(incomings, name)
+        self._gru_layer = gru_layer
+
+    def get_params(self, **tags):
+        return self._gru_layer.get_params(**tags)
+
+    def get_output_shape_for(self, input_shapes):
+        n_batch = input_shapes[0]
+        return n_batch, self._gru_layer.num_units
+
+    def get_output_for(self, inputs, **kwargs):
+        x, hprev = inputs
+        n_batch = x.shape[0]
+        x = x.reshape((n_batch, -1))
+        return self._gru_layer.step(x, hprev)
 
 
 def get_all_layers(layer, treat_as_input=None):

@@ -69,12 +69,12 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         n_itr=500,
         step_size=0.01,
         eta=eta,
-        snn_n_samples=10,
+        snn_n_samples=20,
         subsample_factor=1.0,
-        use_replay_pool=False,  
+        use_replay_pool=False,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=False,
-        n_itr_update=1,
+        n_itr_update=1,  # for SGD set to 10
         kl_batch_size=1,
         normalize_reward=normalize_reward,
         replay_pool_size=100000,
@@ -82,14 +82,15 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         second_order_update=True,
         unn_n_hidden=[64, 64],
         unn_layers_type=['gaussian', 'gaussian', 'gaussian'],
-        unn_learning_rate=0.0001,
-        surprise_transform=None,#'cap90perc',
+        unn_learning_rate=0.01,
+        surprise_transform='cap90perc',
         pool_batch_size=10,
+        update_likelihood_sd=True
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-reacher-a",
+        exp_prefix="trpo-mc-a",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

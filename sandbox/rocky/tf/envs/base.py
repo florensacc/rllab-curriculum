@@ -17,7 +17,7 @@ def to_tf_space(space):
     elif isinstance(space, TheanoDiscrete):
         return Discrete(space.n)
     elif isinstance(space, TheanoProduct):
-        return Product(space.components)
+        return Product(map(to_tf_space, space.components))
     else:
         raise NotImplementedError
 

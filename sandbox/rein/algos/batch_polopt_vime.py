@@ -152,6 +152,7 @@ class BatchPolopt(RLAlgorithm):
             compression=False,
             information_gain=True,
             surprise_transform=None,
+            update_likelihood_sd=True,
             **kwargs
     ):
         """
@@ -218,6 +219,7 @@ class BatchPolopt(RLAlgorithm):
         self.compression = compression
         self.information_gain = information_gain
         self.surprise_transform = surprise_transform
+        self.update_likelihood_sd = update_likelihood_sd
         # ----------------------
 
         if self.second_order_update:
@@ -293,7 +295,8 @@ class BatchPolopt(RLAlgorithm):
             learning_rate=self.unn_learning_rate,
             compression=self.compression,
             information_gain=self.information_gain,
-            update_prior=self.use_replay_pool
+            update_prior=(not self.use_replay_pool),
+            update_likelihood_sd=self.update_likelihood_sd
         )
 
         logger.log(
@@ -378,7 +381,7 @@ class BatchPolopt(RLAlgorithm):
                     "Fitting dynamics model to current sample batch ...")
                 list_obs, list_obs_nxt, list_act = [], [], []
                 for path in samples_data['paths']:
-                    len_path = len(path)
+                    len_path = len(path['observations'])
                     for i in xrange(len_path - 1):
                         list_obs.append(path['observations'][i])
                         list_obs_nxt.append(
@@ -394,9 +397,10 @@ class BatchPolopt(RLAlgorithm):
                     _out = self.bnn.pred_fn(X_train)
                     old_acc += np.mean(np.square(_out - T_train))
                 old_acc /= n_batches
-                
+
                 # Save old parameters as new prior.
                 self.bnn.save_old_params()
+                
                 # Num of runs needed to get to n_updates_per_sample
                 for _ in xrange(n_iterations):
                     # Num batches to traverse.
@@ -499,6 +503,22 @@ class BatchPolopt(RLAlgorithm):
             act_std=act_std,
             second_order_update=self.second_order_update
         )
+
+        # DEBUG
+        # -----
+        if itr > 0 and False:
+            for path in paths:
+                if 'all_r' in path.keys():
+                    r = path['all_r']
+                    kls = path['all_kls']
+                    print(r, kls)
+                    import matplotlib.pyplot as plt
+                    plt.plot(
+                        r, kls, '-', color=(1.0, 0, 0, 0.5))
+                    plt.draw()
+                    plt.show()
+        # -----
+
         if self.whole_paths:
             return paths
         else:
@@ -778,5 +798,6 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
         logger.record_tabular('Expl_eta', self.eta)
+        logger.record_tabular('LikelihoodStd', self.bnn.likelihood_sd.eval())
 
         return samples_data
