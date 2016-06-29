@@ -5,6 +5,9 @@ import sandbox.rocky.tf.core.layers as L
 import tensorflow as tf
 import numpy as np
 import itertools
+from rllab.core.serializable import Serializable
+from sandbox.rocky.tf.core.parameterized import Parameterized
+from sandbox.rocky.tf.core.layers_powered import LayersPowered
 
 
 class MLP(object):
@@ -219,7 +222,7 @@ class GRUNetwork(object):
         return self._hid_init_param
 
 
-class ConvMergeNetwork(object):
+class ConvMergeNetwork(LayersPowered, Serializable):
     """
     This network allows the input to consist of a convolution-friendly component, plus a non-convolution-friendly
     component. These two components will be concatenated in the fully connected layers. There can also be a list of
@@ -238,6 +241,7 @@ class ConvMergeNetwork(object):
                  hidden_nonlinearity=tf.nn.relu,
                  output_nonlinearity=None,
                  input_var=None, input_layer=None):
+        Serializable.quick_init(self, locals())
 
         if extra_hidden_sizes is None:
             extra_hidden_sizes = []
@@ -325,6 +329,8 @@ class ConvMergeNetwork(object):
             )
             self._l_in = l_in
             self._l_out = l_out
+
+            LayersPowered.__init__(self, [l_out], input_layers=[l_in])
 
     @property
     def input_layer(self):

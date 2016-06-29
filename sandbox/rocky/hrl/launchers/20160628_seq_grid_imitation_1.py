@@ -1,9 +1,8 @@
-from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import print_function
 
-from sandbox.rocky.hrl.envs.compound_action_sequence_env import CompoundActionSequenceEnv
-from sandbox.rocky.hrl.algos.imitation_algos import ImitationAlgo
 from rllab.misc.instrument import stub, run_experiment_lite
+from sandbox.rocky.hrl_imitation.imitation_algos import ImitationAlgo
 
 stub(globals())
 
@@ -25,7 +24,7 @@ for v in variants:
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="seq_grid_imitation",
+        exp_prefix="seq_grid_imitation_1",
         seed=v["seed"],
         variant=v,
         mode="lab_kube"

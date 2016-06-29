@@ -188,8 +188,11 @@ class GRUStepLayer(L.MergeLayer):
 
 class GRUNetwork(object):
     def __init__(self, input_shape, output_dim, hidden_dim, hidden_nonlinearity=LN.rectify,
-                 output_nonlinearity=None, name=None, input_var=None):
-        l_in = L.InputLayer(shape=(None, None) + input_shape, input_var=input_var)
+                 output_nonlinearity=None, name=None, input_var=None, input_layer=None):
+        if input_layer is None:
+            l_in = L.InputLayer(shape=(None, None) + input_shape, input_var=input_var, name="input")
+        else:
+            l_in = input_layer
         l_step_input = L.InputLayer(shape=(None,) + input_shape)
         l_step_prev_hidden = L.InputLayer(shape=(None, hidden_dim))
         l_gru = GRULayer(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity,

@@ -2,7 +2,6 @@ from sandbox.rocky.tf.core.layers_powered import LayersPowered
 import sandbox.rocky.tf.core.layers as L
 from sandbox.rocky.tf.core.network import MLP
 from rllab.core.serializable import Serializable
-from rllab.distributions.categorical import Categorical
 from sandbox.rocky.tf.distributions.categorical import Categorical
 from sandbox.rocky.tf.policies.base import StochasticPolicy
 from rllab.misc import ext
