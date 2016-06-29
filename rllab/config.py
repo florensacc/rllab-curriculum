@@ -19,7 +19,7 @@ AWS_S3_PATH = None
 
 AWS_IMAGE_ID = None
 
-AWS_INSTANCE_TYPE = "m4.2xlarge"
+AWS_INSTANCE_TYPE = "m4.xlarge"
 
 AWS_KEY_NAME = "AWS_KEY_NAME"
 
