@@ -1,7 +1,12 @@
 import os
 from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
+from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
+from sandbox.rein.envs.half_cheetah_env_x import HalfCheetahEnvX
 os.environ["THEANO_FLAGS"] = "device=cpu"
+from rllab.envs.gym_env import GymEnv
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
@@ -17,20 +22,20 @@ import itertools
 stub(globals())
 
 # Param ranges
-# seeds = range(10)
-# etas = [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
-# normalize_rewards = [False]
-# kl_ratios = [True]
-# mdp_classes = [MountainCarEnv]
-
 seeds = range(10)
-etas = [0.0001]
+etas = [0, 0.1]
 normalize_rewards = [False]
 kl_ratios = [True]
 mdp_classes = [MountainCarEnvX]
+mdps = [NormalizedEnv(mdp()) for mdp in mdp_classes]
 
-mdps = [NormalizedEnv(env=mdp_class())
-        for mdp_class in mdp_classes]
+# seeds = range(10)
+# etas = [0.1]
+# normalize_rewards = [False]
+# kl_ratios = [True]
+# mdps = [GymEnv("Reacher-v1", record_video=False)]
+# mdps = [GymEnv("SpaceInvaders-ram-v0")]
+
 param_cart_product = itertools.product(
     kl_ratios, normalize_rewards, mdps, etas, seeds
 )
@@ -42,6 +47,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         hidden_sizes=(32,),
     )
 
+#     policy = CategoricalMLPPolicy(
+#         env_spec=mdp.spec,
+#         hidden_sizes=(64, 64)
+#     )
+
     baseline = GaussianMLPBaseline(
         mdp.spec,
         regressor_args=dict(hidden_sizes=(32,)),
@@ -49,6 +59,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     batch_size = 5000
     algo = TRPO(
+        discount=0.99,
         env=mdp,
         policy=policy,
         baseline=baseline,
@@ -58,32 +69,32 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         n_itr=200,
         step_size=0.01,
         eta=eta,
-        eta_discount=1.0,
         snn_n_samples=10,
         subsample_factor=1.0,
-        use_reverse_kl_reg=False,
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
-        use_kl_ratio_q=kl_ratio,
-        n_itr_update=1,
+        use_kl_ratio_q=True,
+        n_itr_update=1,  # for SGD set to 10
         kl_batch_size=1,
         normalize_reward=normalize_reward,
         replay_pool_size=100000,
-        n_updates_per_sample=5000,
+        n_updates_per_sample=500,
         second_order_update=True,
         unn_n_hidden=[32],
         unn_layers_type=['gaussian', 'gaussian'],
         unn_learning_rate=0.0001,
-        update_likelihood_sd=True
+        surprise_transform='cap90perc',
+        pool_batch_size=10,
+        update_likelihood_sd=False
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-test-o",
-        n_parallel=4,
+        exp_prefix="trpo-mc-d",
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         script="sandbox/rein/experiments/run_experiment_lite.py",
     )

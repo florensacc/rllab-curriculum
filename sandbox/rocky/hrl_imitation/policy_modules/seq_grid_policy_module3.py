@@ -6,7 +6,7 @@ import tensorflow as tf
 import sandbox.rocky.tf.core.layers as L
 from rllab.core.serializable import Serializable
 from rllab.envs.base import EnvSpec
-from sandbox.rocky.hrl_imitation.low_policies.branching_categorical_mlp_policy1 import BranchingCategoricalMLPPolicy
+from sandbox.rocky.hrl_imitation.low_policies.branching_categorical_mlp_policy2 import BranchingCategoricalMLPPolicy
 from sandbox.rocky.tf.core.network import ConvMergeNetwork
 from sandbox.rocky.tf.core.network import MLP
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy

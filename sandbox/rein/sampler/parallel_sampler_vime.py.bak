@@ -64,8 +64,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     path['rewards_orig'] = np.array(path['rewards'])
     FIRST = True
 
-    # We skip first iteration as it is often difficult to normalize the KL
-    # divergence terms.
+    # We skip first iteration as it is often difficult to normalize.
     if itr > 0:
         # Iterate over all paths and compute intrinsic reward by updating the
         # model on each observation, calculating the KL divergence of the new
@@ -155,10 +154,9 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     G.dynamics.save_old_params()
 
                     # conservative step (actual step should be 1.0)
-                    step_size = 0.1 
+                    step_size = 0.1
                     kl_div = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
-                    kl_div = np.clip(kl_div, 0, 1000)
 
 
 #                         kl_div = G.dynamics.fn_surprise()

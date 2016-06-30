@@ -5,9 +5,9 @@ from rllab.misc.instrument import run_experiment_lite
 from sandbox.rocky.hrl_imitation.approximate_posteriors.approximate_posterior import ApproximatePosterior
 
 # if False:
-from sandbox.rocky.hrl_imitation.algos.fixed_clock_imitation1 import FixedClockImitation
-from sandbox.rocky.hrl_imitation.env_experts.seq_grid_expert1 import SeqGridExpert
-from sandbox.rocky.hrl_imitation.policy_modules.seq_grid_policy_module2 import SeqGridPolicyModule
+from sandbox.rocky.hrl_imitation.algos.fixed_clock_imitation2 import FixedClockImitation
+from sandbox.rocky.hrl_imitation.env_experts.seq_grid_expert2 import SeqGridExpert
+from sandbox.rocky.hrl_imitation.policy_modules.seq_grid_policy_module3 import SeqGridPolicyModule
 # else:
 #     from sandbox.rocky.hrl_imitation.algos.fixed_clock_imitation import FixedClockImitation
 #     from sandbox.rocky.hrl_imitation.env_experts.seq_grid_expert import SeqGridExpert
@@ -36,7 +36,7 @@ for v in variants:
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="seq_grid_imitation_4",
+        exp_prefix="seq_grid_imitation_5",
         seed=v["seed"],
         variant=v,
         mode="local"

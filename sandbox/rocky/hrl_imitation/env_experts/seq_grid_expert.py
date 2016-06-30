@@ -74,8 +74,8 @@ class SeqGridExpert(object):
 
         base_map = [
             "SWGWW",
-            ".W.WW",
             "...WW",
+            "WWWWW",
             "WWWWW",
             "WWWWW",
         ]

@@ -152,7 +152,7 @@ class BatchPolopt(RLAlgorithm):
             compression=False,
             information_gain=True,
             surprise_transform=None,
-            update_likelihood_sd=False,
+#             update_likelihood_sd=True,
             **kwargs
     ):
         """
@@ -219,7 +219,7 @@ class BatchPolopt(RLAlgorithm):
         self.compression = compression
         self.information_gain = information_gain
         self.surprise_transform = surprise_transform
-        self.update_likelihood_sd = update_likelihood_sd
+#         self.update_likelihood_sd = update_likelihood_sd
         # ----------------------
 
         if self.second_order_update:
@@ -296,7 +296,7 @@ class BatchPolopt(RLAlgorithm):
             compression=self.compression,
             information_gain=self.information_gain,
 #             update_prior=(not self.use_replay_pool),
-            update_likelihood_sd=self.update_likelihood_sd
+#             update_likelihood_sd=self.update_likelihood_sd
         )
 
         logger.log(
@@ -821,6 +821,6 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
         logger.record_tabular('Expl_eta', self.eta)
-        logger.record_tabular('LikelihoodStd', self.bnn.likelihood_sd.eval())
+#         logger.record_tabular('LikelihoodStd', self.bnn.likelihood_sd.eval())
 
         return samples_data

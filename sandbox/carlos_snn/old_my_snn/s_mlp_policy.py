@@ -9,6 +9,8 @@ from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
 from rllab.spaces import Box
 
+from rllab.sampler.utils import rollout  #I need this for logging the diagnostics: run the policy with all diff latents
+
 from rllab.core.serializable import Serializable
 from rllab.policies.base import StochasticPolicy
 from rllab.misc.overrides import overrides
@@ -40,7 +42,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     def __init__(
             self,
             env_spec,
-            ##CF - latents units a the input
+            ##CF - latents units at the input
             latent_dim = 2,
             latent_name='bernoulli',
             resample=True,
@@ -53,17 +55,21 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             std_hidden_nonlinearity=NL.tanh,
             hidden_nonlinearity=NL.tanh,
             output_nonlinearity=None,
+            min_std=1e-6,
     ):
         self.latent_dim = latent_dim  ##could I avoid needing this self for the get_action?
         self.latent_name = latent_name
         self.resample = resample
+        self.pre_fix_latent = np.array([]) # if this is not empty when using reset() it will use this latent
         self.latent_fix = np.array([]) # this will hold the latents variable sampled in reset()
+        self.min_std = min_std
+
         if latent_name == 'normal':
             self.latent_dist = DiagonalGaussian()
-            self.latent_dist_info_vars = dict(mean=np.zeros(self.latent_dim), log_std=np.zeros(self.latent_dim))
+            self.latent_dist_info = dict(mean=np.zeros(self.latent_dim), log_std=np.zeros(self.latent_dim))
         elif latent_name == 'bernoulli':
             self.latent_dist = Bernoulli()
-            self.latent_dist_info_vars = dict(p=0.5*np.ones(self.latent_dim))
+            self.latent_dist_info = dict(p=0.5 * np.ones(self.latent_dim))
         else:
             raise NotImplementedError
 
@@ -106,6 +112,9 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
 
         mean_var, log_std_var = L.get_output([l_mean, l_log_std])
 
+        if self.min_std is not None:
+            log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
+
         self._l_mean = l_mean
         self._l_log_std = l_log_std
 
@@ -131,6 +140,8 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         #generate the generalized input (append latents to obs.)
         extended_obs_var = TT.concatenate( [obs_var,latent_var], axis=1 )
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], extended_obs_var)
+        if self.min_std is not None:
+            log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
         return dict(mean=mean_var, log_std=log_std_var)
     ##
     # def dist_info_sym(self, obs_var, action_var):
@@ -147,13 +158,13 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         # how can I impose that I only reset for a whole rollout? before calling get_actions!!
         if self.latent_dim:
             if self.resample:
-                latents = [self.latent_dist.sample(self.latent_dist_info_vars) for _ in observations]
+                latents = [self.latent_dist.sample(self.latent_dist_info) for _ in observations]
             else:
-                if not len(self.latent_fix)==self.latent_dim:
+                if not len(self.latent_fix)==self.latent_dim:  # we decide to reset based on if smthing in the fix
                     self.reset()
-                latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation would be better...
-                # print latents
-            # print latents, observations
+                if len(self.pre_fix_latent) == self.latent_dim:  # If we have a pre_fix, reset will put the latent to it
+                    self.reset()  # this overwrites the latent sampled or in latent_fix
+                latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation better...
             extended_obs = np.concatenate([observations, latents], axis=1)
         else:
             latents = np.array([[]]*len(observations))
@@ -163,18 +174,29 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         mean, log_std = self._f_dist(extended_obs)
         rnd = np.random.normal(size=mean.shape)
         actions = rnd * np.exp(log_std) + mean
+        print latents
         return actions, dict(mean=mean, log_std=log_std, latents=latents)
 
+    def set_pre_fix_latent(self, latent):
+        self.pre_fix_latent = np.array(latent)
+
+    def unset_pre_fix_latent(self):
+        self.pre_fix_latent = np.array([])
+
     @overrides
-    def reset(self):
-        # print 'enter reset'
+    def reset(self):  # executed at the start of every rollout. Will fix the latent if needed.
         if not self.resample:
-            self.latent_fix = self.latent_dist.sample(self.latent_dist_info_vars)
+            if self.pre_fix_latent.size > 0:
+                self.latent_fix = self.pre_fix_latent
+            else:
+                self.latent_fix = self.latent_dist.sample(self.latent_dist_info)
         else:
             pass
 
     def log_diagnostics(self, paths):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])
+        logger.record_tabular('MaxPolicyStd', np.max(np.exp(log_stds)))
+        logger.record_tabular('MinPolicyStd', np.min(np.exp(log_stds)))
         logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
 
     @property
