@@ -23,8 +23,8 @@ policy = GaussianMLPPolicy(
     hidden_sizes=(32, 32)
 )
 
-# baseline = LinearFeatureBaseline(env_spec=env.spec)
-baseline = ZeroBaseline(env_spec=env.spec)
+baseline = LinearFeatureBaseline(env_spec=env.spec)
+# baseline = ZeroBaseline(env_spec=env.spec)
 
 inner_algo = TRPO(
     env=env,
@@ -34,7 +34,7 @@ inner_algo = TRPO(
     max_path_length=500,
     n_itr=40,
     discount=0.99,
-    step_size=0.01,
+    step_size=0.001,
 )
 algo = POGA(
     env=env,

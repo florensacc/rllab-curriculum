@@ -67,11 +67,11 @@ class POGA(BatchPolopt):
     @overrides
     def optimize_policy(self, itr, samples_data):
         paths = samples_data["paths"]
-        paths = sorted(paths, key=lambda path: path["returns"][-1])
+        sorted_paths = sorted(paths, key=lambda path: -path["returns"][0])
         cur_obs = samples_data["observations"]
         cur_tgt = np.zeros_like(cur_obs[:, 0])
 
-        better_paths = paths[:int(0.2*len(paths))]
+        better_paths = sorted_paths[:int(0.2*len(paths))]
         better_obs = tensor_utils.concat_tensor_list([path["observations"] for path in better_paths])
         better_tgt = np.ones_like(better_obs[:, 0])
 
@@ -82,7 +82,7 @@ class POGA(BatchPolopt):
         ])
 
         self._optimizer.optimize(fin)
-        for _ in xrange(3):
+        for _ in xrange(1):
             for path in paths:
                 path["rewards"] = -self._disc_scorer(*[
                     path["observations"],

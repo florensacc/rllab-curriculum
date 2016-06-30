@@ -44,7 +44,7 @@ class NoVideoSchedule(object):
 
 
 class GymEnv(Env, Serializable):
-    def __init__(self, env_name, record_video=True, video_schedule=None, log_dir=None):
+    def __init__(self, env_name, record_video=True, video_schedule=None, log_dir=None, record_log=True):
         if log_dir is None:
             if logger.get_snapshot_dir() is None:
                 logger.log("Warning: skipping Gym environment monitoring since snapshot_dir not configured.")
@@ -58,7 +58,9 @@ class GymEnv(Env, Serializable):
 
         monitor.logger.setLevel(logging.WARNING)
 
-        if log_dir is None:
+        assert not (not record_log and record_video)
+
+        if log_dir is None or record_log is False:
             self.monitoring = False
         else:
             if not record_video:

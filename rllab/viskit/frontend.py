@@ -110,7 +110,15 @@ def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None):
         height=plot_height,
     )
     fig = go.Figure(data=data, layout=layout)
-    return po.plot(fig, output_type='div', include_plotlyjs=False)
+    fig_div = po.plot(fig, output_type='div', include_plotlyjs=False)
+    if "footnote" in plot_list[0]:
+        footnote = "<br />".join([
+            r"<span><b>%s</b></span>: <span>%s</span>" % (plt.legend, plt.footnote)
+            for plt in plot_list
+        ])
+        return r"%s<div>%s</div>" % (fig_div, footnote)
+    else:
+        return fig_div
 
 
 def make_plot_eps(plot_list, use_median=False, counter=0):
@@ -252,8 +260,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                 if only_show_best:
                     # Group by seed and sort.
                     # -----------------------
-                    filtered_params = core.extract_distinct_params(
-                        filtered_data, l=0)
+                    filtered_params = core.extract_distinct_params(filtered_data, l=0)
                     filtered_params2 = [p[1] for p in filtered_params]
                     filtered_params_k = [p[0] for p in filtered_params]
                     product_space = list(itertools.product(
@@ -261,6 +268,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                     ))
                     data_best_regret = None
                     best_regret = -np.inf
+                    kv_string_best_regret = None
                     for idx, params in enumerate(product_space):
                         selector = core.Selector(exps_data)
                         for k, v in zip(filtered_params_k, params):
@@ -281,9 +289,6 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                             else:
                                 means = np.nanmean(progresses, axis=0)
                                 regret = np.mean(means)
-                            if regret > best_regret:
-                                best_regret = regret
-                                data_best_regret = data
                             distinct_params_k = [p[0] for p in distinct_params]
                             distinct_params_v = [
                                 v for k, v in zip(filtered_params_k, params) if k in distinct_params_k]
@@ -293,6 +298,10 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                 distinct_params_kv).replace('), ', ')\t')
                             print(
                                 '{}\t{}\t{}'.format(regret, len(progresses), distinct_params_kv_string))
+                            if regret > best_regret:
+                                best_regret = regret
+                                data_best_regret = data
+                                kv_string_best_regret = distinct_params_kv_string
 
                     print(group_selector._filters)
                     print('best regret: {}'.format(best_regret))
@@ -344,6 +353,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                 stds = np.clip(stds, -clip_plot_value, clip_plot_value)
                             to_plot.append(
                                 ext.AttrDict(means=means, stds=stds, legend=legend_post_processor(legend)))
+                        to_plot[-1]["footnote"] = kv_string_best_regret
                 else:
                     progresses = [
                         exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
@@ -390,7 +400,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                             ext.AttrDict(means=means, stds=stds, legend=legend_post_processor(group_legend)))
 
         if len(to_plot) > 0 and not gen_eps:
-            plots.append("<div>%s: %s</div>" % (split_key, split_legend))
+            plots.append("<h3>%s: %s</h3>" % (split_key, split_legend))
             plots.append(make_plot(to_plot, use_median=use_median, plot_width=plot_width, plot_height=plot_height))
 
         if gen_eps:
