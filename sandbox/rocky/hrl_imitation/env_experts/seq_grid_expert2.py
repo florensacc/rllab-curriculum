@@ -143,21 +143,26 @@ class SeqGridExpert(object):
                 (N, 1)
             )
             low_obs = np.concatenate([observations, subgoals], axis=-1)
-            low_probs = algo.low_policy.dist_info(low_obs)["prob"]
+            bottleneck_epsilons = np.random.normal(size=(N, algo.bottleneck_dim))
+            low_probs = algo.low_policy.dist_info(low_obs, dict(bottleneck_epsilon=bottleneck_epsilons))["prob"]
             all_low_probs.append(low_probs)
 
         all_low_probs = np.asarray(all_low_probs)
+        subgoals, _ = algo.high_policy.get_actions(self.env_spec.observation_space.unflatten_n(observations))
+        subgoal_low_probs = all_low_probs[subgoals, np.arange(N)]
         flat_low_probs = all_low_probs.reshape((-1, algo.low_policy.action_space.n))
 
         p_a_given_s = np.mean(all_low_probs, axis=0)
         h_a_given_s = np.mean(algo.low_policy.distribution.entropy(dict(prob=p_a_given_s)))
         h_a_given_h_s = np.mean(algo.low_policy.distribution.entropy(dict(prob=flat_low_probs)))
+        h_a_given_subgoal_s = np.mean(algo.low_policy.distribution.entropy(dict(prob=subgoal_low_probs)))
 
         mi_a_h_given_s = h_a_given_s - h_a_given_h_s
 
         logger.record_tabular("I(a;h|s)", mi_a_h_given_s)
         logger.record_tabular("H(a|s)", h_a_given_s)
         logger.record_tabular("H(a|h,s)", h_a_given_h_s)
+        logger.record_tabular("H(a|subgoal,s)", h_a_given_subgoal_s)
 
     def log_train_stats(self, algo):
         env_spec = self.env_spec

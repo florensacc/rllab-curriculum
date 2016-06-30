@@ -9,8 +9,8 @@ from rllab.algos.base import RLAlgorithm
 from rllab.misc import logger
 from sandbox.rocky.tf.core.parameterized import JointParameterized
 from sandbox.rocky.tf.misc import tensor_utils
-from sandbox.rocky.hrl_imitation.policy_modules.seq_grid_policy_module2 import SeqGridPolicyModule
-from sandbox.rocky.hrl_imitation.low_policies.branching_categorical_mlp_policy1 import BranchingCategoricalMLPPolicy
+from sandbox.rocky.hrl_imitation.policy_modules.seq_grid_policy_module3 import SeqGridPolicyModule
+from sandbox.rocky.hrl_imitation.low_policies.branching_categorical_mlp_policy2 import BranchingCategoricalMLPPolicy
 import sandbox.rocky.tf.core.layers as L
 
 
@@ -90,6 +90,11 @@ class FixedClockImitation(RLAlgorithm):
             name="action",
             extra_dims=2,
         )
+        bottleneck_epsilon_var = tf.placeholder(
+            dtype=tf.float32,
+            shape=(None, self.bottleneck_dim),
+            name="bottleneck_epsilon"
+        )
 
         # Sample h~q(h|s, a)
         # Should return the same dimension
@@ -110,7 +115,7 @@ class FixedClockImitation(RLAlgorithm):
         flat_recog_subgoal = tf.reshape(tiled_recog_subgoal, (-1, self.subgoal_dim))
 
         low_obs = tf.concat(1, [flat_obs_var, flat_recog_subgoal])
-        action_dist_info = self.low_policy.dist_info_sym(low_obs)
+        action_dist_info = self.low_policy.dist_info_sym(low_obs, dict(bottleneck_epsilon=bottleneck_epsilon_var))
         flat_action_logli = self.low_policy.distribution.log_likelihood_sym(flat_action_var, action_dist_info)
 
         action_logli = tf.reshape(flat_action_logli, (-1, self.subgoal_interval))
@@ -124,12 +129,12 @@ class FixedClockImitation(RLAlgorithm):
         vlb = tf.reduce_mean(sum_action_logli - subgoal_kl)
 
         # bottleneck_var = self.low_policy.bottleneck_sym(flat_obs_var)
-        all_action_probs = self.low_policy.get_all_probs(flat_obs_var)
+        all_action_probs = self.low_policy.get_all_probs(flat_obs_var, dict(bottleneck_epsilon=bottleneck_epsilon_var))
         subgoal_action_probs = self.low_policy.get_subgoal_probs(all_action_probs, flat_recog_subgoal)
 
         marginal_action_probs = tf.reduce_mean(tf.pack(all_action_probs), reduction_indices=0)
         marginal_ent = self.high_policy.distribution.entropy_sym(dict(prob=marginal_action_probs))
-        subgoal_ent = self.high_policy.distribution.entropy_sym(dict(prob=subgoal_action_probs))
+        # subgoal_ent = self.high_policy.distribution.entropy_sym(dict(prob=subgoal_action_probs))
         conditional_ents = [
             self.high_policy.distribution.entropy_sym(dict(prob=cond_action_probs))
             for cond_action_probs in all_action_probs
@@ -144,16 +149,21 @@ class FixedClockImitation(RLAlgorithm):
         major_surr_loss = -vlb - tf.reduce_mean(tf.stop_gradient(sum_action_logli) * subgoal_logli)
 
         mi_loss = - self.mi_coeff * mi_a_g_given_s
+        major_surr_loss += mi_loss
 
-        major_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
         joint_target = JointParameterized([self.high_policy, self.low_policy, self.recog])
         params = joint_target.get_params(trainable=True)
+        optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+        grads = optimizer.compute_gradients(major_surr_loss, var_list=params)
+        # extra_grads = optimizer.compute_gradients(mi_loss, var_list=L.get_all_params(self.low_policy.l_bottleneck, trainable=True))
 
-        minor_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
-        major_train_op = major_optimizer.minimize(major_surr_loss, var_list=params)
-        minor_train_op = minor_optimizer.minimize(mi_loss,
-                                                  var_list=L.get_all_params(self.low_policy.l_bottleneck,
-                                                                            trainable=True))
+        # major_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+
+        # minor_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+        # major_train_op = major_optimizer.minimize(major_surr_loss, var_list=params)
+        # minor_train_op = minor_optimizer.minimize(mi_loss,
+        #                                          var_list=params)#L.get_all_params(self.low_policy.l_bottleneck,
+        #                                                                    #trainable=True))
 
         # compute extra gradients
         # extra_grads = optimizer.compute_gradients(
@@ -162,10 +172,12 @@ class FixedClockImitation(RLAlgorithm):
         # )
         #
         # train_op = optimizer.apply_gradients(merge_grads(grads, extra_grads))
+        train_op = optimizer.apply_gradients(grads)
 
         self.f_train = tensor_utils.compile_function(
-            inputs=[obs_var, action_var],
-            outputs=[major_train_op, minor_train_op, vlb, mi_a_g_given_s],
+            inputs=[obs_var, action_var, bottleneck_epsilon_var],
+            # outputs=[train_op, major_train_op, minor_train_op, vlb, mi_a_g_given_s],
+            outputs=[train_op, tf.no_op(), vlb, mi_a_g_given_s],
         )
 
     def train(self):
