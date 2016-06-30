@@ -594,6 +594,8 @@ class ConvBNN(LasagnePowered, Serializable):
                  learning_rate=0.0001,
                  compression=False,
                  information_gain=True,
+                 update_prior=False,
+                 update_likelihood_sd=False
                  ):
 
 
@@ -614,6 +616,8 @@ class ConvBNN(LasagnePowered, Serializable):
         self.learning_rate = learning_rate
         self.compression = compression
         self.information_gain = information_gain
+        self.update_prior = update_prior
+        self.update_likelihood_sd = update_likelihood_sd
 
         assert self.information_gain or self.compression
 

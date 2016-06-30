@@ -71,7 +71,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         snn_n_samples=10,
         subsample_factor=1.0,
         use_reverse_kl_reg=False,
-        use_replay_pool=True,
+        use_replay_pool=False,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         n_itr_update=1,
@@ -89,7 +89,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-montezuma-a",
+        exp_prefix="trpo-vime-montezuma-b",
         n_parallel=8,
         snapshot_mode="last",
         seed=seed,

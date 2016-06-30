@@ -10,9 +10,9 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
     print('Training ...')
 
-    kl_div_means = []
-    kl_div_stdns = []
-    kl_all_values = []
+#     kl_div_means = []
+#     kl_div_stdns = []
+#     kl_all_values = []
 
     # Finally, launch the training loop.
     print("Starting training...")
@@ -30,34 +30,34 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
             # Train current minibatch.
             inputs, _ = batch
-            _train_err = model.train_fn(inputs, inputs.reshape(model.batch_size, 28 * 28))
+            _train_err = model.train_fn(
+                inputs, inputs.reshape(model.batch_size, 28 * 28))
 #             pred = model.pred_fn(inputs)
 #             plot_mnist_digit(pred[0].reshape(28, 28))
-            
+
             train_err += _train_err
             train_batches += 1
 
-            # Calculate current minibatch KL.
-            kl_mb_closed_form = model.f_kl_div_closed_form()
+#             # Calculate current minibatch KL.
+#             kl_mb_closed_form = model.fn_kl()
+#
+#             kl_values.append(kl_mb_closed_form)
+#             kl_all_values.append(kl_mb_closed_form)
 
-            kl_values.append(kl_mb_closed_form)
-            kl_all_values.append(kl_mb_closed_form)
-
-        # Calculate KL divergence variance over all minibatches.
-        kl_mean = np.mean(np.asarray(kl_values))
-        kl_stdn = np.std(np.asarray(kl_values))
-
-        kl_div_means.append(kl_mean)
-        kl_div_stdns.append(kl_stdn)
+#         # Calculate KL divergence variance over all minibatches.
+#         kl_mean = np.mean(np.asarray(kl_values))
+#         kl_stdn = np.std(np.asarray(kl_values))
+#
+#         kl_div_means.append(kl_mean)
+#         kl_div_stdns.append(kl_stdn)
 
         # Then we print the results for this epoch:
         print("Epoch {} of {} took {:.3f}s".format(
             epoch + 1, num_epochs, time.time() - start_time))
         print("  training loss:\t\t{:.6f}".format(
             train_err / train_batches))
-        print(
-            "  KL divergence:\t\t{:.6f} ({:.6f})".format(kl_mean, kl_stdn))
-
+#         print(
+#             "  KL divergence:\t\t{:.6f} ({:.6f})".format(kl_mean, kl_stdn))
 
     pred = model.pred_fn(inputs)
     plot_mnist_digit(pred[0].reshape(28, 28))
@@ -67,22 +67,20 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 def main():
 
     num_epochs = 1000
-    batch_size = 16
+    batch_size = 64
 
     print("Loading data ...")
     X_train, T_train, X_test, T_test = load_dataset_MNIST()
     n_batches = int(np.ceil(len(X_train) / float(batch_size)))
 
-    plot_mnist_digit(X_train[0].reshape(28, 28))
-
     print("Building model and compiling functions ...")
     bnn = ConvBNN(
         layers_disc=[
             dict(name='input', in_shape=(None, 1, 28, 28)),
-            dict(name='convolution', n_filters=16, filter_size=(5, 5)),
+            dict(name='convolution', n_filters=2, filter_size=(5, 5)),
             dict(name='pool', pool_size=(2, 2)),
             dict(name='upscale', scale_factor=2),
-            dict(name='transconvolution', n_filters=16, filter_size=(5, 5)),
+            dict(name='transconvolution', n_filters=2, filter_size=(5, 5)),
             dict(name='gaussian', n_units=32)
         ],
         n_out=28 * 28,
@@ -90,8 +88,10 @@ def main():
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=2,
-        prior_sd=0.5
+        n_samples=10,
+        prior_sd=0.5,
+        update_likelihood_sd=True,
+        learning_rate=0.0001
     )
 
     # Train the model.
