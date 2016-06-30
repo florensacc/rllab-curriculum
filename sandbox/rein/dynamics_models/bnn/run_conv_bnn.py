@@ -1,8 +1,7 @@
 import numpy as np
 from sandbox.rein.dynamics_models.bnn.conv_bnn import ConvBNN
-from utils import load_dataset_MNIST
 import lasagne
-from utils import sliding_mean, iterate_minibatches, plot_mnist_digit
+from sandbox.rein.dynamics_models.utils import sliding_mean, iterate_minibatches, plot_mnist_digit, load_dataset_MNIST
 import time
 
 
