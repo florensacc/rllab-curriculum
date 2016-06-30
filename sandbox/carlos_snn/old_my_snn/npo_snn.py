@@ -72,7 +72,7 @@ class NPO_snn(BatchPolopt):
             print 'the action: ', path['actions']
             print 'the latents: ', path['agent_infos']['latents']
             print 'the regressor distr: ', self.latent_regressor.get_output_p(path)
-            print 'latents entropy: ', self.policy.latent_dist.entropy(self.policy.latent_dist_info_vars)
+            print 'latents entropy: ', self.policy.latent_dist.entropy(self.policy.latent_dist_info)
             print 'mutual info lb: ', self.latent_regressor.lowb_mutual(paths)
         # now, hallucinate some more...
         if self.hallucinator is None:

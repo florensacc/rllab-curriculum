@@ -244,8 +244,8 @@ def stub(glbs):
     # replace the __init__ method in all classes
     # hacky!!!
     for k, v in glbs.items():
-        if isinstance(v, type) and v != StubClass:
-            glbs[k] = StubClass(v)
+        if isinstance(v, type) and v != StubClass:  # look at all variables that are instances of a class (not yet Stub)
+            glbs[k] = StubClass(v)  # and replaces them by a the same but Stub
 
 
 def query_yes_no(question, default="yes"):
