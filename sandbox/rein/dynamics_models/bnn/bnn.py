@@ -47,7 +47,7 @@ class BNNLayer(lasagne.layers.Layer):
         # Here we set the priors.
         # -----------------------
         self.mu = self.add_param(
-            lasagne.init.Normal(1., 0.),
+            lasagne.init.Normal(0.01, 0.),
             (self.num_inputs, self.num_units),
             name='mu'
         )
@@ -58,7 +58,7 @@ class BNNLayer(lasagne.layers.Layer):
         )
         # Bias priors.
         self.b_mu = self.add_param(
-            lasagne.init.Normal(1., 0.),
+            lasagne.init.Normal(0.01, 0.),
             (self.num_units,),
             name="b_mu",
             regularizable=False
@@ -511,6 +511,8 @@ class BNN(LasagnePowered, Serializable):
 
                 return updates
 
+            # DEBUG
+            # -----
             def debug_H(loss, params, oldparams):
                 grads = theano.grad(loss, params)
                 updates = OrderedDict()
@@ -556,6 +558,7 @@ class BNN(LasagnePowered, Serializable):
 #                         invH = 0.
                     invHs.append(invH)
                 return grads
+            # -----
 
             def fast_kl_div(loss, params, oldparams, step_size):
 
@@ -589,12 +592,17 @@ class BNN(LasagnePowered, Serializable):
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=False)
 
+            # Code to actually perform second order updates
+            # ---------------------------------------------
 #             updates_kl = second_order_update(
 #                 loss_only_last_sample, params, oldparams, step_size)
 #
 #             self.train_update_fn = ext.compile_function(
 #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
+            # ---------------------------------------------
 
+            # DEBUG
+            # -----
 #             self.debug_H = ext.compile_function(
 #                 [input_var, target_var], debug_H(
 #                     loss_only_last_sample, params, oldparams),
@@ -603,6 +611,7 @@ class BNN(LasagnePowered, Serializable):
 #                 [input_var, target_var], debug_g(
 #                     loss_only_last_sample, params, oldparams),
 #                 log_name='fn_debug_grads')
+            # -----
 
         else:
             # Use SGD to update the model for a single sample, in order to
@@ -628,12 +637,11 @@ class BNN(LasagnePowered, Serializable):
         self.eval_loss = ext.compile_function(
             [input_var, target_var], loss,  log_name='fn_eval_loss', no_default_updates=False)
 
+        # DEBUG
+        # -----
 #         # Calculate surprise.
 #         self.fn_surprise = ext.compile_function(
 #             [], self.surprise(), log_name='fn_surprise')
-#
-        # DEBUG
-        # -----
         self.fn_dbg_nll = ext.compile_function(
             [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll', no_default_updates=False)
         self.fn_kl = ext.compile_function(
