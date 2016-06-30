@@ -244,8 +244,8 @@ def stub(glbs):
     # replace the __init__ method in all classes
     # hacky!!!
     for k, v in glbs.items():
-        if isinstance(v, type) and v != StubClass:
-            glbs[k] = StubClass(v)
+        if isinstance(v, type) and v != StubClass:  # look at all variables that are instances of a class (not yet Stub)
+            glbs[k] = StubClass(v)  # and replaces them by a the same but Stub
 
 
 def query_yes_no(question, default="yes"):
@@ -819,8 +819,8 @@ def to_lab_kube_pod(
                         (log_dir))
     pre_commands.append("""
         while /bin/true; do
-            aws s3 sync --exclude *.pkl {log_dir} {remote_log_dir} --region {aws_region}
-            sleep 5
+            aws s3 sync --exclude *.pkl --exclude gym_log {log_dir} {remote_log_dir} --region {aws_region}
+            sleep 15
         done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
                                              aws_region=config.AWS_REGION_NAME))
     # copy the file to s3 after execution

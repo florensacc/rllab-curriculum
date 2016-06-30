@@ -1,6 +1,7 @@
 import theano.tensor as TT
 import numpy as np
 from .base import Distribution
+from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 TINY = 1e-8
 
@@ -22,6 +23,7 @@ def from_onehot(x_var):
 class Categorical(Distribution):
     def __init__(self, dim):
         self._dim = dim
+        self._srng = RandomStreams()
 
     @property
     def dim(self):
@@ -75,6 +77,10 @@ class Categorical(Distribution):
         # Assume layout is N * A
         N = probs.shape[0]
         return np.log(probs[np.arange(N), from_onehot(np.asarray(xs))] + TINY)
+
+    def sample_sym(self, dist_info):
+        probs = dist_info["prob"]
+        return self._srng.multinomial(pvals=probs, dtype='uint8')
 
     @property
     def dist_info_keys(self):

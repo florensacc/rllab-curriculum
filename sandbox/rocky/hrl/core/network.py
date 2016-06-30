@@ -117,7 +117,7 @@ class ConvMergeNetwork(Serializable):
                  output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
                  hidden_nonlinearity=LN.rectify,
                  output_nonlinearity=None,
-                 name=None, input_var=None):
+                 name=None, input_var=None, input_layer=None):
         Serializable.quick_init(self, locals())
 
         if extra_hidden_sizes is None:
@@ -132,7 +132,10 @@ class ConvMergeNetwork(Serializable):
         extra_input_flat_dim = np.prod(extra_input_shape)
         total_input_flat_dim = input_flat_dim + extra_input_flat_dim
 
-        l_in = L.InputLayer(shape=(None, total_input_flat_dim), input_var=input_var)
+        if input_layer is None:
+            l_in = L.InputLayer(shape=(None, total_input_flat_dim), input_var=input_var)
+        else:
+            l_in = input_layer
 
         l_conv_in = L.reshape(L.SliceLayer(l_in, indices=slice(input_flat_dim)), ([0],) + input_shape)
         l_extra_in = L.reshape(L.SliceLayer(l_in, indices=slice(input_flat_dim, None)), ([0],) + extra_input_shape)
@@ -188,7 +191,6 @@ class ConvMergeNetwork(Serializable):
         )
         self._l_in = l_in
         self._l_out = l_out
-        self._input_var = l_in.input_var
 
     @property
     def input_layer(self):

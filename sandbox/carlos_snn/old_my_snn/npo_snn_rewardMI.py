@@ -14,7 +14,11 @@ from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
+from rllab.sampler.utils import rollout
+import itertools
 
+# try to also plot the MC of the policy in the ec2 instance
+from sandbox.carlos_snn.plotters.plt_results2D import plot_all_exp
 
 class NPO_snn(BatchPolopt):
     """
@@ -27,6 +31,7 @@ class NPO_snn(BatchPolopt):
             latent_regressor=None,
             reward_coef=0,
             self_normalize=False,
+            log_individual_latents=False,  # to log the progress of each individual latent
             n_samples=0,
             optimizer=None,
             optimizer_args=None,
@@ -38,7 +43,7 @@ class NPO_snn(BatchPolopt):
             optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
         self.optimizer = optimizer
         self.step_size = step_size
-
+        self.log_individual_latents = log_individual_latents
         self.hallucinator = hallucinator
         self.latent_regressor = latent_regressor
         self.reward_coef = reward_coef
@@ -51,19 +56,17 @@ class NPO_snn(BatchPolopt):
         # save real undiscounted reward before changing them
         undiscounted_returns = [sum(path["rewards"]) for path in paths]
         logger.record_tabular('TrueAverageReturn', np.mean(undiscounted_returns))
-        #check the latents
+
+        # If using a latent regressor (and possibly adding MI to the reward):
         if self.latent_regressor:
             self.latent_regressor.fit(paths)
-            # for path in paths:
-            #     print 'the action: ', path['actions']
-            #     print 'the latents: ', path['agent_infos']['latents']
-            #     print 'the regressor distr: ', self.latent_regressor.get_output_p(path)
-            #     print 'latents entropy: ', self.policy.latent_dist.entropy(self.policy.latent_dist_info_vars)
-            #     print 'mutual info lb: ', self.latent_regressor.lowb_mutual(paths)
-
             for path in paths:
                 path['logli_latent_regressor'] = self.latent_regressor.predict_log_likelihood(
                                                     [path], [path['agent_infos']['latents']])[0] #this is for paths usually..
+
+                # print "The latent sampled was: {}, the mean/actual action was {}{}, the probability of that one is: {}".format(
+                #     path['agent_infos']['latents'], path['agent_infos']['mean'], path['actions'], path['logli_latent_regressor'])
+
                 path['true_rewards'] = path['rewards']
                 path['rewards'] += self.reward_coef * path['logli_latent_regressor']  # the logli of the latent is the variable
                                                                                         # of the mutual information
@@ -115,14 +118,36 @@ class NPO_snn(BatchPolopt):
                     if self.pause_for_plot:
                         raw_input("Plotting evaluation run: Press Enter to "
                                   "continue...")
-
+        # # if working locally: we can plot at the same time
+        # data_dir = logger.get_snapshot_dir()
+        # plot_all_exp(data_dir)
         self.shutdown_worker()
 
     @overrides
     def log_diagnostics(self, paths):
-        BatchPolopt.log_diagnostics(self, paths) # call the diagnost of env, policy and baseline
+        BatchPolopt.log_diagnostics(self, paths)
         if self.latent_regressor:
             self.latent_regressor.log_diagnostics(paths)
+        # we will here add a measure of multimodality: do X rollouts with each value of the latents. ONLY for NOresample
+        if not self.policy.resample:
+            if self.policy.latent_name == 'bernoulli':
+                all_latents = [np.array(i) for i in itertools.product([0, 1], repeat=self.policy.latent_dim)]
+                all_latent_paths = []
+                for lat in all_latents:
+                    self.policy.pre_fix_latent = lat
+                    # perform 5 rollouts with each set of latent values
+                    present_latent_paths = []
+                    for _ in xrange(5):
+                        path = rollout(self.env, self.policy, self.max_path_length)
+                        present_latent_paths.append(path)
+                        all_latent_paths.append(path)
+                    if self.log_individual_latents:
+                        with logger.tabular_prefix(str(lat)), logger.prefix(str(lat)):
+                            self.env.log_diagnostics(present_latent_paths)
+                self.policy.pre_fix_latent = np.array([])
+                # Here I should prevent this to run if I'm not in an environment that has prefix! Now it will just error
+                with logger.tabular_prefix('all_lat_'), logger.prefix('all_lat_'):
+                    self.env.log_diagnostics(all_latent_paths)
 
     @overrides
     def init_opt(self):

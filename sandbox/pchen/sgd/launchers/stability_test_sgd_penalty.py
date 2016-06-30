@@ -74,7 +74,7 @@ class VG(VariantGenerator):
         return [0., 1e3]
 
 
-variants = VG().variants()[:1]
+variants = VG().variants()
 print("#Experiments: %d" % len(variants))
 
 for v in variants:
@@ -127,13 +127,5 @@ for v in variants:
         snapshot_mode="last",
         mode="lab_kube",
         seed=v.seed,
-        resouces=dict(
-            requests=dict(
-                cpu=1.8,
-            ),
-            limits=dict(
-                cpu=1.8,
-            )
-        ),
     )
 

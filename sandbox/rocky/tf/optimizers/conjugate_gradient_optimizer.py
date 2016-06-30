@@ -145,13 +145,13 @@ class ConjugateGradientOptimizer(Serializable):
         flat_g = self._opt_fun["f_grad"](*(inputs + extra_inputs))
 
         def Hx(x):
-            with logger.log_time("Hx"):
-                xs = tuple(self._target.flat_to_params(x, trainable=True))
-                #     rop = f_Hx_rop(*(inputs + xs))
-                plain = self._opt_fun["f_Hx_plain"](*(subsample_inputs + extra_inputs + xs)) + self._reg_coeff * x
-                # assert np.allclose(rop, plain)
-                return plain
-                # alternatively we can do finite difference on flat_grad
+            # with logger.log_time("Hx"):
+            xs = tuple(self._target.flat_to_params(x, trainable=True))
+            #     rop = f_Hx_rop(*(inputs + xs))
+            plain = self._opt_fun["f_Hx_plain"](*(subsample_inputs + extra_inputs + xs)) + self._reg_coeff * x
+            # assert np.allclose(rop, plain)
+            return plain
+            # alternatively we can do finite difference on flat_grad
 
         descent_direction = krylov.cg(Hx, flat_g, cg_iters=self._cg_iters)
 

@@ -85,3 +85,14 @@ class Parameterized(object):
         Serializable.__setstate__(self, d)
         tf.get_default_session().run(tf.initialize_variables(self.get_params()))
         self.set_param_values(d["params"])
+
+
+class JointParameterized(Parameterized):
+    def __init__(self, components):
+        super(JointParameterized, self).__init__()
+        self.components = components
+
+    def get_params_internal(self, **tags):
+        params = [param for comp in self.components for param in comp.get_params_internal(**tags)]
+        # only return unique parameters
+        return sorted(set(params), key=hash)

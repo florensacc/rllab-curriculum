@@ -10,7 +10,7 @@ import sys
 
 stub(globals())
 
-for alive_coeff in [0., 0.1, 0.01, 1.0]:
+for alive_coeff in [ 1.0]:
     # for seed in [1, 2, 3, 4, 5]:
     seed =1
     env = HopperEnv(alive_coeff=alive_coeff)
@@ -32,6 +32,6 @@ for alive_coeff in [0., 0.1, 0.01, 1.0]:
         snapshot_mode="last",
         exp_prefix="charlio_trpo_hopper",
         seed=seed,
-        terminate_machine=True, # dangerous!!
+        terminate_machine=True, # dangerous to have False!!
     )
-    # sys.exit(0)
+    sys.exit(0)
