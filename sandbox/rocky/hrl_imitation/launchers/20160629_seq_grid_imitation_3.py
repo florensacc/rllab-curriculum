@@ -31,6 +31,7 @@ for v in variants:
         env_expert=env_expert,
         policy_module=SeqGridPolicyModule(),
         recog=recog,
+        n_sweep_per_epoch=5,
         learning_rate=v["learning_rate"],
         bottleneck_coeff=v["bottleneck_coeff"],
     )

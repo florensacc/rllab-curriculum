@@ -19,7 +19,7 @@ class FixedClockImitation(RLAlgorithm):
             subgoal_dim=4,
             subgoal_interval=3,
             bottleneck_dim=10,
-            batch_size=128,
+            batch_size=500,
             learning_rate=1e-3,
             discount=0.99,
             max_path_length=100,

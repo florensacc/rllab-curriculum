@@ -19,7 +19,6 @@ NONE = list()
 
 
 class CategoricalMLPRegressor(LayersPowered, Serializable):
-
     """
     A class for performing regression (or classification, really) by fitting a categorical distribution to the outputs.
     Assumes that the outputs will be always a one hot vector.
@@ -104,6 +103,7 @@ class CategoricalMLPRegressor(LayersPowered, Serializable):
 
             predicted = tensor_utils.to_onehot_sym(tf.argmax(prob_var, dimension=1), output_dim)
 
+            self._prob_network = prob_network
             self._f_predict = tensor_utils.compile_function([xs_var], predicted)
             self._f_prob = tensor_utils.compile_function([xs_var], prob_var)
             self._l_prob = l_prob
@@ -160,6 +160,11 @@ class CategoricalMLPRegressor(LayersPowered, Serializable):
     def predict_log_likelihood(self, xs, ys):
         prob = self._f_prob(np.asarray(xs))
         return self._dist.log_likelihood(np.asarray(ys), dict(prob=prob))
+
+    def log_likelihood_sym(self, x_var, y_var):
+        normalized_xs_var = (x_var - self._x_mean_var) / self._x_std_var
+        prob = L.get_output(self._l_prob, {self._prob_network.input_layer: normalized_xs_var})
+        return self._dist.log_likelihood_sym(tf.cast(y_var, tf.int32), dict(prob=prob))
 
     def get_param_values(self, **tags):
         return LayersPowered.get_param_values(self, **tags)

@@ -4,6 +4,10 @@ from __future__ import print_function
 from rllab.misc.instrument import run_experiment_lite
 from sandbox.rocky.hrl_imitation.approximate_posteriors.approximate_posterior import ApproximatePosterior
 
+"""
+mutual information bonus with stochastic bottleneck
+"""
+
 # if False:
 from sandbox.rocky.hrl_imitation.algos.fixed_clock_imitation2 import FixedClockImitation
 from sandbox.rocky.hrl_imitation.env_experts.seq_grid_expert2 import SeqGridExpert

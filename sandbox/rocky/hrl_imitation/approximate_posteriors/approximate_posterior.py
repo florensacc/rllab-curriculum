@@ -14,7 +14,7 @@ class ApproximatePosterior(LayersPowered):
     sequence. It is structured as a GRU.
     """
 
-    def __init__(self, env_spec, subgoal_dim, subgoal_interval, feature_dim=20, hidden_dim=10):
+    def __init__(self, env_spec, subgoal_dim, subgoal_interval):
         """
         :type env_spec: EnvSpec
         :param env_spec:
@@ -39,13 +39,17 @@ class ApproximatePosterior(LayersPowered):
             name="action_input"
         )
 
+        obs_feature_dim = 10  # 0
+        action_feature_dim = 10
+
         feature_network = ConvMergeNetwork(
             name="feature_network",
-            input_layer=L.reshape(l_obs, (-1, env_spec.observation_space.flat_dim), name="reshape_obs"),
+            input_layer=L.reshape(l_obs, (-1, obs_dim), name="reshape_obs"),
             input_shape=env_spec.observation_space.components[0].shape,
             extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
-            output_dim=feature_dim,
-            hidden_sizes=tuple(),
+            extra_hidden_sizes=(32,),
+            output_dim=obs_feature_dim,
+            hidden_sizes=(32,),#tuple(32,),  # (100,),
             conv_filters=(10, 10),
             conv_filter_sizes=(3, 3),
             conv_strides=(1, 1),
@@ -55,46 +59,93 @@ class ApproximatePosterior(LayersPowered):
         )
         l_reshaped_feature = L.reshape(
             feature_network.output_layer,
-            shape=(-1, subgoal_interval, feature_dim),
+            shape=(-1, subgoal_interval, obs_feature_dim),
             name="reshaped_feature"
         )
 
-        l_preprocess_in = L.reshape(
-            L.concat([l_reshaped_feature, l_action], name="preprocess_in", axis=2),
-            (-1, feature_dim + action_dim),
-            name="preprocess_in_flat",
+        l_action_embedding = L.reshape(
+            MLP(
+                name="action_embedding_network",
+                input_shape=(action_dim,),
+                output_dim=action_feature_dim,
+                hidden_nonlinearity=tf.identity,
+                hidden_sizes=tuple(),
+                output_nonlinearity=tf.identity,
+                input_layer=L.reshape(l_action, name="action_flat", shape=(-1, action_dim)),
+            ).output_layer,
+            shape=(-1, subgoal_interval, action_feature_dim),
+            name="reshaped_action"
         )
-        preprocess_network = MLP(
-            name="preprocess_network",
-            input_shape=(feature_dim + action_dim,),
-            output_dim=feature_dim,
-            hidden_nonlinearity=tf.nn.tanh,
-            output_nonlinearity=tf.nn.tanh,
-            input_layer=l_preprocess_in,
-            hidden_sizes=(feature_dim,),
-        )
+
+        # subgoal_input_layer = L.concat([l_reshaped_feature, l_action], name="subgoal_dim", axis=2)
 
         subgoal_input_layer = L.reshape(
-            preprocess_network.output_layer,
-            (-1, subgoal_interval, feature_dim),
-            name="subgoal_in_reshape"
+            L.concat([l_reshaped_feature, l_action], name="preprocess_in", axis=2),
+            (-1, subgoal_interval * (obs_feature_dim + action_dim)),
+            name="preprocess_in_flat",
         )
+        # preprocess_network = MLP(
+        #     name="preprocess_network",
+        #     input_shape=(obs_feature_dim + action_dim,),
+        #     output_dim=20,
+        #     hidden_nonlinearity=tf.nn.tanh,
+        #     output_nonlinearity=tf.identity,#tf.nn.tanh,
+        #     input_layer=l_preprocess_in,
+        #     hidden_sizes=tuple(),  # (100,),
+        # )
 
-        subgoal_network = GRUNetwork(
+        # preprocess_network = MLP(
+        #     name="preprocess_network_1",
+        #     input_shape=(action_dim,),
+        #     output_dim=10,
+        #     hidden_nonlinearity=tf.nn.tanh,
+        #     output_nonlinearity=tf.nn.tanh,
+        #     input_layer=L.reshape(
+        #         l_action,
+        #         shape=(-1, action_dim),
+        #         name="action_reshape"
+        #     ),
+        #     hidden_sizes=tuple(),#(20,),#tuple(20,),  # (100,),
+        # )
+
+        # subgoal_input_layer = L.reshape(
+        #     preprocess_network.output_layer,
+        #     (-1, subgoal_interval * preprocess_network.output_layer.output_shape[-1]),
+        #     name="subgoal_in_reshape"
+        # )
+
+        subgoal_network = MLP(
             name="h_network",
             input_shape=(subgoal_input_layer.output_shape[-1],),
             output_dim=subgoal_dim,
-            hidden_dim=hidden_dim,
+            hidden_sizes=(100, 100),
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.softmax,
             input_layer=subgoal_input_layer,
         )
-        l_subgoal_probs = L.SliceLayer(
-            subgoal_network.output_layer,
-            indices=subgoal_interval - 1,
-            axis=1,
-            name="subgoal_probs"
-        )
+        l_subgoal_probs = subgoal_network.output_layer
+
+        # subgoal_input_layer = L.reshape(
+        #     preprocess_network.output_layer,
+        #     (-1, subgoal_interval, preprocess_network.output_layer.output_shape[-1]),
+        #     name="subgoal_in_reshape"
+        # )
+        #
+        # subgoal_network = GRUNetwork(
+        #     name="h_network",
+        #     input_shape=(subgoal_input_layer.output_shape[-1],),
+        #     output_dim=subgoal_dim,
+        #     hidden_dim=20,
+        #     hidden_nonlinearity=tf.nn.tanh,
+        #     output_nonlinearity=tf.nn.softmax,
+        #     input_layer=subgoal_input_layer,
+        # )
+        # l_subgoal_probs = L.SliceLayer(
+        #     subgoal_network.output_layer,
+        #     indices=subgoal_interval - 1,
+        #     axis=1,
+        #     name="subgoal_probs"
+        # )
         self.subgoal_dim = subgoal_dim
         self.l_in = l_in
         self.l_obs = l_obs

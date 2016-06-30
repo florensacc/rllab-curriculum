@@ -56,6 +56,7 @@ def generate_demonstration_trajectory(size, start_pos, end_pos, action_map):
 
 class SeqGridExpert(object):
     def __init__(self, grid_size=5, action_map=None):
+        assert grid_size == 5
         self.grid_size = grid_size
         if action_map is None:
             action_map = [
@@ -85,6 +86,7 @@ class SeqGridExpert(object):
         wrapped_env = ImageGridWorld(desc=base_map)
         env = TfEnv(CompoundActionSequenceEnv(wrapped_env, action_map, obs_include_history=True))
         self.template_env = env
+
         self.env_spec = env.spec
 
     def build_dataset(self, batch_size):
@@ -112,17 +114,18 @@ class SeqGridExpert(object):
                 paths.append(path)
                 envs.append(env)
             logger.log("generated")
+            # import ipdb; ipdb.set_trace()
             self.paths = paths
             self.envs = envs
         return self.paths
 
-    def log_diagnostics(self, algo):  # high_policy, low_policy, alt_high_policy):
+    def log_diagnostics(self, algo):
         logger.log("logging MI...")
         self.log_mis(algo)
         # logger.log("logging train stats...")
         # self.log_train_stats(algo)
-        # logger.log("logging test stats...")
-        # self.log_test_stats(algo)
+        logger.log("logging test stats...")
+        self.log_test_stats(algo)
 
     def log_mis(self, algo):
 
@@ -145,36 +148,36 @@ class SeqGridExpert(object):
             all_low_probs.append(low_probs)
 
         all_low_probs = np.asarray(all_low_probs)
+        subgoals, _ = algo.high_policy.get_actions(self.env_spec.observation_space.unflatten_n(observations))
+        subgoal_low_probs = all_low_probs[subgoals, np.arange(N)]
         flat_low_probs = all_low_probs.reshape((-1, algo.low_policy.action_space.n))
 
         p_a_given_s = np.mean(all_low_probs, axis=0)
         h_a_given_s = np.mean(algo.low_policy.distribution.entropy(dict(prob=p_a_given_s)))
         h_a_given_h_s = np.mean(algo.low_policy.distribution.entropy(dict(prob=flat_low_probs)))
+        h_a_given_subgoal_s = np.mean(algo.low_policy.distribution.entropy(dict(prob=subgoal_low_probs)))
 
         mi_a_h_given_s = h_a_given_s - h_a_given_h_s
-
-        bottleneck_dist_info = low_policy.f_bottleneck_dist_info(low_obs)
-        prior_bottleneck_dist_info = dict(mean=np.zeros((N, algo.bottleneck_dim)),
-                                          log_std=np.zeros((N, algo.bottleneck_dim)))
-        bottleneck_kl = np.mean(low_policy.bottleneck_dist.kl(bottleneck_dist_info, prior_bottleneck_dist_info))
 
         logger.record_tabular("I(a;h|s)", mi_a_h_given_s)
         logger.record_tabular("H(a|s)", h_a_given_s)
         logger.record_tabular("H(a|h,s)", h_a_given_h_s)
-        logger.record_tabular("KL(p(z|s)||p(z))", bottleneck_kl)
+        logger.record_tabular("H(a|subgoal,s)", h_a_given_subgoal_s)
 
     def log_train_stats(self, algo):
         env_spec = self.env_spec
         trained_policy = FixedClockPolicy(env_spec=env_spec, high_policy=algo.high_policy, low_policy=algo.low_policy,
                                           subgoal_interval=algo.subgoal_interval)
 
-        train_venv = DummyVecEnv(env=self.template_env, n=len(self.envs), envs=self.envs,
+        n_envs = len(self.envs)
+
+        train_venv = DummyVecEnv(env=self.template_env, n=n_envs, envs=self.envs,
                                  max_path_length=algo.max_path_length)
 
-        path_rewards = [None] * len(self.envs)
-        path_discount_rewards = [None] * len(self.envs)
+        path_rewards = [None] * n_envs
+        path_discount_rewards = [None] * n_envs
         obses = train_venv.reset()
-        dones = np.asarray([True] * len(self.envs))
+        dones = np.asarray([True] * n_envs)
         for t in xrange(algo.max_path_length):
             trained_policy.reset(dones)
             acts, _ = trained_policy.get_actions(obses)

@@ -8,10 +8,24 @@ from collections import OrderedDict
 from rllab.algos.base import RLAlgorithm
 from rllab.misc import logger
 from sandbox.rocky.tf.core.parameterized import JointParameterized
+from sandbox.rocky.tf.core.layers_powered import LayersPowered
+from sandbox.rocky.tf.core.network import MLP
+from sandbox.rocky.tf.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from sandbox.rocky.tf.misc import tensor_utils
 from sandbox.rocky.hrl_imitation.policy_modules.seq_grid_policy_module2 import SeqGridPolicyModule
 from sandbox.rocky.hrl_imitation.low_policies.branching_categorical_mlp_policy1 import BranchingCategoricalMLPPolicy
 import sandbox.rocky.tf.core.layers as L
+
+
+# class BottleneckSubgoalPredictor(LayersPowered):
+#
+#     def __init__(self, bottleneck_dim):
+#         MLP(name="prob_network")
+#         l_in = L.InputLayer(
+#             shape=(None, bottleneck_dim),
+#             name="input"
+#         )
+#         pass
 
 
 def merge_grads(grads, extra_grads):
