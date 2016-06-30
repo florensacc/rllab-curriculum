@@ -62,9 +62,14 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     # ----------------------------
     # Save original reward.
     path['rewards_orig'] = np.array(path['rewards'])
-    FIRST = True
 
-    # We skip first iteration as it is often difficult to normalize.
+    # DEBUG
+    # -----
+    FIRST = True
+    # -----
+
+    # We skip first iteration as it is often difficult to normalize the KL
+    # divergence terms.
     if itr > 0:
         # Iterate over all paths and compute intrinsic reward by updating the
         # model on each observation, calculating the KL divergence of the new
@@ -88,8 +93,10 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 # We do a line search over the best step sizes using
                 # step_size * invH * grad
                 #                 best_loss_value = np.inf
-                r = np.linspace(0., 2., 200)
 
+                # DEBUG
+                # -----
+                r = np.linspace(0., 2., 200)
                 if FIRST and False:
                     path['all_kls'] = []
                     path['all_r'] = r
@@ -130,8 +137,6 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
                         kl_div = G.dynamics.fn_surprise()
 
-                        # DEBUG
-                        # -----
                         print('step size {}'.format(step_size))
                         print('KL {} -> {}'.format(kl_before, kl_after))
                         print('NLL {} -> {}'.format(nll_before, nll_after))
@@ -139,7 +144,6 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                         print(
                             'lik_sd {} -> {}'.format(lik_sd_before, lik_sd_after))
                         print('')
-                        # -----
 
                         path['all_kls'].append(loss_after)
 
@@ -149,22 +153,29 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     print('==============')
 
                     FIRST = False
+                    # -----
                 else:
                     # Save old params.
                     G.dynamics.save_old_params()
 
                     # conservative step (actual step should be 1.0)
-                    step_size = 0.5
+                    step_size = 1.0
                     kl_div = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
+#                     kl_div = np.clip(kl_div, 0, 1000)
 
-
+                    # DEBUG
+                    # -----
 #                         kl_div = G.dynamics.fn_surprise()
 #                         # Reset to old params after each surprise calc.
 #                         G.dynamics.reset_to_old_params()
+                    # -----
 
             else:
                 # First-order updates.
+
+                # DEBUG
+                # -----
                 if FIRST:
                     path['all_kls'] = []
                     n_itr_updates = range(0, 100, 1)
@@ -209,6 +220,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                         # Reset to old params after each surprise calc.
                         G.dynamics.reset_to_old_params()
                         FIRST = False
+                    # -----
                 else:
                     # Save old params for every update.
                     G.dynamics.save_old_params()

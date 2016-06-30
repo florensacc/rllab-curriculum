@@ -258,6 +258,7 @@ class A3C(RLAlgorithm, Serializable):
     def train(self):
         self.init_opt()
         with tf.Session() as sess:
+            # sess.partial_run_setup()
             sess.run(tf.initialize_all_variables())
             self.worker_envs = []
             workers = []

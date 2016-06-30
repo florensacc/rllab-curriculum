@@ -4,6 +4,7 @@ from __future__ import absolute_import
 import numpy as np
 from .base import Distribution
 import tensorflow as tf
+from sandbox.rocky.tf.misc import tensor_utils
 
 TINY = 1e-8
 
@@ -18,6 +19,15 @@ def from_onehot(x_var):
 class Categorical(Distribution):
     def __init__(self, dim):
         self._dim = dim
+        weights_var = tf.placeholder(
+            dtype=tf.float32,
+            shape=(None, dim),
+            name="weights"
+        )
+        self._f_sample = tensor_utils.compile_function(
+            inputs=[weights_var],
+            outputs=tf.multinomial(weights_var, num_samples=1)[:, 0],
+        )
 
     @property
     def dim(self):
@@ -56,6 +66,10 @@ class Categorical(Distribution):
         return (tf.reduce_sum(new_prob_var * x_var, ndims - 1) + TINY) / \
                (tf.reduce_sum(old_prob_var * x_var, ndims - 1) + TINY)
 
+    def entropy_sym(self, dist_info_vars):
+        probs = dist_info_vars["prob"]
+        return -tf.reduce_sum(probs * tf.log(probs + TINY), reduction_indices=1)
+
     def entropy(self, info):
         probs = info["prob"]
         return -np.sum(probs * np.log(probs + TINY), axis=1)
@@ -74,6 +88,11 @@ class Categorical(Distribution):
     @property
     def dist_info_specs(self):
         return [("prob", (self.dim,))]
+
+    def sample(self, dist_info):
+        samples = self._f_sample(dist_info["prob"])
+        import ipdb;
+        ipdb.set_trace()
 
     def sample_sym(self, dist_info):
         probs = dist_info["prob"]

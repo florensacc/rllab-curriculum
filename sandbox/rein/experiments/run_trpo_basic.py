@@ -20,33 +20,33 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(10)
+seeds = range(3)
 # mdp_classes = [MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
-# mdps = [GymEnv("SpaceInvaders-ram-v0")]
-mdps = [GymEnv("Reacher-v1", record_video=False)]
+mdps = [GymEnv("MontezumaRevenge-ram-v0")]
+# mdps = [GymEnv("Reacher-v1", record_video=False)]
 param_cart_product = itertools.product(
     mdps, seeds
 )
 
 for mdp, seed in param_cart_product:
 
-    policy = GaussianMLPPolicy(
-        env_spec=mdp.spec,
-        hidden_sizes=(64, 64),
-    )
+    #     policy = GaussianMLPPolicy(
+    #         env_spec=mdp.spec,
+    #         hidden_sizes=(64, 64),
+    #     )
 
-#     policy = CategoricalMLPPolicy(
-#         env_spec=mdp.spec,
-#         hidden_sizes=(64, 64)
-#     )
+    policy = CategoricalMLPPolicy(
+        env_spec=mdp.spec,
+        hidden_sizes=(64, 64)
+    )
 
     baseline = GaussianMLPBaseline(
         mdp.spec,
         regressor_args=dict(hidden_sizes=(64, 64)),
     )
 
-    batch_size = 500
+    batch_size = 50000
     algo = TRPO(
         discount=0.995,
         env=mdp,
@@ -54,7 +54,7 @@ for mdp, seed in param_cart_product:
         baseline=baseline,
         batch_size=batch_size,
         whole_paths=True,
-        max_path_length=50,
+        max_path_length=5000,
         n_itr=500,
         step_size=0.01,
         subsample_factor=1.0,
@@ -62,8 +62,8 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-reacher-a",
-        n_parallel=4,
+        exp_prefix="trpo-montezuma-a",
+        n_parallel=8,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

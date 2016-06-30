@@ -47,7 +47,7 @@ class BNNLayer(lasagne.layers.Layer):
         # Here we set the priors.
         # -----------------------
         self.mu = self.add_param(
-            lasagne.init.Normal(1., 0.),
+            lasagne.init.Normal(0.01, 0.),
             (self.num_inputs, self.num_units),
             name='mu'
         )
@@ -58,7 +58,7 @@ class BNNLayer(lasagne.layers.Layer):
         )
         # Bias priors.
         self.b_mu = self.add_param(
-            lasagne.init.Normal(1., 0.),
+            lasagne.init.Normal(0.01, 0.),
             (self.num_units,),
             name="b_mu",
             regularizable=False
@@ -253,13 +253,13 @@ class BNN(LasagnePowered, Serializable):
                  prior_sd=0.5,
                  use_reverse_kl_reg=False,
                  reverse_kl_reg_factor=0.1,
-                 likelihood_sd=1.0,
+                 likelihood_sd=5.0,
                  second_order_update=False,
                  learning_rate=0.0001,
                  compression=False,
                  information_gain=True,
                  update_prior=False,
-                 update_likelihood_sd=True
+                 update_likelihood_sd=False
                  ):
 
         Serializable.quick_init(self, locals())
@@ -446,11 +446,11 @@ class BNN(LasagnePowered, Serializable):
 
         # Make the likelihood standard deviation a trainable parameter.
         self.likelihood_sd = theano.shared(
-            value=1.,  # self.likelihood_sd_init,
+            value=1.0,  # self.likelihood_sd_init,
             name='likelihood_sd'
         )
         self.old_likelihood_sd = theano.shared(
-            value=1.,  # self.likelihood_sd_init,
+            value=1.0,  # self.likelihood_sd_init,
             name='old_likelihood_sd'
         )
 
@@ -511,6 +511,8 @@ class BNN(LasagnePowered, Serializable):
 
                 return updates
 
+            # DEBUG
+            # -----
             def debug_H(loss, params, oldparams):
                 grads = theano.grad(loss, params)
                 updates = OrderedDict()
@@ -556,6 +558,7 @@ class BNN(LasagnePowered, Serializable):
 #                         invH = 0.
                     invHs.append(invH)
                 return grads
+            # -----
 
             def fast_kl_div(loss, params, oldparams, step_size):
 
@@ -579,7 +582,7 @@ class BNN(LasagnePowered, Serializable):
                         invH = 0.
 
                     kl_component.append(
-                        T.sum(T.square(step_size) * T.square(grad) * invH))
+                        T.sum(0.5 * T.square(step_size) * T.square(grad) * invH))
 
                 return sum(kl_component)
 
@@ -587,14 +590,19 @@ class BNN(LasagnePowered, Serializable):
                 loss_only_last_sample, params, oldparams, step_size)
 
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=True)
+                [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=False)
 
+            # Code to actually perform second order updates
+            # ---------------------------------------------
 #             updates_kl = second_order_update(
 #                 loss_only_last_sample, params, oldparams, step_size)
 #
 #             self.train_update_fn = ext.compile_function(
-#                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=True)
+#                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
+            # ---------------------------------------------
 
+            # DEBUG
+            # -----
 #             self.debug_H = ext.compile_function(
 #                 [input_var, target_var], debug_H(
 #                     loss_only_last_sample, params, oldparams),
@@ -603,6 +611,7 @@ class BNN(LasagnePowered, Serializable):
 #                 [input_var, target_var], debug_g(
 #                     loss_only_last_sample, params, oldparams),
 #                 log_name='fn_debug_grads')
+            # -----
 
         else:
             # Use SGD to update the model for a single sample, in order to
@@ -623,22 +632,23 @@ class BNN(LasagnePowered, Serializable):
                 loss_only_last_sample, params, learning_rate=self.learning_rate)
 
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=True)
+                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
 
-#         self.eval_loss = ext.compile_function(
-#             [input_var, target_var], loss_only_last_sample,  log_name='fn_eval_loss', no_default_updates=True)
-# 
+        self.eval_loss = ext.compile_function(
+            [input_var, target_var], loss,  log_name='fn_eval_loss', no_default_updates=False)
+
+        # DEBUG
+        # -----
 #         # Calculate surprise.
 #         self.fn_surprise = ext.compile_function(
 #             [], self.surprise(), log_name='fn_surprise')
-# 
-#         # DEBUG
-#         # -----
-#         self.fn_dbg_nll = ext.compile_function(
-#             [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll', no_default_updates=True)
-#         self.fn_kl = ext.compile_function(
-#             [], self.kl_div(), log_name='fn_kl')
-#         # -----
+        self.fn_dbg_nll = ext.compile_function(
+            [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll', no_default_updates=False)
+        self.fn_kl = ext.compile_function(
+            [], self.kl_div(), log_name='fn_kl')
+        self.fn_kl_from_prior = ext.compile_function(
+            [], self.log_p_w_q_w_kl(), log_name='fn_kl_from_prior')
+        # -----
 
 if __name__ == '__main__':
     pass

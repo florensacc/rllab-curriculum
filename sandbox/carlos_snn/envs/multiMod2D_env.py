@@ -5,9 +5,9 @@ import numpy as np
 
 
 class MultiModEnv(Env):
-    def __init__(self, mu=[1, 0], sigma=0.01, n=2, rand_init=False):
+    def __init__(self, mu=(1, 0), sigma=0.01, n=2, rand_init=False):
         self.mu = np.array(mu)
-        self.sigma = sigma  ##we suppose symetric Gaussians
+        self.sigma = sigma  #we suppose symetric Gaussians
         self.n = n
         self.rand_init = rand_init
 
@@ -49,3 +49,7 @@ class MultiModEnv(Env):
 
     def render(self):
         print 'current state:', self._state
+
+    def log_diagnostics(self, paths):
+        # to count the modes I need the current policy!
+        pass

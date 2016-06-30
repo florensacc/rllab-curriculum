@@ -7,7 +7,7 @@ from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rein.dynamics_models.bnn.utils import iterate_minibatches
+from sandbox.rein.dynamics_models.utils import iterate_minibatches
 
 
 # exploration imports
@@ -138,7 +138,6 @@ class BatchPolopt(RLAlgorithm):
             min_pool_size=500,
             n_updates_per_sample=500,
             pool_batch_size=10,
-            eta_discount=1.0,
             n_itr_update=5,
             reward_alpha=0.001,
             kl_alpha=0.001,
@@ -152,7 +151,7 @@ class BatchPolopt(RLAlgorithm):
             compression=False,
             information_gain=True,
             surprise_transform=None,
-            update_likelihood_sd=True,
+            update_likelihood_sd=False,
             **kwargs
     ):
         """
@@ -205,7 +204,6 @@ class BatchPolopt(RLAlgorithm):
         self.min_pool_size = min_pool_size
         self.n_updates_per_sample = n_updates_per_sample
         self.pool_batch_size = pool_batch_size
-        self.eta_discount = eta_discount
         self.n_itr_update = n_itr_update
         self.reward_alpha = reward_alpha
         self.kl_alpha = kl_alpha
@@ -340,7 +338,7 @@ class BatchPolopt(RLAlgorithm):
                     obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
                     _inputss = []
                     _targetss = []
-                    for _ in xrange(self.n_updates_per_sample):
+                    for _ in xrange(self.n_updates_per_sample / self.pool_batch_size):
                         batch = self.pool.random_batch(
                             self.pool_batch_size)
                         obs = (batch['observations'] - obs_mean) / \
@@ -363,6 +361,14 @@ class BatchPolopt(RLAlgorithm):
 
                     for _inputs, _targets in zip(_inputss, _targetss):
                         self.bnn.train_fn(_inputs, _targets)
+                        # DEBUG
+                        # -----
+#                         print(self.bnn.eval_loss(_inputs, _targets))
+#                         print(self.bnn.fn_kl())
+#                         print(self.bnn.fn_kl_from_prior())
+#                         print(self.bnn.fn_dbg_nll(_inputs, _targets))
+#                         print('---')
+                        # -----
 
                     new_acc = 0.
                     for _inputs, _targets in zip(_inputss, _targetss):
@@ -393,29 +399,51 @@ class BatchPolopt(RLAlgorithm):
                 T_train = np.asarray(list_obs_nxt)
 
                 old_acc, new_acc = 0., 0.
-                for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
-                    _out = self.bnn.pred_fn(X_train)
-                    old_acc += np.mean(np.square(_out - T_train))
+                for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=False):
+                    _out = self.bnn.pred_fn(batch[0])
+                    old_acc += np.mean(np.square(_out - batch[1]))
                 old_acc /= n_batches
 
                 # Save old parameters as new prior.
                 self.bnn.save_old_params()
-                
+
                 # Num of runs needed to get to n_updates_per_sample
                 for _ in xrange(n_iterations):
                     # Num batches to traverse.
                     for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
                         self.bnn.train_fn(batch[0], batch[1])
 
-                for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
-                    _out = self.bnn.pred_fn(X_train)
-                new_acc += np.mean(np.square(_out - T_train))
+                        # DEBUG
+                        # -----
+#                         print(self.bnn.eval_loss(batch[0], batch[1]))
+#                         print(self.bnn.fn_kl())
+#                         print(self.bnn.fn_dbg_nll(batch[0], batch[1]))
+#                         print('---')
+                        # -----
+
+                # DEBUG
+                # -----
+#                 loss = 0.
+#                 kl_div = 0.
+#                 nll = 0.
+#                 count = 0
+#                 for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
+#                     loss += self.bnn.eval_loss(batch[0], batch[1])
+#                     kl_div += self.bnn.fn_kl()
+#                     nll += self.bnn.fn_dbg_nll(batch[0], batch[1])
+#                     count += 1
+#                 print(loss / count, nll / count, kl_div / count)
+                # -----
+
+                for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=False):
+                    _out = self.bnn.pred_fn(batch[0])
+                    new_acc += np.mean(np.square(_out - batch[1]))
                 new_acc /= n_batches
 
                 logger.record_tabular(
-                    'DynModelSqLossBefore', old_acc)
+                    'DynModelSqErrBefore', old_acc)
                 logger.record_tabular(
-                    'DynModelSqLossAfter', new_acc)
+                    'DynModelSqErrAfter', new_acc)
             # ----------------
 
             self.env.log_diagnostics(paths)
@@ -615,9 +643,6 @@ class BatchPolopt(RLAlgorithm):
             # Add KL as intrinsic reward to external reward
             for i in xrange(len(paths)):
                 paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
-
-            # Discount eta
-            self.eta *= self.eta_discount
 
         else:
             logger.record_tabular('BNN_MeanKL', 0.)
