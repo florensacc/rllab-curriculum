@@ -1,0 +1,12 @@
+#!/usr/bin/env python
+import argparse
+from rllab.misc import docker
+parser = argparse.ArgumentParser()
+parser.add_argument("cmd", choices=["push","run","build"])
+args = parser.parse_args()
+if args.cmd == "push":
+    docker.docker_push()
+elif args.cmd == "build":
+    docker.docker_build()
+elif args.cmd == "run":
+    docker.docker_run()    
