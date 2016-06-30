@@ -259,7 +259,7 @@ class BNN(LasagnePowered, Serializable):
                  compression=False,
                  information_gain=True,
                  update_prior=False,
-                 update_likelihood_sd=False
+                 update_likelihood_sd=True
                  ):
 
         Serializable.quick_init(self, locals())
@@ -446,11 +446,11 @@ class BNN(LasagnePowered, Serializable):
 
         # Make the likelihood standard deviation a trainable parameter.
         self.likelihood_sd = theano.shared(
-            value=1.0,  # self.likelihood_sd_init,
+            value=0.5,  # self.likelihood_sd_init,
             name='likelihood_sd'
         )
         self.old_likelihood_sd = theano.shared(
-            value=1.0,  # self.likelihood_sd_init,
+            value=0.5,  # self.likelihood_sd_init,
             name='old_likelihood_sd'
         )
 
@@ -579,7 +579,7 @@ class BNN(LasagnePowered, Serializable):
                         invH = 0.
 
                     kl_component.append(
-                        T.sum(0.5 * T.square(step_size) * T.square(grad) * invH))
+                        T.sum(T.square(step_size) * T.square(grad) * invH))
 
                 return sum(kl_component)
 
@@ -587,13 +587,13 @@ class BNN(LasagnePowered, Serializable):
                 loss_only_last_sample, params, oldparams, step_size)
 
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=False)
+                [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=True)
 
 #             updates_kl = second_order_update(
 #                 loss_only_last_sample, params, oldparams, step_size)
 #
 #             self.train_update_fn = ext.compile_function(
-#                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
+#                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=True)
 
 #             self.debug_H = ext.compile_function(
 #                 [input_var, target_var], debug_H(
@@ -623,10 +623,10 @@ class BNN(LasagnePowered, Serializable):
                 loss_only_last_sample, params, learning_rate=self.learning_rate)
 
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
+                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=True)
 
         self.eval_loss = ext.compile_function(
-            [input_var, target_var], loss,  log_name='fn_eval_loss', no_default_updates=False)
+            [input_var, target_var], loss,  log_name='fn_eval_loss', no_default_updates=True)
 
 #         # Calculate surprise.
 #         self.fn_surprise = ext.compile_function(
@@ -635,7 +635,7 @@ class BNN(LasagnePowered, Serializable):
         # DEBUG
         # -----
         self.fn_dbg_nll = ext.compile_function(
-            [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll', no_default_updates=False)
+            [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll', no_default_updates=True)
         self.fn_kl = ext.compile_function(
             [], self.kl_div(), log_name='fn_kl')
         self.fn_kl_from_prior = ext.compile_function(
