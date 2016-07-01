@@ -51,7 +51,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
         )
 
         l_mean = mean_network.output_layer
-        obs_var = mean_network.input_var
+        obs_var = mean_network.input_layer.input_var
 
         l_log_std = ParamLayer(
             mean_network.input_layer,

@@ -103,7 +103,7 @@ class BernoulliRecurrentRegressor(LasagnePowered, Serializable):
         old_info_vars = dict(p=old_p_var)
         info_vars = dict(p=p_var)  # posterior of the latent at every step, wrt obs-act. Same along batch if recurrent
 
-        dist = self._dist = Bernoulli()
+        dist = self._dist = Bernoulli(output_dim)
 
         mean_kl = TT.mean(dist.kl_sym(old_info_vars, info_vars))
 

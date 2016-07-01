@@ -5,7 +5,7 @@ import rllab.misc.logger as logger
 import theano
 import theano.tensor as TT
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-#imports from batch_polopt I might need as not I use here process_samples and others
+# imports from batch_polopt I might need as not I use here process_samples and others
 import numpy as np
 from rllab.algos.base import RLAlgorithm
 from rllab.sampler import parallel_sampler
@@ -17,8 +17,9 @@ import rllab.plotter as plotter
 from rllab.sampler.utils import rollout
 import itertools
 
+
 # try to also plot the MC of the policy in the ec2 instance
-from sandbox.carlos_snn.plotters.plt_results2D import plot_all_exp
+# from sandbox.carlos_snn.plotters.plt_results2D import plot_all_exp
 
 class NPO_snn(BatchPolopt):
     """
@@ -48,10 +49,10 @@ class NPO_snn(BatchPolopt):
         self.latent_regressor = latent_regressor
         self.reward_coef = reward_coef
         self.self_normalize = self_normalize
-        self.n_samples=n_samples
+        self.n_samples = n_samples
         super(NPO_snn, self).__init__(**kwargs)
 
-    @overrides
+    # @overrides
     def process_samples(self, itr, paths):
         # save real undiscounted reward before changing them
         undiscounted_returns = [sum(path["rewards"]) for path in paths]
@@ -62,17 +63,19 @@ class NPO_snn(BatchPolopt):
             self.latent_regressor.fit(paths)
             for path in paths:
                 path['logli_latent_regressor'] = self.latent_regressor.predict_log_likelihood(
-                                                    [path], [path['agent_infos']['latents']])[0] #this is for paths usually..
+                    [path], [path['agent_infos']['latents']])[0]  # this is for paths usually..
 
                 # print "The latent sampled was: {}, the mean/actual action was {}{}, the probability of that one is: {}".format(
                 #     path['agent_infos']['latents'], path['agent_infos']['mean'], path['actions'], path['logli_latent_regressor'])
 
                 path['true_rewards'] = path['rewards']
-                path['rewards'] += self.reward_coef * path['logli_latent_regressor']  # the logli of the latent is the variable
-                                                                                        # of the mutual information
+                path['rewards'] += self.reward_coef * path[
+                    'logli_latent_regressor']  # the logli of the latent is the variable
+                # of the mutual information
 
         real_samples = ext.extract_dict(
-            BatchPolopt.process_samples(self, itr, paths),   # I don't need to process the hallucinated samples: the R, A,.. same!
+            self.sampler.process_samples(itr, paths),
+            # I don't need to process the hallucinated samples: the R, A,.. same!
             "observations", "actions", "advantages", "env_infos", "agent_infos"
         )
         real_samples["importance_weights"] = np.ones_like(real_samples["advantages"])
@@ -102,7 +105,7 @@ class NPO_snn(BatchPolopt):
         episode_lengths = []
         for itr in xrange(self.start_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
-                paths = self.obtain_samples(itr)
+                paths = self.sampler.obtain_samples(itr)
                 samples_data = self.process_samples(itr, paths)
                 self.log_diagnostics(paths)
                 self.optimize_policy(itr, samples_data)
@@ -174,15 +177,15 @@ class NPO_snn(BatchPolopt):
             ndim=1 + is_recurrent,
             dtype=theano.config.floatX
         )
-        dist = self.policy.distribution   ### this can still be the dist P(a|s,__h__)
+        dist = self.policy.distribution  ### this can still be the dist P(a|s,__h__)
         old_dist_info_vars = {
             k: ext.new_tensor(
-                'old_%s' % k,   ##define tensors old_mean and old_log_std
+                'old_%s' % k,  ##define tensors old_mean and old_log_std
                 ndim=2 + is_recurrent,
                 dtype=theano.config.floatX
             ) for k in dist.dist_info_keys
             }
-        old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys] ##put 2 tensors above in a list
+        old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]  ##put 2 tensors above in a list
 
         if is_recurrent:
             valid_var = TT.matrix('valid')
@@ -203,7 +206,7 @@ class NPO_snn(BatchPolopt):
         mean_kl = TT.mean(kl * importance_weights)
         surr_loss = - TT.mean(lr * advantage_var * importance_weights)
 
-        input_list = [                  ##these are sym var. the inputs in optimize_policy have to be in same order!
+        input_list = [  ##these are sym var. the inputs in optimize_policy have to be in same order!
                          obs_var,
                          action_var,
                          advantage_var,
@@ -224,17 +227,20 @@ class NPO_snn(BatchPolopt):
         return dict()
 
     @overrides
-    def optimize_policy(self, itr, samples_data):   ###make that samples_data comes with latents: see train in batch_polopt
-        all_input_values = tuple(ext.extract(       ### it will be in agent_infos!!! under key "latents"
+    def optimize_policy(self, itr,
+                        samples_data):  ###make that samples_data comes with latents: see train in batch_polopt
+        all_input_values = tuple(ext.extract(  ### it will be in agent_infos!!! under key "latents"
             samples_data,
-            "observations",  "actions", "advantages", "importance_weights"
+            "observations", "actions", "advantages", "importance_weights"
         ))
         agent_infos = samples_data["agent_infos"]
         ##CF
-        all_input_values += (agent_infos["latents"],)  #latents has already been processed and is the concat of all latents, but keeps key "latents"
+        all_input_values += (agent_infos[
+                                 "latents"],)  # latents has already been processed and is the concat of all latents, but keeps key "latents"
         #
-        info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys] ##these are the mean and var used at rollout, corresponding to
-        all_input_values += tuple(info_list)                                            # old_dist_info_vars_list as symbolic var
+        info_list = [agent_infos[k] for k in
+                     self.policy.distribution.dist_info_keys]  ##these are the mean and var used at rollout, corresponding to
+        all_input_values += tuple(info_list)  # old_dist_info_vars_list as symbolic var
         if self.policy.recurrent:
             all_input_values += (samples_data["valids"],)
 

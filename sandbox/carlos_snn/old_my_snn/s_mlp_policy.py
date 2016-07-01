@@ -65,10 +65,10 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         self.min_std = min_std
 
         if latent_name == 'normal':
-            self.latent_dist = DiagonalGaussian()
+            self.latent_dist = DiagonalGaussian(self.latent_dim)
             self.latent_dist_info = dict(mean=np.zeros(self.latent_dim), log_std=np.zeros(self.latent_dim))
         elif latent_name == 'bernoulli':
-            self.latent_dist = Bernoulli()
+            self.latent_dist = Bernoulli(self.latent_dim)
             self.latent_dist_info = dict(p=0.5 * np.ones(self.latent_dim))
         else:
             raise NotImplementedError
@@ -90,7 +90,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         )
 
         l_mean = mean_network.output_layer
-        obs_var = mean_network.input_var
+        obs_var = mean_network.input_layer.input_var
 
         if adaptive_std:
             l_log_std = MLP(
@@ -118,7 +118,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         self._l_mean = l_mean
         self._l_log_std = l_log_std
 
-        self._dist = DiagonalGaussian()
+        self._dist = DiagonalGaussian(action_dim)
 
         LasagnePowered.__init__(self, [l_mean, l_log_std])
         super(GaussianMLPPolicy_snn, self).__init__(env_spec)
