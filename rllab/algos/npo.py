@@ -19,7 +19,8 @@ class NPO(BatchPolopt):
             step_size=0.01,
             truncate_local_is_ratio=None,
             lossy_lr=False,
-            **kwargs):
+            **kwargs
+    ):
         if optimizer is None:
             if optimizer_args is None:
                 optimizer_args = dict()

@@ -40,6 +40,8 @@ class BatchSampler(Sampler):
     def process_samples(self, itr, paths):
         baselines = []
         returns = []
+        if self.algo.preprocess_samples is not None:
+            paths = self.algo.preprocess_samples(itr, paths)
         for path in paths:
             path_baselines = np.append(self.algo.baseline.predict(path), 0)
             deltas = path["rewards"] + \
@@ -233,6 +235,7 @@ class BatchPolopt(RLAlgorithm):
         if sampler_args is None:
             sampler_args = dict()
         self.sampler = sampler_cls(self, **sampler_args)
+        self.preprocess_samples = None
 
     def start_worker(self):
         self.sampler.start_worker()
