@@ -152,6 +152,7 @@ class BatchPolopt(RLAlgorithm):
             information_gain=True,
             surprise_transform=None,
             update_likelihood_sd=False,
+            replay_kl_schedule=1.0,
             **kwargs
     ):
         """
@@ -218,6 +219,7 @@ class BatchPolopt(RLAlgorithm):
         self.information_gain = information_gain
         self.surprise_transform = surprise_transform
         self.update_likelihood_sd = update_likelihood_sd
+        self.replay_kl_schedule = replay_kl_schedule
         # ----------------------
 
         if self.second_order_update:
@@ -312,6 +314,7 @@ class BatchPolopt(RLAlgorithm):
         self.init_opt()
         episode_rewards = []
         episode_lengths = []
+        kl_factor = 1.0
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
@@ -360,7 +363,7 @@ class BatchPolopt(RLAlgorithm):
                     old_acc /= len(_inputss)
 
                     for _inputs, _targets in zip(_inputss, _targetss):
-                        self.bnn.train_fn(_inputs, _targets)
+                        self.bnn.train_fn(_inputs, _targets, kl_factor)
                         # DEBUG
                         # -----
 #                         print(self.bnn.eval_loss(_inputs, _targets))
@@ -375,6 +378,9 @@ class BatchPolopt(RLAlgorithm):
                         _out = self.bnn.pred_fn(_inputs)
                         new_acc += np.mean(np.square(_out - _targets))
                     new_acc /= len(_inputss)
+
+                    kl_factor *= self.replay_kl_schedule
+                    logger.record_tabular('KLFactor', kl_factor)
 
                     logger.record_tabular(
                         'DynModelSqLossBefore', old_acc)
@@ -411,7 +417,8 @@ class BatchPolopt(RLAlgorithm):
                 for _ in xrange(n_iterations):
                     # Num batches to traverse.
                     for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
-                        self.bnn.train_fn(batch[0], batch[1])
+                        # Don't use kl_factor when using no replay pool.
+                        self.bnn.train_fn(batch[0], batch[1], 1.0)
 
                         # DEBUG
                         # -----
@@ -444,6 +451,7 @@ class BatchPolopt(RLAlgorithm):
                     'DynModelSqErrBefore', old_acc)
                 logger.record_tabular(
                     'DynModelSqErrAfter', new_acc)
+
             # ----------------
 
             self.env.log_diagnostics(paths)

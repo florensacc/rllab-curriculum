@@ -259,7 +259,7 @@ class BNN(LasagnePowered, Serializable):
                  compression=False,
                  information_gain=True,
                  update_prior=False,
-                 update_likelihood_sd=False
+                 update_likelihood_sd=False,
                  ):
 
         Serializable.quick_init(self, locals())
@@ -357,7 +357,7 @@ class BNN(LasagnePowered, Serializable):
     def pred_sym(self, input):
         return lasagne.layers.get_output(self.network, input)
 
-    def loss(self, input, target, likelihood_sd):
+    def loss(self, input, target, likelihood_sd, kl_factor):
 
         # MC samples.
         _log_p_D_given_w = []
@@ -378,7 +378,7 @@ class BNN(LasagnePowered, Serializable):
                 self.reverse_log_p_w_q_w_kl()
 
         # Calculate loss function.
-        return kl / self.n_batches - log_p_D_given_w / self.n_samples
+        return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
 
     def loss_last_sample(self, input, target, likelihood_sd):
         """The difference with the original loss is that we only update based on the latest sample.
@@ -443,6 +443,8 @@ class BNN(LasagnePowered, Serializable):
                              dtype=theano.config.floatX)  # @UndefinedVariable
         target_var = T.matrix('targets',
                               dtype=theano.config.floatX)  # @UndefinedVariable
+        kl_factor = T.scalar('kl_factor',
+                             dtype=theano.config.floatX)  # @UndefinedVariable
 
         # Make the likelihood standard deviation a trainable parameter.
         self.likelihood_sd = theano.shared(
@@ -455,7 +457,8 @@ class BNN(LasagnePowered, Serializable):
         )
 
         # Loss function.
-        loss = self.loss(input_var, target_var, self.likelihood_sd)
+        loss = self.loss(
+            input_var, target_var, self.likelihood_sd, kl_factor)
         loss_only_last_sample = self.loss_last_sample(
             input_var, target_var, self.likelihood_sd)
 
@@ -474,7 +477,7 @@ class BNN(LasagnePowered, Serializable):
         # We want to resample when actually updating the BNN itself, otherwise
         # you will fit to the specific noise.
         self.train_fn = ext.compile_function(
-            [input_var, target_var], loss, updates=updates, log_name='fn_train')
+            [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
 
         if self.second_order_update:
 
@@ -635,7 +638,7 @@ class BNN(LasagnePowered, Serializable):
                 [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
 
         self.eval_loss = ext.compile_function(
-            [input_var, target_var], loss,  log_name='fn_eval_loss', no_default_updates=False)
+            [input_var, target_var, kl_factor], loss,  log_name='fn_eval_loss', no_default_updates=False)
 
         # DEBUG
         # -----
