@@ -8,7 +8,7 @@ from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
 
 from sandbox.carlos_snn.hallucinators.prior_hallucinator import PriorHallucinator
 
-from sandbox.carlos_snn.regressors.mlp_latent_regressor import MLPLatent_regressor
+from sandbox.carlos_snn.regressors.latent_regressor import Latent_regressor
 
 # from rllab.envs.gym_env import GymEnv  # for ec2 this doesn't work yet..
 # from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
@@ -40,7 +40,7 @@ for resample in [False]:
                         baseline = LinearFeatureBaseline(env_spec=env.spec)
 
                         if latent_dim:
-                            latent_regressor = MLPLatent_regressor(
+                            latent_regressor = Latent_regressor(
                                 env_spec=env.spec,
                                 policy=policy,
                                 recurrent=recurrent_reg,

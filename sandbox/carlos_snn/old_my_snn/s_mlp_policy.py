@@ -174,7 +174,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         mean, log_std = self._f_dist(extended_obs)
         rnd = np.random.normal(size=mean.shape)
         actions = rnd * np.exp(log_std) + mean
-        print latents
+        # print latents
         return actions, dict(mean=mean, log_std=log_std, latents=latents)
 
     def set_pre_fix_latent(self, latent):
@@ -190,6 +190,8 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
                 self.latent_fix = self.pre_fix_latent
             else:
                 self.latent_fix = self.latent_dist.sample(self.latent_dist_info)
+            # print 'I reset to latent {} because the pre_fix_latent is {}'.format(self.latent_fix, self.pre_fix_latent)
+            # print 'the pre_fix is: ', str(self.pre_fix_latent)
         else:
             pass
 

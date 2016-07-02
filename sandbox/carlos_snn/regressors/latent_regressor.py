@@ -10,19 +10,41 @@ from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from sandbox.carlos_snn.regressors.bernoulli_mlp_regressor import BernoulliMLPRegressor
 from sandbox.carlos_snn.regressors.bernoulli_recurrent_regressor import BernoulliRecurrentRegressor
 
-class MLPLatent_regressor(Parameterized, Serializable):
 
+class Latent_regressor(Parameterized, Serializable):
     def __init__(
             self,
             env_spec,
             policy,
             recurrent=False,
+            obs_regressed='all',
+            act_regressed='all',
             regressor_args=None,
     ):
+        """
+        :param env_spec:
+        :param policy:
+        :param recurrent:
+        :param obs_regressed: list of index of the obs variables used to fit the regressor. default string 'all'
+        :param act_regressed: list of index of the act variables used to fit the regressor. default string 'all'
+        :param regressor_args:
+        """
         self.latent_dim = policy.latent_dim
-        self.obs_act_dim = env_spec.observation_space.flat_dim + env_spec.action_space.flat_dim
         self.policy = policy
         self.recurrent = recurrent
+        # decide what obs variables will be regressed upon
+        if obs_regressed == 'all':
+            self.obs_regressed = range(env_spec.observation_space.flat_dim)
+        else:
+            self.obs_regressed = obs_regressed
+        # decide what action variables will be regressed upon
+        if act_regressed == 'all':
+            self.act_regressed = range(env_spec.action_space.flat_dim)
+        else:
+            self.act_regressed = act_regressed
+        # shape the input dimension of the NN for the above decisions.
+        self.obs_act_dim = len(self.obs_regressed) + len(self.act_regressed)
+
         Serializable.quick_init(self, locals())  # ??
 
         if regressor_args is None:
@@ -52,32 +74,38 @@ class MLPLatent_regressor(Parameterized, Serializable):
 
     def fit(self, paths):
         if self.recurrent:
-            observations = np.array([p["observations"] for p in paths])
-            # print 'the obs shape is: ', np.shape(observations)
-            actions = np.array([p["actions"] for p in paths])
-            # print 'the actions shape is; ', np.shape(actions)
+            observations = np.array([p["observations"][:, self.obs_regressed] for p in paths])
+            print 'the obs shape is: ', np.shape(observations)
+            actions = np.array([p["actions"][:, self.act_regressed] for p in paths])
+            print 'the actions shape is; ', np.shape(actions)
             obs_actions = np.concatenate([observations, actions], axis=2)
             latents = np.array([p['agent_infos']['latents'] for p in paths])
-            self._regressor.fit(obs_actions, latents) # why reshape??
+            self._regressor.fit(obs_actions, latents)  # why reshape??
         else:
-            observations = np.concatenate([p["observations"] for p in paths])
-            actions = np.concatenate([p["actions"] for p in paths])
+            observations = np.concatenate([p["observations"][:, self.obs_regressed] for p in paths])
+            actions = np.concatenate([p["actions"][:, self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate([p['agent_infos']["latents"] for p in paths])
-            self._regressor.fit(obs_actions, latents.reshape((-1, self.latent_dim))) # why reshape??
+            self._regressor.fit(obs_actions, latents.reshape((-1, self.latent_dim)))  # why reshape??
 
     def predict(self, path):
         if self.recurrent:
-            obs_actions = [np.concatenate([path["observations"], path["actions"]], axis=1)] # is this the same??
+            obs_actions = [np.concatenate([path["observations"][:, self.obs_regressed],
+                                           path["actions"][:, self.act_regressed]],
+                                          axis=1)]  # is this the same??
         else:
-            obs_actions = np.concatenate([path["observations"], path["actions"]], axis=1)
+            obs_actions = np.concatenate([path["observations"][:, self.obs_regressed],
+                                          path["actions"][:, self.act_regressed]], axis=1)
         return self._regressor.predict(obs_actions).flatten()
 
-    def get_output_p(self, path): # this gives the p_dist for every step: the latent posterior wrt obs_act
+    def get_output_p(self, path):  # this gives the p_dist for every step: the latent posterior wrt obs_act
         if self.recurrent:
-            obs_actions = [np.concatenate([path["observations"], path["actions"]], axis=1)] # is this the same??
+            obs_actions = [np.concatenate([path["observations"][:, self.obs_regressed],
+                                           path["actions"][:, self.act_regressed]],
+                                          axis=1)]  # is this the same??
         else:
-            obs_actions = np.concatenate([path["observations"], path["actions"]], axis=1)
+            obs_actions = np.concatenate([path["observations"][:, self.obs_regressed],
+                                          path["actions"][:, self.act_regressed]], axis=1)
         if self.policy.latent_name == 'bernoulli':
             return self._regressor._f_p(obs_actions).flatten()
         elif self.policy.latent_name == 'normal':
@@ -91,29 +119,29 @@ class MLPLatent_regressor(Parameterized, Serializable):
 
     def predict_log_likelihood(self, paths, latents):
         if self.recurrent:
-            observations = np.array([p["observations"] for p in paths])
-            actions = np.array([p["actions"] for p in paths])
+            observations = np.array([p["observations"][:, self.obs_regressed] for p in paths])
+            actions = np.array([p["actions"][:, self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=2)
         else:
-            observations = np.concatenate([p["observations"] for p in paths])
-            actions = np.concatenate([p["actions"] for p in paths])
+            observations = np.concatenate([p["observations"][:, self.obs_regressed] for p in paths])
+            actions = np.concatenate([p["actions"][:, self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate(latents, axis=0)
         return self._regressor.predict_log_likelihood(obs_actions, latents)  # see difference with fit above...
 
     def lowb_mutual(self, paths):
         if self.recurrent:
-            observations = np.array([p["observations"] for p in paths])
-            actions = np.array([p["actions"] for p in paths])
+            observations = np.array([p["observations"][:, self.obs_regressed] for p in paths])
+            actions = np.array([p["actions"][:, self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=2)
             latents = np.array([p['agent_infos']['latents'] for p in paths])
         else:
-            observations = np.concatenate([p["observations"] for p in paths])
-            actions = np.concatenate([p["actions"] for p in paths])
+            observations = np.concatenate([p["observations"][:, self.obs_regressed] for p in paths])
+            actions = np.concatenate([p["actions"][:, self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate([p['agent_infos']["latents"] for p in paths])
         H_latent = self.policy.latent_dist.entropy(self.policy.latent_dist_info)  # sum of entropies latents in
-                                                                                  # one timestep (assumes iid)
+        # one timestep (assumes iid)
         print 'the latent entropy is: ', H_latent
         # for one Bernoulli it will be
         # 1Ber, the latent entropy is:  0.69314716056
@@ -133,5 +161,3 @@ class MLPLatent_regressor(Parameterized, Serializable):
 
     def log_diagnostics(self, paths):
         logger.record_tabular('LowerB_MI', self.lowb_mutual(paths))
-
-
