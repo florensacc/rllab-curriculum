@@ -9,7 +9,7 @@ from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
 from rllab.spaces import Box
 
-from rllab.sampler.utils import rollout  #I need this for logging the diagnostics: run the policy with all diff latents
+from rllab.sampler.utils import rollout  # I need this for logging the diagnostics: run the policy with all diff latents
 
 from rllab.core.serializable import Serializable
 from rllab.policies.base import StochasticPolicy
@@ -43,8 +43,9 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             self,
             env_spec,
             ##CF - latents units at the input
-            latent_dim = 2,
+            latent_dim=2,
             latent_name='bernoulli',
+            bilinear_integration=False,
             resample=True,
             hidden_sizes=(32, 32),
             learn_std=True,
@@ -59,9 +60,10 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     ):
         self.latent_dim = latent_dim  ##could I avoid needing this self for the get_action?
         self.latent_name = latent_name
+        self.bilinear_integration = bilinear_integration
         self.resample = resample
-        self.pre_fix_latent = np.array([]) # if this is not empty when using reset() it will use this latent
-        self.latent_fix = np.array([]) # this will hold the latents variable sampled in reset()
+        self.pre_fix_latent = np.array([])  # if this is not empty when using reset() it will use this latent
+        self.latent_fix = np.array([])  # this will hold the latents variable sampled in reset()
         self.min_std = min_std
 
         if latent_name == 'normal':
@@ -77,7 +79,11 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         assert isinstance(env_spec.action_space, Box)
 
         ##CF - enlarge obs with the latents
-        obs_dim = env_spec.observation_space.flat_dim + latent_dim
+        if self.bilinear_integration:
+            obs_dim = env_spec.observation_space.flat_dim + latent_dim + env_spec.observation_space.flat_dim * latent_dim
+        else:
+            obs_dim = env_spec.observation_space.flat_dim + latent_dim  # here only if concat.
+
         action_dim = env_spec.action_space.flat_dim
 
         # create network
@@ -131,18 +137,24 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     ##CF 
     @property
     def latent_space(self):
-        return Box(low= -np.inf, high=np.inf, shape=(1,))
+        return Box(low=-np.inf, high=np.inf, shape=(1,))
+
     ##
-    
+
     ##CF - the mean and var now also depend on the particular latents sampled
 
-    def dist_info_sym(self, obs_var, latent_var ):
-        #generate the generalized input (append latents to obs.)
-        extended_obs_var = TT.concatenate( [obs_var,latent_var], axis=1 )
+    def dist_info_sym(self, obs_var, latent_var):
+        # generate the generalized input (append latents to obs.)
+        if self.bilinear_integration:
+
+            extended_obs_var = TT.concatenate([obs_var, latent_var, TT.flatten(TT.outer(obs_var, latent_var))], axis=1)
+        else:
+            extended_obs_var = TT.concatenate([obs_var, latent_var], axis=1)
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], extended_obs_var)
         if self.min_std is not None:
             log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
         return dict(mean=mean_var, log_std=log_std_var)
+
     ##
     # def dist_info_sym(self, obs_var, action_var):
     #     mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
@@ -160,14 +172,18 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             if self.resample:
                 latents = [self.latent_dist.sample(self.latent_dist_info) for _ in observations]
             else:
-                if not len(self.latent_fix)==self.latent_dim:  # we decide to reset based on if smthing in the fix
+                if not len(self.latent_fix) == self.latent_dim:  # we decide to reset based on if smthing in the fix
                     self.reset()
                 if len(self.pre_fix_latent) == self.latent_dim:  # If we have a pre_fix, reset will put the latent to it
                     self.reset()  # this overwrites the latent sampled or in latent_fix
                 latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation better...
-            extended_obs = np.concatenate([observations, latents], axis=1)
+            if self.bilinear_integration:
+                extended_obs = np.concatenate([observations, latents,
+                                               np.ndarray.flatten(np.outer(observations, latents))], axis =1)
+            else:
+                extended_obs = np.concatenate([observations, latents], axis=1)
         else:
-            latents = np.array([[]]*len(observations))
+            latents = np.array([[]] * len(observations))
             extended_obs = observations
         # print extended_obs
         # make mean, log_std also depend on the latents (as observ.)
@@ -190,7 +206,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
                 self.latent_fix = self.pre_fix_latent
             else:
                 self.latent_fix = self.latent_dist.sample(self.latent_dist_info)
-            # print 'I reset to latent {} because the pre_fix_latent is {}'.format(self.latent_fix, self.pre_fix_latent)
+                # print 'I reset to latent {} because the pre_fix_latent is {}'.format(self.latent_fix, self.pre_fix_latent)
         else:
             pass
 
@@ -214,11 +230,11 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         logli = self._dist.log_likelihood(actions, agent_infos)
         if not action_only:
             raise NotImplementedError
-         #   if not action_only:
-         #       for idx, latent_name in enumerate(self._latent_distributions):
-         #           latent_var = dist_info["latent_%d" % idx]
-         #           prefix = "latent_%d_" % idx
-         #           latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.iteritems() if k.startswith(
-         #               prefix)}
-         #           logli += latent_name.log_likelihood(latent_var, latent_dist_info)
+            #   if not action_only:
+            #       for idx, latent_name in enumerate(self._latent_distributions):
+            #           latent_var = dist_info["latent_%d" % idx]
+            #           prefix = "latent_%d_" % idx
+            #           latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.iteritems() if k.startswith(
+            #               prefix)}
+            #           logli += latent_name.log_likelihood(latent_var, latent_dist_info)
         return logli

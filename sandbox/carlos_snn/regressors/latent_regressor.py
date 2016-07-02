@@ -20,6 +20,8 @@ class Latent_regressor(Parameterized, Serializable):
             recurrent=False,
             obs_regressed='all',
             act_regressed='all',
+            use_only_sign=False,
+            noisify_traj_coef=0,
             optimizer=None, #this defaults to LBFGS
             regressor_args=None, # here goes all args straight to the regressor: predict_all, optimizer, step_size....
     ):
@@ -34,6 +36,8 @@ class Latent_regressor(Parameterized, Serializable):
         self.latent_dim = policy.latent_dim
         self.policy = policy
         self.recurrent = recurrent
+        self.use_only_sign = use_only_sign
+        self.noisify_traj_coef = noisify_traj_coef
         # decide what obs variables will be regressed upon
         if obs_regressed == 'all':
             self.obs_regressed = range(env_spec.observation_space.flat_dim)
@@ -87,10 +91,13 @@ class Latent_regressor(Parameterized, Serializable):
     def fit(self, paths):
         if self.recurrent:
             observations = np.array([p["observations"][:, self.obs_regressed] for p in paths])
-            print 'the obs shape is: ', np.shape(observations)
+            # print 'the obs shape is: ', np.shape(observations)
             actions = np.array([p["actions"][:, self.act_regressed] for p in paths])
-            print 'the actions shape is; ', np.shape(actions)
+            # print 'the actions shape is; ', np.shape(actions)
             obs_actions = np.concatenate([observations, actions], axis=2)
+            if self.noisify_traj_coef:
+                obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+                                                size=np.shape(obs_actions))
             latents = np.array([p['agent_infos']['latents'] for p in paths])
             self._regressor.fit(obs_actions, latents)  # why reshape??
         else:
@@ -98,6 +105,9 @@ class Latent_regressor(Parameterized, Serializable):
             actions = np.concatenate([p["actions"][:, self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate([p['agent_infos']["latents"] for p in paths])
+            if self.noisify_traj_coef:
+                obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+                                                size=np.shape(obs_actions))
             self._regressor.fit(obs_actions, latents.reshape((-1, self.latent_dim)))  # why reshape??
 
     def predict(self, path):
@@ -108,6 +118,11 @@ class Latent_regressor(Parameterized, Serializable):
         else:
             obs_actions = np.concatenate([path["observations"][:, self.obs_regressed],
                                           path["actions"][:, self.act_regressed]], axis=1)
+        if self.noisify_traj_coef:
+            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+                                            size=np.shape(obs_actions))
+        if self.use_only_sign:
+            obs_actions = np.sign(obs_actions)
         return self._regressor.predict(obs_actions).flatten()
 
     def get_output_p(self, path):  # this gives the p_dist for every step: the latent posterior wrt obs_act
@@ -118,6 +133,11 @@ class Latent_regressor(Parameterized, Serializable):
         else:
             obs_actions = np.concatenate([path["observations"][:, self.obs_regressed],
                                           path["actions"][:, self.act_regressed]], axis=1)
+        if self.noisify_traj_coef:
+            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+                                            size=np.shape(obs_actions))
+        if self.use_only_sign:
+            obs_actions = np.sign(obs_actions)
         if self.policy.latent_name == 'bernoulli':
             return self._regressor._f_p(obs_actions).flatten()
         elif self.policy.latent_name == 'normal':
@@ -139,6 +159,11 @@ class Latent_regressor(Parameterized, Serializable):
             actions = np.concatenate([p["actions"][:, self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate(latents, axis=0)
+        if self.noisify_traj_coef:
+            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+                                            size=np.shape(obs_actions))
+        if self.use_only_sign:
+            obs_actions = np.sign(obs_actions)
         return self._regressor.predict_log_likelihood(obs_actions, latents)  # see difference with fit above...
 
     def lowb_mutual(self, paths):
@@ -152,6 +177,11 @@ class Latent_regressor(Parameterized, Serializable):
             actions = np.concatenate([p["actions"][:, self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate([p['agent_infos']["latents"] for p in paths])
+        if self.noisify_traj_coef:
+            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+                                            size=np.shape(obs_actions))
+        if self.use_only_sign:
+            obs_actions = np.sign(obs_actions)
         H_latent = self.policy.latent_dist.entropy(self.policy.latent_dist_info)  # sum of entropies latents in
         # one timestep (assumes iid)
         print 'the latent entropy is: ', H_latent
