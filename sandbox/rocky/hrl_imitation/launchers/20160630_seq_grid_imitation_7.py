@@ -19,8 +19,8 @@ from rllab.misc.instrument import VariantGenerator
 vg = VariantGenerator()
 vg.add("seed", [11, 111, 211, 311, 411, 511, 611, 711, 811, 911])
 vg.add("learning_rate", [1e-3])
-vg.add("obs_feature_dim", [1, 2, 3, 5, 7, 10])
-vg.add("feature_hidden_dim", [10, 32, 50, 100, 200])
+vg.add("obs_feature_dim", [10])#, 2, 3, 5, 7, 10])
+vg.add("feature_hidden_dim", [100])#, 32, 50, 100, 200])
 vg.add("bottleneck_coeff", [0])
 
 variants = vg.variants()
@@ -38,16 +38,16 @@ for v in variants:
         env_expert=env_expert,
         policy_module=SeqGridPolicyModule(),
         recog=recog,
-        n_epochs=50,
+        n_epochs=1000,
         n_sweep_per_epoch=5,
         learning_rate=v["learning_rate"],
         bottleneck_coeff=v["bottleneck_coeff"],
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="seq_grid_imitation_3",
+        exp_prefix="seq_grid_imitation_10",
         seed=v["seed"],
         variant=v,
-        mode="lab_kube"
+        mode="local"
     )
     # break

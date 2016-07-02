@@ -14,7 +14,7 @@ class ApproximatePosterior(LayersPowered):
     sequence. It is structured as a GRU.
     """
 
-    def __init__(self, env_spec, subgoal_dim, subgoal_interval):
+    def __init__(self, env_spec, subgoal_dim, subgoal_interval, obs_feature_dim=100, feature_hidden_dim=100):
         """
         :type env_spec: EnvSpec
         :param env_spec:
@@ -39,24 +39,34 @@ class ApproximatePosterior(LayersPowered):
             name="action_input"
         )
 
-        obs_feature_dim = 10  # 0
+        # obs_feature_dim = 1#10#2#0  # 0
         action_feature_dim = 10
 
-        feature_network = ConvMergeNetwork(
-            name="feature_network",
-            input_layer=L.reshape(l_obs, (-1, obs_dim), name="reshape_obs"),
-            input_shape=env_spec.observation_space.components[0].shape,
-            extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
-            extra_hidden_sizes=(32,),
+        feature_network = MLP(
+            input_shape=(env_spec.observation_space.flat_dim,),
             output_dim=obs_feature_dim,
-            hidden_sizes=(32,),#tuple(32,),  # (100,),
-            conv_filters=(10, 10),
-            conv_filter_sizes=(3, 3),
-            conv_strides=(1, 1),
-            conv_pads=('SAME', 'SAME'),
+            hidden_sizes=(feature_hidden_dim,),
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.tanh,
+            name="feature_network",
+            input_layer=L.reshape(l_obs, (-1, obs_dim), name="reshape_obs"),
         )
+
+        # feature_network = ConvMergeNetwork(
+        #     name="feature_network",
+        #     input_layer=L.reshape(l_obs, (-1, obs_dim), name="reshape_obs"),
+        #     input_shape=env_spec.observation_space.components[0].shape,
+        #     extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
+        #     extra_hidden_sizes=(feature_hidden_dim,),
+        #     output_dim=obs_feature_dim,
+        #     hidden_sizes=(feature_hidden_dim,),#tuple(32,),  # (100,),
+        #     conv_filters=(10, 10),
+        #     conv_filter_sizes=(3, 3),
+        #     conv_strides=(1, 1),
+        #     conv_pads=('SAME', 'SAME'),
+        #     hidden_nonlinearity=tf.nn.tanh,
+        #     output_nonlinearity=tf.nn.tanh,
+        # )
         l_reshaped_feature = L.reshape(
             feature_network.output_layer,
             shape=(-1, subgoal_interval, obs_feature_dim),
@@ -107,7 +117,7 @@ class ApproximatePosterior(LayersPowered):
         #     ),
         #     hidden_sizes=tuple(),#(20,),#tuple(20,),  # (100,),
         # )
-
+        #
         # subgoal_input_layer = L.reshape(
         #     preprocess_network.output_layer,
         #     (-1, subgoal_interval * preprocess_network.output_layer.output_shape[-1]),
@@ -118,7 +128,7 @@ class ApproximatePosterior(LayersPowered):
             name="h_network",
             input_shape=(subgoal_input_layer.output_shape[-1],),
             output_dim=subgoal_dim,
-            hidden_sizes=(100, 100),
+            hidden_sizes=(100,),
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.softmax,
             input_layer=subgoal_input_layer,

@@ -120,6 +120,8 @@ class FixedClockImitation(RLAlgorithm):
         )
         bottleneck_kl = self.low_policy.bottleneck_dist.kl_sym(bottleneck_dist_info, prior_bottleneck_dist_info)
 
+        ent_g_given_a_s = tf.reduce_mean(self.recog.distribution.entropy_sym(recog_subgoal_dist))
+
         vlb = tf.reduce_mean(- sum_action_logli + subgoal_kl)
         avg_bottleneck_kl = tf.reduce_mean(bottleneck_kl)
 
@@ -135,7 +137,7 @@ class FixedClockImitation(RLAlgorithm):
 
         self.f_train = tensor_utils.compile_function(
             inputs=[obs_var, action_var, bottleneck_epsilon_var],
-            outputs=[train_op, loss, vlb, avg_bottleneck_kl],
+            outputs=[train_op, loss, surr_loss, vlb, avg_bottleneck_kl, ent_g_given_a_s],
         )
 
     def train(self):
@@ -152,8 +154,10 @@ class FixedClockImitation(RLAlgorithm):
             for epoch_id in xrange(self.n_epochs):
 
                 losses = []
+                surr_losses = []
                 vlbs = []
                 bottleneck_kls = []
+                ent_g_given_a_ses = []
 
                 logger.log("Start epoch %d..." % epoch_id)
 
@@ -163,16 +167,21 @@ class FixedClockImitation(RLAlgorithm):
                         # Sample minibatch and train
                         N = batch_obs.shape[0] * batch_obs.shape[1]
                         epsilons = np.random.normal(size=(N, self.bottleneck_dim))
-                        _, loss_val, vlb_val, bottleneck_kl_val = self.f_train(batch_obs, batch_actions, epsilons)
+                        _, loss_val, surr_loss_val, vlb_val, bottleneck_kl_val, ent_g_given_a_s_val = self.f_train(
+                            batch_obs, batch_actions, epsilons)
                         losses.append(loss_val)
+                        surr_losses.append(surr_loss_val)
                         vlbs.append(vlb_val)
                         bottleneck_kls.append(bottleneck_kl_val)
+                        ent_g_given_a_ses.append(ent_g_given_a_s_val)
 
                 logger.log("Evaluating...")
 
                 logger.record_tabular("Epoch", epoch_id)
                 logger.record_tabular("AverageLoss", np.mean(losses))
+                logger.record_tabular("AverageSurrLoss", np.mean(surr_losses))
                 logger.record_tabular("AverageNegVlb", np.mean(vlbs))
                 logger.record_tabular("AverageBottleneckKL", np.mean(bottleneck_kls))
+                logger.record_tabular("H(q(g|a,s))", np.mean(ent_g_given_a_ses))
                 self.env_expert.log_diagnostics(self)
                 logger.dump_tabular()

@@ -6,6 +6,7 @@ from sandbox.rocky.tf.core.parameterized import Parameterized
 
 class Policy(Parameterized):
     def __init__(self, env_spec):
+        Parameterized.__init__(self)
         self._env_spec = env_spec
 
     # Should be implemented by all policies
@@ -13,8 +14,19 @@ class Policy(Parameterized):
     def get_action(self, observation):
         raise NotImplementedError
 
+    def get_actions(self, observations):
+        raise NotImplementedError
+
     def reset(self, dones=None):
         pass
+
+    @property
+    def vectorized(self):
+        """
+        Indicates whether the policy is vectorized. If True, it should implement get_actions(), and support resetting
+        with multiple simultaneous states.
+        """
+        return False
 
     @property
     def observation_space(self):

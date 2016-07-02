@@ -85,7 +85,11 @@ class SeqGridExpert(object):
         wrapped_env = ImageGridWorld(desc=base_map)
         env = TfEnv(CompoundActionSequenceEnv(wrapped_env, action_map, obs_include_history=True))
         self.template_env = env
-        self.env_spec = env.spec
+        self._env_spec = env.spec
+
+    @property
+    def env_spec(self):
+        return self._env_spec
 
     def build_dataset(self, batch_size):
         if self.dataset is None:

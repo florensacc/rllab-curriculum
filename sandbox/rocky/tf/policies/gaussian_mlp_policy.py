@@ -139,6 +139,10 @@ class GaussianMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
                 outputs=[mean_var, log_std_var],
             )
 
+    @property
+    def vectorized(self):
+        return True
+
     def dist_info_sym(self, obs_var, state_info_vars=None):
         mean_var, std_param_var = L.get_output([self._l_mean, self._l_std_param], obs_var)
         if self.min_std_param is not None:

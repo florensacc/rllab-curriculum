@@ -596,7 +596,7 @@ class SeqGridExpert(object):
         #         use_trust_region=False,
         #     )
         #     tf.get_default_session().run(tf.initialize_variables(self.g_given_z_regressor.get_params()))
-        algo.g_given_z_regressor.fit(all_bottlenecks, all_subgoals)#policy_subgoal_dist["prob"])
+        algo.g_given_z_regressor.fit(all_bottlenecks, all_subgoals)  # policy_subgoal_dist["prob"])
         ent = np.mean(algo.g_given_z_regressor._dist.entropy(dict(prob=algo.g_given_z_regressor._f_prob(bottlenecks))))
         # now learn a regressor from bottlenecks to
         logger.record_tabular("exact_H(g|z)", ent)
@@ -986,7 +986,7 @@ class FixedClockImitation(RLAlgorithm):
         recog_subgoal_dist = self.bottleneck_goal_recognizer.dist_info_sym(bottleneck_var)
 
         ent_g_given_z = tf.reduce_mean(self.high_policy.distribution.cross_entropy_sym(policy_subgoal_dist,
-                                                                                 recog_subgoal_dist))
+                                                                                       recog_subgoal_dist))
 
         surr_ent_g_given_z = ent_g_given_z
 
@@ -1034,17 +1034,31 @@ class FixedClockImitation(RLAlgorithm):
         all_params = JointParameterized([self.high_policy, self.low_policy, self.recog]).get_params(trainable=True)
         bottleneck_params = L.get_all_params(self.low_policy.l_bottleneck, trainable=True)
 
-        vlb_train_op = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(
-            -surr_vlb,# - self.ent_g_given_z_coeff * surr_ent_g_given_z,  # - self.mi_coeff * mi_a_g_given_s,
-            var_list=all_params)
+        optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
 
-        bottleneck_train_op = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(
+        vlb_grads = optimizer.compute_gradients(-surr_vlb, var_list=all_params)
+        bottleneck_grads = optimizer.compute_gradients(
             - self.mi_coeff * mi_a_g_given_s - self.ent_g_given_z_coeff * surr_ent_g_given_z, var_list=bottleneck_params
         )
-
-        goal_recog_train_op = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(
+        goal_recog_grads = optimizer.compute_gradients(
             ent_g_given_z, var_list=self.bottleneck_goal_recognizer.get_params(trainable=True)
         )
+
+        all_grads = merge_grads(vlb_grads, bottleneck_grads, goal_recog_grads)
+
+        train_op = optimizer.apply_gradients(all_grads)
+
+        # vlb_train_op = .minimize(
+        #     -surr_vlb,# - self.ent_g_given_z_coeff * surr_ent_g_given_z,  # - self.mi_coeff * mi_a_g_given_s,
+        #     var_list=all_params)
+        #
+        # bottleneck_train_op = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(
+        #     - self.mi_coeff * mi_a_g_given_s - self.ent_g_given_z_coeff * surr_ent_g_given_z, var_list=bottleneck_params
+        # )
+        #
+        # goal_recog_train_op = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(
+        #     ent_g_given_z, var_list=self.bottleneck_goal_recognizer.get_params(trainable=True)
+        # )
 
         self.logging_info.extend([
             ("average_NegVlb", -vlb),
@@ -1056,17 +1070,9 @@ class FixedClockImitation(RLAlgorithm):
         # train_op = tf.group(joint_train_op, bottleneck_train_op)#, goal_recog_train_op)
         # goal_recog_train_op =
 
-        self.f_train_vlb = tensor_utils.compile_function(
+        self.f_train = tensor_utils.compile_function(
             inputs=[obs_var, action_var],
-            outputs=[vlb_train_op] + [x[1] for x in self.logging_info],
-        )
-        self.f_train_bottleneck = tensor_utils.compile_function(
-            inputs=[obs_var, action_var],
-            outputs=[bottleneck_train_op],
-        )
-        self.f_train_goal_recog = tensor_utils.compile_function(
-            inputs=[obs_var, action_var],
-            outputs=[goal_recog_train_op],
+            outputs=[train_op] + [x[1] for x in self.logging_info],
         )
 
     def get_snapshot(self):
@@ -1097,9 +1103,7 @@ class FixedClockImitation(RLAlgorithm):
 
                     for batch_obs, batch_actions in dataset.iterate():
                         # Sample minibatch and train
-                        vals = self.f_train_vlb(batch_obs, batch_actions)[1:]
-                        self.f_train_bottleneck(batch_obs, batch_actions)
-                        self.f_train_goal_recog(batch_obs, batch_actions)
+                        vals = self.f_train(batch_obs, batch_actions)[1:]
                         all_vals.append(vals)
 
                 # for rep in xrange(self.n_sweep_per_epoch*5):

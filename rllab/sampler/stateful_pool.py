@@ -84,7 +84,7 @@ class StatefulPool(object):
 
     def run_map(self, runner, args_list):
         if self.n_parallel > 1:
-            return self.pool.map((_worker_run_map, runner, args) for args in args_list)
+            return self.pool.map(_worker_run_map, [(runner, args) for args in args_list])
         else:
             ret = []
             for args in args_list:
