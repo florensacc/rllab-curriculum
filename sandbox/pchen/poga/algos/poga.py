@@ -19,14 +19,18 @@ class POGA(BatchPolopt):
             self,
             inner_algo,
             optimizer=FirstOrderOptimizer(
-                max_epochs=1,
-                batch_size=None,
-                learning_rate=1e-2,
+                max_epochs=2,
+                batch_size=64,
+                learning_rate=1e-4,
             ),
+            inner_n_itr=3,
+            best_ratio=0.5,
             **kwargs
     ):
         self._inner = inner_algo
         self._optimizer = optimizer
+        self._inner_n_itr = inner_n_itr
+        self._best_ratio = best_ratio
         super(POGA, self).__init__(**kwargs)
 
     @overrides
@@ -62,7 +66,7 @@ class POGA(BatchPolopt):
             inputs=input_lst,
         )
 
-        self._disc_scorer = compile_function([obs_var], -TT.log(disc_out))
+        self._disc_scorer = compile_function([obs_var], -TT.log(1-disc_out))
 
     @overrides
     def optimize_policy(self, itr, samples_data):
@@ -70,8 +74,16 @@ class POGA(BatchPolopt):
         sorted_paths = sorted(paths, key=lambda path: -path["returns"][0])
         cur_obs = samples_data["observations"]
         cur_tgt = np.zeros_like(cur_obs[:, 0])
+        kl_input_values = tuple(ext.extract(
+            samples_data,
+            "observations", "actions", "advantages"
+        ))
+        agent_infos = samples_data["agent_infos"]
+        state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
+        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
+        kl_input_values += tuple(state_info_list) + tuple(dist_info_list)
 
-        better_paths = sorted_paths[:int(0.2*len(paths))]
+        better_paths = sorted_paths[:int(self._best_ratio*len(paths))]
         better_obs = tensor_utils.concat_tensor_list([path["observations"] for path in better_paths])
         better_tgt = np.ones_like(better_obs[:, 0])
 
@@ -81,15 +93,23 @@ class POGA(BatchPolopt):
             np.concatenate([cur_tgt, better_tgt], axis=0),
         ])
 
+        # import ipdb; ipdb.set_trace()
         self._optimizer.optimize(fin)
-        for _ in xrange(1):
-            for path in paths:
-                path["rewards"] = -self._disc_scorer(*[
-                    path["observations"],
-                ])
-            ga_samples_data = self.sampler.process_samples(itr, paths)
-            self._inner.optimize_policy(itr, ga_samples_data)
-            paths = self.sampler.obtain_samples(itr)
+        # import ipdb; ipdb.set_trace()
+        score_before = self._disc_scorer(cur_obs).mean()
+        for inner_i in xrange(self._inner_n_itr):
+            with logger.tabular_prefix("InnerItr%s" % inner_i):
+                if inner_i != 0:
+                    paths = self.sampler.obtain_samples(itr)
+                for path in paths:
+                    path["rewards"] = self._disc_scorer(*[
+                        path["observations"],
+                    ])
+                ga_samples_data = self.sampler.process_samples(itr, paths)
+                self._inner.optimize_policy(itr, ga_samples_data)
+        score_after = self._disc_scorer(ga_samples_data["observations"]).mean()
+        logger.record_tabular('ScoreImprov', score_after - score_before)
+        logger.record_tabular('MeanKL', self._inner.optimizer.constraint_val(kl_input_values))
 
     @overrides
     def get_itr_snapshot(self, itr, samples_data):
@@ -99,3 +119,4 @@ class POGA(BatchPolopt):
             baseline=self.baseline,
             env=self.env,
         )
+
