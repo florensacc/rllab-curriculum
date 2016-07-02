@@ -2,6 +2,8 @@ import os
 from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
 os.environ["THEANO_FLAGS"] = "device=cpu"
+from rllab.envs.gym_env import GymEnv
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
@@ -23,31 +25,40 @@ stub(globals())
 # kl_ratios = [True]
 # mdp_classes = [MountainCarEnv]
 
-seeds = range(10)
+seeds = range(3)
 etas = [0.0001]
 normalize_rewards = [False]
 kl_ratios = [True]
-mdp_classes = [MountainCarEnvX]
 
-mdps = [NormalizedEnv(env=mdp_class())
-        for mdp_class in mdp_classes]
+# mdp_classes = [MountainCarEnvX]
+# mdps = [NormalizedEnv(env=mdp_class())
+#         for mdp_class in mdp_classes]
+
+mdps = [GymEnv("MontezumaRevenge-ram-v0")]
+
+
 param_cart_product = itertools.product(
     kl_ratios, normalize_rewards, mdps, etas, seeds
 )
 
 for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
-    policy = GaussianMLPPolicy(
+    #     policy = GaussianMLPPolicy(
+    #         env_spec=mdp.spec,
+    #         hidden_sizes=(32,),
+    #     )
+
+    policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
-        hidden_sizes=(32,),
+        hidden_sizes=(64, 64)
     )
 
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(hidden_sizes=(32,)),
+        regressor_args=dict(hidden_sizes=(64, 64)),
     )
 
-    batch_size = 5000
+    batch_size = 50000
     algo = TRPO(
         env=mdp,
         policy=policy,
@@ -67,24 +78,24 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         n_itr_update=1,
         kl_batch_size=16,
         normalize_reward=normalize_reward,
-        replay_pool_size=100000,
-        n_updates_per_sample=5000,
+        replay_pool_size=1000000,
+        n_updates_per_sample=50000,
         second_order_update=True,
-        unn_n_hidden=[32],
-        unn_layers_type=['gaussian', 'gaussian'],
+        unn_n_hidden=[64, 64],
+        unn_layers_type=['gaussian', 'gaussian', 'gaussian'],
         unn_learning_rate=0.001,
-        surprise_transform=None,
+        surprise_transform='cap1000',
         update_likelihood_sd=True,
-        replay_kl_schedule=0.99
+        replay_kl_schedule=0.99,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-mc-a",
-        n_parallel=1,
+        exp_prefix="trpo-vime-montezuma-c",
+        n_parallel=8,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         script="sandbox/rein/experiments/run_experiment_lite.py",
     )

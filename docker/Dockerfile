@@ -55,3 +55,5 @@ ENV PATH /opt/conda/envs/rllab/bin:$PATH
 RUN echo "source activate rllab" >> /root/.bashrc
 ENV BASH_ENV /root/.bashrc
 WORKDIR /root/code
+
+ADD . /root/code/rllab
