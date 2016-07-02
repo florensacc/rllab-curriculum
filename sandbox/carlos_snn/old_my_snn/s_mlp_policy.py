@@ -191,7 +191,6 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             else:
                 self.latent_fix = self.latent_dist.sample(self.latent_dist_info)
             # print 'I reset to latent {} because the pre_fix_latent is {}'.format(self.latent_fix, self.pre_fix_latent)
-            # print 'the pre_fix is: ', str(self.pre_fix_latent)
         else:
             pass
 

@@ -100,27 +100,30 @@ class BernoulliRecurrentRegressor(LasagnePowered, Serializable):
 # padd along the time dimension to obtain the same shape as before
         padded_p = TT.tile(p_var_last, (1, TT.shape(p_var_all)[1], 1))
 # give it the standard name
-        p_var = padded_p
+        if predict_all:
+            p_var = p_var_all
+        else:
+            p_var = padded_p
 
         old_info_vars = dict(p=old_p_var)
         info_vars = dict(p=p_var)  # posterior of the latent at every step, wrt obs-act. Same along batch if recurrent
-        info_vars_all = dict(p=p_var_all)  # posterior of lat at every step, different at every step! predict-as-you-go
+        # info_vars_all = dict(p=p_var_all)  # posterior of lat at every step, different at every step! predict-as-you-go
 
         dist = self._dist = Bernoulli(output_dim)
 
         mean_kl = TT.mean(dist.kl_sym(old_info_vars, info_vars))
-        mean_kl_all = TT.mean(dist.kl_sym(old_info_vars, info_vars_all))
+        # mean_kl_all = TT.mean(dist.kl_sym(old_info_vars, info_vars_all))
 
         loss = - TT.mean(dist.log_likelihood_sym(ys_var, info_vars)) # regressor just wants to min -loglik of data ys
-        loss_all = - TT.mean(dist.log_likelihood_sym(ys_var, info_vars_all)) # regressor just wants to min -loglik of data ys
+        # loss_all = - TT.mean(dist.log_likelihood_sym(ys_var, info_vars_all)) # regressor just wants to min -loglik of data ys
 
         predicted = p_var >= 0.5
-        predicted_all = p_var >= 0.5
+        # predicted_all = p_var >= 0.5
 
         self._f_predict = ext.compile_function([xs_var], predicted)
         self._f_p = ext.compile_function([xs_var], p_var)  # for consistency with gauss_mlp_reg this should be ._f_pdists
-        self._f_predict_all = ext.compile_function([xs_var], predicted_all)
-        self._f_p_all = ext.compile_function([xs_var], p_var_all)  # for consistency with gauss_mlp_reg this should be ._f_pdists
+        # self._f_predict_all = ext.compile_function([xs_var], predicted_all)
+        # self._f_p_all = ext.compile_function([xs_var], p_var_all)  # for consistency with gauss_mlp_reg this should be ._f_pdists
 
         self._l_p = l_p
 
@@ -130,17 +133,18 @@ class BernoulliRecurrentRegressor(LasagnePowered, Serializable):
             network_outputs=[p_var],
         )
 
-        optimizer_args_all = dict(
-            loss=loss_all,
-            target=self,
-            network_outputs=[p_var_all],
-        )
+        # optimizer_args_all = dict(
+        #     loss=loss_all,
+        #     target=self,
+        #     network_outputs=[p_var_all],
+        # )
 
         if use_trust_region:
-            if predict_all:
-                optimizer_args["leq_constraint"] = (mean_kl, step_size)
-            else:
-                optimizer_args["leq_constraint"] = (mean_kl_all, step_size)
+            # if predict_all:
+            #     optimizer_args["leq_constraint"] = (mean_kl, step_size)
+            # else:
+            #     optimizer_args["leq_constraint"] = (mean_kl_all, step_size)
+            optimizer_args["leq_constraint"] = (mean_kl, step_size)
             optimizer_args["inputs"] = [xs_var, ys_var, old_p_var]
         else:
             optimizer_args["inputs"] = [xs_var, ys_var]

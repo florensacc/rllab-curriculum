@@ -10,6 +10,7 @@ from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 from sandbox.carlos_snn.regressors.bernoulli_mlp_regressor import BernoulliMLPRegressor
 from sandbox.carlos_snn.regressors.bernoulli_recurrent_regressor import BernoulliRecurrentRegressor
 
+from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 
 class Latent_regressor(Parameterized, Serializable):
     def __init__(
@@ -19,7 +20,8 @@ class Latent_regressor(Parameterized, Serializable):
             recurrent=False,
             obs_regressed='all',
             act_regressed='all',
-            regressor_args=None,
+            optimizer=None, #this defaults to LBFGS
+            regressor_args=None, # here goes all args straight to the regressor: predict_all, optimizer, step_size....
     ):
         """
         :param env_spec:
@@ -50,23 +52,33 @@ class Latent_regressor(Parameterized, Serializable):
         if regressor_args is None:
             regressor_args = dict()
 
+        if optimizer == 'first_order':
+            self.optimizer = FirstOrderOptimizer()
+        elif optimizer is None:
+            self.optimizer = None
+        else:
+            raise NotImplementedError
+
         if policy.latent_name == 'bernoulli':
             if recurrent:
                 self._regressor = BernoulliRecurrentRegressor(
                     input_shape=(self.obs_act_dim,),
                     output_dim=policy.latent_dim,
+                    optimizer=self.optimizer,
                     **regressor_args
                 )
             else:
                 self._regressor = BernoulliMLPRegressor(
                     input_shape=(self.obs_act_dim,),
                     output_dim=policy.latent_dim,
+                    optimizer=self.optimizer,
                     **regressor_args
                 )
         elif policy.latent_name == 'normal':
             self._regressor = GaussianMLPRegressor(
                 input_shape=(self.obs_act_dim,),
                 output_dim=policy.latent_dim,
+                optimizer=self.optimizer,
                 **regressor_args
             )
         else:
