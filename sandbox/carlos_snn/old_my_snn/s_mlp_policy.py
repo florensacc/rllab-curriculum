@@ -146,13 +146,20 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     def dist_info_sym(self, obs_var, latent_var):
         # generate the generalized input (append latents to obs.)
         if self.bilinear_integration:
-
-            extended_obs_var = TT.concatenate([obs_var, latent_var, TT.flatten(TT.outer(obs_var, latent_var))], axis=1)
+            print 'building the exteded var'
+            extended_obs_var = TT.concatenate([obs_var, latent_var,
+                                               TT.flatten(obs_var[:, :, np.newaxis] * latent_var[:, np.newaxis, :],
+                                                          outdim=2)]
+                                              , axis=1)
+            print 'finished building'
+            # pass
         else:
             extended_obs_var = TT.concatenate([obs_var, latent_var], axis=1)
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], extended_obs_var)
+        print 'finished building the mean and std'
         if self.min_std is not None:
             log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
+        print ' about to return the dic of vars'
         return dict(mean=mean_var, log_std=log_std_var)
 
     ##
@@ -168,6 +175,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     def get_actions(self, observations):
         ##CF
         # how can I impose that I only reset for a whole rollout? before calling get_actions!!
+        observations = np.array(observations)  # needed to do the outer product for the bilinear
         if self.latent_dim:
             if self.resample:
                 latents = [self.latent_dist.sample(self.latent_dist_info) for _ in observations]
@@ -178,19 +186,25 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
                     self.reset()  # this overwrites the latent sampled or in latent_fix
                 latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation better...
             if self.bilinear_integration:
+                # print 'the obs is: ' , observations, '\nwith time length: {}\n'.format(observations.shape[0])
+                # print 'the reshaped bilinear is:\n' , np.reshape(observations[:, np.newaxis, :] * latents[:, :, np.newaxis],
+                #                                    (observations.shape[0], -1) )
                 extended_obs = np.concatenate([observations, latents,
-                                               np.ndarray.flatten(np.outer(observations, latents))], axis =1)
+                                               np.reshape(
+                                                   observations[:, np.newaxis, :] * latents[:, :, np.newaxis],
+                                                   (observations.shape[0], -1))],
+                                              axis=1)
             else:
                 extended_obs = np.concatenate([observations, latents], axis=1)
         else:
             latents = np.array([[]] * len(observations))
             extended_obs = observations
-        # print extended_obs
+        # print 'the extened_obs are:\n', extended_obs
         # make mean, log_std also depend on the latents (as observ.)
         mean, log_std = self._f_dist(extended_obs)
         rnd = np.random.normal(size=mean.shape)
         actions = rnd * np.exp(log_std) + mean
-        # print latents
+        print latents
         return actions, dict(mean=mean, log_std=log_std, latents=latents)
 
     def set_pre_fix_latent(self, latent):
