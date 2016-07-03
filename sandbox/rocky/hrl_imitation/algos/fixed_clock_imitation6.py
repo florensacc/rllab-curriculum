@@ -609,13 +609,8 @@ class SeqGridExpert(object):
         #         use_trust_region=False,
         #     )
         #     tf.get_default_session().run(tf.initialize_variables(self.g_given_z_regressor.get_params()))
-
-        algo.bottleneck_goal_recognizer.fit(all_bottlenecks, all_subgoals)  # policy_subgoal_dist["prob"])
-        ent = np.mean(algo.bottleneck_goal_recognizer._dist.entropy(dict(prob=algo.bottleneck_goal_recognizer._f_prob(bottlenecks))))
-
-        # algo.g_given_z_regressor.fit(all_bottlenecks, all_subgoals)  # policy_subgoal_dist["prob"])
-        # ent = np.mean(algo.g_given_z_regressor._dist.entropy(dict(prob=algo.g_given_z_regressor._f_prob(bottlenecks))))
-
+        algo.g_given_z_regressor.fit(all_bottlenecks, all_subgoals)  # policy_subgoal_dist["prob"])
+        ent = np.mean(algo.g_given_z_regressor._dist.entropy(dict(prob=algo.g_given_z_regressor._f_prob(bottlenecks))))
         # now learn a regressor from bottlenecks to
         logger.record_tabular("exact_H(g|z)", ent)
 
@@ -652,20 +647,16 @@ class ApproximatePosterior(LayersPowered, Serializable):
             name="action_input"
         )
 
-        feature_network = ConvMergeNetwork(
-            name="feature_network",
-            input_layer=L.reshape(l_obs, (-1, env_spec.observation_space.flat_dim), name="reshape_obs"),
-            input_shape=env_spec.observation_space.components[0].shape,
-            extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
+        feature_network = MLP(
+            input_shape=(env_spec.observation_space.flat_dim,),
             output_dim=feature_dim,
-            hidden_sizes=tuple(),
-            conv_filters=(10, 10),
-            conv_filter_sizes=(3, 3),
-            conv_strides=(1, 1),
-            conv_pads=('SAME', 'SAME'),
+            hidden_sizes=(10,),
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.tanh,
+            name="feature_network",
+            input_layer=L.reshape(l_obs, (-1, obs_dim), name="reshape_obs"),
         )
+
         l_reshaped_feature = L.reshape(
             feature_network.output_layer,
             shape=(-1, subgoal_interval, feature_dim),
@@ -693,21 +684,17 @@ class ApproximatePosterior(LayersPowered, Serializable):
             name="subgoal_in_reshape"
         )
 
-        subgoal_network = GRUNetwork(
+        subgoal_network = MLP(
             name="h_network",
             input_shape=(subgoal_input_layer.output_shape[-1],),
             output_dim=subgoal_dim,
-            hidden_dim=hidden_dim,
+            hidden_sizes=(100,),
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.softmax,
             input_layer=subgoal_input_layer,
         )
-        l_subgoal_probs = L.SliceLayer(
-            subgoal_network.output_layer,
-            indices=subgoal_interval - 1,
-            axis=1,
-            name="subgoal_probs"
-        )
+        l_subgoal_probs = subgoal_network.output_layer
+
         self.subgoal_dim = subgoal_dim
         self.l_in = l_in
         self.l_obs = l_obs
@@ -784,8 +771,6 @@ class FixedClockImitation(RLAlgorithm):
             subgoal_dim=self.subgoal_dim,
             bottleneck_dim=self.bottleneck_dim
         )
-
-        # assert isinstance(self.low_policy, BranchingCategoricalMLPPolicy)
 
         self.bottleneck_goal_recognizer = CategoricalMLPRegressor(
             name="bottleneck_goal_regressor",

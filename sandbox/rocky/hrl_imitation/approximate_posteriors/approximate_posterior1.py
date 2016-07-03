@@ -57,25 +57,21 @@ class ApproximatePosterior(LayersPowered, Serializable):
 
         subgoal_input_layer = L.reshape(
             preprocess_network.output_layer,
-            (-1, subgoal_interval, preprocess_network.output_layer.output_shape[-1]),
+            (-1, subgoal_interval * preprocess_network.output_layer.output_shape[-1]),
             name="subgoal_in_reshape"
         )
 
-        subgoal_network = GRUNetwork(
+        subgoal_network = MLP(
             name="h_network",
             input_shape=(subgoal_input_layer.output_shape[-1],),
             output_dim=subgoal_dim,
-            hidden_dim=20,
+            hidden_sizes=(100,),
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.softmax,
             input_layer=subgoal_input_layer,
         )
-        l_subgoal_probs = L.SliceLayer(
-            subgoal_network.output_layer,
-            indices=subgoal_interval - 1,
-            axis=1,
-            name="subgoal_probs"
-        )
+        l_subgoal_probs = subgoal_network.output_layer
+
         self.subgoal_dim = subgoal_dim
         self.l_in = l_in
         self.l_obs = l_obs
