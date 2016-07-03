@@ -18,7 +18,6 @@ class NPO(BatchPolopt):
             optimizer_args=None,
             step_size=0.01,
             truncate_local_is_ratio=None,
-            lossy_lr=False,
             **kwargs
     ):
         if optimizer is None:
@@ -28,7 +27,6 @@ class NPO(BatchPolopt):
         self.optimizer = optimizer
         self.step_size = step_size
         self.truncate_local_is_ratio = truncate_local_is_ratio
-        self.lossy_lr = lossy_lr
         super(NPO, self).__init__(**kwargs)
 
     @overrides
@@ -73,10 +71,7 @@ class NPO(BatchPolopt):
 
         dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
-        if self.lossy_lr:
-            lr = dist.likelihood_sym(action_var, dist_info_vars) / dist.likelihood_sym(action_var, old_dist_info_vars)
-        else:
-            lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
+        lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
         if self.truncate_local_is_ratio is not None:
             lr = TT.minimum(self.truncate_local_is_ratio, lr)
         if is_recurrent:
