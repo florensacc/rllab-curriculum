@@ -23,6 +23,9 @@ class Discrete(Space):
     def sample(self):
         return np.random.randint(self.n)
 
+    def sample_n(self, n):
+        return np.random.randint(low=0, high=self.n, size=n)
+
     def contains(self, x):
         x = np.asarray(x)
         return x.shape == () and x.dtype.kind == 'i' and x >= 0 and x < self.n

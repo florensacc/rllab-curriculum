@@ -6,20 +6,22 @@ from sandbox.rocky.tf.spaces.product import Product
 import tensorflow as tf
 import sandbox.rocky.tf.core.layers as L
 from sandbox.rocky.tf.distributions.categorical import Categorical
+from rllab.core.serializable import Serializable
 
 
-class ApproximatePosterior(LayersPowered):
+class ApproximatePosterior(LayersPowered, Serializable):
     """
     The approximate posterior takes in the sequence of states and actions, and predicts the hidden state based on the
     sequence. It is structured as a GRU.
     """
 
-    def __init__(self, env_spec, subgoal_dim, subgoal_interval, feature_dim=20, hidden_dim=10):
+    def __init__(self, env_spec, subgoal_dim, subgoal_interval, obs_feature_dim=100, feature_hidden_dim=100):
         """
         :type env_spec: EnvSpec
         :param env_spec:
         :return:
         """
+        Serializable.quick_init(self, locals())
         obs_dim = env_spec.observation_space.flat_dim
         action_dim = env_spec.action_space.flat_dim
         l_in = L.InputLayer(
@@ -39,44 +41,23 @@ class ApproximatePosterior(LayersPowered):
             name="action_input"
         )
 
-        feature_network = ConvMergeNetwork(
-            name="feature_network",
-            input_layer=L.reshape(l_obs, (-1, env_spec.observation_space.flat_dim), name="reshape_obs"),
-            input_shape=env_spec.observation_space.components[0].shape,
-            extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
-            output_dim=feature_dim,
-            hidden_sizes=tuple(),
-            conv_filters=(10, 10),
-            conv_filter_sizes=(3, 3),
-            conv_strides=(1, 1),
-            conv_pads=('SAME', 'SAME'),
-            hidden_nonlinearity=tf.nn.tanh,
-            output_nonlinearity=tf.nn.tanh,
-        )
-        l_reshaped_feature = L.reshape(
-            feature_network.output_layer,
-            shape=(-1, subgoal_interval, feature_dim),
-            name="reshaped_feature"
-        )
-
-        l_preprocess_in = L.reshape(
-            L.concat([l_reshaped_feature, l_action], name="preprocess_in", axis=2),
-            (-1, feature_dim + action_dim),
-            name="preprocess_in_flat",
-        )
         preprocess_network = MLP(
-            name="preprocess_network",
-            input_shape=(feature_dim + action_dim,),
-            output_dim=feature_dim,
+            name="preprocess_network_1",
+            input_shape=(action_dim,),
+            output_dim=10,
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.tanh,
-            input_layer=l_preprocess_in,
-            hidden_sizes=(feature_dim,),
+            input_layer=L.reshape(
+                l_action,
+                shape=(-1, action_dim),
+                name="action_reshape"
+            ),
+            hidden_sizes=tuple(),
         )
 
         subgoal_input_layer = L.reshape(
             preprocess_network.output_layer,
-            (-1, subgoal_interval, feature_dim),
+            (-1, subgoal_interval, preprocess_network.output_layer.output_shape[-1]),
             name="subgoal_in_reshape"
         )
 
@@ -84,7 +65,7 @@ class ApproximatePosterior(LayersPowered):
             name="h_network",
             input_shape=(subgoal_input_layer.output_shape[-1],),
             output_dim=subgoal_dim,
-            hidden_dim=hidden_dim,
+            hidden_dim=20,
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.softmax,
             input_layer=subgoal_input_layer,

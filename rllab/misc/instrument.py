@@ -301,6 +301,7 @@ def run_experiment_lite(
         env=None,
         variant=None,
         use_gpu=False,
+        sync_s3_pkl=False,
         confirm_remote=True,
         terminate_machine=True,
         **kwargs):
@@ -404,7 +405,8 @@ def run_experiment_lite(
                    dry=dry,
                    terminate_machine=terminate_machine,
                    use_gpu=use_gpu,
-                   code_full_path=s3_code_path)
+                   code_full_path=s3_code_path,
+                   sync_s3_pkl=sync_s3_pkl)
     elif mode == "lab_kube":
         assert env is None
         # first send code folder to s3
@@ -551,7 +553,7 @@ def dedent(s):
 
 def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                script='scripts/run_experiment.py',
-               aws_config=None, dry=False, terminate_machine=True, use_gpu=False):
+               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False):
     if len(params_list) == 0:
         return
 
@@ -608,12 +610,20 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         sio.write("""
             mkdir -p {log_dir}
         """.format(log_dir=log_dir))
-        sio.write("""
-            while /bin/true; do
-                aws s3 sync --exclude *.pkl {log_dir} {remote_log_dir} --region {aws_region}
-                sleep 5
-            done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                 aws_region=config.AWS_REGION_NAME))
+        if sync_s3_pkl:
+            sio.write("""
+                while /bin/true; do
+                    aws s3 sync {log_dir} {remote_log_dir} --region {aws_region}
+                    sleep 5
+                done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                     aws_region=config.AWS_REGION_NAME))
+        else:
+            sio.write("""
+                while /bin/true; do
+                    aws s3 sync --exclude *.pkl {log_dir} {remote_log_dir} --region {aws_region}
+                    sleep 5
+                done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                     aws_region=config.AWS_REGION_NAME))
         sio.write("""
             {command}
         """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu, env=env,

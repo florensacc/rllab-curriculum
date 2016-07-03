@@ -49,7 +49,7 @@ def send_css(path):
     return flask.send_from_directory('css', path)
 
 
-def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None):
+def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None, title=None):
     data = []
     p25, p50, p75 = [], [], []
     for idx, plt in enumerate(plot_list):
@@ -108,6 +108,7 @@ def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None):
         ),
         width=plot_width,
         height=plot_height,
+        title=title,
     )
     fig = go.Figure(data=data, layout=layout)
     fig_div = po.plot(fig, output_type='div', include_plotlyjs=False)
@@ -276,7 +277,8 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                         data = selector.extract()
                         if len(data) > 0:
                             progresses = [
-                                exp.progress.get(plot_key, np.array([np.nan])) for exp in data]
+                                exp.progress.get(plot_key, np.array([np.nan])) for exp in data
+                            ]
                             #                             progresses = [progress[:500] for progress in progresses ]
                             sizes = map(len, progresses)
                             max_size = max(sizes)
@@ -353,7 +355,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                 stds = np.clip(stds, -clip_plot_value, clip_plot_value)
                             to_plot.append(
                                 ext.AttrDict(means=means, stds=stds, legend=legend_post_processor(legend)))
-                        to_plot[-1]["footnote"] = kv_string_best_regret
+                        to_plot[-1]["footnote"] = "%s; e.g. %s" % (kv_string_best_regret, data[0].params.get("exp_name", "NA"))
                 else:
                     progresses = [
                         exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
@@ -400,8 +402,13 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                             ext.AttrDict(means=means, stds=stds, legend=legend_post_processor(group_legend)))
 
         if len(to_plot) > 0 and not gen_eps:
-            plots.append("<h3>%s: %s</h3>" % (split_key, split_legend))
-            plots.append(make_plot(to_plot, use_median=use_median, plot_width=plot_width, plot_height=plot_height))
+            fig_title = "%s: %s" % (split_key, split_legend)
+            # plots.append("<h3>%s</h3>" % fig_title)
+            plots.append(make_plot(
+                to_plot,
+                use_median=use_median, title=fig_title,
+                plot_width=plot_width, plot_height=plot_height
+            ))
 
         if gen_eps:
             make_plot_eps(to_plot, use_median=use_median, counter=counter)

@@ -10,7 +10,7 @@ from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
 
 from sandbox.carlos_snn.hallucinators.prior_hallucinator import PriorHallucinator
 
-from sandbox.carlos_snn.regressors.mlp_latent_regressor import MLPLatent_regressor
+from sandbox.carlos_snn.regressors.latent_regressor import Latent_regressor
 
 from rllab.envs.gym_env import GymEnv
 
@@ -37,7 +37,7 @@ for n in [2]:
 
                         baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-                        latent_regressor = MLPLatent_regressor(
+                        latent_regressor = Latent_regressor(
                             env_spec=env.spec,
                             policy=policy,
                             regressor_args={

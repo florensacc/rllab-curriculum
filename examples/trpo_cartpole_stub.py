@@ -23,7 +23,7 @@ algo = TRPO(
     baseline=baseline,
     batch_size=4000,
     max_path_length=100,
-    n_itr=40,
+    n_itr=1000,
     discount=0.99,
     step_size=0.01,
     # Uncomment both lines (this and the plot parameter below) to enable plotting

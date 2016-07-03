@@ -191,6 +191,11 @@ def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     lasagne.random.set_rng(np.random.RandomState(seed))
+    try:
+        import tensorflow as tf
+        tf.set_random_seed(seed)
+    except Exception as e:
+        print(e)
     print(
         colorize(
             'using seed %s' % (str(seed)),

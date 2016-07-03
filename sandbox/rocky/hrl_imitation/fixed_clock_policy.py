@@ -1,17 +1,22 @@
 from __future__ import print_function
 from __future__ import absolute_import
 from sandbox.rocky.tf.policies.base import StochasticPolicy
+from rllab.core.serializable import Serializable
 import numpy as np
 
 
-class FixedClockPolicy(StochasticPolicy):
+class FixedClockPolicy(StochasticPolicy, Serializable):
     def __init__(self, env_spec, high_policy, low_policy, subgoal_interval):
+        Serializable.quick_init(self, locals())
         self.high_policy = high_policy
         self.low_policy = low_policy
         self.ts = None
         self.subgoals = None
         self.subgoal_interval = subgoal_interval
         super(FixedClockPolicy, self).__init__(env_spec=env_spec)
+
+    def get_params_internal(self, **tags):
+        return self.high_policy.get_params(**tags) + self.low_policy.get_params(**tags)
 
     def reset(self, dones=None):
         self.high_policy.reset(dones)
