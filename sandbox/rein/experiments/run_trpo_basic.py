@@ -14,7 +14,7 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 
 from rllab.algos.trpo import TRPO
-from rllab.misc.instrument import stub, run_experiment_lite
+from sandbox.john.instrument import stub, run_experiment_lite
 import itertools
 
 stub(globals())

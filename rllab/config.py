@@ -9,6 +9,8 @@ USE_TF = False
 
 DOCKER_IMAGE = "DOCKER_IMAGE"
 
+DOCKERFILE_PATH = "/path/to/Dockerfile"
+
 KUBE_PREFIX = "rllab_"
 
 DOCKER_LOG_DIR = "/tmp/expt"

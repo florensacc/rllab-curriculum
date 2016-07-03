@@ -16,7 +16,7 @@ def weighted_sample(weights, objects):
     cs = np.cumsum(weights)
     # Find the index of the first weight over a random value.
     idx = sum(cs < np.random.rand())
-    return objects[idx]
+    return objects[min(idx, len(objects) - 1)]
 
 
 # compute softmax for each row

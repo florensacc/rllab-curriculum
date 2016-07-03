@@ -55,6 +55,10 @@ class CategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
             super(CategoricalMLPPolicy, self).__init__(env_spec)
             LayersPowered.__init__(self, [prob_network.output_layer])
 
+    @property
+    def vectorized(self):
+        return True
+
     @overrides
     def dist_info_sym(self, obs_var, state_info_vars=None):
         return dict(prob=L.get_output(self._l_prob, {self._l_obs: tf.cast(obs_var, tf.float32)}))

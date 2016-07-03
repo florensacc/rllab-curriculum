@@ -24,7 +24,7 @@ class IgnorantBranchingCategoricalMLPPolicy(BranchingCategoricalMLPPolicy, Seria
             # shared_network,
             subgoal_dim,
             bottleneck_dim,
-            bottleneck_std_threshold=1e-3,
+            bottleneck_std_threshold=1e-10,
             hidden_sizes=(32, 32),
             hidden_nonlinearity=tf.nn.tanh,
     ):

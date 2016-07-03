@@ -1,8 +1,7 @@
 import numpy as np
 from sandbox.rein.dynamics_models.bnn.bnn import BNN
-from utils import load_dataset_1Dregression
+from sandbox.rein.dynamics_models.utils import load_dataset_1Dregression, sliding_mean, iterate_minibatches
 import lasagne
-from utils import sliding_mean, iterate_minibatches
 import time
 
 # Plotting params.
@@ -111,12 +110,12 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
             # Train current minibatch.
             inputs, targets = batch
-            _train_err = model.train_fn(inputs, targets)
+            _train_err = model.train_fn(inputs, targets, 1.0)
             train_err += _train_err
             train_batches += 1
 
             # Calculate current minibatch KL.
-            kl_mb_closed_form = model.fn_surprise()
+            kl_mb_closed_form = model.fn_kl()
 
             kl_values.append(kl_mb_closed_form)
             kl_all_values.append(kl_mb_closed_form)
@@ -151,6 +150,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             painter_output.set_ydata(y)
             plt.draw()
             plt.pause(0.00001)
+
 
         elif PLOT_OUTPUT_REGIONS and epoch % 30 == 0 and epoch != 0:
             import matplotlib.pyplot as plt
@@ -246,8 +246,14 @@ def main():
         use_reverse_kl_reg=False,
         reverse_kl_reg_factor=1e-2,
         learning_rate=0.001,
-        likelihood_sd=5.0
+        group_variance_by='unit',
+        use_local_reparametrization_trick=False,
+        update_likelihood_sd=False,
+        likelihood_sd_init=0.01
     )
+    
+    bnn.fn_kl()
+    print(bnn.network.get_b().eval())
 
     # Train the model.
     train(bnn, num_epochs=num_epochs, X_train=X_train,

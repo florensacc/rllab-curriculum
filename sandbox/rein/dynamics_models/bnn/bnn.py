@@ -9,10 +9,6 @@ from rllab.misc import ext
 from collections import OrderedDict
 import theano
 
-# ----------------
-USE_REPARAMETRIZATION_TRICK = True
-# ----------------
-
 
 class BNNLayer(lasagne.layers.Layer):
     """Probabilistic layer that uses Gaussian weights.
@@ -25,6 +21,8 @@ class BNNLayer(lasagne.layers.Layer):
                  num_units,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  prior_sd=None,
+                 group_variance_by=None,
+                 use_local_reparametrization_trick=None,
                  **kwargs):
         super(BNNLayer, self).__init__(incoming, **kwargs)
 
@@ -35,7 +33,10 @@ class BNNLayer(lasagne.layers.Layer):
         self.num_inputs = int(np.prod(self.input_shape[1:]))
         self.num_units = num_units
         self.prior_sd = prior_sd
+        self.group_variance_by = group_variance_by
+        self.use_local_reparametrization_trick = use_local_reparametrization_trick
 
+        # Convert prior_sd into prior_rho.
         prior_rho = self.std_to_log(self.prior_sd)
 
         self.W = np.random.normal(0., prior_sd,
@@ -47,29 +48,60 @@ class BNNLayer(lasagne.layers.Layer):
         # Here we set the priors.
         # -----------------------
         self.mu = self.add_param(
-            lasagne.init.Normal(0.01, 0.),
+            lasagne.init.Normal(1., 0.),
             (self.num_inputs, self.num_units),
             name='mu'
         )
-        self.rho = self.add_param(
-            lasagne.init.Constant(prior_rho),
-            (self.num_inputs, self.num_units),
-            name='rho'
-        )
+        if self.group_variance_by == 'layer':
+            self.rho = self.add_param(
+                lasagne.init.Constant(prior_rho),
+                (1, 1),
+                name='rho',
+                broadcastable=(True, True)
+            )
+        elif self.group_variance_by == 'unit':
+            self.rho = self.add_param(
+                lasagne.init.Constant(prior_rho),
+                (self.num_units, ),
+                name='rho',
+                broadcastable=(False, True)
+            )
+        else:
+            self.rho = self.add_param(
+                lasagne.init.Constant(prior_rho),
+                (self.num_inputs, self.num_units),
+                name='rho'
+            )
         # Bias priors.
         self.b_mu = self.add_param(
-            lasagne.init.Normal(0.01, 0.),
+            lasagne.init.Normal(1., 0.),
             (self.num_units,),
             name="b_mu",
             regularizable=False
         )
-        self.b_rho = self.add_param(
-            lasagne.init.Constant(prior_rho),
-            (self.num_units,),
-            name="b_rho",
-            regularizable=False
-        )
-        # -----------------------
+        if self.group_variance_by == 'layer':
+            self.b_rho = self.add_param(
+                lasagne.init.Constant(prior_rho),
+                (1,),
+                name="b_rho",
+                regularizable=False,
+                broadcastable=(True,)
+            )
+        elif self.group_variance_by == 'unit':
+            self.b_rho = self.add_param(
+                lasagne.init.Constant(prior_rho),
+                (self.num_units,),
+                name="b_rho",
+                regularizable=False
+            )
+        else:
+            self.b_rho = self.add_param(
+                lasagne.init.Constant(prior_rho),
+                (self.num_units,),
+                name="b_rho",
+                regularizable=False
+            )
+            # -----------------------
 
         # Backup params for KL calculations.
         self.mu_old = self.add_param(
@@ -79,13 +111,31 @@ class BNNLayer(lasagne.layers.Layer):
             trainable=False,
             oldparam=True
         )
-        self.rho_old = self.add_param(
-            np.ones((self.num_inputs, self.num_units)),
-            (self.num_inputs, self.num_units),
-            name='rho_old',
-            trainable=False,
-            oldparam=True
-        )
+        if self.group_variance_by == 'layer':
+            self.rho_old = self.add_param(
+                np.ones((1, 1)),
+                (1, 1),
+                name='rho_old',
+                trainable=False,
+                oldparam=True,
+                broadcastable=(True, True)
+            )
+        elif self.group_variance_by == 'unit':
+            self.rho_old = self.add_param(
+                np.ones((self.num_units, )),
+                (self.num_units, ),
+                name='rho_old',
+                trainable=False,
+                oldparam=True
+            )
+        else:
+            self.rho_old = self.add_param(
+                np.ones((self.num_inputs, self.num_units)),
+                (self.num_inputs, self.num_units),
+                name='rho_old',
+                trainable=False,
+                oldparam=True
+            )
         # Bias priors.
         self.b_mu_old = self.add_param(
             np.zeros((self.num_units,)),
@@ -95,14 +145,33 @@ class BNNLayer(lasagne.layers.Layer):
             trainable=False,
             oldparam=True
         )
-        self.b_rho_old = self.add_param(
-            np.ones((self.num_units,)),
-            (self.num_units,),
-            name="b_rho_old",
-            regularizable=False,
-            trainable=False,
-            oldparam=True
-        )
+        if self.group_variance_by == 'layer':
+            self.b_rho_old = self.add_param(
+                np.ones((1,)),
+                (1,),
+                name="b_rho_old",
+                regularizable=False,
+                trainable=False,
+                oldparam=True
+            )
+        elif self.group_variance_by == 'unit':
+            self.b_rho_old = self.add_param(
+                np.ones((self.num_units,)),
+                (self.num_units,),
+                name="b_rho_old",
+                regularizable=False,
+                trainable=False,
+                oldparam=True
+            )
+        else:
+            self.b_rho_old = self.add_param(
+                np.ones((self.num_units,)),
+                (self.num_units,),
+                name="b_rho_old",
+                regularizable=False,
+                trainable=False,
+                oldparam=True
+            )
 
     def log_to_std(self, rho):
         """Transformation for allowing rho in \mathbb{R}, rather than \mathbb{R}_+
@@ -117,20 +186,40 @@ class BNNLayer(lasagne.layers.Layer):
         return np.log(np.exp(sigma) - 1)
 
     def get_W(self):
-        # Here we generate random epsilon values from a normal distribution
-        epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
-                                    dtype=theano.config.floatX)  # @UndefinedVariable
-        # Here we calculate weights based on shifting and rescaling according
-        # to mean and variance (paper step 2)
-        W = self.mu + self.log_to_std(self.rho) * epsilon
+        if self.group_variance_by == 'layer':
+            # Here we generate random epsilon values from a normal distribution
+            epsilon = self._srng.normal(size=(1, 1), avg=0., std=1.,
+                                        dtype=theano.config.floatX)  # @UndefinedVariable
+            W = self.mu + T.mean(self.log_to_std(self.rho)) * epsilon
+        elif self.group_variance_by == 'unit':
+            # Here we generate random epsilon values from a normal distribution
+            epsilon = self._srng.normal(size=(self.num_units, ), avg=0., std=1.,
+                                        dtype=theano.config.floatX)  # @UndefinedVariable
+            W = self.mu + (self.log_to_std(self.rho) * epsilon).T
+        else:
+            # Here we generate random epsilon values from a normal distribution
+            epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
+                                        dtype=theano.config.floatX)  # @UndefinedVariable
+            W = self.mu + (epsilon * self.log_to_std(self.rho))
         self.W = W
         return W
 
     def get_b(self):
-        # Here we generate random epsilon values from a normal distribution
-        epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
-                                    dtype=theano.config.floatX)  # @UndefinedVariable
-        b = self.b_mu + self.log_to_std(self.b_rho) * epsilon
+        if self.group_variance_by == 'layer':
+            # Here we generate random epsilon values from a normal distribution
+            epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
+                                        dtype=theano.config.floatX)  # @UndefinedVariable
+            b = self.b_mu + T.mean(self.log_to_std(self.b_rho)) * epsilon
+        if self.group_variance_by == 'unit':
+            # Here we generate random epsilon values from a normal distribution
+            epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
+                                        dtype=theano.config.floatX)  # @UndefinedVariable
+            b = self.b_mu + self.log_to_std(self.b_rho) * epsilon
+        else:
+            # Here we generate random epsilon values from a normal distribution
+            epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
+                                        dtype=theano.config.floatX)  # @UndefinedVariable
+            b = self.b_mu + self.log_to_std(self.b_rho) * epsilon
         self.b = b
         return b
 
@@ -144,21 +233,26 @@ class BNNLayer(lasagne.layers.Layer):
         ----------
         Kingma et al., "Variational Dropout and the Local Reparametrization Trick", 2015
         """
-        if input.ndim > 2:
-            # if the input has more than two dimensions, flatten it into a
-            # batch of feature vectors.
-            input = input.flatten(2)
 
-        gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-        delta = T.dot(T.square(input), T.square(self.log_to_std(
-            self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
+        if self.group_variance_by == 'layer':
+            raise Exception(
+                'Local reparametrization trick not supported for tied variances per layer!')
+        else:
+            if input.ndim > 2:
+                # if the input has more than two dimensions, flatten it into a
+                # batch of feature vectors.
+                input = input.flatten(2)
 
-        epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
-                                    dtype=theano.config.floatX)  # @UndefinedVariable
+            gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
+            delta = T.dot(T.square(input), T.square(self.log_to_std(
+                self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
 
-        activation = gamma + T.sqrt(delta) * epsilon
+            epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
+                                        dtype=theano.config.floatX)  # @UndefinedVariable
 
-        return self.nonlinearity(activation)
+            activation = gamma + T.sqrt(delta) * epsilon
+
+            return self.nonlinearity(activation)
 
     def save_old_params(self):
         """Save old parameter values for KL calculation."""
@@ -176,6 +270,9 @@ class BNNLayer(lasagne.layers.Layer):
 
     def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
+        if self.group_variance_by == 'layer':
+            p_std = T.mean(p_std)
+            q_std = T.mean(q_std)
         numerator = T.square(p_mean - q_mean) + \
             T.square(p_std) - T.square(q_std)
         denominator = 2 * T.square(q_std) + 1e-8
@@ -218,7 +315,7 @@ class BNNLayer(lasagne.layers.Layer):
         return kl_div
 
     def get_output_for(self, input, **kwargs):
-        if USE_REPARAMETRIZATION_TRICK:
+        if self.use_local_reparametrization_trick:
             return self.get_output_for_reparametrization(input, **kwargs)
         else:
             return self.get_output_for_default(input, **kwargs)
@@ -253,17 +350,21 @@ class BNN(LasagnePowered, Serializable):
                  prior_sd=0.5,
                  use_reverse_kl_reg=False,
                  reverse_kl_reg_factor=0.1,
-                 likelihood_sd=5.0,
                  second_order_update=False,
                  learning_rate=0.0001,
                  compression=False,
                  information_gain=True,
                  update_prior=False,
                  update_likelihood_sd=False,
+                 group_variance_by='weight',
+                 use_local_reparametrization_trick=True,
+                 likelihood_sd_init=1.0
                  ):
 
         Serializable.quick_init(self, locals())
         assert len(layers_type) == len(n_hidden) + 1
+
+        assert group_variance_by in ['layer', 'unit', 'weight']
 
         self.n_in = n_in
         self.n_hidden = n_hidden
@@ -277,13 +378,18 @@ class BNN(LasagnePowered, Serializable):
         self.n_batches = n_batches
         self.use_reverse_kl_reg = use_reverse_kl_reg
         self.reverse_kl_reg_factor = reverse_kl_reg_factor
-        self.likelihood_sd_init = likelihood_sd
+        self.likelihood_sd_init = likelihood_sd_init
         self.second_order_update = second_order_update
         self.learning_rate = learning_rate
         self.compression = compression
         self.information_gain = information_gain
         self.update_prior = update_prior
         self.update_likelihood_sd = update_likelihood_sd
+        self.group_variance_by = group_variance_by
+        self.use_local_reparametrization_trick = use_local_reparametrization_trick
+
+        if self.group_variance_by != 'weight':
+            assert not self.use_local_reparametrization_trick
 
         assert self.information_gain or self.compression
 
@@ -420,7 +526,7 @@ class BNN(LasagnePowered, Serializable):
         for i in xrange(len(self.n_hidden)):
             if self.layers_type[i] == 'gaussian':
                 network = BNNLayer(
-                    network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd)
+                    network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by)
             elif self.layers_type[i] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf)
@@ -428,7 +534,7 @@ class BNN(LasagnePowered, Serializable):
         # Output layer
         if self.layers_type[len(self.n_hidden)] == 'gaussian':
             network = BNNLayer(
-                network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd)
+                network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by)
         elif self.layers_type[len(self.n_hidden)] == 'deterministic':
             network = lasagne.layers.DenseLayer(
                 network, self.n_out, nonlinearity=self.outf)
@@ -448,11 +554,11 @@ class BNN(LasagnePowered, Serializable):
 
         # Make the likelihood standard deviation a trainable parameter.
         self.likelihood_sd = theano.shared(
-            value=1.0,  # self.likelihood_sd_init,
+            value=self.likelihood_sd_init,  # self.likelihood_sd_init,
             name='likelihood_sd'
         )
         self.old_likelihood_sd = theano.shared(
-            value=1.0,  # self.likelihood_sd_init,
+            value=self.likelihood_sd_init,  # self.likelihood_sd_init,
             name='old_likelihood_sd'
         )
 

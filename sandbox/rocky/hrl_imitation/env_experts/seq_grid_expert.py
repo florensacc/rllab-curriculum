@@ -85,7 +85,11 @@ class SeqGridExpert(object):
         wrapped_env = ImageGridWorld(desc=base_map)
         env = TfEnv(CompoundActionSequenceEnv(wrapped_env, action_map, obs_include_history=True))
         self.template_env = env
-        self.env_spec = env.spec
+        self._env_spec = env.spec
+
+    @property
+    def env_spec(self):
+        return self._env_spec
 
     def build_dataset(self, batch_size):
         if self.dataset is None:
@@ -119,10 +123,10 @@ class SeqGridExpert(object):
     def log_diagnostics(self, algo):  # high_policy, low_policy, alt_high_policy):
         logger.log("logging MI...")
         self.log_mis(algo)
-        logger.log("logging train stats...")
-        self.log_train_stats(algo)
-        logger.log("logging test stats...")
-        self.log_test_stats(algo)
+        # logger.log("logging train stats...")
+        # self.log_train_stats(algo)
+        # logger.log("logging test stats...")
+        # self.log_test_stats(algo)
 
     def log_mis(self, algo):
 

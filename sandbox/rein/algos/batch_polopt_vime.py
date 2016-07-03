@@ -606,6 +606,10 @@ class BatchPolopt(RLAlgorithm):
                 # Cap max KL for stabilization.
                 for i in xrange(len(paths)):
                     kls[i] = np.minimum(kls[i], perc90)
+            elif self.surprise_transform == 'cap1000':
+                # Cap max KL for stabilization.
+                for i in xrange(len(paths)):
+                    kls[i] = np.minimum(kls[i], 1000)
 
             kls_flat = np.hstack(kls)
 

@@ -9,7 +9,7 @@ from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
 
 from sandbox.carlos_snn.hallucinators.prior_hallucinator import PriorHallucinator
 
-from sandbox.carlos_snn.regressors.mlp_latent_regressor import MLPLatent_regressor
+from sandbox.carlos_snn.regressors.latent_regressor import Latent_regressor
 
 stub(globals())
 
@@ -39,7 +39,7 @@ for resample in [False]:
 
                         # without latents
                         if latent_dim:
-                            latent_regressor = MLPLatent_regressor(
+                            latent_regressor = Latent_regressor(
                                 env_spec=env.spec,
                                 policy=policy,
                                 recurrent=True,

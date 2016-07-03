@@ -81,6 +81,21 @@ def concat_tensor_dict_list(tensor_dict_list):
     return ret
 
 
+def split_tensor_dict_list(tensor_dict):
+    keys = tensor_dict.keys()
+    ret = None
+    for k in keys:
+        vals = tensor_dict[k]
+        if isinstance(vals, dict):
+            vals = split_tensor_dict_list(vals)
+        if ret is None:
+            ret = [{k: v} for v in vals]
+        else:
+            for v, cur_dict in zip(vals, ret):
+                cur_dict[k] = v
+    return ret
+
+
 def truncate_tensor_list(tensor_list, truncated_len):
     return tensor_list[:truncated_len]
 

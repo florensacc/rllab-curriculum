@@ -78,6 +78,21 @@ def stack_tensor_dict_list(tensor_dict_list):
     return ret
 
 
+def split_tensor_dict_list(tensor_dict):
+    keys = tensor_dict.keys()
+    ret = None
+    for k in keys:
+        vals = tensor_dict[k]
+        if isinstance(vals, dict):
+            vals = split_tensor_dict_list(vals)
+        if ret is None:
+            ret = [{k: v} for v in vals]
+        else:
+            for v, cur_dict in zip(vals, ret):
+                cur_dict[k] = v
+    return ret
+
+
 def to_onehot_sym(inds, dim):
     return tf.one_hot(inds, depth=dim, on_value=1, off_value=0)
 
