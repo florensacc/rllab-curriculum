@@ -237,7 +237,7 @@ def main():
         n_in=4,
         n_out=1,
         n_batches=n_batches,
-        n_hidden=[32],
+        n_hidden=[128],
         layers_type=['gaussian', 'gaussian'],
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
@@ -248,13 +248,13 @@ def main():
         learning_rate=0.001,
         group_variance_by='unit',
         use_local_reparametrization_trick=False,
-        update_likelihood_sd=False,
-        likelihood_sd_init=0.01
+        update_likelihood_sd=True,
+        likelihood_sd_init=1.0
     )
     
-    bnn.fn_kl()
     print(bnn.network.get_b().eval())
-
+    print(bnn.network.get_b().eval().shape)
+    
     # Train the model.
     train(bnn, num_epochs=num_epochs, X_train=X_train,
               T_train=T_train, X_test=X_test, T_test=T_test)

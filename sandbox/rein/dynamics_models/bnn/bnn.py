@@ -62,7 +62,7 @@ class BNNLayer(lasagne.layers.Layer):
         elif self.group_variance_by == 'unit':
             self.rho = self.add_param(
                 lasagne.init.Constant(prior_rho),
-                (self.num_units, ),
+                (self.num_inputs, ),
                 name='rho',
                 broadcastable=(False, True)
             )
@@ -90,7 +90,7 @@ class BNNLayer(lasagne.layers.Layer):
         elif self.group_variance_by == 'unit':
             self.b_rho = self.add_param(
                 lasagne.init.Constant(prior_rho),
-                (self.num_units,),
+                (1,),
                 name="b_rho",
                 regularizable=False
             )
@@ -122,8 +122,8 @@ class BNNLayer(lasagne.layers.Layer):
             )
         elif self.group_variance_by == 'unit':
             self.rho_old = self.add_param(
-                np.ones((self.num_units, )),
-                (self.num_units, ),
+                np.ones((self.num_inputs, )),
+                (self.num_inputs, ),
                 name='rho_old',
                 trainable=False,
                 oldparam=True
@@ -156,8 +156,8 @@ class BNNLayer(lasagne.layers.Layer):
             )
         elif self.group_variance_by == 'unit':
             self.b_rho_old = self.add_param(
-                np.ones((self.num_units,)),
-                (self.num_units,),
+                np.ones((1,)),
+                (1,),
                 name="b_rho_old",
                 regularizable=False,
                 trainable=False,
@@ -193,9 +193,9 @@ class BNNLayer(lasagne.layers.Layer):
             W = self.mu + T.mean(self.log_to_std(self.rho)) * epsilon
         elif self.group_variance_by == 'unit':
             # Here we generate random epsilon values from a normal distribution
-            epsilon = self._srng.normal(size=(self.num_units, ), avg=0., std=1.,
+            epsilon = self._srng.normal(size=(self.num_inputs, ), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
-            W = self.mu + (self.log_to_std(self.rho) * epsilon).T
+            W =  self.mu + (self.log_to_std(self.rho) * epsilon).dimshuffle(0, 'x')
         else:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
@@ -209,17 +209,20 @@ class BNNLayer(lasagne.layers.Layer):
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
+            # T.mean is a hack to get 2D broadcasting on a scalar.
             b = self.b_mu + T.mean(self.log_to_std(self.b_rho)) * epsilon
-        if self.group_variance_by == 'unit':
+        elif self.group_variance_by == 'unit':
+            # Here we generate random epsilon values from a normal distribution
+            epsilon = self._srng.normal(size=(1,), avg=0., std=1.,
+                                        dtype=theano.config.floatX)  # @UndefinedVariable
+            b = self.b_mu + T.mean(self.log_to_std(self.b_rho)) * epsilon
+        elif self.group_variance_by == 'weight':
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
             b = self.b_mu + self.log_to_std(self.b_rho) * epsilon
         else:
-            # Here we generate random epsilon values from a normal distribution
-            epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
-                                        dtype=theano.config.floatX)  # @UndefinedVariable
-            b = self.b_mu + self.log_to_std(self.b_rho) * epsilon
+            raise Exception('Group variance by unknown!')
         self.b = b
         return b
 
@@ -273,6 +276,11 @@ class BNNLayer(lasagne.layers.Layer):
         if self.group_variance_by == 'layer':
             p_std = T.mean(p_std)
             q_std = T.mean(q_std)
+        elif self.group_variance_by == 'unit':
+            if not isinstance(p_std, float):
+                p_std = p_std.dimshuffle(0, 'x') 
+            if not isinstance(q_std, float):
+                q_std = q_std.dimshuffle(0, 'x')
         numerator = T.square(p_mean - q_mean) + \
             T.square(p_std) - T.square(q_std)
         denominator = 2 * T.square(q_std) + 1e-8
