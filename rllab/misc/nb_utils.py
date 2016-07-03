@@ -44,6 +44,7 @@ class Experiment(object):
         self.progress = progress
         self.params = params
         self.flat_params = self._flatten_params(params)
+        self.name = params["exp_name"]
 
     def _flatten_params(self, params, depth=2):
         flat_params = dict()

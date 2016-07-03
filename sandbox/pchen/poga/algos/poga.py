@@ -100,7 +100,7 @@ class POGA(BatchPolopt):
         for inner_i in xrange(self._inner_n_itr):
             with logger.tabular_prefix("InnerItr%s" % inner_i):
                 if inner_i != 0:
-                    paths = self.sampler.obtain_samples(itr)
+                    paths = self._inner.sampler.obtain_samples(itr)
                 for path in paths:
                     path["rewards"] = self._disc_scorer(*[
                         path["observations"],
