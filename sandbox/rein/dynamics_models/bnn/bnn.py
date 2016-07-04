@@ -368,7 +368,8 @@ class BNN(LasagnePowered, Serializable):
                  group_variance_by='weight',
                  use_local_reparametrization_trick=True,
                  likelihood_sd_init=1.0,
-                 output_type='regression'
+                 output_type='regression',
+                 debug=False
                  ):
 
         Serializable.quick_init(self, locals())
@@ -398,9 +399,15 @@ class BNN(LasagnePowered, Serializable):
         self.group_variance_by = group_variance_by
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
         self.output_type = output_type
+        self.debug = debug
 
         if self.group_variance_by != 'weight':
             assert not self.use_local_reparametrization_trick
+
+        if self.output_type == 'classification' and self.update_likelihood_sd:
+            print(
+                'Setting output_type=\'classification\' cannot be used with update_likelihood_sd=True, changing to False.')
+            self.update_likelihood_sd = False
 
         assert self.information_gain or self.compression
 
@@ -418,14 +425,16 @@ class BNN(LasagnePowered, Serializable):
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_old_params()
-        self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
+        if self.update_likelihood_sd:
+            self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
     def reset_to_old_params(self):
         layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.reset_to_old_params()
-        self.likelihood_sd.set_value(self.old_likelihood_sd.get_value())
+        if self.update_likelihood_sd:
+            self.likelihood_sd.set_value(self.old_likelihood_sd.get_value())
 
     def compression_improvement(self):
         """KL divergence KL[old_param||new_param]"""
@@ -481,7 +490,17 @@ class BNN(LasagnePowered, Serializable):
     def likelihood_classification(self, target, prediction):
         # Cross-entropy; target vector selecting correct prediction
         # entries.
-        return - T.log(prediction[T.arange(target.shape[0]), target])
+        # Hardcoding n_classes=3
+        n_classes = 3
+        n_out = 2
+        target2 = target + T.arange(target.shape[1]) * n_classes
+        target3 = target2.T.ravel()
+        idx = T.arange(target.shape[0])
+        idx2 = T.tile(idx, n_out)
+        prediction_selected = prediction[
+            idx2, target3].reshape([n_out, target.shape[0]]).T
+        ll = T.sum(T.log(prediction_selected))
+        return ll
 
     def loss(self, input, target, kl_factor, **kwargs):
 
@@ -558,12 +577,20 @@ class BNN(LasagnePowered, Serializable):
                     network, self.n_hidden[i], nonlinearity=self.transf)
 
         # Output layer
-        if self.layers_type[len(self.n_hidden)] == 'gaussian':
-            network = BNNLayer(
-                network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by)
-        elif self.layers_type[len(self.n_hidden)] == 'deterministic':
-            network = lasagne.layers.DenseLayer(
-                network, self.n_out, nonlinearity=self.outf)
+        if self.output_type == 'regression':
+            if self.layers_type[len(self.n_hidden)] == 'gaussian':
+                network = BNNLayer(
+                    network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by)
+            elif self.layers_type[len(self.n_hidden)] == 'deterministic':
+                network = lasagne.layers.DenseLayer(
+                    network, self.n_out, nonlinearity=self.outf)
+        elif self.output_type == 'classification':
+            if self.layers_type[len(self.n_hidden)] == 'gaussian':
+                network = BNNLayer(
+                    network, self.n_out, nonlinearity=lasagne.nonlinearities.softmax, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by)
+            elif self.layers_type[len(self.n_hidden)] == 'deterministic':
+                network = lasagne.layers.DenseLayer(
+                    network, self.n_out, nonlinearity=lasagne.nonlinearities.softmax)
 
         self.network = network
 
@@ -571,14 +598,15 @@ class BNN(LasagnePowered, Serializable):
 
         # Prepare Theano variables for inputs and targets
         # Same input for classification as regression.
-        input_var = T.matrix('inputs',
-                             dtype=theano.config.floatX)  # @UndefinedVariable
-        target_var = T.matrix('targets',
-                              dtype=theano.config.floatX)  # @UndefinedVariable
         kl_factor = T.scalar('kl_factor',
                              dtype=theano.config.floatX)  # @UndefinedVariable
-
+        input_var = T.matrix('inputs',
+                             dtype=theano.config.floatX)  # @UndefinedVariable
         if self.output_type == 'regression':
+
+            target_var = T.matrix('targets',
+                                  dtype=theano.config.floatX)  # @UndefinedVariable
+
             # Make the likelihood standard deviation a trainable parameter.
             self.likelihood_sd = theano.shared(
                 value=self.likelihood_sd_init,  # self.likelihood_sd_init,
@@ -597,10 +625,12 @@ class BNN(LasagnePowered, Serializable):
 
         elif self.output_type == 'classification':
 
+            target_var = T.imatrix('targets')
+
             # Loss function.
-            loss = self.loss_classification(
+            loss = self.loss(
                 input_var, target_var, kl_factor)
-            loss_only_last_sample = self.loss_last_sample_classification(
+            loss_only_last_sample = self.loss_last_sample(
                 input_var, target_var)
 
         # Create update methods.
@@ -608,6 +638,7 @@ class BNN(LasagnePowered, Serializable):
         params = []
         params.extend(params_kl)
         if self.update_likelihood_sd:
+            # No likelihood sd for classification tasks.
             params.append(self.likelihood_sd)
         updates = lasagne.updates.adam(
             loss, params, learning_rate=self.learning_rate)
@@ -655,54 +686,53 @@ class BNN(LasagnePowered, Serializable):
 
                 return updates
 
-            # DEBUG
-            # -----
-            def debug_H(loss, params, oldparams):
-                grads = theano.grad(loss, params)
-                updates = OrderedDict()
+            if self.debug:
 
-                invHs = []
-                for i in xrange(len(params)):
-                    param = params[i]
-                    grad = grads[i]
+                def debug_H(loss, params, oldparams):
+                    grads = theano.grad(loss, params)
+                    updates = OrderedDict()
 
-                    if param.name == 'mu' or param.name == 'b_mu':
-                        oldparam_rho = oldparams[i + 1]
-                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    elif param.name == 'rho' or param.name == 'b_rho':
-                        oldparam_rho = oldparams[i]
-                        p = param
-                        H = 2. * (T.exp(2 * p)) / \
-                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
-                        invH = 1. / H
-#                     elif param.name == 'likelihood_sd':
-#                         invH = 0.
-                    invHs.append(invH)
-                return invHs
+                    invHs = []
+                    for i in xrange(len(params)):
+                        param = params[i]
+                        grad = grads[i]
 
-            def debug_g(loss, params, oldparams):
-                grads = theano.grad(loss, params)
-                updates = OrderedDict()
+                        if param.name == 'mu' or param.name == 'b_mu':
+                            oldparam_rho = oldparams[i + 1]
+                            invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                        elif param.name == 'rho' or param.name == 'b_rho':
+                            oldparam_rho = oldparams[i]
+                            p = param
+                            H = 2. * (T.exp(2 * p)) / \
+                                (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                            invH = 1. / H
+                        elif param.name == 'likelihood_sd':
+                            invH = 0.
+                        invHs.append(invH)
+                    return invHs
 
-                invHs = []
-                for i in xrange(len(params)):
-                    param = params[i]
-                    grad = grads[i]
+                def debug_g(loss, params, oldparams):
+                    grads = theano.grad(loss, params)
+                    updates = OrderedDict()
 
-                    if param.name == 'mu' or param.name == 'b_mu':
-                        oldparam_rho = oldparams[i + 1]
-                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    elif param.name == 'rho' or param.name == 'b_rho':
-                        oldparam_rho = oldparams[i]
-                        p = param
-                        H = 2. * (T.exp(2 * p)) / \
-                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
-                        invH = 1. / H
-#                     elif param.name == 'likelihood_sd':
-#                         invH = 0.
-                    invHs.append(invH)
-                return grads
-            # -----
+                    invHs = []
+                    for i in xrange(len(params)):
+                        param = params[i]
+                        grad = grads[i]
+
+                        if param.name == 'mu' or param.name == 'b_mu':
+                            oldparam_rho = oldparams[i + 1]
+                            invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                        elif param.name == 'rho' or param.name == 'b_rho':
+                            oldparam_rho = oldparams[i]
+                            p = param
+                            H = 2. * (T.exp(2 * p)) / \
+                                (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                            invH = 1. / H
+                        elif param.name == 'likelihood_sd':
+                            invH = 0.
+                        invHs.append(invH)
+                    return grads
 
             def fast_kl_div(loss, params, oldparams, step_size):
 
@@ -745,17 +775,15 @@ class BNN(LasagnePowered, Serializable):
 #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
             # ---------------------------------------------
 
-            # DEBUG
-            # -----
-#             self.debug_H = ext.compile_function(
-#                 [input_var, target_var], debug_H(
-#                     loss_only_last_sample, params, oldparams),
-#                 log_name='fn_debug_grads')
-#             self.debug_g = ext.compile_function(
-#                 [input_var, target_var], debug_g(
-#                     loss_only_last_sample, params, oldparams),
-#                 log_name='fn_debug_grads')
-            # -----
+            if self.debug:
+                self.debug_H = ext.compile_function(
+                    [input_var, target_var], debug_H(
+                        loss_only_last_sample, params, oldparams),
+                    log_name='fn_debug_grads')
+                self.debug_g = ext.compile_function(
+                    [input_var, target_var], debug_g(
+                        loss_only_last_sample, params, oldparams),
+                    log_name='fn_debug_grads')
 
         else:
             # Use SGD to update the model for a single sample, in order to
@@ -778,21 +806,20 @@ class BNN(LasagnePowered, Serializable):
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
 
-        self.eval_loss = ext.compile_function(
-            [input_var, target_var, kl_factor], loss,  log_name='fn_eval_loss', no_default_updates=False)
-
-        # DEBUG
-        # -----
-#         # Calculate surprise.
-#         self.fn_surprise = ext.compile_function(
-#             [], self.surprise(), log_name='fn_surprise')
-        self.fn_dbg_nll = ext.compile_function(
-            [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll', no_default_updates=False)
-        self.fn_kl = ext.compile_function(
-            [], self.kl_div(), log_name='fn_kl')
-        self.fn_kl_from_prior = ext.compile_function(
-            [], self.log_p_w_q_w_kl(), log_name='fn_kl_from_prior')
-        # -----
+        if self.debug:
+            self.eval_loss = ext.compile_function(
+                [input_var, target_var, kl_factor], loss,  log_name='fn_eval_loss', no_default_updates=False)
+            # Calculate surprise.
+            self.fn_surprise = ext.compile_function(
+                [], self.surprise(), log_name='fn_surprise')
+#             self.fn_dbg_nll = ext.compile_function(
+#                 [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll', no_default_updates=False)
+            self.fn_kl = ext.compile_function(
+                [], self.kl_div(), log_name='fn_kl')
+            self.fn_kl_from_prior = ext.compile_function(
+                [], self.log_p_w_q_w_kl(), log_name='fn_kl_from_prior')
+            self.fn_classification_nll = ext.compile_function(
+                [input_var, target_var], self.likelihood_classification(target_var, self.pred_sym(input_var)), log_name='fn_classification_nll')
 
 if __name__ == '__main__':
     pass

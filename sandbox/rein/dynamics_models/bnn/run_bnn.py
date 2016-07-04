@@ -1,6 +1,7 @@
 import numpy as np
 from sandbox.rein.dynamics_models.bnn.bnn import BNN
-from sandbox.rein.dynamics_models.utils import load_dataset_1Dregression, sliding_mean, iterate_minibatches
+from sandbox.rein.dynamics_models.utils import load_dataset_1Dregression, sliding_mean, iterate_minibatches,\
+    load_dataset_multitarget_classification
 import lasagne
 import time
 
@@ -13,7 +14,7 @@ PLOT_OUTPUT_REGIONS = False
 PLOT_KL = False
 
 
-def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None):
+def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, debug=False):
 
     training_data_start = 1000
     training_data_end = 1100
@@ -65,6 +66,8 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         import matplotlib.pyplot as plt
         plt.ion()
         y = [model.pred_fn(x[None, :])[0][0] for x in X_test]
+        temp = model.fn_classification_nll(X_train, T_train)
+        print(temp)
         _ = plt.figure()
         plt.plot(np.array(X_test[training_data_start:training_data_end])[:, 0][:, None], np.array(
             T_test[training_data_start:training_data_end]), 'o', label="t", color=(1.0, 0, 0, 0.5))
@@ -219,46 +222,59 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             train_err / train_batches))
         print(
             "  KL divergence:\t\t{:.6f} ({:.6f})".format(kl_mean, kl_stdn))
-        print(model.likelihood_sd.eval())
+#         print(model.likelihood_sd.eval())
 
     print("Done training.")
 
 
 def main():
 
+    a = np.array([[1, 2, 3],
+                  [4, 5, 6],
+                  [7, 8, 9]])
+    lst = np.array([[0, 1], [1, 2], [0, 2]])
+    lst2 = lst.T.ravel()
+    idx = np.arange(len(lst))
+    idx2 = np.tile(idx,2)
+    print(idx2)
+    print(lst2)
+    print(a[idx2, lst2].reshape(2,-1).T)
+
+    DEBUG = True
+
     num_epochs = 1000
     batch_size = 10
 
     print("Loading data ...")
     (X_train, T_train), (X_test, T_test) = load_dataset_1Dregression()
+    (X_train, T_train), (X_test,
+                         T_test), n_classes = load_dataset_multitarget_classification()
     n_batches = int(np.ceil(len(X_train) / float(batch_size)))
     print("Building model and compiling functions ...")
     bnn = BNN(
         n_in=4,
-        n_out=1,
+        n_out=n_classes * 2,
         n_batches=n_batches,
         n_hidden=[8],
         layers_type=['gaussian', 'gaussian'],
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=1,
+        n_samples=2,
         use_reverse_kl_reg=False,
         reverse_kl_reg_factor=1e-2,
         learning_rate=0.001,
-        group_variance_by='unit',
+        group_variance_by='weight',
         use_local_reparametrization_trick=False,
         update_likelihood_sd=True,
         likelihood_sd_init=1.0,
-        output_type='regression'
+        output_type='classification',
+        debug=DEBUG
     )
-
-    print(bnn.network.get_b().eval())
-    print(bnn.network.get_b().eval().shape)
 
     # Train the model.
     train(bnn, num_epochs=num_epochs, X_train=X_train,
-          T_train=T_train, X_test=X_test, T_test=T_test)
+          T_train=T_train, X_test=X_test, T_test=T_test, debug=DEBUG)
     print('Done.')
 
 if __name__ == '__main__':
