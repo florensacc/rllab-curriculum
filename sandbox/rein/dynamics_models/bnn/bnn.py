@@ -195,7 +195,8 @@ class BNNLayer(lasagne.layers.Layer):
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, ), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
-            W =  self.mu + (self.log_to_std(self.rho) * epsilon).dimshuffle(0, 'x')
+            W = self.mu + \
+                (self.log_to_std(self.rho) * epsilon).dimshuffle(0, 'x')
         else:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
@@ -278,7 +279,7 @@ class BNNLayer(lasagne.layers.Layer):
             q_std = T.mean(q_std)
         elif self.group_variance_by == 'unit':
             if not isinstance(p_std, float):
-                p_std = p_std.dimshuffle(0, 'x') 
+                p_std = p_std.dimshuffle(0, 'x')
             if not isinstance(q_std, float):
                 q_std = q_std.dimshuffle(0, 'x')
         numerator = T.square(p_mean - q_mean) + \
@@ -366,7 +367,8 @@ class BNN(LasagnePowered, Serializable):
                  update_likelihood_sd=False,
                  group_variance_by='weight',
                  use_local_reparametrization_trick=True,
-                 likelihood_sd_init=1.0
+                 likelihood_sd_init=1.0,
+                 output_type='regression'
                  ):
 
         Serializable.quick_init(self, locals())
@@ -395,6 +397,7 @@ class BNN(LasagnePowered, Serializable):
         self.update_likelihood_sd = update_likelihood_sd
         self.group_variance_by = group_variance_by
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
+        self.output_type = output_type
 
         if self.group_variance_by != 'weight':
             assert not self.use_local_reparametrization_trick
@@ -471,7 +474,16 @@ class BNN(LasagnePowered, Serializable):
     def pred_sym(self, input):
         return lasagne.layers.get_output(self.network, input)
 
-    def loss(self, input, target, likelihood_sd, kl_factor):
+    def likelihood_regression(self, target, prediction, likelihood_sd):
+        return self._log_prob_normal(
+            target, prediction, likelihood_sd)
+
+    def likelihood_classification(self, target, prediction):
+        # Cross-entropy; target vector selecting correct prediction
+        # entries.
+        return - T.log(prediction[T.arange(target.shape[0]), target])
+
+    def loss(self, input, target, kl_factor, **kwargs):
 
         # MC samples.
         _log_p_D_given_w = []
@@ -479,8 +491,11 @@ class BNN(LasagnePowered, Serializable):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
-            _log_p_D_given_w.append(self._log_prob_normal(
-                target, prediction, likelihood_sd))
+            if self.output_type == 'classification':
+                lh = self.likelihood_classification(target, prediction)
+            elif self.output_type == 'regression':
+                lh = self.likelihood_regression(target, prediction, **kwargs)
+            _log_p_D_given_w.append(lh)
         log_p_D_given_w = sum(_log_p_D_given_w)
         # Calculate variational posterior log(q(w)) and prior log(p(w)).
         if self.update_prior:
@@ -494,7 +509,7 @@ class BNN(LasagnePowered, Serializable):
         # Calculate loss function.
         return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
 
-    def loss_last_sample(self, input, target, likelihood_sd):
+    def loss_last_sample(self, input, target, **kwargs):
         """The difference with the original loss is that we only update based on the latest sample.
         This means that instead of using the prior p(w), we use the previous approximated posterior
         q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
@@ -506,8 +521,11 @@ class BNN(LasagnePowered, Serializable):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(sample|w)).
-            _log_p_D_given_w.append(self._log_prob_normal(
-                target, prediction, likelihood_sd))
+            if self.output_type == 'classification':
+                lh = self.likelihood_classification(target, prediction)
+            elif self.output_type == 'regression':
+                lh = self.likelihood_regression(target, prediction, **kwargs)
+            _log_p_D_given_w.append(lh)
         log_p_D_given_w = sum(_log_p_D_given_w)
         # Calculate loss function.
         # self.kl_div() should be zero when taking second order step
@@ -560,21 +578,30 @@ class BNN(LasagnePowered, Serializable):
         kl_factor = T.scalar('kl_factor',
                              dtype=theano.config.floatX)  # @UndefinedVariable
 
-        # Make the likelihood standard deviation a trainable parameter.
-        self.likelihood_sd = theano.shared(
-            value=self.likelihood_sd_init,  # self.likelihood_sd_init,
-            name='likelihood_sd'
-        )
-        self.old_likelihood_sd = theano.shared(
-            value=self.likelihood_sd_init,  # self.likelihood_sd_init,
-            name='old_likelihood_sd'
-        )
+        if self.output_type == 'regression':
+            # Make the likelihood standard deviation a trainable parameter.
+            self.likelihood_sd = theano.shared(
+                value=self.likelihood_sd_init,  # self.likelihood_sd_init,
+                name='likelihood_sd'
+            )
+            self.old_likelihood_sd = theano.shared(
+                value=self.likelihood_sd_init,  # self.likelihood_sd_init,
+                name='old_likelihood_sd'
+            )
 
-        # Loss function.
-        loss = self.loss(
-            input_var, target_var, self.likelihood_sd, kl_factor)
-        loss_only_last_sample = self.loss_last_sample(
-            input_var, target_var, self.likelihood_sd)
+            # Loss function.
+            loss = self.loss(
+                input_var, target_var, kl_factor, likelihood_sd=self.likelihood_sd)
+            loss_only_last_sample = self.loss_last_sample(
+                input_var, target_var, likelihood_sd=self.likelihood_sd)
+
+        elif self.output_type == 'classification':
+
+            # Loss function.
+            loss = self.loss_classification(
+                input_var, target_var, kl_factor)
+            loss_only_last_sample = self.loss_last_sample_classification(
+                input_var, target_var)
 
         # Create update methods.
         params_kl = lasagne.layers.get_all_params(self.network, trainable=True)

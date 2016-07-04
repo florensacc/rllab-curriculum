@@ -12,6 +12,7 @@ PLOT_OUTPUT = True
 PLOT_OUTPUT_REGIONS = False
 PLOT_KL = False
 
+
 def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None):
 
     training_data_start = 1000
@@ -151,7 +152,6 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             plt.draw()
             plt.pause(0.00001)
 
-
         elif PLOT_OUTPUT_REGIONS and epoch % 30 == 0 and epoch != 0:
             import matplotlib.pyplot as plt
 
@@ -237,27 +237,28 @@ def main():
         n_in=4,
         n_out=1,
         n_batches=n_batches,
-        n_hidden=[128],
+        n_hidden=[8],
         layers_type=['gaussian', 'gaussian'],
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=10,
+        n_samples=1,
         use_reverse_kl_reg=False,
         reverse_kl_reg_factor=1e-2,
         learning_rate=0.001,
         group_variance_by='unit',
         use_local_reparametrization_trick=False,
         update_likelihood_sd=True,
-        likelihood_sd_init=1.0
+        likelihood_sd_init=1.0,
+        output_type='regression'
     )
-    
+
     print(bnn.network.get_b().eval())
     print(bnn.network.get_b().eval().shape)
-    
+
     # Train the model.
     train(bnn, num_epochs=num_epochs, X_train=X_train,
-              T_train=T_train, X_test=X_test, T_test=T_test)
+          T_train=T_train, X_test=X_test, T_test=T_test)
     print('Done.')
 
 if __name__ == '__main__':
