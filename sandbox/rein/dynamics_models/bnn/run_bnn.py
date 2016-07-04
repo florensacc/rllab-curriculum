@@ -151,6 +151,15 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
         elif PLOT_OUTPUT:
             y = [model.pred_fn(x[None, :])[0][0] for x in X_test]
+            pred = model.pred_fn(X_train)
+            pred2 = pred.reshape([-1, 3])
+            argm = np.argmax(pred2, axis=1)
+            argm2 = argm.reshape([-1, 2])
+            err1 = np.sum(
+                np.equal(T_train[:, 0], argm2[:, 0])) / float(len(T_train))
+            err2 = np.sum(
+                np.equal(T_train[:, 0], argm2[:, 1])) / float(len(T_train))
+            print(err1, err2)
             painter_output.set_ydata(y)
             plt.draw()
             plt.pause(0.00001)
@@ -235,10 +244,10 @@ def main():
     lst = np.array([[0, 1], [1, 2], [0, 2]])
     lst2 = lst.T.ravel()
     idx = np.arange(len(lst))
-    idx2 = np.tile(idx,2)
+    idx2 = np.tile(idx, 2)
     print(idx2)
     print(lst2)
-    print(a[idx2, lst2].reshape(2,-1).T)
+    print(a[idx2, lst2].reshape(2, -1).T)
 
     DEBUG = True
 

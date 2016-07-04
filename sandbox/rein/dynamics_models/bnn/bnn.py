@@ -344,6 +344,35 @@ class BNNLayer(lasagne.layers.Layer):
         return (input_shape[0], self.num_units)
 
 
+class CatOutBNNLayer(BNNLayer):
+    """ Categorical output layer (multidimensional softmax); extension to BNNLayer """
+
+    def __init__(self,
+                 incoming,
+                 num_units,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 prior_sd=None,
+                 group_variance_by=None,
+                 use_local_reparametrization_trick=None,
+                 **kwargs):
+        super(CatOutBNNLayer, self).__init__(incoming, num_units, nonlinearity,
+                                             prior_sd, group_variance_by, use_local_reparametrization_trick, **kwargs)
+
+    def get_output_for_default(self, input, **kwargs):
+        if input.ndim > 2:
+            # if the input has more than two dimensions, flatten it into a
+            # batch of feature vectors.
+            input = input.flatten(2)
+
+        activation = T.dot(input, self.get_W()) + \
+            self.get_b().dimshuffle('x', 0)
+#         return self.nonlinearity(activation)
+
+        # Apply nonlinearity (softmax) over all n_out dimensions.
+        postact = self.nonlinearity(activation.reshape([-1, 3]))
+        return postact.reshape([-1, 3 * 2])
+
+
 class BNN(LasagnePowered, Serializable):
     """Bayesian neural network (BNN), according to Blundell2016."""
 
@@ -526,7 +555,7 @@ class BNN(LasagnePowered, Serializable):
                 self.reverse_log_p_w_q_w_kl()
 
         # Calculate loss function.
-        return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
+        return kl / self.n_batches * kl_factor * 0. - log_p_D_given_w / self.n_samples
 
     def loss_last_sample(self, input, target, **kwargs):
         """The difference with the original loss is that we only update based on the latest sample.
@@ -585,12 +614,9 @@ class BNN(LasagnePowered, Serializable):
                 network = lasagne.layers.DenseLayer(
                     network, self.n_out, nonlinearity=self.outf)
         elif self.output_type == 'classification':
-            if self.layers_type[len(self.n_hidden)] == 'gaussian':
-                network = BNNLayer(
-                    network, self.n_out, nonlinearity=lasagne.nonlinearities.softmax, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by)
-            elif self.layers_type[len(self.n_hidden)] == 'deterministic':
-                network = lasagne.layers.DenseLayer(
-                    network, self.n_out, nonlinearity=lasagne.nonlinearities.softmax)
+            network = CatOutBNNLayer(
+                network, self.n_out, nonlinearity=lasagne.nonlinearities.softmax,
+                prior_sd=self.prior_sd, group_variance_by=self.group_variance_by)
 
         self.network = network
 
