@@ -43,6 +43,9 @@ class SeqGridPolicyModule(object):
     low-level policy receives partial observation. stochastic bottleneck
     """
 
+    def __init__(self, low_policy_obs='full'):
+        self.low_policy_obs = low_policy_obs
+
     def new_high_policy(self, env_spec, subgoal_dim):
         subgoal_space = Discrete(subgoal_dim)
         return CategoricalMLPPolicy(
@@ -56,12 +59,12 @@ class SeqGridPolicyModule(object):
                 input_shape=env_spec.observation_space.components[0].shape,
                 extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
                 output_dim=subgoal_dim,
-                hidden_sizes=(10, 10),
+                hidden_sizes=(100, 100),
                 conv_filters=(10, 10),
                 conv_filter_sizes=(3, 3),
                 conv_strides=(1, 1),
                 conv_pads=('SAME', 'SAME'),
-                extra_hidden_sizes=tuple(),
+                extra_hidden_sizes=(100,),
                 hidden_nonlinearity=tf.nn.tanh,
                 output_nonlinearity=tf.nn.softmax,
             ),
@@ -78,84 +81,46 @@ class SeqGridPolicyModule(object):
 
     def new_low_policy(self, env_spec, subgoal_dim, bottleneck_dim):
         subgoal_space = Discrete(subgoal_dim)
-        return BranchingCategoricalMLPPolicy(
-            name="low_policy",
-            env_spec=EnvSpec(
-                observation_space=Product(env_spec.observation_space, subgoal_space),
-                action_space=env_spec.action_space,
-            ),
-            shared_network=ConvMergeNetwork(
-                name="low_policy_shared_network",
-                input_shape=env_spec.observation_space.components[0].shape,
-                extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
-                output_dim=10,
+        if self.low_policy_obs == 'full':
+            return BranchingCategoricalMLPPolicy(
+                name="low_policy",
+                env_spec=EnvSpec(
+                    observation_space=Product(env_spec.observation_space, subgoal_space),
+                    action_space=env_spec.action_space,
+                ),
+                shared_network=ConvMergeNetwork(
+                    name="low_policy_shared_network",
+                    input_shape=env_spec.observation_space.components[0].shape,
+                    extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
+                    output_dim=10,
+                    hidden_sizes=(100,),
+                    conv_filters=(10, 10),
+                    conv_filter_sizes=(3, 3),
+                    conv_strides=(1, 1),
+                    conv_pads=('SAME', 'SAME'),
+                    extra_hidden_sizes=(100,),
+                    hidden_nonlinearity=tf.nn.tanh,
+                    output_nonlinearity=tf.nn.tanh,
+                ),
+                subgoal_dim=subgoal_dim,
                 hidden_sizes=(100,),
-                conv_filters=(10, 10),
-                conv_filter_sizes=(3, 3),
-                conv_strides=(1, 1),
-                conv_pads=('SAME', 'SAME'),
-                extra_hidden_sizes=tuple(),
                 hidden_nonlinearity=tf.nn.tanh,
-                output_nonlinearity=tf.nn.tanh,
-            ),
-            subgoal_dim=subgoal_dim,
-            hidden_sizes=(32,),
-            hidden_nonlinearity=tf.nn.tanh,
-            bottleneck_dim=bottleneck_dim,
-        )
-
-
-class SeqGridPolicyModule1(object):
-    """
-    low-level policy receives partial observation. stochastic bottleneck
-    """
-
-    def new_high_policy(self, env_spec, subgoal_dim):
-        subgoal_space = Discrete(subgoal_dim)
-        return CategoricalMLPPolicy(
-            name="high_policy",
-            env_spec=EnvSpec(
-                observation_space=env_spec.observation_space,
-                action_space=subgoal_space,
-            ),
-            prob_network=ConvMergeNetwork(
-                name="high_policy_network",
-                input_shape=env_spec.observation_space.components[0].shape,
-                extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
-                output_dim=subgoal_dim,
-                hidden_sizes=(10, 10),
-                conv_filters=(10, 10),
-                conv_filter_sizes=(3, 3),
-                conv_strides=(1, 1),
-                conv_pads=('SAME', 'SAME'),
-                extra_hidden_sizes=tuple(),
+                bottleneck_dim=bottleneck_dim,
+            )
+        elif self.low_policy_obs == 'partial':
+            return IgnorantBranchingCategoricalMLPPolicy(
+                name="low_policy",
+                env_spec=EnvSpec(
+                    observation_space=Product(env_spec.observation_space, subgoal_space),
+                    action_space=env_spec.action_space,
+                ),
+                subgoal_dim=subgoal_dim,
+                hidden_sizes=(100,),
                 hidden_nonlinearity=tf.nn.tanh,
-                output_nonlinearity=tf.nn.softmax,
-            ),
-        )
-
-    def new_alt_high_policy(self, env_spec, subgoal_dim):
-        subgoal_space = Discrete(subgoal_dim)
-        return UniformControlPolicy(
-            env_spec=EnvSpec(
-                observation_space=env_spec.observation_space,
-                action_space=subgoal_space,
-            ),
-        )
-
-    def new_low_policy(self, env_spec, subgoal_dim, bottleneck_dim):
-        subgoal_space = Discrete(subgoal_dim)
-        return IgnorantBranchingCategoricalMLPPolicy(
-            name="low_policy",
-            env_spec=EnvSpec(
-                observation_space=Product(env_spec.observation_space, subgoal_space),
-                action_space=env_spec.action_space,
-            ),
-            subgoal_dim=subgoal_dim,
-            hidden_sizes=(32,),
-            hidden_nonlinearity=tf.nn.tanh,
-            bottleneck_dim=bottleneck_dim,
-        )
+                bottleneck_dim=bottleneck_dim,
+            )
+        else:
+            raise NotImplementedError
 
 
 class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
@@ -312,10 +277,10 @@ class IgnorantBranchingCategoricalMLPPolicy(BranchingCategoricalMLPPolicy, Seria
         shared_network = MLP(
             input_shape=(slice_end - slice_start,),
             input_layer=l_sliced_in,
-            hidden_sizes=tuple(),
-            hidden_nonlinearity=None,
+            hidden_sizes=(100, 100),
+            hidden_nonlinearity=tf.nn.tanh,
             output_dim=slice_end - slice_start,
-            output_nonlinearity=None,
+            output_nonlinearity=tf.nn.tanh,
             name="dummy_shared",
         )
         BranchingCategoricalMLPPolicy.__init__(self, name=name, env_spec=env_spec, subgoal_dim=subgoal_dim,
@@ -621,7 +586,7 @@ class ApproximatePosterior(LayersPowered, Serializable):
     sequence. It is structured as a GRU.
     """
 
-    def __init__(self, env_spec, subgoal_dim, subgoal_interval, feature_dim=20, hidden_dim=10):
+    def __init__(self, env_spec, subgoal_dim, subgoal_interval):
         """
         :type env_spec: EnvSpec
         :param env_spec:
@@ -647,84 +612,54 @@ class ApproximatePosterior(LayersPowered, Serializable):
             name="action_input"
         )
 
-        preprocess_network = MLP(
-            name="preprocess_network_1",
-            input_shape=(action_dim,),
-            output_dim=10,
+        feature_network = ConvMergeNetwork(
+            name="feature_network",
+            input_layer=L.reshape(l_obs, (-1, obs_dim), name="reshape_obs"),
+            input_shape=env_spec.observation_space.components[0].shape,
+            extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
+            output_dim=100,
+            hidden_sizes=(100,),
+            conv_filters=(10, 10),
+            conv_filter_sizes=(3, 3),
+            conv_strides=(1, 1),
+            conv_pads=('SAME', 'SAME'),
+            extra_hidden_sizes=(100,),
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.tanh,
-            input_layer=L.reshape(
-                l_action,
-                shape=(-1, action_dim),
-                name="action_reshape"
-            ),
-            hidden_sizes=tuple(),
         )
 
-        subgoal_input_layer = L.reshape(
-            preprocess_network.output_layer,
-            (-1, subgoal_interval * preprocess_network.output_layer.output_shape[-1]),
-            name="subgoal_in_reshape"
+        l_reshaped_feature = L.reshape(
+            feature_network.output_layer,
+            shape=(-1, subgoal_interval, 100),
+            name="reshaped_feature"
         )
+
+        l_action_embedding = L.reshape(
+            MLP(
+                name="action_embedding_network",
+                input_shape=(action_dim,),
+                output_dim=100,
+                hidden_nonlinearity=tf.identity,
+                hidden_sizes=tuple(),
+                output_nonlinearity=tf.identity,
+                input_layer=L.reshape(l_action, name="action_flat", shape=(-1, action_dim)),
+            ).output_layer,
+            shape=(-1, subgoal_interval, 100),
+            name="reshaped_action"
+        )
+
+        subgoal_input_layer = L.concat([l_reshaped_feature, l_action_embedding], name="subgoal_dim", axis=2)
 
         subgoal_network = MLP(
             name="h_network",
             input_shape=(subgoal_input_layer.output_shape[-1],),
             output_dim=subgoal_dim,
-            hidden_sizes=(100,),
+            hidden_sizes=(100, 100),
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.softmax,
             input_layer=subgoal_input_layer,
         )
         l_subgoal_probs = subgoal_network.output_layer
-
-        # feature_network = MLP(
-        #     input_shape=(env_spec.observation_space.flat_dim,),
-        #     output_dim=feature_dim,
-        #     hidden_sizes=(10,),
-        #     hidden_nonlinearity=tf.nn.tanh,
-        #     output_nonlinearity=tf.nn.tanh,
-        #     name="feature_network",
-        #     input_layer=L.reshape(l_obs, (-1, obs_dim), name="reshape_obs"),
-        # )
-        #
-        # l_reshaped_feature = L.reshape(
-        #     feature_network.output_layer,
-        #     shape=(-1, subgoal_interval, feature_dim),
-        #     name="reshaped_feature"
-        # )
-        #
-        # l_preprocess_in = L.reshape(
-        #     L.concat([l_reshaped_feature, l_action], name="preprocess_in", axis=2),
-        #     (-1, feature_dim + action_dim),
-        #     name="preprocess_in_flat",
-        # )
-        # preprocess_network = MLP(
-        #     name="preprocess_network",
-        #     input_shape=(feature_dim + action_dim,),
-        #     output_dim=feature_dim,
-        #     hidden_nonlinearity=tf.nn.tanh,
-        #     output_nonlinearity=tf.nn.tanh,
-        #     input_layer=l_preprocess_in,
-        #     hidden_sizes=(feature_dim,),
-        # )
-        #
-        # subgoal_input_layer = L.reshape(
-        #     preprocess_network.output_layer,
-        #     (-1, subgoal_interval * preprocess_network.output_layer.output_shape[-1]),
-        #     name="subgoal_in_reshape"
-        # )
-        #
-        # subgoal_network = MLP(
-        #     name="h_network",
-        #     input_shape=(subgoal_input_layer.output_shape[-1],),
-        #     output_dim=subgoal_dim,
-        #     hidden_sizes=(100,),
-        #     hidden_nonlinearity=tf.nn.tanh,
-        #     output_nonlinearity=tf.nn.softmax,
-        #     input_layer=subgoal_input_layer,
-        # )
-        # l_subgoal_probs = subgoal_network.output_layer
 
         self.subgoal_dim = subgoal_dim
         self.l_in = l_in
@@ -748,6 +683,7 @@ class ApproximatePosterior(LayersPowered, Serializable):
 class FixedClockImitation(RLAlgorithm):
     def __init__(
             self,
+            policy_module=None,
             policy_module_cls=None,
             approximate_posterior_cls=None,
             subgoal_dim=4,
@@ -763,9 +699,11 @@ class FixedClockImitation(RLAlgorithm):
             ent_g_given_z_coeff=0.,
     ):
         self.env_expert = SeqGridExpert()
-        if policy_module_cls is None:
-            policy_module_cls = SeqGridPolicyModule1
-        self.policy_module = policy_module_cls()
+        if policy_module is None:
+            if policy_module_cls is None:
+                policy_module_cls = SeqGridPolicyModule
+            policy_module = policy_module_cls()
+        self.policy_module = policy_module
 
         if approximate_posterior_cls is None:
             approximate_posterior_cls = ApproximatePosterior
@@ -805,8 +743,10 @@ class FixedClockImitation(RLAlgorithm):
 
         self.bottleneck_goal_recognizer = CategoricalMLPRegressor(
             name="bottleneck_goal_regressor",
-            input_shape=(self.bottleneck_dim,),
-            output_dim=self.subgoal_dim,
+            input_shape=(bottleneck_dim,),
+            output_dim=subgoal_dim,
+            use_trust_region=False,
+            hidden_sizes=(200, 200),
         )
 
         self.g_given_z_regressor = CategoricalMLPRegressor(
@@ -814,6 +754,7 @@ class FixedClockImitation(RLAlgorithm):
             input_shape=(bottleneck_dim,),
             output_dim=subgoal_dim,
             use_trust_region=False,
+            hidden_sizes=(200, 200),
         )
 
         self.logging_info = []
@@ -859,7 +800,8 @@ class FixedClockImitation(RLAlgorithm):
         E_sum_action_logli = tf.reduce_sum(recog_subgoal_dist['prob'] * tf.transpose(tf.pack(
             all_sum_action_logli)), reduction_indices=-1)
 
-        vlb = tf.reduce_mean(E_sum_action_logli - subgoal_kl)
+        vlb = tf.reduce_mean(E_sum_action_logli) - tf.reduce_mean(subgoal_kl)# + \
+              #0.1 * tf.reduce_mean(self.recog.distribution.entropy_sym(recog_subgoal_dist))
 
         surr_vlb = vlb
 
