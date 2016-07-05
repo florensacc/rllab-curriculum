@@ -80,10 +80,10 @@ def load_dataset_multitarget_classification():
     x = dataset.data
     y = np.vstack((dataset.target, dataset.target)).T
     n_classes = len(np.unique(y))
-    X_train = x[:len(x) * 0.9]
-    X_test = x[len(x) * 0.9:]
-    y_train = y[:len(y) * 0.9]
-    y_test = y[len(y) * 0.9:]
+    X_train = x[:len(x) * 0.7]
+    X_test = x[len(x) * 0.7:]
+    y_train = y[:len(y) * 0.7]
+    y_test = y[len(y) * 0.7:]
     return (X_train, y_train), (X_test, y_test), n_classes
 
 

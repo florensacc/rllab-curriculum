@@ -23,6 +23,7 @@ class BNNLayer(lasagne.layers.Layer):
                  prior_sd=None,
                  group_variance_by=None,
                  use_local_reparametrization_trick=None,
+                 disable_variance=None,
                  **kwargs):
         super(BNNLayer, self).__init__(incoming, **kwargs)
 
@@ -35,6 +36,7 @@ class BNNLayer(lasagne.layers.Layer):
         self.prior_sd = prior_sd
         self.group_variance_by = group_variance_by
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
+        self.disable_variance = disable_variance
 
         # Convert prior_sd into prior_rho.
         prior_rho = self.std_to_log(self.prior_sd)
@@ -186,42 +188,54 @@ class BNNLayer(lasagne.layers.Layer):
         return np.log(np.exp(sigma) - 1)
 
     def get_W(self):
+        if self.disable_variance:
+            mask = 0.
+        else:
+            mask = 1.
         if self.group_variance_by == 'layer':
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(1, 1), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
-            W = self.mu + T.mean(self.log_to_std(self.rho)) * epsilon
+            W = self.mu + T.mean(self.log_to_std(self.rho)) * epsilon * mask
         elif self.group_variance_by == 'unit':
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, ), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
             W = self.mu + \
-                (self.log_to_std(self.rho) * epsilon).dimshuffle(0, 'x')
-        else:
+                (self.log_to_std(self.rho) * epsilon * mask).dimshuffle(0, 'x')
+        elif self.group_variance_by == 'weight':
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
-            W = self.mu + (epsilon * self.log_to_std(self.rho))
+            W = self.mu + epsilon * self.log_to_std(self.rho) * mask
+        else:
+            raise Exception('Group variance by unknown!')
         self.W = W
         return W
 
     def get_b(self):
+        if self.disable_variance:
+            mask = 0.
+        else:
+            mask = 1.
         if self.group_variance_by == 'layer':
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
             # T.mean is a hack to get 2D broadcasting on a scalar.
-            b = self.b_mu + T.mean(self.log_to_std(self.b_rho)) * epsilon
+            b = self.b_mu + \
+                T.mean(self.log_to_std(self.b_rho)) * epsilon * mask
         elif self.group_variance_by == 'unit':
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(1,), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
-            b = self.b_mu + T.mean(self.log_to_std(self.b_rho)) * epsilon
+            b = self.b_mu + \
+                T.mean(self.log_to_std(self.b_rho)) * epsilon * mask
         elif self.group_variance_by == 'weight':
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
-            b = self.b_mu + self.log_to_std(self.b_rho) * epsilon
+            b = self.b_mu + self.log_to_std(self.b_rho) * epsilon * mask
         else:
             raise Exception('Group variance by unknown!')
         self.b = b
@@ -251,10 +265,14 @@ class BNNLayer(lasagne.layers.Layer):
             delta = T.dot(T.square(input), T.square(self.log_to_std(
                 self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
 
+            if self.disable_variance:
+                mask = 0.
+            else:
+                mask = 1.
             epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
 
-            activation = gamma + T.sqrt(delta) * epsilon
+            activation = gamma + T.sqrt(delta) * epsilon * mask
 
             return self.nonlinearity(activation)
 
@@ -350,13 +368,18 @@ class CatOutBNNLayer(BNNLayer):
     def __init__(self,
                  incoming,
                  num_units,
-                 nonlinearity=lasagne.nonlinearities.rectify,
+                 nonlinearity=lasagne.nonlinearities.softmax,
                  prior_sd=None,
                  group_variance_by=None,
                  use_local_reparametrization_trick=None,
+                 num_classes=None,
+                 num_output_dim=None,
+                 disable_variance=None,
                  **kwargs):
         super(CatOutBNNLayer, self).__init__(incoming, num_units, nonlinearity,
-                                             prior_sd, group_variance_by, use_local_reparametrization_trick, **kwargs)
+                                             prior_sd, group_variance_by, use_local_reparametrization_trick, disable_variance, **kwargs)
+        self.num_classes = num_classes
+        self.num_output_dim = num_output_dim
 
     def get_output_for_default(self, input, **kwargs):
         if input.ndim > 2:
@@ -366,11 +389,51 @@ class CatOutBNNLayer(BNNLayer):
 
         activation = T.dot(input, self.get_W()) + \
             self.get_b().dimshuffle('x', 0)
-#         return self.nonlinearity(activation)
+
+        return self.nonlinearity(activation)
 
         # Apply nonlinearity (softmax) over all n_out dimensions.
-        postact = self.nonlinearity(activation.reshape([-1, 3]))
-        return postact.reshape([-1, 3 * 2])
+        postact = self.nonlinearity(activation.reshape([-1, self.num_classes]))
+        return postact.reshape([-1, self.num_classes * self.num_ouput_dim])
+
+    def get_output_for_reparametrization(self, input, **kwargs):
+        """Implementation of the local reparametrization trick.
+
+        This essentially leads to a speedup compared to the naive implementation case.
+        Furthermore, it leads to gradients with less variance.
+
+        References
+        ----------
+        Kingma et al., "Variational Dropout and the Local Reparametrization Trick", 2015
+        """
+
+        if self.group_variance_by == 'layer':
+            raise Exception(
+                'Local reparametrization trick not supported for tied variances per layer!')
+        else:
+            if input.ndim > 2:
+                # if the input has more than two dimensions, flatten it into a
+                # batch of feature vectors.
+                input = input.flatten(2)
+
+            gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
+            delta = T.dot(T.square(input), T.square(self.log_to_std(
+                self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
+
+            if self.disable_variance:
+                mask = 0.
+            else:
+                mask = 1.
+            epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
+                                        dtype=theano.config.floatX)  # @UndefinedVariable
+
+            activation = gamma + T.sqrt(delta) * epsilon * mask
+
+        return self.nonlinearity(activation)
+
+        # Apply nonlinearity (softmax) over all n_out dimensions.
+        postact = self.nonlinearity(activation.reshape([-1, self.num_classes]))
+        return postact.reshape([-1, self.num_classes * self.num_ouput_dim])
 
 
 class BNN(LasagnePowered, Serializable):
@@ -398,6 +461,9 @@ class BNN(LasagnePowered, Serializable):
                  use_local_reparametrization_trick=True,
                  likelihood_sd_init=1.0,
                  output_type='regression',
+                 num_classes=None,
+                 num_output_dim=None,
+                 disable_variance=False,
                  debug=False
                  ):
 
@@ -428,7 +494,15 @@ class BNN(LasagnePowered, Serializable):
         self.group_variance_by = group_variance_by
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
         self.output_type = output_type
+        self.num_classes = num_classes
+        self.num_output_dim = num_output_dim
+        self.disable_variance = disable_variance
         self.debug = debug
+
+        if self.output_type == 'classification':
+            assert self.num_classes is not None
+            assert self.num_output_dim is not None
+            assert self.n_out == self.num_classes * self.num_output_dim
 
         if self.group_variance_by != 'weight':
             assert not self.use_local_reparametrization_trick
@@ -437,6 +511,9 @@ class BNN(LasagnePowered, Serializable):
             print(
                 'Setting output_type=\'classification\' cannot be used with update_likelihood_sd=True, changing to False.')
             self.update_likelihood_sd = False
+
+        if self.disable_variance:
+            print('Warning: all noise has been disabled, only using means.')
 
         assert self.information_gain or self.compression
 
@@ -517,17 +594,17 @@ class BNN(LasagnePowered, Serializable):
             target, prediction, likelihood_sd)
 
     def likelihood_classification(self, target, prediction):
+#         return T.sum(T.log(prediction[T.arange(target.shape[0]), target]))
+
         # Cross-entropy; target vector selecting correct prediction
         # entries.
         # Hardcoding n_classes=3
-        n_classes = 3
-        n_out = 2
-        target2 = target + T.arange(target.shape[1]) * n_classes
+        target2 = target + T.arange(target.shape[1]) * self.num_classes
         target3 = target2.T.ravel()
         idx = T.arange(target.shape[0])
-        idx2 = T.tile(idx, n_out)
+        idx2 = T.tile(idx, self.num_output_dim)
         prediction_selected = prediction[
-            idx2, target3].reshape([n_out, target.shape[0]]).T
+            idx2, target3].reshape([self.num_output_dim, target.shape[0]]).T
         ll = T.sum(T.log(prediction_selected))
         return ll
 
@@ -600,7 +677,9 @@ class BNN(LasagnePowered, Serializable):
         for i in xrange(len(self.n_hidden)):
             if self.layers_type[i] == 'gaussian':
                 network = BNNLayer(
-                    network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by)
+                    network, self.n_hidden[
+                        i], nonlinearity=self.transf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by,
+                    disable_variance=self.disable_variance)
             elif self.layers_type[i] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf)
@@ -609,14 +688,16 @@ class BNN(LasagnePowered, Serializable):
         if self.output_type == 'regression':
             if self.layers_type[len(self.n_hidden)] == 'gaussian':
                 network = BNNLayer(
-                    network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by)
+                    network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by,
+                    disable_variance=self.disable_variance)
             elif self.layers_type[len(self.n_hidden)] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, self.n_out, nonlinearity=self.outf)
         elif self.output_type == 'classification':
             network = CatOutBNNLayer(
                 network, self.n_out, nonlinearity=lasagne.nonlinearities.softmax,
-                prior_sd=self.prior_sd, group_variance_by=self.group_variance_by)
+                prior_sd=self.prior_sd, group_variance_by=self.group_variance_by,
+                num_classes=self.num_classes, num_output_dim=self.num_output_dim, disable_variance=self.disable_variance)
 
         self.network = network
 
@@ -829,8 +910,8 @@ class BNN(LasagnePowered, Serializable):
             updates_kl = sgd(
                 loss_only_last_sample, params, learning_rate=self.learning_rate)
 
-            self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
+#             self.train_update_fn = ext.compile_function(
+#                 [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
 
         if self.debug:
             self.eval_loss = ext.compile_function(

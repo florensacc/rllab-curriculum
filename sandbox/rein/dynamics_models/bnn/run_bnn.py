@@ -14,7 +14,7 @@ PLOT_OUTPUT_REGIONS = False
 PLOT_KL = False
 
 
-def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, debug=False):
+def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, num_classes=None, num_output_dim=None, debug=False):
 
     training_data_start = 1000
     training_data_end = 1100
@@ -152,14 +152,24 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         elif PLOT_OUTPUT:
             y = [model.pred_fn(x[None, :])[0][0] for x in X_test]
             pred = model.pred_fn(X_train)
-            pred2 = pred.reshape([-1, 3])
+            pred2 = pred.reshape([-1, num_classes])
             argm = np.argmax(pred2, axis=1)
-            argm2 = argm.reshape([-1, 2])
+            argm2 = argm.reshape([-1, num_output_dim])
             err1 = np.sum(
                 np.equal(T_train[:, 0], argm2[:, 0])) / float(len(T_train))
             err2 = np.sum(
                 np.equal(T_train[:, 0], argm2[:, 1])) / float(len(T_train))
-            print(err1, err2)
+            print('train', err1, err2)
+            pred = model.pred_fn(X_test)
+            pred2 = pred.reshape([-1, num_classes])
+            argm = np.argmax(pred2, axis=1)
+            argm2 = argm.reshape([-1, num_output_dim])
+            err1 = np.sum(
+                np.equal(T_test[:, 0], argm2[:, 0])) / float(len(T_test))
+            err2 = np.sum(
+                np.equal(T_test[:, 0], argm2[:, 1])) / float(len(T_test))
+            print('test', err1, err2)
+
             painter_output.set_ydata(y)
             plt.draw()
             plt.pause(0.00001)
@@ -257,33 +267,37 @@ def main():
     print("Loading data ...")
     (X_train, T_train), (X_test, T_test) = load_dataset_1Dregression()
     (X_train, T_train), (X_test,
-                         T_test), n_classes = load_dataset_multitarget_classification()
+                         T_test), num_classes = load_dataset_multitarget_classification()
+    num_output_dim = 2
     n_batches = int(np.ceil(len(X_train) / float(batch_size)))
     print("Building model and compiling functions ...")
     bnn = BNN(
         n_in=4,
-        n_out=n_classes * 2,
+        n_out=num_classes * num_output_dim,
         n_batches=n_batches,
-        n_hidden=[8],
+        n_hidden=[32],
         layers_type=['gaussian', 'gaussian'],
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=2,
+        n_samples=10,
         use_reverse_kl_reg=False,
         reverse_kl_reg_factor=1e-2,
         learning_rate=0.001,
-        group_variance_by='weight',
+        group_variance_by='unit',
         use_local_reparametrization_trick=False,
         update_likelihood_sd=True,
         likelihood_sd_init=1.0,
         output_type='classification',
+        num_classes=num_classes,
+        num_output_dim=num_output_dim,
+        disable_variance=False,
         debug=DEBUG
     )
 
     # Train the model.
     train(bnn, num_epochs=num_epochs, X_train=X_train,
-          T_train=T_train, X_test=X_test, T_test=T_test, debug=DEBUG)
+          T_train=T_train, X_test=X_test, T_test=T_test, num_classes=num_classes, num_output_dim=num_output_dim, debug=DEBUG)
     print('Done.')
 
 if __name__ == '__main__':
