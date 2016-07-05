@@ -291,8 +291,19 @@ def sample_paths(
     return singleton_pool.run_collect(
         _worker_collect_one_path,
         threshold=max_samples,
-        args=(max_path_length, itr, normalize_reward, reward_mean,
-              reward_std, kl_batch_size, n_itr_update, use_replay_pool, obs_mean, obs_std, act_mean, act_std, second_order_update),
+        args=(max_path_length,
+              itr,
+              normalize_reward,
+              reward_mean,
+              reward_std,
+              kl_batch_size,
+              n_itr_update,
+              use_replay_pool,
+              obs_mean,
+              obs_std,
+              act_mean,
+              act_std,
+              second_order_update),
         show_prog_bar=True
     )
 

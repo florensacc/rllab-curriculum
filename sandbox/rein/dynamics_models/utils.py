@@ -61,7 +61,6 @@ def load_dataset_MNIST():
     # (It doesn't matter how we do this as long as we can read them again.)
     return X_train, y_train, X_test, y_test
 
-
 def plot_mnist_digit(image):
     """ Plot a single MNIST image."""
     import matplotlib.pyplot as plt

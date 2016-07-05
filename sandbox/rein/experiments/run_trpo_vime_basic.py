@@ -24,17 +24,15 @@ stub(globals())
 # normalize_rewards = [False]
 # kl_ratios = [True]
 # mdp_classes = [MountainCarEnv]
+# mdps = [NormalizedEnv(env=mdp_class())
+#         for mdp_class in mdp_classes]
 
 seeds = range(3)
 etas = [0.0001]
 normalize_rewards = [False]
 kl_ratios = [True]
-
-# mdp_classes = [MountainCarEnvX]
-# mdps = [NormalizedEnv(env=mdp_class())
-#         for mdp_class in mdp_classes]
-
 mdps = [GymEnv("Freeway-ram-v0")]
+# mdp_classes = [MountainCarEnvX]
 
 param_cart_product = itertools.product(
     kl_ratios, normalize_rewards, mdps, etas, seeds
@@ -42,34 +40,36 @@ param_cart_product = itertools.product(
 
 for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
-    #     policy = GaussianMLPPolicy(
-    #         env_spec=mdp.spec,
-    #         hidden_sizes=(32,),
-    #     )
+#     policy = GaussianMLPPolicy(
+#         env_spec=mdp.spec,
+#         hidden_sizes=(32,),
+#     )
 
     policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
-        hidden_sizes=(64,)
+        hidden_sizes=(64, 64)
     )
 
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(hidden_sizes=(64,)),
+        regressor_args=dict(hidden_sizes=(64, 64)),
     )
 
     batch_size = 50000
     algo = TRPO(
+        discount=0.995,
         env=mdp,
         policy=policy,
         baseline=baseline,
         batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
-        n_itr=100,
+        n_itr=1000,
         step_size=0.01,
+        subsample_factor=1.0,
+        # -----------------
         eta=eta,
         snn_n_samples=10,
-        subsample_factor=1.0,
         use_reverse_kl_reg=False,
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
@@ -77,20 +77,26 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         n_itr_update=1,
         kl_batch_size=16,
         normalize_reward=normalize_reward,
-        replay_pool_size=1000000,
-        n_updates_per_sample=50000,
+        replay_pool_size=100000,
+        n_updates_per_sample=10000,
         second_order_update=True,
-        unn_n_hidden=[64],
-        unn_layers_type=['gaussian', 'gaussian'],
+        unn_n_hidden=[128, 128],
+        unn_layers_type=['gaussian', 'gaussian', 'gaussian'],
         unn_learning_rate=0.001,
-        surprise_transform='cap1000',
+        surprise_transform=None,
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
+        output_type='regression',
+        use_local_reparametrization_trick=True,
+        surprise_type='information_gain',
+        predict_reward=False,
+        group_variance_by='weight',
+        pool_batch_size=64
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-a",
+        exp_prefix="trpo-vime-freeway-b",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

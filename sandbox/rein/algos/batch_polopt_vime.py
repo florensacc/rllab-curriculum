@@ -148,12 +148,15 @@ class BatchPolopt(RLAlgorithm):
             unn_layers_type=[1, 1],
             unn_learning_rate=0.001,
             second_order_update=False,
-            compression=False,
-            information_gain=True,
+            surprise_type='information_gain',
             surprise_transform=None,
             update_likelihood_sd=False,
             replay_kl_schedule=1.0,
-            **kwargs
+            output_type='regression',
+            use_local_reparametrization_trick=True,
+            predict_reward=False,
+            group_variance_by='weight',
+            ** kwargs
     ):
         """
         :param env: Environment
@@ -215,11 +218,14 @@ class BatchPolopt(RLAlgorithm):
         self.unn_layers_type = unn_layers_type
         self.unn_learning_rate = unn_learning_rate
         self.second_order_update = second_order_update
-        self.compression = compression
-        self.information_gain = information_gain
+        self.surprise_type = surprise_type
         self.surprise_transform = surprise_transform
         self.update_likelihood_sd = update_likelihood_sd
         self.replay_kl_schedule = replay_kl_schedule
+        self.output_type = output_type
+        self.use_local_reparametrization_trick = use_local_reparametrization_trick
+        self.predict_reward = predict_reward
+        self.group_variance_by = group_variance_by
         # ----------------------
 
         if self.second_order_update:
@@ -281,7 +287,7 @@ class BatchPolopt(RLAlgorithm):
         self.bnn = bnn.BNN(
             n_in=(obs_dim + act_dim),
             n_hidden=self.unn_n_hidden,
-            n_out=128 * 256,  # obs_dim,
+            n_out=obs_dim,#128 * 256,#obs_dim
             n_batches=n_batches,
             layers_type=self.unn_layers_type,
             trans_func=lasagne.nonlinearities.rectify,
@@ -293,25 +299,29 @@ class BatchPolopt(RLAlgorithm):
             reverse_kl_reg_factor=self.reverse_kl_reg_factor,
             second_order_update=self.second_order_update,
             learning_rate=self.unn_learning_rate,
-            compression=self.compression,
-            information_gain=self.information_gain,
+            surprise_type=self.surprise_type,
             update_prior=(not self.use_replay_pool),
             update_likelihood_sd=self.update_likelihood_sd,
-            group_variance_by='unit',
-            use_local_reparametrization_trick=False,
-            output_type='classification',
+            group_variance_by=self.group_variance_by,
+            output_type=self.output_type,
             num_classes=256,
             num_output_dim=128,
+            use_local_reparametrization_trick=self.use_local_reparametrization_trick
         )
 
         logger.log(
             "Model built ({:.1f} sec).".format((time.time() - start_time)))
 
         if self.use_replay_pool:
+            if self.output_type == 'classification':
+                observation_dtype = int
+            elif self.output_type == 'regression':
+                observation_dtype = float
             self.pool = SimpleReplayPool(
                 max_pool_size=self.replay_pool_size,
                 observation_shape=self.env.observation_space.shape,
-                action_dim=act_dim
+                action_dim=act_dim,
+                observation_dtype=observation_dtype
             )
         # ------------------------------------------------
 
@@ -349,12 +359,16 @@ class BatchPolopt(RLAlgorithm):
                     for _ in xrange(self.n_updates_per_sample / self.pool_batch_size):
                         batch = self.pool.random_batch(
                             self.pool_batch_size)
-                        obs = (batch['observations'] - obs_mean) / \
-                            (obs_std + 1e-8)
-                        next_obs = (
-                            batch['next_observations'] - obs_mean) / (obs_std + 1e-8)
                         act = (batch['actions'] - act_mean) / \
                             (act_std + 1e-8)
+                        if self.output_type == 'classification':
+                            obs = batch['observations']
+                            next_obs = batch['next_observations']
+                        elif self.output_type == 'regression':
+                            obs = (batch['observations'] - obs_mean) / \
+                                (obs_std + 1e-8)
+                            next_obs = (
+                                batch['next_observations'] - obs_mean) / (obs_std + 1e-8)
                         _inputs = np.hstack(
                             [obs, act])
                         _targets = next_obs
@@ -362,10 +376,18 @@ class BatchPolopt(RLAlgorithm):
                         _targetss.append(_targets)
 
                     old_acc = 0.
-                    for _inputs, _targets in zip(_inputss, _targetss):
-                        _out = self.bnn.pred_fn(_inputs)
-                        old_acc += np.mean(np.square(_out - _targets))
-                    old_acc /= len(_inputss)
+#                     for _inputs, _targets in zip(_inputss, _targetss):
+#                         _out = self.bnn.pred_fn(_inputs)
+#                         if self.output_type == 'regression':
+#                             old_acc += np.mean(np.square(_out - _targets))
+#                         elif self.output_type == 'classification':
+#                             _out2 = _out.reshape([-1, 256])
+#                             _argm = np.argmax(_out2, axis=1)
+#                             _argm2 = _argm.reshape([-1, 128])
+#                             acc = np.sum(
+#                                 np.equal(_targets, _argm2)) / float(_targets.size)
+#                             old_acc += acc
+#                     old_acc /= len(_inputss)
 
                     for _inputs, _targets in zip(_inputss, _targetss):
                         self.bnn.train_fn(_inputs, _targets, kl_factor)
@@ -379,10 +401,18 @@ class BatchPolopt(RLAlgorithm):
                         # -----
 
                     new_acc = 0.
-                    for _inputs, _targets in zip(_inputss, _targetss):
-                        _out = self.bnn.pred_fn(_inputs)
-                        new_acc += np.mean(np.square(_out - _targets))
-                    new_acc /= len(_inputss)
+#                     for _inputs, _targets in zip(_inputss, _targetss):
+#                         _out = self.bnn.pred_fn(_inputs)
+#                         if self.output_type == 'regression':
+#                             old_acc += np.mean(np.square(_out - _targets))
+#                         elif self.output_type == 'classification':
+#                             _out2 = _out.reshape([-1, 256])
+#                             _argm = np.argmax(_out2, axis=1)
+#                             _argm2 = _argm.reshape([-1, 128])
+#                             acc = np.sum(
+#                                 np.equal(_targets, _argm2)) / float(_targets.size)
+#                             new_acc += acc
+#                     new_acc /= len(_inputss)
 
                     kl_factor *= self.replay_kl_schedule
                     logger.record_tabular('KLFactor', kl_factor)
@@ -521,7 +551,7 @@ class BatchPolopt(RLAlgorithm):
             reward_std = np.mean(np.asarray(self._reward_std))
 
         # Mean/std obs/act based on replay pool.
-        if self.use_replay_pool:
+        if self.use_replay_pool or self.output_type == 'regression':
             obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
         else:
             obs_mean, obs_std, act_mean, act_std = 0, 1, 0, 1
@@ -840,6 +870,6 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
         logger.record_tabular('Expl_eta', self.eta)
-        logger.record_tabular('LikelihoodStd', self.bnn.likelihood_sd.eval())
+#         logger.record_tabular('LikelihoodStd', self.bnn.likelihood_sd.eval())
 
         return samples_data

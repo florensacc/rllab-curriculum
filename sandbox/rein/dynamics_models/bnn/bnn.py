@@ -68,7 +68,7 @@ class BNNLayer(lasagne.layers.Layer):
                 name='rho',
                 broadcastable=(False, True)
             )
-        else:
+        elif self.group_variance_by == 'weight':
             self.rho = self.add_param(
                 lasagne.init.Constant(prior_rho),
                 (self.num_inputs, self.num_units),
@@ -96,7 +96,7 @@ class BNNLayer(lasagne.layers.Layer):
                 name="b_rho",
                 regularizable=False
             )
-        else:
+        elif self.group_variance_by == 'weight':
             self.b_rho = self.add_param(
                 lasagne.init.Constant(prior_rho),
                 (self.num_units,),
@@ -130,7 +130,7 @@ class BNNLayer(lasagne.layers.Layer):
                 trainable=False,
                 oldparam=True
             )
-        else:
+        elif self.group_variance_by == 'weight':
             self.rho_old = self.add_param(
                 np.ones((self.num_inputs, self.num_units)),
                 (self.num_inputs, self.num_units),
@@ -165,7 +165,7 @@ class BNNLayer(lasagne.layers.Layer):
                 trainable=False,
                 oldparam=True
             )
-        else:
+        elif self.group_variance_by == 'weight':
             self.b_rho_old = self.add_param(
                 np.ones((self.num_units,)),
                 (self.num_units,),
@@ -405,7 +405,7 @@ class CatOutBNNLayer(BNNLayer):
         Kingma et al., "Variational Dropout and the Local Reparametrization Trick", 2015
         """
 
-        if self.group_variance_by == 'layer':
+        if self.group_variance_by == 'layer' or self.group_variance_by == 'unit':
             raise Exception(
                 'Local reparametrization trick not supported for tied variances per layer!')
         else:
@@ -449,8 +449,7 @@ class BNN(LasagnePowered, Serializable):
                  reverse_kl_reg_factor=0.1,
                  second_order_update=False,
                  learning_rate=0.0001,
-                 compression=False,
-                 information_gain=True,
+                 surprise_type='information_gain',
                  update_prior=False,
                  update_likelihood_sd=False,
                  group_variance_by='weight',
@@ -483,8 +482,7 @@ class BNN(LasagnePowered, Serializable):
         self.likelihood_sd_init = likelihood_sd_init
         self.second_order_update = second_order_update
         self.learning_rate = learning_rate
-        self.compression = compression
-        self.information_gain = information_gain
+        self.surprise_type = surprise_type
         self.update_prior = update_prior
         self.update_likelihood_sd = update_likelihood_sd
         self.group_variance_by = group_variance_by
@@ -500,8 +498,10 @@ class BNN(LasagnePowered, Serializable):
             assert self.num_output_dim is not None
             assert self.n_out == self.num_classes * self.num_output_dim
 
-        if self.group_variance_by != 'weight':
-            assert not self.use_local_reparametrization_trick
+        if self.group_variance_by != 'weight' and self.use_local_reparametrization_trick:
+            print(
+                'Setting use_local_reparametrization_trick=True cannot be used with group_variance_by!=\'weight\', changing to False')
+            self.use_local_reparametrization_trick = False
 
         if self.output_type == 'classification' and self.update_likelihood_sd:
             print(
@@ -510,8 +510,6 @@ class BNN(LasagnePowered, Serializable):
 
         if self.disable_variance:
             print('Warning: all noise has been disabled, only using means.')
-
-        assert self.information_gain or self.compression
 
         # Build network architecture.
         self.build_network()
@@ -550,12 +548,34 @@ class BNN(LasagnePowered, Serializable):
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
-    def surprise(self):
-        surpr = 0.
-        if self.compression:
-            surpr += self.compression_improvement()
-        if self.information_gain:
-            surpr += self.inf_gain()
+    def entropy(self, input, target, **kwargs):
+        """ Entropy of a batch of input/output samples. """
+
+        # MC samples.
+        _log_p_D_given_w = []
+        for _ in xrange(self.n_samples):
+            # Make prediction.
+            prediction = self.pred_sym(input)
+            # Calculate model likelihood log(P(D|w)).
+            if self.output_type == 'classification':
+                lh = self.likelihood_classification(target, prediction)
+            elif self.output_type == 'regression':
+                lh = self.likelihood_regression(target, prediction, **kwargs)
+            _log_p_D_given_w.append(lh)
+        log_p_D_given_w = sum(_log_p_D_given_w)
+
+        return - log_p_D_given_w / self.n_samples
+
+    def surprise(self, **kwargs):
+        if self.surprise_type == 'compression':
+            surpr = self.compression_improvement()
+        elif self.surprise_type == 'information_gain':
+            surpr = self.inf_gain()
+        elif self.surprise_type == 'BALD':
+            surpr = self.entropy(**kwargs)
+        else:
+            raise Exception(
+                'Uknown surprise_type {}'.format(self.surprise_type))
         return surpr
 
     def kl_div(self):
@@ -590,8 +610,6 @@ class BNN(LasagnePowered, Serializable):
             target, prediction, likelihood_sd)
 
     def likelihood_classification(self, target, prediction):
-        # return T.sum(T.log(prediction[T.arange(target.shape[0]), target]))
-
         # Cross-entropy; target vector selecting correct prediction
         # entries.
         # Hardcoding n_classes=3
@@ -616,6 +634,9 @@ class BNN(LasagnePowered, Serializable):
                 lh = self.likelihood_classification(target, prediction)
             elif self.output_type == 'regression':
                 lh = self.likelihood_regression(target, prediction, **kwargs)
+            else:
+                raise Exception(
+                    'Uknown output_type {}'.format(self.output_type))
             _log_p_D_given_w.append(lh)
         log_p_D_given_w = sum(_log_p_D_given_w)
         # Calculate variational posterior log(q(w)) and prior log(p(w)).
@@ -646,6 +667,9 @@ class BNN(LasagnePowered, Serializable):
                 lh = self.likelihood_classification(target, prediction)
             elif self.output_type == 'regression':
                 lh = self.likelihood_regression(target, prediction, **kwargs)
+            else:
+                raise Exception(
+                    'Uknown output_type {}'.format(self.output_type))
             _log_p_D_given_w.append(lh)
         log_p_D_given_w = sum(_log_p_D_given_w)
         # Calculate loss function.
@@ -706,8 +730,8 @@ class BNN(LasagnePowered, Serializable):
                              dtype=theano.config.floatX)  # @UndefinedVariable
         input_var = T.matrix('inputs',
                              dtype=theano.config.floatX)  # @UndefinedVariable
-        if self.output_type == 'regression':
 
+        if self.output_type == 'regression':
             target_var = T.matrix('targets',
                                   dtype=theano.config.floatX)  # @UndefinedVariable
 
@@ -737,11 +761,15 @@ class BNN(LasagnePowered, Serializable):
             loss_only_last_sample = self.loss_last_sample(
                 input_var, target_var)
 
+        else:
+            raise Exception(
+                'Unknown self.output_type {}'.format(self.output_type))
+
         # Create update methods.
         params_kl = lasagne.layers.get_all_params(self.network, trainable=True)
         params = []
         params.extend(params_kl)
-        if self.update_likelihood_sd:
+        if self.output_type == 'regression' and self.update_likelihood_sd:
             # No likelihood sd for classification tasks.
             params.append(self.likelihood_sd)
         updates = lasagne.updates.adam(
@@ -810,8 +838,8 @@ class BNN(LasagnePowered, Serializable):
                             H = 2. * (T.exp(2 * p)) / \
                                 (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                             invH = 1. / H
-                        elif param.name == 'likelihood_sd':
-                            invH = 0.
+#                         elif param.name == 'likelihood_sd':
+#                             invH = 0.
                         invHs.append(invH)
                     return invHs
 
@@ -833,12 +861,13 @@ class BNN(LasagnePowered, Serializable):
                             H = 2. * (T.exp(2 * p)) / \
                                 (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                             invH = 1. / H
-                        elif param.name == 'likelihood_sd':
-                            invH = 0.
+#                         elif param.name == 'likelihood_sd':
+#                             invH = 0.
                         invHs.append(invH)
                     return grads
 
             def fast_kl_div(loss, params, oldparams, step_size):
+                # FIXME: doesn't work yet for group_variance_by!='weight'.
 
                 grads = T.grad(loss, params)
 
@@ -883,11 +912,11 @@ class BNN(LasagnePowered, Serializable):
                 self.debug_H = ext.compile_function(
                     [input_var, target_var], debug_H(
                         loss_only_last_sample, params, oldparams),
-                    log_name='fn_debug_grads')
+                    log_name='fn_debug_grads_H')
                 self.debug_g = ext.compile_function(
                     [input_var, target_var], debug_g(
                         loss_only_last_sample, params, oldparams),
-                    log_name='fn_debug_grads')
+                    log_name='fn_debug_grads_g')
 
         else:
             # Use SGD to update the model for a single sample, in order to
@@ -922,8 +951,8 @@ class BNN(LasagnePowered, Serializable):
                 [], self.kl_div(), log_name='fn_kl')
             self.fn_kl_from_prior = ext.compile_function(
                 [], self.log_p_w_q_w_kl(), log_name='fn_kl_from_prior')
-            self.fn_classification_nll = ext.compile_function(
-                [input_var, target_var], self.likelihood_classification(target_var, self.pred_sym(input_var)), log_name='fn_classification_nll')
+#             self.fn_classification_nll = ext.compile_function(
+#                 [input_var, target_var], self.likelihood_classification(target_var, self.pred_sym(input_var)), log_name='fn_classification_nll')
 
 if __name__ == '__main__':
     pass
