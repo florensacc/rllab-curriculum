@@ -78,7 +78,7 @@ def load_dataset_multitarget_classification():
     """Synthetic classification data loader"""
     dataset = datasets.load_iris()
     x = dataset.data
-    y = np.vstack((dataset.target, dataset.target)).T
+    y = np.tile(dataset.target[:, None], 2)
     n_classes = len(np.unique(y))
     X_train = x[:len(x) * 0.7]
     X_test = x[len(x) * 0.7:]

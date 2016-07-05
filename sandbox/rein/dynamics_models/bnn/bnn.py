@@ -390,11 +390,9 @@ class CatOutBNNLayer(BNNLayer):
         activation = T.dot(input, self.get_W()) + \
             self.get_b().dimshuffle('x', 0)
 
-        return self.nonlinearity(activation)
-
         # Apply nonlinearity (softmax) over all n_out dimensions.
         postact = self.nonlinearity(activation.reshape([-1, self.num_classes]))
-        return postact.reshape([-1, self.num_classes * self.num_ouput_dim])
+        return postact.reshape([-1, self.num_classes * self.num_output_dim])
 
     def get_output_for_reparametrization(self, input, **kwargs):
         """Implementation of the local reparametrization trick.
@@ -429,11 +427,9 @@ class CatOutBNNLayer(BNNLayer):
 
             activation = gamma + T.sqrt(delta) * epsilon * mask
 
-        return self.nonlinearity(activation)
-
         # Apply nonlinearity (softmax) over all n_out dimensions.
         postact = self.nonlinearity(activation.reshape([-1, self.num_classes]))
-        return postact.reshape([-1, self.num_classes * self.num_ouput_dim])
+        return postact.reshape([-1, self.num_classes * self.num_output_dim])
 
 
 class BNN(LasagnePowered, Serializable):
@@ -594,7 +590,7 @@ class BNN(LasagnePowered, Serializable):
             target, prediction, likelihood_sd)
 
     def likelihood_classification(self, target, prediction):
-#         return T.sum(T.log(prediction[T.arange(target.shape[0]), target]))
+        # return T.sum(T.log(prediction[T.arange(target.shape[0]), target]))
 
         # Cross-entropy; target vector selecting correct prediction
         # entries.
@@ -632,7 +628,7 @@ class BNN(LasagnePowered, Serializable):
                 self.reverse_log_p_w_q_w_kl()
 
         # Calculate loss function.
-        return kl / self.n_batches * kl_factor * 0. - log_p_D_given_w / self.n_samples
+        return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
 
     def loss_last_sample(self, input, target, **kwargs):
         """The difference with the original loss is that we only update based on the latest sample.
@@ -679,7 +675,7 @@ class BNN(LasagnePowered, Serializable):
                 network = BNNLayer(
                     network, self.n_hidden[
                         i], nonlinearity=self.transf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by,
-                    disable_variance=self.disable_variance)
+                    disable_variance=self.disable_variance, use_local_reparametrization_trick=self.use_local_reparametrization_trick)
             elif self.layers_type[i] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf)
@@ -689,7 +685,7 @@ class BNN(LasagnePowered, Serializable):
             if self.layers_type[len(self.n_hidden)] == 'gaussian':
                 network = BNNLayer(
                     network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by,
-                    disable_variance=self.disable_variance)
+                    disable_variance=self.disable_variance, use_local_reparametrization_trick=self.use_local_reparametrization_trick)
             elif self.layers_type[len(self.n_hidden)] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, self.n_out, nonlinearity=self.outf)
@@ -697,7 +693,8 @@ class BNN(LasagnePowered, Serializable):
             network = CatOutBNNLayer(
                 network, self.n_out, nonlinearity=lasagne.nonlinearities.softmax,
                 prior_sd=self.prior_sd, group_variance_by=self.group_variance_by,
-                num_classes=self.num_classes, num_output_dim=self.num_output_dim, disable_variance=self.disable_variance)
+                num_classes=self.num_classes, num_output_dim=self.num_output_dim, disable_variance=self.disable_variance,
+                use_local_reparametrization_trick=self.use_local_reparametrization_trick)
 
         self.network = network
 
@@ -910,8 +907,8 @@ class BNN(LasagnePowered, Serializable):
             updates_kl = sgd(
                 loss_only_last_sample, params, learning_rate=self.learning_rate)
 
-#             self.train_update_fn = ext.compile_function(
-#                 [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
+            self.train_update_fn = ext.compile_function(
+                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
 
         if self.debug:
             self.eval_loss = ext.compile_function(

@@ -34,8 +34,7 @@ kl_ratios = [True]
 # mdps = [NormalizedEnv(env=mdp_class())
 #         for mdp_class in mdp_classes]
 
-mdps = [GymEnv("MontezumaRevenge-ram-v0")]
-
+mdps = [GymEnv("Freeway-ram-v0")]
 
 param_cart_product = itertools.product(
     kl_ratios, normalize_rewards, mdps, etas, seeds
@@ -50,12 +49,12 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
-        hidden_sizes=(64, 64)
+        hidden_sizes=(64,)
     )
 
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(hidden_sizes=(64, 64)),
+        regressor_args=dict(hidden_sizes=(64,)),
     )
 
     batch_size = 50000
@@ -81,8 +80,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         replay_pool_size=1000000,
         n_updates_per_sample=50000,
         second_order_update=True,
-        unn_n_hidden=[64, 64],
-        unn_layers_type=['gaussian', 'gaussian', 'gaussian'],
+        unn_n_hidden=[64],
+        unn_layers_type=['gaussian', 'gaussian'],
         unn_learning_rate=0.001,
         surprise_transform='cap1000',
         update_likelihood_sd=True,
@@ -91,11 +90,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-montezuma-c",
-        n_parallel=8,
+        exp_prefix="trpo-vime-freeway-a",
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         script="sandbox/rein/experiments/run_experiment_lite.py",
     )

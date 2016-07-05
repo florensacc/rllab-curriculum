@@ -281,7 +281,7 @@ class BatchPolopt(RLAlgorithm):
         self.bnn = bnn.BNN(
             n_in=(obs_dim + act_dim),
             n_hidden=self.unn_n_hidden,
-            n_out=obs_dim,
+            n_out=128 * 256,  # obs_dim,
             n_batches=n_batches,
             layers_type=self.unn_layers_type,
             trans_func=lasagne.nonlinearities.rectify,
@@ -296,7 +296,12 @@ class BatchPolopt(RLAlgorithm):
             compression=self.compression,
             information_gain=self.information_gain,
             update_prior=(not self.use_replay_pool),
-            update_likelihood_sd=self.update_likelihood_sd
+            update_likelihood_sd=self.update_likelihood_sd,
+            group_variance_by='unit',
+            use_local_reparametrization_trick=False,
+            output_type='classification',
+            num_classes=256,
+            num_output_dim=128,
         )
 
         logger.log(
