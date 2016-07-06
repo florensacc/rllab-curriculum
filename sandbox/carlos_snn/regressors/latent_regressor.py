@@ -174,12 +174,12 @@ class Latent_regressor(Parameterized, Serializable):
             observations = np.array([p["observations"][times[0]:times[1], self.obs_regressed] for p in paths])
             actions = np.array([p["actions"][times[0]:times[1], self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=2)
-            latents = np.array([p['agent_infos']['latents'] for p in paths])
+            latents = np.array([p['agent_infos']['latents'][times[0]:times[1]] for p in paths])
         else:
             observations = np.concatenate([p["observations"][times[0]:times[1], self.obs_regressed] for p in paths])
             actions = np.concatenate([p["actions"][times[0]:times[1], self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=1)
-            latents = np.concatenate([p['agent_infos']["latents"] for p in paths])
+            latents = np.concatenate([p['agent_infos']["latents"][times[0]:times[1]] for p in paths])
         if self.noisify_traj_coef:
             obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
                                             size=np.shape(obs_actions))
@@ -205,6 +205,6 @@ class Latent_regressor(Parameterized, Serializable):
         # return H_latent + lowb
 
     def log_diagnostics(self, paths):
-        logger.record_tabular('LowerB_MI', self.lowb_mutual(paths))
-        logger.record_tabular('LowerB_MI_5first', self.lowb_mutual(paths, times=(0, 5)))
-        logger.record_tabular('LowerB_MI_5last', self.lowb_mutual(paths, times=(-5, None)))
+        logger.record_tabular(self._regressor._name + 'LowerB_MI', self.lowb_mutual(paths))
+        logger.record_tabular(self._regressor._name + 'LowerB_MI_5first', self.lowb_mutual(paths, times=(0, 5)))
+        logger.record_tabular(self._regressor._name + 'LowerB_MI_5last', self.lowb_mutual(paths, times=(-5, None)))
