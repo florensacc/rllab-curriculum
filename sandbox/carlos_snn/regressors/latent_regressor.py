@@ -12,6 +12,7 @@ from sandbox.carlos_snn.regressors.bernoulli_recurrent_regressor import Bernoull
 
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 
+
 class Latent_regressor(Parameterized, Serializable):
     def __init__(
             self,
@@ -22,8 +23,8 @@ class Latent_regressor(Parameterized, Serializable):
             act_regressed='all',
             use_only_sign=False,
             noisify_traj_coef=0,
-            optimizer=None, #this defaults to LBFGS
-            regressor_args=None, # here goes all args straight to the regressor: predict_all, optimizer, step_size....
+            optimizer=None,  # this defaults to LBFGS
+            regressor_args=None,  # here goes all args straight to the regressor: predict_all, optimizer, step_size....
     ):
         """
         :param env_spec:
@@ -96,7 +97,8 @@ class Latent_regressor(Parameterized, Serializable):
             # print 'the actions shape is; ', np.shape(actions)
             obs_actions = np.concatenate([observations, actions], axis=2)
             if self.noisify_traj_coef:
-                obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+                obs_actions += np.random.normal(loc=0.0,
+                                                scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
                                                 size=np.shape(obs_actions))
             latents = np.array([p['agent_infos']['latents'] for p in paths])
             self._regressor.fit(obs_actions, latents)  # why reshape??
@@ -106,7 +108,8 @@ class Latent_regressor(Parameterized, Serializable):
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate([p['agent_infos']["latents"] for p in paths])
             if self.noisify_traj_coef:
-                obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+                obs_actions += np.random.normal(loc=0.0,
+                                                scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
                                                 size=np.shape(obs_actions))
             self._regressor.fit(obs_actions, latents.reshape((-1, self.latent_dim)))  # why reshape??
 
@@ -119,7 +122,7 @@ class Latent_regressor(Parameterized, Serializable):
             obs_actions = np.concatenate([path["observations"][:, self.obs_regressed],
                                           path["actions"][:, self.act_regressed]], axis=1)
         if self.noisify_traj_coef:
-            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
                                             size=np.shape(obs_actions))
         if self.use_only_sign:
             obs_actions = np.sign(obs_actions)
@@ -134,7 +137,7 @@ class Latent_regressor(Parameterized, Serializable):
             obs_actions = np.concatenate([path["observations"][:, self.obs_regressed],
                                           path["actions"][:, self.act_regressed]], axis=1)
         if self.noisify_traj_coef:
-            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
                                             size=np.shape(obs_actions))
         if self.use_only_sign:
             obs_actions = np.sign(obs_actions)
@@ -160,25 +163,25 @@ class Latent_regressor(Parameterized, Serializable):
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate(latents, axis=0)
         if self.noisify_traj_coef:
-            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
                                             size=np.shape(obs_actions))
         if self.use_only_sign:
             obs_actions = np.sign(obs_actions)
         return self._regressor.predict_log_likelihood(obs_actions, latents)  # see difference with fit above...
 
-    def lowb_mutual(self, paths):
+    def lowb_mutual(self, paths, times=(0, None)):
         if self.recurrent:
-            observations = np.array([p["observations"][:, self.obs_regressed] for p in paths])
-            actions = np.array([p["actions"][:, self.act_regressed] for p in paths])
+            observations = np.array([p["observations"][times[0]:times[1], self.obs_regressed] for p in paths])
+            actions = np.array([p["actions"][times[0]:times[1], self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=2)
             latents = np.array([p['agent_infos']['latents'] for p in paths])
         else:
-            observations = np.concatenate([p["observations"][:, self.obs_regressed] for p in paths])
-            actions = np.concatenate([p["actions"][:, self.act_regressed] for p in paths])
+            observations = np.concatenate([p["observations"][times[0]:times[1], self.obs_regressed] for p in paths])
+            actions = np.concatenate([p["actions"][times[0]:times[1], self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate([p['agent_infos']["latents"] for p in paths])
         if self.noisify_traj_coef:
-            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions)))*self.noisify_traj_coef,
+            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
                                             size=np.shape(obs_actions))
         if self.use_only_sign:
             obs_actions = np.sign(obs_actions)
@@ -203,3 +206,5 @@ class Latent_regressor(Parameterized, Serializable):
 
     def log_diagnostics(self, paths):
         logger.record_tabular('LowerB_MI', self.lowb_mutual(paths))
+        logger.record_tabular('LowerB_MI_5first', self.lowb_mutual(paths, times=(0, 5)))
+        logger.record_tabular('LowerB_MI_5last', self.lowb_mutual(paths, times=(-5, None)))
