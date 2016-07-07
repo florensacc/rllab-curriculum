@@ -1,7 +1,6 @@
 import os
 from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
-# os.environ["THEANO_FLAGS"] = "device=cpu"
 from rllab.envs.gym_env import GymEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 
@@ -15,6 +14,7 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.rein.algos.trpo_vime import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
+os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
@@ -59,7 +59,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         baseline=baseline,
         batch_size=50000,
         whole_paths=True,
-        max_path_length=500,
+        max_path_length=5000,
         n_itr=1000,
         step_size=0.01,
         subsample_factor=1.0,
@@ -84,7 +84,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         surprise_transform=None,
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
-        output_type='regression',
+        output_type='classification',
         use_local_reparametrization_trick=True,
         surprise_type='information_gain',
         predict_reward=False,

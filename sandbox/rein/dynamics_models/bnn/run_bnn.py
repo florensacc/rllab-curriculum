@@ -288,8 +288,6 @@ def main():
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
         n_samples=1,
-        use_reverse_kl_reg=False,
-        reverse_kl_reg_factor=1e-2,
         learning_rate=0.001,
         group_variance_by='unit',
         use_local_reparametrization_trick=True,
