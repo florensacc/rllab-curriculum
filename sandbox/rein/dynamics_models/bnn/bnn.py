@@ -445,8 +445,6 @@ class BNN(LasagnePowered, Serializable):
                  batch_size=100,
                  n_samples=10,
                  prior_sd=0.5,
-                 use_reverse_kl_reg=False,
-                 reverse_kl_reg_factor=0.1,
                  second_order_update=False,
                  learning_rate=0.0001,
                  surprise_type='information_gain',
@@ -477,8 +475,6 @@ class BNN(LasagnePowered, Serializable):
         self.prior_sd = prior_sd
         self.layers_type = layers_type
         self.n_batches = n_batches
-        self.use_reverse_kl_reg = use_reverse_kl_reg
-        self.reverse_kl_reg_factor = reverse_kl_reg_factor
         self.likelihood_sd_init = likelihood_sd_init
         self.second_order_update = second_order_update
         self.learning_rate = learning_rate
@@ -547,6 +543,12 @@ class BNN(LasagnePowered, Serializable):
         layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
+    
+    def num_weights(self):
+        print('Disclaimer: only work with BNNLayers!')
+        layers = lasagne.layers.get_all_layers(self.network)[1:]
+        return sum(l.W.size for l in layers)
+
 
     def entropy(self, input, target, **kwargs):
         """ Entropy of a batch of input/output samples. """
@@ -644,9 +646,6 @@ class BNN(LasagnePowered, Serializable):
             kl = self.kl_div()
         else:
             kl = self.log_p_w_q_w_kl()
-        if self.use_reverse_kl_reg:
-            kl += self.reverse_kl_reg_factor * \
-                self.reverse_log_p_w_q_w_kl()
 
         # Calculate loss function.
         return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
@@ -813,7 +812,6 @@ class BNN(LasagnePowered, Serializable):
                         invH = 1. / H
                     elif param.name == 'likelihood_sd':
                         invH = 0.
-                    # So wtf is going wrong here?
                     updates[param] = param - step_size * invH * grad
 
                 return updates
