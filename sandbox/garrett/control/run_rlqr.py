@@ -11,8 +11,9 @@ from rllab.q_functions.continuous_mlp_q_function import ContinuousMLPQFunction
 from rlqr import RecurrentLQRPolicy
 
 env = normalize(CartpoleEnv())
+Q = np.zeros((4,4)); Q[2,2] = 1
 R = np.array([[1]])
-policy = RecurrentLQRPolicy(env.spec, R)
+policy = RecurrentLQRPolicy(env.spec, Q, R)
 baseline = LinearFeatureBaseline(env_spec=env.spec)
 es = OUStrategy(env_spec=env.spec)
 qf = ContinuousMLPQFunction(env_spec=env.spec)

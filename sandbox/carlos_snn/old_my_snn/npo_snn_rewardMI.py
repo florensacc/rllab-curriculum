@@ -5,6 +5,9 @@ import rllab.misc.logger as logger
 import theano
 import theano.tensor as TT
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+#latent regressor to log the MI with other variables
+from sandbox.carlos_snn.regressors.latent_regressor import Latent_regressor
+
 # imports from batch_polopt I might need as not I use here process_samples and others
 import numpy as np
 from rllab.algos.base import RLAlgorithm
@@ -33,6 +36,7 @@ class NPO_snn(BatchPolopt):
             reward_coef=0,
             self_normalize=False,
             log_individual_latents=False,  # to log the progress of each individual latent
+            logged_MI=[], #a list of tuples specifying the (obs,actions) that are regressed to find the latents
             n_samples=0,
             optimizer=None,
             optimizer_args=None,
@@ -45,13 +49,22 @@ class NPO_snn(BatchPolopt):
         self.optimizer = optimizer
         self.step_size = step_size
         self.log_individual_latents = log_individual_latents
+
         self.hallucinator = hallucinator
         self.latent_regressor = latent_regressor
         self.reward_coef = reward_coef
         self.self_normalize = self_normalize
         self.n_samples = n_samples
         super(NPO_snn, self).__init__(**kwargs)
-
+        
+        # see what are the MI that want to be logged (it has to be done after initializing the super to have self.env)
+        self.logged_MI = logged_MI
+        if self.logged_MI == 'all_individual':
+            self.logged_MI = []
+            for o in range(self.env.spec.observation_space.flat_dim):
+                self.logged_MI.append(([o], []))
+            for a in range(self.env.spec.action_space.flat_dim):
+                self.logged_MI.append(([], [a]))
     # @overrides
     def process_samples(self, itr, paths):
         # save real undiscounted reward before changing them
@@ -103,7 +116,7 @@ class NPO_snn(BatchPolopt):
         self.init_opt()
         episode_rewards = []
         episode_lengths = []
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in xrange(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.sampler.obtain_samples(itr)
                 samples_data = self.process_samples(itr, paths)
@@ -131,6 +144,27 @@ class NPO_snn(BatchPolopt):
         BatchPolopt.log_diagnostics(self, paths)
         if self.latent_regressor:
             self.latent_regressor.log_diagnostics(paths)
+        # log the MI with other obs and action
+        for (obs, actions) in self.logged_MI:
+            temp_lat_reg =Latent_regressor(
+                env_spec=self.env.spec,
+                policy=self.policy,
+                recurrent=True,
+                obs_regressed=obs,  # this is the x-position of the com
+                act_regressed=actions,
+                use_only_sign=False,  # for the regressor we use only the sign to estimate the post
+                noisify_traj_coef=0,
+                optimizer=None,  # this defaults to LBFGS, for first order, put 'fist_order'
+                regressor_args={
+                    'hidden_sizes': (32, 32),
+                    'name': 'latent_reg_obs{}_act{}'.format(obs, actions),
+                    'predict_all': True,  # use all the predictions and not only the last
+                    'use_trust_region': True,
+                }
+            )
+            temp_lat_reg.fit(paths)
+            temp_lat_reg.log_diagnostics(paths)
+
         # we will here add a measure of multimodality: do X rollouts with each value of the latents. ONLY for NOresample
         if not self.policy.resample:
             if self.policy.latent_name == 'bernoulli':
