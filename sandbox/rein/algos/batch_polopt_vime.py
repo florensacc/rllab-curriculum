@@ -8,7 +8,9 @@ from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 from sandbox.rein.dynamics_models.utils import iterate_minibatches
-
+# Nonscientific printing of numpy arrays.
+np.set_printoptions(suppress=True)
+np.set_printoptions(precision=4)
 
 # exploration imports
 # -------------------
@@ -155,6 +157,7 @@ class BatchPolopt(RLAlgorithm):
             predict_reward=False,
             group_variance_by='weight',
             likelihood_sd_init=1.0,
+            disable_variance=False,
             ** kwargs
     ):
         """
@@ -224,6 +227,7 @@ class BatchPolopt(RLAlgorithm):
         self.predict_reward = predict_reward
         self.group_variance_by = group_variance_by
         self.likelihood_sd_init = likelihood_sd_init
+        self.disable_variance = disable_variance
         # ----------------------
 
         if self.second_order_update:
@@ -253,6 +257,21 @@ class BatchPolopt(RLAlgorithm):
 
     def shutdown_worker(self):
         pass
+
+    def accuracy(self, _inputss, _targetss):
+        acc = 0.
+        for _inputs, _targets in zip(_inputss, _targetss):
+            _out = self.bnn.pred_fn(_inputs)
+            if self.output_type == 'regression':
+                acc += np.mean(np.square(_out - _targets))
+            elif self.output_type == 'classification':
+                _out2 = _out.reshape([-1, 256])
+                _argm = np.argmax(_out2, axis=1)
+                _argm2 = _argm.reshape([-1, 128])
+                acc += np.sum(
+                    np.equal(_targets, _argm2)) / float(_targets.size)
+        acc /= len(_inputss)
+        return acc
 
     def train(self):
 
@@ -312,7 +331,8 @@ class BatchPolopt(RLAlgorithm):
             num_classes=256,
             num_output_dim=128,
             use_local_reparametrization_trick=self.use_local_reparametrization_trick,
-            likelihood_sd_init=self.likelihood_sd_init
+            likelihood_sd_init=self.likelihood_sd_init,
+            disable_variance=self.disable_variance
         )
 
         self.num_weights = self.bnn.num_weights()
@@ -382,24 +402,11 @@ class BatchPolopt(RLAlgorithm):
                         _targets = next_obs
                         if self.predict_reward:
                             _targets = np.hstack(
-                                (next_obs, batch['rewards'][:, None]))
+                                (_targets, batch['rewards'][:, None]))
                         _inputss.append(_inputs)
                         _targetss.append(_targets)
 
-                    old_acc = 0.
-                    for _inputs, _targets in zip(_inputss, _targetss):
-                        _out = self.bnn.pred_fn(_inputs)
-                        if self.output_type == 'regression':
-                            old_acc += np.mean(np.square(_out - _targets))
-                        elif self.output_type == 'classification':
-                            _out2 = _out.reshape([-1, 256])
-                            _argm = np.argmax(_out2, axis=1)
-                            _argm2 = _argm.reshape([-1, 128])
-                            acc = np.sum(
-                                np.equal(_targets, _argm2)) / float(_targets.size)
-                            old_acc += acc
-                    old_acc /= len(_inputss)
-
+                    old_acc = self.accuracy(_inputss, _targetss)
                     for _inputs, _targets in zip(_inputss, _targetss):
                         self.bnn.train_fn(_inputs, _targets, kl_factor)
                         # DEBUG
@@ -410,20 +417,23 @@ class BatchPolopt(RLAlgorithm):
 #                         print(self.bnn.fn_dbg_nll(_inputs, _targets))
 #                         print('---')
                         # -----
+                    new_acc = self.accuracy(_inputss, _targetss)
 
-                    new_acc = 0.
                     for _inputs, _targets in zip(_inputss, _targetss):
                         _out = self.bnn.pred_fn(_inputs)
                         if self.output_type == 'regression':
-                            new_acc += np.mean(np.square(_out - _targets))
-                        elif self.output_type == 'classification':
-                            _out2 = _out.reshape([-1, 256])
-                            _argm = np.argmax(_out2, axis=1)
-                            _argm2 = _argm.reshape([-1, 128])
-                            acc = np.sum(
-                                np.equal(_targets, _argm2)) / float(_targets.size)
-                            new_acc += acc
-                    new_acc /= len(_inputss)
+                            print('batch')
+                            for i, o, t in zip(_inputs, _out, _targets):
+                                print(i)
+                                print(o[:4])
+                                print(t[:4])
+                                print('')
+                            print('----')
+                            for o, t in zip(_out, _targets):
+                                print(o[4])
+                                print(t[4])
+                                print('')
+                            break
 
                     kl_factor *= self.replay_kl_schedule
                     logger.record_tabular('KLFactor', kl_factor)

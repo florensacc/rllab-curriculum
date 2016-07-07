@@ -21,6 +21,7 @@ stub(globals())
 # Param ranges
 seeds = range(10)
 etas = [0, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
+etas = [0.1]
 normalize_rewards = [False]
 kl_ratios = [True]
 mdp_classes = [CartpoleSwingupEnv]
@@ -61,39 +62,42 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=10,
+        snn_n_samples=20,
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        n_itr_update=1,
-        kl_batch_size=1,
+        kl_batch_size=16,
         normalize_reward=normalize_reward,
         replay_pool_size=100000,
         n_updates_per_sample=5000,
         second_order_update=True,
-        unn_n_hidden=[32],
+        unn_n_hidden=[512],
         unn_layers_type=['gaussian', 'gaussian'],
         unn_learning_rate=0.001,
-        surprise_transform=None,  # 'cap1000',
-        update_likelihood_sd=True,
+        surprise_transform='log(1+surprise)',  # 'cap1000', 'cap90perc'
+        update_likelihood_sd=False,
         replay_kl_schedule=0.99,
         output_type='regression',
-        use_local_reparametrization_trick=True,
+        pool_batch_size=16,
+        likelihood_sd_init=0.1,
+        prior_sd=0.5,
+        # -------------
+        disable_variance=False,
+        group_variance_by='weight',
         surprise_type='information_gain',
         predict_reward=True,
-        group_variance_by='weight',
-        pool_batch_size=10,
-        likelihood_sd_init=5.0
+        use_local_reparametrization_trick=True,
+        n_itr_update=1,
         # -------------
     )
 
     run_experiment_lite(
         algo.train(),
         exp_prefix="trpo-vime-cps-a",
-        n_parallel=4,
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         script="sandbox/rein/experiments/run_experiment_lite.py",
     )

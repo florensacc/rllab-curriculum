@@ -50,7 +50,7 @@ class BNNLayer(lasagne.layers.Layer):
         # Here we set the priors.
         # -----------------------
         self.mu = self.add_param(
-            lasagne.init.Normal(1., 0.),
+            lasagne.init.Normal(0.001, 0.),
             (self.num_inputs, self.num_units),
             name='mu'
         )
@@ -76,7 +76,7 @@ class BNNLayer(lasagne.layers.Layer):
             )
         # Bias priors.
         self.b_mu = self.add_param(
-            lasagne.init.Normal(1., 0.),
+            lasagne.init.Normal(0.001, 0.),
             (self.num_units,),
             name="b_mu",
             regularizable=False
@@ -543,12 +543,11 @@ class BNN(LasagnePowered, Serializable):
         layers = filter(lambda l: isinstance(l, BNNLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
-    
+
     def num_weights(self):
         print('Disclaimer: only work with BNNLayers!')
         layers = lasagne.layers.get_all_layers(self.network)[1:]
         return sum(l.W.size for l in layers)
-
 
     def entropy(self, input, target, **kwargs):
         """ Entropy of a batch of input/output samples. """
@@ -616,8 +615,8 @@ class BNN(LasagnePowered, Serializable):
         # entries.
 
         # Numerical stability.
-        prediction += 1e-8 
-        
+        prediction += 1e-8
+
         target2 = target + T.arange(target.shape[1]) * self.num_classes
         target3 = target2.T.ravel()
         idx = T.arange(target.shape[0])
