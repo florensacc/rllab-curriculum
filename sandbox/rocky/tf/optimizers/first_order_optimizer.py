@@ -110,6 +110,7 @@ class FirstOrderOptimizer(Serializable):
 
             new_loss = f_loss(*(tuple(inputs) + extra_inputs))
 
+            print(new_loss)
             if self._callback or callback:
                 elapsed = time.time() - start_time
                 callback_args = dict(

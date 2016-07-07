@@ -8,6 +8,8 @@ class BatchDataset(object):
             i for i in inputs
         ]
         self._batch_size = batch_size
+        if extra_inputs is None:
+            extra_inputs = []
         self._extra_inputs = extra_inputs
         self._ids = np.arange(self._inputs[0].shape[0])
         self.update()
@@ -27,10 +29,7 @@ class BatchDataset(object):
                 batch_end = (itr + 1) * self._batch_size
                 batch_ids = self._ids[batch_start:batch_end]
                 batch = [d[batch_ids] for d in self._inputs]
-                if self._extra_inputs:
-                    yield batch + self._extra_inputs
-                else:
-                    yield batch
+                yield list(batch) + list(self._extra_inputs)
             if update:
                 self.update()
 

@@ -49,6 +49,8 @@ def worker_run_step(G, action_n, scope):
         action = action_n[idx]
         ids.append(idx)
         step_results.append(tuple(env.step(action)))
+    if len(step_results) == 0:
+        return None
     obs, rewards, dones, env_infos = map(list, zip(*step_results))
     obs = env_template.observation_space.flatten_n(obs)
     rewards = np.asarray(rewards)
@@ -92,6 +94,7 @@ class ParallelVecEnvExecutor(object):
             worker_run_step,
             [(action_n, self.scope) for _ in self._alloc_env_ids],
         )
+        results = [x for x in results if x is not None]
         ids, obs, rewards, dones, env_infos = zip(*results)
         ids = np.concatenate(ids)
         obs = self.observation_space.unflatten_n(np.concatenate(obs))

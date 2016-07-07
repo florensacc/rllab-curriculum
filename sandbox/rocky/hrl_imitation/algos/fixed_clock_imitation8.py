@@ -43,6 +43,9 @@ class SeqGridPolicyModule(object):
     low-level policy receives partial observation. stochastic bottleneck
     """
 
+    def __init__(self, low_policy_obs='full'):
+        self.low_policy_obs = low_policy_obs
+
     def new_high_policy(self, env_spec, subgoal_dim):
         subgoal_space = Discrete(subgoal_dim)
         return CategoricalMLPPolicy(
@@ -56,12 +59,12 @@ class SeqGridPolicyModule(object):
                 input_shape=env_spec.observation_space.components[0].shape,
                 extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
                 output_dim=subgoal_dim,
-                hidden_sizes=(10, 10),
+                hidden_sizes=(100, 100),
                 conv_filters=(10, 10),
                 conv_filter_sizes=(3, 3),
                 conv_strides=(1, 1),
                 conv_pads=('SAME', 'SAME'),
-                extra_hidden_sizes=tuple(),
+                extra_hidden_sizes=(100,),
                 hidden_nonlinearity=tf.nn.tanh,
                 output_nonlinearity=tf.nn.softmax,
             ),
@@ -78,84 +81,46 @@ class SeqGridPolicyModule(object):
 
     def new_low_policy(self, env_spec, subgoal_dim, bottleneck_dim):
         subgoal_space = Discrete(subgoal_dim)
-        return BranchingCategoricalMLPPolicy(
-            name="low_policy",
-            env_spec=EnvSpec(
-                observation_space=Product(env_spec.observation_space, subgoal_space),
-                action_space=env_spec.action_space,
-            ),
-            shared_network=ConvMergeNetwork(
-                name="low_policy_shared_network",
-                input_shape=env_spec.observation_space.components[0].shape,
-                extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
-                output_dim=10,
+        if self.low_policy_obs == 'full':
+            return BranchingCategoricalMLPPolicy(
+                name="low_policy",
+                env_spec=EnvSpec(
+                    observation_space=Product(env_spec.observation_space, subgoal_space),
+                    action_space=env_spec.action_space,
+                ),
+                shared_network=ConvMergeNetwork(
+                    name="low_policy_shared_network",
+                    input_shape=env_spec.observation_space.components[0].shape,
+                    extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
+                    output_dim=10,
+                    hidden_sizes=(100,),
+                    conv_filters=(10, 10),
+                    conv_filter_sizes=(3, 3),
+                    conv_strides=(1, 1),
+                    conv_pads=('SAME', 'SAME'),
+                    extra_hidden_sizes=(100,),
+                    hidden_nonlinearity=tf.nn.tanh,
+                    output_nonlinearity=tf.nn.tanh,
+                ),
+                subgoal_dim=subgoal_dim,
                 hidden_sizes=(100,),
-                conv_filters=(10, 10),
-                conv_filter_sizes=(3, 3),
-                conv_strides=(1, 1),
-                conv_pads=('SAME', 'SAME'),
-                extra_hidden_sizes=tuple(),
                 hidden_nonlinearity=tf.nn.tanh,
-                output_nonlinearity=tf.nn.tanh,
-            ),
-            subgoal_dim=subgoal_dim,
-            hidden_sizes=(32,),
-            hidden_nonlinearity=tf.nn.tanh,
-            bottleneck_dim=bottleneck_dim,
-        )
-
-
-class SeqGridPolicyModule1(object):
-    """
-    low-level policy receives partial observation. stochastic bottleneck
-    """
-
-    def new_high_policy(self, env_spec, subgoal_dim):
-        subgoal_space = Discrete(subgoal_dim)
-        return CategoricalMLPPolicy(
-            name="high_policy",
-            env_spec=EnvSpec(
-                observation_space=env_spec.observation_space,
-                action_space=subgoal_space,
-            ),
-            prob_network=ConvMergeNetwork(
-                name="high_policy_network",
-                input_shape=env_spec.observation_space.components[0].shape,
-                extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
-                output_dim=subgoal_dim,
-                hidden_sizes=(10, 10),
-                conv_filters=(10, 10),
-                conv_filter_sizes=(3, 3),
-                conv_strides=(1, 1),
-                conv_pads=('SAME', 'SAME'),
-                extra_hidden_sizes=tuple(),
+                bottleneck_dim=bottleneck_dim,
+            )
+        elif self.low_policy_obs == 'partial':
+            return IgnorantBranchingCategoricalMLPPolicy(
+                name="low_policy",
+                env_spec=EnvSpec(
+                    observation_space=Product(env_spec.observation_space, subgoal_space),
+                    action_space=env_spec.action_space,
+                ),
+                subgoal_dim=subgoal_dim,
+                hidden_sizes=(100,),
                 hidden_nonlinearity=tf.nn.tanh,
-                output_nonlinearity=tf.nn.softmax,
-            ),
-        )
-
-    def new_alt_high_policy(self, env_spec, subgoal_dim):
-        subgoal_space = Discrete(subgoal_dim)
-        return UniformControlPolicy(
-            env_spec=EnvSpec(
-                observation_space=env_spec.observation_space,
-                action_space=subgoal_space,
-            ),
-        )
-
-    def new_low_policy(self, env_spec, subgoal_dim, bottleneck_dim):
-        subgoal_space = Discrete(subgoal_dim)
-        return IgnorantBranchingCategoricalMLPPolicy(
-            name="low_policy",
-            env_spec=EnvSpec(
-                observation_space=Product(env_spec.observation_space, subgoal_space),
-                action_space=env_spec.action_space,
-            ),
-            subgoal_dim=subgoal_dim,
-            hidden_sizes=(32,),
-            hidden_nonlinearity=tf.nn.tanh,
-            bottleneck_dim=bottleneck_dim,
-        )
+                bottleneck_dim=bottleneck_dim,
+            )
+        else:
+            raise NotImplementedError
 
 
 class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
@@ -312,10 +277,10 @@ class IgnorantBranchingCategoricalMLPPolicy(BranchingCategoricalMLPPolicy, Seria
         shared_network = MLP(
             input_shape=(slice_end - slice_start,),
             input_layer=l_sliced_in,
-            hidden_sizes=tuple(),
-            hidden_nonlinearity=None,
+            hidden_sizes=(100, 100),
+            hidden_nonlinearity=tf.nn.tanh,
             output_dim=slice_end - slice_start,
-            output_nonlinearity=None,
+            output_nonlinearity=tf.nn.tanh,
             name="dummy_shared",
         )
         BranchingCategoricalMLPPolicy.__init__(self, name=name, env_spec=env_spec, subgoal_dim=subgoal_dim,
@@ -331,7 +296,12 @@ def merge_grads(grads, *extra_grads_list):
             if var not in grad_dict:
                 grad_dict[var] = grad
             else:
-                grad_dict[var] += grad
+                if grad is None:
+                    pass
+                elif grad_dict[var] is None:
+                    grad_dict[var] = grad
+                else:
+                    grad_dict[var] += grad
     return [(y, x) for x, y in grad_dict.iteritems()]
 
 
@@ -456,66 +426,88 @@ class SeqGridExpert(object):
 
         low_policy = algo.low_policy
 
-        observations = self.seg_obs[:, 0, :]
-        actions = self.seg_actions[:, 0, :]
-        N = observations.shape[0]
+        # flat_obs =
+        obs_dim = self.env_spec.observation_space.flat_dim
+
+        first_obs = self.seg_obs[:, 0, :]
+        all_obs = self.seg_obs.reshape((-1, obs_dim))
+        # actions = self.seg_actions[:, 0, :]
+        N = all_obs.shape[0]
 
         all_low_probs = []
 
         for g in xrange(algo.subgoal_dim):
             subgoals = np.tile(
-                algo.high_policy.action_space.flatten(g).reshape((1, -1)),
+                np.asarray(algo.high_policy.action_space.flatten(g)).reshape((1, -1)),
                 (N, 1)
             )
-            low_obs = np.concatenate([observations, subgoals], axis=-1)
-            bottleneck_epsilons = np.random.normal(size=(N, algo.bottleneck_dim))
-            low_probs = algo.low_policy.dist_info(low_obs, dict(bottleneck_epsilon=bottleneck_epsilons))["prob"]
+            low_obs = np.concatenate([all_obs, subgoals], axis=-1)
+            low_probs = algo.low_policy.dist_info(low_obs)["prob"]
             all_low_probs.append(low_probs)
 
         all_low_probs = np.asarray(all_low_probs)
-        subgoals, _ = algo.high_policy.get_actions(self.env_spec.observation_space.unflatten_n(observations))
+        subgoals, _ = algo.high_policy.get_actions(self.env_spec.observation_space.unflatten_n(first_obs))
+        subgoals = np.tile(
+            np.asarray(subgoals).reshape((-1, 1)),
+            (1, algo.subgoal_interval)
+        ).flatten()
         subgoal_low_probs = all_low_probs[subgoals, np.arange(N)]
-        flat_low_probs = all_low_probs.reshape((-1, algo.low_policy.action_space.n))
+        # flat_low_probs = all_low_probs.reshape((-1, algo.low_policy.action_space.n))
 
-        p_a_given_s = np.mean(all_low_probs, axis=0)
-        ent_a_given_s = np.mean(algo.low_policy.distribution.entropy(dict(prob=p_a_given_s)))
-        ent_a_given_g_s = np.mean(algo.low_policy.distribution.entropy(dict(prob=flat_low_probs)))
-        ent_a_given_subgoal_s = np.mean(algo.low_policy.distribution.entropy(dict(prob=subgoal_low_probs)))
+        bottlenecks = algo.low_policy.f_bottleneck(all_obs)
 
-        mi_a_g_given_s = ent_a_given_s - ent_a_given_g_s
+        p_g_given_z = algo.g_given_z_regressor._f_prob(bottlenecks)
+        p_a_given_g_z = np.asarray(all_low_probs)
 
-        logger.record_tabular("exact_I(a;g|s)", mi_a_g_given_s)
-        logger.record_tabular("exact_H(a|s)", ent_a_given_s)
-        logger.record_tabular("exact_H(a|g,s)", ent_a_given_g_s)
-        logger.record_tabular("exact_H(a|taken_g,s)", ent_a_given_subgoal_s)
+        p_a_given_z = np.sum((p_g_given_z.T[:, :, np.newaxis] * p_a_given_g_z), axis=0)
 
-    def log_train_stats(self, algo):
-        env_spec = self.env_spec
-        trained_policy = FixedClockPolicy(env_spec=env_spec, high_policy=algo.high_policy, low_policy=algo.low_policy,
-                                          subgoal_interval=algo.subgoal_interval)
+        ents_a_given_g_z = [
+            algo.low_policy.distribution.entropy(dict(prob=cond_low_probs))
+            for cond_low_probs in all_low_probs
+            ]
+        # import ipdb;
+        # ipdb.set_trace()
 
-        n_envs = len(self.envs)
+        # p_a_given_s = np.mean(all_low_probs, axis=0)
+        ent_a_given_z = np.mean(algo.low_policy.distribution.entropy(dict(prob=p_a_given_z)))
+        ent_a_given_g_z = np.mean(np.sum(p_g_given_z.T * np.asarray(ents_a_given_g_z), axis=0))
+        ent_a_given_subgoal_z = np.mean(algo.low_policy.distribution.entropy(dict(prob=subgoal_low_probs)))
 
-        train_venv = DummyVecEnv(env=self.template_env, n=n_envs, envs=self.envs,
-                                 max_path_length=algo.max_path_length)
+        mi_a_g_given_z = ent_a_given_z - ent_a_given_g_z
 
-        path_rewards = [None] * n_envs
-        path_discount_rewards = [None] * n_envs
-        obses = train_venv.reset()
-        dones = np.asarray([True] * n_envs)
-        for t in xrange(algo.max_path_length):
-            trained_policy.reset(dones)
-            acts, _ = trained_policy.get_actions(obses)
-            next_obses, rewards, dones, _ = train_venv.step(acts)
-            obses = next_obses
-            for idx, done in enumerate(dones):
-                if done and path_rewards[idx] is None:
-                    path_rewards[idx] = rewards[idx]
-                    path_discount_rewards[idx] = rewards[idx] * (algo.discount ** t)
+        logger.record_tabular("exact_I(a;g|z)", mi_a_g_given_z)
+        logger.record_tabular("exact_H(a|z)", ent_a_given_z)
+        logger.record_tabular("exact_H(a|g,z)", ent_a_given_g_z)
+        logger.record_tabular("exact_H(a|taken_g,z)", ent_a_given_subgoal_z)
 
-        logger.record_tabular("AverageTrainReturn", np.mean(path_rewards))
-        logger.record_tabular("AverageTrainDiscountedReturn", np.mean(path_discount_rewards))
-
+    #
+    # def log_train_stats(self, algo):
+    #     env_spec = self.env_spec
+    #     trained_policy = FixedClockPolicy(env_spec=env_spec, high_policy=algo.high_policy, low_policy=algo.low_policy,
+    #                                       subgoal_interval=algo.subgoal_interval)
+    #
+    #     n_envs = len(self.envs)
+    #
+    #     train_venv = DummyVecEnv(env=self.template_env, n=n_envs, envs=self.envs,
+    #                              max_path_length=algo.max_path_length)
+    #
+    #     path_rewards = [None] * n_envs
+    #     path_discount_rewards = [None] * n_envs
+    #     obses = train_venv.reset()
+    #     dones = np.asarray([True] * n_envs)
+    #     for t in xrange(algo.max_path_length):
+    #         trained_policy.reset(dones)
+    #         acts, _ = trained_policy.get_actions(obses)
+    #         next_obses, rewards, dones, _ = train_venv.step(acts)
+    #         obses = next_obses
+    #         for idx, done in enumerate(dones):
+    #             if done and path_rewards[idx] is None:
+    #                 path_rewards[idx] = rewards[idx]
+    #                 path_discount_rewards[idx] = rewards[idx] * (algo.discount ** t)
+    #
+    #     logger.record_tabular("AverageTrainReturn", np.mean(path_rewards))
+    #     logger.record_tabular("AverageTrainDiscountedReturn", np.mean(path_discount_rewards))
+    #
     def log_mi_goal_state(self, algo):
         # Essentially, we want to check how well the low-level policy learns the subgoals
         if not hasattr(self, "all_flat_obs"):
@@ -586,32 +578,34 @@ class SeqGridExpert(object):
         logger.record_tabular("AverageTestDiscountedReturn", np.mean(path_discount_rewards))
 
     def log_exact_ent_g_given_z(self, algo):
+
+        obs_dim = self.seg_obs.shape[-1]
         obs = self.seg_obs[:, 0, :]
         unflat_obs = self.env_spec.observation_space.unflatten_n(obs)
 
-        n_samples = 10
+        all_obs = self.seg_obs.reshape((-1, obs_dim))
+
+        n_samples = 1  # 0
 
         all_bottlenecks = []
         all_subgoals = []
         for _ in range(n_samples):
-            policy_subgoal_dist = algo.high_policy.dist_info(obs)
+            # policy_subgoal_dist = algo.high_policy.dist_info(obs)
             subgoals = np.asarray(algo.high_policy.get_actions(unflat_obs)[0])
             flat_subgoals = algo.high_policy.action_space.flatten_n(subgoals)
-            bottlenecks = algo.low_policy.f_bottleneck(obs)
+            bottlenecks = algo.low_policy.f_bottleneck(all_obs)
             all_bottlenecks.extend(bottlenecks)
-            all_subgoals.extend(flat_subgoals)
+            all_subgoals.extend(np.tile(
+                flat_subgoals.reshape((-1, algo.subgoal_dim, 1)),
+                (1, 1, algo.subgoal_interval)
+            ).reshape((-1, algo.subgoal_dim)))
 
-        # if not hasattr(self, "g_given_z_regressor"):
-        #     self.g_given_z_regressor = CategoricalMLPRegressor(
-        #         name="g_given_z_regressor",
-        #         input_shape=bottlenecks.shape[1:],
-        #         output_dim=algo.subgoal_dim,
-        #         use_trust_region=False,
-        #     )
-        #     tf.get_default_session().run(tf.initialize_variables(self.g_given_z_regressor.get_params()))
-        algo.g_given_z_regressor.fit(all_bottlenecks, all_subgoals)  # policy_subgoal_dist["prob"])
-        ent = np.mean(algo.g_given_z_regressor._dist.entropy(dict(prob=algo.g_given_z_regressor._f_prob(bottlenecks))))
-        # now learn a regressor from bottlenecks to
+        algo.g_given_z_regressor.fit(all_bottlenecks, all_subgoals)
+        ent = np.mean(
+            algo.g_given_z_regressor._dist.entropy(
+                dict(prob=algo.g_given_z_regressor._f_prob(all_bottlenecks))
+            )
+        )
         logger.record_tabular("exact_H(g|z)", ent)
 
 
@@ -621,7 +615,7 @@ class ApproximatePosterior(LayersPowered, Serializable):
     sequence. It is structured as a GRU.
     """
 
-    def __init__(self, env_spec, subgoal_dim, subgoal_interval, feature_dim=20, hidden_dim=10):
+    def __init__(self, env_spec, subgoal_dim, subgoal_interval):
         """
         :type env_spec: EnvSpec
         :param env_spec:
@@ -647,84 +641,54 @@ class ApproximatePosterior(LayersPowered, Serializable):
             name="action_input"
         )
 
-        preprocess_network = MLP(
-            name="preprocess_network_1",
-            input_shape=(action_dim,),
-            output_dim=10,
+        feature_network = ConvMergeNetwork(
+            name="feature_network",
+            input_layer=L.reshape(l_obs, (-1, obs_dim), name="reshape_obs"),
+            input_shape=env_spec.observation_space.components[0].shape,
+            extra_input_shape=(Product(env_spec.observation_space.components[1:]).flat_dim,),
+            output_dim=100,
+            hidden_sizes=(100,),
+            conv_filters=(10, 10),
+            conv_filter_sizes=(3, 3),
+            conv_strides=(1, 1),
+            conv_pads=('SAME', 'SAME'),
+            extra_hidden_sizes=(100,),
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.tanh,
-            input_layer=L.reshape(
-                l_action,
-                shape=(-1, action_dim),
-                name="action_reshape"
-            ),
-            hidden_sizes=tuple(),
         )
 
-        subgoal_input_layer = L.reshape(
-            preprocess_network.output_layer,
-            (-1, subgoal_interval * preprocess_network.output_layer.output_shape[-1]),
-            name="subgoal_in_reshape"
+        l_reshaped_feature = L.reshape(
+            feature_network.output_layer,
+            shape=(-1, subgoal_interval, 100),
+            name="reshaped_feature"
         )
+
+        l_action_embedding = L.reshape(
+            MLP(
+                name="action_embedding_network",
+                input_shape=(action_dim,),
+                output_dim=100,
+                hidden_nonlinearity=tf.identity,
+                hidden_sizes=tuple(),
+                output_nonlinearity=tf.identity,
+                input_layer=L.reshape(l_action, name="action_flat", shape=(-1, action_dim)),
+            ).output_layer,
+            shape=(-1, subgoal_interval, 100),
+            name="reshaped_action"
+        )
+
+        subgoal_input_layer = L.concat([l_reshaped_feature, l_action_embedding], name="subgoal_dim", axis=2)
 
         subgoal_network = MLP(
             name="h_network",
             input_shape=(subgoal_input_layer.output_shape[-1],),
             output_dim=subgoal_dim,
-            hidden_sizes=(100,),
+            hidden_sizes=(100, 100),
             hidden_nonlinearity=tf.nn.tanh,
             output_nonlinearity=tf.nn.softmax,
             input_layer=subgoal_input_layer,
         )
         l_subgoal_probs = subgoal_network.output_layer
-
-        # feature_network = MLP(
-        #     input_shape=(env_spec.observation_space.flat_dim,),
-        #     output_dim=feature_dim,
-        #     hidden_sizes=(10,),
-        #     hidden_nonlinearity=tf.nn.tanh,
-        #     output_nonlinearity=tf.nn.tanh,
-        #     name="feature_network",
-        #     input_layer=L.reshape(l_obs, (-1, obs_dim), name="reshape_obs"),
-        # )
-        #
-        # l_reshaped_feature = L.reshape(
-        #     feature_network.output_layer,
-        #     shape=(-1, subgoal_interval, feature_dim),
-        #     name="reshaped_feature"
-        # )
-        #
-        # l_preprocess_in = L.reshape(
-        #     L.concat([l_reshaped_feature, l_action], name="preprocess_in", axis=2),
-        #     (-1, feature_dim + action_dim),
-        #     name="preprocess_in_flat",
-        # )
-        # preprocess_network = MLP(
-        #     name="preprocess_network",
-        #     input_shape=(feature_dim + action_dim,),
-        #     output_dim=feature_dim,
-        #     hidden_nonlinearity=tf.nn.tanh,
-        #     output_nonlinearity=tf.nn.tanh,
-        #     input_layer=l_preprocess_in,
-        #     hidden_sizes=(feature_dim,),
-        # )
-        #
-        # subgoal_input_layer = L.reshape(
-        #     preprocess_network.output_layer,
-        #     (-1, subgoal_interval * preprocess_network.output_layer.output_shape[-1]),
-        #     name="subgoal_in_reshape"
-        # )
-        #
-        # subgoal_network = MLP(
-        #     name="h_network",
-        #     input_shape=(subgoal_input_layer.output_shape[-1],),
-        #     output_dim=subgoal_dim,
-        #     hidden_sizes=(100,),
-        #     hidden_nonlinearity=tf.nn.tanh,
-        #     output_nonlinearity=tf.nn.softmax,
-        #     input_layer=subgoal_input_layer,
-        # )
-        # l_subgoal_probs = subgoal_network.output_layer
 
         self.subgoal_dim = subgoal_dim
         self.l_in = l_in
@@ -748,6 +712,7 @@ class ApproximatePosterior(LayersPowered, Serializable):
 class FixedClockImitation(RLAlgorithm):
     def __init__(
             self,
+            policy_module=None,
             policy_module_cls=None,
             approximate_posterior_cls=None,
             subgoal_dim=4,
@@ -758,14 +723,14 @@ class FixedClockImitation(RLAlgorithm):
             discount=0.99,
             max_path_length=100,
             n_epochs=100,
-            n_sweep_per_epoch=10,
             mi_coeff=0.,
-            ent_g_given_z_coeff=0.,
     ):
         self.env_expert = SeqGridExpert()
-        if policy_module_cls is None:
-            policy_module_cls = SeqGridPolicyModule1
-        self.policy_module = policy_module_cls()
+        if policy_module is None:
+            if policy_module_cls is None:
+                policy_module_cls = SeqGridPolicyModule
+            policy_module = policy_module_cls()
+        self.policy_module = policy_module
 
         if approximate_posterior_cls is None:
             approximate_posterior_cls = ApproximatePosterior
@@ -783,10 +748,7 @@ class FixedClockImitation(RLAlgorithm):
         self.discount = discount
         self.max_path_length = max_path_length
         self.n_epochs = n_epochs
-        self.n_sweep_per_epoch = n_sweep_per_epoch
         self.mi_coeff = mi_coeff
-        self.ent_g_given_z_coeff = ent_g_given_z_coeff
-        self.bottleneck_goal_recognizer = None
 
         env_spec = self.env_expert.env_spec
         self.high_policy = self.policy_module.new_high_policy(
@@ -803,17 +765,12 @@ class FixedClockImitation(RLAlgorithm):
             bottleneck_dim=self.bottleneck_dim
         )
 
-        self.bottleneck_goal_recognizer = CategoricalMLPRegressor(
-            name="bottleneck_goal_regressor",
-            input_shape=(self.bottleneck_dim,),
-            output_dim=self.subgoal_dim,
-        )
-
         self.g_given_z_regressor = CategoricalMLPRegressor(
             name="g_given_z_regressor",
             input_shape=(bottleneck_dim,),
             output_dim=subgoal_dim,
             use_trust_region=False,
+            hidden_sizes=(200, 200),
         )
 
         self.logging_info = []
@@ -859,7 +816,8 @@ class FixedClockImitation(RLAlgorithm):
         E_sum_action_logli = tf.reduce_sum(recog_subgoal_dist['prob'] * tf.transpose(tf.pack(
             all_sum_action_logli)), reduction_indices=-1)
 
-        vlb = tf.reduce_mean(E_sum_action_logli - subgoal_kl)
+        vlb = tf.reduce_mean(E_sum_action_logli) - tf.reduce_mean(subgoal_kl)  # + \
+        # 0.1 * tf.reduce_mean(self.recog.distribution.entropy_sym(recog_subgoal_dist))
 
         surr_vlb = vlb
 
@@ -872,13 +830,19 @@ class FixedClockImitation(RLAlgorithm):
 
         return vlb, surr_vlb
 
-    def mi_a_g_given_s_sym(self, obs_var, action_var):
+    def mi_a_g_given_z_sym(self, obs_var, action_var):
         env_spec = self.env_expert.env_spec
         obs_dim = env_spec.observation_space.flat_dim
         flat_obs_var = tf.reshape(obs_var, (-1, obs_dim))
+        bottleneck_var = self.low_policy.bottleneck_sym(flat_obs_var)
+        recog_subgoal_dist = self.g_given_z_regressor.dist_info_sym(bottleneck_var)
+
         all_action_probs = self.low_policy.get_all_probs(flat_obs_var)
 
-        marginal_action_probs = tf.reduce_mean(tf.pack(all_action_probs), reduction_indices=0)
+        marginal_action_probs = tf.reduce_sum(
+            tf.expand_dims(tf.transpose(recog_subgoal_dist["prob"]), -1) * tf.pack(all_action_probs),
+            0
+        )
         marginal_ent = self.high_policy.distribution.entropy_sym(dict(prob=marginal_action_probs))
 
         conditional_ents = [
@@ -886,35 +850,10 @@ class FixedClockImitation(RLAlgorithm):
             for cond_action_probs in all_action_probs
             ]
 
-        mi_a_g_given_s = tf.reduce_mean(marginal_ent) - tf.reduce_mean(conditional_ents)
-        return mi_a_g_given_s
+        mean_conditional_ents = tf.reduce_sum(tf.transpose(recog_subgoal_dist["prob"]) * tf.pack(conditional_ents), 0)
 
-    def ent_g_given_z_sym_smooth(self, obs_var, action_var):
-        env_spec = self.env_expert.env_spec
-        obs_dim = env_spec.observation_space.flat_dim
-        flat_obs_var = tf.reshape(obs_var, (-1, obs_dim))
-        high_obs_var = obs_var[:, 0, :]
-        policy_subgoal_dist = self.high_policy.dist_info_sym(high_obs_var, dict())
-        policy_subgoal_prob = policy_subgoal_dist["prob"]
-        tiled_policy_subgoal_prob = tf.tile(
-            tf.expand_dims(policy_subgoal_prob, 1),
-            [1, self.subgoal_interval, 1]
-        )
-        flat_policy_subgoal_prob = tf.reshape(tiled_policy_subgoal_prob, (-1, self.subgoal_dim))
-        bottleneck_var = self.low_policy.bottleneck_sym(flat_obs_var)
-
-        recog_subgoal_dist = self.bottleneck_goal_recognizer.dist_info_sym(bottleneck_var)
-
-        ent_g_given_z = tf.reduce_mean(
-            self.high_policy.distribution.cross_entropy_sym(
-                dict(prob=flat_policy_subgoal_prob),
-                recog_subgoal_dist
-            )
-        )
-
-        surr_ent_g_given_z = ent_g_given_z
-
-        return ent_g_given_z, surr_ent_g_given_z
+        mi_a_g_given_z = tf.reduce_mean(marginal_ent) - tf.reduce_mean(mean_conditional_ents)
+        return mi_a_g_given_z
 
     def init_opt(self):
         logger.log("setting up training")
@@ -931,8 +870,7 @@ class FixedClockImitation(RLAlgorithm):
         )
 
         vlb, surr_vlb = self.surr_vlb_sym(obs_var, action_var)
-        mi_a_g_given_s = self.mi_a_g_given_s_sym(obs_var, action_var)
-        ent_g_given_z, surr_ent_g_given_z = self.ent_g_given_z_sym_smooth(obs_var, action_var)
+        mi_a_g_given_z = self.mi_a_g_given_z_sym(obs_var, action_var)
 
         all_params = JointParameterized([self.high_policy, self.low_policy, self.recog]).get_params(trainable=True)
         bottleneck_params = L.get_all_params(self.low_policy.l_bottleneck, trainable=True)
@@ -941,21 +879,17 @@ class FixedClockImitation(RLAlgorithm):
 
         vlb_grads = optimizer.compute_gradients(-surr_vlb, var_list=all_params)
         bottleneck_grads = optimizer.compute_gradients(
-            - self.mi_coeff * mi_a_g_given_s - self.ent_g_given_z_coeff * surr_ent_g_given_z, var_list=bottleneck_params
-        )
-        goal_recog_grads = optimizer.compute_gradients(
-            ent_g_given_z, var_list=self.bottleneck_goal_recognizer.get_params(trainable=True)
+            - self.mi_coeff * mi_a_g_given_z, var_list=all_params  # bottleneck_params
         )
 
-        all_grads = merge_grads(vlb_grads, bottleneck_grads, goal_recog_grads)
+        all_grads = merge_grads(vlb_grads, bottleneck_grads)
 
         train_op = optimizer.apply_gradients(all_grads)
 
         self.logging_info.extend([
             ("average_NegVlb", -vlb),
             ("average_Vlb", vlb),
-            ("average_H(g|z)", ent_g_given_z),
-            ("average_I(a;g|s)", mi_a_g_given_s),
+            ("average_I(a;g|z)", mi_a_g_given_z),
         ])
 
         self.f_train = tensor_utils.compile_function(
@@ -970,12 +904,11 @@ class FixedClockImitation(RLAlgorithm):
             high_policy=self.high_policy,
             low_policy=self.low_policy,
             recog=self.recog,
-            bottleneck_goal_recognizer=self.bottleneck_goal_recognizer,
         )
 
     def train(self):
-        self.init_opt()
         dataset = self.env_expert.build_dataset(self.batch_size)
+        self.init_opt()
         with tf.Session() as sess:
             logger.log("initializing variables")
             sess.run(tf.initialize_all_variables())
@@ -983,16 +916,11 @@ class FixedClockImitation(RLAlgorithm):
 
             for epoch_id in xrange(self.n_epochs):
 
-                all_vals = []
-
                 logger.log("Start epoch %d..." % epoch_id)
 
-                for _ in xrange(self.n_sweep_per_epoch):
+                batch_obs, batch_actions = dataset._inputs
 
-                    for batch_obs, batch_actions in dataset.iterate():
-                        # Sample minibatch and train
-                        vals = self.f_train(batch_obs, batch_actions)[1:]
-                        all_vals.append(vals)
+                all_vals = [self.f_train(batch_obs, batch_actions)[1:]]
 
                 logger.log("Evaluating...")
 

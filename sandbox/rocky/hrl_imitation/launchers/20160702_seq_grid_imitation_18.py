@@ -30,11 +30,31 @@ vg.add("policy_module", [
     SeqGridPolicyModule1,
 ])
 vg.add("recog", [
+    # Use both state and action, passed to a GRU
     ApproximatePosterior_orig,
+    # Use only the action, passed to a GRU
     ApproximatePosterior0,
+    # Use only the action, passed to an MLP
     ApproximatePosterior1,
+    # Use both state and action, passed to an MLP
     ApproximatePosterior2,
 ])
+
+"""
+Observations:
+- If the low-level policy receives the full observation:
+    - AP_orig and AP_0 has I(a;g|s) near 0 when no bonus, and struggles to achieve high MI when bonus is given
+    - AP_1 and AP_2 were able to achieve MI around 0.5 for some runs even without bonus, and does much better when
+      bonus is given
+- If the low-level policy only sees the action history:
+    - The optimization of vlb is prone to local optima, and sometimes get stuck in non-optimal solutions. These
+      solutions also correspond to lower MI.
+    - The bonus term has almost no effect on the result. Even in this case, sometimes the MI still couldn't get well
+      optimized because of the above issue.
+    - The exact H(g|z) is positively correlated with how well the optimization is done, and also with the performance on
+      the test environment. It is still questionable whether these terms are all necessary.
+"""
+
 
 variants = vg.variants()
 

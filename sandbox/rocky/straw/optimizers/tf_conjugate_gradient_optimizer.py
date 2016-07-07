@@ -21,7 +21,7 @@ class PerlmutterHvp(object):
         params = target.get_params(trainable=True)
 
         constraint_grads = tf.gradients(f, xs=params)
-        xs = tuple([tensor_utils.new_tensor_like("%s x" % p.name, p) for p in params])
+        xs = tuple([tensor_utils.new_tensor_like(p.name, p) for p in params])
 
         def Hx_plain():
             Hx_plain_splits = tf.gradients(
