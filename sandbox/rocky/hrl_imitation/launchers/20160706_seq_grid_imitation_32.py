@@ -4,7 +4,7 @@ from __future__ import print_function
 from rllab.misc.instrument import stub, run_experiment_lite
 
 """
-Discrete bottleneck layer
+Discrete bottleneck layer + fix MI
 """
 
 from sandbox.rocky.hrl_imitation.algos.fixed_clock_imitation17 import FixedClockImitation, SeqGridPolicyModule
@@ -41,7 +41,7 @@ for v in variants:
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="seq_grid_imitation_31",
+        exp_prefix="seq_grid_imitation_32",
         seed=v["seed"],
         variant=v,
         mode="lab_kube",

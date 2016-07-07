@@ -43,8 +43,9 @@ class SeqGridPolicyModule(object):
     low-level policy receives partial observation. stochastic bottleneck
     """
 
-    def __init__(self, low_policy_obs='full'):
+    def __init__(self, low_policy_obs='full', log_prob_tensor_std=1.0):
         self.low_policy_obs = low_policy_obs
+        self.log_prob_tensor_std = log_prob_tensor_std
 
     def new_high_policy(self, env_spec, subgoal_dim):
         subgoal_space = Discrete(subgoal_dim)
@@ -106,6 +107,7 @@ class SeqGridPolicyModule(object):
                 hidden_sizes=(100,),
                 hidden_nonlinearity=tf.nn.tanh,
                 bottleneck_dim=bottleneck_dim,
+                log_prob_tensor_std=self.log_prob_tensor_std,
             )
         elif self.low_policy_obs == 'partial':
             return IgnorantBranchingCategoricalMLPPolicy(
@@ -118,6 +120,7 @@ class SeqGridPolicyModule(object):
                 hidden_sizes=(100,),
                 hidden_nonlinearity=tf.nn.tanh,
                 bottleneck_dim=bottleneck_dim,
+                log_prob_tensor_std=self.log_prob_tensor_std,
             )
         else:
             raise NotImplementedError
@@ -156,6 +159,7 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializabl
             bottleneck_std_threshold=1e-3,
             hidden_sizes=(32, 32),
             hidden_nonlinearity=tf.nn.tanh,
+            log_prob_tensor_std=1.0,
     ):
         """
         :param env_spec: A spec for the mdp.
@@ -182,7 +186,7 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializabl
             )
 
             log_prob_tensor = tf.Variable(
-                initial_value=np.cast['float32'](np.random.normal(scale=0.01, size=(bottleneck_dim, subgoal_dim,
+                initial_value=np.cast['float32'](np.random.normal(scale=log_prob_tensor_std, size=(bottleneck_dim, subgoal_dim,
                                                                                     action_dim))),
                 # stddev=0.01),
                 trainable=True,
@@ -294,6 +298,7 @@ class IgnorantBranchingCategoricalMLPPolicy(BranchingCategoricalMLPPolicy, Seria
             bottleneck_std_threshold=1e-3,
             hidden_sizes=(32, 32),
             hidden_nonlinearity=tf.nn.tanh,
+            **kwargs
     ):
         Serializable.quick_init(self, locals())
         l_in = L.InputLayer(shape=(None, env_spec.observation_space.components[0].flat_dim), name="input")
@@ -314,7 +319,8 @@ class IgnorantBranchingCategoricalMLPPolicy(BranchingCategoricalMLPPolicy, Seria
         BranchingCategoricalMLPPolicy.__init__(self, name=name, env_spec=env_spec, subgoal_dim=subgoal_dim,
                                                bottleneck_dim=bottleneck_dim, shared_network=shared_network,
                                                bottleneck_std_threshold=bottleneck_std_threshold,
-                                               hidden_sizes=hidden_sizes, hidden_nonlinearity=hidden_nonlinearity)
+                                               hidden_sizes=hidden_sizes, hidden_nonlinearity=hidden_nonlinearity,
+                                               **kwargs)
 
 
 def weighted_sample_n(prob_matrix, items):
@@ -544,15 +550,15 @@ class SeqGridExpert(object):
         return self.paths
 
     def log_diagnostics(self, algo):
-        pass
+        # pass
         # logger.log("logging MI...")
         # self.log_mis(algo)
         # logger.log("logging train stats...")
         # self.log_train_stats(algo)
-        # logger.log("logging test stats...")
-        # self.log_test_stats(algo)
-        # logger.log("logging I(g;s'|s)...")
-        # self.log_mi_goal_state(algo)
+        logger.log("logging test stats...")
+        self.log_test_stats(algo)
+        logger.log("logging I(g;s'|s)...")
+        self.log_mi_goal_state(algo)
         # logger.log("logging exact_H(g|z)...")
         # self.log_exact_ent_g_given_z(algo)
 
@@ -1036,6 +1042,10 @@ class FixedClockImitation(RLAlgorithm):
             inputs=[obs_var, action_var],
             outputs=[train_op] + [x[1] for x in self.logging_info],
         )
+        self.f_log_only = tensor_utils.compile_function(
+            inputs=[obs_var, action_var],
+            outputs=[x[1] for x in self.logging_info],
+        )
 
     def get_snapshot(self):
         return dict(
@@ -1099,6 +1109,11 @@ class FixedClockImitation(RLAlgorithm):
                 mean_all_vals = np.mean(np.asarray(all_vals), axis=0)
                 for (k, _), v in zip(self.logging_info, mean_all_vals):
                     logger.record_tabular(k, v)
+
+                # also log a batch version of the stats
+                batch_logs = self.f_log_only(*dataset._inputs)
+                # import ipdb; ipdb.set_trace()
+
                 self.env_expert.log_diagnostics(self)
                 logger.dump_tabular()
                 logger.save_itr_params(epoch_id, self.get_snapshot())
