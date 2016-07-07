@@ -614,7 +614,10 @@ class BNN(LasagnePowered, Serializable):
     def likelihood_classification(self, target, prediction):
         # Cross-entropy; target vector selecting correct prediction
         # entries.
-        # Hardcoding n_classes=3
+
+        # Numerical stability.
+        prediction += 1e-8 
+        
         target2 = target + T.arange(target.shape[1]) * self.num_classes
         target3 = target2.T.ravel()
         idx = T.arange(target.shape[0])

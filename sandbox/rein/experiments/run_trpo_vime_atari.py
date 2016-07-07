@@ -40,11 +40,6 @@ param_cart_product = itertools.product(
 
 for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
-    #     policy = GaussianMLPPolicy(
-    #         env_spec=mdp.spec,
-    #         hidden_sizes=(32,),
-    #     )
-
     policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
         hidden_sizes=(64, 64)
@@ -73,7 +68,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=10,
+        snn_n_samples=20,
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
@@ -89,7 +84,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         surprise_transform=None,
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
-        output_type='classification',
+        output_type='regression',
         use_local_reparametrization_trick=True,
         surprise_type='information_gain',
         predict_reward=False,

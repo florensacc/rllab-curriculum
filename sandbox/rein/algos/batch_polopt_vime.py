@@ -381,7 +381,8 @@ class BatchPolopt(RLAlgorithm):
                             [obs, act])
                         _targets = next_obs
                         if self.predict_reward:
-                            _targets = np.hstack((next_obs, batch['rewards']))
+                            _targets = np.hstack(
+                                (next_obs, batch['rewards'][:, None]))
                         _inputss.append(_inputs)
                         _targetss.append(_targets)
 
@@ -582,7 +583,8 @@ class BatchPolopt(RLAlgorithm):
             obs_std=obs_std,
             act_mean=act_mean,
             act_std=act_std,
-            second_order_update=self.second_order_update
+            second_order_update=self.second_order_update,
+            predict_reward=self.predict_reward
         )
 
         # DEBUG
@@ -882,7 +884,7 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
         logger.record_tabular('Expl_eta', self.eta)
-        if self.update_likelihood_sd:
+        if self.update_likelihood_sd and self.output_type == 'regression':
             logger.record_tabular(
                 'LikelihoodStd', self.bnn.likelihood_sd.eval())
 

@@ -19,9 +19,8 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(1)
-etas = [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
-etas = [0.1]
+seeds = range(10)
+etas = [0, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
 normalize_rewards = [False]
 kl_ratios = [True]
 mdp_classes = [CartpoleSwingupEnv]
@@ -41,7 +40,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(hidden_sizes=(32, )),
+        regressor_args=dict(hidden_sizes=(32,)),
     )
 
     algo = TRPO(
@@ -90,11 +89,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-mc-a",
-        n_parallel=1,
+        exp_prefix="trpo-vime-cps-a",
+        n_parallel=4,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         script="sandbox/rein/experiments/run_experiment_lite.py",
     )
