@@ -187,7 +187,7 @@ class Latent_regressor(Parameterized, Serializable):
             obs_actions = np.sign(obs_actions)
         H_latent = self.policy.latent_dist.entropy(self.policy.latent_dist_info)  # sum of entropies latents in
         # one timestep (assumes iid)
-        print 'the latent entropy is: ', H_latent
+        # print 'the latent entropy is: ', H_latent
         # for one Bernoulli it will be
         # 1Ber, the latent entropy is:  0.69314716056
         # 2Ber, the latent entropy is:  1.38629432112

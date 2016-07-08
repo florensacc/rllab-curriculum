@@ -13,7 +13,7 @@ from rllab.misc import ext
 
 import common.util as util
 
-def compute_gain(A, B, Q, R, k):
+def lqr(A, B, Q, R, k):
     def recurrence(P):
         tmp1 = TT.dot(A.T, TT.dot(P, A))
         tmp2 = TT.dot(A.T, TT.dot(P, B))
@@ -26,7 +26,7 @@ def compute_gain(A, B, Q, R, k):
                        n_steps=k)
     P = Ps[-1]
 
-    return TT.dot(inv(R + TT.dot(B.T, TT.dot(P, B))), TT.dot(B.T, TT.dot(P, A)))
+    return P, TT.dot(inv(R + TT.dot(B.T, TT.dot(P, B))), TT.dot(B.T, TT.dot(P, A)))
 
 class RecurrentLQRPolicy(Policy, Serializable):
     def __init__(self, env_spec, Q, R, k=10):
@@ -42,11 +42,10 @@ class RecurrentLQRPolicy(Policy, Serializable):
 
         self._A = util.init_weights(observation_dim, observation_dim)
         self._B = util.init_weights(observation_dim, action_dim)
-        self._P = util.init_weights(observation_dim, observation_dim)
         self._Q = theano.shared(Q.astype(float_t))
         self._R = theano.shared(R.astype(float_t))
         self._k = k
-        self._K = compute_gain(self._A, self._B, self._Q, self._R, self._k)
+        self._P, self._K = lqr(self._A, self._B, self._Q, self._R, self._k)
 
 
         obs_var = env_spec.observation_space.new_tensor_variable('obs', 1)
