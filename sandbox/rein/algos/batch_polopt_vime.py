@@ -406,7 +406,7 @@ class BatchPolopt(RLAlgorithm):
                         _inputss.append(_inputs)
                         _targetss.append(_targets)
 
-                    old_acc = self.accuracy(_inputss, _targetss)
+                    acc_before = self.accuracy(_inputss, _targetss)
                     for _inputs, _targets in zip(_inputss, _targetss):
                         self.bnn.train_fn(_inputs, _targets, kl_factor)
                         # DEBUG
@@ -417,7 +417,7 @@ class BatchPolopt(RLAlgorithm):
 #                         print(self.bnn.fn_dbg_nll(_inputs, _targets))
 #                         print('---')
                         # -----
-                    new_acc = self.accuracy(_inputss, _targetss)
+                    acc_after = self.accuracy(_inputss, _targetss)
 
                     for _inputs, _targets in zip(_inputss, _targetss):
                         _out = self.bnn.pred_fn(_inputs)
@@ -439,9 +439,9 @@ class BatchPolopt(RLAlgorithm):
                     logger.record_tabular('KLFactor', kl_factor)
 
                     logger.record_tabular(
-                        'DynModelSqLossBefore', old_acc)
+                        'DynModelSqLossBefore', acc_before)
                     logger.record_tabular(
-                        'DynModelSqLossAfter', new_acc)
+                        'DynModelSqLossAfter', acc_after)
             else:
                 # Here we should take the current batch of samples and shuffle
                 # them for i.d.d. purposes.

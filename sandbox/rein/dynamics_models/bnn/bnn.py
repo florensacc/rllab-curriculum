@@ -41,6 +41,8 @@ class BNNLayer(lasagne.layers.Layer):
         # Convert prior_sd into prior_rho.
         prior_rho = self.std_to_log(self.prior_sd)
 
+        self.num_weights = self.num_inputs * (self.num_units + 1)
+
         self.W = np.random.normal(0., prior_sd,
                                   (self.num_inputs, self.num_units))  # @UndefinedVariable
         self.b = np.zeros(
@@ -547,7 +549,7 @@ class BNN(LasagnePowered, Serializable):
     def num_weights(self):
         print('Disclaimer: only work with BNNLayers!')
         layers = lasagne.layers.get_all_layers(self.network)[1:]
-        return sum(l.W.size for l in layers)
+        return sum(l.num_weights for l in layers)
 
     def entropy(self, input, target, **kwargs):
         """ Entropy of a batch of input/output samples. """
@@ -878,9 +880,14 @@ class BNN(LasagnePowered, Serializable):
 
                     if param.name == 'mu' or param.name == 'b_mu':
                         oldparam_rho = oldparams[i + 1]
+                        if self.group_variance_by == 'unit':
+                            if not isinstance(oldparam_rho, float):
+                                oldparam_rho = oldparam_rho.dimshuffle(0, 'x')
                         invH = T.square(T.log(1 + T.exp(oldparam_rho)))
                     elif param.name == 'rho' or param.name == 'b_rho':
                         oldparam_rho = oldparams[i]
+#                         if not isinstance(oldparam_rho, float):
+#                             oldparam_rho = oldparam_rho.dimshuffle(0, 'x')
                         p = param
                         H = 2. * (T.exp(2 * p)) / \
                             (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)

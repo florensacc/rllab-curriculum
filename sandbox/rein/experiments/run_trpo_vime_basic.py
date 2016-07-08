@@ -71,7 +71,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         replay_pool_size=100000,
         n_updates_per_sample=5000,
         second_order_update=True,
-        unn_n_hidden=[512],
+        unn_n_hidden=[128],
         unn_layers_type=['gaussian', 'gaussian'],
         unn_learning_rate=0.001,
         surprise_transform='log(1+surprise)',  # 'cap1000', 'cap90perc'
@@ -83,7 +83,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         prior_sd=0.5,
         # -------------
         disable_variance=False,
-        group_variance_by='weight',
+        group_variance_by='unit',
         surprise_type='information_gain',
         predict_reward=True,
         use_local_reparametrization_trick=True,

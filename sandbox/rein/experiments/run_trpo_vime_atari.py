@@ -28,7 +28,7 @@ stub(globals())
 #         for mdp_class in mdp_classes]
 
 seeds = range(3)
-etas = [0, 0.000001]
+etas = [0, 0.01, 0.1]
 normalize_rewards = [False]
 kl_ratios = [True]
 mdps = [GymEnv("Freeway-ram-v0")]
@@ -77,15 +77,15 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         replay_pool_size=1000000,
         n_updates_per_sample=50000,
         second_order_update=True,
-        unn_n_hidden=[512, 512],
-        unn_layers_type=['gaussian', 'gaussian', 'gaussian'],
+        unn_n_hidden=[128],
+        unn_layers_type=['gaussian', 'gaussian'],
         unn_learning_rate=0.001,
         surprise_transform='log(1+surprise)',
-        update_likelihood_sd=False,
+        update_likelihood_sd=True,
         replay_kl_schedule=0.99,
         output_type='regression',
         pool_batch_size=128,
-        likelihood_sd_init=0.1,
+        likelihood_sd_init=1.0,
         prior_sd=0.5,
         # -------------
         disable_variance=False,
@@ -99,7 +99,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-e",
+        exp_prefix="trpo-vime-freeway-f",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

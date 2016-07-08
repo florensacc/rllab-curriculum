@@ -165,7 +165,6 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     step_size = 1.0
                     kl_div = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
-#                     kl_div = np.clip(kl_div, 0, 1000)
 
                     # DEBUG
                     # -----
