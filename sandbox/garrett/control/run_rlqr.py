@@ -11,14 +11,19 @@ from rllab.exploration_strategies.ou_strategy import OUStrategy
 from rllab.q_functions.continuous_mlp_q_function import ContinuousMLPQFunction
 
 from rlqr import RecurrentLQRPolicy
+from common.envs.flexible_cartpole import FlexibleCartpoleEnv
+
+# cartpole = CartpoleEnv()
+cartpole = FlexibleCartpoleEnv()
+env = normalize(cartpole)
 
 if len(sys.argv) > 1:
     k = int(sys.argv[1])
 else:
     k = 10
 
-env = normalize(CartpoleEnv())
-Q = np.zeros((4,4)); Q[2,2] = 1
+obs_dim = cartpole.observation_space.flat_dim
+Q = np.zeros((obs_dim, obs_dim)); Q[2,2] = 1
 R = np.array([[1]])
 policy = RecurrentLQRPolicy(env.spec, Q, R, k)
 baseline = LinearFeatureBaseline(env_spec=env.spec)
