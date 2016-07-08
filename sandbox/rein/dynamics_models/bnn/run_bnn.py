@@ -66,6 +66,8 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         import matplotlib.pyplot as plt
         plt.ion()
         y = [model.pred_fn(x[None, :])[0][0] for x in X_test]
+#         y = model.pred_fn(X_test[0][None,:])
+
 #         temp = model.fn_classification_nll(X_train, T_train)
 #         print(temp)
         _ = plt.figure()
@@ -287,7 +289,7 @@ def main():
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=1,
+        n_samples=20,
         learning_rate=0.001,
         group_variance_by='unit',
         use_local_reparametrization_trick=True,

@@ -243,41 +243,6 @@ class BNNLayer(lasagne.layers.Layer):
         self.b = b
         return b
 
-    def get_output_for_reparametrization(self, input, **kwargs):
-        """Implementation of the local reparametrization trick.
-
-        This essentially leads to a speedup compared to the naive implementation case.
-        Furthermore, it leads to gradients with less variance.
-
-        References
-        ----------
-        Kingma et al., "Variational Dropout and the Local Reparametrization Trick", 2015
-        """
-
-        if self.group_variance_by == 'layer':
-            raise Exception(
-                'Local reparametrization trick not supported for tied variances per layer!')
-        else:
-            if input.ndim > 2:
-                # if the input has more than two dimensions, flatten it into a
-                # batch of feature vectors.
-                input = input.flatten(2)
-
-            gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-            delta = T.dot(T.square(input), T.square(self.log_to_std(
-                self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
-
-            if self.disable_variance:
-                mask = 0.
-            else:
-                mask = 1.
-            epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
-                                        dtype=theano.config.floatX)  # @UndefinedVariable
-
-            activation = gamma + T.sqrt(delta) * epsilon * mask
-
-            return self.nonlinearity(activation)
-
     def save_old_params(self):
         """Save old parameter values for KL calculation."""
         self.mu_old.set_value(self.mu.get_value())
@@ -345,9 +310,50 @@ class BNNLayer(lasagne.layers.Layer):
 
     def get_output_for(self, input, **kwargs):
         if self.use_local_reparametrization_trick:
-            return self.get_output_for_reparametrization(input, **kwargs)
+            preactivation = self.get_output_for_reparametrization(
+                input, **kwargs)
+            return self.post_transf(preactivation)
         else:
-            return self.get_output_for_default(input, **kwargs)
+            preactivation = self.get_output_for_default(input, **kwargs)
+            return self.post_transf(preactivation)
+
+    def get_output_for_reparametrization(self, input, **kwargs):
+        """Implementation of the local reparametrization trick.
+
+        This essentially leads to a speedup compared to the naive implementation case.
+        Furthermore, it leads to gradients with less variance.
+
+        References
+        ----------
+        Kingma et al., "Variational Dropout and the Local Reparametrization Trick", 2015
+        """
+
+        if input.ndim > 2:
+            # if the input has more than two dimensions, flatten it into a
+            # batch of feature vectors.
+            input = input.flatten(2)
+
+        if self.group_variance_by == 'layer':
+            raise Exception(
+                'Local reparametrization trick not supported for tied variances per layer!')
+
+        elif self.group_variance_by == 'unit':
+            delta = T.dot(T.square(input), T.tile(T.square(self.log_to_std(self.rho)), [
+                          self.num_units, 1]).T) + T.tile(T.square(self.log_to_std(self.b_rho)), self.num_units)
+
+        elif self.group_variance_by == 'weight':
+            delta = T.dot(T.square(input), T.square(self.log_to_std(
+                self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
+
+        else:
+            raise Exception(
+                'Unknown group_variance_by param {}'.format(self.group_variance_by))
+
+        mask = 0 if self.disable_variance else 1
+        gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
+        epsilon = self._srng.normal(size=(self.num_units, ), avg=0., std=1.,
+                                    dtype=theano.config.floatX)  # @UndefinedVariable
+        return gamma + T.sqrt(delta) * epsilon * mask
 
     def get_output_for_default(self, input, **kwargs):
         if input.ndim > 2:
@@ -355,10 +361,10 @@ class BNNLayer(lasagne.layers.Layer):
             # batch of feature vectors.
             input = input.flatten(2)
 
-        activation = T.dot(input, self.get_W()) + \
-            self.get_b().dimshuffle('x', 0)
+        return T.dot(input, self.get_W()) + self.get_b().dimshuffle('x', 0)
 
-        return self.nonlinearity(activation)
+    def post_transf(self, input):
+        return self.nonlinearity(input)
 
     def get_output_shape_for(self, input_shape):
         return (input_shape[0], self.num_units)
@@ -383,54 +389,9 @@ class CatOutBNNLayer(BNNLayer):
         self.num_classes = num_classes
         self.num_output_dim = num_output_dim
 
-    def get_output_for_default(self, input, **kwargs):
-        if input.ndim > 2:
-            # if the input has more than two dimensions, flatten it into a
-            # batch of feature vectors.
-            input = input.flatten(2)
-
-        activation = T.dot(input, self.get_W()) + \
-            self.get_b().dimshuffle('x', 0)
-
+    def post_transf(self, input):
         # Apply nonlinearity (softmax) over all n_out dimensions.
-        postact = self.nonlinearity(activation.reshape([-1, self.num_classes]))
-        return postact.reshape([-1, self.num_classes * self.num_output_dim])
-
-    def get_output_for_reparametrization(self, input, **kwargs):
-        """Implementation of the local reparametrization trick.
-
-        This essentially leads to a speedup compared to the naive implementation case.
-        Furthermore, it leads to gradients with less variance.
-
-        References
-        ----------
-        Kingma et al., "Variational Dropout and the Local Reparametrization Trick", 2015
-        """
-
-        if self.group_variance_by == 'layer' or self.group_variance_by == 'unit':
-            raise Exception(
-                'Local reparametrization trick not supported for tied variances per layer!')
-        else:
-            if input.ndim > 2:
-                # if the input has more than two dimensions, flatten it into a
-                # batch of feature vectors.
-                input = input.flatten(2)
-
-            gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-            delta = T.dot(T.square(input), T.square(self.log_to_std(
-                self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
-
-            if self.disable_variance:
-                mask = 0.
-            else:
-                mask = 1.
-            epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
-                                        dtype=theano.config.floatX)  # @UndefinedVariable
-
-            activation = gamma + T.sqrt(delta) * epsilon * mask
-
-        # Apply nonlinearity (softmax) over all n_out dimensions.
-        postact = self.nonlinearity(activation.reshape([-1, self.num_classes]))
+        postact = self.nonlinearity(input.reshape([-1, self.num_classes]))
         return postact.reshape([-1, self.num_classes * self.num_output_dim])
 
 
@@ -496,9 +457,9 @@ class BNN(LasagnePowered, Serializable):
             assert self.num_output_dim is not None
             assert self.n_out == self.num_classes * self.num_output_dim
 
-        if self.group_variance_by != 'weight' and self.use_local_reparametrization_trick:
+        if self.group_variance_by == 'layer' and self.use_local_reparametrization_trick:
             print(
-                'Setting use_local_reparametrization_trick=True cannot be used with group_variance_by!=\'weight\', changing to False')
+                'Setting use_local_reparametrization_trick=True cannot be used with group_variance_by==\'layer\', changing to False')
             self.use_local_reparametrization_trick = False
 
         if self.output_type == 'classification' and self.update_likelihood_sd:
