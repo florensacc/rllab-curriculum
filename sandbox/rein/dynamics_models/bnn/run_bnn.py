@@ -122,12 +122,12 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
             # Calculate current minibatch KL.
             kl_mb_closed_form = model.fn_kl()
-            
+
             step_size = 1.0
 #             print(inputs.shape, targets.shape)
 #             print(inputs, targets)
             kl_div = model.train_update_fn(
-                        inputs, targets, step_size)
+                inputs, targets, step_size)
 #             print(kl_div)
 
             kl_values.append(kl_mb_closed_form)
@@ -276,31 +276,31 @@ def main():
     print("Loading data ...")
     (X_train, T_train), (X_test, T_test) = load_dataset_1Dregression()
 #     (X_train, T_train), (X_test,
-#                          T_test), num_classes = load_dataset_multitarget_classification()
+# T_test), num_classes = load_dataset_multitarget_classification()
     num_output_dim = 2
     n_batches = int(np.ceil(len(X_train) / float(batch_size)))
     print("Building model and compiling functions ...")
     bnn = BNN(
         n_in=4,
-        n_out=1,#num_classes * num_output_dim,
+        n_out=1,  # num_classes * num_output_dim,
         n_batches=n_batches,
         n_hidden=[32],
         layers_type=['gaussian', 'gaussian'],
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=20,
+        n_samples=10,
         learning_rate=0.001,
-        group_variance_by='unit',
+        group_variance_by=BNN.GroupVarianceBy.UNIT,  # @UndefinedVariable
         use_local_reparametrization_trick=True,
         update_likelihood_sd=True,
         likelihood_sd_init=1.0,
-        output_type='regression',
-        surprise_type='information_gain',
-        num_classes=None,#num_classes,
+        output_type=BNN.OutputType.REGRESSION,  # @UndefinedVariable
+        surprise_type=BNN.SurpriseType.INFGAIN,  # @UndefinedVariable
+        num_classes=None,  # num_classes,
         num_output_dim=num_output_dim,
         disable_variance=False,
-        second_order_update=True, 
+        second_order_update=True,
         debug=DEBUG
     )
 

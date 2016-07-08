@@ -10,6 +10,9 @@ from collections import OrderedDict
 import theano
 
 
+def enum(**enums):
+    return type('Enum', (), enums)
+
 class BNNLayer(lasagne.layers.Layer):
     """Probabilistic layer that uses Gaussian weights.
 
@@ -52,25 +55,25 @@ class BNNLayer(lasagne.layers.Layer):
         # Here we set the priors.
         # -----------------------
         self.mu = self.add_param(
-            lasagne.init.Normal(0.001, 0.),
+            lasagne.init.Normal(1., 0.),
             (self.num_inputs, self.num_units),
             name='mu'
         )
-        if self.group_variance_by == 'layer':
+        if self.group_variance_by == BNN.GroupVarianceBy.LAYER:
             self.rho = self.add_param(
                 lasagne.init.Constant(prior_rho),
                 (1, 1),
                 name='rho',
                 broadcastable=(True, True)
             )
-        elif self.group_variance_by == 'unit':
+        elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             self.rho = self.add_param(
                 lasagne.init.Constant(prior_rho),
                 (self.num_inputs, ),
                 name='rho',
                 broadcastable=(False, True)
             )
-        elif self.group_variance_by == 'weight':
+        elif self.group_variance_by == BNN.GroupVarianceBy.WEIGHT:
             self.rho = self.add_param(
                 lasagne.init.Constant(prior_rho),
                 (self.num_inputs, self.num_units),
@@ -78,12 +81,12 @@ class BNNLayer(lasagne.layers.Layer):
             )
         # Bias priors.
         self.b_mu = self.add_param(
-            lasagne.init.Normal(0.001, 0.),
+            lasagne.init.Normal(1., 0.),
             (self.num_units,),
             name="b_mu",
             regularizable=False
         )
-        if self.group_variance_by == 'layer':
+        if self.group_variance_by == BNN.GroupVarianceBy.LAYER:
             self.b_rho = self.add_param(
                 lasagne.init.Constant(prior_rho),
                 (1,),
@@ -91,14 +94,14 @@ class BNNLayer(lasagne.layers.Layer):
                 regularizable=False,
                 broadcastable=(True,)
             )
-        elif self.group_variance_by == 'unit':
+        elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             self.b_rho = self.add_param(
                 lasagne.init.Constant(prior_rho),
                 (1,),
                 name="b_rho",
                 regularizable=False
             )
-        elif self.group_variance_by == 'weight':
+        elif self.group_variance_by == BNN.GroupVarianceBy.WEIGHT:
             self.b_rho = self.add_param(
                 lasagne.init.Constant(prior_rho),
                 (self.num_units,),
@@ -115,7 +118,7 @@ class BNNLayer(lasagne.layers.Layer):
             trainable=False,
             oldparam=True
         )
-        if self.group_variance_by == 'layer':
+        if self.group_variance_by == BNN.GroupVarianceBy.LAYER:
             self.rho_old = self.add_param(
                 np.ones((1, 1)),
                 (1, 1),
@@ -124,7 +127,7 @@ class BNNLayer(lasagne.layers.Layer):
                 oldparam=True,
                 broadcastable=(True, True)
             )
-        elif self.group_variance_by == 'unit':
+        elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             self.rho_old = self.add_param(
                 np.ones((self.num_inputs, )),
                 (self.num_inputs, ),
@@ -132,7 +135,7 @@ class BNNLayer(lasagne.layers.Layer):
                 trainable=False,
                 oldparam=True
             )
-        elif self.group_variance_by == 'weight':
+        elif self.group_variance_by == BNN.GroupVarianceBy.WEIGHT:
             self.rho_old = self.add_param(
                 np.ones((self.num_inputs, self.num_units)),
                 (self.num_inputs, self.num_units),
@@ -149,7 +152,7 @@ class BNNLayer(lasagne.layers.Layer):
             trainable=False,
             oldparam=True
         )
-        if self.group_variance_by == 'layer':
+        if self.group_variance_by == BNN.GroupVarianceBy.LAYER:
             self.b_rho_old = self.add_param(
                 np.ones((1,)),
                 (1,),
@@ -158,7 +161,7 @@ class BNNLayer(lasagne.layers.Layer):
                 trainable=False,
                 oldparam=True
             )
-        elif self.group_variance_by == 'unit':
+        elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             self.b_rho_old = self.add_param(
                 np.ones((1,)),
                 (1,),
@@ -167,7 +170,7 @@ class BNNLayer(lasagne.layers.Layer):
                 trainable=False,
                 oldparam=True
             )
-        elif self.group_variance_by == 'weight':
+        elif self.group_variance_by == BNN.GroupVarianceBy.WEIGHT:
             self.b_rho_old = self.add_param(
                 np.ones((self.num_units,)),
                 (self.num_units,),
@@ -190,22 +193,21 @@ class BNNLayer(lasagne.layers.Layer):
         return np.log(np.exp(sigma) - 1)
 
     def get_W(self):
-        if self.disable_variance:
-            mask = 0.
-        else:
-            mask = 1.
-        if self.group_variance_by == 'layer':
+        # Mask to disable noise.
+        mask = 0 if self.disable_variance else 1
+
+        if self.group_variance_by == BNN.GroupVarianceBy.LAYER:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(1, 1), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
             W = self.mu + T.mean(self.log_to_std(self.rho)) * epsilon * mask
-        elif self.group_variance_by == 'unit':
+        elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, ), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
             W = self.mu + \
                 (self.log_to_std(self.rho) * epsilon * mask).dimshuffle(0, 'x')
-        elif self.group_variance_by == 'weight':
+        elif self.group_variance_by == BNN.GroupVarianceBy.WEIGHT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
@@ -216,24 +218,23 @@ class BNNLayer(lasagne.layers.Layer):
         return W
 
     def get_b(self):
-        if self.disable_variance:
-            mask = 0.
-        else:
-            mask = 1.
-        if self.group_variance_by == 'layer':
+        # Mask to disable noise.
+        mask = 0 if self.disable_variance else 1
+
+        if self.group_variance_by == BNN.GroupVarianceBy.LAYER:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
             # T.mean is a hack to get 2D broadcasting on a scalar.
             b = self.b_mu + \
                 T.mean(self.log_to_std(self.b_rho)) * epsilon * mask
-        elif self.group_variance_by == 'unit':
+        elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(1,), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
             b = self.b_mu + \
                 T.mean(self.log_to_std(self.b_rho)) * epsilon * mask
-        elif self.group_variance_by == 'weight':
+        elif self.group_variance_by == BNN.GroupVarianceBy.WEIGHT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                         dtype=theano.config.floatX)  # @UndefinedVariable
@@ -259,10 +260,10 @@ class BNNLayer(lasagne.layers.Layer):
 
     def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
-        if self.group_variance_by == 'layer':
+        if self.group_variance_by == BNN.GroupVarianceBy.LAYER:
             p_std = T.mean(p_std)
             q_std = T.mean(q_std)
-        elif self.group_variance_by == 'unit':
+        elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             if not isinstance(p_std, float):
                 p_std = p_std.dimshuffle(0, 'x')
             if not isinstance(q_std, float):
@@ -333,7 +334,7 @@ class BNNLayer(lasagne.layers.Layer):
             # batch of feature vectors.
             input = input.flatten(2)
 
-        if self.group_variance_by == 'layer':
+        if self.group_variance_by == BNN.GroupVarianceBy.LAYER:
             raise Exception(
                 'Local reparametrization trick not supported for tied variances per layer!')
 
@@ -349,7 +350,9 @@ class BNNLayer(lasagne.layers.Layer):
             raise Exception(
                 'Unknown group_variance_by param {}'.format(self.group_variance_by))
 
+        # Mask to disable noise.
         mask = 0 if self.disable_variance else 1
+
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
         epsilon = self._srng.normal(size=(self.num_units, ), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
@@ -398,6 +401,12 @@ class CatOutBNNLayer(BNNLayer):
 class BNN(LasagnePowered, Serializable):
     """Bayesian neural network (BNN), according to Blundell2016."""
 
+    # Enums
+    GroupVarianceBy = enum(WEIGHT='weight', UNIT='unit', LAYER='layer')
+    OutputType = enum(REGRESSION='regression', CLASSIFICATION='classfication')
+    SurpriseType = enum(
+        INFGAIN='information gain', COMPR='compression gain', BALD='BALD')
+
     def __init__(self, n_in,
                  n_hidden,
                  n_out,
@@ -410,13 +419,13 @@ class BNN(LasagnePowered, Serializable):
                  prior_sd=0.5,
                  second_order_update=False,
                  learning_rate=0.0001,
-                 surprise_type='information_gain',
+                 surprise_type=SurpriseType.INFGAIN,
                  update_prior=False,
                  update_likelihood_sd=False,
-                 group_variance_by='weight',
+                 group_variance_by=GroupVarianceBy.WEIGHT,
                  use_local_reparametrization_trick=True,
                  likelihood_sd_init=1.0,
-                 output_type='regression',
+                 output_type=OutputType.REGRESSION,
                  num_classes=None,
                  num_output_dim=None,
                  disable_variance=False,
@@ -424,9 +433,6 @@ class BNN(LasagnePowered, Serializable):
                  ):
 
         Serializable.quick_init(self, locals())
-        assert len(layers_type) == len(n_hidden) + 1
-
-        assert group_variance_by in ['layer', 'unit', 'weight']
 
         self.n_in = n_in
         self.n_hidden = n_hidden
@@ -452,17 +458,22 @@ class BNN(LasagnePowered, Serializable):
         self.disable_variance = disable_variance
         self.debug = debug
 
-        if self.output_type == 'classification':
+        # Assertions
+        # ----------
+        assert len(layers_type) == len(n_hidden) + 1
+
+        if self.output_type == BNN.OutputType.CLASSIFICATION:
             assert self.num_classes is not None
             assert self.num_output_dim is not None
             assert self.n_out == self.num_classes * self.num_output_dim
+        # ----------
 
-        if self.group_variance_by == 'layer' and self.use_local_reparametrization_trick:
+        if self.group_variance_by == BNN.GroupVarianceBy.LAYER and self.use_local_reparametrization_trick:
             print(
                 'Setting use_local_reparametrization_trick=True cannot be used with group_variance_by==\'layer\', changing to False')
             self.use_local_reparametrization_trick = False
 
-        if self.output_type == 'classification' and self.update_likelihood_sd:
+        if self.output_type == BNN.OutputType.CLASSIFICATION and self.update_likelihood_sd:
             print(
                 'Setting output_type=\'classification\' cannot be used with update_likelihood_sd=True, changing to False.')
             self.update_likelihood_sd = False
@@ -521,9 +532,9 @@ class BNN(LasagnePowered, Serializable):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
-            if self.output_type == 'classification':
+            if self.output_type == BNN.OutputType.CLASSIFICATION:
                 lh = self.likelihood_classification(target, prediction)
-            elif self.output_type == 'regression':
+            elif self.output_type == BNN.OutputType.REGRESSION:
                 lh = self.likelihood_regression(target, prediction, **kwargs)
             _log_p_D_given_w.append(lh)
         log_p_D_given_w = sum(_log_p_D_given_w)
@@ -531,11 +542,12 @@ class BNN(LasagnePowered, Serializable):
         return - log_p_D_given_w / self.n_samples
 
     def surprise(self, **kwargs):
-        if self.surprise_type == 'compression':
+
+        if self.surprise_type == BNN.SurpriseType.COMPR:
             surpr = self.compression_improvement()
-        elif self.surprise_type == 'information_gain':
+        elif self.surprise_type == BNN.SurpriseType.INFGAIN:
             surpr = self.inf_gain()
-        elif self.surprise_type == 'BALD':
+        elif self.surprise_type == BNN.SurpriseType.BALD:
             surpr = self.entropy(**kwargs)
         else:
             raise Exception(
@@ -597,9 +609,9 @@ class BNN(LasagnePowered, Serializable):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
-            if self.output_type == 'classification':
+            if self.output_type == BNN.OutputType.CLASSIFICATION:
                 lh = self.likelihood_classification(target, prediction)
-            elif self.output_type == 'regression':
+            elif self.output_type == BNN.OutputType.REGRESSION:
                 lh = self.likelihood_regression(target, prediction, **kwargs)
             else:
                 raise Exception(
@@ -627,9 +639,9 @@ class BNN(LasagnePowered, Serializable):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(sample|w)).
-            if self.output_type == 'classification':
+            if self.output_type == BNN.OutputType.CLASSIFICATION:
                 lh = self.likelihood_classification(target, prediction)
-            elif self.output_type == 'regression':
+            elif self.output_type == BNN.OutputType.REGRESSION:
                 lh = self.likelihood_regression(target, prediction, **kwargs)
             else:
                 raise Exception(
@@ -669,7 +681,7 @@ class BNN(LasagnePowered, Serializable):
                     network, self.n_hidden[i], nonlinearity=self.transf)
 
         # Output layer
-        if self.output_type == 'regression':
+        if self.output_type == BNN.OutputType.REGRESSION:
             if self.layers_type[len(self.n_hidden)] == 'gaussian':
                 network = BNNLayer(
                     network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by,
@@ -677,7 +689,7 @@ class BNN(LasagnePowered, Serializable):
             elif self.layers_type[len(self.n_hidden)] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, self.n_out, nonlinearity=self.outf)
-        elif self.output_type == 'classification':
+        elif self.output_type == BNN.OutputType.CLASSIFICATION:
             network = CatOutBNNLayer(
                 network, self.n_out, nonlinearity=lasagne.nonlinearities.softmax,
                 prior_sd=self.prior_sd, group_variance_by=self.group_variance_by,
@@ -695,7 +707,7 @@ class BNN(LasagnePowered, Serializable):
         input_var = T.matrix('inputs',
                              dtype=theano.config.floatX)  # @UndefinedVariable
 
-        if self.output_type == 'regression':
+        if self.output_type == BNN.OutputType.REGRESSION:
             target_var = T.matrix('targets',
                                   dtype=theano.config.floatX)  # @UndefinedVariable
 
@@ -715,7 +727,7 @@ class BNN(LasagnePowered, Serializable):
             loss_only_last_sample = self.loss_last_sample(
                 input_var, target_var, likelihood_sd=self.likelihood_sd)
 
-        elif self.output_type == 'classification':
+        elif self.output_type == BNN.OutputType.CLASSIFICATION:
 
             target_var = T.imatrix('targets')
 
