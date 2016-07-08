@@ -310,7 +310,10 @@ class NPO_snn(BatchPolopt):
             all_input_values += (samples_data["valids"],)
 
         loss_before = self.optimizer.loss(all_input_values)
-
+        # this should always be 0. If it's not there is a problem.
+        mean_kl_before = self.optimizer.constraint_val(all_input_values)
+        logger.record_tabular('MeanKL_Before', mean_kl_before)
+        
         with logger.prefix(' PolicyOptimize | '):
             self.optimizer.optimize(all_input_values)
 

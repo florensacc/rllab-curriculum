@@ -136,7 +136,17 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             outputs=[mean_var, log_std_var],
         )
 
-    ##CF 
+#  this is currently not used, although it could, in dist_info_sym and in get_actions. Also we could refactor all..
+        latent_var = Box(low=-np.inf, high=np.inf, shape=(1,)).new_tensor_variable('latents', extra_dims=1)
+        extended_obs_var = TT.concatenate([obs_var, latent_var,
+                                           TT.flatten(obs_var[:, :, np.newaxis] * latent_var[:, np.newaxis, :],
+                                                      outdim=2)]
+                                          , axis=1)
+        self._extended_obs_var = ext.compile_function(
+            inputs=[obs_var, latent_var],
+            outputs=[extended_obs_var]
+        )
+    ##CF
     @property
     def latent_space(self):
         return Box(low=-np.inf, high=np.inf, shape=(1,))
@@ -183,9 +193,12 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
                 #                                    (observations.shape[0], -1) )
                 extended_obs = np.concatenate([observations, latents,
                                                np.reshape(
-                                                   observations[:, np.newaxis, :] * latents[:, :, np.newaxis],
+                                                   observations[:, :, np.newaxis] * latents[:, np.newaxis, :],
                                                    (observations.shape[0], -1))],
                                               axis=1)
+                # print 'Latents: {}, observations: {}'.format(latents, observations), \
+                #     'The extended obs are: ', extended_obs, \
+                #     '\ndone with the theano function it is', self._extended_obs_var(observations,latents)
             else:
                 extended_obs = np.concatenate([observations, latents], axis=1)
         else:
