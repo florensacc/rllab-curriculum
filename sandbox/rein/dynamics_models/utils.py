@@ -1,4 +1,6 @@
 import numpy as np
+from sklearn import datasets
+
 
 # This function takes an array of numbers and smoothes them out.
 # Smoothing is useful for making plots a little easier to read.
@@ -59,17 +61,29 @@ def load_dataset_MNIST():
     # (It doesn't matter how we do this as long as we can read them again.)
     return X_train, y_train, X_test, y_test
 
-
 def plot_mnist_digit(image):
     """ Plot a single MNIST image."""
     import matplotlib.pyplot as plt
     import matplotlib
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    ax.matshow(image, cmap = matplotlib.cm.binary)
+    ax.matshow(image, cmap=matplotlib.cm.binary)
     plt.xticks(np.array([]))
     plt.yticks(np.array([]))
     plt.show()
+
+
+def load_dataset_multitarget_classification():
+    """Synthetic classification data loader"""
+    dataset = datasets.load_iris()
+    x = dataset.data
+    y = np.tile(dataset.target[:, None], 2)
+    n_classes = len(np.unique(y))
+    X_train = x[:len(x) * 0.7]
+    X_test = x[len(x) * 0.7:]
+    y_train = y[:len(y) * 0.7]
+    y_test = y[len(y) * 0.7:]
+    return (X_train, y_train), (X_test, y_test), n_classes
 
 
 def load_dataset_1Dregression():
@@ -101,7 +115,7 @@ def load_dataset_1Dregression():
         y2 = x2 * 0. + 0.5
         test_x = np.vstack([x2, test_x])
         test_y = np.vstack([y2, test_y])
-        
+
 #         print(train_x.shape)
         train_x = np.hstack([train_x, train_x**2, train_x**3, train_x**4])
         test_x = np.hstack([test_x, test_x**2, test_x**3, test_x**4])
@@ -111,6 +125,7 @@ def load_dataset_1Dregression():
         return (train_x, train_y), (test_x, test_y)
 
     return generate_synthetic_data(1e3)
+
 
 def load_dataset_4Dregression():
     """Synthetic 1D regression data loader"""
@@ -141,7 +156,7 @@ def load_dataset_4Dregression():
         y2 = x2 * 0. + 0.5
         test_x = np.vstack([x2, test_x])
         test_y = np.vstack([y2, test_y])
-        
+
 #         print(train_x.shape)
         train_x = np.hstack([train_x, train_x**2, train_x**3, train_x**4])
         test_x = np.hstack([test_x, test_x**2, test_x**3, test_x**4])

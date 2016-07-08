@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 import theano
 
@@ -10,9 +12,15 @@ from rllab.q_functions.continuous_mlp_q_function import ContinuousMLPQFunction
 
 from rlqr import RecurrentLQRPolicy
 
+if len(sys.argv) > 1:
+    k = int(sys.argv[1])
+else:
+    k = 10
+
 env = normalize(CartpoleEnv())
+Q = np.zeros((4,4)); Q[2,2] = 1
 R = np.array([[1]])
-policy = RecurrentLQRPolicy(env.spec, R)
+policy = RecurrentLQRPolicy(env.spec, Q, R, k)
 baseline = LinearFeatureBaseline(env_spec=env.spec)
 es = OUStrategy(env_spec=env.spec)
 qf = ContinuousMLPQFunction(env_spec=env.spec)

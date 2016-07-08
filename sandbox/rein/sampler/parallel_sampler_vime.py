@@ -7,8 +7,9 @@ import numpy as np
 
 
 def _worker_init(G, id):
-    import os
-    os.environ['THEANO_FLAGS'] = 'device=cpu'
+    if singleton_pool.n_parallel > 1:
+        import os
+        os.environ['THEANO_FLAGS'] = 'device=cpu'
     G.worker_id = id
 
 
@@ -54,7 +55,7 @@ def _worker_set_dynamics_params(G, params):
 
 def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                              reward_mean, reward_std, kl_batch_size, n_itr_update, use_replay_pool,
-                             obs_mean, obs_std, act_mean, act_std, second_order_update):
+                             obs_mean, obs_std, act_mean, act_std, second_order_update, predict_reward):
     # Path rollout.
     path = rollout(G.env, G.policy, max_path_length)
 
@@ -81,6 +82,8 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
         obs_nxt = np.vstack([obs[1:]])
         _inputs = np.hstack([obs[:-1], act[:-1]])
         _targets = obs_nxt
+        if predict_reward:
+            _targets = np.hstack((_targets, rew[:-1, None]))
         # KL vector assumes same shape as reward.
         kl = np.zeros(rew.shape)
         for j in xrange(int(np.ceil(obs.shape[0] / float(kl_batch_size)))):
@@ -162,7 +165,6 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     step_size = 1.0
                     kl_div = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
-#                     kl_div = np.clip(kl_div, 0, 1000)
 
                     # DEBUG
                     # -----
@@ -266,7 +268,8 @@ def sample_paths(
         obs_std=None,
         act_mean=None,
         act_std=None,
-        second_order_update=None
+        second_order_update=None,
+        predict_reward=None
 ):
     """
     :param policy_params: parameters for the policy. This will be updated on each worker process
@@ -291,8 +294,20 @@ def sample_paths(
     return singleton_pool.run_collect(
         _worker_collect_one_path,
         threshold=max_samples,
-        args=(max_path_length, itr, normalize_reward, reward_mean,
-              reward_std, kl_batch_size, n_itr_update, use_replay_pool, obs_mean, obs_std, act_mean, act_std, second_order_update),
+        args=(max_path_length,
+              itr,
+              normalize_reward,
+              reward_mean,
+              reward_std,
+              kl_batch_size,
+              n_itr_update,
+              use_replay_pool,
+              obs_mean,
+              obs_std,
+              act_mean,
+              act_std,
+              second_order_update,
+              predict_reward),
         show_prog_bar=True
     )
 

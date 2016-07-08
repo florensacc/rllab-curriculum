@@ -14,7 +14,9 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 
 from rllab.algos.trpo import TRPO
-from sandbox.john.instrument import stub, run_experiment_lite
+# from sandbox.john.instrument import stub, run_experiment_lite
+from rllab.misc.instrument import stub, run_experiment_lite
+
 import itertools
 
 stub(globals())
@@ -23,7 +25,7 @@ stub(globals())
 seeds = range(3)
 # mdp_classes = [MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
-mdps = [GymEnv("MontezumaRevenge-ram-v0")]
+mdps = [GymEnv("Freeway-ram-v0")]
 # mdps = [GymEnv("Reacher-v1", record_video=False)]
 param_cart_product = itertools.product(
     mdps, seeds
@@ -62,7 +64,7 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-montezuma-a",
+        exp_prefix="trpo-freeway-a",
         n_parallel=8,
         snapshot_mode="last",
         seed=seed,

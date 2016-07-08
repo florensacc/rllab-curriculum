@@ -45,6 +45,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             ##CF - latents units at the input
             latent_dim=2,
             latent_name='bernoulli',
+            # hot_encoding=False,
             bilinear_integration=False,
             resample=True,
             hidden_sizes=(32, 32),
@@ -56,7 +57,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             std_hidden_nonlinearity=NL.tanh,
             hidden_nonlinearity=NL.tanh,
             output_nonlinearity=None,
-            min_std=1e-6,
+            min_std=1e-4,
     ):
         self.latent_dim = latent_dim  ##could I avoid needing this self for the get_action?
         self.latent_name = latent_name
@@ -80,7 +81,8 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
 
         ##CF - enlarge obs with the latents
         if self.bilinear_integration:
-            obs_dim = env_spec.observation_space.flat_dim + latent_dim + env_spec.observation_space.flat_dim * latent_dim
+            obs_dim = env_spec.observation_space.flat_dim + latent_dim +\
+                      env_spec.observation_space.flat_dim * latent_dim
         else:
             obs_dim = env_spec.observation_space.flat_dim + latent_dim  # here only if concat.
 
@@ -146,26 +148,16 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     def dist_info_sym(self, obs_var, latent_var):
         # generate the generalized input (append latents to obs.)
         if self.bilinear_integration:
-            print 'building the exteded var'
             extended_obs_var = TT.concatenate([obs_var, latent_var,
                                                TT.flatten(obs_var[:, :, np.newaxis] * latent_var[:, np.newaxis, :],
                                                           outdim=2)]
                                               , axis=1)
-            print 'finished building'
-            # pass
         else:
             extended_obs_var = TT.concatenate([obs_var, latent_var], axis=1)
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], extended_obs_var)
-        print 'finished building the mean and std'
         if self.min_std is not None:
             log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
-        print ' about to return the dic of vars'
         return dict(mean=mean_var, log_std=log_std_var)
-
-    ##
-    # def dist_info_sym(self, obs_var, action_var):
-    #     mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
-    #     return dict(mean=mean_var, log_std=log_std_var)
 
     @overrides
     def get_action(self, observation):
@@ -204,7 +196,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         mean, log_std = self._f_dist(extended_obs)
         rnd = np.random.normal(size=mean.shape)
         actions = rnd * np.exp(log_std) + mean
-        print latents
+        # print latents
         return actions, dict(mean=mean, log_std=log_std, latents=latents)
 
     def set_pre_fix_latent(self, latent):

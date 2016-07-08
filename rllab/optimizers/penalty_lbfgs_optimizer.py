@@ -141,8 +141,15 @@ class PenaltyLbfgsOptimizer(Serializable):
                 elif penalty_scale_factor < 1 and \
                         try_constraint_val >= self._max_constraint_val:
                     break
-            try_penalty *= penalty_scale_factor
-            try_penalty = np.clip(try_penalty, self._min_penalty, self._max_penalty)
-            self._penalty = try_penalty
+
+            # check if the penalty was already at the maximum. Otherwise, update it
+            if try_penalty >= self._max_penalty and penalty_scale_factor > 1:
+                logger.log('_max_penalty has already been tried!')
+                self._penalty = try_penalty  # useless: if we were at max_penalty it means a previous itr already set it
+                break
+            else:
+                try_penalty *= penalty_scale_factor
+                try_penalty = np.clip(try_penalty, self._min_penalty, self._max_penalty)
+                self._penalty = try_penalty
 
         self._target.set_param_values(opt_params, trainable=True)
