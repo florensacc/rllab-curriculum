@@ -284,7 +284,7 @@ class BatchPolopt(RLAlgorithm):
         # would be given correctly.
         if self.use_replay_pool:
             batch_size = 1
-            n_batches = 5  # FIXME, there is no correct value!
+            n_batches = 50  # FIXME, there is no correct value!
         else:
             batch_size = int(self.pool_batch_size)
             n_batches = int(
@@ -301,9 +301,9 @@ class BatchPolopt(RLAlgorithm):
         logger.log("Building BNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
 
-        if self.output_type == 'classification':
+        if self.output_type == bnn.BNN.OutputType.CLASSIFICATION:
             n_out = 128 * 256
-        elif self.output_type == 'regression':
+        elif self.output_type == bnn.BNN.OutputType.REGRESSION:
             n_out = obs_dim
 
         if self.predict_reward:
@@ -341,9 +341,9 @@ class BatchPolopt(RLAlgorithm):
             "Model built ({:.1f} sec, {} weights).".format((time.time() - start_time), self.num_weights))
 
         if self.use_replay_pool:
-            if self.output_type == 'classification':
+            if self.output_type == bnn.BNN.OutputType.CLASSIFICATION:
                 observation_dtype = int
-            elif self.output_type == 'regression':
+            elif self.output_type == bnn.BNN.OutputType.REGRESSION:
                 observation_dtype = float
             self.pool = SimpleReplayPool(
                 max_pool_size=self.replay_pool_size,
@@ -357,7 +357,10 @@ class BatchPolopt(RLAlgorithm):
         self.init_opt()
         episode_rewards = []
         episode_lengths = []
+
+        # KL rescaling factor for replay pool-based training.
         kl_factor = 1.0
+
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
@@ -374,9 +377,9 @@ class BatchPolopt(RLAlgorithm):
                     for i in xrange(path_len):
                         obs = path['observations'][i]
                         act = path['actions'][i]
-                        rew = path['rewards'][i]
+                        rew_orig = path['rewards_orig'][i]
                         term = (i == path_len - 1)
-                        self.pool.add_sample(obs, act, rew, term)
+                        self.pool.add_sample(obs, act, rew_orig, term)
 
                 # Now we train the dynamics model using the replay self.pool; only
                 # if self.pool is large enough.
@@ -419,21 +422,21 @@ class BatchPolopt(RLAlgorithm):
                         # -----
                     acc_after = self.accuracy(_inputss, _targetss)
 
-                    for _inputs, _targets in zip(_inputss, _targetss):
-                        _out = self.bnn.pred_fn(_inputs)
-                        if self.output_type == 'regression':
-                            print('batch')
-                            for i, o, t in zip(_inputs, _out, _targets):
-                                print(i)
-                                print(o[:4])
-                                print(t[:4])
-                                print('')
-                            print('----')
-                            for o, t in zip(_out, _targets):
-                                print(o[4])
-                                print(t[4])
-                                print('')
-                            break
+#                     for _inputs, _targets in zip(_inputss, _targetss):
+#                         _out = self.bnn.pred_fn(_inputs)
+#                         if self.output_type == 'regression':
+#                             print('batch')
+#                             for i, o, t in zip(_inputs, _out, _targets):
+#                                 print(i)
+#                                 print(o[:4])
+#                                 print(t[:4])
+#                                 print('')
+#                             print('----')
+#                             for o, t in zip(_out, _targets):
+#                                 print(o[4])
+#                                 print(t[4])
+#                                 print('')
+#                             break
 
                     kl_factor *= self.replay_kl_schedule
                     logger.record_tabular('KLFactor', kl_factor)
@@ -752,6 +755,7 @@ class BatchPolopt(RLAlgorithm):
                 path_baselines[:-1]
             path["advantages"] = special.discount_cumsum(
                 deltas, self.discount * self.gae_lambda)
+            # FIXME: does this have to be rewards_orig or rewards? DEFAULT: rewards_orig
             path["returns"] = special.discount_cumsum(
                 path["rewards_orig"], self.discount)
             baselines.append(path_baselines[:-1])
@@ -876,7 +880,7 @@ class BatchPolopt(RLAlgorithm):
             [np.mean(path["rewards_orig"]) for path in paths])
         min_reward = np.min(
             [np.min(path["rewards_orig"]) for path in paths])
-        max_reward = np.min(
+        max_reward = np.max(
             [np.min(path["rewards_orig"]) for path in paths])
 
         logger.record_tabular('Iteration', itr)

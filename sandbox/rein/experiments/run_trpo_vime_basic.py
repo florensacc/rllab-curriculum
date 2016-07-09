@@ -4,6 +4,7 @@ from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
 os.environ["THEANO_FLAGS"] = "device=cpu"
 from rllab.envs.gym_env import GymEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from sandbox.rein.dynamics_models.bnn.bnn import BNN
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
@@ -20,8 +21,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
-etas = [0.1]
+etas = [0.1, 0.3, 1.0, 3.0, 10.0]
 normalize_rewards = [False]
 kl_ratios = [True]
 mdp_classes = [CartpoleSwingupEnv]
@@ -66,7 +66,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=16,
+        kl_batch_size=4,
         normalize_reward=normalize_reward,
         replay_pool_size=100000,
         n_updates_per_sample=5000,
@@ -74,17 +74,18 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         unn_n_hidden=[128],
         unn_layers_type=['gaussian', 'gaussian'],
         unn_learning_rate=0.001,
-        surprise_transform='log(1+surprise)',  # 'cap1000', 'cap90perc'
-        update_likelihood_sd=False,
+        # 'log(1+surprise)',  # 'cap1000', 'cap90perc'
+        surprise_transform='cap90perc',
+        update_likelihood_sd=True,
         replay_kl_schedule=0.99,
-        output_type='regression',
+        output_type=BNN.OutputType.REGRESSION,
         pool_batch_size=16,
-        likelihood_sd_init=0.1,
+        likelihood_sd_init=1.0,
         prior_sd=0.5,
         # -------------
         disable_variance=False,
-        group_variance_by='unit',
-        surprise_type='information_gain',
+        group_variance_by=BNN.GroupVarianceBy.UNIT,
+        surprise_type=BNN.SurpriseType.INFGAIN,
         predict_reward=True,
         use_local_reparametrization_trick=True,
         n_itr_update=1,
@@ -93,11 +94,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-cps-a",
-        n_parallel=1,
+        exp_prefix="temp",
+        n_parallel=4,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         script="sandbox/rein/experiments/run_experiment_lite.py",
     )

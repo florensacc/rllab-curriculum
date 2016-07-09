@@ -3,6 +3,7 @@ from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
 from rllab.envs.gym_env import GymEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from sandbox.rein.dynamics_models.bnn.bnn import BNN
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
@@ -27,8 +28,9 @@ stub(globals())
 # mdps = [NormalizedEnv(env=mdp_class())
 #         for mdp_class in mdp_classes]
 
-seeds = range(3)
-etas = [0, 0.01, 0.1]
+seeds = range(5)
+# etas = [0, 0.001, 0.01, 0.1]
+etas = [0]
 normalize_rewards = [False]
 kl_ratios = [True]
 mdps = [GymEnv("Freeway-ram-v0")]
@@ -60,7 +62,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         batch_size=50000,
         whole_paths=True,
         max_path_length=5000,
-        n_itr=250,
+        n_itr=-1,
         step_size=0.01,
         subsample_factor=1.0,
         # -------------
@@ -68,30 +70,30 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=20,
+        snn_n_samples=10,
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=128,
+        kl_batch_size=8,
         normalize_reward=normalize_reward,
         replay_pool_size=1000000,
         n_updates_per_sample=50000,
         second_order_update=True,
-        unn_n_hidden=[128],
-        unn_layers_type=['gaussian', 'gaussian'],
+        unn_n_hidden=[512, 512],
+        unn_layers_type=['gaussian', 'gaussian', 'gaussian'],
         unn_learning_rate=0.001,
-        surprise_transform='log(1+surprise)',
+        surprise_transform='cap90perc',
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
-        output_type='regression',
+        output_type=BNN.OutputType.REGRESSION,
         pool_batch_size=128,
         likelihood_sd_init=1.0,
         prior_sd=0.5,
         # -------------
         disable_variance=False,
-        group_variance_by='weight',
-        surprise_type='information_gain',
-        predict_reward=False,
+        group_variance_by=BNN.GroupVarianceBy.UNIT,
+        surprise_type=BNN.SurpriseType.INFGAIN,
+        predict_reward=True,
         use_local_reparametrization_trick=True,
         n_itr_update=1,
         # -------------
@@ -99,7 +101,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-f",
+        exp_prefix="temp",#"trpo-vime-freeway-f",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

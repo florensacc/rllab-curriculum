@@ -13,6 +13,7 @@ import theano
 def enum(**enums):
     return type('Enum', (), enums)
 
+
 class BNNLayer(lasagne.layers.Layer):
     """Probabilistic layer that uses Gaussian weights.
 
@@ -47,10 +48,10 @@ class BNNLayer(lasagne.layers.Layer):
         self.num_weights = self.num_inputs * (self.num_units + 1)
 
         self.W = np.random.normal(0., prior_sd,
-                                  (self.num_inputs, self.num_units))  # @UndefinedVariable
+                                  (self.num_inputs, self.num_units))
         self.b = np.zeros(
             (self.num_units,),
-            dtype=theano.config.floatX)  # @UndefinedVariable
+            dtype=theano.config.floatX)
 
         # Here we set the priors.
         # -----------------------
@@ -199,18 +200,18 @@ class BNNLayer(lasagne.layers.Layer):
         if self.group_variance_by == BNN.GroupVarianceBy.LAYER:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(1, 1), avg=0., std=1.,
-                                        dtype=theano.config.floatX)  # @UndefinedVariable
+                                        dtype=theano.config.floatX)
             W = self.mu + T.mean(self.log_to_std(self.rho)) * epsilon * mask
         elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, ), avg=0., std=1.,
-                                        dtype=theano.config.floatX)  # @UndefinedVariable
+                                        dtype=theano.config.floatX)
             W = self.mu + \
                 (self.log_to_std(self.rho) * epsilon * mask).dimshuffle(0, 'x')
         elif self.group_variance_by == BNN.GroupVarianceBy.WEIGHT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
-                                        dtype=theano.config.floatX)  # @UndefinedVariable
+                                        dtype=theano.config.floatX)
             W = self.mu + epsilon * self.log_to_std(self.rho) * mask
         else:
             raise Exception('Group variance by unknown!')
@@ -224,20 +225,20 @@ class BNNLayer(lasagne.layers.Layer):
         if self.group_variance_by == BNN.GroupVarianceBy.LAYER:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
-                                        dtype=theano.config.floatX)  # @UndefinedVariable
+                                        dtype=theano.config.floatX)
             # T.mean is a hack to get 2D broadcasting on a scalar.
             b = self.b_mu + \
                 T.mean(self.log_to_std(self.b_rho)) * epsilon * mask
         elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(1,), avg=0., std=1.,
-                                        dtype=theano.config.floatX)  # @UndefinedVariable
+                                        dtype=theano.config.floatX)
             b = self.b_mu + \
                 T.mean(self.log_to_std(self.b_rho)) * epsilon * mask
         elif self.group_variance_by == BNN.GroupVarianceBy.WEIGHT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
-                                        dtype=theano.config.floatX)  # @UndefinedVariable
+                                        dtype=theano.config.floatX)
             b = self.b_mu + self.log_to_std(self.b_rho) * epsilon * mask
         else:
             raise Exception('Group variance by unknown!')
@@ -277,36 +278,36 @@ class BNNLayer(lasagne.layers.Layer):
     def kl_div_new_old(self):
         kl_div = self.kl_div_p_q(
             self.mu, self.log_to_std(self.rho), self.mu_old, self.log_to_std(self.rho_old))
-        kl_div += self.kl_div_p_q(self.b_mu, self.log_to_std(self.b_rho),
-                                  self.b_mu_old, self.log_to_std(self.b_rho_old))
+#         kl_div += self.kl_div_p_q(self.b_mu, self.log_to_std(self.b_rho),
+# self.b_mu_old, self.log_to_std(self.b_rho_old))
         return kl_div
 
     def kl_div_old_new(self):
         kl_div = self.kl_div_p_q(
             self.mu_old, self.log_to_std(self.rho_old), self.mu, self.log_to_std(self.rho))
-        kl_div += self.kl_div_p_q(self.b_mu_old,
-                                  self.log_to_std(self.b_rho_old), self.b_mu, self.log_to_std(self.b_rho))
+#         kl_div += self.kl_div_p_q(self.b_mu_old,
+# self.log_to_std(self.b_rho_old), self.b_mu, self.log_to_std(self.b_rho))
         return kl_div
 
     def kl_div_new_prior(self):
         kl_div = self.kl_div_p_q(
             self.mu, self.log_to_std(self.rho), 0., self.prior_sd)
-        kl_div += self.kl_div_p_q(self.b_mu,
-                                  self.log_to_std(self.b_rho), 0., self.prior_sd)
+#         kl_div += self.kl_div_p_q(self.b_mu,
+# self.log_to_std(self.b_rho), 0., self.prior_sd)
         return kl_div
 
     def kl_div_old_prior(self):
         kl_div = self.kl_div_p_q(
             self.mu_old, self.log_to_std(self.rho_old), 0., self.prior_sd)
-        kl_div += self.kl_div_p_q(self.b_mu_old,
-                                  self.log_to_std(self.b_rho_old), 0., self.prior_sd)
+#         kl_div += self.kl_div_p_q(self.b_mu_old,
+# self.log_to_std(self.b_rho_old), 0., self.prior_sd)
         return kl_div
 
     def kl_div_prior_new(self):
         kl_div = self.kl_div_p_q(
             0., self.prior_sd, self.mu,  self.log_to_std(self.rho))
-        kl_div += self.kl_div_p_q(0., self.prior_sd,
-                                  self.b_mu, self.log_to_std(self.b_rho))
+#         kl_div += self.kl_div_p_q(0., self.prior_sd,
+#                                   self.b_mu, self.log_to_std(self.b_rho))
         return kl_div
 
     def get_output_for(self, input, **kwargs):
@@ -355,7 +356,7 @@ class BNNLayer(lasagne.layers.Layer):
 
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
         epsilon = self._srng.normal(size=(self.num_units, ), avg=0., std=1.,
-                                    dtype=theano.config.floatX)  # @UndefinedVariable
+                                    dtype=theano.config.floatX)
         return gamma + T.sqrt(delta) * epsilon * mask
 
     def get_output_for_default(self, input, **kwargs):
@@ -703,13 +704,13 @@ class BNN(LasagnePowered, Serializable):
         # Prepare Theano variables for inputs and targets
         # Same input for classification as regression.
         kl_factor = T.scalar('kl_factor',
-                             dtype=theano.config.floatX)  # @UndefinedVariable
+                             dtype=theano.config.floatX)
         input_var = T.matrix('inputs',
-                             dtype=theano.config.floatX)  # @UndefinedVariable
+                             dtype=theano.config.floatX)
 
         if self.output_type == BNN.OutputType.REGRESSION:
             target_var = T.matrix('targets',
-                                  dtype=theano.config.floatX)  # @UndefinedVariable
+                                  dtype=theano.config.floatX)
 
             # Make the likelihood standard deviation a trainable parameter.
             self.likelihood_sd = theano.shared(
@@ -759,47 +760,22 @@ class BNN(LasagnePowered, Serializable):
         self.train_fn = ext.compile_function(
             [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
 
-        if self.second_order_update:
+        if self.surprise_type == BNN.SurpriseType.INFGAIN:
+            if self.second_order_update:
 
-            oldparams = lasagne.layers.get_all_params(
-                self.network, oldparam=True)
-            step_size = T.scalar('step_size',
-                                 dtype=theano.config.floatX)  # @UndefinedVariable
+                oldparams = lasagne.layers.get_all_params(
+                    self.network, oldparam=True)
+                step_size = T.scalar('step_size',
+                                     dtype=theano.config.floatX)
 
-            def second_order_update(loss, params, oldparams, step_size):
-                """Second-order update method for optimizing loss_last_sample, so basically,
-                KL term (new params || old params) + NLL of latest sample. The Hessian is
-                evaluated at the origin and provides curvature information to make a more
-                informed step in the correct descent direction."""
-                grads = theano.grad(loss, params)
-                updates = OrderedDict()
-
-                for i in xrange(len(params)):
-                    param = params[i]
-                    grad = grads[i]
-
-                    if param.name == 'mu' or param.name == 'b_mu':
-                        oldparam_rho = oldparams[i + 1]
-                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    elif param.name == 'rho' or param.name == 'b_rho':
-                        oldparam_rho = oldparams[i]
-                        p = param
-                        H = 2. * (T.exp(2 * p)) / \
-                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
-                        invH = 1. / H
-                    elif param.name == 'likelihood_sd':
-                        invH = 0.
-                    updates[param] = param - step_size * invH * grad
-
-                return updates
-
-            if self.debug:
-
-                def debug_H(loss, params, oldparams):
+                def second_order_update(loss, params, oldparams, step_size):
+                    """Second-order update method for optimizing loss_last_sample, so basically,
+                    KL term (new params || old params) + NLL of latest sample. The Hessian is
+                    evaluated at the origin and provides curvature information to make a more
+                    informed step in the correct descent direction."""
                     grads = theano.grad(loss, params)
                     updates = OrderedDict()
 
-                    invHs = []
                     for i in xrange(len(params)):
                         param = params[i]
                         grad = grads[i]
@@ -813,111 +789,144 @@ class BNN(LasagnePowered, Serializable):
                             H = 2. * (T.exp(2 * p)) / \
                                 (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                             invH = 1. / H
-#                         elif param.name == 'likelihood_sd':
-#                             invH = 0.
-                        invHs.append(invH)
-                    return invHs
+                        elif param.name == 'likelihood_sd':
+                            invH = 0.
+                        updates[param] = param - step_size * invH * grad
 
-                def debug_g(loss, params, oldparams):
-                    grads = theano.grad(loss, params)
-                    updates = OrderedDict()
+                    return updates
 
-                    invHs = []
+                if self.debug:
+
+                    def debug_H(loss, params, oldparams):
+                        grads = theano.grad(loss, params)
+                        updates = OrderedDict()
+
+                        invHs = []
+                        for i in xrange(len(params)):
+                            param = params[i]
+                            grad = grads[i]
+
+                            if param.name == 'mu' or param.name == 'b_mu':
+                                oldparam_rho = oldparams[i + 1]
+                                invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                            elif param.name == 'rho' or param.name == 'b_rho':
+                                oldparam_rho = oldparams[i]
+                                p = param
+                                H = 2. * (T.exp(2 * p)) / \
+                                    (1 + T.exp(p))**2 / \
+                                    (T.log(1 + T.exp(p))**2)
+                                invH = 1. / H
+    #                         elif param.name == 'likelihood_sd':
+    #                             invH = 0.
+                            invHs.append(invH)
+                        return invHs
+
+                    def debug_g(loss, params, oldparams):
+                        grads = theano.grad(loss, params)
+                        updates = OrderedDict()
+
+                        invHs = []
+                        for i in xrange(len(params)):
+                            param = params[i]
+                            grad = grads[i]
+
+                            if param.name == 'mu' or param.name == 'b_mu':
+                                oldparam_rho = oldparams[i + 1]
+                                invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                            elif param.name == 'rho' or param.name == 'b_rho':
+                                oldparam_rho = oldparams[i]
+                                p = param
+                                H = 2. * (T.exp(2 * p)) / \
+                                    (1 + T.exp(p))**2 / \
+                                    (T.log(1 + T.exp(p))**2)
+                                invH = 1. / H
+    #                         elif param.name == 'likelihood_sd':
+    #                             invH = 0.
+                            invHs.append(invH)
+                        return grads
+
+                def fast_kl_div(loss, params, oldparams, step_size):
+                    # FIXME: doesn't work yet for group_variance_by!='weight'.
+
+                    grads = T.grad(loss, params)
+
+                    kl_component = []
                     for i in xrange(len(params)):
                         param = params[i]
                         grad = grads[i]
 
                         if param.name == 'mu' or param.name == 'b_mu':
                             oldparam_rho = oldparams[i + 1]
+                            if self.group_variance_by == 'unit':
+                                if not isinstance(oldparam_rho, float):
+                                    oldparam_rho = oldparam_rho.dimshuffle(
+                                        0, 'x')
                             invH = T.square(T.log(1 + T.exp(oldparam_rho)))
                         elif param.name == 'rho' or param.name == 'b_rho':
                             oldparam_rho = oldparams[i]
+    #                         if not isinstance(oldparam_rho, float):
+    #                             oldparam_rho = oldparam_rho.dimshuffle(0, 'x')
                             p = param
                             H = 2. * (T.exp(2 * p)) / \
                                 (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                             invH = 1. / H
-#                         elif param.name == 'likelihood_sd':
-#                             invH = 0.
-                        invHs.append(invH)
-                    return grads
+                        elif param.name == 'likelihood_sd':
+                            invH = 0.
 
-            def fast_kl_div(loss, params, oldparams, step_size):
-                # FIXME: doesn't work yet for group_variance_by!='weight'.
+                        kl_component.append(
+                            T.sum(0.5 * T.square(step_size) * T.square(grad) * invH))
 
-                grads = T.grad(loss, params)
+                    return sum(kl_component)
 
-                kl_component = []
-                for i in xrange(len(params)):
-                    param = params[i]
-                    grad = grads[i]
+                compute_fast_kl_div = fast_kl_div(
+                    loss_only_last_sample, params, oldparams, step_size)
 
-                    if param.name == 'mu' or param.name == 'b_mu':
-                        oldparam_rho = oldparams[i + 1]
-                        if self.group_variance_by == 'unit':
-                            if not isinstance(oldparam_rho, float):
-                                oldparam_rho = oldparam_rho.dimshuffle(0, 'x')
-                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    elif param.name == 'rho' or param.name == 'b_rho':
-                        oldparam_rho = oldparams[i]
-#                         if not isinstance(oldparam_rho, float):
-#                             oldparam_rho = oldparam_rho.dimshuffle(0, 'x')
-                        p = param
-                        H = 2. * (T.exp(2 * p)) / \
-                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
-                        invH = 1. / H
-                    elif param.name == 'likelihood_sd':
-                        invH = 0.
+                self.train_update_fn = ext.compile_function(
+                    [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=False)
 
-                    kl_component.append(
-                        T.sum(0.5 * T.square(step_size) * T.square(grad) * invH))
+                # Code to actually perform second order updates
+                # ---------------------------------------------
+    #             updates_kl = second_order_update(
+    #                 loss_only_last_sample, params, oldparams, step_size)
+    #
+    #             self.train_update_fn = ext.compile_function(
+    #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
+                # ---------------------------------------------
 
-                return sum(kl_component)
+                if self.debug:
+                    self.debug_H = ext.compile_function(
+                        [input_var, target_var], debug_H(
+                            loss_only_last_sample, params, oldparams),
+                        log_name='fn_debug_grads_H')
+                    self.debug_g = ext.compile_function(
+                        [input_var, target_var], debug_g(
+                            loss_only_last_sample, params, oldparams),
+                        log_name='fn_debug_grads_g')
 
-            compute_fast_kl_div = fast_kl_div(
-                loss_only_last_sample, params, oldparams, step_size)
+            else:
+                # Use SGD to update the model for a single sample, in order to
+                # calculate the surprise.
 
+                def sgd(loss, params, learning_rate):
+                    grads = theano.grad(loss, params)
+                    updates = OrderedDict()
+                    for param, grad in zip(params, grads):
+                        if param.name == 'likelihood_sd':
+                            updates[param] = param  # - learning_rate * grad
+                        else:
+                            updates[param] = param - learning_rate * grad
+
+                    return updates
+
+                updates_kl = sgd(
+                    loss_only_last_sample, params, learning_rate=self.learning_rate)
+
+                self.train_update_fn = ext.compile_function(
+                    [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
+
+        elif self.surprise_type == BNN.SurpriseType.BALD:
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=False)
-
-            # Code to actually perform second order updates
-            # ---------------------------------------------
-#             updates_kl = second_order_update(
-#                 loss_only_last_sample, params, oldparams, step_size)
-#
-#             self.train_update_fn = ext.compile_function(
-#                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
-            # ---------------------------------------------
-
-            if self.debug:
-                self.debug_H = ext.compile_function(
-                    [input_var, target_var], debug_H(
-                        loss_only_last_sample, params, oldparams),
-                    log_name='fn_debug_grads_H')
-                self.debug_g = ext.compile_function(
-                    [input_var, target_var], debug_g(
-                        loss_only_last_sample, params, oldparams),
-                    log_name='fn_debug_grads_g')
-
-        else:
-            # Use SGD to update the model for a single sample, in order to
-            # calculate the surprise.
-
-            def sgd(loss, params, learning_rate):
-                grads = theano.grad(loss, params)
-                updates = OrderedDict()
-                for param, grad in zip(params, grads):
-                    if param.name == 'likelihood_sd':
-                        updates[param] = param  # - learning_rate * grad
-                    else:
-                        updates[param] = param - learning_rate * grad
-
-                return updates
-
-            updates_kl = sgd(
-                loss_only_last_sample, params, learning_rate=self.learning_rate)
-
-            self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
+                [input_var], self.surprise(input_var))
 
         if self.debug:
             self.eval_loss = ext.compile_function(

@@ -63,6 +63,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     # ----------------------------
     # Save original reward.
     path['rewards_orig'] = np.array(path['rewards'])
+#     path['rewards'] += 1e8
 
     # DEBUG
     # -----
@@ -77,15 +78,16 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
         # params to the old ones, and undoing this operation.
         obs = (path['observations'] - obs_mean) / (obs_std + 1e-8)
         act = (path['actions'] - act_mean) / (act_std + 1e-8)
-        rew = path['rewards']
+        rew_orig = path['rewards_orig']
         # inputs = (o,a), target = o'
         obs_nxt = np.vstack([obs[1:]])
         _inputs = np.hstack([obs[:-1], act[:-1]])
         _targets = obs_nxt
         if predict_reward:
-            _targets = np.hstack((_targets, rew[:-1, None]))
+            _targets = np.hstack((_targets, rew_orig[:-1, None]))
+
         # KL vector assumes same shape as reward.
-        kl = np.zeros(rew.shape)
+        kl = np.zeros(rew_orig.shape)
         for j in xrange(int(np.ceil(obs.shape[0] / float(kl_batch_size)))):
 
             start = j * kl_batch_size
