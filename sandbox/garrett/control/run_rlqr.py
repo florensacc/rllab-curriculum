@@ -22,13 +22,19 @@ if len(sys.argv) > 1:
 else:
     k = 10
 
-obs_dim = cartpole.observation_space.flat_dim
-Q = np.zeros((obs_dim, obs_dim)); Q[2,2] = 1
+# obs_dim = cartpole.observation_space.flat_dim
+state_dim = 4
+Q = np.zeros((state_dim, state_dim)); Q[2,2] = 1
 R = np.array([[1]])
-policy = RecurrentLQRPolicy(env.spec, Q, R, k)
+policy = RecurrentLQRPolicy(env.spec, Q, R, state_dim=4, recurrences=k)
 baseline = LinearFeatureBaseline(env_spec=env.spec)
 es = OUStrategy(env_spec=env.spec)
 qf = ContinuousMLPQFunction(env_spec=env.spec)
+
+def callback(itr):
+    r_w, r_h = np.random.rand(2)
+    w, h = r_w * 0.1 + 0.05, r_h + 0.5
+    cartpole.set_pole_size(w, h)
 
 algo = DDPG(
     env=env,
@@ -45,4 +51,4 @@ algo = DDPG(
     qf_learning_rate=1e-3,
     policy_learning_rate=1e-4
 )
-algo.train()
+algo.train(callback)
