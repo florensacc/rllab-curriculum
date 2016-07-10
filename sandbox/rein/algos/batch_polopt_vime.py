@@ -7,7 +7,9 @@ from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rein.dynamics_models.utils import iterate_minibatches
+from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup
+from scipy import stats
+from sandbox.rein.dynamics_models.utils import enum
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
@@ -107,6 +109,10 @@ class BatchPolopt(RLAlgorithm):
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
     """
+
+    # Enums
+    SurpriseTransform = enum(
+        CAP1000='cap at 1000', LOG='log(1+surprise)', ZERO100='0-100', CAP90PERC='cap at 90th percentile')
 
     def __init__(
             self,
@@ -265,6 +271,7 @@ class BatchPolopt(RLAlgorithm):
             if self.output_type == 'regression':
                 acc += np.mean(np.square(_out - _targets))
             elif self.output_type == 'classification':
+                # FIXME: only for Atari
                 _out2 = _out.reshape([-1, 256])
                 _argm = np.argmax(_out2, axis=1)
                 _argm2 = _argm.reshape([-1, 128])
@@ -597,7 +604,8 @@ class BatchPolopt(RLAlgorithm):
             act_mean=act_mean,
             act_std=act_std,
             second_order_update=self.second_order_update,
-            predict_reward=self.predict_reward
+            predict_reward=self.predict_reward,
+            surprise_type=self.surprise_type
         )
 
         # DEBUG
@@ -659,19 +667,26 @@ class BatchPolopt(RLAlgorithm):
             logger.record_tabular('BNN_90percKL', np.percentile(kls_flat, 90))
 
             # Transform intrinsic rewards.
-            if self.surprise_transform == 'log(1+surprise)':
+            if self.surprise_transform == BatchPolopt.SurpriseTransform.LOG:
                 # Transform surprise into (positive) log space.
                 for i in xrange(len(paths)):
                     kls[i] = np.log(1 + kls[i])
-            elif self.surprise_transform == 'cap90perc':
+            elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP90PERC:
                 perc90 = np.percentile(np.hstack(kls), 90)
                 # Cap max KL for stabilization.
                 for i in xrange(len(paths)):
                     kls[i] = np.minimum(kls[i], perc90)
-            elif self.surprise_transform == 'cap1000':
+            elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP1000:
                 # Cap max KL for stabilization.
                 for i in xrange(len(paths)):
                     kls[i] = np.minimum(kls[i], 1000)
+            elif self.surprise_transform == BatchPolopt.SurpriseTransform.ZERO100:
+                cap = np.percentile(kls_flat, 95)
+                kls = [np.minimum(kl, cap) for kl in kls]
+                kls_flat, lens = ungroup(kls)
+                zerohunderd = stats.rankdata(
+                    kls_flat, "average") / len(kls_flat)
+                kls = group(zerohunderd, lens)
 
             kls_flat = np.hstack(kls)
 
@@ -699,6 +714,8 @@ class BatchPolopt(RLAlgorithm):
                     median_KL_current_batch = np.median(np.hstack(kls))
                     for i in xrange(len(kls)):
                         kls[i] = kls[i] / median_KL_current_batch
+                        # FIXME: inserted clip for stabilization.
+                        kls[i] = np.minimum(kls[i], 100)
 
             kls_flat = np.hstack(kls)
 
@@ -755,7 +772,8 @@ class BatchPolopt(RLAlgorithm):
                 path_baselines[:-1]
             path["advantages"] = special.discount_cumsum(
                 deltas, self.discount * self.gae_lambda)
-            # FIXME: does this have to be rewards_orig or rewards? DEFAULT: rewards_orig
+            # FIXME: does this have to be rewards_orig or rewards? DEFAULT:
+            # rewards_orig
             path["returns"] = special.discount_cumsum(
                 path["rewards_orig"], self.discount)
             baselines.append(path_baselines[:-1])

@@ -1,7 +1,7 @@
 import numpy as np
 from sandbox.rein.dynamics_models.bnn.bnn import BNN
 from sandbox.rein.dynamics_models.utils import load_dataset_1Dregression, sliding_mean, iterate_minibatches,\
-    load_dataset_multitarget_classification
+    load_dataset_multitarget_classification, group, ungroup
 import lasagne
 import time
 
@@ -66,7 +66,8 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         import matplotlib.pyplot as plt
         plt.ion()
         y = [model.pred_fn(x[None, :])[0][0] for x in X_test]
-#         y = model.pred_fn(X_test[0][None,:])
+        entropy = model.train_update_fn(X_test[0][None,:])
+        print(entropy)
 
 #         temp = model.fn_classification_nll(X_train, T_train)
 #         print(temp)
@@ -126,9 +127,9 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             step_size = 1.0
 #             print(inputs.shape, targets.shape)
 #             print(inputs, targets)
-            kl_div = model.train_update_fn(
-                inputs, targets, step_size)
-#             print(kl_div)
+#             kl_div = model.train_update_fn(
+#                 inputs, targets, step_size)
+            kl_div = model.train_update_fn(inputs)
 
             kl_values.append(kl_mb_closed_form)
             kl_all_values.append(kl_mb_closed_form)
@@ -264,9 +265,17 @@ def main():
     lst2 = lst.T.ravel()
     idx = np.arange(len(lst))
     idx2 = np.tile(idx, 2)
-    print(idx2)
-    print(lst2)
-    print(a[idx2, lst2].reshape(2, -1).T)
+#     print(idx2)
+#     print(lst2)
+#     print(a[idx2, lst2].reshape(2, -1).T)
+
+    a = list([[0], [1, 2], [3, 4, 5]])
+    print(a)
+    a_flat, lens = ungroup(a)
+    print(a_flat)
+    print(lens)
+    a_hat = group(a_flat, lens)
+    print(a_hat)
 
     DEBUG = True
 
@@ -289,14 +298,14 @@ def main():
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=10,
+        n_samples=2,
         learning_rate=0.001,
-        group_variance_by=BNN.GroupVarianceBy.UNIT,  # @UndefinedVariable
+        group_variance_by=BNN.GroupVarianceBy.UNIT,
         use_local_reparametrization_trick=True,
         update_likelihood_sd=True,
         likelihood_sd_init=1.0,
-        output_type=BNN.OutputType.REGRESSION,  # @UndefinedVariable
-        surprise_type=BNN.SurpriseType.INFGAIN,  # @UndefinedVariable
+        output_type=BNN.OutputType.REGRESSION,
+        surprise_type=BNN.SurpriseType.BALD,
         num_classes=None,  # num_classes,
         num_output_dim=num_output_dim,
         disable_variance=False,

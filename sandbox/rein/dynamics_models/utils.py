@@ -1,12 +1,29 @@
 import numpy as np
 from sklearn import datasets
+import itertools
+
+def enum(**enums):
+    return type('Enum', (), enums)
+
+def group(x, lens):
+    """Unflatten 2D list"""
+    xg, clen = [], 0
+    for _len in lens:
+        xg.append(np.asarray(x[clen:clen + _len]))
+        clen += _len
+    return xg
 
 
-# This function takes an array of numbers and smoothes them out.
-# Smoothing is useful for making plots a little easier to read.
+def ungroup(x):
+    """Flatten 2D list"""
+    xf = list(itertools.chain.from_iterable(x))
+    lens = [len(_x) for _x in x]
+    return xf, lens
 
 
 def sliding_mean(data_array, window=5):
+    # This function takes an array of numbers and smoothes them out.
+    # Smoothing is useful for making plots a little easier to read.
     data_array = np.array(data_array)
     new_list = []
     for i in range(len(data_array)):
@@ -60,6 +77,7 @@ def load_dataset_MNIST():
     # We just return all the arrays in order, as expected in main().
     # (It doesn't matter how we do this as long as we can read them again.)
     return X_train, y_train, X_test, y_test
+
 
 def plot_mnist_digit(image):
     """ Plot a single MNIST image."""

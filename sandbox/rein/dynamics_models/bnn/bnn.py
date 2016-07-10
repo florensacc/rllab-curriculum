@@ -7,11 +7,8 @@ from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc import ext
 from collections import OrderedDict
+from sandbox.rein.dynamics_models.utils import enum
 import theano
-
-
-def enum(**enums):
-    return type('Enum', (), enums)
 
 
 class BNNLayer(lasagne.layers.Layer):
@@ -524,7 +521,7 @@ class BNN(LasagnePowered, Serializable):
         layers = lasagne.layers.get_all_layers(self.network)[1:]
         return sum(l.num_weights for l in layers)
 
-    def entropy(self, input, target, **kwargs):
+    def entropy(self, input, likelihood_sd, **kwargs):
         """ Entropy of a batch of input/output samples. """
 
         # MC samples.
@@ -532,15 +529,19 @@ class BNN(LasagnePowered, Serializable):
         for _ in xrange(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
-            # Calculate model likelihood log(P(D|w)).
-            if self.output_type == BNN.OutputType.CLASSIFICATION:
-                lh = self.likelihood_classification(target, prediction)
-            elif self.output_type == BNN.OutputType.REGRESSION:
-                lh = self.likelihood_regression(target, prediction, **kwargs)
-            _log_p_D_given_w.append(lh)
+            for _ in xrange(self.n_samples):
+                sampled_mean = self.pred_sym(input)
+                # Calculate model likelihood log(P(D|w)).
+                if self.output_type == BNN.OutputType.CLASSIFICATION:
+                    lh = self.likelihood_classification(
+                        sampled_mean, prediction)
+                elif self.output_type == BNN.OutputType.REGRESSION:
+                    lh = self.likelihood_regression(
+                        sampled_mean, prediction, likelihood_sd)
+                _log_p_D_given_w.append(lh)
         log_p_D_given_w = sum(_log_p_D_given_w)
 
-        return - log_p_D_given_w / self.n_samples
+        return - log_p_D_given_w / (self.n_samples)**2 + 0.5 * (np.log(2 * np.pi * likelihood_sd**2) + 1)
 
     def surprise(self, **kwargs):
 
@@ -926,14 +927,14 @@ class BNN(LasagnePowered, Serializable):
 
         elif self.surprise_type == BNN.SurpriseType.BALD:
             self.train_update_fn = ext.compile_function(
-                [input_var], self.surprise(input_var))
+                [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
 
         if self.debug:
             self.eval_loss = ext.compile_function(
                 [input_var, target_var, kl_factor], loss,  log_name='fn_eval_loss', no_default_updates=False)
             # Calculate surprise.
-            self.fn_surprise = ext.compile_function(
-                [], self.surprise(), log_name='fn_surprise')
+#             self.fn_surprise = ext.compile_function(
+#                 [], self.surprise(), log_name='fn_surprise')
 #             self.fn_dbg_nll = ext.compile_function(
 #                 [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll', no_default_updates=False)
             self.fn_kl = ext.compile_function(

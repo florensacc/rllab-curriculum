@@ -1,6 +1,7 @@
 import os
 from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
+from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
 os.environ["THEANO_FLAGS"] = "device=cpu"
 from rllab.envs.gym_env import GymEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
@@ -62,9 +63,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=20,
+        snn_n_samples=2,
         use_replay_pool=True,
-        use_kl_ratio=kl_ratio,
+        use_kl_ratio=False,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=4,
         normalize_reward=normalize_reward,
@@ -74,8 +75,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         unn_n_hidden=[128],
         unn_layers_type=['gaussian', 'gaussian'],
         unn_learning_rate=0.001,
-        # 'log(1+surprise)',  # 'cap1000', 'cap90perc'
-        surprise_transform='cap90perc',
+        surprise_transform=BatchPolopt.SurpriseTransform.CAP90PERC,
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
         output_type=BNN.OutputType.REGRESSION,
@@ -85,7 +85,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # -------------
         disable_variance=False,
         group_variance_by=BNN.GroupVarianceBy.UNIT,
-        surprise_type=BNN.SurpriseType.INFGAIN,
+        surprise_type=BNN.SurpriseType.BALD,
         predict_reward=True,
         use_local_reparametrization_trick=True,
         n_itr_update=1,
@@ -95,10 +95,10 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix="temp",
-        n_parallel=4,
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         script="sandbox/rein/experiments/run_experiment_lite.py",
     )

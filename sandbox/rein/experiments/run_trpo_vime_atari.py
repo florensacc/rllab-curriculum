@@ -15,6 +15,7 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.rein.algos.trpo_vime import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
+from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
@@ -29,10 +30,9 @@ stub(globals())
 #         for mdp_class in mdp_classes]
 
 seeds = range(5)
-# etas = [0, 0.001, 0.01, 0.1]
-etas = [0]
+etas = [0.001, 0.01, 0.1]
 normalize_rewards = [False]
-kl_ratios = [True]
+kl_ratios = [False]
 mdps = [GymEnv("Freeway-ram-v0")]
 # mdp_classes = [MountainCarEnvX]
 
@@ -61,8 +61,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         baseline=baseline,
         batch_size=50000,
         whole_paths=True,
-        max_path_length=5000,
-        n_itr=-1,
+        max_path_length=10000,
+        n_itr=100,
         step_size=0.01,
         subsample_factor=1.0,
         # -------------
@@ -74,7 +74,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=8,
+        kl_batch_size=4,
         normalize_reward=normalize_reward,
         replay_pool_size=1000000,
         n_updates_per_sample=50000,
@@ -82,7 +82,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         unn_n_hidden=[512, 512],
         unn_layers_type=['gaussian', 'gaussian', 'gaussian'],
         unn_learning_rate=0.001,
-        surprise_transform='cap90perc',
+        surprise_transform=BatchPolopt.SurpriseTransform.ZERO100,
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
         output_type=BNN.OutputType.REGRESSION,
@@ -101,7 +101,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="temp",#"trpo-vime-freeway-f",
+        exp_prefix="trpo-vime-freeway-g",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
