@@ -90,7 +90,7 @@ class ParallelVecEnvExecutor(object):
         self.max_path_length = max_path_length
 
     def step(self, action_n):
-        results = singleton_pool.run_map(
+        results = singleton_pool.run_each(
             worker_run_step,
             [(action_n, self.scope) for _ in self._alloc_env_ids],
         )
@@ -109,7 +109,7 @@ class ParallelVecEnvExecutor(object):
 
         ids, obs, rewards, dones, env_infos = zip(*items)
 
-        obs = self.observation_space.unflatten_n(obs)
+        obs = list(obs)
         rewards = np.asarray(rewards)
         dones = np.asarray(dones)
 
@@ -125,7 +125,7 @@ class ParallelVecEnvExecutor(object):
 
     def _run_reset(self, dones):
         dones = np.asarray(dones)
-        results = singleton_pool.run_map(
+        results = singleton_pool.run_each(
             worker_run_reset,
             [(dones, self.scope) for _ in self._alloc_env_ids],
         )

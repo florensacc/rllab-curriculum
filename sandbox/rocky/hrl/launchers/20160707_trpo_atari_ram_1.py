@@ -43,10 +43,10 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="0707-trpo-atari-ram",
+        exp_prefix="0707-trpo-atari-ram-1",
         seed=v["seed"],
         n_parallel=4,
         snapshot_mode="last",
         variant=v,
-        mode="local",
+        mode="lab_kube",
     )

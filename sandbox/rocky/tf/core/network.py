@@ -10,7 +10,7 @@ from sandbox.rocky.tf.core.parameterized import Parameterized
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
 
 
-class MLP(object):
+class MLP(LayersPowered):
     def __init__(self, name, output_dim, hidden_sizes, hidden_nonlinearity,
                  output_nonlinearity, hidden_W_init=L.xavier_init, hidden_b_init=tf.zeros_initializer,
                  output_W_init=L.xavier_init, output_b_init=tf.zeros_initializer,
@@ -46,6 +46,8 @@ class MLP(object):
             self._l_out = l_out
             # self._input_var = l_in.input_var
             self._output = L.get_output(l_out)
+
+            LayersPowered.__init__(self, l_out)
 
     @property
     def input_layer(self):

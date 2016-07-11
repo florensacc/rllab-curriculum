@@ -214,7 +214,7 @@ def check_nan(exp):
 
 
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
-                         only_show_best=False, gen_eps=False, clip_plot_value=None, plot_width=None,
+                         only_show_best=False, only_show_best_final=False, gen_eps=False, clip_plot_value=None, plot_width=None,
                          plot_height=None, filter_nan=False, smooth_curve=False, custom_filter=None,
                          legend_post_processor=None):
     print(plot_key, split_key, group_key, filters)
@@ -258,7 +258,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
             filtered_data = group_selector.extract()
             if len(filtered_data) > 0:
 
-                if only_show_best:
+                if only_show_best or only_show_best_final:
                     # Group by seed and sort.
                     # -----------------------
                     filtered_params = core.extract_distinct_params(filtered_data, l=0)
@@ -285,6 +285,8 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                             progresses = [
                                 np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
 
+                            if only_show_best_final:
+                                progresses = np.asarray(progresses)[:, -1]
                             if use_median:
                                 medians = np.nanmedian(progresses, axis=0)
                                 regret = np.mean(medians)
@@ -355,7 +357,10 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                 stds = np.clip(stds, -clip_plot_value, clip_plot_value)
                             to_plot.append(
                                 ext.AttrDict(means=means, stds=stds, legend=legend_post_processor(legend)))
-                        to_plot[-1]["footnote"] = "%s; e.g. %s" % (kv_string_best_regret, data[0].params.get("exp_name", "NA"))
+                        if len(to_plot) > 0 and len(data) > 0:
+                            to_plot[-1]["footnote"] = "%s; e.g. %s" % (kv_string_best_regret, data[0].params.get("exp_name", "NA"))
+                        else:
+                            to_plot[-1]["footnote"] = ""
                 else:
                     progresses = [
                         exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
@@ -443,6 +448,7 @@ def plot_div():
     use_median = args.get("use_median", "") == 'True'
     gen_eps = args.get("eps", "") == 'True'
     only_show_best = args.get("only_show_best", "") == 'True'
+    only_show_best_final = args.get("only_show_best_final", "") == 'True'
     filter_nan = args.get("filter_nan", "") == 'True'
     smooth_curve = args.get("smooth_curve", "") == 'True'
     clip_plot_value = parse_float_arg(args, "clip_plot_value")
@@ -460,9 +466,10 @@ def plot_div():
         legend_post_processor = None
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, filter_nan=filter_nan,
                                     group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps,
-                                    only_show_best=only_show_best, clip_plot_value=clip_plot_value,
-                                    plot_width=plot_width, plot_height=plot_height, smooth_curve=smooth_curve,
-                                    custom_filter=custom_filter, legend_post_processor=legend_post_processor)
+                                    only_show_best=only_show_best, only_show_best_final=only_show_best_final,
+                                    clip_plot_value=clip_plot_value, plot_width=plot_width, plot_height=plot_height,
+                                    smooth_curve=smooth_curve, custom_filter=custom_filter,
+                                    legend_post_processor=legend_post_processor)
     # print plot_div
     return plot_div
 
