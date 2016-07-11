@@ -693,7 +693,6 @@ class ConvBNN(LasagnePowered, Serializable):
             if i == 0:
                 assert(layer_disc['name'] == 'input')
 
-            print('layer {}: {}'.format(i, layer_disc))
             if layer_disc['name'] == 'input':
                 network = lasagne.layers.InputLayer(
                     shape=layer_disc['in_shape'])
@@ -717,13 +716,18 @@ class ConvBNN(LasagnePowered, Serializable):
             elif layer_disc['name'] == 'upscale':
                 network = lasagne.layers.Upscale2DLayer(
                     network, scale_factor=layer_disc['scale_factor'])
+            elif layer_disc['name'] == 'reshape':
+                network = lasagne.layers.ReshapeLayer(
+                    network, shape=layer_disc['shape'])
             else:
                 raise(Exception('Unknown layer!'))
+
+            print('layer {}: {}\n\toutsize: {}'.format(i, layer_disc, network.output_shape))
 
         # Output layer
         network = BayesianDenseLayer(
             network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, use_local_reparametrization_trick=True)
-        print('layer f: {} outputs'.format(self.n_out))
+        print('layer f: outsize: {}'.format(network.output_shape))
 
         self.network = network
 

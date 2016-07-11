@@ -42,7 +42,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             train_err / train_batches))
 
     pred = model.pred_fn(inputs)
-    plot_mnist_digit(pred[0].reshape(28, 28),ax)
+    plot_mnist_digit(pred[0].reshape(28, 28), ax)
     print("Done training.")
 
 
@@ -59,17 +59,27 @@ def main():
     plt.ion()
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    plot_mnist_digit(X_train[0][0],ax)
+    plot_mnist_digit(X_train[0][0], ax)
 
     print("Building model and compiling functions ...")
+    deconv_filters = 1
+    filter_sizes = 5
     bnn = ConvBNN(
         layers_disc=[
             dict(name='input', in_shape=(None, 1, 28, 28)),
-            dict(name='convolution', n_filters=2, filter_size=(5, 5)),
+            dict(name='convolution', n_filters=2,
+                 filter_size=(filter_sizes, filter_sizes)),
             dict(name='pool', pool_size=(2, 2)),
+            dict(name='reshape', shape=([0], -1)),
+            dict(name='gaussian', n_units=288),
+            dict(name='gaussian', n_units=24),
+            dict(name='gaussian', n_units=288),
+            dict(name='reshape', shape=(
+                [0], 2, 12, 12)),
             dict(name='upscale', scale_factor=2),
-            dict(name='transconvolution', n_filters=2, filter_size=(5, 5))
-            #             dict(name='gaussian', n_units=8),
+            dict(name='transconvolution', n_filters=deconv_filters,
+                 filter_size=(filter_sizes, filter_sizes))
+
         ],
         n_out=28 * 28,
         n_batches=n_batches,
