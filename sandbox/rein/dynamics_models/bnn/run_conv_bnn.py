@@ -19,7 +19,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         train_err, train_batches, start_time, kl_values = 0, 0, time.time(), []
 
         pred = model.pred_fn(X_train[0][:, None])
-        plot_mnist_digit(pred[0].reshape(28, 28), plt, ax)
+        plot_mnist_digit(pred[0].reshape(28, 28), ax)
 
         # Iterate over all minibatches and train on each of them.
         for batch in iterate_minibatches(X_train, T_train, model.batch_size, shuffle=True):
@@ -42,7 +42,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             train_err / train_batches))
 
     pred = model.pred_fn(inputs)
-    plot_mnist_digit(pred[0].reshape(28, 28), plt, ax)
+    plot_mnist_digit(pred[0].reshape(28, 28),ax)
     print("Done training.")
 
 
@@ -59,7 +59,7 @@ def main():
     plt.ion()
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    plot_mnist_digit(X_train[0][0], plt, ax)
+    plot_mnist_digit(X_train[0][0],ax)
 
     print("Building model and compiling functions ...")
     bnn = ConvBNN(
@@ -94,7 +94,7 @@ def main():
 
     # Train the model.
     train(bnn, num_epochs=num_epochs, X_train=X_train,
-          T_train=T_train, X_test=X_test, T_test=T_test, plt=plt, ax=ax)
+          T_train=T_train, X_test=X_test, T_test=T_test, ax=ax)
     print('Done.')
 
 if __name__ == '__main__':

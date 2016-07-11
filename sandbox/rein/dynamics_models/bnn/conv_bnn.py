@@ -10,10 +10,6 @@ from collections import OrderedDict
 import theano
 from sandbox.rein.dynamics_models.utils import enum
 
-# ----------------
-USE_REPARAMETRIZATION_TRICK = True
-# ----------------
-
 
 def conv_input_length(output_length, filter_size, stride, pad=0):
     """Helper function to compute the input size of a convolution operation
@@ -71,199 +67,6 @@ def conv_input_length(output_length, filter_size, stride, pad=0):
     if not isinstance(pad, int):
         raise ValueError('Invalid pad: {0}'.format(pad))
     return (output_length - 1) * stride - 2 * pad + filter_size
-
-
-class ReshapeLayer(lasagne.layers.Layer):
-    """
-    A layer reshaping its input tensor to another tensor of the same total
-    number of elements.
-    :parameters:
-        - incoming : a :class:`Layer` instance or a tuple
-            the layer feeding into this layer, or the expected input shape
-        - shape : tuple
-            The target shape specification. Any of its elements can be `[i]`,
-            a single-element list of int, denoting to use the size of the ith
-            input dimension. At most one element can be `-1`, denoting to
-            infer the size for this dimension to match the total number of
-            elements of the input tensor. Any remaining elements must be
-            positive integers directly giving the size of the corresponding
-            dimension.
-    :usage:
-        >>> from lasagne.layers import InputLayer, ReshapeLayer
-        >>> l_in = InputLayer((None, 100, 20))
-        >>> l1 = ReshapeLayer(l_in, ([0], [1], 2, 10))
-        >>> l1.get_output_shape()
-        (None, 100, 2, 10)
-        >>> l2 = ReshapeLayer(l_in, ([0], 1, 2, 5, -1))
-        >>> l2.get_output_shape()
-        (None, 1, 2, 5, 200)
-    :note:
-        The tensor elements will be fetched and placed in C-like order. That
-        is, reshaping `[1,2,3,4,5,6]` to shape `(2,3)` will result in a matrix
-        `[[1,2,3],[4,5,6]]`, not in `[[1,3,5],[2,4,6]]` (Fortran-like order),
-        regardless of the memory layout of the input tensor. For C-contiguous
-        input, reshaping is cheap, for others it may require copying the data.
-    """
-
-    def __init__(self, incoming, shape, **kwargs):
-        super(ReshapeLayer, self).__init__(incoming, **kwargs)
-        shape = tuple(shape)
-        for s in shape:
-            if isinstance(s, int):
-                if s == 0 or s < - 1:
-                    raise ValueError("`shape` integers must be positive or -1")
-            elif isinstance(s, list):
-                if len(s) != 1 or not isinstance(s[0], int) or s[0] < 0:
-                    raise ValueError("`shape` input references must be "
-                                     "single-element lists of int >= 0")
-            else:
-                raise ValueError("`shape` must be a tuple of int and/or [int]")
-        if sum(s == -1 for s in shape) > 1:
-            raise ValueError("`shape` cannot contain multiple -1")
-        self.shape = shape
-
-    def get_output_shape_for(self, input_shape, **kwargs):
-        # Initialize output shape from shape specification
-        output_shape = list(self.shape)
-        # First, replace all `[i]` with the corresponding input dimension, and
-        # mask parts of the shapes thus becoming irrelevant for -1 inference
-        masked_input_shape = list(input_shape)
-        masked_output_shape = list(output_shape)
-        for dim, o in enumerate(output_shape):
-            if isinstance(o, list):
-                if o[0] >= len(input_shape):
-                    raise ValueError("specification contains [%d], but input "
-                                     "shape has %d dimensions only" %
-                                     (o[0], len(input_shape)))
-                output_shape[dim] = input_shape[o[0]]
-                masked_output_shape[dim] = input_shape[o[0]]
-                if (input_shape[o[0]] is None) \
-                   and (masked_input_shape[o[0]] is None):
-                    # first time we copied this unknown input size: mask
-                    # it, we have a 1:1 correspondence between out[dim] and
-                    # in[o[0]] and can ignore it for -1 inference even if
-                    # it is unknown.
-                    masked_input_shape[o[0]] = 1
-                    masked_output_shape[dim] = 1
-        # From the shapes, compute the sizes of the input and output tensor
-        input_size = (None if any(x is None for x in masked_input_shape)
-                      else np.prod(masked_input_shape))
-        output_size = (None if any(x is None for x in masked_output_shape)
-                       else np.prod(masked_output_shape))
-        del masked_input_shape, masked_output_shape
-        # Finally, infer value for -1 if needed
-        if -1 in output_shape:
-            dim = output_shape.index(-1)
-            if (input_size is None) or (output_size is None):
-                output_shape[dim] = None
-                output_size = None
-            else:
-                output_size *= -1
-                output_shape[dim] = input_size // output_size
-                output_size *= output_shape[dim]
-        # Sanity check
-        if (input_size is not None) and (output_size is not None) \
-           and (input_size != output_size):
-            raise ValueError("%s cannot be reshaped to specification %s. "
-                             "The total size mismatches." %
-                             (input_shape, self.shape))
-        return tuple(output_shape)
-
-    def get_output_for(self, input, **kwargs):
-        # Replace all `[i]` with the corresponding input dimension
-        output_shape = list(self.shape)
-        for dim, o in enumerate(output_shape):
-            if isinstance(o, list):
-                output_shape[dim] = input.shape[o[0]]
-        # Everything else is handled by Theano
-        return input.reshape(tuple(output_shape))
-
-reshape = ReshapeLayer  # shortcut
-
-
-class TransConvLayer(lasagne.layers.Layer):
-
-    def __init__(self, incoming, num_filters, filter_size, stride=(1, 1),
-                 crop=0, untie_biases=False,
-                 W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0.),
-                 nonlinearity=lasagne.nonlinearities.rectify, flip_filters=False,
-                 **kwargs):
-
-        super(TransConvLayer, self).__init__(
-            incoming, **kwargs)
-
-        pad = crop
-        self.crop = crop
-        self.n = len(self.input_shape) - 2
-        self.nonlinearity = nonlinearity
-        self.num_filters = num_filters
-        self.filter_size = lasagne.utils.as_tuple(filter_size, self.n, int)
-        self.flip_filters = flip_filters
-        self.stride = lasagne.utils.as_tuple(stride, self.n, int)
-        self.untie_biases = untie_biases
-
-        if pad == 'same':
-            if any(s % 2 == 0 for s in self.filter_size):
-                raise NotImplementedError(
-                    '`same` padding requires odd filter size.')
-        if pad == 'valid':
-            self.pad = lasagne.utils.as_tuple(0, self.n)
-        elif pad in ('full', 'same'):
-            self.pad = pad
-        else:
-            self.pad = lasagne.utils.as_tuple(pad, self.n, int)
-
-        self.W = self.add_param(W, self.get_W_shape(), name="W")
-        if b is None:
-            self.b = None
-        else:
-            if self.untie_biases:
-                biases_shape = (num_filters,) + self.output_shape[2:]
-            else:
-                biases_shape = (num_filters,)
-            self.b = self.add_param(b, biases_shape, name="b",
-                                    regularizable=False)
-
-    def get_W_shape(self):
-        num_input_channels = self.input_shape[1]
-        # first two sizes are swapped compared to a forward convolution
-        return (num_input_channels, self.num_filters) + self.filter_size
-
-    def get_output_shape_for(self, input_shape):
-        # when called from the constructor, self.crop is still called self.pad:
-        crop = getattr(self, 'crop', getattr(self, 'pad', None))
-        crop = crop if isinstance(crop, tuple) else (crop,) * self.n
-        batchsize = input_shape[0]
-        return ((batchsize, self.num_filters) +
-                tuple(conv_input_length(input, filter, stride, p)
-                      for input, filter, stride, p
-                      in zip(input_shape[2:], self.filter_size,
-                             self.stride, crop)))
-
-    def convolve(self, input, **kwargs):
-        border_mode = 'half' if self.crop == 'same' else self.crop
-        op = T.nnet.abstract_conv.AbstractConv2d_gradInputs(
-            imshp=self.output_shape,
-            kshp=self.get_W_shape(),
-            subsample=self.stride, border_mode=border_mode,
-            filter_flip=not self.flip_filters)
-        output_size = self.output_shape[2:]
-        if any(s is None for s in output_size):
-            output_size = self.get_output_shape_for(input.shape)[2:]
-        conved = op(self.W, input, output_size)
-        return conved
-
-    def get_output_for(self, input, **kwargs):
-        conved = self.convolve(input, **kwargs)
-
-        if self.b is None:
-            activation = conved
-        elif self.untie_biases:
-            activation = conved + T.shape_padleft(self.b, 1)
-        else:
-            activation = conved + self.b.dimshuffle(('x', 0) + ('x',) * self.n)
-
-        return self.nonlinearity(activation)
 
 
 class BayesianLayer(lasagne.layers.Layer):
@@ -404,8 +207,6 @@ class BayesianConvLayer(BayesianLayer):
         stride=(1, 1),
         pad=0,
         untie_biases=False,
-        W=lasagne.init.GlorotUniform(),
-        b=lasagne.init.Constant(0.),
         nonlinearity=lasagne.nonlinearities.rectify,
         flip_filters=True,
         prior_sd=None,
@@ -461,6 +262,93 @@ class BayesianConvLayer(BayesianLayer):
                                subsample=self.stride,
                                border_mode=border_mode,
                                filter_flip=self.flip_filters)
+        return conved
+
+    def get_output_for(self, input, **kwargs):
+        conved = self.convolve(input, **kwargs)
+
+        if self.untie_biases:
+            activation = conved + T.shape_padleft(self.get_b(), 1)
+        else:
+            activation = conved + \
+                self.get_b().dimshuffle(('x', 0) + ('x',) * self.n)
+
+        return self.nonlinearity(activation)
+
+
+class BayesianDeConvLayer(BayesianLayer):
+
+    def __init__(self,
+                 incoming,
+                 num_filters,
+                 filter_size,
+                 stride=(1, 1),
+                 crop=0,
+                 untie_biases=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 flip_filters=False,
+                 prior_sd=None,
+                 **kwargs):
+
+        super(BayesianDeConvLayer, self).__init__(
+            incoming, num_filters, nonlinearity, prior_sd, **kwargs)
+
+        pad = crop
+        self.crop = crop
+        self.n = len(self.input_shape) - 2
+        self.nonlinearity = nonlinearity
+        self.num_units = num_filters
+        self.filter_size = lasagne.utils.as_tuple(filter_size, self.n, int)
+        self.flip_filters = flip_filters
+        self.stride = lasagne.utils.as_tuple(stride, self.n, int)
+        self.untie_biases = untie_biases
+
+        self.init_params()
+
+        if pad == 'same':
+            if any(s % 2 == 0 for s in self.filter_size):
+                raise NotImplementedError(
+                    '`same` padding requires odd filter size.')
+        if pad == 'valid':
+            self.pad = lasagne.utils.as_tuple(0, self.n)
+        elif pad in ('full', 'same'):
+            self.pad = pad
+        else:
+            self.pad = lasagne.utils.as_tuple(pad, self.n, int)
+
+    def get_W_shape(self):
+        num_input_channels = self.input_shape[1]
+        # first two sizes are swapped compared to a forward convolution
+        return (num_input_channels, self.num_units) + self.filter_size
+
+    def get_b_shape(self):
+        if self.untie_biases:
+            return (self.num_units,) + self.output_shape[2:]
+        else:
+            return (self.num_units,)
+
+    def get_output_shape_for(self, input_shape):
+        # when called from the constructor, self.crop is still called self.pad:
+        crop = getattr(self, 'crop', getattr(self, 'pad', None))
+        crop = crop if isinstance(crop, tuple) else (crop,) * self.n
+        batchsize = input_shape[0]
+        return ((batchsize, self.num_units) +
+                tuple(conv_input_length(input, filter, stride, p)
+                      for input, filter, stride, p
+                      in zip(input_shape[2:], self.filter_size,
+                             self.stride, crop)))
+
+    def convolve(self, input, **kwargs):
+        border_mode = 'half' if self.crop == 'same' else self.crop
+        op = T.nnet.abstract_conv.AbstractConv2d_gradInputs(
+            imshp=self.output_shape,
+            kshp=self.get_W_shape(),
+            subsample=self.stride, border_mode=border_mode,
+            filter_flip=not self.flip_filters)
+        output_size = self.output_shape[2:]
+        if any(s is None for s in output_size):
+            output_size = self.get_output_shape_for(input.shape)[2:]
+        conved = op(self.get_W(), input, output_size)
         return conved
 
     def get_output_for(self, input, **kwargs):
@@ -824,8 +712,8 @@ class ConvBNN(LasagnePowered, Serializable):
                 network = lasagne.layers.DenseLayer(
                     network, num_units=layer_disc['n_units'], nonlinearity=self.transf)
             elif layer_disc['name'] == 'transconvolution':
-                network = TransConvLayer(network, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'])
+                network = BayesianDeConvLayer(network, num_filters=layer_disc[
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd)
             elif layer_disc['name'] == 'upscale':
                 network = lasagne.layers.Upscale2DLayer(
                     network, scale_factor=layer_disc['scale_factor'])

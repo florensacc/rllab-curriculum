@@ -2,8 +2,10 @@ import numpy as np
 from sklearn import datasets
 import itertools
 
+
 def enum(**enums):
     return type('Enum', (), enums)
+
 
 def group(x, lens):
     """Unflatten 2D list"""
@@ -73,24 +75,22 @@ def load_dataset_MNIST():
     y_train = load_mnist_labels(PATH + 'train-labels-idx1-ubyte.gz')
     X_test = load_mnist_images(PATH + 't10k-images-idx3-ubyte.gz')
     y_test = load_mnist_labels(PATH + 't10k-labels-idx1-ubyte.gz')
-    
-    
 
     # We just return all the arrays in order, as expected in main().
     # (It doesn't matter how we do this as long as we can read them again.)
     return X_train, y_train, X_test, y_test
 
 
-def plot_mnist_digit(image, plt, ax):
+def plot_mnist_digit(image, ax):
     """ Plot a single MNIST image."""
 
     import matplotlib
+    import matplotlib.pyplot as plt
     ax.matshow(image, cmap=matplotlib.cm.binary)
     plt.xticks(np.array([]))
     plt.yticks(np.array([]))
     plt.draw()
     plt.pause(0.00001)
-
 
 
 def load_dataset_multitarget_classification():
