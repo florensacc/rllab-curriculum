@@ -252,7 +252,8 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
         # Last element in KL vector needs to be replaced by second last one
         # because the actual last observation has no next observation.
-        kl[-1] = kl[-2]
+        if len(path['rewards']) > 1:
+            kl[-1] = kl[-2]
 
         # Stuff it in path
         path['KL'] = kl

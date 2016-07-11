@@ -11,7 +11,7 @@ from sandbox.rein.dynamics_models.utils import enum
 import theano
 
 
-class BNNLayer(lasagne.layers.Layer):
+class BayesianDenseLayer(lasagne.layers.Layer):
     """Probabilistic layer that uses Gaussian weights.
 
     Each weight has two parameters: mean and standard deviation (std).
@@ -26,7 +26,7 @@ class BNNLayer(lasagne.layers.Layer):
                  use_local_reparametrization_trick=None,
                  disable_variance=None,
                  **kwargs):
-        super(BNNLayer, self).__init__(incoming, **kwargs)
+        super(BayesianDenseLayer, self).__init__(incoming, **kwargs)
 
         self._srng = RandomStreams()
 
@@ -371,8 +371,8 @@ class BNNLayer(lasagne.layers.Layer):
         return (input_shape[0], self.num_units)
 
 
-class CatOutBNNLayer(BNNLayer):
-    """ Categorical output layer (multidimensional softmax); extension to BNNLayer """
+class CatOutBNNLayer(BayesianDenseLayer):
+    """ Categorical output layer (multidimensional softmax); extension to BayesianDenseLayer """
 
     def __init__(self,
                  incoming,
@@ -489,7 +489,7 @@ class BNN(LasagnePowered, Serializable):
         self.build_model()
 
     def save_old_params(self):
-        layers = filter(lambda l: isinstance(l, BNNLayer),
+        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_old_params()
@@ -497,7 +497,7 @@ class BNN(LasagnePowered, Serializable):
             self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
     def reset_to_old_params(self):
-        layers = filter(lambda l: isinstance(l, BNNLayer),
+        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.reset_to_old_params()
@@ -506,13 +506,13 @@ class BNN(LasagnePowered, Serializable):
 
     def compression_improvement(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = filter(lambda l: isinstance(l, BNNLayer),
+        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_old_new() for l in layers)
 
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, BNNLayer),
+        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
@@ -520,6 +520,19 @@ class BNN(LasagnePowered, Serializable):
         print('Disclaimer: only work with BNNLayers!')
         layers = lasagne.layers.get_all_layers(self.network)[1:]
         return sum(l.num_weights for l in layers)
+
+    def ent(self, input):
+        # FIXME: work in progress
+        mtrx_pred = np.zeros((self.n_samples, self.n_out))
+        for i in xrange(self.n_samples):
+            # Make prediction.
+            mtrx_pred[i] = self.pred_fn(input)
+        cov = np.cov(mtrx_pred, rowvar=0)
+        if isinstance(cov, float):
+            var = np.trace(cov) / float(cov.shape[0])
+        else:
+            var = cov
+        return var
 
     def entropy(self, input, likelihood_sd, **kwargs):
         """ Entropy of a batch of input/output samples. """
@@ -541,7 +554,8 @@ class BNN(LasagnePowered, Serializable):
                 _log_p_D_given_w.append(lh)
         log_p_D_given_w = sum(_log_p_D_given_w)
 
-        return - log_p_D_given_w / (self.n_samples)**2 + 0.5 * (np.log(2 * np.pi * likelihood_sd**2) + 1)
+        return - log_p_D_given_w / (self.n_samples)**2 + 0.5 * (np.log(2 * np.pi
+                                                                       * likelihood_sd**2) + 1)
 
     def surprise(self, **kwargs):
 
@@ -558,19 +572,19 @@ class BNN(LasagnePowered, Serializable):
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, BNNLayer),
+        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: isinstance(l, BNNLayer),
+        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: isinstance(l, BNNLayer),
+        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_prior_new() for l in layers)
 
@@ -674,7 +688,7 @@ class BNN(LasagnePowered, Serializable):
         # Hidden layers
         for i in xrange(len(self.n_hidden)):
             if self.layers_type[i] == 'gaussian':
-                network = BNNLayer(
+                network = BayesianDenseLayer(
                     network, self.n_hidden[
                         i], nonlinearity=self.transf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by,
                     disable_variance=self.disable_variance, use_local_reparametrization_trick=self.use_local_reparametrization_trick)
@@ -685,7 +699,7 @@ class BNN(LasagnePowered, Serializable):
         # Output layer
         if self.output_type == BNN.OutputType.REGRESSION:
             if self.layers_type[len(self.n_hidden)] == 'gaussian':
-                network = BNNLayer(
+                network = BayesianDenseLayer(
                     network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, group_variance_by=self.group_variance_by,
                     disable_variance=self.disable_variance, use_local_reparametrization_trick=self.use_local_reparametrization_trick)
             elif self.layers_type[len(self.n_hidden)] == 'deterministic':
@@ -926,6 +940,7 @@ class BNN(LasagnePowered, Serializable):
                     [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
 
         elif self.surprise_type == BNN.SurpriseType.BALD:
+            # BALD
             self.train_update_fn = ext.compile_function(
                 [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
 

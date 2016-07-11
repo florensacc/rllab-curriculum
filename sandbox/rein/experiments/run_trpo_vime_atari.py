@@ -82,7 +82,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         unn_n_hidden=[512, 512],
         unn_layers_type=['gaussian', 'gaussian', 'gaussian'],
         unn_learning_rate=0.001,
-        surprise_transform=BatchPolopt.SurpriseTransform.ZERO100,
+        surprise_transform=None,#BatchPolopt.SurpriseTransform.CAP90PERC,
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
         output_type=BNN.OutputType.REGRESSION,
@@ -92,7 +92,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # -------------
         disable_variance=False,
         group_variance_by=BNN.GroupVarianceBy.UNIT,
-        surprise_type=BNN.SurpriseType.INFGAIN,
+        surprise_type=BNN.SurpriseType.BALD,
         predict_reward=True,
         use_local_reparametrization_trick=True,
         n_itr_update=1,
@@ -101,7 +101,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-g",
+        exp_prefix="trpo-vime-freeway-i",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
