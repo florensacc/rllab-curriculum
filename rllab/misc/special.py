@@ -73,6 +73,8 @@ def from_onehot(v):
 
 
 def from_onehot_n(v):
+    if len(v) == 0:
+        return []
     return np.nonzero(v)[1]
 
 
