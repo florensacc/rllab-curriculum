@@ -30,7 +30,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             # Train current minibatch.
             inputs, _ = batch
             _train_err = model.train_fn(
-                inputs, inputs.reshape(model.batch_size, 28 * 28))
+                inputs, inputs.reshape(model.batch_size, 28 * 28), 1.0)
 
             train_err += _train_err
             train_batches += 1
@@ -69,7 +69,7 @@ def main():
             dict(name='pool', pool_size=(2, 2)),
             dict(name='upscale', scale_factor=2),
             dict(name='transconvolution', n_filters=2, filter_size=(5, 5))
-#             dict(name='gaussian', n_units=8), 
+            #             dict(name='gaussian', n_units=8),
         ],
         n_out=28 * 28,
         n_batches=n_batches,
@@ -79,11 +79,18 @@ def main():
         n_samples=2,
         prior_sd=0.5,
         update_likelihood_sd=True,
-        learning_rate=0.001
+        learning_rate=0.001,
+        group_variance_by=ConvBNN.GroupVarianceBy.UNIT,
+        use_local_reparametrization_trick=False,
+        likelihood_sd_init=1.0,
+        output_type=ConvBNN.OutputType.REGRESSION,
+        surprise_type=ConvBNN.SurpriseType.BALD,
+        num_classes=None,
+        num_output_dim=None,
+        disable_variance=False,
+        second_order_update=True,
+        debug=True
     )
-
-    print(bnn.network.get_W().eval())
-    print(bnn.network.get_W().eval().shape)
 
     # Train the model.
     train(bnn, num_epochs=num_epochs, X_train=X_train,

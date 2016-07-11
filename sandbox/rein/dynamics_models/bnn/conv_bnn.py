@@ -266,112 +266,6 @@ class TransConvLayer(lasagne.layers.Layer):
         return self.nonlinearity(activation)
 
 
-class UpscaleLayer(lasagne.layers.Layer):
-    """
-    2D upscaling layer
-    Performs 2D upscaling over the two trailing axes of a 4D input tensor.
-    Parameters
-    ----------
-    incoming : a :class:`Layer` instance or tuple
-        The layer feeding into this layer, or the expected input shape.
-    scale_factor : integer or iterable
-        The scale factor in each dimension. If an integer, it is promoted to
-        a square scale factor region. If an iterable, it should have two
-        elements.
-    **kwargs
-        Any additional keyword arguments are passed to the :class:`Layer`
-        superclass.
-    """
-
-    def __init__(self, incoming, scale_factor, **kwargs):
-        super(UpscaleLayer, self).__init__(incoming, **kwargs)
-
-        self.scale_factor = lasagne.utils.as_tuple(scale_factor, 2)
-
-        if self.scale_factor[0] < 1 or self.scale_factor[1] < 1:
-            raise ValueError('Scale factor must be >= 1, not {0}'.format(
-                self.scale_factor))
-
-    def get_output_shape_for(self, input_shape):
-        output_shape = list(input_shape)  # copy / convert to mutable list
-        if output_shape[2] is not None:
-            output_shape[2] *= self.scale_factor[0]
-        if output_shape[3] is not None:
-            output_shape[3] *= self.scale_factor[1]
-        return tuple(output_shape)
-
-    def get_output_for(self, input, **kwargs):
-        a, b = self.scale_factor
-        upscaled = input
-        if b > 1:
-            upscaled = T.extra_ops.repeat(upscaled, b, 3)
-        if a > 1:
-            upscaled = T.extra_ops.repeat(upscaled, a, 2)
-        return upscaled
-
-
-class PoolLayer(lasagne.layers.Layer):
-
-    def __init__(self, incoming, pool_size, stride=None, pad=(0, 0),
-                 ignore_border=True, mode='max', **kwargs):
-        super(PoolLayer, self).__init__(incoming, **kwargs)
-
-        self.pool_size = lasagne.utils.as_tuple(pool_size, 2)
-
-        if len(self.input_shape) != 4:
-            raise ValueError("Tried to create a 2D pooling layer with "
-                             "input shape %r. Expected 4 input dimensions "
-                             "(batchsize, channels, 2 spatial dimensions)."
-                             % (self.input_shape,))
-
-        if stride is None:
-            self.stride = self.pool_size
-        else:
-            self.stride = lasagne.utils.as_tuple(stride, 2)
-
-        self.pad = lasagne.utils.as_tuple(pad, 2)
-
-        self.ignore_border = ignore_border
-        self.mode = mode
-
-    def get_output_shape_for(self, input_shape):
-        output_shape = list(input_shape)  # copy / convert to mutable list
-
-        output_shape[2] = lasagne.layers.pool.pool_output_length(input_shape[2],
-                                                                 pool_size=self.pool_size[
-                                                                     0],
-                                                                 stride=self.stride[
-                                                                     0],
-                                                                 pad=self.pad[
-                                                                     0],
-                                                                 ignore_border=self.ignore_border,
-                                                                 )
-
-        output_shape[3] = lasagne.layers.pool.pool_output_length(input_shape[3],
-                                                                 pool_size=self.pool_size[
-                                                                     1],
-                                                                 stride=self.stride[
-                                                                     1],
-                                                                 pad=self.pad[
-                                                                     1],
-                                                                 ignore_border=self.ignore_border,
-                                                                 )
-
-        return tuple(output_shape)
-
-    def get_output_for(self, input, **kwargs):
-        pooled = theano.tensor.signal.pool.pool_2d(input,
-                                                   ds=self.pool_size,
-                                                   st=self.stride,
-                                                   ignore_border=self.ignore_border,
-                                                   padding=self.pad,
-                                                   mode=self.mode,
-                                                   )
-        return pooled
-
-# -----------------------------------------------------------------------
-
-
 class BayesianLayer(lasagne.layers.Layer):
     """Generic Bayesian layer"""
 
@@ -659,7 +553,7 @@ class BayesianDenseLayer(BayesianLayer):
 
 
 class ConvBNN(LasagnePowered, Serializable):
-    """Convolutional Bayesian neural network (ConvBNN), according to Blundell2016."""
+    """Bayesian neural network (BNN), according to Blundell2016."""
 
     # Enums
     GroupVarianceBy = enum(WEIGHT='weight', UNIT='unit', LAYER='layer')
@@ -668,46 +562,70 @@ class ConvBNN(LasagnePowered, Serializable):
         INFGAIN='information gain', COMPR='compression gain', BALD='BALD')
 
     def __init__(self,
-                 layers_disc,
                  n_out,
+                 layers_disc,
                  n_batches,
                  trans_func=lasagne.nonlinearities.rectify,
                  out_func=lasagne.nonlinearities.linear,
                  batch_size=100,
                  n_samples=10,
                  prior_sd=0.5,
-                 use_reverse_kl_reg=False,
-                 reverse_kl_reg_factor=0.1,
-                 likelihood_sd=5.0,
                  second_order_update=False,
                  learning_rate=0.0001,
-                 compression=False,
-                 information_gain=True,
+                 surprise_type=SurpriseType.INFGAIN,
                  update_prior=False,
-                 update_likelihood_sd=False
+                 update_likelihood_sd=False,
+                 group_variance_by=GroupVarianceBy.WEIGHT,
+                 use_local_reparametrization_trick=True,
+                 likelihood_sd_init=1.0,
+                 output_type=OutputType.REGRESSION,
+                 num_classes=None,
+                 num_output_dim=None,
+                 disable_variance=False,
+                 debug=False
                  ):
 
         Serializable.quick_init(self, locals())
 
+        self.n_out = n_out
         self.batch_size = batch_size
         self.transf = trans_func
-        self.n_out = n_out
         self.outf = out_func
         self.n_samples = n_samples
         self.prior_sd = prior_sd
         self.layers_disc = layers_disc
         self.n_batches = n_batches
-        self.use_reverse_kl_reg = use_reverse_kl_reg
-        self.reverse_kl_reg_factor = reverse_kl_reg_factor
-        self.likelihood_sd = likelihood_sd
+        self.likelihood_sd_init = likelihood_sd_init
         self.second_order_update = second_order_update
         self.learning_rate = learning_rate
-        self.compression = compression
-        self.information_gain = information_gain
+        self.surprise_type = surprise_type
         self.update_prior = update_prior
         self.update_likelihood_sd = update_likelihood_sd
+        self.group_variance_by = group_variance_by
+        self.use_local_reparametrization_trick = use_local_reparametrization_trick
+        self.output_type = output_type
+        self.num_classes = num_classes
+        self.num_output_dim = num_output_dim
+        self.disable_variance = disable_variance
+        self.debug = debug
 
-        assert self.information_gain or self.compression
+        if self.output_type == ConvBNN.OutputType.CLASSIFICATION:
+            assert self.num_classes is not None
+            assert self.num_output_dim is not None
+            assert self.n_out == self.num_classes * self.num_output_dim
+
+        if self.group_variance_by == ConvBNN.GroupVarianceBy.LAYER and self.use_local_reparametrization_trick:
+            print(
+                'Setting use_local_reparametrization_trick=True cannot be used with group_variance_by==\'layer\', changing to False')
+            self.use_local_reparametrization_trick = False
+
+        if self.output_type == ConvBNN.OutputType.CLASSIFICATION and self.update_likelihood_sd:
+            print(
+                'Setting output_type=\'classification\' cannot be used with update_likelihood_sd=True, changing to False.')
+            self.update_likelihood_sd = False
+
+        if self.disable_variance:
+            print('Warning: all noise has been disabled, only using means.')
 
         # Build network architecture.
         self.build_network()
@@ -723,14 +641,16 @@ class ConvBNN(LasagnePowered, Serializable):
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_old_params()
-        self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
+        if self.update_likelihood_sd:
+            self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
     def reset_to_old_params(self):
         layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.reset_to_old_params()
-        self.likelihood_sd.set_value(self.old_likelihood_sd.get_value())
+        if self.update_likelihood_sd:
+            self.likelihood_sd.set_value(self.old_likelihood_sd.get_value())
 
     def compression_improvement(self):
         """KL divergence KL[old_param||new_param]"""
@@ -744,12 +664,58 @@ class ConvBNN(LasagnePowered, Serializable):
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
-    def surprise(self):
-        surpr = 0.
-        if self.compression:
-            surpr += self.compression_improvement()
-        if self.information_gain:
-            surpr += self.inf_gain()
+    def num_weights(self):
+        print('Disclaimer: only work with BNNLayers!')
+        layers = lasagne.layers.get_all_layers(self.network)[1:]
+        return sum(l.num_weights for l in layers)
+
+    def ent(self, input):
+        # FIXME: work in progress
+        mtrx_pred = np.zeros((self.n_samples, self.n_out))
+        for i in xrange(self.n_samples):
+            # Make prediction.
+            mtrx_pred[i] = self.pred_fn(input)
+        cov = np.cov(mtrx_pred, rowvar=0)
+        if isinstance(cov, float):
+            var = np.trace(cov) / float(cov.shape[0])
+        else:
+            var = cov
+        return var
+
+    def entropy(self, input, likelihood_sd, **kwargs):
+        """ Entropy of a batch of input/output samples. """
+
+        # MC samples.
+        _log_p_D_given_w = []
+        for _ in xrange(self.n_samples):
+            # Make prediction.
+            prediction = self.pred_sym(input)
+            for _ in xrange(self.n_samples):
+                sampled_mean = self.pred_sym(input)
+                # Calculate model likelihood log(P(D|w)).
+                if self.output_type == ConvBNN.OutputType.CLASSIFICATION:
+                    lh = self.likelihood_classification(
+                        sampled_mean, prediction)
+                elif self.output_type == ConvBNN.OutputType.REGRESSION:
+                    lh = self.likelihood_regression(
+                        sampled_mean, prediction, likelihood_sd)
+                _log_p_D_given_w.append(lh)
+        log_p_D_given_w = sum(_log_p_D_given_w)
+
+        return - log_p_D_given_w / (self.n_samples)**2 + 0.5 * (np.log(2 * np.pi
+                                                                       * likelihood_sd**2) + 1)
+
+    def surprise(self, **kwargs):
+
+        if self.surprise_type == ConvBNN.SurpriseType.COMPR:
+            surpr = self.compression_improvement()
+        elif self.surprise_type == ConvBNN.SurpriseType.INFGAIN:
+            surpr = self.inf_gain()
+        elif self.surprise_type == ConvBNN.SurpriseType.BALD:
+            surpr = self.entropy(**kwargs)
+        else:
+            raise Exception(
+                'Uknown surprise_type {}'.format(self.surprise_type))
         return surpr
 
     def kl_div(self):
@@ -779,7 +745,27 @@ class ConvBNN(LasagnePowered, Serializable):
     def pred_sym(self, input):
         return lasagne.layers.get_output(self.network, input)
 
-    def loss(self, input, target, likelihood_sd):
+    def likelihood_regression(self, target, prediction, likelihood_sd):
+        return self._log_prob_normal(
+            target, prediction, likelihood_sd)
+
+    def likelihood_classification(self, target, prediction):
+        # Cross-entropy; target vector selecting correct prediction
+        # entries.
+
+        # Numerical stability.
+        prediction += 1e-8
+
+        target2 = target + T.arange(target.shape[1]) * self.num_classes
+        target3 = target2.T.ravel()
+        idx = T.arange(target.shape[0])
+        idx2 = T.tile(idx, self.num_output_dim)
+        prediction_selected = prediction[
+            idx2, target3].reshape([self.num_output_dim, target.shape[0]]).T
+        ll = T.sum(T.log(prediction_selected))
+        return ll
+
+    def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
 
         # MC samples.
         _log_p_D_given_w = []
@@ -787,60 +773,39 @@ class ConvBNN(LasagnePowered, Serializable):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
-            _log_p_D_given_w.append(self._log_prob_normal(
-                target, prediction, likelihood_sd))
+            if self.output_type == ConvBNN.OutputType.CLASSIFICATION:
+                lh = self.likelihood_classification(target, prediction)
+            elif self.output_type == ConvBNN.OutputType.REGRESSION:
+                lh = self.likelihood_regression(target, prediction, **kwargs)
+            else:
+                raise Exception(
+                    'Uknown output_type {}'.format(self.output_type))
+            _log_p_D_given_w.append(lh)
         log_p_D_given_w = sum(_log_p_D_given_w)
-        # Calculate variational posterior log(q(w)) and prior log(p(w)).
-        if self.update_prior:
-            kl = self.kl_div()
+
+        if disable_kl:
+            return - log_p_D_given_w / self.n_samples
         else:
-            kl = self.log_p_w_q_w_kl()
-        if self.use_reverse_kl_reg:
-            kl += self.reverse_kl_reg_factor * \
-                self.reverse_log_p_w_q_w_kl()
+            if self.update_prior:
+                kl = self.kl_div()
+            else:
+                kl = self.log_p_w_q_w_kl()
+            return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
 
-        # Calculate loss function.
-        return kl / self.n_batches - log_p_D_given_w / self.n_samples
-
-    def loss_last_sample(self, input, target, likelihood_sd):
+    def loss_last_sample(self, input, target, **kwargs):
         """The difference with the original loss is that we only update based on the latest sample.
         This means that instead of using the prior p(w), we use the previous approximated posterior
         q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
         """
-        # Fix sampled noise.
-        # MC samples.
-        _log_p_D_given_w = []
-        for _ in xrange(self.n_samples):
-            # Make prediction.
-            prediction = self.pred_sym(input)
-            # Calculate model likelihood log(P(sample|w)).
-            _log_p_D_given_w.append(self._log_prob_normal(
-                target, prediction, likelihood_sd))
-        log_p_D_given_w = sum(_log_p_D_given_w)
-        # Calculate loss function.
-        # self.kl_div() should be zero when taking second order step
-        return self.kl_div() - log_p_D_given_w / self.n_samples
-
-    def dbg_nll(self, input, target, likelihood_sd):
-        # MC samples.
-        _log_p_D_given_w = []
-        for _ in xrange(self.n_samples):
-            # Make prediction.
-            prediction = self.pred_sym(input)
-            # Calculate model likelihood log(P(sample|w)).
-            _log_p_D_given_w.append(self._log_prob_normal(
-                target, prediction, likelihood_sd))
-        log_p_D_given_w = sum(_log_p_D_given_w)
-        return - log_p_D_given_w / self.n_samples
+        return self.loss(input, target, disable_kl=True, **kwargs)
 
     def build_network(self):
 
-        # Layers
         for i, layer_disc in enumerate(self.layers_disc):
             if i == 0:
                 assert(layer_disc['name'] == 'input')
 
-            print(layer_disc)
+            print('layer {}: {}'.format(i, layer_disc))
             if layer_disc['name'] == 'input':
                 network = lasagne.layers.InputLayer(
                     shape=layer_disc['in_shape'])
@@ -848,7 +813,8 @@ class ConvBNN(LasagnePowered, Serializable):
                 network = BayesianConvLayer(network, num_filters=layer_disc[
                     'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd)
             elif layer_disc['name'] == 'pool':
-                network = PoolLayer(network, pool_size=layer_disc['pool_size'])
+                network = lasagne.layers.Pool2DLayer(
+                    network, pool_size=layer_disc['pool_size'])
             elif layer_disc['name'] == 'gaussian':
                 network = BayesianDenseLayer(
                     network, num_units=layer_disc[
@@ -861,7 +827,7 @@ class ConvBNN(LasagnePowered, Serializable):
                 network = TransConvLayer(network, num_filters=layer_disc[
                     'n_filters'], filter_size=layer_disc['filter_size'])
             elif layer_disc['name'] == 'upscale':
-                network = UpscaleLayer(
+                network = lasagne.layers.Upscale2DLayer(
                     network, scale_factor=layer_disc['scale_factor'])
             else:
                 raise(Exception('Unknown layer!'))
@@ -869,6 +835,7 @@ class ConvBNN(LasagnePowered, Serializable):
         # Output layer
         network = BayesianDenseLayer(
             network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, use_local_reparametrization_trick=True)
+        print('layer f: {} outputs'.format(self.n_out))
 
         self.network = network
 
@@ -876,31 +843,51 @@ class ConvBNN(LasagnePowered, Serializable):
 
         # Prepare Theano variables for inputs and targets
         # Same input for classification as regression.
+        kl_factor = T.scalar('kl_factor',
+                             dtype=theano.config.floatX)
         input_var = T.tensor4('inputs',
-                              dtype=theano.config.floatX)  # @UndefinedVariable
-        target_var = T.matrix('targets',
-                              dtype=theano.config.floatX)  # @UndefinedVariable
+                              dtype=theano.config.floatX)
 
-        # Make the likelihood standard deviation a trainable parameter.
-        self.likelihood_sd = theano.shared(
-            value=1.0,  # self.likelihood_sd_init,
-            name='likelihood_sd'
-        )
-        self.old_likelihood_sd = theano.shared(
-            value=1.0,  # self.likelihood_sd_init,
-            name='old_likelihood_sd'
-        )
+        if self.output_type == ConvBNN.OutputType.REGRESSION:
+            target_var = T.matrix('targets',
+                                  dtype=theano.config.floatX)
 
-        # Loss function.
-        loss = self.loss(input_var, target_var, self.likelihood_sd)
-        loss_only_last_sample = self.loss_last_sample(
-            input_var, target_var, self.likelihood_sd)
+            # Make the likelihood standard deviation a trainable parameter.
+            self.likelihood_sd = theano.shared(
+                value=self.likelihood_sd_init,  # self.likelihood_sd_init,
+                name='likelihood_sd'
+            )
+            self.old_likelihood_sd = theano.shared(
+                value=self.likelihood_sd_init,  # self.likelihood_sd_init,
+                name='old_likelihood_sd'
+            )
+
+            # Loss function.
+            loss = self.loss(
+                input_var, target_var, kl_factor, likelihood_sd=self.likelihood_sd)
+            loss_only_last_sample = self.loss_last_sample(
+                input_var, target_var, likelihood_sd=self.likelihood_sd)
+
+        elif self.output_type == ConvBNN.OutputType.CLASSIFICATION:
+
+            target_var = T.imatrix('targets')
+
+            # Loss function.
+            loss = self.loss(
+                input_var, target_var, kl_factor)
+            loss_only_last_sample = self.loss_last_sample(
+                input_var, target_var)
+
+        else:
+            raise Exception(
+                'Unknown self.output_type {}'.format(self.output_type))
 
         # Create update methods.
         params_kl = lasagne.layers.get_all_params(self.network, trainable=True)
         params = []
         params.extend(params_kl)
-        if self.update_likelihood_sd:
+        if self.output_type == 'regression' and self.update_likelihood_sd:
+            # No likelihood sd for classification tasks.
             params.append(self.likelihood_sd)
         updates = lasagne.updates.adam(
             loss, params, learning_rate=self.learning_rate)
@@ -911,181 +898,114 @@ class ConvBNN(LasagnePowered, Serializable):
         # We want to resample when actually updating the BNN itself, otherwise
         # you will fit to the specific noise.
         self.train_fn = ext.compile_function(
-            [input_var, target_var], loss, updates=updates, log_name='fn_train')
+            [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
 
-        if self.second_order_update:
+        if self.surprise_type == ConvBNN.SurpriseType.INFGAIN:
+            if self.second_order_update:
 
-            oldparams = lasagne.layers.get_all_params(
-                self.network, oldparam=True)
-            step_size = T.scalar('step_size',
-                                 dtype=theano.config.floatX)  # @UndefinedVariable
+                oldparams = lasagne.layers.get_all_params(
+                    self.network, oldparam=True)
+                step_size = T.scalar('step_size',
+                                     dtype=theano.config.floatX)
 
-            def second_order_update(loss, params, oldparams, step_size):
-                """Second-order update method for optimizing loss_last_sample, so basically,
-                KL term (new params || old params) + NLL of latest sample. The Hessian is
-                evaluated at the origin and provides curvature information to make a more
-                informed step in the correct descent direction."""
-                grads = theano.grad(loss, params)
-                updates = OrderedDict()
+                def second_order_update(loss, params, oldparams, step_size):
+                    """Second-order update method for optimizing loss_last_sample, so basically,
+                    KL term (new params || old params) + NLL of latest sample. The Hessian is
+                    evaluated at the origin and provides curvature information to make a more
+                    informed step in the correct descent direction."""
+                    grads = theano.grad(loss, params)
+                    updates = OrderedDict()
 
-                for i in xrange(len(params)):
-                    param = params[i]
-                    grad = grads[i]
+                    for i in xrange(len(params)):
+                        param = params[i]
+                        grad = grads[i]
 
-                    if param.name == 'mu' or param.name == 'b_mu':
-                        oldparam_rho = oldparams[i + 1]
-                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    elif param.name == 'rho' or param.name == 'b_rho':
-                        oldparam_rho = oldparams[i]
-                        p = param
-                        H = 2. * (T.exp(2 * p)) / \
-                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
-                        invH = 1. / H
-                    elif param.name == 'likelihood_sd':
-                        invH = 0.
-                    # So wtf is going wrong here?
-                    updates[param] = param - step_size * invH * grad
+                        if param.name == 'mu' or param.name == 'b_mu':
+                            oldparam_rho = oldparams[i + 1]
+                            invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                        elif param.name == 'rho' or param.name == 'b_rho':
+                            oldparam_rho = oldparams[i]
+                            p = param
+                            H = 2. * (T.exp(2 * p)) / \
+                                (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                            invH = 1. / H
+                        elif param.name == 'likelihood_sd':
+                            invH = 0.
+                        updates[param] = param - step_size * invH * grad
 
-                return updates
+                    return updates
 
-            # DEBUG
-            # -----
-            def debug_H(loss, params, oldparams):
-                grads = theano.grad(loss, params)
-                updates = OrderedDict()
+                def fast_kl_div(loss, params, oldparams, step_size):
+                    # FIXME: doesn't work yet for group_variance_by!='weight'.
 
-                invHs = []
-                for i in xrange(len(params)):
-                    param = params[i]
-                    grad = grads[i]
+                    grads = T.grad(loss, params)
 
-                    if param.name == 'mu' or param.name == 'b_mu':
-                        oldparam_rho = oldparams[i + 1]
-                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    elif param.name == 'rho' or param.name == 'b_rho':
-                        oldparam_rho = oldparams[i]
-                        p = param
-                        H = 2. * (T.exp(2 * p)) / \
-                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
-                        invH = 1. / H
-#                     elif param.name == 'likelihood_sd':
-#                         invH = 0.
-                    invHs.append(invH)
-                return invHs
+                    kl_component = []
+                    for i in xrange(len(params)):
+                        param = params[i]
+                        grad = grads[i]
 
-            def debug_g(loss, params, oldparams):
-                grads = theano.grad(loss, params)
-                updates = OrderedDict()
+                        if param.name == 'mu' or param.name == 'b_mu':
+                            oldparam_rho = oldparams[i + 1]
+                            if self.group_variance_by == 'unit':
+                                if not isinstance(oldparam_rho, float):
+                                    oldparam_rho = oldparam_rho.dimshuffle(
+                                        0, 'x')
+                            invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                        elif param.name == 'rho' or param.name == 'b_rho':
+                            oldparam_rho = oldparams[i]
+                            p = param
+                            H = 2. * (T.exp(2 * p)) / \
+                                (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                            invH = 1. / H
+                        elif param.name == 'likelihood_sd':
+                            invH = 0.
 
-                invHs = []
-                for i in xrange(len(params)):
-                    param = params[i]
-                    grad = grads[i]
+                        kl_component.append(
+                            T.sum(0.5 * T.square(step_size) * T.square(grad) * invH))
 
-                    if param.name == 'mu' or param.name == 'b_mu':
-                        oldparam_rho = oldparams[i + 1]
-                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    elif param.name == 'rho' or param.name == 'b_rho':
-                        oldparam_rho = oldparams[i]
-                        p = param
-                        H = 2. * (T.exp(2 * p)) / \
-                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
-                        invH = 1. / H
-#                     elif param.name == 'likelihood_sd':
-#                         invH = 0.
-                    invHs.append(invH)
-                return grads
-            # -----
+                    return sum(kl_component)
 
-            def fast_kl_div(loss, params, oldparams, step_size):
+                compute_fast_kl_div = fast_kl_div(
+                    loss_only_last_sample, params, oldparams, step_size)
 
-                grads = T.grad(loss, params)
+                self.train_update_fn = ext.compile_function(
+                    [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=False)
 
-                kl_component = []
-                for i in xrange(len(params)):
-                    param = params[i]
-                    grad = grads[i]
+                # Code to actually perform second order updates
+                # ---------------------------------------------
+    #             updates_kl = second_order_update(
+    #                 loss_only_last_sample, params, oldparams, step_size)
+    #
+    #             self.train_update_fn = ext.compile_function(
+    #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
+                # ---------------------------------------------
 
-                    if param.name == 'mu' or param.name == 'b_mu':
-                        oldparam_rho = oldparams[i + 1]
-                        invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                    elif param.name == 'rho' or param.name == 'b_rho':
-                        oldparam_rho = oldparams[i]
-                        p = param
-                        H = 2. * (T.exp(2 * p)) / \
-                            (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
-                        invH = 1. / H
-                    elif param.name == 'likelihood_sd':
-                        invH = 0.
+            else:
+                # Use SGD to update the model for a single sample, in order to
+                # calculate the surprise.
 
-                    kl_component.append(
-                        T.sum(0.5 * T.square(step_size) * T.square(grad) * invH))
+                def sgd(loss, params, learning_rate):
+                    grads = theano.grad(loss, params)
+                    updates = OrderedDict()
+                    for param, grad in zip(params, grads):
+                        if param.name == 'likelihood_sd':
+                            updates[param] = param  # - learning_rate * grad
+                        else:
+                            updates[param] = param - learning_rate * grad
 
-                return sum(kl_component)
+                    return updates
 
-            compute_fast_kl_div = fast_kl_div(
-                loss_only_last_sample, params, oldparams, step_size)
+                updates_kl = sgd(
+                    loss_only_last_sample, params, learning_rate=self.learning_rate)
 
+                self.train_update_fn = ext.compile_function(
+                    [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
+
+        elif self.surprise_type == ConvBNN.SurpriseType.BALD:
+            # BALD
             self.train_update_fn = ext.compile_function(
-                [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=False)
-
-            # Code to actually perform second order updates
-            # ---------------------------------------------
-#             updates_kl = second_order_update(
-#                 loss_only_last_sample, params, oldparams, step_size)
-#
-#             self.train_update_fn = ext.compile_function(
-#                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
-            # ---------------------------------------------
-
-            # DEBUG
-            # -----
-#             self.debug_H = ext.compile_function(
-#                 [input_var, target_var], debug_H(
-#                     loss_only_last_sample, params, oldparams),
-#                 log_name='fn_debug_grads')
-#             self.debug_g = ext.compile_function(
-#                 [input_var, target_var], debug_g(
-#                     loss_only_last_sample, params, oldparams),
-#                 log_name='fn_debug_grads')
-            # -----
-
-        else:
-            # Use SGD to update the model for a single sample, in order to
-            # calculate the surprise.
-
-            def sgd(loss, params, learning_rate):
-                grads = theano.grad(loss, params)
-                updates = OrderedDict()
-                for param, grad in zip(params, grads):
-                    if param.name == 'likelihood_sd':
-                        updates[param] = param  # - learning_rate * grad
-                    else:
-                        updates[param] = param - learning_rate * grad
-
-                return updates
-
-            updates_kl = sgd(
-                loss_only_last_sample, params, learning_rate=self.learning_rate)
-
-            self.train_update_fn = ext.compile_function(
-                [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
-
-        self.eval_loss = ext.compile_function(
-            [input_var, target_var], loss,  log_name='fn_eval_loss', no_default_updates=False)
-
-        # DEBUG
-        # -----
-#         # Calculate surprise.
-#         self.fn_surprise = ext.compile_function(
-#             [], self.surprise(), log_name='fn_surprise')
-        self.fn_dbg_nll = ext.compile_function(
-            [input_var, target_var], self.dbg_nll(input_var, target_var, self.likelihood_sd), log_name='fn_dbg_nll', no_default_updates=False)
-        self.fn_kl = ext.compile_function(
-            [], self.kl_div(), log_name='fn_kl')
-        self.fn_kl_from_prior = ext.compile_function(
-            [], self.log_p_w_q_w_kl(), log_name='fn_kl_from_prior')
-        # -----
+                [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
 
 if __name__ == '__main__':
     pass
