@@ -13,6 +13,9 @@ def center_advantages(advantages):
 def shift_advantages_to_positive(advantages):
     return (advantages - np.min(advantages)) + 1e-8
 
+def sign(x):
+    return 1.*(x>=0) - 1.*(x<0)
+
 
 class ReplayPool(Serializable):
     """
