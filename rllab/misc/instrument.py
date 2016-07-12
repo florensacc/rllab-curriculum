@@ -25,7 +25,6 @@ from rllab.viskit.core import flatten
 
 
 class StubBase(object):
-
     def __getitem__(self, item):
         return StubMethodCall(self, "__getitem__", args=[item], kwargs=dict())
 
@@ -39,7 +38,6 @@ class StubBase(object):
 
 
 class StubAttr(StubBase):
-
     def __init__(self, obj, attr_name):
         self.__dict__["_obj"] = obj
         self.__dict__["_attr_name"] = attr_name
@@ -60,7 +58,6 @@ class StubAttr(StubBase):
 
 
 class StubMethodCall(StubBase, Serializable):
-
     def __init__(self, obj, method_name, args, kwargs):
         self._serializable_initialized = False
         Serializable.quick_init(self, locals())
@@ -75,7 +72,6 @@ class StubMethodCall(StubBase, Serializable):
 
 
 class StubClass(StubBase):
-
     def __init__(self, proxy_class):
         self.proxy_class = proxy_class
 
@@ -103,7 +99,6 @@ class StubClass(StubBase):
 
 
 class StubObject(StubBase):
-
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
             spec = inspect.getargspec(__proxy_class.__init__)
@@ -130,6 +125,15 @@ class StubObject(StubBase):
         return "StubObject(%s, *%s, **%s)" % (str(self.proxy_class), str(self.args), str(self.kwargs))
 
 
+class VariantDict(dict):
+    def __init__(self, d, hidden_keys):
+        super(VariantDict, self).__init__(d)
+        self._hidden_keys = hidden_keys
+
+    def dump(self):
+        return {k: v for k, v in self.iteritems() if k not in self._hidden_keys}
+
+
 class VariantGenerator(object):
     """
     Usage:
@@ -149,6 +153,10 @@ class VariantGenerator(object):
     def __init__(self):
         self._variants = []
         self._populate_variants()
+        self._hidden_keys = []
+        for k, vs, cfg in self._variants:
+            if cfg.get("hide", False):
+                self._hidden_keys.append(k)
 
     def add(self, key, vals, **kwargs):
         self._variants.append((key, vals, kwargs))
@@ -165,7 +173,10 @@ class VariantGenerator(object):
         ret = list(self.ivariants())
         if randomized:
             np.random.shuffle(ret)
-        return ret
+        return map(self.variant_dict, ret)
+
+    def variant_dict(self, variant):
+        return VariantDict(variant, self._hidden_keys)
 
     def to_name_suffix(self, variant):
         suffix = []
@@ -342,7 +353,7 @@ def run_experiment_lite(
                 exp_prefix, timestamp, exp_count)
         if task.get("log_dir", None) is None:
             task["log_dir"] = config.LOG_DIR + "/local/" + \
-                exp_prefix.replace("_", "-") + "/" + task["exp_name"]
+                              exp_prefix.replace("_", "-") + "/" + task["exp_name"]
         if task.get("variant", None) is not None:
             variant = task.pop("variant")
             if "exp_name" not in variant:
@@ -535,7 +546,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     params = dict(params, log_dir=docker_log_dir)
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
-#     command_list.append('sleep 9999999')
+    #     command_list.append('sleep 9999999')
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
@@ -760,7 +771,7 @@ def s3_sync_code(config, dry=False):
     cache_cmds = ["aws", "s3", "sync"] + \
                  [cache_path, full_path]
     cmds = ["aws", "s3", "sync"] + \
-        flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+           flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
            [".", full_path]
     caching_cmds = ["aws", "s3", "sync"] + \
                    [full_path, cache_path]

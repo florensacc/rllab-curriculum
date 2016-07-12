@@ -5,7 +5,7 @@ from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
 os.environ["THEANO_FLAGS"] = "device=cpu"
 from rllab.envs.gym_env import GymEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from sandbox.rein.dynamics_models.bnn.bnn import BNN
+from sandbox.rein.dynamics_models.bnn.conv_bnn import ConvBNN
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
@@ -22,10 +22,10 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-etas = [0.1, 0.3, 1.0, 3.0, 10.0]
+etas = [0.0001, 0.001, 0.01, 0.1, 1.0]
 normalize_rewards = [False]
 kl_ratios = [True]
-mdp_classes = [CartpoleSwingupEnv]
+mdp_classes = [CartpoleEnv]
 mdps = [NormalizedEnv(env=mdp_class())
         for mdp_class in mdp_classes]
 
@@ -63,11 +63,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=2,
+        snn_n_samples=10,
         use_replay_pool=True,
-        use_kl_ratio=False,
+        use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=4,
+        kl_batch_size=128,
         normalize_reward=normalize_reward,
         replay_pool_size=100000,
         n_updates_per_sample=5000,
@@ -75,17 +75,17 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         unn_n_hidden=[128],
         unn_layers_type=['gaussian', 'gaussian'],
         unn_learning_rate=0.001,
-        surprise_transform=BatchPolopt.SurpriseTransform.CAP90PERC,
+        surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP90PERC,
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
-        output_type=BNN.OutputType.REGRESSION,
+        output_type=ConvBNN.OutputType.REGRESSION,
         pool_batch_size=16,
         likelihood_sd_init=1.0,
         prior_sd=0.5,
         # -------------
         disable_variance=False,
-        group_variance_by=BNN.GroupVarianceBy.UNIT,
-        surprise_type=BNN.SurpriseType.BALD,
+        group_variance_by=ConvBNN.GroupVarianceBy.WEIGHT,
+        surprise_type=ConvBNN.SurpriseType.INFGAIN,
         predict_reward=True,
         use_local_reparametrization_trick=True,
         n_itr_update=1,
@@ -94,7 +94,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="temp",
+        exp_prefix="trpo-vime-basic-a",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

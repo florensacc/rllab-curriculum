@@ -3,7 +3,9 @@ from rllab.sampler.stateful_pool import singleton_pool
 from rllab.misc import ext
 from rllab.misc import logger
 from rllab.misc import tensor_utils
+from sandbox.rein.dynamics_models.utils import atari_format_image
 import numpy as np
+import scipy
 
 
 def _worker_init(G, id):
@@ -63,7 +65,6 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     # ----------------------------
     # Save original reward.
     path['rewards_orig'] = np.array(path['rewards'])
-#     path['rewards'] += 1e8
 
     # DEBUG
     # -----
@@ -81,7 +82,9 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
         rew_orig = path['rewards_orig']
         # inputs = (o,a), target = o'
         obs_nxt = np.vstack([obs[1:]])
-        _inputs = np.hstack([obs[:-1], act[:-1]])
+        # FIXME: actions turned off!
+#         _inputs = np.hstack([obs[:-1], act[:-1]])
+        _inputs = obs[:-1]
         _targets = obs_nxt
         if predict_reward:
             _targets = np.hstack((_targets, rew_orig[:-1, None]))
@@ -252,7 +255,8 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
         # Last element in KL vector needs to be replaced by second last one
         # because the actual last observation has no next observation.
-        kl[-1] = kl[-2]
+        if len(path['rewards']) > 1:
+            kl[-1] = kl[-2]
 
         # Stuff it in path
         path['KL'] = kl

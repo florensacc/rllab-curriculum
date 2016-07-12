@@ -1,9 +1,25 @@
 import numpy as np
 from sklearn import datasets
 import itertools
+import scipy
+
 
 def enum(**enums):
     return type('Enum', (), enums)
+
+
+def atari_format_image(x):
+    if len(x.shape) != 3:
+        xt = x.reshape(210, 160, 3)
+    else:
+        xt = x.transpose(1, 2, 0)
+    return scipy.misc.imresize(xt, (42, 32, 3), interp='bilinear', mode=None).transpose(2, 0, 1)
+
+
+def atari_unformat_image(x):
+    xt = x.transpose(1, 2, 0)
+    return scipy.misc.imresize(xt, (210, 160, 3), interp='bilinear', mode=None).transpose(2, 0, 1)
+
 
 def group(x, lens):
     """Unflatten 2D list"""
@@ -79,16 +95,16 @@ def load_dataset_MNIST():
     return X_train, y_train, X_test, y_test
 
 
-def plot_mnist_digit(image):
+def plot_mnist_digit(image, ax):
     """ Plot a single MNIST image."""
-    import matplotlib.pyplot as plt
+
     import matplotlib
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
+    import matplotlib.pyplot as plt
     ax.matshow(image, cmap=matplotlib.cm.binary)
     plt.xticks(np.array([]))
     plt.yticks(np.array([]))
-    plt.show()
+    plt.draw()
+    plt.pause(0.00001)
 
 
 def load_dataset_multitarget_classification():

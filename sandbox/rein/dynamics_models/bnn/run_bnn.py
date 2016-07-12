@@ -66,7 +66,8 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         import matplotlib.pyplot as plt
         plt.ion()
         y = [model.pred_fn(x[None, :])[0][0] for x in X_test]
-        entropy = model.train_update_fn(X_test[0][None,:])
+#         entropy = model.train_update_fn(X_test[0][None,:])
+        entropy = model.ent(X_test[0][None,:])
         print(entropy)
 
 #         temp = model.fn_classification_nll(X_train, T_train)
@@ -129,7 +130,10 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 #             print(inputs, targets)
 #             kl_div = model.train_update_fn(
 #                 inputs, targets, step_size)
-            kl_div = model.train_update_fn(inputs)
+#             kl_div = model.train_update_fn(inputs)
+#             print(kl_div)
+            ent =  model.ent(inputs)
+            print(ent)
 
             kl_values.append(kl_mb_closed_form)
             kl_all_values.append(kl_mb_closed_form)
@@ -298,7 +302,7 @@ def main():
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=2,
+        n_samples=10,
         learning_rate=0.001,
         group_variance_by=BNN.GroupVarianceBy.UNIT,
         use_local_reparametrization_trick=True,

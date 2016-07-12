@@ -103,14 +103,13 @@ class FirstOrderOptimizer(Serializable):
         sess = tf.get_default_session()
 
         for epoch in xrange(self._max_epochs):
-            if self._verbose:
-                logger.log("Epoch %d" % epoch)
             for batch in dataset.iterate(update=True):
                 sess.run(self._train_op, dict(zip(self._input_vars, batch)))
 
             new_loss = f_loss(*(tuple(inputs) + extra_inputs))
 
-            print(new_loss)
+            if self._verbose:
+                logger.log("Epoch: %d | Loss: %f" % (epoch, new_loss))
             if self._callback or callback:
                 elapsed = time.time() - start_time
                 callback_args = dict(

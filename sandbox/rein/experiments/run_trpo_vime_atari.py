@@ -33,7 +33,7 @@ seeds = range(5)
 etas = [0.001, 0.01, 0.1]
 normalize_rewards = [False]
 kl_ratios = [False]
-mdps = [GymEnv("Freeway-ram-v0")]
+mdps = [GymEnv("Freeway-v0")]
 # mdp_classes = [MountainCarEnvX]
 
 param_cart_product = itertools.product(
@@ -59,7 +59,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=50000,
+        batch_size=500,
         whole_paths=True,
         max_path_length=10000,
         n_itr=100,
@@ -70,19 +70,19 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=10,
+        snn_n_samples=1,
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=4,
         normalize_reward=normalize_reward,
-        replay_pool_size=1000000,
+        replay_pool_size=100000,
         n_updates_per_sample=50000,
         second_order_update=True,
         unn_n_hidden=[512, 512],
         unn_layers_type=['gaussian', 'gaussian', 'gaussian'],
         unn_learning_rate=0.001,
-        surprise_transform=BatchPolopt.SurpriseTransform.ZERO100,
+        surprise_transform=None,#BatchPolopt.SurpriseTransform.CAP90PERC,
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
         output_type=BNN.OutputType.REGRESSION,
@@ -91,7 +91,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         prior_sd=0.5,
         # -------------
         disable_variance=False,
-        group_variance_by=BNN.GroupVarianceBy.UNIT,
+        group_variance_by=BNN.GroupVarianceBy.WEIGHT,
         surprise_type=BNN.SurpriseType.INFGAIN,
         predict_reward=True,
         use_local_reparametrization_trick=True,
@@ -101,11 +101,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-g",
+        exp_prefix="trpo-vime-freeway-i",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",
