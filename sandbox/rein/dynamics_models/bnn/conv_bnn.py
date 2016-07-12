@@ -699,7 +699,8 @@ class ConvBNN(LasagnePowered, Serializable):
 
             if layer_disc['name'] == 'input':
                 network = lasagne.layers.InputLayer(
-                    shape=layer_disc['in_shape'])
+                    shape=(None, np.prod(layer_disc['in_shape'])))
+                network = lasagne.layers.reshape(network, ([0],) + layer_disc['in_shape'])
             elif layer_disc['name'] == 'convolution':
                 network = BayesianConvLayer(network, num_filters=layer_disc[
                     'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'])
