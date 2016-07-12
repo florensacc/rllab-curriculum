@@ -116,6 +116,9 @@ class BayesianLayer(lasagne.layers.Layer):
 
         self.b_rho_old = self.add_param(
             np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False, trainable=False, oldparam=True)
+        
+    def num_weights(self):
+        return np.prod(self.get_W_shape())
 
     def log_to_std(self, rho):
         """Transformation for allowing rho in \mathbb{R}, rather than \mathbb{R}_+
@@ -450,7 +453,6 @@ class ConvBNN(LasagnePowered, Serializable):
         INFGAIN='information gain', COMPR='compression gain', BALD='BALD')
 
     def __init__(self,
-                 n_out,
                  layers_disc,
                  n_batches,
                  trans_func=lasagne.nonlinearities.rectify,
@@ -475,7 +477,6 @@ class ConvBNN(LasagnePowered, Serializable):
 
         Serializable.quick_init(self, locals())
 
-        self.n_out = n_out
         self.batch_size = batch_size
         self.transf = trans_func
         self.outf = out_func
@@ -523,9 +524,11 @@ class ConvBNN(LasagnePowered, Serializable):
 
         # Compile theano functions.
         self.build_model()
+        
+        print('num_weights: {}'.format(self.num_weights()))
 
     def save_old_params(self):
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_old_params()
@@ -533,7 +536,7 @@ class ConvBNN(LasagnePowered, Serializable):
             self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
     def reset_to_old_params(self):
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.reset_to_old_params()
@@ -542,20 +545,21 @@ class ConvBNN(LasagnePowered, Serializable):
 
     def compression_improvement(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_old_new() for l in layers)
 
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
     def num_weights(self):
         print('Disclaimer: only work with BNNLayers!')
-        layers = lasagne.layers.get_all_layers(self.network)[1:]
-        return sum(l.num_weights for l in layers)
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
+                        lasagne.layers.get_all_layers(self.network)[1:])
+        return sum(l.num_weights() for l in layers)
 
     def ent(self, input):
         # FIXME: work in progress
@@ -608,19 +612,19 @@ class ConvBNN(LasagnePowered, Serializable):
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_prior_new() for l in layers)
 
@@ -698,10 +702,13 @@ class ConvBNN(LasagnePowered, Serializable):
                     shape=layer_disc['in_shape'])
             elif layer_disc['name'] == 'convolution':
                 network = BayesianConvLayer(network, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd)
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'])
             elif layer_disc['name'] == 'pool':
                 network = lasagne.layers.Pool2DLayer(
                     network, pool_size=layer_disc['pool_size'])
+            elif layer_disc['name'] == 'pad':
+                network = lasagne.layers.PadLayer(
+                    network, val=0)
             elif layer_disc['name'] == 'gaussian':
                 network = BayesianDenseLayer(
                     network, num_units=layer_disc[
@@ -710,9 +717,9 @@ class ConvBNN(LasagnePowered, Serializable):
             elif layer_disc['name'] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, num_units=layer_disc['n_units'], nonlinearity=self.transf)
-            elif layer_disc['name'] == 'transconvolution':
+            elif layer_disc['name'] == 'deconvolution':
                 network = BayesianDeConvLayer(network, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd)
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'])
             elif layer_disc['name'] == 'upscale':
                 network = lasagne.layers.Upscale2DLayer(
                     network, scale_factor=layer_disc['scale_factor'])
@@ -723,11 +730,6 @@ class ConvBNN(LasagnePowered, Serializable):
                 raise(Exception('Unknown layer!'))
 
             print('layer {}: {}\n\toutsize: {}'.format(i, layer_disc, network.output_shape))
-
-        # Output layer
-        network = BayesianDenseLayer(
-            network, self.n_out, nonlinearity=self.outf, prior_sd=self.prior_sd, use_local_reparametrization_trick=True)
-        print('layer f: outsize: {}'.format(network.output_shape))
 
         self.network = network
 

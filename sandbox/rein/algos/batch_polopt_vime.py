@@ -7,9 +7,10 @@ from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup
+from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup,\
+    plot_mnist_digit
 from scipy import stats
-from sandbox.rein.dynamics_models.utils import enum
+from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_unformat_image
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
@@ -20,7 +21,7 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.rein.dynamics_models.bnn import bnn
+from sandbox.rein.dynamics_models.bnn import conv_bnn
 # -------------------
 
 
@@ -29,8 +30,8 @@ class SimpleReplayPool(object):
 
     def __init__(
             self, max_pool_size, observation_shape, action_dim,
-            observation_dtype=theano.config.floatX,  # @UndefinedVariable
-            action_dtype=theano.config.floatX):  # @UndefinedVariable
+            observation_dtype=theano.config.floatX,
+            action_dtype=theano.config.floatX):
         self._observation_shape = observation_shape
         self._action_dim = action_dim
         self._observation_dtype = observation_dtype
@@ -308,21 +309,44 @@ class BatchPolopt(RLAlgorithm):
         logger.log("Building BNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
 
-        if self.output_type == bnn.BNN.OutputType.CLASSIFICATION:
+        if self.output_type == conv_bnn.ConvBNN.OutputType.CLASSIFICATION:
             n_out = 128 * 256
-        elif self.output_type == bnn.BNN.OutputType.REGRESSION:
+        elif self.output_type == conv_bnn.ConvBNN.OutputType.REGRESSION:
             n_out = obs_dim
 
         if self.predict_reward:
             # One extra output dimension to predict the reward or return.
             n_out += 1
 
-        self.bnn = bnn.BNN(
-            n_in=(obs_dim + act_dim),
-            n_hidden=self.unn_n_hidden,
-            n_out=n_out,
+        deconv_filters = 16
+        filter_sizes = 5
+        self.bnn = conv_bnn.ConvBNN(
+            #             n_in=(obs_dim + act_dim),
+            #             n_hidden=self.unn_n_hidden,
+            #             n_out=n_out,
+            layers_disc=[
+                dict(name='input', in_shape=(None, 3, 42, 32)),
+                dict(name='convolution', n_filters=16,
+                     filter_size=(filter_sizes, filter_sizes), stride=(1, 1)),
+                dict(name='convolution', n_filters=16,
+                     filter_size=(4, 4), stride=(2, 2)),
+                dict(name='convolution', n_filters=16,
+                     filter_size=(filter_sizes, filter_sizes), stride=(1, 1)),
+                dict(name='reshape', shape=([0], -1)),
+                dict(name='gaussian', n_units=2016),
+                dict(name='gaussian', n_units=128),
+                dict(name='gaussian', n_units=2016),
+                dict(name='reshape', shape=([0], 16, 14, 9)),
+                dict(name='deconvolution', n_filters=deconv_filters,
+                     filter_size=(filter_sizes, filter_sizes), stride=(1, 1)),
+                dict(name='deconvolution', n_filters=deconv_filters,
+                     filter_size=(4, 4), stride=(2, 2)),
+                dict(name='deconvolution', n_filters=3,
+                     filter_size=(filter_sizes, filter_sizes), stride=(1, 1)),
+            ],
+            #             n_out=42 * 32,
             n_batches=n_batches,
-            layers_type=self.unn_layers_type,
+            #             layers_type=self.unn_layers_type,
             trans_func=lasagne.nonlinearities.rectify,
             out_func=lasagne.nonlinearities.linear,
             batch_size=batch_size,
@@ -342,19 +366,21 @@ class BatchPolopt(RLAlgorithm):
             disable_variance=self.disable_variance
         )
 
+        # Number of weights in BNN, excluding biases.
         self.num_weights = self.bnn.num_weights()
 
         logger.log(
             "Model built ({:.1f} sec, {} weights).".format((time.time() - start_time), self.num_weights))
 
         if self.use_replay_pool:
-            if self.output_type == bnn.BNN.OutputType.CLASSIFICATION:
+            if self.output_type == conv_bnn.ConvBNN.OutputType.CLASSIFICATION:
                 observation_dtype = int
-            elif self.output_type == bnn.BNN.OutputType.REGRESSION:
+            elif self.output_type == conv_bnn.ConvBNN.OutputType.REGRESSION:
                 observation_dtype = float
             self.pool = SimpleReplayPool(
                 max_pool_size=self.replay_pool_size,
-                observation_shape=self.env.observation_space.shape,
+                # self.env.observation_space.shape,
+                observation_shape=(3, 42, 32),
                 action_dim=act_dim,
                 observation_dtype=observation_dtype
             )
@@ -407,8 +433,10 @@ class BatchPolopt(RLAlgorithm):
                                 (obs_std + 1e-8)
                             next_obs = (
                                 batch['next_observations'] - obs_mean) / (obs_std + 1e-8)
-                        _inputs = np.hstack(
-                            [obs, act])
+                        # FIXME: actions turned off!
+                        _inputs = obs
+#                         _inputs = np.hstack(
+#                             [obs, act])
                         _targets = next_obs
                         if self.predict_reward:
                             _targets = np.hstack(

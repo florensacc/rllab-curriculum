@@ -1,10 +1,24 @@
 import numpy as np
 from sklearn import datasets
 import itertools
+import scipy
 
 
 def enum(**enums):
     return type('Enum', (), enums)
+
+
+def atari_format_image(x):
+    if len(x.shape) != 3:
+        xt = x.reshape(210, 160, 3)
+    else:
+        xt = x.transpose(1, 2, 0)
+    return scipy.misc.imresize(xt, (42, 32, 3), interp='bilinear', mode=None).transpose(2, 0, 1)
+
+
+def atari_unformat_image(x):
+    xt = x.transpose(1, 2, 0)
+    return scipy.misc.imresize(xt, (210, 160, 3), interp='bilinear', mode=None).transpose(2, 0, 1)
 
 
 def group(x, lens):

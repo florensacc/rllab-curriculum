@@ -5,7 +5,7 @@ from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
 os.environ["THEANO_FLAGS"] = "device=cpu"
 from rllab.envs.gym_env import GymEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from sandbox.rein.dynamics_models.bnn.bnn import BNN
+from sandbox.rein.dynamics_models.bnn.conv_bnn import ConvBNN
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
@@ -78,14 +78,14 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP90PERC,
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
-        output_type=BNN.OutputType.REGRESSION,
+        output_type=ConvBNN.OutputType.REGRESSION,
         pool_batch_size=16,
         likelihood_sd_init=1.0,
         prior_sd=0.5,
         # -------------
         disable_variance=False,
-        group_variance_by=BNN.GroupVarianceBy.UNIT,
-        surprise_type=BNN.SurpriseType.BALD,
+        group_variance_by=ConvBNN.GroupVarianceBy.WEIGHT,
+        surprise_type=ConvBNN.SurpriseType.INFGAIN,
         predict_reward=True,
         use_local_reparametrization_trick=True,
         n_itr_update=1,
@@ -95,10 +95,10 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix="trpo-vime-basic-a",
-        n_parallel=4,
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         script="sandbox/rein/experiments/run_experiment_lite.py",
     )

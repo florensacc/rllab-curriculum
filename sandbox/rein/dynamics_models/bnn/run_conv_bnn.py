@@ -77,7 +77,7 @@ def main():
             dict(name='reshape', shape=(
                 [0], 2, 12, 12)),
             dict(name='upscale', scale_factor=2),
-            dict(name='transconvolution', n_filters=deconv_filters,
+            dict(name='deconvolution', n_filters=deconv_filters,
                  filter_size=(filter_sizes, filter_sizes))
 
         ],
