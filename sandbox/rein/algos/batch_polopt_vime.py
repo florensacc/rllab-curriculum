@@ -152,8 +152,8 @@ class BatchPolopt(RLAlgorithm):
             kl_batch_size=1,
             use_kl_ratio_q=False,
             layers_disc=None,
-#             unn_n_hidden=[32],
-#             unn_layers_type=[1, 1],
+            input_dim=None,
+            output_dim=None,
             unn_learning_rate=0.001,
             second_order_update=False,
             surprise_type='information_gain',
@@ -222,8 +222,8 @@ class BatchPolopt(RLAlgorithm):
         self.normalize_reward = normalize_reward
         self.kl_batch_size = kl_batch_size
         self.use_kl_ratio_q = use_kl_ratio_q
-#         self.unn_n_hidden = unn_n_hidden
-#         self.unn_layers_type = unn_layers_type
+        self.input_dim = input_dim
+        self.output_dim = output_dim
         self.layers_disc = layers_disc
         self.unn_learning_rate = unn_learning_rate
         self.second_order_update = second_order_update
@@ -321,13 +321,10 @@ class BatchPolopt(RLAlgorithm):
             n_out += 1
 
         self.bnn = conv_bnn.ConvBNN(
-            #             n_in=(obs_dim + act_dim),
-            #             n_hidden=self.unn_n_hidden,
-            #             n_out=n_out,
+            input_dim=self.input_dim,
+            output_dim=self.output_dim,
             layers_disc=self.layers_disc,
-            #             n_out=42 * 32,
             n_batches=n_batches,
-            #             layers_type=self.unn_layers_type,
             trans_func=lasagne.nonlinearities.rectify,
             out_func=lasagne.nonlinearities.linear,
             batch_size=batch_size,
@@ -346,6 +343,8 @@ class BatchPolopt(RLAlgorithm):
             likelihood_sd_init=self.likelihood_sd_init,
             disable_variance=self.disable_variance
         )
+        
+        self.bnn.pred_fn(np.empty((10, 4032)))
 
         # Number of weights in BNN, excluding biases.
         self.num_weights = self.bnn.num_weights()
@@ -361,7 +360,7 @@ class BatchPolopt(RLAlgorithm):
             self.pool = SimpleReplayPool(
                 max_pool_size=self.replay_pool_size,
                 # self.env.observation_space.shape,
-                observation_shape=(3, 42, 32),
+                observation_shape=(np.prod((3, 42, 32)),),
                 action_dim=act_dim,
                 observation_dtype=observation_dtype
             )

@@ -116,7 +116,7 @@ class BayesianLayer(lasagne.layers.Layer):
 
         self.b_rho_old = self.add_param(
             np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False, trainable=False, oldparam=True)
-        
+
     def num_weights(self):
         return np.prod(self.get_W_shape())
 
@@ -444,7 +444,12 @@ class BayesianDenseLayer(BayesianLayer):
 
 
 class ConvBNN(LasagnePowered, Serializable):
-    """Bayesian neural network (BNN), according to Blundell2016."""
+    """(Convolutional) Bayesian neural network (BNN), according to Blundell2016.
+
+    The input and output to the network is a flat array. Internally, the shapes of input_dim 
+    and output_dim are used. Use layers_disc to describe the layers between the input and output
+    layers.
+    """
 
     # Enums
     GroupVarianceBy = enum(WEIGHT='weight', UNIT='unit', LAYER='layer')
@@ -453,6 +458,8 @@ class ConvBNN(LasagnePowered, Serializable):
         INFGAIN='information gain', COMPR='compression gain', BALD='BALD')
 
     def __init__(self,
+                 input_dim,
+                 output_dim,
                  layers_disc,
                  n_batches,
                  trans_func=lasagne.nonlinearities.rectify,
@@ -477,6 +484,8 @@ class ConvBNN(LasagnePowered, Serializable):
 
         Serializable.quick_init(self, locals())
 
+        self.input_dim = input_dim
+        self.output_dim = output_dim
         self.batch_size = batch_size
         self.transf = trans_func
         self.outf = out_func
@@ -524,7 +533,7 @@ class ConvBNN(LasagnePowered, Serializable):
 
         # Compile theano functions.
         self.build_model()
-        
+
         print('num_weights: {}'.format(self.num_weights()))
 
     def save_old_params(self):
@@ -693,15 +702,15 @@ class ConvBNN(LasagnePowered, Serializable):
 
     def build_network(self):
 
-        for i, layer_disc in enumerate(self.layers_disc):
-            if i == 0:
-                assert(layer_disc['name'] == 'input')
+        # Input to the network is always flattened.
+        network = lasagne.layers.InputLayer(
+            shape=(None, np.prod(self.input_dim)))
+        # Reshape according to the input_dim
+        network = lasagne.layers.reshape(network, ([0],) + self.input_dim)
 
-            if layer_disc['name'] == 'input':
-                network = lasagne.layers.InputLayer(
-                    shape=(None, np.prod(layer_disc['in_shape'])))
-                network = lasagne.layers.reshape(network, ([0],) + layer_disc['in_shape'])
-            elif layer_disc['name'] == 'convolution':
+        for i, layer_disc in enumerate(self.layers_disc):
+
+            if layer_disc['name'] == 'convolution':
                 network = BayesianConvLayer(network, num_filters=layer_disc[
                     'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'])
             elif layer_disc['name'] == 'pool':
@@ -727,12 +736,15 @@ class ConvBNN(LasagnePowered, Serializable):
             elif layer_disc['name'] == 'reshape':
                 network = lasagne.layers.ReshapeLayer(
                     network, shape=layer_disc['shape'])
+
             else:
                 raise(Exception('Unknown layer!'))
 
-            print('layer {}: {}\n\toutsize: {}'.format(i, layer_disc, network.output_shape))
+            print('layer {}: {}\n\toutsize: {}'.format(
+                i, layer_disc, network.output_shape))
 
-        self.network = network
+        # Output of output_dim is flattened again.
+        self.network = lasagne.layers.flatten(network)
 
     def build_model(self):
 
@@ -740,8 +752,9 @@ class ConvBNN(LasagnePowered, Serializable):
         # Same input for classification as regression.
         kl_factor = T.scalar('kl_factor',
                              dtype=theano.config.floatX)
-        input_var = T.tensor4('inputs',
-                              dtype=theano.config.floatX)
+        # Assume all inputs are flattened.
+        input_var = T.matrix('inputs',
+                             dtype=theano.config.floatX)
 
         if self.output_type == ConvBNN.OutputType.REGRESSION:
             target_var = T.matrix('targets',

@@ -18,6 +18,7 @@ from sandbox.rein.algos.trpo_vime import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
 from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
+from rllab.baselines.zero_baseline import ZeroBaseline
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
@@ -98,8 +99,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         replay_pool_size=10000,
         n_updates_per_sample=500,
         second_order_update=True,
+        input_dim=(3, 42, 32),
+        output_dim=(3, 42, 32),
         layers_disc=[
-            dict(name='input', in_shape=(3, 42, 32)),
             dict(name='convolution', n_filters=16,
                  filter_size=(filter_sizes, filter_sizes), stride=(1, 1)),
             dict(name='convolution', n_filters=16,
@@ -109,7 +111,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
             dict(name='reshape', shape=([0], -1)),
             dict(name='gaussian', n_units=2016),
             dict(name='gaussian', n_units=128),
+            dict(name='fuse'),
             dict(name='gaussian', n_units=2016),
+            dict(name='split', n_units=128),
             dict(name='reshape', shape=([0], 16, 14, 9)),
             dict(name='deconvolution', n_filters=deconv_filters,
                  filter_size=(filter_sizes, filter_sizes), stride=(1, 1)),
@@ -130,7 +134,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         disable_variance=False,
         group_variance_by=BNN.GroupVarianceBy.WEIGHT,
         surprise_type=BNN.SurpriseType.INFGAIN,
-        predict_reward=True,
+        predict_reward=False,
         use_local_reparametrization_trick=True,
         n_itr_update=1,
         # -------------
