@@ -187,8 +187,9 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializabl
             )
 
             log_prob_tensor = tf.Variable(
-                initial_value=np.cast['float32'](np.random.normal(scale=log_prob_tensor_std, size=(bottleneck_dim, subgoal_dim,
-                                                                                    action_dim))),
+                initial_value=np.cast['float32'](
+                    np.random.normal(scale=log_prob_tensor_std, size=(bottleneck_dim, subgoal_dim,
+                                                                      action_dim))),
                 # stddev=0.01),
                 trainable=True,
                 name="log_prob"
@@ -328,7 +329,8 @@ def weighted_sample_n(prob_matrix, items):
     s = prob_matrix.cumsum(axis=1)
     r = np.random.rand(prob_matrix.shape[0])
     k = (s < r.reshape((-1, 1))).sum(axis=1)
-    return items[k]
+    n_items = len(items)
+    return items[np.minimum(k, n_items - 1)]
 
 
 class FixedClockPolicy(StochasticPolicy, Serializable):
@@ -1137,9 +1139,10 @@ class FixedClockImitation(RLAlgorithm):
 
                 logger.record_tabular("dHighParamNorm", np.linalg.norm(after_high_params - prev_high_params))
                 logger.record_tabular("dLowParamNorm", np.linalg.norm(after_low_params - prev_low_params))
-                logger.record_tabular("dBottleneckParamNorm", np.linalg.norm(after_bottleneck_params - prev_bottleneck_params))
+                logger.record_tabular("dBottleneckParamNorm",
+                                      np.linalg.norm(after_bottleneck_params - prev_bottleneck_params))
                 logger.record_tabular("dNonBottleneckParamNorm", np.linalg.norm(after_non_bottleneck_params -
-                                                                              prev_non_bottleneck_params))
+                                                                                prev_non_bottleneck_params))
 
                 self.env_expert.log_diagnostics(self)
                 logger.dump_tabular()
