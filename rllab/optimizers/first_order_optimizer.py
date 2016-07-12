@@ -105,8 +105,6 @@ class FirstOrderOptimizer(Serializable):
 
         itr = 0
         for epoch in pyprind.prog_bar(range(self._max_epochs)):
-            if self._verbose:
-                logger.log("Epoch %d" % epoch)
             for batch in dataset.iterate(update=True):
                 f_opt(*batch)
                 if yield_itr is not None and (itr % (yield_itr+1)) == 0:
@@ -114,6 +112,8 @@ class FirstOrderOptimizer(Serializable):
                 itr += 1
 
             new_loss = f_loss(*(tuple(inputs) + extra_inputs))
+            if self._verbose:
+                logger.log("Epoch %d, loss %s" % (epoch, new_loss))
 
             if self._callback or callback:
                 elapsed = time.time() - start_time

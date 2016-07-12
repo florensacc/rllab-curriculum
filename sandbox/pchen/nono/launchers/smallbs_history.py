@@ -21,8 +21,8 @@ from sandbox.pchen.poga.algos.poga import POGA
 stub(globals())
 
 env = normalize(
-    CartpoleEnv()
-    # SwimmerEnv()
+    # CartpoleEnv()
+    SwimmerEnv()
 )
 
 from rllab.misc.instrument import VariantGenerator, variant
@@ -68,7 +68,7 @@ for v in variants:
         max_path_length=100,
         n_itr=min([budget/bs, 200]),
         discount=0.99,
-        step_size=0.01,
+        step_size=0.001,
         # plot=True,
         optimizer=ConjugateGradientOptimizerWithHistory(
             cg_iters=v.ncg,

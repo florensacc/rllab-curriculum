@@ -32,10 +32,6 @@ class DiagonalGaussian(Distribution):
         denominator = 2 * np.square(new_std) + 1e-8
         return np.sum(
             numerator / denominator + new_log_stds - old_log_stds, axis=-1)
-        # more lossy version
-        # return TT.sum(
-        #     numerator / denominator + TT.log(new_std) - TT.log(old_std ), axis=-1)
-
 
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
         old_means = old_dist_info_vars["mean"]
@@ -58,9 +54,6 @@ class DiagonalGaussian(Distribution):
         denominator = 2 * TT.square(new_std) + 1e-8
         return TT.sum(
             numerator / denominator + new_log_stds - old_log_stds, axis=-1)
-        # more lossy version
-        # return TT.sum(
-        #     numerator / denominator + TT.log(new_std) - TT.log(old_std ), axis=-1)
 
     def kl(self, old_dist_info, new_dist_info):
         old_means = old_dist_info["mean"]
