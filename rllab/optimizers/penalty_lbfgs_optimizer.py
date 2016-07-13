@@ -135,6 +135,7 @@ class PenaltyLbfgsOptimizer(Serializable):
                     penalty_scale_factor = self._decrease_penalty_factor
                     opt_params = itr_opt_params
             else:
+                # After the first iteration, the penalty is not None. Now whenever constraint is crossed, we stop adjust
                 if penalty_scale_factor > 1 and \
                         try_constraint_val <= self._max_constraint_val:
                     break
@@ -142,10 +143,14 @@ class PenaltyLbfgsOptimizer(Serializable):
                         try_constraint_val >= self._max_constraint_val:
                     break
 
-            # check if the penalty was already at the maximum. Otherwise, update it
+            # check if the penalty was already at the bounds. Otherwise update it. Here penalty_scale_fact is never None
             if try_penalty >= self._max_penalty and penalty_scale_factor > 1:
                 logger.log('_max_penalty has already been tried!')
                 self._penalty = try_penalty  # useless: if we were at max_penalty it means a previous itr already set it
+                break
+            elif try_penalty <= self._min_penalty and penalty_scale_factor < 1:
+                logger.log('_min_penalty has already been tried!')
+                self._penalty = try_penalty
                 break
             else:
                 try_penalty *= penalty_scale_factor
