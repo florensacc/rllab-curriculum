@@ -17,7 +17,6 @@ from rllab.misc import special
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 
-# try recurrence
 from sandbox.carlos_snn.core.network import GRUNetwork
 
 
@@ -73,12 +72,9 @@ class BernoulliRecurrentRegressor(LasagnePowered, Serializable):
 
         LasagnePowered.__init__(self, [l_p])
 
-        #I should extract the last prediction and pad it to the rest of the batch
-        # padded_p = TT.tile(l_p[:,-1,:], (1, TT.shape(l_p)[1], 1))
-
         xs_var = p_network.input_layer.input_var
 
-        ys_var = TT.itensor3("ys")
+        ys_var = TT.itensor3("ys")  # this is 3D: (traj, time, lat_dim)
         old_p_var = TT.tensor3("old_p")
         x_mean_var = theano.shared(
             np.zeros((1, 1,) + input_shape),
@@ -107,23 +103,17 @@ class BernoulliRecurrentRegressor(LasagnePowered, Serializable):
 
         old_info_vars = dict(p=old_p_var)
         info_vars = dict(p=p_var)  # posterior of the latent at every step, wrt obs-act. Same along batch if recurrent
-        # info_vars_all = dict(p=p_var_all)  # posterior of lat at every step, different at every step! predict-as-you-go
 
         dist = self._dist = Bernoulli(output_dim)
 
         mean_kl = TT.mean(dist.kl_sym(old_info_vars, info_vars))
-        # mean_kl_all = TT.mean(dist.kl_sym(old_info_vars, info_vars_all))
 
         loss = - TT.mean(dist.log_likelihood_sym(ys_var, info_vars)) # regressor just wants to min -loglik of data ys
-        # loss_all = - TT.mean(dist.log_likelihood_sym(ys_var, info_vars_all)) # regressor just wants to min -loglik of data ys
 
         predicted = p_var >= 0.5
-        # predicted_all = p_var >= 0.5
 
         self._f_predict = ext.compile_function([xs_var], predicted)
         self._f_p = ext.compile_function([xs_var], p_var)  # for consistency with gauss_mlp_reg this should be ._f_pdists
-        # self._f_predict_all = ext.compile_function([xs_var], predicted_all)
-        # self._f_p_all = ext.compile_function([xs_var], p_var_all)  # for consistency with gauss_mlp_reg this should be ._f_pdists
 
         self._l_p = l_p
 
@@ -133,17 +123,7 @@ class BernoulliRecurrentRegressor(LasagnePowered, Serializable):
             network_outputs=[p_var],
         )
 
-        # optimizer_args_all = dict(
-        #     loss=loss_all,
-        #     target=self,
-        #     network_outputs=[p_var_all],
-        # )
-
         if use_trust_region:
-            # if predict_all:
-            #     optimizer_args["leq_constraint"] = (mean_kl, step_size)
-            # else:
-            #     optimizer_args["leq_constraint"] = (mean_kl_all, step_size)
             optimizer_args["leq_constraint"] = (mean_kl, step_size)
             optimizer_args["inputs"] = [xs_var, ys_var, old_p_var]
         else:
@@ -161,8 +141,8 @@ class BernoulliRecurrentRegressor(LasagnePowered, Serializable):
     def fit(self, xs, ys):
         if self._normalize_inputs:
             # recompute normalizing constants for inputs
-            self._x_mean_var.set_value(np.mean(xs, axis=(0,1), keepdims=True)) #the mean taken over batches AND steps
-            self._x_std_var.set_value(np.std(xs, axis=(0,1), keepdims=True) + 1e-8)
+            self._x_mean_var.set_value(np.mean(xs, axis=(0, 1), keepdims=True)) #the mean taken over batches AND steps
+            self._x_std_var.set_value(np.std(xs, axis=(0, 1), keepdims=True) + 1e-8)
         if self._use_trust_region:
             old_p = self._f_p(xs)
             inputs = [xs, ys, old_p]
