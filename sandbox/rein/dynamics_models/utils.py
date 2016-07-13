@@ -96,11 +96,20 @@ def load_dataset_MNIST():
     return X_train[:100], y_train[:100], X_test, y_test
 
 
+def load_dataset_MNIST_plus():
+    X_train, y_train, X_test, y_test = load_dataset_MNIST()
+    # add action and reward signal.
+    act = np.tanh(np.linspace(0, 1, X_train.shape[0]))
+    act = np.vstack((act, act)).T
+    rew = np.sin(np.linspace(0, 1, X_train.shape[0]))[:, None]
+    return X_train, y_train, X_test, y_test, act, rew
+
 def plot_mnist_digit(image, im):
     """ Plot a single MNIST image."""
     im.set_data(image)
     plt.draw()
     plt.pause(0.000001)
+
 
 def load_dataset_multitarget_classification():
     """Synthetic classification data loader"""

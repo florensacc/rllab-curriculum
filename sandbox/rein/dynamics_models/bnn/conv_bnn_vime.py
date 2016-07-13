@@ -9,7 +9,29 @@ from collections import OrderedDict
 import theano
 from sandbox.rein.dynamics_models.utils import enum
 from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, BayesianDeConvLayer, BayesianDenseLayer, BayesianLayer
-from __builtin__ import None
+
+
+class OuterProdLayer(lasagne.layers.MergeLayer):
+
+    def __init__(self, incomings, **kwargs):
+        super(OuterProdLayer, self).__init__(incomings, **kwargs)
+
+    def get_output_shape_for(self, input_shapes):
+        return (None, input_shapes[0][1] * input_shapes[1][1])  
+
+    def get_output_for(self, inputs, **kwargs):
+        return T.outer(inputs)
+    
+class ConcatLayer(lasagne.layers.MergeLayer):
+
+    def __init__(self, incomings, **kwargs):
+        super(ConcatLayer, self).__init__(incomings, **kwargs)
+
+    def get_output_shape_for(self, input_shapes):
+        return (None, input_shapes[0][1] + input_shapes[1][1])  
+
+    def get_output_for(self, inputs, **kwargs):
+        return T.concatenate(inputs)
 
 
 class ConvBNNVIME(LasagnePowered, Serializable):
@@ -277,16 +299,31 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def build_network(self):
 
+        print('f: {} x {} -> {} x {}'.format(self.state_dim,
+                                             self.action_dim, self.state_dim, self.reward_dim))
+
         # Make sure that we are able to unmerge the s_in and a_in.
 
         # Input to the s_net is always flattened.
-        s_net = lasagne.layers.InputLayer(
-            shape=(None, np.prod(self.state_dim)))
+        s_flat_dim = np.prod(self.state_dim)
+        a_flat_dim = np.prod(self.action_dim)
+        r_flat_dim = np.prod(self.reward_dim)
+
+        input = lasagne.layers.InputLayer(
+            shape=(None, s_flat_dim + a_flat_dim))
+
+        # Split input into state and action.
+        s_net = lasagne.layers.SliceLayer(
+            input, indices=slice(None, s_flat_dim), axis=1)
+        a_net = lasagne.layers.SliceLayer(
+            input, indices=slice(s_flat_dim, None), axis=1)
+
         # Reshape according to the input_dim
         s_net = lasagne.layers.reshape(s_net, ([0],) + self.state_dim)
+        a_net = lasagne.layers.reshape(a_net, ([0],) + self.action_dim)
 
-        a_net = lasagne.layers.InputLayer(
-            shape=(None, np.prod(self.action_dim)))
+        print('Slicing into {} and {}'.format(
+            s_net.output_shape, a_net.output_shape))
 
         for i, layer_disc in enumerate(self.layers_disc):
 
@@ -307,10 +344,16 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             elif layer_disc['name'] == 'reshape':
                 s_net = lasagne.layers.ReshapeLayer(
                     s_net, shape=layer_disc['shape'])
+            elif layer_disc['name'] == 'pool':
+                s_net = lasagne.layers.Pool2DLayer(
+                    s_net, pool_size=layer_disc['pool_size'])
+            elif layer_disc['name'] == 'upscale':
+                s_net = lasagne.layers.Upscale2DLayer(
+                    s_net, scale_factor=layer_disc['scale_factor'])
             elif layer_disc['name'] == 'fuse':
                 # Here we fuse the s_net with the a_net through an outer
                 # product.
-                s_net = T.outer(s_net, a_net)
+                s_net = OuterProdLayer([s_net, a_net])
             elif layer_disc['name'] == 'split':
                 # Split off the r_net from s_net.
                 r_net = BayesianDenseLayer(
@@ -325,7 +368,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # Output of output_dim is flattened again. But ofc, we need to output
         # the r_net value, e.g., the reward signal.
-        self.network = lasagne.layers.flatten(T.concatenate(s_net, r_net))
+        s_net = lasagne.layers.flatten(s_net)
+        r_net = lasagne.layers.flatten(r_net)
+        self.network = ConcatLayer([s_net, r_net])
 
     def build_model(self):
 
