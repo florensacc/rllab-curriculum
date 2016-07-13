@@ -66,24 +66,23 @@ class NPO_snn(BatchPolopt):
             for a in range(self.env.spec.action_space.flat_dim):
                 self.logged_MI.append(([], [a]))
         self.other_regressors = []
-        for (obs, actions) in self.logged_MI:
-            temp_lat_reg = Latent_regressor(
-                env_spec=self.env.spec,
-                policy=self.policy,
-                recurrent=True,
-                obs_regressed=obs,  # this is the x-position of the com
-                act_regressed=actions,
-                use_only_sign=False,  # for the regressor we use only the sign to estimate the post
-                noisify_traj_coef=0,
-                optimizer=None,  # this defaults to LBFGS, for first order, put 'fist_order'
-                regressor_args={
-                    'hidden_sizes': (32, 32),
-                    'name': 'latent_reg_obs{}_act{}'.format(obs, actions),
-                    'predict_all': True,  # use all the predictions and not only the last
-                    'use_trust_region': True,
+        if self.latent_regressor:  # check that there is a latent_regressor. there isn't if latent_dim=0.
+            for reg_dict in self.logged_MI:
+                extra_regressor_args = {
+                    'env_spec': self.latent_regressor.env_spec,
+                    'policy': self.latent_regressor.policy,
+                    'recurrent': self.latent_regressor.recurrent,
+                    'predict_all': self.latent_regressor.predict_all,
+                    'obs_regressed': self.latent_regressor.obs_regressed,
+                    'act_regressed': self.latent_regressor.act_regressed,
+                    'use_only_sign': self.latent_regressor.use_only_sign,
+                    # 'optimizer': self.latent_regressor.optimizer,
+                    'regressor_args': self.latent_regressor.regressor_args,
                 }
-            )
-            self.other_regressors.append(temp_lat_reg)
+                for key, value in reg_dict.iteritems():
+                    extra_regressor_args[key] = value
+                temp_lat_reg = Latent_regressor(**extra_regressor_args)
+                self.other_regressors.append(temp_lat_reg)
 
     # @overrides
     def process_samples(self, itr, paths):
@@ -107,24 +106,26 @@ class NPO_snn(BatchPolopt):
                 self.latent_regressor.fit(paths)
 
                 for i, path in enumerate(paths):
-                    if np.isnan(path['observations']).any():
-                        print '(after reg.fit) The observation of path {} have a NaN: '.format(i), path['observations'][0]
-                    if np.isnan(path['actions']).any():
-                        print '(after reg.fit) The actions of path {} have a NaN: '.format(i), path['actions'][0]
-                    if np.isnan(path['rewards']).any():
-                        print '(after reg.fit) The rewards of path {} have a Nan: '.format(i), path['rewards'][0]
+                    # if np.isnan(path['observations']).any():
+                    #     print '(after reg.fit) The observation of path {} have a NaN: '.format(i), path['observations'][
+                    #         0]
+                    # if np.isnan(path['actions']).any():
+                    #     print '(after reg.fit) The actions of path {} have a NaN: '.format(i), path['actions'][0]
+                    # if np.isnan(path['rewards']).any():
+                    #     print '(after reg.fit) The rewards of path {} have a Nan: '.format(i), path['rewards'][0]
 
                     path['logli_latent_regressor'] = self.latent_regressor.predict_log_likelihood(
                         [path], [path['agent_infos']['latents']])[0]  # this is for paths usually..
 
-                    if np.isnan(path['logli_latent_regressor']).any():
-                        print 'The logli_latent_reg of path {} have NaN: '.format(i), path['logli_latent_regressor'][0]
+                    # if np.isnan(path['logli_latent_regressor']).any():
+                    #     print 'The logli_latent_reg of path {} have NaN: '.format(i), path['logli_latent_regressor'][0]
 
                     # print "(after reg.pred) The latent sampled in path {} was: {}, " \
                     #       "the mean/actual action was {}{}, the probability of that one is: {}".format(
                     #         i, path['agent_infos']['latents'][0], path['agent_infos']['mean'][0],
                     #         path['actions'][0], path['logli_latent_regressor'][0])
 
+                    # print path
                     path['true_rewards'] = path['rewards']
                     path['rewards'] += self.reward_coef * path[
                         'logli_latent_regressor']  # the logli of the latent is the variable
@@ -189,7 +190,8 @@ class NPO_snn(BatchPolopt):
     def log_diagnostics(self, paths):
         BatchPolopt.log_diagnostics(self, paths)
         if self.latent_regressor:
-            with logger.prefix(' Latent regressor logging | '):  # this is mostly useless as log_diagnostics is only tabular
+            with logger.prefix(
+                    ' Latent regressor logging | '):  # this is mostly useless as log_diagnostics is only tabular
                 self.latent_regressor.log_diagnostics(paths)
         # log the MI with other obs and action
         for i, lat_reg in enumerate(self.other_regressors):
@@ -313,7 +315,7 @@ class NPO_snn(BatchPolopt):
         # this should always be 0. If it's not there is a problem.
         mean_kl_before = self.optimizer.constraint_val(all_input_values)
         logger.record_tabular('MeanKL_Before', mean_kl_before)
-        
+
         with logger.prefix(' PolicyOptimize | '):
             self.optimizer.optimize(all_input_values)
 
