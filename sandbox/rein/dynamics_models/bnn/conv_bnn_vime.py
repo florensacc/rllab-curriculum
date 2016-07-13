@@ -352,7 +352,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             elif layer_disc['name'] == 'upscale':
                 s_net = lasagne.layers.Upscale2DLayer(
                     s_net, scale_factor=layer_disc['scale_factor'])
-            elif layer_disc['name'] == 'fuse':
+            elif layer_disc['name'] == 'outerprod':
                 # Here we fuse the s_net with the a_net through an outer
                 # product.
                 s_net = lasagne.layers.flatten(OuterProdLayer([s_net, a_net]))
@@ -440,8 +440,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             [input_var], self.pred_sym(input_var), log_name='fn_pred')
         # We want to resample when actually updating the BNN itself, otherwise
         # you will fit to the specific noise.
-#         self.train_fn = ext.compile_function(
-#             [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
+        self.train_fn = ext.compile_function(
+            [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
 
         if self.surprise_type == ConvBNNVIME.SurpriseType.INFGAIN:
             if self.second_order_update:

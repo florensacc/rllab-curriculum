@@ -11,6 +11,19 @@ import theano
 def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, plt=None, act=None, rew=None, im=None):
     # Train convolutional BNN to autoencode MNIST digits.
 
+    pred_in = np.hstack(
+        (X_train[0].reshape((1, 28 * 28)), act[0].reshape(1, 2)))
+    pred_in = np.vstack((pred_in, pred_in))
+    pred = model.pred_fn(pred_in)
+    pred_s = pred[:, :28 * 28]
+    pred_r = pred[:, -1]
+    print('pred_r: {}'.format(pred_r))
+    plot_mnist_digit(pred_s[0].reshape(28, 28), im)
+
+    X_train = X_train.reshape(-1, 28 * 28)
+    X = np.hstack((X_train, act))
+    Y = np.hstack((X_train, rew))
+
     print('Training ...')
 
     # Finally, launch the training loop.
@@ -21,30 +34,25 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         # In each epoch, we do a full pass over the training data:
         train_err, train_batches, start_time, kl_values = 0, 0, time.time(), []
 
-        pred_in = np.hstack(
-            (X_train[0].reshape((1, 28 * 28)), act[0].reshape(1, 2)))
-        pred_in = np.vstack((pred_in, pred_in))
-        pred = model.pred_fn(pred_in)
-        pred_s = pred[:, :28 * 28]
-        pred_r = pred[:, -1]
-        print(pred_s.shape)
-        print(pred_r.shape)
-        plot_mnist_digit(pred_s[0].reshape(28, 28), im)
-
         # Iterate over all minibatches and train on each of them.
-        for batch in iterate_minibatches(X_train, T_train, model.batch_size, shuffle=True):
+        for batch in iterate_minibatches(X, Y, model.batch_size, shuffle=True):
 
             # Fix old params for KL divergence computation.
             model.save_old_params()
 
             # Train current minibatch.
-            inputs, _ = batch
-            inputs_rs = inputs.reshape(-1, 1 * 28 * 28)
+            inputs, targets = batch
             _train_err = model.train_fn(
-                inputs_rs, inputs_rs, 1.0)
+                inputs, targets, 1.0)
 
             train_err += _train_err
             train_batches += 1
+        pred = model.pred_fn(X)
+        pred_s = pred[0, :28 * 28]
+        pred_r = pred[:5, -1]
+        print(pred_r)
+        print(Y[:5, -1])
+        plot_mnist_digit(pred_s.reshape(28, 28), im)
 
         # Then we print the results for this epoch:
         print("Epoch {} of {} took {:.3f}s".format(
@@ -52,8 +60,6 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         print("  training loss:\t\t{:.6f}".format(
             train_err / train_batches))
 
-    pred = model.pred_fn(inputs.reshape(-1, 1 * 28 * 28))
-    plot_mnist_digit(pred[0].reshape(28, 28), im)
     print("Done training.")
 
 
@@ -88,7 +94,7 @@ def main():
             dict(name='reshape', shape=([0], -1)),
             dict(name='gaussian', n_units=288),
             dict(name='gaussian', n_units=24),
-            dict(name='fuse'),
+            dict(name='outerprod'),
             dict(name='gaussian', n_units=288),
             dict(name='split', n_units=128),
             dict(name='reshape', shape=(
@@ -102,7 +108,7 @@ def main():
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=2,
+        n_samples=10,
         prior_sd=0.05,
         update_likelihood_sd=False,
         learning_rate=0.001,
