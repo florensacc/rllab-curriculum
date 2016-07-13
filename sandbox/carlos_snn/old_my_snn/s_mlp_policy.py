@@ -18,6 +18,7 @@ from rllab.misc import logger
 from rllab.misc import ext
 from rllab.misc import autoargs
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
+from rllab.distributions.categorical import Categorical
 from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
 
 
@@ -73,6 +74,13 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         elif latent_name == 'bernoulli':
             self.latent_dist = Bernoulli(self.latent_dim)
             self.latent_dist_info = dict(p=0.5 * np.ones(self.latent_dim))
+        elif latent_name == 'categorical':
+            self.latent_dist = Categorical(self.latent_dim)
+            if self.latent_dim > 0:
+                self.latent_dist_info = dict(prob=1./self.latent_dim * np.ones(self.latent_dim))
+            else:
+                self.latent_dist_info = dict(prob=np.ones(self.latent_dim))
+            print self.latent_dist_info
         else:
             raise NotImplementedError
 
@@ -175,18 +183,23 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         return actions[0], {k: v[0] for k, v in outputs.iteritems()}
 
     def get_actions(self, observations):
+        # print 'enter get_actions'
         ##CF
         # how can I impose that I only reset for a whole rollout? before calling get_actions!!
         observations = np.array(observations)  # needed to do the outer product for the bilinear
         if self.latent_dim:
             if self.resample:
                 latents = [self.latent_dist.sample(self.latent_dist_info) for _ in observations]
+                # print 'resampling the latents'
             else:
-                if not len(self.latent_fix) == self.latent_dim:  # we decide to reset based on if smthing in the fix
+                if not np.size(self.latent_fix) == self.latent_dim:  # we decide to reset based on if smthing in the fix
+                    # logger.log('Reset for latents: the latent_fix {} not match latent_dim{}'.format(self.latent_fix, self.latent_dim))
                     self.reset()
                 if len(self.pre_fix_latent) == self.latent_dim:  # If we have a pre_fix, reset will put the latent to it
+                    # logger.log('Reset for latents: we have a pre_fix to fix!')
                     self.reset()  # this overwrites the latent sampled or in latent_fix
                 latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation better...
+                # print 'not resample, use latent_fix, obtaining: ', latents
             if self.bilinear_integration:
                 # print 'the obs is: ' , observations, '\nwith time length: {}\n'.format(observations.shape[0])
                 # print 'the reshaped bilinear is:\n' , np.reshape(observations[:, np.newaxis, :] * latents[:, :, np.newaxis],
@@ -220,6 +233,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
 
     @overrides
     def reset(self):  # executed at the start of every rollout. Will fix the latent if needed.
+        # print 'entering reset'
         if not self.resample:
             if self.pre_fix_latent.size > 0:
                 self.latent_fix = self.pre_fix_latent
