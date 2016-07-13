@@ -17,21 +17,22 @@ class OuterProdLayer(lasagne.layers.MergeLayer):
         super(OuterProdLayer, self).__init__(incomings, **kwargs)
 
     def get_output_shape_for(self, input_shapes):
-        return (None, input_shapes[0][1] * input_shapes[1][1])  
+        return (None, input_shapes[1][1], input_shapes[0][1])
 
     def get_output_for(self, inputs, **kwargs):
-        return T.outer(inputs)
-    
+        return inputs[0][:, :, np.newaxis] * inputs[1][:, np.newaxis, :]
+
+
 class ConcatLayer(lasagne.layers.MergeLayer):
 
     def __init__(self, incomings, **kwargs):
         super(ConcatLayer, self).__init__(incomings, **kwargs)
 
     def get_output_shape_for(self, input_shapes):
-        return (None, input_shapes[0][1] + input_shapes[1][1])  
+        return (None, input_shapes[0][1] + input_shapes[1][1])
 
     def get_output_for(self, inputs, **kwargs):
-        return T.concatenate(inputs)
+        return T.concatenate(inputs, axis=1)
 
 
 class ConvBNNVIME(LasagnePowered, Serializable):
@@ -317,6 +318,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             input, indices=slice(None, s_flat_dim), axis=1)
         a_net = lasagne.layers.SliceLayer(
             input, indices=slice(s_flat_dim, None), axis=1)
+        r_net = None
 
         # Reshape according to the input_dim
         s_net = lasagne.layers.reshape(s_net, ([0],) + self.state_dim)
@@ -353,7 +355,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             elif layer_disc['name'] == 'fuse':
                 # Here we fuse the s_net with the a_net through an outer
                 # product.
-                s_net = OuterProdLayer([s_net, a_net])
+                s_net = lasagne.layers.flatten(OuterProdLayer([s_net, a_net]))
             elif layer_disc['name'] == 'split':
                 # Split off the r_net from s_net.
                 r_net = BayesianDenseLayer(
@@ -365,11 +367,18 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
             print('layer {}: {}\n\toutsize: {}'.format(
                 i, layer_disc, s_net.output_shape))
+            if a_net is not None:
+                print('\toutsize: {}'.format(a_net.output_shape))
+            if r_net is not None:
+                print('\toutsize: {}'.format(r_net.output_shape))
 
         # Output of output_dim is flattened again. But ofc, we need to output
         # the r_net value, e.g., the reward signal.
-        s_net = lasagne.layers.flatten(s_net)
-        r_net = lasagne.layers.flatten(r_net)
+        s_net = lasagne.layers.reshape(s_net, ([0], -1))
+        r_net = BayesianDenseLayer(
+            r_net, num_units=r_flat_dim, nonlinearity=self.transf, prior_sd=self.prior_sd,
+            use_local_reparametrization_trick=True)
+        r_net = lasagne.layers.reshape(r_net, ([0], -1))
         self.network = ConcatLayer([s_net, r_net])
 
     def build_model(self):
@@ -431,8 +440,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             [input_var], self.pred_sym(input_var), log_name='fn_pred')
         # We want to resample when actually updating the BNN itself, otherwise
         # you will fit to the specific noise.
-        self.train_fn = ext.compile_function(
-            [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
+#         self.train_fn = ext.compile_function(
+#             [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
 
         if self.surprise_type == ConvBNNVIME.SurpriseType.INFGAIN:
             if self.second_order_update:
@@ -538,8 +547,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         elif self.surprise_type == ConvBNNVIME.SurpriseType.BALD:
             # BALD
-            self.train_update_fn = ext.compile_function(
-                [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
+            pass
+#             self.train_update_fn = ext.compile_function(
+#                 [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
 
 if __name__ == '__main__':
     pass

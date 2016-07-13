@@ -4,6 +4,8 @@ import lasagne
 from sandbox.rein.dynamics_models.utils import iterate_minibatches, plot_mnist_digit, load_dataset_MNIST, load_dataset_MNIST_plus
 import time
 from sandbox.rein.dynamics_models.bnn.conv_bnn_vime import ConvBNNVIME
+import theano
+# theano.config.exception_verbosity='high'
 
 
 def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, plt=None, act=None, rew=None, im=None):
@@ -19,9 +21,15 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         # In each epoch, we do a full pass over the training data:
         train_err, train_batches, start_time, kl_values = 0, 0, time.time(), []
 
-        pred_in = X_train[0].reshape((1, 28 * 28))
+        pred_in = np.hstack(
+            (X_train[0].reshape((1, 28 * 28)), act[0].reshape(1, 2)))
+        pred_in = np.vstack((pred_in, pred_in))
         pred = model.pred_fn(pred_in)
-        plot_mnist_digit(pred[0].reshape(28, 28), im)
+        pred_s = pred[:, :28 * 28]
+        pred_r = pred[:, -1]
+        print(pred_s.shape)
+        print(pred_r.shape)
+        plot_mnist_digit(pred_s[0].reshape(28, 28), im)
 
         # Iterate over all minibatches and train on each of them.
         for batch in iterate_minibatches(X_train, T_train, model.batch_size, shuffle=True):
@@ -94,7 +102,7 @@ def main():
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=10,
+        n_samples=2,
         prior_sd=0.05,
         update_likelihood_sd=False,
         learning_rate=0.001,
