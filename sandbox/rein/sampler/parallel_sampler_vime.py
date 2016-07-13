@@ -81,10 +81,10 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
         rew_orig = path['rewards_orig']
         # inputs = (o,a), target = o'
         obs_nxt = np.vstack([obs[1:]])
-        # FIXME: actions turned off!
-#         _inputs = np.hstack([obs[:-1], act[:-1]])
-        _inputs = obs[:-1]
+        _inputs = np.hstack([obs[:-1], act[:-1]])
         _targets = obs_nxt
+        # FIXME: turned on by default
+        predict_reward=True
         if predict_reward:
             _targets = np.hstack((_targets, rew_orig[:-1, None]))
 

@@ -36,7 +36,7 @@ etas = [0.1]
 # seeds = range(5)
 # etas = [0, 0.001, 0.01, 0.1]
 normalize_rewards = [False]
-kl_ratios = [False]
+kl_ratios = [True]
 mdps = [GymEnv("Freeway-v0")]
 # mdp_classes = [MountainCarEnvX]
 
@@ -65,9 +65,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 #         hidden_sizes=(64, 64)
 #     )
 
-    baseline = LinearFeatureBaseline(
-        mdp.spec
-    )
+
+#     baseline = LinearFeatureBaseline(
+#         mdp.spec
+#     )
+    baseline = ZeroBaseline(mdp.spec)
 
     deconv_filters = 16
     filter_sizes = 5
@@ -99,8 +101,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         replay_pool_size=10000,
         n_updates_per_sample=500,
         second_order_update=True,
-        input_dim=(3, 42, 32),
-        output_dim=(3, 42, 32),
+        state_dim=(3, 42, 32),
+        action_dim=(3,),
+        reward_dim=(1,),
         layers_disc=[
             dict(name='convolution', n_filters=16,
                  filter_size=(filter_sizes, filter_sizes), stride=(1, 1)),
@@ -111,7 +114,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
             dict(name='reshape', shape=([0], -1)),
             dict(name='gaussian', n_units=2016),
             dict(name='gaussian', n_units=128),
-            dict(name='fuse'),
+            dict(name='outerprod'),
             dict(name='gaussian', n_units=2016),
             dict(name='split', n_units=128),
             dict(name='reshape', shape=([0], 16, 14, 9)),
@@ -127,14 +130,14 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         update_likelihood_sd=True,
         replay_kl_schedule=0.99,
         output_type=BNN.OutputType.REGRESSION,
-        pool_batch_size=2,
+        pool_batch_size=64,
         likelihood_sd_init=1.0,
         prior_sd=0.5,
         # -------------
         disable_variance=False,
         group_variance_by=BNN.GroupVarianceBy.WEIGHT,
         surprise_type=BNN.SurpriseType.INFGAIN,
-        predict_reward=False,
+        predict_reward=True,
         use_local_reparametrization_trick=True,
         n_itr_update=1,
         # -------------

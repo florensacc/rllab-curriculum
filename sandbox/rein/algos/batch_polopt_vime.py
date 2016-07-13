@@ -21,7 +21,7 @@ import theano
 import lasagne
 from collections import deque
 import time
-from sandbox.rein.dynamics_models.bnn import conv_bnn
+from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
 # -------------------
 
 
@@ -152,8 +152,9 @@ class BatchPolopt(RLAlgorithm):
             kl_batch_size=1,
             use_kl_ratio_q=False,
             layers_disc=None,
-            input_dim=None,
-            output_dim=None,
+            state_dim=None,
+            action_dim=None,
+            reward_dim=None,
             unn_learning_rate=0.001,
             second_order_update=False,
             surprise_type='information_gain',
@@ -222,8 +223,9 @@ class BatchPolopt(RLAlgorithm):
         self.normalize_reward = normalize_reward
         self.kl_batch_size = kl_batch_size
         self.use_kl_ratio_q = use_kl_ratio_q
-        self.input_dim = input_dim
-        self.output_dim = output_dim
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.reward_dim = reward_dim
         self.layers_disc = layers_disc
         self.unn_learning_rate = unn_learning_rate
         self.second_order_update = second_order_update
@@ -311,18 +313,21 @@ class BatchPolopt(RLAlgorithm):
         logger.log("Building BNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
 
-        if self.output_type == conv_bnn.ConvBNN.OutputType.CLASSIFICATION:
+        # FIXME: doesnt work
+        if self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
             n_out = 128 * 256
-        elif self.output_type == conv_bnn.ConvBNN.OutputType.REGRESSION:
+        elif self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.REGRESSION:
             n_out = obs_dim
 
-        if self.predict_reward:
-            # One extra output dimension to predict the reward or return.
-            n_out += 1
+        # FIXME: predict reward is hardcode atm.
+#         if self.predict_reward:
+#             # One extra output dimension to predict the reward or return.
+#             n_out += 1
 
-        self.bnn = conv_bnn.ConvBNN(
-            input_dim=self.input_dim,
-            output_dim=self.output_dim,
+        self.bnn = conv_bnn_vime.ConvBNNVIME(
+            state_dim=self.state_dim,
+            action_dim=self.action_dim,
+            reward_dim=self.reward_dim,
             layers_disc=self.layers_disc,
             n_batches=n_batches,
             trans_func=lasagne.nonlinearities.rectify,
@@ -343,8 +348,20 @@ class BatchPolopt(RLAlgorithm):
             likelihood_sd_init=self.likelihood_sd_init,
             disable_variance=self.disable_variance
         )
-        
-        self.bnn.pred_fn(np.empty((10, 4032)))
+
+        sanity_pred = self.bnn.pred_fn(np.empty((10, 4032 + 3)))
+        import matplotlib.pyplot as plt
+        plt.ion()
+        plt.figure()
+        print('rew: {}'.format(sanity_pred[-1]))
+        sanity_pred_im = sanity_pred[
+            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+        print(sanity_pred_im.shape)
+        im = plt.imshow(
+            sanity_pred_im)#, interpolation='none')
+#         im.set_data(image)
+        plt.draw()
+        plt.pause(0.000001)
 
         # Number of weights in BNN, excluding biases.
         self.num_weights = self.bnn.num_weights()
@@ -353,9 +370,9 @@ class BatchPolopt(RLAlgorithm):
             "Model built ({:.1f} sec, {} weights).".format((time.time() - start_time), self.num_weights))
 
         if self.use_replay_pool:
-            if self.output_type == conv_bnn.ConvBNN.OutputType.CLASSIFICATION:
+            if self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
                 observation_dtype = int
-            elif self.output_type == conv_bnn.ConvBNN.OutputType.REGRESSION:
+            elif self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.REGRESSION:
                 observation_dtype = float
             self.pool = SimpleReplayPool(
                 max_pool_size=self.replay_pool_size,
@@ -389,6 +406,10 @@ class BatchPolopt(RLAlgorithm):
                     path_len = len(path['rewards'])
                     for i in xrange(path_len):
                         obs = path['observations'][i]
+                        im.set_data(
+                            obs.reshape(self.state_dim).transpose(1, 2, 0))
+                        plt.draw()
+                        plt.pause(0.000001)
                         act = path['actions'][i]
                         rew_orig = path['rewards_orig'][i]
                         term = (i == path_len - 1)
@@ -413,10 +434,8 @@ class BatchPolopt(RLAlgorithm):
                                 (obs_std + 1e-8)
                             next_obs = (
                                 batch['next_observations'] - obs_mean) / (obs_std + 1e-8)
-                        # FIXME: actions turned off!
-                        _inputs = obs
-#                         _inputs = np.hstack(
-#                             [obs, act])
+                        _inputs = np.hstack(
+                            [obs, act])
                         _targets = next_obs
                         if self.predict_reward:
                             _targets = np.hstack(

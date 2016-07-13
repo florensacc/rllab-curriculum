@@ -47,11 +47,16 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
             train_err += _train_err
             train_batches += 1
+
+        pred = model.pred_fn(X)
+        acc = np.mean(np.square(pred - Y))
+        print('sqerr: {}'.format(acc))
+
         pred = model.pred_fn(X)
         pred_s = pred[0, :28 * 28]
         pred_r = pred[:5, -1]
-        print(pred_r)
-        print(Y[:5, -1])
+#         print(pred_r)
+#         print(Y[:5, -1])
         plot_mnist_digit(pred_s.reshape(28, 28), im)
 
         # Then we print the results for this epoch:
@@ -66,7 +71,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 def main():
 
     num_epochs = 1000
-    batch_size = 2
+    batch_size = 8
 
     print("Loading data ...")
     X_train, T_train, X_test, T_test, act, rew = load_dataset_MNIST_plus()
