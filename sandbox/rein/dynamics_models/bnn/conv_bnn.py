@@ -90,15 +90,18 @@ class BayesianLayer(lasagne.layers.Layer):
         self.prior_rho = self.std_to_log(self.prior_sd)
         self.disable_variance = disable_variance
 
+        if self.disable_variance:
+            print('Variance disabled!')
+
     def init_params(self):
         self.mu = self.add_param(
-            lasagne.init.Normal(1., 0.), self.get_W_shape(), name='mu')
+            lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
 
         self.rho = self.add_param(
             lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho')
 
         self.b_mu = self.add_param(
-            lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_mu", regularizable=False)
+            lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
 
         self.b_rho = self.add_param(
             lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False)
@@ -379,7 +382,6 @@ class BayesianDenseLayer(BayesianLayer):
                  prior_sd=None,
                  use_local_reparametrization_trick=None,
                  group_variance_by=None,
-                 disable_variance=None,
                  **kwargs):
         super(BayesianDenseLayer, self).__init__(
             incoming, num_units, nonlinearity, prior_sd, **kwargs)
@@ -702,6 +704,8 @@ class ConvBNN(LasagnePowered, Serializable):
 
     def build_network(self):
 
+        print('f: {} -> {}'.format(self.input_dim, self.output_dim))
+
         # Input to the network is always flattened.
         network = lasagne.layers.InputLayer(
             shape=(None, np.prod(self.input_dim)))
@@ -712,31 +716,30 @@ class ConvBNN(LasagnePowered, Serializable):
 
             if layer_disc['name'] == 'convolution':
                 network = BayesianConvLayer(network, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'])
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'],
+                    disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'pool':
                 network = lasagne.layers.Pool2DLayer(
                     network, pool_size=layer_disc['pool_size'])
-            elif layer_disc['name'] == 'pad':
-                network = lasagne.layers.PadLayer(
-                    network, val=0)
             elif layer_disc['name'] == 'gaussian':
                 network = BayesianDenseLayer(
                     network, num_units=layer_disc[
                         'n_units'], nonlinearity=self.transf, prior_sd=self.prior_sd,
-                    use_local_reparametrization_trick=True)
+                    use_local_reparametrization_trick=self.use_local_reparametrization_trick,
+                    disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'deterministic':
                 network = lasagne.layers.DenseLayer(
                     network, num_units=layer_disc['n_units'], nonlinearity=self.transf)
             elif layer_disc['name'] == 'deconvolution':
                 network = BayesianDeConvLayer(network, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'])
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'],
+                    disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'upscale':
                 network = lasagne.layers.Upscale2DLayer(
                     network, scale_factor=layer_disc['scale_factor'])
             elif layer_disc['name'] == 'reshape':
                 network = lasagne.layers.ReshapeLayer(
                     network, shape=layer_disc['shape'])
-
             else:
                 raise(Exception('Unknown layer!'))
 
@@ -912,8 +915,9 @@ class ConvBNN(LasagnePowered, Serializable):
 
         elif self.surprise_type == ConvBNN.SurpriseType.BALD:
             # BALD
-            self.train_update_fn = ext.compile_function(
-                [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
+            pass
+#             self.train_update_fn = ext.compile_function(
+#                 [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
 
 if __name__ == '__main__':
     pass

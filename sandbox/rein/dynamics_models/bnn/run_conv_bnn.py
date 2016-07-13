@@ -5,7 +5,7 @@ from sandbox.rein.dynamics_models.utils import iterate_minibatches, plot_mnist_d
 import time
 
 
-def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, plt=None, ax=None):
+def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, plt=None, im=None):
     # Train convolutional BNN to autoencode MNIST digits.
 
     print('Training ...')
@@ -18,8 +18,9 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         # In each epoch, we do a full pass over the training data:
         train_err, train_batches, start_time, kl_values = 0, 0, time.time(), []
 
-        pred = model.pred_fn(X_train[0][:, None])
-        plot_mnist_digit(pred[0].reshape(28, 28), ax)
+        pred_in = X_train[0].reshape((1, 28 * 28))
+        pred = model.pred_fn(pred_in)
+        plot_mnist_digit(pred[0].reshape(28, 28), im)
 
         # Iterate over all minibatches and train on each of them.
         for batch in iterate_minibatches(X_train, T_train, model.batch_size, shuffle=True):
@@ -29,8 +30,9 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
             # Train current minibatch.
             inputs, _ = batch
+            inputs_rs = inputs.reshape(-1, 1 * 28 * 28)
             _train_err = model.train_fn(
-                inputs, inputs.reshape(model.batch_size, 28 * 28), 1.0)
+                inputs_rs, inputs_rs, 1.0)
 
             train_err += _train_err
             train_batches += 1
@@ -41,15 +43,15 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         print("  training loss:\t\t{:.6f}".format(
             train_err / train_batches))
 
-    pred = model.pred_fn(inputs)
-    plot_mnist_digit(pred[0].reshape(28, 28), ax)
+    pred = model.pred_fn(inputs.reshape(-1, 1 * 28 * 28))
+    plot_mnist_digit(pred[0].reshape(28, 28), im)
     print("Done training.")
 
 
 def main():
 
     num_epochs = 1000
-    batch_size = 64
+    batch_size = 2
 
     print("Loading data ...")
     X_train, T_train, X_test, T_test = load_dataset_MNIST()
@@ -57,18 +59,21 @@ def main():
 
     import matplotlib.pyplot as plt
     plt.ion()
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    plot_mnist_digit(X_train[0][0], ax)
+    plt.figure()
+    im = plt.imshow(
+        X_train[0][0], cmap='gist_gray_r', vmin=0, vmax=1, interpolation='none')
+    plot_mnist_digit(X_train[0][0], im)
 
     print("Building model and compiling functions ...")
     deconv_filters = 1
     filter_sizes = 5
     bnn = ConvBNN(
+        input_dim=(1, 28, 28),
+        output_dim=(1, 28, 28),
         layers_disc=[
-            dict(name='input', in_shape=(None, 1, 28, 28)),
             dict(name='convolution', n_filters=2,
-                 filter_size=(filter_sizes, filter_sizes)),
+                 filter_size=(filter_sizes, filter_sizes),
+                 stride=(1, 1)),
             dict(name='pool', pool_size=(2, 2)),
             dict(name='reshape', shape=([0], -1)),
             dict(name='gaussian', n_units=288),
@@ -78,21 +83,20 @@ def main():
                 [0], 2, 12, 12)),
             dict(name='upscale', scale_factor=2),
             dict(name='deconvolution', n_filters=deconv_filters,
-                 filter_size=(filter_sizes, filter_sizes))
-
+                 filter_size=(filter_sizes, filter_sizes),
+                 stride=(1, 1))
         ],
-        n_out=28 * 28,
         n_batches=n_batches,
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=2,
-        prior_sd=0.5,
-        update_likelihood_sd=True,
+        n_samples=10,
+        prior_sd=0.05,
+        update_likelihood_sd=False,
         learning_rate=0.001,
         group_variance_by=ConvBNN.GroupVarianceBy.UNIT,
-        use_local_reparametrization_trick=False,
-        likelihood_sd_init=1.0,
+        use_local_reparametrization_trick=True,
+        likelihood_sd_init=0.01,
         output_type=ConvBNN.OutputType.REGRESSION,
         surprise_type=ConvBNN.SurpriseType.BALD,
         num_classes=None,
@@ -104,7 +108,7 @@ def main():
 
     # Train the model.
     train(bnn, num_epochs=num_epochs, X_train=X_train,
-          T_train=T_train, X_test=X_test, T_test=T_test, ax=ax)
+          T_train=T_train, X_test=X_test, T_test=T_test, im=im)
     print('Done.')
 
 if __name__ == '__main__':
