@@ -2,6 +2,7 @@ import numpy as np
 from sklearn import datasets
 import itertools
 import scipy
+import matplotlib.pyplot as plt
 
 
 def enum(**enums):
@@ -92,19 +93,22 @@ def load_dataset_MNIST():
 
     # We just return all the arrays in order, as expected in main().
     # (It doesn't matter how we do this as long as we can read them again.)
-    return X_train, y_train, X_test, y_test
+    return X_train[:100], y_train[:100], X_test, y_test
 
 
-def plot_mnist_digit(image, ax):
+def load_dataset_MNIST_plus():
+    X_train, y_train, X_test, y_test = load_dataset_MNIST()
+    # add action and reward signal.
+    act = np.tanh(np.linspace(0, 1, X_train.shape[0]))
+    act = np.vstack((act, act)).T
+    rew = np.sin(np.linspace(0, 1, X_train.shape[0]))[:, None]
+    return X_train, y_train, X_test, y_test, act, rew
+
+def plot_mnist_digit(image, im):
     """ Plot a single MNIST image."""
-
-    import matplotlib
-    import matplotlib.pyplot as plt
-    ax.matshow(image, cmap=matplotlib.cm.binary)
-    plt.xticks(np.array([]))
-    plt.yticks(np.array([]))
+    im.set_data(image)
     plt.draw()
-    plt.pause(0.00001)
+    plt.pause(0.000001)
 
 
 def load_dataset_multitarget_classification():

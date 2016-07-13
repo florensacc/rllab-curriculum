@@ -1,9 +1,8 @@
-from rllab.sampler.utils import rollout
+from sandbox.rein.sampler.utils_atari import rollout
 from rllab.sampler.stateful_pool import singleton_pool
 from rllab.misc import ext
 from rllab.misc import logger
 from rllab.misc import tensor_utils
-from sandbox.rein.dynamics_models.utils import atari_format_image
 import numpy as np
 import scipy
 
