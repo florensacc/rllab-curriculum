@@ -125,7 +125,7 @@ class StubObject(StubBase):
         return "StubObject(%s, *%s, **%s)" % (str(self.proxy_class), str(self.args), str(self.kwargs))
 
 
-class VariantDict(dict):
+class VariantDict(AttrDict):
     def __init__(self, d, hidden_keys):
         super(VariantDict, self).__init__(d)
         self._hidden_keys = hidden_keys
