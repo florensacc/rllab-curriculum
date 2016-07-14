@@ -15,7 +15,7 @@ class PerlmutterHvp(Serializable):
         self.reg_coeff = None
         self.opt_fun = None
 
-    def update_opt(self, f, target, inputs, reg_coeff, extra_inputs=None):
+    def update_opt(self, f, target, inputs, reg_coeff):
         self.target = target
         self.reg_coeff = reg_coeff
         params = target.get_params(trainable=True)
@@ -31,24 +31,18 @@ class PerlmutterHvp(Serializable):
             )
             return TT.concatenate([TT.flatten(s) for s in Hx_plain_splits])
 
-        if extra_inputs is None:
-            extra_inputs = []
-
         self.opt_fun = ext.lazydict(
             f_Hx_plain=lambda: ext.compile_function(
-                inputs=inputs + extra_inputs + xs,
+                inputs=inputs + xs,
                 outputs=Hx_plain(),
                 log_name="f_Hx_plain",
             ),
         )
 
-    def build_eval(self, inputs, extra_inputs=None):
-        if extra_inputs is None:
-            extra_inputs = []
-
+    def build_eval(self, inputs):
         def eval(x):
             xs = tuple(self.target.flat_to_params(x, trainable=True))
-            ret = self.opt_fun["f_Hx_plain"](*(inputs + extra_inputs + xs)) + self.reg_coeff * x
+            ret = self.opt_fun["f_Hx_plain"](*(inputs + xs)) + self.reg_coeff * x
             return ret
 
         return eval
