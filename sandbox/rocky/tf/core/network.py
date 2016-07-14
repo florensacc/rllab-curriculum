@@ -10,11 +10,13 @@ from sandbox.rocky.tf.core.parameterized import Parameterized
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
 
 
-class MLP(LayersPowered):
+class MLP(LayersPowered, Serializable):
     def __init__(self, name, output_dim, hidden_sizes, hidden_nonlinearity,
                  output_nonlinearity, hidden_W_init=L.xavier_init, hidden_b_init=tf.zeros_initializer,
                  output_W_init=L.xavier_init, output_b_init=tf.zeros_initializer,
                  input_var=None, input_layer=None, input_shape=None):
+
+        Serializable.quick_init(self, locals())
 
         with tf.variable_scope(name):
             if input_layer is None:

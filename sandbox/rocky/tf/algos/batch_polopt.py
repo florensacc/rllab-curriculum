@@ -95,13 +95,19 @@ class BatchPolopt(RLAlgorithm):
     def shutdown_worker(self):
         self.sampler.shutdown_worker()
 
+    def obtain_samples(self, itr):
+        return self.sampler.obtain_samples(itr)
+
+    def process_samples(self, itr, paths):
+        return self.sampler.process_samples()
+
     def train(self):
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
             self.start_worker()
             for itr in xrange(self.start_itr, self.n_itr):
                 with logger.prefix('itr #%d | ' % itr):
-                    paths = self.sampler.obtain_samples(itr)
+                    paths = self.obtain_samples(itr)
                     samples_data = self.sampler.process_samples(itr, paths)
                     self.log_diagnostics(paths)
                     self.optimize_policy(itr, samples_data)
