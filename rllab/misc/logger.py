@@ -264,6 +264,8 @@ def stub_to_json(stub_sth):
         return map(stub_to_json, stub_sth)
     elif type(stub_sth) == type(lambda: None):
         return stub_sth.__module__ + "." + stub_sth.__name__
+    elif "theano" in str(type(stub_sth)):
+        return repr(stub_sth)
     return stub_sth
 
 

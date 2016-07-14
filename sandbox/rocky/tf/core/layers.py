@@ -682,7 +682,7 @@ class GRULayer(Layer):
         u = self.gate_nonlinearity(tf.matmul(x, self.W_xu) + tf.matmul(hprev, self.W_hu) + self.b_u)
         c = self.nonlinearity(tf.matmul(x, self.W_xc) + r * (tf.matmul(hprev, self.W_hc)) + self.b_c)
         h = (1 - u) * hprev + u * c
-        return h  # .astype(theano.config.floatX)
+        return h
 
     def get_step_layer(self, l_in, l_prev_hidden, name):
         return GRUStepLayer(incomings=[l_in, l_prev_hidden], gru_layer=self, name=name)
@@ -725,9 +725,9 @@ class GRUStepLayer(MergeLayer):
 
     def get_output_for(self, inputs, **kwargs):
         x, hprev = inputs
-        n_batch = x.shape[0]
-        x = x.reshape((n_batch, -1))
-        return self._gru_layer.step(x, hprev)
+        n_batch = tf.shape(x)[0]
+        x = tf.reshape(x, tf.pack([n_batch, -1]))
+        return self._gru_layer.step(hprev, x)
 
 
 def get_all_layers(layer, treat_as_input=None):

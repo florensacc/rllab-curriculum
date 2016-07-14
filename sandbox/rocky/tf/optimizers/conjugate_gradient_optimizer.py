@@ -21,6 +21,10 @@ class PerlmutterHvp(object):
         params = target.get_params(trainable=True)
 
         constraint_grads = tf.gradients(f, xs=params)
+        for idx, (grad, param) in enumerate(zip(constraint_grads, params)):
+            if grad is None:
+                constraint_grads[idx] = tf.zeros_like(param)
+
         xs = tuple([tensor_utils.new_tensor_like(p.name.split(":")[0], p) for p in params])
 
         def Hx_plain():
@@ -30,6 +34,9 @@ class PerlmutterHvp(object):
                 ),
                 params
             )
+            for idx, (Hx, param) in enumerate(zip(Hx_plain_splits, params)):
+                if Hx is None:
+                    Hx_plain_splits[idx] = tf.zeros_like(param)
             return tensor_utils.flatten_tensor_variables(Hx_plain_splits)
 
         self.opt_fun = ext.lazydict(
@@ -61,50 +68,24 @@ class FiniteDifferenceHvp(object):
 
         params = target.get_params(trainable=True)
 
-        # param_norm = tf.sqrt(tf.reduce_sum(tf.square(tensor_utils.flatten_tensor_variables(params))))
-        #
-        # eps = tf.cast(self.base_eps / (tf.stop_gradient(param_norm) + 1e-8), tf.float32)
-
-
         constraint_grads = tf.gradients(f, xs=params)
+        for idx, (grad, param) in enumerate(zip(constraint_grads, params)):
+            if grad is None:
+                constraint_grads[idx] = tf.zeros_like(param)
+
         flat_grad = tensor_utils.flatten_tensor_variables(constraint_grads)
-
-        # xs = tuple([tensor_utils.new_tensor_like("%s x" % p.name, p) for p in params])
-
-        # grad_dvplus = theano.clone(
-        #     constraint_grads,
-        #     replace=zip(params, [p + eps * x for p, x in zip(params, xs)]),
-        # )
-
-        # flat_grad_dvplus = flatten_tensor_variables(grad_dvplus)
-        #
-        # if self.grad_clip is not None:
-        #     flat_grad_dvplus = tf.clip_by_value(flat_grad_dvplus, -self.grad_clip, self.grad_clip)
-        #
-        # if self.symmetric:
-        #     grad_dvminus = theano.clone(
-        #         constraint_grads,
-        #         replace=zip(params, [p - eps * x for p, x in zip(params, xs)]),
-        #     )
-        #     flat_grad_dvminus = flatten_tensor_variables(grad_dvminus)
-        #     if self.grad_clip is not None:
-        #         flat_grad_dvminus = tf.clip_by_value(flat_grad_dvminus, -self.grad_clip, self.grad_clip)
-        #     hx = (flat_grad_dvplus - flat_grad_dvminus) / (2 * eps)
-        # else:
-        #     hx = (flat_grad_dvplus - flatten_tensor_variables(constraint_grads)) / eps
 
         def f_Hx_plain(*args):
             inputs_ = args[:len(inputs)]
             xs = args[len(inputs):]
             flat_xs = np.concatenate(map(lambda x: np.reshape(x, (-1,)), xs))
-            # flat_xs = ext.flatten(xs)
-            param_val = self.target.get_param_values()
+            param_val = self.target.get_param_values(trainable=True)
             eps = np.cast['float32'](self.base_eps / (np.linalg.norm(param_val) + 1e-8))
-            self.target.set_param_values(param_val + eps * flat_xs)
+            self.target.set_param_values(param_val + eps * flat_xs, trainable=True)
             flat_grad_dvplus = self.opt_fun["f_grad"](*inputs_)
-            self.target.set_param_values(param_val)
+            self.target.set_param_values(param_val, trainable=True)
             if self.symmetric:
-                self.target.set_param_values(param_val - eps * flat_xs)
+                self.target.set_param_values(param_val - eps * flat_xs, trainable=True)
                 flat_grad_dvminus = self.opt_fun["f_grad"](*inputs_)
                 hx = (flat_grad_dvplus - flat_grad_dvminus) / (2 * eps)
             else:
@@ -199,6 +180,9 @@ class ConjugateGradientOptimizer(Serializable):
 
         params = target.get_params(trainable=True)
         grads = tf.gradients(loss, xs=params)
+        for idx, (grad, param) in enumerate(zip(grads, params)):
+            if grad is None:
+                grads[idx] = tf.zeros_like(param)
         flat_grad = tensor_utils.flatten_tensor_variables(grads)
 
         self._hvp_approach.update_opt(f=constraint_term, target=target, inputs=inputs + extra_inputs,
@@ -280,7 +264,7 @@ class ConjugateGradientOptimizer(Serializable):
 
         logger.log("descent direction computed")
 
-        prev_param = self._target.get_param_values(trainable=True)
+        prev_param = np.copy(self._target.get_param_values(trainable=True))
         n_iter = 0
         for n_iter, ratio in enumerate(self._backtrack_ratio ** np.arange(self._max_backtracks)):
             cur_step = ratio * flat_descent_step
@@ -295,7 +279,15 @@ class ConjugateGradientOptimizer(Serializable):
         if (np.isnan(loss) or np.isnan(constraint_val) or loss >= loss_before or constraint_val >=
             self._max_constraint_val) and not self._accept_violation:
             logger.log("Line search condition violated. Rejecting the step!")
-            self._target.set_param_values(prev_param)
+            if np.isnan(loss):
+                logger.log("Violated because loss is NaN")
+            if np.isnan(constraint_val):
+                logger.log("Violated because constraint %s is NaN" % self._constraint_name)
+            if loss >= loss_before:
+                logger.log("Violated because loss not improving")
+            if constraint_val >= self._max_constraint_val:
+                logger.log("Violated because constraint %s is violated" % self._constraint_name)
+            self._target.set_param_values(prev_param, trainable=True)
         logger.log("backtrack iters: %d" % n_iter)
         logger.log("computing loss after")
         logger.log("optimization finished")

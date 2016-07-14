@@ -8,6 +8,7 @@ import theano
 from rllab.misc import ext
 from rllab.core.lasagne_layers import OpLayer
 from rllab.core.lasagne_powered import LasagnePowered
+from rllab.core.serializable import Serializable
 
 import numpy as np
 
@@ -32,11 +33,13 @@ def wrapped_conv(*args, **kwargs):
         return theano.tensor.nnet.conv2d(*args, **kwargs)
 
 
-class MLP(LasagnePowered):
+class MLP(LasagnePowered, Serializable):
     def __init__(self, output_dim, hidden_sizes, hidden_nonlinearity,
                  output_nonlinearity, hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
                  output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
                  name=None, input_var=None, input_layer=None, input_shape=None):
+
+        Serializable.quick_init(self, locals())
 
         if name is None:
             prefix = ""
