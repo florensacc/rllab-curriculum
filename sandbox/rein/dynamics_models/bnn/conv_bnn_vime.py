@@ -331,18 +331,21 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
             if layer_disc['name'] == 'convolution':
                 s_net = BayesianConvLayer(s_net, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'])
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'],
+                                          disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'gaussian':
                 s_net = BayesianDenseLayer(
                     s_net, num_units=layer_disc[
                         'n_units'], nonlinearity=self.transf, prior_sd=self.prior_sd,
-                    use_local_reparametrization_trick=True)
+                    use_local_reparametrization_trick=True,
+                                          disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'deterministic':
                 s_net = lasagne.layers.DenseLayer(
                     s_net, num_units=layer_disc['n_units'], nonlinearity=self.transf)
             elif layer_disc['name'] == 'deconvolution':
                 s_net = BayesianDeConvLayer(s_net, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'])
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'],
+                                          disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'reshape':
                 s_net = lasagne.layers.ReshapeLayer(
                     s_net, shape=layer_disc['shape'])
@@ -417,7 +420,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
             # Loss function.
             loss = self.loss(
-                input_var, target_var, kl_factor)
+                input_var, target_var, kl_factor, disable_kl=self.disable_variance)
             loss_only_last_sample = self.loss_last_sample(
                 input_var, target_var)
 

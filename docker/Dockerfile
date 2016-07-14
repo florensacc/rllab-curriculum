@@ -39,6 +39,7 @@ RUN pip install --upgrade pip
 #RUN conda install --yes -c https://conda.anaconda.org/kne pybox2d
 #RUN conda install --yes -c https://conda.binstar.org/tlatorre pygame
 RUN apt-get build-dep -y python-pygame
+RUN pip install Pillow
 
 # ========== OpenAI Gym ==========
 RUN pip install gym

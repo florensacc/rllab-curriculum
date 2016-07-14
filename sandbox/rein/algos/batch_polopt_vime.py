@@ -9,7 +9,7 @@ import rllab.misc.logger as logger
 import rllab.plotter as plotter
 from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup,\
     plot_mnist_digit
-from scipy import stats
+from scipy import stats, misc
 from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_unformat_image
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
@@ -286,7 +286,7 @@ class BatchPolopt(RLAlgorithm):
         return acc
 
     def train(self):
-
+        
         # Bayesian neural network (BNN) initialization.
         # ------------------------------------------------
 
@@ -349,19 +349,19 @@ class BatchPolopt(RLAlgorithm):
             disable_variance=self.disable_variance
         )
 
-        sanity_pred = self.bnn.pred_fn(np.empty((10, 4032 + 3)))
-        import matplotlib.pyplot as plt
-        plt.ion()
-        plt.figure()
-        print('rew: {}'.format(sanity_pred[-1]))
-        sanity_pred_im = sanity_pred[
-            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
-        print(sanity_pred_im.shape)
-        im = plt.imshow(
-            sanity_pred_im)#, interpolation='none')
-#         im.set_data(image)
-        plt.draw()
-        plt.pause(0.000001)
+#         sanity_pred = self.bnn.pred_fn(np.empty((10, 4032 + 3)))
+#         import matplotlib.pyplot as plt
+#         plt.ion()
+#         plt.figure()
+#         print('rew: {}'.format(sanity_pred[-1]))
+#         sanity_pred_im = sanity_pred[
+#             0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+#         print(sanity_pred_im.shape)
+#         im = plt.imshow(
+#             sanity_pred_im)#, interpolation='none')
+# #         im.set_data(image)
+#         plt.draw()
+#         plt.pause(0.000001)
 
         # Number of weights in BNN, excluding biases.
         self.num_weights = self.bnn.num_weights()
@@ -406,10 +406,10 @@ class BatchPolopt(RLAlgorithm):
                     path_len = len(path['rewards'])
                     for i in xrange(path_len):
                         obs = path['observations'][i]
-                        im.set_data(
-                            obs.reshape(self.state_dim).transpose(1, 2, 0))
-                        plt.draw()
-                        plt.pause(0.000001)
+#                         im.set_data(
+#                             obs.reshape(self.state_dim).transpose(1, 2, 0))
+#                         plt.draw()
+#                         plt.pause(0.000001)
                         act = path['actions'][i]
                         rew_orig = path['rewards_orig'][i]
                         term = (i == path_len - 1)

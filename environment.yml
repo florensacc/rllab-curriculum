@@ -24,6 +24,7 @@ dependencies:
     - scikit-learn
     - tensorflow=0.9.0
     - pip:
+        - Pillow
         - atari-py
         - pyprind
         - ipdb

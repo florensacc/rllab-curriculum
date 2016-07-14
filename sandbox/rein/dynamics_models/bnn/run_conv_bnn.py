@@ -4,7 +4,7 @@ import lasagne
 from sandbox.rein.dynamics_models.utils import iterate_minibatches, plot_mnist_digit, load_dataset_MNIST, load_dataset_MNIST_plus
 import time
 from sandbox.rein.dynamics_models.bnn.conv_bnn_vime import ConvBNNVIME
-import theano
+# import theano
 # theano.config.exception_verbosity='high'
 
 
@@ -71,7 +71,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 def main():
 
     num_epochs = 1000
-    batch_size = 8
+    batch_size = 2
 
     print("Loading data ...")
     X_train, T_train, X_test, T_test, act, rew = load_dataset_MNIST_plus()
@@ -113,7 +113,7 @@ def main():
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=10,
+        n_samples=2,
         prior_sd=0.05,
         update_likelihood_sd=False,
         learning_rate=0.001,

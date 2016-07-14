@@ -31,10 +31,12 @@ stub(globals())
 # mdp_classes = [MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class())
 #         for mdp_class in mdp_classes]
-seeds = [0, 1]
-etas = [0.1]
-# seeds = range(5)
-# etas = [0, 0.001, 0.01, 0.1]
+
+# seeds = [0, 1]
+# etas = [0.1]
+
+seeds = range(5)
+etas = [0, 0.001, 0.01, 0.1]
 normalize_rewards = [False]
 kl_ratios = [True]
 mdps = [GymEnv("Freeway-v0")]
@@ -66,10 +68,10 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 #     )
 
 
-#     baseline = LinearFeatureBaseline(
-#         mdp.spec
-#     )
-    baseline = ZeroBaseline(mdp.spec)
+    baseline = LinearFeatureBaseline(
+        mdp.spec
+    )
+#     baseline = ZeroBaseline(mdp.spec)
 
     deconv_filters = 16
     filter_sizes = 5
@@ -81,7 +83,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=500,
+        batch_size=50000,
         whole_paths=True,
         max_path_length=10,
         n_itr=100,
@@ -98,8 +100,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=4,
         normalize_reward=normalize_reward,
-        replay_pool_size=10000,
-        n_updates_per_sample=500,
+        replay_pool_size=1000000,
+        n_updates_per_sample=10000,
         second_order_update=True,
         state_dim=(3, 42, 32),
         action_dim=(3,),
@@ -132,7 +134,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         output_type=BNN.OutputType.REGRESSION,
         pool_batch_size=64,
         likelihood_sd_init=1.0,
-        prior_sd=0.5,
+        prior_sd=0.05,
         # -------------
         disable_variance=False,
         group_variance_by=BNN.GroupVarianceBy.WEIGHT,
@@ -145,11 +147,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-i",
+        exp_prefix="trpo-vime-freeway-pxl-a",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",
