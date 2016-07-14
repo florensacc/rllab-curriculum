@@ -3,6 +3,7 @@ from rllab.misc import tensor_utils
 import time
 import scipy
 
+
 def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
     observations = []
     actions = []
@@ -17,6 +18,7 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
     while path_length < max_path_length:
         o = scipy.misc.imresize(
             o, (42, 32, 3), interp='bilinear', mode=None).transpose((2, 0, 1))
+        o = (o - 128.) / 256.
         a, agent_info = agent.get_action(o)
         next_o, r, d, env_info = env.step(a)
         observations.append(env.observation_space.flatten(o))

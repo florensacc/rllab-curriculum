@@ -68,10 +68,10 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 #     )
 
 
-    baseline = LinearFeatureBaseline(
-        mdp.spec
-    )
-#     baseline = ZeroBaseline(mdp.spec)
+#     baseline = LinearFeatureBaseline(
+#         mdp.spec
+#     )
+    baseline = ZeroBaseline(mdp.spec)
 
     deconv_filters = 16
     filter_sizes = 5
@@ -83,25 +83,25 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=50000,
+        batch_size=1000,
         whole_paths=True,
-        max_path_length=10,
+        max_path_length=100,
         n_itr=100,
         step_size=0.01,
-        subsample_factor=1.0,
+        subsample_factor=0.1,
         # -------------
 
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=1,
+        snn_n_samples=2,
         use_replay_pool=True,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=4,
         normalize_reward=normalize_reward,
-        replay_pool_size=1000000,
-        n_updates_per_sample=10000,
+        replay_pool_size=10000,
+        n_updates_per_sample=1000,
         second_order_update=True,
         state_dim=(3, 42, 32),
         action_dim=(3,),
@@ -114,11 +114,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
             dict(name='convolution', n_filters=16,
                  filter_size=(filter_sizes, filter_sizes), stride=(1, 1)),
             dict(name='reshape', shape=([0], -1)),
-            dict(name='gaussian', n_units=2016),
             dict(name='gaussian', n_units=128),
             dict(name='outerprod'),
-            dict(name='gaussian', n_units=2016),
+            dict(name='gaussian', n_units=128),
             dict(name='split', n_units=128),
+            dict(name='gaussian', n_units=2016),
             dict(name='reshape', shape=([0], 16, 14, 9)),
             dict(name='deconvolution', n_filters=deconv_filters,
                  filter_size=(filter_sizes, filter_sizes), stride=(1, 1)),
@@ -151,7 +151,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

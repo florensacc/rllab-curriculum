@@ -65,11 +65,6 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     # Save original reward.
     path['rewards_orig'] = np.array(path['rewards'])
 
-    # DEBUG
-    # -----
-    FIRST = True
-    # -----
-
     # We skip first iteration as it is often difficult to normalize the KL
     # divergence terms.
     if itr > 0:
@@ -84,7 +79,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
         _inputs = np.hstack([obs[:-1], act[:-1]])
         _targets = obs_nxt
         # FIXME: turned on by default
-        predict_reward=True
+        predict_reward = True
         if predict_reward:
             _targets = np.hstack((_targets, rew_orig[:-1, None]))
 
@@ -101,149 +96,29 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     # We do a line search over the best step sizes using
                     # step_size * invH * grad
                     #                 best_loss_value = np.inf
+                    # Save old params.
+                    G.dynamics.save_old_params()
 
-                    # DEBUG
-                    # -----
-                    r = np.linspace(0., 2., 200)
-                    if FIRST and False:
-                        path['all_kls'] = []
-                        path['all_r'] = r
-                        g = G.dynamics.debug_g(
-                            _inputs[start:end], _targets[start:end])
-                        H = G.dynamics.debug_H(
-                            _inputs[start:end], _targets[start:end])
-
-                        print(
-                            '\nHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH')
-                        print(H)
-                        print(
-                            'ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg')
-                        print(g)
-
-                        for step_size in r:
-
-                            # Save old params for every update.
-                            G.dynamics.save_old_params()
-
-                            lik_sd_before = G.dynamics.likelihood_sd.eval()
-                            nll_before = G.dynamics.fn_dbg_nll(
-                                _inputs[start:end], _targets[start:end])
-                            kl_before = G.dynamics.fn_kl()
-                            loss_before = G.dynamics.eval_loss(
-                                _inputs[start:end], _targets[start:end])
-
-                            G.dynamics.train_update_fn(
-                                _inputs[start:end], _targets[start:end], step_size)
-
-                            loss_after = G.dynamics.eval_loss(
-                                _inputs[start:end], _targets[start:end])
-
-                            nll_after = G.dynamics.fn_dbg_nll(
-                                _inputs[start:end], _targets[start:end])
-                            kl_after = G.dynamics.fn_kl()
-                            lik_sd_after = G.dynamics.likelihood_sd.eval()
-
-                            kl_div = G.dynamics.fn_surprise()
-
-                            print('step size {}'.format(step_size))
-                            print('KL {} -> {}'.format(kl_before, kl_after))
-                            print('NLL {} -> {}'.format(nll_before, nll_after))
-                            print(
-                                'loss {} -> {}'.format(loss_before, loss_after))
-                            print(
-                                'lik_sd {} -> {}'.format(lik_sd_before, lik_sd_after))
-                            print('')
-
-                            path['all_kls'].append(loss_after)
-
-                            # Reset to old params after each surprise calc.
-                            G.dynamics.reset_to_old_params()
-
-                        print('==============')
-
-                        FIRST = False
-                        # -----
-                    else:
-                        # Save old params.
-                        G.dynamics.save_old_params()
-
-                        # conservative step (actual step should be 1.0)
-                        step_size = 1.0
-                        kl_div = G.dynamics.train_update_fn(
-                            _inputs[start:end], _targets[start:end], step_size)
-
-                        # DEBUG
-                        # -----
-    #                         kl_div = G.dynamics.fn_surprise()
-    #                         # Reset to old params after each surprise calc.
-    #                         G.dynamics.reset_to_old_params()
-                        # -----
+                    # conservative step (actual step should be 1.0)
+                    step_size = 1.0
+                    kl_div = G.dynamics.train_update_fn(
+                        _inputs[start:end], _targets[start:end], step_size)
 
                 else:
                     # First-order updates.
+                    # Save old params for every update.
+                    G.dynamics.save_old_params()
 
-                    # DEBUG
-                    # -----
-                    if FIRST:
-                        path['all_kls'] = []
-                        n_itr_updates = range(0, 100, 1)
-                        path['all_r'] = n_itr_updates
-                        for n_itr_update in n_itr_updates:
-                            # Save old params for every update.
-                            G.dynamics.save_old_params()
+                    # Update model weights based on current minibatch.
+                    for _ in xrange(n_itr_update):
+                        G.dynamics.train_update_fn(
+                            _inputs[start:end], _targets[start:end])
 
-                            lik_sd_before = G.dynamics.likelihood_sd.eval()
-                            nll_before = G.dynamics.fn_dbg_nll(
-                                _inputs[start:end], _targets[start:end])
-                            kl_before = G.dynamics.fn_kl()
-                            # Update model weights based on current minibatch.
-                            loss_before = G.dynamics.eval_loss(
-                                _inputs[start:end], _targets[start:end])
-                            for _ in xrange(n_itr_update):
-                                G.dynamics.train_update_fn(
-                                    _inputs[start:end], _targets[start:end])
-                            loss_after = G.dynamics.eval_loss(
-                                _inputs[start:end], _targets[start:end])
+                    # Calculate current minibatch KL.
+                    kl_div = G.dynamics.fn_surprise()
 
-                            # Calculate current minibatch KL.
-                            kl_div = G.dynamics.fn_surprise()
-                            nll_after = G.dynamics.fn_dbg_nll(
-                                _inputs[start:end], _targets[start:end])
-                            kl_after = G.dynamics.fn_kl()
-                            lik_sd_after = G.dynamics.likelihood_sd.eval()
-
-                            # DEBUG
-                            # -----
-                            print('ITR: {}'.format(n_itr_update))
-                            print('KL {} -> {}'.format(kl_before, kl_after))
-                            print('NLL {} -> {}'.format(nll_before, nll_after))
-                            print(
-                                'loss {} -> {}'.format(loss_before, loss_after))
-                            print(
-                                'lik_sd {} -> {}'.format(lik_sd_before, lik_sd_after))
-                            print('')
-                            # -----
-
-                            path['all_kls'].append(loss_after)
-
-                            # Reset to old params after each surprise calc.
-                            G.dynamics.reset_to_old_params()
-                            FIRST = False
-                        # -----
-                    else:
-                        # Save old params for every update.
-                        G.dynamics.save_old_params()
-
-                        # Update model weights based on current minibatch.
-                        for _ in xrange(n_itr_update):
-                            G.dynamics.train_update_fn(
-                                _inputs[start:end], _targets[start:end])
-
-                        # Calculate current minibatch KL.
-                        kl_div = G.dynamics.fn_surprise()
-
-                        # Reset to old params after each surprise calc.
-                        G.dynamics.reset_to_old_params()
+                    # Reset to old params after each surprise calc.
+                    G.dynamics.reset_to_old_params()
 
             elif surprise_type == G.dynamics.SurpriseType.BALD:
                 kl_div = G.dynamics.train_update_fn(

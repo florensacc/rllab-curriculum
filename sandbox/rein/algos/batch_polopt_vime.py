@@ -397,6 +397,8 @@ class BatchPolopt(RLAlgorithm):
             paths = self.obtain_samples(itr)
             samples_data = self.process_samples(itr, paths)
 
+
+
             # Exploration code
             # ----------------
             if self.use_replay_pool:
@@ -446,31 +448,7 @@ class BatchPolopt(RLAlgorithm):
                     acc_before = self.accuracy(_inputss, _targetss)
                     for _inputs, _targets in zip(_inputss, _targetss):
                         self.bnn.train_fn(_inputs, _targets, kl_factor)
-                        # DEBUG
-                        # -----
-#                         print(self.bnn.eval_loss(_inputs, _targets))
-#                         print(self.bnn.fn_kl())
-#                         print(self.bnn.fn_kl_from_prior())
-#                         print(self.bnn.fn_dbg_nll(_inputs, _targets))
-#                         print('---')
-                        # -----
                     acc_after = self.accuracy(_inputss, _targetss)
-
-#                     for _inputs, _targets in zip(_inputss, _targetss):
-#                         _out = self.bnn.pred_fn(_inputs)
-#                         if self.output_type == 'regression':
-#                             print('batch')
-#                             for i, o, t in zip(_inputs, _out, _targets):
-#                                 print(i)
-#                                 print(o[:4])
-#                                 print(t[:4])
-#                                 print('')
-#                             print('----')
-#                             for o, t in zip(_out, _targets):
-#                                 print(o[4])
-#                                 print(t[4])
-#                                 print('')
-#                             break
 
                     kl_factor *= self.replay_kl_schedule
                     logger.record_tabular('KLFactor', kl_factor)
@@ -512,28 +490,6 @@ class BatchPolopt(RLAlgorithm):
                     for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
                         # Don't use kl_factor when using no replay pool.
                         self.bnn.train_fn(batch[0], batch[1], 1.0)
-
-                        # DEBUG
-                        # -----
-#                         print(self.bnn.eval_loss(batch[0], batch[1]))
-#                         print(self.bnn.fn_kl())
-#                         print(self.bnn.fn_dbg_nll(batch[0], batch[1]))
-#                         print('---')
-                        # -----
-
-                # DEBUG
-                # -----
-#                 loss = 0.
-#                 kl_div = 0.
-#                 nll = 0.
-#                 count = 0
-#                 for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
-#                     loss += self.bnn.eval_loss(batch[0], batch[1])
-#                     kl_div += self.bnn.fn_kl()
-#                     nll += self.bnn.fn_dbg_nll(batch[0], batch[1])
-#                     count += 1
-#                 print(loss / count, nll / count, kl_div / count)
-                # -----
 
                 for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=False):
                     _out = self.bnn.pred_fn(batch[0])
@@ -634,21 +590,6 @@ class BatchPolopt(RLAlgorithm):
             predict_reward=self.predict_reward,
             surprise_type=self.surprise_type
         )
-
-        # DEBUG
-        # -----
-        if itr > 0 and False:
-            for path in paths:
-                if 'all_r' in path.keys():
-                    r = path['all_r']
-                    kls = path['all_kls']
-                    print(r, kls)
-                    import matplotlib.pyplot as plt
-                    plt.plot(
-                        r, kls, '-', color=(1.0, 0, 0, 0.5))
-                    plt.draw()
-                    plt.show()
-        # -----
 
         if self.whole_paths:
             return paths

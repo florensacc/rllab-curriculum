@@ -51,6 +51,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         pred = model.pred_fn(X)
         acc = np.mean(np.square(pred - Y))
         print('sqerr: {}'.format(acc))
+        print('KL[post||prior]: {}'.format(model.kl_div_new_prior().eval()))
 
         pred = model.pred_fn(X)
         pred_s = pred[0, :28 * 28]
