@@ -19,6 +19,14 @@ def weighted_sample(weights, objects):
     return objects[min(idx, len(objects) - 1)]
 
 
+def weighted_sample_n(prob_matrix, items):
+    s = prob_matrix.cumsum(axis=1)
+    r = np.random.rand(prob_matrix.shape[0])
+    k = (s < r.reshape((-1, 1))).sum(axis=1)
+    n_items = len(items)
+    return items[np.minimum(k, n_items - 1)]
+
+
 # compute softmax for each row
 def softmax(x):
     shifted = x - np.max(x, axis=-1, keepdims=True)
@@ -169,7 +177,6 @@ def rk4(derivs, y0, t, *args, **kwargs):
     i = 0
 
     for i in np.arange(len(t) - 1):
-
         thist = t[i]
         dt = t[i + 1] - thist
         dt2 = dt / 2.0
@@ -181,5 +188,3 @@ def rk4(derivs, y0, t, *args, **kwargs):
         k4 = np.asarray(derivs(y0 + dt * k3, thist + dt, *args, **kwargs))
         yout[i + 1] = y0 + dt / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4)
     return yout
-
-

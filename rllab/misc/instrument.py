@@ -53,6 +53,9 @@ class StubAttr(StubBase):
     def __call__(self, *args, **kwargs):
         return StubMethodCall(self.obj, self.attr_name, args, kwargs)
 
+    def __add__(self, other):
+        return StubMethodCall(self, "__add__", [other], dict())
+
     def __str__(self):
         return "StubAttr(%s, %s)" % (str(self.obj), str(self.attr_name))
 
