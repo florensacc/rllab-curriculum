@@ -6,9 +6,11 @@ import theano.tensor as TT
 import theano
 import itertools
 import numpy as np
+from rllab.misc.ext import sliced_fun
 
 
 class PerlmutterHvp(Serializable):
+
     def __init__(self):
         Serializable.quick_init(self, locals())
         self.target = None
@@ -20,12 +22,14 @@ class PerlmutterHvp(Serializable):
         self.reg_coeff = reg_coeff
         params = target.get_params(trainable=True)
 
-        constraint_grads = theano.grad(f, wrt=params, disconnected_inputs='warn')
+        constraint_grads = theano.grad(
+            f, wrt=params, disconnected_inputs='warn')
         xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
 
         def Hx_plain():
             Hx_plain_splits = TT.grad(
-                TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
+                TT.sum([TT.sum(g * x)
+                        for g, x in itertools.izip(constraint_grads, xs)]),
                 wrt=params,
                 disconnected_inputs='warn'
             )
@@ -42,13 +46,15 @@ class PerlmutterHvp(Serializable):
     def build_eval(self, inputs):
         def eval(x):
             xs = tuple(self.target.flat_to_params(x, trainable=True))
-            ret = self.opt_fun["f_Hx_plain"](*(inputs + xs)) + self.reg_coeff * x
+            ret = self.opt_fun["f_Hx_plain"](
+                *(inputs + xs)) + self.reg_coeff * x
             return ret
 
         return eval
 
 
 class FiniteDifferenceHvp(Serializable):
+
     def __init__(self, base_eps=1e-8, symmetric=True, grad_clip=None):
         Serializable.quick_init(self, locals())
         self.base_eps = base_eps
@@ -61,7 +67,8 @@ class FiniteDifferenceHvp(Serializable):
 
         params = target.get_params(trainable=True)
 
-        constraint_grads = theano.grad(f, wrt=params, disconnected_inputs='warn')
+        constraint_grads = theano.grad(
+            f, wrt=params, disconnected_inputs='warn')
         flat_grad = ext.flatten_tensor_variables(constraint_grads)
 
         def f_Hx_plain(*args):
@@ -69,12 +76,15 @@ class FiniteDifferenceHvp(Serializable):
             xs = args[len(inputs):]
             flat_xs = np.concatenate(map(lambda x: np.reshape(x, (-1,)), xs))
             param_val = self.target.get_param_values(trainable=True)
-            eps = np.cast['float32'](self.base_eps / (np.linalg.norm(param_val) + 1e-8))
-            self.target.set_param_values(param_val + eps * flat_xs, trainable=True)
+            eps = np.cast['float32'](
+                self.base_eps / (np.linalg.norm(param_val) + 1e-8))
+            self.target.set_param_values(
+                param_val + eps * flat_xs, trainable=True)
             flat_grad_dvplus = self.opt_fun["f_grad"](*inputs_)
             self.target.set_param_values(param_val, trainable=True)
             if self.symmetric:
-                self.target.set_param_values(param_val - eps * flat_xs, trainable=True)
+                self.target.set_param_values(
+                    param_val - eps * flat_xs, trainable=True)
                 flat_grad_dvminus = self.opt_fun["f_grad"](*inputs_)
                 hx = (flat_grad_dvplus - flat_grad_dvminus) / (2 * eps)
             else:
@@ -94,7 +104,8 @@ class FiniteDifferenceHvp(Serializable):
     def build_eval(self, inputs):
         def eval(x):
             xs = tuple(self.target.flat_to_params(x, trainable=True))
-            ret = self.opt_fun["f_Hx_plain"](*(inputs + xs)) + self.reg_coeff * x
+            ret = self.opt_fun["f_Hx_plain"](
+                *(inputs + xs)) + self.reg_coeff * x
             return ret
 
         return eval
@@ -210,6 +221,9 @@ class ConjugateGradientOptimizer(Serializable):
         return self._opt_fun["f_constraint"](*(inputs + extra_inputs))
 
     def optimize(self, inputs, extra_inputs=None, subsample_grouped_inputs=None):
+        # Arbitrary magic number
+        NUM_SLICES = 10
+        
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()
@@ -227,18 +241,21 @@ class ConjugateGradientOptimizer(Serializable):
             subsample_inputs = inputs
 
         logger.log("computing loss before")
-        loss_before = self._opt_fun["f_loss"](*(inputs + extra_inputs))
+        loss_before = sliced_fun(self._opt_fun["f_loss"], NUM_SLICES)(
+            inputs, extra_inputs)
         logger.log("performing update")
         logger.log("computing descent direction")
 
-        flat_g = self._opt_fun["f_grad"](*(inputs + extra_inputs))
+        flat_g = sliced_fun(self._opt_fun["f_grad"], NUM_SLICES)(
+            inputs, extra_inputs)
 
         Hx = self._hvp_approach.build_eval(subsample_inputs + extra_inputs)
 
         descent_direction = krylov.cg(Hx, flat_g, cg_iters=self._cg_iters)
 
         initial_step_size = np.sqrt(
-            2.0 * self._max_constraint_val * (1. / (descent_direction.dot(Hx(descent_direction)) + 1e-8))
+            2.0 * self._max_constraint_val *
+            (1. / (descent_direction.dot(Hx(descent_direction)) + 1e-8))
         )
         if np.isnan(initial_step_size):
             initial_step_size = 1.
@@ -252,20 +269,23 @@ class ConjugateGradientOptimizer(Serializable):
             cur_step = ratio * flat_descent_step
             cur_param = prev_param - cur_step
             self._target.set_param_values(cur_param, trainable=True)
-            loss, constraint_val = self._opt_fun["f_loss_constraint"](*(inputs + extra_inputs))
+            loss, constraint_val = sliced_fun(
+                self._opt_fun["f_loss_constraint"], NUM_SLICES)(inputs, extra_inputs)
             if loss < loss_before and constraint_val <= self._max_constraint_val:
                 break
         if (np.isnan(loss) or np.isnan(constraint_val) or loss >= loss_before or constraint_val >=
-            self._max_constraint_val) and not self._accept_violation:
+                self._max_constraint_val) and not self._accept_violation:
             logger.log("Line search condition violated. Rejecting the step!")
             if np.isnan(loss):
                 logger.log("Violated because loss is NaN")
             if np.isnan(constraint_val):
-                logger.log("Violated because constraint %s is NaN" % self._constraint_name)
+                logger.log("Violated because constraint %s is NaN" %
+                           self._constraint_name)
             if loss >= loss_before:
                 logger.log("Violated because loss not improving")
             if constraint_val >= self._max_constraint_val:
-                logger.log("Violated because constraint %s is violated" % self._constraint_name)
+                logger.log(
+                    "Violated because constraint %s is violated" % self._constraint_name)
             self._target.set_param_values(prev_param, trainable=True)
         logger.log("backtrack iters: %d" % n_iter)
         logger.log("computing loss after")
