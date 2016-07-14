@@ -237,7 +237,6 @@ class ConjugateGradientOptimizer(Serializable):
         logger.log("performing update")
         logger.log("computing descent direction")
 
-        import ipdb; ipdb.set_trace()
         flat_g = self._opt_fun["f_grad"](*(inputs + extra_inputs))
 
         Hx = self._hvp_approach.build_eval(subsample_inputs + extra_inputs)

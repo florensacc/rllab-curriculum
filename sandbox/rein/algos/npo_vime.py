@@ -104,10 +104,6 @@ class NPO(BatchPolopt):
             samples_data,
             "observations", "actions", "advantages"
         ))
-
-        for i in xrange(len(all_input_values[1])):
-            print(all_input_values[1][i])
-
         agent_infos = samples_data["agent_infos"]
         state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
         dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
