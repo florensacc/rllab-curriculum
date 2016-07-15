@@ -408,10 +408,6 @@ class BatchPolopt(RLAlgorithm):
                     path_len = len(path['rewards'])
                     for i in xrange(path_len):
                         obs = path['observations'][i]
-#                         im.set_data(
-#                             obs.reshape(self.state_dim).transpose(1, 2, 0))
-#                         plt.draw()
-#                         plt.pause(0.000001)
                         act = path['actions'][i]
                         rew_orig = path['rewards_orig'][i]
                         term = (i == path_len - 1)

@@ -1,46 +1,28 @@
 import os
 from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
-from rllab.envs.gym_env import GymEnv
+from sandbox.rein.envs.gym_env_downscaled import GymEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rein.dynamics_models.bnn.bnn import BNN
 from rllab.core.network import ConvNetwork
 
-from rllab.envs.box2d.cartpole_env import CartpoleEnv
-from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
-from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
-from rllab.envs.box2d.mountain_car_env import MountainCarEnv
-from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.envs.normalized_env import NormalizedEnv
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from sandbox.rein.algos.trpo_vime import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
 from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
-from rllab.baselines.zero_baseline import ZeroBaseline
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
 # Param ranges
-# seeds = range(10)
-# etas = [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
-# normalize_rewards = [False]
-# kl_ratios = [True]
-# mdp_classes = [MountainCarEnv]
-# mdps = [NormalizedEnv(env=mdp_class())
-#         for mdp_class in mdp_classes]
-
-# seeds = [0, 1]
+# seeds = [0]
 # etas = [0.1]
-
 seeds = range(5)
 etas = [0, 0.001, 0.01, 0.1]
 normalize_rewards = [False]
 kl_ratios = [True]
 mdps = [GymEnv("Freeway-v0")]
-# mdp_classes = [MountainCarEnvX]
 
 param_cart_product = itertools.product(
     kl_ratios, normalize_rewards, mdps, etas, seeds
@@ -49,8 +31,8 @@ param_cart_product = itertools.product(
 for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     network = ConvNetwork(
-        input_shape=(3, 42, 32),
-        output_dim=mdp.spec.action_space.n,
+        input_shape=mdp.spec.observation_space.shape,
+        output_dim=mdp.spec.action_space.flat_dim,
         hidden_sizes=(20,),
         conv_filters=(16, 16),
         conv_filter_sizes=(4, 4),
@@ -62,16 +44,19 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         prob_network=network,
     )
 
-#     policy = CategoricalMLPPolicy(
-#         env_spec=mdp.spec,
-#         hidden_sizes=(64, 64)
-#     )
-
-
-#     baseline = LinearFeatureBaseline(
-#         mdp.spec
-#     )
-    baseline = ZeroBaseline(mdp.spec)
+    network = ConvNetwork(
+        input_shape=mdp.spec.observation_space.shape,
+        output_dim=1,
+        hidden_sizes=(20,),
+        conv_filters=(16, 16),
+        conv_filter_sizes=(4, 4),
+        conv_strides=(2, 2),
+        conv_pads=(0, 0),
+    )
+    baseline = GaussianMLPBaseline(
+        mdp.spec,
+        regressor_args=dict(mean_network=network),
+    )
 
     deconv_filters = 16
     filter_sizes = 5
@@ -88,7 +73,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         max_path_length=10000,
         n_itr=100,
         step_size=0.01,
-        subsample_factor=0.1,
+        subsample_factor=1.,
         # -------------
 
         # VIME settings
@@ -103,8 +88,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         replay_pool_size=1000000,
         n_updates_per_sample=10000,
         second_order_update=True,
-        state_dim=(3, 42, 32),
-        action_dim=(3,),
+        state_dim=mdp.spec.observation_space.shape,
+        action_dim=(mdp.spec.action_space.flat_dim,),
         reward_dim=(1,),
         layers_disc=[
             dict(name='convolution', n_filters=16,
@@ -147,7 +132,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-pxl-b",
+        exp_prefix="trpo-vime-freeway-pxl-d",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

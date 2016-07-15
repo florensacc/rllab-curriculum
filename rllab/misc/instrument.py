@@ -25,6 +25,7 @@ from rllab.viskit.core import flatten
 
 
 class StubBase(object):
+
     def __getitem__(self, item):
         return StubMethodCall(self, "__getitem__", args=[item], kwargs=dict())
 
@@ -38,6 +39,7 @@ class StubBase(object):
 
 
 class StubAttr(StubBase):
+
     def __init__(self, obj, attr_name):
         self.__dict__["_obj"] = obj
         self.__dict__["_attr_name"] = attr_name
@@ -61,6 +63,7 @@ class StubAttr(StubBase):
 
 
 class StubMethodCall(StubBase, Serializable):
+
     def __init__(self, obj, method_name, args, kwargs):
         self._serializable_initialized = False
         Serializable.quick_init(self, locals())
@@ -75,6 +78,7 @@ class StubMethodCall(StubBase, Serializable):
 
 
 class StubClass(StubBase):
+
     def __init__(self, proxy_class):
         self.proxy_class = proxy_class
 
@@ -102,6 +106,7 @@ class StubClass(StubBase):
 
 
 class StubObject(StubBase):
+
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
             spec = inspect.getargspec(__proxy_class.__init__)
@@ -129,6 +134,7 @@ class StubObject(StubBase):
 
 
 class VariantDict(AttrDict):
+
     def __init__(self, d, hidden_keys):
         super(VariantDict, self).__init__(d)
         self._hidden_keys = hidden_keys
@@ -258,7 +264,8 @@ def stub(glbs):
     # replace the __init__ method in all classes
     # hacky!!!
     for k, v in glbs.items():
-        if isinstance(v, type) and v != StubClass:  # look at all variables that are instances of a class (not yet Stub)
+        # look at all variables that are instances of a class (not yet Stub)
+        if isinstance(v, type) and v != StubClass:
             glbs[k] = StubClass(v)  # and replaces them by a the same but Stub
 
 
@@ -356,7 +363,7 @@ def run_experiment_lite(
                 exp_prefix, timestamp, exp_count)
         if task.get("log_dir", None) is None:
             task["log_dir"] = config.LOG_DIR + "/local/" + \
-                              exp_prefix.replace("_", "-") + "/" + task["exp_name"]
+                exp_prefix.replace("_", "-") + "/" + task["exp_name"]
         if task.get("variant", None) is not None:
             variant = task.pop("variant")
             if "exp_name" not in variant:
@@ -549,12 +556,13 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     params = dict(params, log_dir=docker_log_dir)
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
-    #     command_list.append('sleep 9999999')
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
     command_list.append(to_local_command(
         params, osp.join(config.DOCKER_CODE_DIR, script), use_gpu=use_gpu))
+    # We for 2 min sleep after termination to allow for last syncs.
+    post_commands = ['sleep 120']
     if post_commands is not None:
         command_list.extend(post_commands)
     return command_prefix + "'" + "; ".join(command_list) + "'"
@@ -774,7 +782,7 @@ def s3_sync_code(config, dry=False):
     cache_cmds = ["aws", "s3", "sync"] + \
                  [cache_path, full_path]
     cmds = ["aws", "s3", "sync"] + \
-           flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+        flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
            [".", full_path]
     caching_cmds = ["aws", "s3", "sync"] + \
                    [full_path, cache_path]

@@ -1,4 +1,4 @@
-from sandbox.rein.sampler.utils_atari import rollout
+from rllab.sampler.utils import rollout
 from rllab.sampler.stateful_pool import singleton_pool
 from rllab.misc import ext
 from rllab.misc import logger

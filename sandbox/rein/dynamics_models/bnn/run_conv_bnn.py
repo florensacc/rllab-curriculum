@@ -33,6 +33,8 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
         # In each epoch, we do a full pass over the training data:
         train_err, train_batches, start_time, kl_values = 0, 0, time.time(), []
+        
+        print('KL[post||prior]: {}'.format(model.log_p_w_q_w_kl().eval()))
 
         # Iterate over all minibatches and train on each of them.
         for batch in iterate_minibatches(X, Y, model.batch_size, shuffle=True):
@@ -51,7 +53,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         pred = model.pred_fn(X)
         acc = np.mean(np.square(pred - Y))
         print('sqerr: {}'.format(acc))
-        print('KL[post||prior]: {}'.format(model.kl_div_new_prior().eval()))
+        
 
         pred = model.pred_fn(X)
         pred_s = pred[0, :28 * 28]
@@ -114,7 +116,7 @@ def main():
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=2,
+        n_samples=10,
         prior_sd=0.05,
         update_likelihood_sd=False,
         learning_rate=0.001,

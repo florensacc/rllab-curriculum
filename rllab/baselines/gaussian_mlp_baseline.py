@@ -19,6 +19,7 @@ class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
         super(GaussianMLPBaseline, self).__init__(env_spec)
         if regressor_args is None:
             regressor_args = dict()
+
         self._regressor = GaussianMLPRegressor(
             input_shape=(env_spec.observation_space.flat_dim,),
             output_dim=1,
