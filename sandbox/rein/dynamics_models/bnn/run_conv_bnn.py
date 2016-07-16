@@ -33,7 +33,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
         # In each epoch, we do a full pass over the training data:
         train_err, train_batches, start_time, kl_values = 0, 0, time.time(), []
-        
+
         print('KL[post||prior]: {}'.format(model.log_p_w_q_w_kl().eval()))
 
         # Iterate over all minibatches and train on each of them.
@@ -53,13 +53,13 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         pred = model.pred_fn(X)
         acc = np.mean(np.square(pred - Y))
         print('sqerr: {}'.format(acc))
-        
 
         pred = model.pred_fn(X)
         pred_s = pred[0, :28 * 28]
         pred_r = pred[:5, -1]
 #         print(pred_r)
 #         print(Y[:5, -1])
+#         pred_s = pred_s + 1.
         plot_mnist_digit(pred_s.reshape(28, 28), im)
 
         # Then we print the results for this epoch:
@@ -84,33 +84,39 @@ def main():
     plt.ion()
     plt.figure()
     im = plt.imshow(
-        X_train[0][0], cmap='gist_gray_r', vmin=0, vmax=1, interpolation='none')
-    plot_mnist_digit(X_train[0][0], im)
+        (X_train[0][0] + 1.), cmap='gist_gray_r', vmin=0, vmax=1, interpolation='none')
+    plot_mnist_digit((X_train[0][0] + 1.), im)
 
     print("Building model and compiling functions ...")
     deconv_filters = 1
-    filter_sizes = 5
+    filter_sizes = 4
     bnn = ConvBNNVIME(
         state_dim=(1, 28, 28),
         action_dim=(2,),
         reward_dim=(1,),
         layers_disc=[
-            dict(name='convolution', n_filters=2,
+            dict(name='convolution',
+                 n_filters=2,
                  filter_size=(filter_sizes, filter_sizes),
-                 stride=(1, 1)),
-            dict(name='pool', pool_size=(2, 2)),
-            dict(name='reshape', shape=([0], -1)),
-            dict(name='gaussian', n_units=288),
-            dict(name='gaussian', n_units=24),
+                 stride=(2, 2)),
+            dict(name='reshape',
+                 shape=([0], -1)),
+            dict(name='gaussian',
+                 n_units=338),
+            dict(name='gaussian',
+                 n_units=128),
             dict(name='outerprod'),
-            dict(name='gaussian', n_units=288),
-            dict(name='split', n_units=128),
-            dict(name='reshape', shape=(
-                [0], 2, 12, 12)),
-            dict(name='upscale', scale_factor=2),
-            dict(name='deconvolution', n_filters=deconv_filters,
+            dict(name='gaussian',
+                 n_units=338),
+            dict(name='split',
+                 n_units=128),
+            dict(name='reshape',
+                 shape=([0], 2, 13, 13)),
+            dict(name='deconvolution',
+                 n_filters=deconv_filters,
                  filter_size=(filter_sizes, filter_sizes),
-                 stride=(1, 1))
+                 stride=(2, 2),
+                 nonlinearity=lasagne.nonlinearities.linear)
         ],
         n_batches=n_batches,
         trans_func=lasagne.nonlinearities.rectify,

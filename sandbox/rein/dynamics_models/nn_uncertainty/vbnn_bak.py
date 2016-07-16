@@ -24,7 +24,7 @@ VBNN_LAYER_TAG = 'vbnnlayer'
 USE_REPARAMETRIZATION_TRICK = True
 
 
-def log_to_std(rho):
+def softplus(rho):
     """Transformation for allowing rho in \mathbb{R}, rather than \mathbb{R}_+
 
     This makes sure that we don't get negative stds. However, a downside might be
@@ -95,7 +95,7 @@ class VBNNLayer(lasagne.layers.Layer):
                                     dtype=theano.config.floatX)  # @UndefinedVariable
         # Here we calculate weights based on shifting and rescaling according
         # to mean and variance (paper step 2)
-        W = self.mu + log_to_std(self.rho) * epsilon
+        W = self.mu + softplus(self.rho) * epsilon
         self.W = W
         return W
 
@@ -104,7 +104,7 @@ class VBNNLayer(lasagne.layers.Layer):
         # (paper step 1)
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
-        b = self.b_mu + log_to_std(self.b_rho) * epsilon
+        b = self.b_mu + softplus(self.b_rho) * epsilon
         self.b = b
         return b
 
@@ -124,8 +124,8 @@ class VBNNLayer(lasagne.layers.Layer):
             input = input.flatten(2)
 
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-        delta = T.dot(T.square(input), T.square(log_to_std(
-            self.rho))) + T.square(log_to_std(self.b_rho)).dimshuffle('x', 0)
+        delta = T.dot(T.square(input), T.square(softplus(
+            self.rho))) + T.square(softplus(self.b_rho)).dimshuffle('x', 0)
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
 
@@ -173,30 +173,30 @@ class VBNNLayer(lasagne.layers.Layer):
 
     def kl_div_new_old(self):
         old_mean = self.mu_old
-        old_std = log_to_std(self.rho_old) * self.prior_sd
+        old_std = softplus(self.rho_old) * self.prior_sd
         new_mean = self.mu
-        new_std = log_to_std(self.rho) * self.prior_sd
+        new_std = softplus(self.rho) * self.prior_sd
         kl_div = self.kl_div_p_q(new_mean, new_std, old_mean, old_std)
 
         old_mean = self.b_mu_old
-        old_std = log_to_std(self.b_rho_old) * self.prior_sd
+        old_std = softplus(self.b_rho_old) * self.prior_sd
         new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho) * self.prior_sd
+        new_std = softplus(self.b_rho) * self.prior_sd
         kl_div += self.kl_div_p_q(new_mean, new_std, old_mean, old_std)
 
         return kl_div
 
     def kl_div_old_new(self):
         old_mean = self.mu_old
-        old_std = log_to_std(self.rho_old) * self.prior_sd
+        old_std = softplus(self.rho_old) * self.prior_sd
         new_mean = self.mu
-        new_std = log_to_std(self.rho) * self.prior_sd
+        new_std = softplus(self.rho) * self.prior_sd
         kl_div = self.kl_div_p_q(old_mean, old_std, new_mean, new_std)
 
         old_mean = self.b_mu_old
-        old_std = log_to_std(self.b_rho_old) * self.prior_sd
+        old_std = softplus(self.b_rho_old) * self.prior_sd
         new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho) * self.prior_sd
+        new_std = softplus(self.b_rho) * self.prior_sd
         kl_div += self.kl_div_p_q(old_mean, old_std, new_mean, new_std)
 
         return kl_div
@@ -205,11 +205,11 @@ class VBNNLayer(lasagne.layers.Layer):
         prior_mean = 0.
         prior_std = self.prior_sd
         new_mean = self.mu
-        new_std = log_to_std(self.rho) * self.prior_sd
+        new_std = softplus(self.rho) * self.prior_sd
         kl_div = self.kl_div_p_q(new_mean, new_std, prior_mean, prior_std)
 
         new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho) * self.prior_sd
+        new_std = softplus(self.b_rho) * self.prior_sd
         kl_div += self.kl_div_p_q(new_mean, new_std, prior_mean, prior_std)
 
         return kl_div
@@ -218,11 +218,11 @@ class VBNNLayer(lasagne.layers.Layer):
         prior_mean = 0.
         prior_std = self.prior_sd
         new_mean = self.mu
-        new_std = log_to_std(self.rho) * self.prior_sd
+        new_std = softplus(self.rho) * self.prior_sd
         kl_div = self.kl_div_p_q(prior_mean, prior_std, new_mean, new_std)
 
         new_mean = self.b_mu
-        new_std = log_to_std(self.b_rho) * self.prior_sd
+        new_std = softplus(self.b_rho) * self.prior_sd
         kl_div += self.kl_div_p_q(prior_mean, prior_std, new_mean, new_std)
 
         return kl_div
@@ -372,7 +372,7 @@ class VBNN(LasagnePowered, Serializable):
         return lasagne.layers.get_output(self.network_mean, input)
 
     def pred_stdn(self, input):
-        return log_to_std(lasagne.layers.get_output(self.network_stdn, input))
+        return softplus(lasagne.layers.get_output(self.network_stdn, input))
     # ---------------------
 
     def pred_sym_stochastic(self, input):

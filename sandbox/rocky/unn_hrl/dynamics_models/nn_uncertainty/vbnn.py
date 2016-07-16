@@ -41,7 +41,7 @@ class VBNNLayer(lasagne.layers.Layer):
         self.num_units = num_units
         self.prior_sd = prior_sd
 
-        prior_rho = self.std_to_log(self.prior_sd)
+        prior_rho = self.inv_softplus(self.prior_sd)
 
         self.W = np.random.normal(0., prior_sd,
                                   (self.num_inputs, self.num_units))  # @UndefinedVariable
@@ -109,7 +109,7 @@ class VBNNLayer(lasagne.layers.Layer):
             oldparam=True
         )
 
-    def log_to_std(self, rho):
+    def softplus(self, rho):
         """Transformation for allowing rho in \mathbb{R}, rather than \mathbb{R}_+
 
         This makes sure that we don't get negative stds. However, a downside might be
@@ -117,8 +117,8 @@ class VBNNLayer(lasagne.layers.Layer):
         """
         return T.log(1 + T.exp(rho))
 
-    def std_to_log(self, sigma):
-        """Reverse log_to_std transformation."""
+    def inv_softplus(self, sigma):
+        """Reverse softplus transformation."""
         return np.log(np.exp(sigma) - 1)
 
     def get_W(self):
@@ -127,7 +127,7 @@ class VBNNLayer(lasagne.layers.Layer):
                                     dtype=theano.config.floatX)  # @UndefinedVariable
         # Here we calculate weights based on shifting and rescaling according
         # to mean and variance (paper step 2)
-        W = self.mu + self.log_to_std(self.rho) * epsilon
+        W = self.mu + self.softplus(self.rho) * epsilon
         self.W = W
         return W
 
@@ -135,7 +135,7 @@ class VBNNLayer(lasagne.layers.Layer):
         # Here we generate random epsilon values from a normal distribution
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
-        b = self.b_mu + self.log_to_std(self.b_rho) * epsilon
+        b = self.b_mu + self.softplus(self.b_rho) * epsilon
         self.b = b
         return b
 
@@ -155,8 +155,8 @@ class VBNNLayer(lasagne.layers.Layer):
             input = input.flatten(2)
 
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-        delta = T.dot(T.square(input), T.square(self.log_to_std(
-            self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
+        delta = T.dot(T.square(input), T.square(self.softplus(
+            self.rho))) + T.square(self.softplus(self.b_rho)).dimshuffle('x', 0)
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
 
@@ -188,37 +188,37 @@ class VBNNLayer(lasagne.layers.Layer):
 
     def kl_div_new_old(self):
         kl_div = self.kl_div_p_q(
-            self.mu, self.log_to_std(self.rho), self.mu_old, self.log_to_std(self.rho_old))
-        kl_div += self.kl_div_p_q(self.b_mu, self.log_to_std(self.b_rho),
-                                  self.b_mu_old, self.log_to_std(self.b_rho_old))
+            self.mu, self.softplus(self.rho), self.mu_old, self.softplus(self.rho_old))
+        kl_div += self.kl_div_p_q(self.b_mu, self.softplus(self.b_rho),
+                                  self.b_mu_old, self.softplus(self.b_rho_old))
         return kl_div
 
     def kl_div_old_new(self):
         kl_div = self.kl_div_p_q(
-            self.mu_old, self.log_to_std(self.rho_old), self.mu, self.log_to_std(self.rho))
+            self.mu_old, self.softplus(self.rho_old), self.mu, self.softplus(self.rho))
         kl_div += self.kl_div_p_q(self.b_mu_old,
-                                  self.log_to_std(self.b_rho_old), self.b_mu, self.log_to_std(self.b_rho))
+                                  self.softplus(self.b_rho_old), self.b_mu, self.softplus(self.b_rho))
         return kl_div
 
     def kl_div_new_prior(self):
         kl_div = self.kl_div_p_q(
-            self.mu, self.log_to_std(self.rho), 0., self.prior_sd)
+            self.mu, self.softplus(self.rho), 0., self.prior_sd)
         kl_div += self.kl_div_p_q(self.b_mu,
-                                  self.log_to_std(self.b_rho), 0., self.prior_sd)
+                                  self.softplus(self.b_rho), 0., self.prior_sd)
         return kl_div
 
     def kl_div_old_prior(self):
         kl_div = self.kl_div_p_q(
-            self.mu_old, self.log_to_std(self.rho_old), 0., self.prior_sd)
+            self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
         kl_div += self.kl_div_p_q(self.b_mu_old,
-                                  self.log_to_std(self.b_rho_old), 0., self.prior_sd)
+                                  self.softplus(self.b_rho_old), 0., self.prior_sd)
         return kl_div
 
     def kl_div_prior_new(self):
         kl_div = self.kl_div_p_q(
-            0., self.prior_sd, self.mu,  self.log_to_std(self.rho))
+            0., self.prior_sd, self.mu,  self.softplus(self.rho))
         kl_div += self.kl_div_p_q(0., self.prior_sd,
-                                  self.b_mu, self.log_to_std(self.b_rho))
+                                  self.b_mu, self.softplus(self.b_rho))
         return kl_div
 
     def get_output_for(self, input, **kwargs):

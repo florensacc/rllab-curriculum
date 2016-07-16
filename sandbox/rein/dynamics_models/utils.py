@@ -98,6 +98,7 @@ def load_dataset_MNIST():
 
 def load_dataset_MNIST_plus():
     X_train, y_train, X_test, y_test = load_dataset_MNIST()
+#     X_train = X_train - 1.
     # add action and reward signal.
     act = np.tanh(np.linspace(0, 1, X_train.shape[0]))
     act = np.vstack((act, act)).T

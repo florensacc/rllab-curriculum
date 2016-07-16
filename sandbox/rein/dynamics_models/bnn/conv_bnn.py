@@ -87,43 +87,43 @@ class BayesianLayer(lasagne.layers.Layer):
         self.prior_sd = prior_sd
         self.num_units = num_units
         self.num_inputs = int(np.prod(self.input_shape[1:]))
-        self.prior_rho = self.std_to_log(self.prior_sd)
+        self.prior_rho = self.inv_softplus(self.prior_sd)
         self.disable_variance = disable_variance
 
         if self.disable_variance:
             print('Variance disabled!')
 
     def init_params(self):
+        # In fact, this should be initialized to np.zeros(self.get_W_shape()),
+        # but this trains much slower.
         self.mu = self.add_param(
             lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
-
         self.rho = self.add_param(
             lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho')
 
+        # TODO: Perhaps biases should have a postive value, to avoid zeroing the
+        # relus.
         self.b_mu = self.add_param(
             lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
-
         self.b_rho = self.add_param(
             lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False)
 
         # Backup params for KL calculations.
         self.mu_old = self.add_param(
             np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
-
         self.rho_old = self.add_param(
             np.zeros(self.get_W_shape()),  self.get_W_shape(), name='rho_old', trainable=False, oldparam=True)
 
         # Bias priors.
         self.b_mu_old = self.add_param(
             np.zeros(self.get_b_shape()), self.get_b_shape(),  name="b_mu_old", regularizable=False,   trainable=False, oldparam=True)
-
         self.b_rho_old = self.add_param(
             np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False, trainable=False, oldparam=True)
 
     def num_weights(self):
         return np.prod(self.get_W_shape())
 
-    def log_to_std(self, rho):
+    def softplus(self, rho):
         """Transformation for allowing rho in \mathbb{R}, rather than \mathbb{R}_+
 
         This makes sure that we don't get negative stds. However, a downside might be
@@ -131,8 +131,8 @@ class BayesianLayer(lasagne.layers.Layer):
         """
         return T.log(1 + T.exp(rho))
 
-    def std_to_log(self, sigma):
-        """Reverse log_to_std transformation."""
+    def inv_softplus(self, sigma):
+        """Reverse softplus transformation."""
         return np.log(np.exp(sigma) - 1)
 
     def get_W_shape(self):
@@ -159,39 +159,39 @@ class BayesianLayer(lasagne.layers.Layer):
 
     def get_W(self):
         mask = 0 if self.disable_variance else 1
-        # Here we generate random epsilon values from a normal distribution
         epsilon = self._srng.normal(size=self.get_W_shape(), avg=0., std=1.,
-                                    dtype=theano.config.floatX)  # @UndefinedVariable
+                                    dtype=theano.config.floatX)
         # Here we calculate weights based on shifting and rescaling according
         # to mean and variance (paper step 2)
-        return self.mu + self.log_to_std(self.rho) * epsilon * mask
+        return self.mu + self.softplus(self.rho) * epsilon * mask
 
     def get_b(self):
         mask = 0 if self.disable_variance else 1
-        # Here we generate random epsilon values from a normal distribution
         epsilon = self._srng.normal(size=self.get_b_shape(), avg=0., std=1.,
-                                    dtype=theano.config.floatX)  # @UndefinedVariable
-        return self.b_mu + self.log_to_std(self.b_rho) * epsilon * mask
+                                    dtype=theano.config.floatX)
+        return self.b_mu + self.softplus(self.b_rho) * epsilon * mask
 
+    # We don't calculate the KL for biases, as they should be able to
+    # arbitrarily shift.
     def kl_div_new_old(self):
         return self.kl_div_p_q(
-            self.mu, self.log_to_std(self.rho), self.mu_old, self.log_to_std(self.rho_old))
+            self.mu, self.softplus(self.rho), self.mu_old, self.softplus(self.rho_old))
 
     def kl_div_old_new(self):
         return self.kl_div_p_q(
-            self.mu_old, self.log_to_std(self.rho_old), self.mu, self.log_to_std(self.rho))
+            self.mu_old, self.softplus(self.rho_old), self.mu, self.softplus(self.rho))
 
     def kl_div_new_prior(self):
         return self.kl_div_p_q(
-            self.mu, self.log_to_std(self.rho), 0., self.prior_sd)
+            self.mu, self.softplus(self.rho), 0., self.prior_sd)
 
     def kl_div_old_prior(self):
         return self.kl_div_p_q(
-            self.mu_old, self.log_to_std(self.rho_old), 0., self.prior_sd)
+            self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
 
     def kl_div_prior_new(self):
         return self.kl_div_p_q(
-            0., self.prior_sd, self.mu,  self.log_to_std(self.rho))
+            0., self.prior_sd, self.mu,  self.softplus(self.rho))
 
     def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
@@ -414,8 +414,8 @@ class BayesianDenseLayer(BayesianLayer):
             input = input.flatten(2)
 
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-        delta = T.dot(T.square(input), T.square(self.log_to_std(
-            self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
+        delta = T.dot(T.square(input), T.square(self.softplus(
+            self.rho))) + T.square(self.softplus(self.b_rho)).dimshuffle('x', 0)
 
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
@@ -567,7 +567,7 @@ class ConvBNN(LasagnePowered, Serializable):
         return sum(l.kl_div_new_old() for l in layers)
 
     def num_weights(self):
-        print('Disclaimer: only work with BNNLayers!')
+        print('Disclaimer: num_weights only works with BNNLayers!')
         layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.num_weights() for l in layers)
@@ -632,12 +632,6 @@ class ConvBNN(LasagnePowered, Serializable):
         layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_prior() for l in layers)
-
-    def reverse_log_p_w_q_w_kl(self):
-        """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
-        return sum(l.kl_div_prior_new() for l in layers)
 
     def _log_prob_normal(self, input, mu=0., sigma=1.):
         log_normal = - \

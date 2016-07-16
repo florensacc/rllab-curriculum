@@ -57,7 +57,5 @@ RUN echo "source activate rllab" >> /root/.bashrc
 ENV BASH_ENV /root/.bashrc
 WORKDIR /root/code
 
-ADD . /root/code/rllab
-
 # gpu theanno
 ENV THEANO_FLAGS mode=FAST_RUN,device=gpu,floatX=float32

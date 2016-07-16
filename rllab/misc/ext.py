@@ -10,7 +10,6 @@ import operator
 
 sys.setrecursionlimit(50000)
 
-
 def extract(x, *keys):
     if isinstance(x, (dict, lazydict)):
         return tuple(x[k] for k in keys)
@@ -69,6 +68,7 @@ def cached_function(inputs, outputs):
 
 # Immutable, lazily evaluated dict
 class lazydict(object):
+
     def __init__(self, **kwargs):
         self._lazy_dict = kwargs
         self._dict = {}
@@ -149,6 +149,7 @@ def new_tensor_like(name, arr_like):
 
 
 class AttrDict(dict):
+
     def __init__(self, *args, **kwargs):
         super(AttrDict, self).__init__(*args, **kwargs)
         self.__dict__ = self
@@ -183,6 +184,7 @@ def shuffled(sequence):
 
 
 seed_ = None
+
 
 def set_seed(seed):
     global seed_
@@ -255,10 +257,10 @@ def flatten_hessian(cost, wrt, consider_constant=None,
     hessians = []
     if not block_diagonal:
         expr = TT.concatenate([
-                                  grad(cost, input, consider_constant=consider_constant,
-                                       disconnected_inputs=disconnected_inputs).flatten()
-                                  for input in wrt
-                                  ])
+            grad(cost, input, consider_constant=consider_constant,
+                 disconnected_inputs=disconnected_inputs).flatten()
+            for input in wrt
+        ])
 
     for input in wrt:
         assert isinstance(input, Variable), \
@@ -278,8 +280,8 @@ def flatten_hessian(cost, wrt, consider_constant=None,
             x,
             consider_constant=consider_constant,
             disconnected_inputs='ignore').flatten(),
-                                    sequences=arange(expr.shape[0]),
-                                    non_sequences=[expr, input])
+            sequences=arange(expr.shape[0]),
+            non_sequences=[expr, input])
         assert not updates, \
             ("Scan has returned a list of updates. This should not "
              "happen! Report this to theano-users (also include the "
@@ -347,7 +349,8 @@ def sliced_fun(f, n_slices):
                 slice_ret_vals_as_list = [slice_ret_vals]
             else:
                 slice_ret_vals_as_list = slice_ret_vals
-            scaled_ret_vals = [np.asarray(v) * len(inputs_slice[0]) for v in slice_ret_vals_as_list]
+            scaled_ret_vals = [
+                np.asarray(v) * len(inputs_slice[0]) for v in slice_ret_vals_as_list]
             if ret_vals is None:
                 ret_vals = scaled_ret_vals
             else:
@@ -364,3 +367,16 @@ def sliced_fun(f, n_slices):
 
 def stdize(data, eps=1e-6):
     return (data - np.mean(data, axis=0)) / (np.std(data, axis=0) + eps)
+
+
+def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
+    assert len(inputs) == len(targets)
+    if shuffle:
+        indices = np.arange(len(inputs))
+        np.random.shuffle(indices)
+    for start_idx in range(0, len(inputs) - batchsize + 1, batchsize):
+        if shuffle:
+            excerpt = indices[start_idx:start_idx + batchsize]
+        else:
+            excerpt = slice(start_idx, start_idx + batchsize)
+        yield inputs[excerpt], targets[excerpt]

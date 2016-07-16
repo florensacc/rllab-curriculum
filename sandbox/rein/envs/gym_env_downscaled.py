@@ -14,6 +14,7 @@ from rllab.spaces.discrete import Discrete
 from rllab.misc import logger
 import logging
 import scipy
+import numpy as np
 
 
 def convert_gym_space(space):
@@ -77,7 +78,8 @@ class GymEnv(Env, Serializable):
             self.env.monitor.start(log_dir, video_schedule, force=True)
             self.monitoring = True
 
-        self._observation_space = convert_gym_space(gym.spaces.Box(0., 255., (3, 42, 32)))
+        self._observation_space = convert_gym_space(
+            gym.spaces.Box(0., 1., (3, 42, 32)))
         self._action_space = convert_gym_space(env.action_space)
         self._horizon = env.spec.timestep_limit
         self._log_dir = log_dir
@@ -98,14 +100,14 @@ class GymEnv(Env, Serializable):
         next_obs = self.env.reset()
         next_obs = scipy.misc.imresize(
             next_obs, (42, 32, 3), interp='bilinear', mode=None).transpose((2, 0, 1))
-        next_obs = (next_obs - 128.) / 256.
+        next_obs = next_obs / 256.
         return next_obs
 
     def step(self, action):
         next_obs, reward, done, info = self.env.step(action)
         next_obs = scipy.misc.imresize(
             next_obs, (42, 32, 3), interp='bilinear', mode=None).transpose((2, 0, 1))
-        next_obs = (next_obs - 128.) / 256.
+        next_obs = next_obs / 256.
         return Step(next_obs, reward, done, **info)
 
     def render(self):

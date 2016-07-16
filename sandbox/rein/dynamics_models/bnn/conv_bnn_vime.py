@@ -9,6 +9,7 @@ from collections import OrderedDict
 import theano
 from sandbox.rein.dynamics_models.utils import enum
 from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, BayesianDeConvLayer, BayesianDenseLayer, BayesianLayer
+from lasagne.layers.shape import PadLayer
 
 
 class OuterProdLayer(lasagne.layers.MergeLayer):
@@ -345,7 +346,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             elif layer_disc['name'] == 'deconvolution':
                 s_net = BayesianDeConvLayer(s_net, num_filters=layer_disc[
                     'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'],
-                    disable_variance=self.disable_variance)
+                    disable_variance=self.disable_variance, nonlinearity=layer_disc['nonlinearity'])
             elif layer_disc['name'] == 'reshape':
                 s_net = lasagne.layers.ReshapeLayer(
                     s_net, shape=layer_disc['shape'])
