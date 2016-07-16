@@ -268,6 +268,16 @@ def xavier_init(shape, dtype=tf.float32):
     return tf.random_uniform_initializer(-init_range, init_range, dtype=dtype)(shape)
 
 
+def he_init(shape, dtype=tf.float32):
+    if len(shape) == 2:
+        n_inputs, _ = shape
+    else:
+        receptive_field_size = np.prod(shape[:2])
+        n_inputs = shape[-2] * receptive_field_size
+    init_range = math.sqrt(1.0 / n_inputs)
+    return tf.random_uniform_initializer(-init_range, init_range, dtype=dtype)(shape)
+
+
 class ParamLayer(Layer):
     def __init__(self, incoming, name, num_units, param=tf.zeros_initializer,
                  trainable=True, **kwargs):
@@ -346,6 +356,9 @@ class BaseConvLayer(Layer):
                  untie_biases=False,
                  W=xavier_init, b=tf.zeros_initializer,
                  nonlinearity=tf.nn.relu, n=None, **kwargs):
+        """
+        Input is assumed to be of shape batch*height*width*channels
+        """
         super(BaseConvLayer, self).__init__(incoming, **kwargs)
         if nonlinearity is None:
             self.nonlinearity = tf.identity
@@ -628,6 +641,67 @@ class SliceLayer(Layer):
         if axis < 0:
             axis += ndims
         return input[(slice(None),) * axis + (self.slice,) + (slice(None),) * (ndims - axis - 1)]
+
+
+class DimshuffleLayer(Layer):
+    def __init__(self, incoming, pattern, name, **kwargs):
+        super(DimshuffleLayer, self).__init__(incoming, name=name, **kwargs)
+
+        # Sanity check the pattern
+        used_dims = set()
+        for p in pattern:
+            if isinstance(p, int):
+                # Dimension p
+                if p in used_dims:
+                    raise ValueError("pattern contains dimension {0} more "
+                                     "than once".format(p))
+                used_dims.add(p)
+            elif p == 'x':
+                # Broadcast
+                pass
+            else:
+                raise ValueError("pattern should only contain dimension"
+                                 "indices or 'x', not {0}".format(p))
+
+        self.pattern = pattern
+
+        # try computing the output shape once as a sanity check
+        self.get_output_shape_for(self.input_shape)
+
+    def get_output_shape_for(self, input_shape):
+        # Build output shape while keeping track of the dimensions that we are
+        # attempting to collapse, so we can ensure that they are broadcastable
+        output_shape = []
+        dims_used = [False] * len(input_shape)
+        for p in self.pattern:
+            if isinstance(p, int):
+                if p < 0 or p >= len(input_shape):
+                    raise ValueError("pattern contains {0}, but input shape "
+                                     "has {1} dimensions "
+                                     "only".format(p, len(input_shape)))
+                # Dimension p
+                o = input_shape[p]
+                dims_used[p] = True
+            elif p == 'x':
+                # Broadcast; will be of size 1
+                o = 1
+            output_shape.append(o)
+
+        for i, (dim_size, used) in enumerate(zip(input_shape, dims_used)):
+            if not used and dim_size != 1 and dim_size is not None:
+                raise ValueError(
+                    "pattern attempted to collapse dimension "
+                    "{0} of size {1}; dimensions with size != 1/None are not"
+                    "broadcastable and cannot be "
+                    "collapsed".format(i, dim_size))
+
+        return tuple(output_shape)
+
+    def get_output_for(self, input, **kwargs):
+        return tf.transpose(input, self.pattern)
+
+
+dimshuffle = DimshuffleLayer  # shortcut
 
 
 class GRULayer(Layer):
