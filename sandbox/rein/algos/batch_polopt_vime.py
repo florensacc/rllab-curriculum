@@ -29,14 +29,20 @@ class SimpleReplayPool(object):
     """Replay pool"""
 
     def __init__(
-            self, max_pool_size, observation_shape, action_dim,
+            self,
+            max_pool_size,
+            observation_shape,
+            action_dim,
             observation_dtype=theano.config.floatX,
-            action_dtype=theano.config.floatX):
+            action_dtype=theano.config.floatX,
+            subsample_factor=1.
+    ):
         self._observation_shape = observation_shape
         self._action_dim = action_dim
         self._observation_dtype = observation_dtype
         self._action_dtype = action_dtype
         self._max_pool_size = max_pool_size
+        self._subsample_factor = subsample_factor
 
         self._observations = np.zeros(
             (max_pool_size,) + observation_shape,
@@ -51,17 +57,27 @@ class SimpleReplayPool(object):
         self._bottom = 0
         self._top = 0
         self._size = 0
+        
+    def __str__(self):
+        sb = []
+        for key in self.__dict__:
+            sb.append("{key}='{value}'".format(key=key, value=self.__dict__[key]))
+        return ', '.join(sb)
 
     def add_sample(self, observation, action, reward, terminal):
-        self._observations[self._top] = observation
-        self._actions[self._top] = action
-        self._rewards[self._top] = reward
-        self._terminals[self._top] = terminal
-        self._top = (self._top + 1) % self._max_pool_size
-        if self._size >= self._max_pool_size:
-            self._bottom = (self._bottom + 1) % self._max_pool_size
-        else:
-            self._size = self._size + 1
+        # Uniformly sample from [0,1], then apply subsampling factor to throw
+        # out samples.
+        rnd = np.random.uniform(0, 1)
+        if rnd < self._subsample_factor:
+            self._observations[self._top] = observation
+            self._actions[self._top] = action
+            self._rewards[self._top] = reward
+            self._terminals[self._top] = terminal
+            self._top = (self._top + 1) % self._max_pool_size
+            if self._size >= self._max_pool_size:
+                self._bottom = (self._bottom + 1) % self._max_pool_size
+            else:
+                self._size = self._size + 1
 
     def random_batch(self, batch_size):
         assert self._size > batch_size
@@ -142,7 +158,7 @@ class BatchPolopt(RLAlgorithm):
             kl_q_len=10,
             use_replay_pool=True,
             replay_pool_size=100000,
-            min_pool_size=500,
+            min_pool_size=50,
             n_updates_per_sample=500,
             pool_batch_size=10,
             n_itr_update=5,
@@ -167,6 +183,7 @@ class BatchPolopt(RLAlgorithm):
             group_variance_by='weight',
             likelihood_sd_init=1.0,
             disable_variance=False,
+            pool_args=dict(),
             ** kwargs
     ):
         """
@@ -239,6 +256,7 @@ class BatchPolopt(RLAlgorithm):
         self.group_variance_by = group_variance_by
         self.likelihood_sd_init = likelihood_sd_init
         self.disable_variance = disable_variance
+        self._pool_args = pool_args
         # ----------------------
 
         if self.second_order_update:
@@ -362,7 +380,8 @@ class BatchPolopt(RLAlgorithm):
                 # self.env.observation_space.shape,
                 observation_shape=(self.env.observation_space.flat_dim,),
                 action_dim=act_dim,
-                observation_dtype=observation_dtype
+                observation_dtype=observation_dtype,
+                **self._pool_args
             )
 
         self.start_worker()
@@ -432,11 +451,11 @@ class BatchPolopt(RLAlgorithm):
                     print('rew: {}'.format(sanity_pred[-1]))
 #                     import ipdb; ipdb.set_trace()
                     sanity_pred_im = sanity_pred[
-                        0, :-1].reshape(self.state_dim).transpose(1, 2, 0)#[:, :, 0]
+                        0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
                     sanity_pred_im = sanity_pred_im * 256.
                     sanity_pred_im = np.around(sanity_pred_im).astype(int)
                     target_im = _targetss[0][
-                        0, :-1].reshape(self.state_dim).transpose(1, 2, 0)#[:, :, 0]
+                        0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
                     target_im = target_im * 256.
                     target_im = np.around(target_im).astype(int)
                     im1 = fig_1.imshow(
@@ -448,24 +467,30 @@ class BatchPolopt(RLAlgorithm):
                     # ----
 
 #                     acc_before = self.accuracy(_inputss, _targetss)
+                    count = 0
                     for _inputs, _targets in zip(_inputss, _targetss):
-                        print(self.bnn.train_fn(_inputs, _targets, kl_factor))
+                        train_err = self.bnn.train_fn(
+                            _inputs, _targets, kl_factor)
                         # PLOT
                         # ----
-                        sanity_pred = self.bnn.pred_fn(_inputs)
-                        
-                        sanity_pred_im = sanity_pred[
-                            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)#[:, :, 0]
-                        sanity_pred_im = sanity_pred_im * 256.
-                        sanity_pred_im = np.around(sanity_pred_im).astype(int)
-                        target_im = _targets[
-                            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)#[:, :, 0]
-                        target_im = target_im * 256.
-                        target_im = np.around(target_im).astype(int)
-                        im1.set_data(sanity_pred_im)
-                        im2.set_data(target_im)
-                        plt.draw()
-                        plt.pause(0.000001)
+                        if count % 100 == 0:
+                            print(train_err)
+                            sanity_pred = self.bnn.pred_fn(_inputs)
+
+                            sanity_pred_im = sanity_pred[
+                                0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+                            sanity_pred_im = sanity_pred_im * 256.
+                            sanity_pred_im = np.around(
+                                sanity_pred_im).astype(int)
+                            target_im = _targets[
+                                0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+                            target_im = target_im * 256.
+                            target_im = np.around(target_im).astype(int)
+                            im1.set_data(sanity_pred_im)
+                            im2.set_data(target_im)
+                            plt.draw()
+                            plt.pause(0.000001)
+                        count += 1
                         # ----
 
 #                     acc_after = self.accuracy(_inputss, _targetss)
