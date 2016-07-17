@@ -110,7 +110,7 @@ class GRULayer(L.Layer):
 
     def __init__(self, incoming, num_units, hidden_nonlinearity,
                  gate_nonlinearity=LN.sigmoid, name=None,
-                 W_init=LI.HeUniform(), b_init=LI.Constant(0.),
+                 W_init=LI.GlorotUniform(), b_init=LI.Constant(0.),
                  hidden_init=LI.Constant(0.), hidden_init_trainable=True):
 
         if hidden_nonlinearity is None:
