@@ -2,7 +2,7 @@ import numpy as np
 import sandbox.rocky.tf.core.layers as L
 import tensorflow as tf
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
-from sandbox.rocky.tf.core.network import GRUNetwork, MLP
+from sandbox.rocky.tf.core.network import LSTMNetwork, MLP
 from sandbox.rocky.tf.distributions.recurrent_categorical import RecurrentCategorical
 from sandbox.rocky.tf.misc import tensor_utils
 from sandbox.rocky.tf.spaces.discrete import Discrete
@@ -13,15 +13,18 @@ from rllab.misc import special
 from rllab.misc.overrides import overrides
 
 
-class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
+class CategoricalLSTMPolicy(StochasticPolicy, LayersPowered, Serializable):
     def __init__(
             self,
             name,
             env_spec,
             hidden_dim=32,
             feature_network=None,
+            prob_network=None,
             state_include_action=True,
-            hidden_nonlinearity=tf.tanh):
+            hidden_nonlinearity=tf.tanh,
+            forget_bias=1.0,
+            use_peepholes=False):
         """
         :param env_spec: A spec for the env.
         :param hidden_dim: dimension of hidden layer
@@ -31,7 +34,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
         with tf.variable_scope(name):
             assert isinstance(env_spec.action_space, Discrete)
             Serializable.quick_init(self, locals())
-            super(CategoricalGRUPolicy, self).__init__(env_spec)
+            super(CategoricalLSTMPolicy, self).__init__(env_spec)
 
             obs_dim = env_spec.observation_space.flat_dim
             action_dim = env_spec.action_space.flat_dim
@@ -64,15 +67,18 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
                     shape_op=lambda _, input_shape: (input_shape[0], input_shape[1], feature_dim)
                 )
 
-            prob_network = GRUNetwork(
-                input_shape=(feature_dim,),
-                input_layer=l_feature,
-                output_dim=env_spec.action_space.n,
-                hidden_dim=hidden_dim,
-                hidden_nonlinearity=hidden_nonlinearity,
-                output_nonlinearity=tf.nn.softmax,
-                name="prob_network"
-            )
+            if prob_network is None:
+                prob_network = LSTMNetwork(
+                    input_shape=(feature_dim,),
+                    input_layer=l_feature,
+                    output_dim=env_spec.action_space.n,
+                    hidden_dim=hidden_dim,
+                    hidden_nonlinearity=hidden_nonlinearity,
+                    output_nonlinearity=tf.nn.softmax,
+                    forget_bias=forget_bias,
+                    use_peepholes=use_peepholes,
+                    name="prob_network"
+                )
 
             self.prob_network = prob_network
             self.feature_network = feature_network
@@ -88,11 +94,13 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             self.f_step_prob = tensor_utils.compile_function(
                 [
                     flat_input_var,
-                    prob_network.step_prev_hidden_layer.input_var
+                    prob_network.step_prev_hidden_layer.input_var,
+                    prob_network.step_prev_cell_layer.input_var
                 ],
                 L.get_output([
                     prob_network.step_output_layer,
-                    prob_network.step_hidden_layer
+                    prob_network.step_hidden_layer,
+                    prob_network.step_cell_layer
                 ], {prob_network.step_input_layer: feature_var})
             )
 
@@ -102,6 +110,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
 
             self.prev_actions = None
             self.prev_hiddens = None
+            self.prev_cells = None
             self.dist = RecurrentCategorical(env_spec.action_space.n)
 
             out_layers = [prob_network.output_layer]
@@ -117,7 +126,8 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
         obs_var = tf.reshape(obs_var, tf.pack([n_batches, n_steps, -1]))
         obs_var = tf.cast(obs_var, tf.float32)
         if self.state_include_action:
-            prev_action_var = tf.cast(state_info_vars["prev_action"], tf.float32)
+            prev_action_var = state_info_vars["prev_action"]
+            prev_action_var = tf.cast(prev_action_var, tf.float32)
             all_input_var = tf.concat(2, [obs_var, prev_action_var])
         else:
             all_input_var = obs_var
@@ -148,9 +158,11 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
         if self.prev_actions is None or len(dones) != len(self.prev_actions):
             self.prev_actions = np.zeros((len(dones), self.action_space.flat_dim))
             self.prev_hiddens = np.zeros((len(dones), self.hidden_dim))
+            self.prev_cells = np.zeros((len(dones), self.hidden_dim))
 
         self.prev_actions[dones] = 0.
-        self.prev_hiddens[dones] = self.prob_network.hid_init_param.eval()  # get_value()
+        self.prev_hiddens[dones] = self.prob_network.hid_init_param.eval()
+        self.prev_cells[dones] = self.prob_network.cell_init_param.eval()
 
     # The return value is a pair. The first item is a matrix (N, A), where each
     # entry corresponds to the action value taken. The second item is a vector
@@ -172,11 +184,12 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             ], axis=-1)
         else:
             all_input = flat_obs
-        probs, hidden_vec = self.f_step_prob(all_input, self.prev_hiddens)
+        probs, hidden_vec, cell_vec = self.f_step_prob(all_input, self.prev_hiddens, self.prev_cells)
         actions = special.weighted_sample_n(probs, np.arange(self.action_space.n))
         prev_actions = self.prev_actions
         self.prev_actions = self.action_space.flatten_n(actions)
         self.prev_hiddens = hidden_vec
+        self.prev_cells = cell_vec
         agent_info = dict(prob=probs)
         if self.state_include_action:
             agent_info["prev_action"] = np.copy(prev_actions)

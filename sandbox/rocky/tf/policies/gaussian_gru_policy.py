@@ -2,18 +2,16 @@ import numpy as np
 import sandbox.rocky.tf.core.layers as L
 import tensorflow as tf
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
-from sandbox.rocky.tf.core.network import GRUNetwork, MLP
-from sandbox.rocky.tf.distributions.recurrent_categorical import RecurrentCategorical
+from sandbox.rocky.tf.core.network import GRUNetwork
+from sandbox.rocky.tf.distributions.recurrent_diagonal_gaussian import RecurrentDiagonalGaussian
 from sandbox.rocky.tf.misc import tensor_utils
-from sandbox.rocky.tf.spaces.discrete import Discrete
 from sandbox.rocky.tf.policies.base import StochasticPolicy
 
 from rllab.core.serializable import Serializable
-from rllab.misc import special
 from rllab.misc.overrides import overrides
 
 
-class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
+class GaussianGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
     def __init__(
             self,
             name,
@@ -21,7 +19,11 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             hidden_dim=32,
             feature_network=None,
             state_include_action=True,
-            hidden_nonlinearity=tf.tanh):
+            hidden_nonlinearity=tf.tanh,
+            learn_std=True,
+            init_std=1.0,
+            output_nonlinearity=None,
+    ):
         """
         :param env_spec: A spec for the env.
         :param hidden_dim: dimension of hidden layer
@@ -29,9 +31,8 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
         :return:
         """
         with tf.variable_scope(name):
-            assert isinstance(env_spec.action_space, Discrete)
             Serializable.quick_init(self, locals())
-            super(CategoricalGRUPolicy, self).__init__(env_spec)
+            super(GaussianGRUPolicy, self).__init__(env_spec)
 
             obs_dim = env_spec.observation_space.flat_dim
             action_dim = env_spec.action_space.flat_dim
@@ -64,17 +65,33 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
                     shape_op=lambda _, input_shape: (input_shape[0], input_shape[1], feature_dim)
                 )
 
-            prob_network = GRUNetwork(
+            mean_network = GRUNetwork(
                 input_shape=(feature_dim,),
                 input_layer=l_feature,
-                output_dim=env_spec.action_space.n,
+                output_dim=action_dim,
                 hidden_dim=hidden_dim,
                 hidden_nonlinearity=hidden_nonlinearity,
-                output_nonlinearity=tf.nn.softmax,
-                name="prob_network"
+                output_nonlinearity=output_nonlinearity,
+                name="mean_network"
             )
 
-            self.prob_network = prob_network
+            l_log_std = L.ParamLayer(
+                mean_network.input_layer,
+                num_units=action_dim,
+                param=tf.constant_initializer(np.log(init_std)),
+                name="output_log_std",
+                trainable=learn_std,
+            )
+
+            l_step_log_std = L.ParamLayer(
+                mean_network.step_input_layer,
+                num_units=action_dim,
+                param=l_log_std.param,
+                name="step_output_log_std",
+                trainable=learn_std,
+            )
+
+            self.mean_network = mean_network
             self.feature_network = feature_network
             self.l_input = l_input
             self.state_include_action = state_include_action
@@ -85,16 +102,19 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             else:
                 feature_var = L.get_output(l_flat_feature, {feature_network.input_layer: flat_input_var})
 
-            self.f_step_prob = tensor_utils.compile_function(
+            self.f_step_mean_std = tensor_utils.compile_function(
                 [
                     flat_input_var,
-                    prob_network.step_prev_hidden_layer.input_var
+                    mean_network.step_prev_hidden_layer.input_var,
                 ],
                 L.get_output([
-                    prob_network.step_output_layer,
-                    prob_network.step_hidden_layer
-                ], {prob_network.step_input_layer: feature_var})
+                    mean_network.step_output_layer,
+                    l_step_log_std,
+                    mean_network.step_hidden_layer,
+                ], {mean_network.step_input_layer: feature_var})
             )
+
+            self.l_log_std = l_log_std
 
             self.input_dim = input_dim
             self.action_dim = action_dim
@@ -102,9 +122,9 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
 
             self.prev_actions = None
             self.prev_hiddens = None
-            self.dist = RecurrentCategorical(env_spec.action_space.n)
+            self.dist = RecurrentDiagonalGaussian(action_dim)
 
-            out_layers = [prob_network.output_layer]
+            out_layers = [mean_network.output_layer, l_log_std, l_step_log_std]
             if feature_network is not None:
                 out_layers.append(feature_network.output_layer)
 
@@ -115,31 +135,27 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
         n_batches = tf.shape(obs_var)[0]
         n_steps = tf.shape(obs_var)[1]
         obs_var = tf.reshape(obs_var, tf.pack([n_batches, n_steps, -1]))
-        obs_var = tf.cast(obs_var, tf.float32)
         if self.state_include_action:
-            prev_action_var = tf.cast(state_info_vars["prev_action"], tf.float32)
+            prev_action_var = state_info_vars["prev_action"]
             all_input_var = tf.concat(2, [obs_var, prev_action_var])
         else:
             all_input_var = obs_var
         if self.feature_network is None:
-            return dict(
-                prob=L.get_output(
-                    self.prob_network.output_layer,
-                    {self.l_input: all_input_var}
-                )
+            means, log_stds = L.get_output(
+                [self.mean_network.output_layer, self.l_log_std],
+                {self.l_input: all_input_var}
             )
         else:
             flat_input_var = tf.reshape(all_input_var, (-1, self.input_dim))
-            return dict(
-                prob=L.get_output(
-                    self.prob_network.output_layer,
-                    {self.l_input: all_input_var, self.feature_network.input_layer: flat_input_var}
-                )
+            means, log_stds = L.get_output(
+                [self.mean_network.output_layer, self.l_log_std],
+                {self.l_input: all_input_var, self.feature_network.input_layer: flat_input_var}
             )
+        return dict(mean=means, log_std=log_stds)
 
     @property
     def vectorized(self):
-        return True
+        return False#True
 
     def reset(self, dones=None):
         if dones is None:
@@ -150,7 +166,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             self.prev_hiddens = np.zeros((len(dones), self.hidden_dim))
 
         self.prev_actions[dones] = 0.
-        self.prev_hiddens[dones] = self.prob_network.hid_init_param.eval()  # get_value()
+        self.prev_hiddens[dones] = self.mean_network.hid_init_param.eval()
 
     # The return value is a pair. The first item is a matrix (N, A), where each
     # entry corresponds to the action value taken. The second item is a vector
@@ -172,12 +188,13 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             ], axis=-1)
         else:
             all_input = flat_obs
-        probs, hidden_vec = self.f_step_prob(all_input, self.prev_hiddens)
-        actions = special.weighted_sample_n(probs, np.arange(self.action_space.n))
+        means, log_stds, hidden_vec = self.f_step_mean_std(all_input, self.prev_hiddens)
+        rnd = np.random.normal(size=means.shape)
+        actions = rnd * np.exp(log_stds) + means
         prev_actions = self.prev_actions
         self.prev_actions = self.action_space.flatten_n(actions)
         self.prev_hiddens = hidden_vec
-        agent_info = dict(prob=probs)
+        agent_info = dict(mean=means, log_std=log_stds)
         if self.state_include_action:
             agent_info["prev_action"] = np.copy(prev_actions)
         return actions, agent_info
