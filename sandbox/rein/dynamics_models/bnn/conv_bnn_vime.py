@@ -332,7 +332,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
             if layer_disc['name'] == 'convolution':
                 s_net = BayesianConvLayer(s_net, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'],
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd,
+                    pad=layer_disc['pad'], stride=layer_disc['stride'],
                     disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'gaussian':
                 s_net = BayesianDenseLayer(
@@ -345,7 +346,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     s_net, num_units=layer_disc['n_units'], nonlinearity=self.transf)
             elif layer_disc['name'] == 'deconvolution':
                 s_net = BayesianDeConvLayer(s_net, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'],
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd,
+                    stride=layer_disc['stride'], crop=layer_disc['pad'],
                     disable_variance=self.disable_variance, nonlinearity=layer_disc['nonlinearity'])
             elif layer_disc['name'] == 'reshape':
                 s_net = lasagne.layers.ReshapeLayer(

@@ -57,11 +57,12 @@ class SimpleReplayPool(object):
         self._bottom = 0
         self._top = 0
         self._size = 0
-        
+
     def __str__(self):
         sb = []
         for key in self.__dict__:
-            sb.append("{key}='{value}'".format(key=key, value=self.__dict__[key]))
+            sb.append(
+                "{key}='{value}'".format(key=key, value=self.__dict__[key]))
         return ', '.join(sb)
 
     def add_sample(self, observation, action, reward, terminal):
@@ -442,28 +443,31 @@ class BatchPolopt(RLAlgorithm):
 
                     # PLOT
                     # ----
-                    sanity_pred = self.bnn.pred_fn(_inputss[0])
-                    import matplotlib.pyplot as plt
-                    plt.ion()
-                    fig = plt.figure()
-                    fig_1 = fig.add_subplot(121)
-                    fig_2 = fig.add_subplot(122)
-                    print('rew: {}'.format(sanity_pred[-1]))
-#                     import ipdb; ipdb.set_trace()
-                    sanity_pred_im = sanity_pred[
-                        0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
-                    sanity_pred_im = sanity_pred_im * 256.
-                    sanity_pred_im = np.around(sanity_pred_im).astype(int)
-                    target_im = _targetss[0][
-                        0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
-                    target_im = target_im * 256.
-                    target_im = np.around(target_im).astype(int)
-                    im1 = fig_1.imshow(
-                        sanity_pred_im, interpolation='none', vmin=0, vmax=255)
-                    im2 = fig_2.imshow(
-                        target_im, interpolation='none', vmin=0, vmax=255)
-                    plt.draw()
-                    plt.pause(0.000001)
+                    try:
+                        sanity_pred = self.bnn.pred_fn(_inputss[0])
+                        import matplotlib.pyplot as plt
+                        plt.ion()
+                        fig = plt.figure()
+                        fig_1 = fig.add_subplot(121)
+                        fig_2 = fig.add_subplot(122)
+                        print('rew: {}'.format(sanity_pred[-1]))
+    #                     import ipdb; ipdb.set_trace()
+                        sanity_pred_im = sanity_pred[
+                            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+                        sanity_pred_im = sanity_pred_im * 256.
+                        sanity_pred_im = np.around(sanity_pred_im).astype(int)
+                        target_im = _targetss[0][
+                            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+                        target_im = target_im * 256.
+                        target_im = np.around(target_im).astype(int)
+                        im1 = fig_1.imshow(
+                            sanity_pred_im, interpolation='none', vmin=0, vmax=255)
+                        im2 = fig_2.imshow(
+                            target_im, interpolation='none', vmin=0, vmax=255)
+                        plt.draw()
+                        plt.pause(0.000001)
+                    except Exception:
+                        pass
                     # ----
 
 #                     acc_before = self.accuracy(_inputss, _targetss)
@@ -474,22 +478,25 @@ class BatchPolopt(RLAlgorithm):
                         # PLOT
                         # ----
                         if count % 100 == 0:
-                            print(train_err)
-                            sanity_pred = self.bnn.pred_fn(_inputs)
+                            try:
+                                print(train_err)
+                                sanity_pred = self.bnn.pred_fn(_inputs)
 
-                            sanity_pred_im = sanity_pred[
-                                0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
-                            sanity_pred_im = sanity_pred_im * 256.
-                            sanity_pred_im = np.around(
-                                sanity_pred_im).astype(int)
-                            target_im = _targets[
-                                0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
-                            target_im = target_im * 256.
-                            target_im = np.around(target_im).astype(int)
-                            im1.set_data(sanity_pred_im)
-                            im2.set_data(target_im)
-                            plt.draw()
-                            plt.pause(0.000001)
+                                sanity_pred_im = sanity_pred[
+                                    0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+                                sanity_pred_im = sanity_pred_im * 256.
+                                sanity_pred_im = np.around(
+                                    sanity_pred_im).astype(int)
+                                target_im = _targets[
+                                    0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+                                target_im = target_im * 256.
+                                target_im = np.around(target_im).astype(int)
+                                im1.set_data(sanity_pred_im)
+                                im2.set_data(target_im)
+                                plt.draw()
+                                plt.pause(0.000001)
+                            except Exception:
+                                pass
                         count += 1
                         # ----
 
