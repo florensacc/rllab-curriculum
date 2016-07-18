@@ -18,20 +18,24 @@ cartpole = FlexibleCartpoleEnv()
 env = normalize(cartpole)
 
 if len(sys.argv) > 1:
-    k = int(sys.argv[1])
+    recurrences = int(sys.argv[1])
 else:
-    k = 10
+    recurrences = 10
 
 # obs_dim = cartpole.observation_space.flat_dim
 state_dim = 4
 Q = np.zeros((state_dim, state_dim)); Q[2,2] = 1
 R = np.array([[1]])
-policy = RecurrentLQRPolicy(env.spec, Q, R, state_dim=4, recurrences=k)
+policy = RecurrentLQRPolicy(env.spec, Q, R,
+        state_dim=4,
+        net_hidden_sizes=[100, 100, 100],
+        recurrences=recurrences
+)
 baseline = LinearFeatureBaseline(env_spec=env.spec)
 es = OUStrategy(env_spec=env.spec)
 qf = ContinuousMLPQFunction(env_spec=env.spec)
 
-def callback(itr):
+def callback():
     r_w, r_h = np.random.rand(2)
     w, h = r_w * 0.1 + 0.05, r_h + 0.5
     cartpole.set_pole_size(w, h)
