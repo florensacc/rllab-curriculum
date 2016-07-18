@@ -190,8 +190,11 @@ class Latent_regressor(Parameterized, Serializable):
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate(latents, axis=0)
         if self.noisify_traj_coef:
-            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
-                                            size=np.shape(obs_actions))
+            noise = np.random.multivariate_normal(mean=np.zeros_like(np.mean(obs_actions, axis=0)),
+                                                         cov=np.diag(np.mean(np.abs(obs_actions),
+                                                                     axis=0) * self.noisify_traj_coef),
+                                                         size=np.shape(obs_actions)[0])
+            obs_actions += noise
         if self.use_only_sign:
             obs_actions = np.sign(obs_actions)
         return self._regressor.predict_log_likelihood(obs_actions, latents)  # see difference with fit above...
@@ -208,8 +211,10 @@ class Latent_regressor(Parameterized, Serializable):
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate([p['agent_infos']["latents"][times[0]:times[1]] for p in paths])
         if self.noisify_traj_coef:
-            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
-                                            size=np.shape(obs_actions))
+            obs_actions += np.random.multivariate_normal(mean=np.zeros_like(np.mean(obs_actions,axis=0)),
+                                                         cov=np.diag(np.mean(np.abs(obs_actions),
+                                                                     axis=0) * self.noisify_traj_coef),
+                                                         size=np.shape(obs_actions)[0])
         if self.use_only_sign:
             obs_actions = np.sign(obs_actions)
         H_latent = self.policy.latent_dist.entropy(self.policy.latent_dist_info)  # sum of entropies latents in
