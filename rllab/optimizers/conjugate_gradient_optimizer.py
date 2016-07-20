@@ -94,13 +94,14 @@ class FiniteDifferenceHvp(Serializable):
             self.target.set_param_values(
                 param_val + eps * flat_xs, trainable=True)
             flat_grad_dvplus = self.opt_fun["f_grad"](*inputs_)
-            self.target.set_param_values(param_val, trainable=True)
             if self.symmetric:
                 self.target.set_param_values(
                     param_val - eps * flat_xs, trainable=True)
                 flat_grad_dvminus = self.opt_fun["f_grad"](*inputs_)
                 hx = (flat_grad_dvplus - flat_grad_dvminus) / (2 * eps)
+                self.target.set_param_values(param_val, trainable=True)
             else:
+                self.target.set_param_values(param_val, trainable=True)
                 flat_grad = self.opt_fun["f_grad"](*inputs_)
                 hx = (flat_grad_dvplus - flat_grad) / eps
             return hx

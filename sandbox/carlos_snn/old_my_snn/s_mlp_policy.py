@@ -3,6 +3,7 @@ import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import theano.tensor as TT
 import numpy as np
+from contextlib import contextmanager
 
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
@@ -47,9 +48,8 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             ##CF - latents units at the input
             latent_dim=2,
             latent_name='bernoulli',
-            # hot_encoding=False,
             bilinear_integration=False,
-            resample=True,
+            resample=False,
             hidden_sizes=(32, 32),
             learn_std=True,
             init_std=1.0,
@@ -65,9 +65,11 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         self.latent_name = latent_name
         self.bilinear_integration = bilinear_integration
         self.resample = resample
+        self.min_std = min_std
+
         self.pre_fix_latent = np.array([])  # if this is not empty when using reset() it will use this latent
         self.latent_fix = np.array([])  # this will hold the latents variable sampled in reset()
-        self.min_std = min_std
+        self._set_std_to_0 = False
 
         if latent_name == 'normal':
             self.latent_dist = DiagonalGaussian(self.latent_dim)
@@ -184,7 +186,6 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         return actions[0], {k: v[0] for k, v in outputs.iteritems()}
 
     def get_actions(self, observations):
-        # print 'enter get_actions'
         ##CF
         # how can I impose that I only reset for a whole rollout? before calling get_actions!!
         observations = np.array(observations)  # needed to do the outer product for the bilinear
@@ -221,8 +222,13 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         # print 'the extened_obs are:\n', extended_obs
         # make mean, log_std also depend on the latents (as observ.)
         mean, log_std = self._f_dist(extended_obs)
-        rnd = np.random.normal(size=mean.shape)
-        actions = rnd * np.exp(log_std) + mean
+
+        if self._set_std_to_0:
+            actions = mean
+            log_std = -1e6 * np.ones_like(log_std)
+        else:
+            rnd = np.random.normal(size=mean.shape)
+            actions = rnd * np.exp(log_std) + mean
         # print latents
         return actions, dict(mean=mean, log_std=log_std, latents=latents)
 
@@ -231,6 +237,23 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
 
     def unset_pre_fix_latent(self):
         self.pre_fix_latent = np.array([])
+
+    @contextmanager
+    def set_std_to_0(self):
+        print 'about to set the std to 0'
+        self._set_std_to_0 = True
+        # try:
+        #     print 'now doig something'
+        #     yield
+        # finally:
+        #     print 'and finally closing it'
+        #     self._set_std_to_0 = False
+        yield
+        print 'all the work done!'
+        self._set_std_to_0 = False
+
+    def unset_std_to_0(self):
+        self._set_std_to_0 = False
 
     @overrides
     def reset(self):  # executed at the start of every rollout. Will fix the latent if needed.

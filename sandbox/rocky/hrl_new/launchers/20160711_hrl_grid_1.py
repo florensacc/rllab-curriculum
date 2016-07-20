@@ -108,10 +108,10 @@ print("#Experiments: %d" % len(variants))
 for v in variants:
     run_experiment_lite(
         v["algo"].train(),
-        exp_prefix="0711-hrl-grid-1",
+        exp_prefix="0711-hrl-grid-1-1",
         seed=v["seed"],
         n_parallel=4,
         snapshot_mode="last",
-        mode="local",
+        mode="lab_kube",
         variant=v,
     )
