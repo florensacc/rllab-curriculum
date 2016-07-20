@@ -18,9 +18,9 @@ import numpy as np
 
 
 class PolicyImitationTrainer(object):
-    def __init__(self, optimizer=None):
+    def __init__(self, optimizer=None, max_epochs=10):
         if optimizer is None:
-            optimizer = FirstOrderOptimizer(max_epochs=10, verbose=True)
+            optimizer = FirstOrderOptimizer(max_epochs=max_epochs, verbose=True)
         self.optimizer = optimizer
 
     def update_opt(self, policy, obs_var, state_info_vars_list, old_dist_info_vars_list):
@@ -97,12 +97,13 @@ class PolicyImprovementTrainer(object):
 
 
 class BonusImitationTrainer(object):
-    def __init__(self, bonus_evaluator, bonus_coeff, optimizer=None):
+    def __init__(self, bonus_evaluator, bonus_coeff, optimizer=None, max_epochs=10):
         if optimizer is None:
-            optimizer = FirstOrderOptimizer(max_epochs=10, verbose=True)
+            optimizer = FirstOrderOptimizer(max_epochs=max_epochs, verbose=True)
         self.optimizer = optimizer
         self.bonus_evaluator = bonus_evaluator
         self.bonus_coeff = bonus_coeff
+        self.loss_coeff_var = tf.Variable(initial_value=1., name="loss_coeff", dtype=tf.float32)
 
     def update_opt(self, policy, obs_var, state_info_vars_list, old_dist_info_vars_list):
         """
@@ -120,7 +121,7 @@ class BonusImitationTrainer(object):
         # Objective is to simply minimize the KL
         loss = tf.reduce_mean(kl_sym)
 
-        joint_loss = loss - self.bonus_coeff * bonus_sym
+        joint_loss = self.loss_coeff_var * loss - bonus_sym
 
         self.optimizer.update_opt(joint_loss, policy, [obs_var] + state_info_vars_list + old_dist_info_vars_list)
         self.f_loss = tensor_utils.compile_function(
@@ -130,7 +131,18 @@ class BonusImitationTrainer(object):
 
     def train(self, inputs):
         loss_before, bonus_before, joint_loss_before = self.f_loss(*inputs)
-        self.optimizer.optimize(inputs)
+        # initialize bonus coefficient to be the largest
+        sess = tf.get_default_session()
+        sess.run(tf.assign(self.loss_coeff_var, 1.0))
+
+        def opt_callback(*args, **kwargs):
+            cur_coeff = sess.run(self.loss_coeff_var)
+            upscale_coeff = 10.
+            logger.log("Growing loss_coeff from %f to %f" % (cur_coeff, cur_coeff * upscale_coeff))
+            sess.run(tf.assign(self.loss_coeff_var, cur_coeff * upscale_coeff))
+
+        self.optimizer.optimize(inputs, callback=opt_callback)
+        sess.run(tf.assign(self.loss_coeff_var, 1.0))
         loss_after, bonus_after, joint_loss_after = self.f_loss(*inputs)
         logger.record_tabular('LossBefore', loss_before)
         logger.record_tabular('LossAfter', loss_after)
@@ -153,15 +165,15 @@ class BonusEvaluator(object):
         self.env_spec = env_spec
         self.policy = policy
 
-    def p_g_given_z_sym(self, obs_var, state_info_vars):
-        subgoal_obs = state_info_vars["subgoal_obs"]
-        subgoal_probs = L.get_output(self.policy.l_subgoal_prob, {self.policy.l_obs: subgoal_obs})
-        bottleneck_probs = L.get_output(self.policy.l_bottleneck_prob, {self.policy.l_obs: obs_var})
-        N = tf.shape(obs_var)[0]
-        p_z = tf.reduce_mean(bottleneck_probs, reduction_indices=0)
-        p_g_z = tf.matmul(tf.transpose(subgoal_probs), bottleneck_probs) / tf.cast(N, tf.float32)
-        p_g_given_z = p_g_z / tf.expand_dims(p_z, 0)
-        return p_g_given_z, p_g_z, p_z
+    # def p_g_given_z_sym(self, obs_var, state_info_vars):
+    #     subgoal_obs = state_info_vars["subgoal_obs"]
+    #     subgoal_probs = L.get_output(self.policy.l_subgoal_prob, {self.policy.l_obs: subgoal_obs})
+    #     bottleneck_probs = L.get_output(self.policy.l_bottleneck_prob, {self.policy.l_obs: obs_var})
+    #     N = tf.shape(obs_var)[0]
+    #     p_z = tf.reduce_mean(bottleneck_probs, reduction_indices=0)
+    #     p_g_z = tf.matmul(tf.transpose(subgoal_probs), bottleneck_probs) / tf.cast(N, tf.float32)
+    #     p_g_given_z = p_g_z / tf.expand_dims(p_z, 0)
+    #     return p_g_given_z, p_g_z, p_z
 
     def mi_a_g_given_z_sym(self, obs_var, state_info_vars):
         action_dim = self.policy.action_dim
@@ -170,7 +182,15 @@ class BonusEvaluator(object):
         # p(g|z): a matrix of dimension |G|*|Z|
         # p(g,z): a matrix of dimension |G|*|Z|
         # p(z): a vector of dimension |Z|
-        p_g_given_z, p_g_z, p_z = self.p_g_given_z_sym(obs_var, state_info_vars)
+
+        subgoal_obs = state_info_vars["subgoal_obs"]
+        subgoal_probs = L.get_output(self.policy.l_subgoal_prob, {self.policy.l_obs: subgoal_obs})
+        bottleneck_probs = L.get_output(self.policy.l_bottleneck_prob, {self.policy.l_obs: obs_var})
+        N = tf.shape(obs_var)[0]
+        p_z = tf.reduce_mean(bottleneck_probs, reduction_indices=0)
+        p_g_z = tf.matmul(tf.transpose(subgoal_probs), bottleneck_probs) / tf.cast(N, tf.float32)
+        p_g_given_z = p_g_z / tf.expand_dims(p_z, 0)
+        # p_g_given_z, p_g_z, p_z = self.p_g_given_z_sym(obs_var, state_info_vars)
 
         # retrieve p(a|g,z), which is a tensor of dimension |Z|*|G|*|A|
         # we first transpose it so it's |G|*|Z|*|A|
@@ -206,6 +226,8 @@ class BonusEvaluator(object):
 
         ent_Z_given_g = self.policy.bottleneck_dist.entropy_sym(dict(prob=p_z_given_g))
         ent_Z_given_G = tf.reduce_sum(ent_Z_given_g * p_g)
+        ent_G_given_S = tf.reduce_mean(self.policy.subgoal_dist.entropy_sym(dict(prob=subgoal_probs)))
+        ent_Z_given_S = tf.reduce_mean(self.policy.bottleneck_dist.entropy_sym(dict(prob=bottleneck_probs)))
 
         mi = ent_A_given_Z - ent_A_given_G_Z
 
@@ -219,6 +241,8 @@ class BonusEvaluator(object):
             ("H(Z)", ent_Z),
             ("H(G)", ent_G),
             ("H(Z|G)", ent_Z_given_G),
+            ("H(G|S)", ent_G_given_S),
+            ("H(Z|S)", ent_Z_given_S),
         ]
 
         self.f_logs = tensor_utils.compile_function(
@@ -247,14 +271,15 @@ class HierPolopt(BatchPolopt):
                  bonus_evaluator=None,
                  mi_coeff=0.0,
                  step_size=0.01,
+                 imitation_max_epochs=10,
                  **kwargs):
         self.mi_coeff = mi_coeff
         self.aux_policy = aux_policy
         if bonus_evaluator is None:
             bonus_evaluator = BonusEvaluator(env_spec=env.spec, policy=policy)
-        self.aux_imitation_trainer = PolicyImitationTrainer()
+        self.aux_imitation_trainer = PolicyImitationTrainer(max_epochs=imitation_max_epochs)
         self.aux_improvement_trainer = PolicyImprovementTrainer()
-        self.hier_imitation_trainer = BonusImitationTrainer(bonus_evaluator, mi_coeff)
+        self.hier_imitation_trainer = BonusImitationTrainer(bonus_evaluator, mi_coeff, max_epochs=imitation_max_epochs)
         self.bonus_evaluator = bonus_evaluator
         self.step_size = step_size
         BatchPolopt.__init__(self, env=env, policy=policy, **kwargs)
@@ -294,10 +319,14 @@ class HierPolopt(BatchPolopt):
                                                 state_info_vars_list, old_dist_info_vars_list)
         self.hier_imitation_trainer.update_opt(self.policy, obs_var, state_info_vars_list, old_dist_info_vars_list)
 
-        return dict()
+        dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
+        hier_kl = tf.reduce_mean(self.policy.distribution.kl_sym(old_dist_info_vars, dist_info_vars))
+        self.f_hier_kl = tensor_utils.compile_function(
+            inputs=[obs_var] + state_info_vars_list + old_dist_info_vars_list,
+            outputs=hier_kl
+        )
 
-    def log_diagnostics(self, paths):
-        self.bonus_evaluator.log_diagnostics(paths)
+        return dict()
 
     def get_itr_snapshot(self, itr, samples_data):
         return dict(
@@ -338,5 +367,11 @@ class HierPolopt(BatchPolopt):
 
         with logger.prefix("HierImitation | "), logger.tabular_prefix("HierImitation"):
             self.hier_imitation_trainer.train([samples_data["observations"]] + state_info_list + new_aux_dist_info_list)
+
+        # compute the final KL
+        final_kl = self.f_hier_kl(*([samples_data["observations"]] + state_info_list + dist_info_list))
+        logger.record_tabular("FinalMeanKL", final_kl)
+
+        self.bonus_evaluator.log_diagnostics(samples_data["paths"])
 
         return dict()

@@ -1,38 +1,33 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
+import sandbox.rocky.tf.core.layers as L
 import numpy as np
-
 import tensorflow as tf
+
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
 from sandbox.rocky.tf.core.network import MLP
-from sandbox.rocky.tf.misc import tensor_utils
-from sandbox.rocky.tf.distributions.categorical import Categorical
-from sandbox.rocky.tf.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-from sandbox.rocky.tf.optimizers.lbfgs_optimizer import LbfgsOptimizer
-from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
-import sandbox.rocky.tf.core.layers as L
 from rllab.core.serializable import Serializable
-from rllab.misc import ext
+from sandbox.rocky.tf.distributions.bernoulli import Bernoulli
+from sandbox.rocky.tf.misc import tensor_utils
 from rllab.misc import logger
+from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from sandbox.rocky.tf.optimizers.lbfgs_optimizer import LbfgsOptimizer
 
-NONE = list()
 
-
-class CategoricalMLPRegressor(LayersPowered, Serializable):
+class BernoulliMLPRegressor(LayersPowered, Serializable):
     """
-    A class for performing regression (or classification, really) by fitting a categorical distribution to the outputs.
-    Assumes that the outputs will be always a one hot vector.
+    A class for performing regression (or classification, really) by fitting a bernoulli distribution to each of the
+    output units.
     """
 
     def __init__(
             self,
-            name,
             input_shape,
             output_dim,
-            prob_network=None,
+            name,
             hidden_sizes=(32, 32),
-            hidden_nonlinearity=tf.nn.tanh,
+            hidden_nonlinearity=tf.nn.relu,
             optimizer=None,
             tr_optimizer=None,
             use_trust_region=True,
@@ -52,6 +47,7 @@ class CategoricalMLPRegressor(LayersPowered, Serializable):
         Serializable.quick_init(self, locals())
 
         with tf.variable_scope(name):
+
             if optimizer is None:
                 optimizer = LbfgsOptimizer(name="optimizer")
             if tr_optimizer is None:
@@ -61,58 +57,48 @@ class CategoricalMLPRegressor(LayersPowered, Serializable):
             self.optimizer = optimizer
             self.tr_optimizer = tr_optimizer
 
-            if prob_network is None:
-                prob_network = MLP(
-                    input_shape=input_shape,
-                    output_dim=output_dim,
-                    hidden_sizes=hidden_sizes,
-                    hidden_nonlinearity=hidden_nonlinearity,
-                    output_nonlinearity=tf.nn.softmax,
-                    name="prob_network"
-                )
-
-            l_prob = prob_network.output_layer
-
-            LayersPowered.__init__(self, [l_prob])
-
-            xs_var = prob_network.input_layer.input_var
-            ys_var = tf.placeholder(dtype=tf.float32, shape=[None, output_dim], name="ys")
-            old_prob_var = tf.placeholder(dtype=tf.float32, shape=[None, output_dim], name="old_prob")
-
-            x_mean_var = tf.get_variable(
-                name="x_mean",
-                shape=(1,) + input_shape,
-                initializer=tf.constant_initializer(0., dtype=tf.float32)
+            p_network = MLP(
+                input_shape=input_shape,
+                output_dim=output_dim,
+                hidden_sizes=hidden_sizes,
+                hidden_nonlinearity=hidden_nonlinearity,
+                output_nonlinearity=tf.nn.sigmoid,
+                name="p_network"
             )
-            x_std_var = tf.get_variable(
-                name="x_std",
-                shape=(1,) + input_shape,
-                initializer=tf.constant_initializer(1., dtype=tf.float32)
-            )
+
+            l_p = p_network.output_layer
+
+            LayersPowered.__init__(self, [l_p])
+
+            xs_var = p_network.input_layer.input_var
+            ys_var = tf.placeholder(dtype=tf.float32, shape=(None, output_dim), name="ys")
+            old_p_var = tf.placeholder(dtype=tf.float32, shape=(None, output_dim), name="old_p")
+
+            x_mean_var = tf.get_variable(name="x_mean", initializer=tf.zeros_initializer, shape=(1,) + input_shape)
+            x_std_var = tf.get_variable(name="x_std", initializer=tf.ones_initializer, shape=(1,) + input_shape)
 
             normalized_xs_var = (xs_var - x_mean_var) / x_std_var
 
-            prob_var = L.get_output(l_prob, {prob_network.input_layer: normalized_xs_var})
+            p_var = L.get_output(l_p, {p_network.input_layer: normalized_xs_var})
 
-            old_info_vars = dict(prob=old_prob_var)
-            info_vars = dict(prob=prob_var)
+            old_info_vars = dict(p=old_p_var)
+            info_vars = dict(p=p_var)
 
-            dist = self._dist = Categorical(output_dim)
+            dist = self._dist = Bernoulli(output_dim)
 
             mean_kl = tf.reduce_mean(dist.kl_sym(old_info_vars, info_vars))
 
             loss = - tf.reduce_mean(dist.log_likelihood_sym(ys_var, info_vars))
 
-            predicted = tensor_utils.to_onehot_sym(tf.argmax(prob_var, dimension=1), output_dim)
+            predicted = p_var >= 0.5
 
-            self.prob_network = prob_network
             self.f_predict = tensor_utils.compile_function([xs_var], predicted)
-            self.f_prob = tensor_utils.compile_function([xs_var], prob_var)
-            self.l_prob = l_prob
+            self.f_p = tensor_utils.compile_function([xs_var], p_var)
+            self.l_p = l_p
 
-            self.optimizer.update_opt(loss=loss, target=self, network_outputs=[prob_var], inputs=[xs_var, ys_var])
-            self.tr_optimizer.update_opt(loss=loss, target=self, network_outputs=[prob_var],
-                                         inputs=[xs_var, ys_var, old_prob_var],
+            self.optimizer.update_opt(loss=loss, target=self, network_outputs=[p_var], inputs=[xs_var, ys_var])
+            self.tr_optimizer.update_opt(loss=loss, target=self, network_outputs=[p_var],
+                                         inputs=[xs_var, ys_var, old_p_var],
                                          leq_constraint=(mean_kl, step_size)
                                          )
 
@@ -133,9 +119,11 @@ class CategoricalMLPRegressor(LayersPowered, Serializable):
                 tf.assign(self.x_mean_var, new_mean),
                 tf.assign(self.x_std_var, new_std),
             ))
+            # self._x_mean_var.set_value(np.mean(xs, axis=0, keepdims=True))
+            # self._x_std_var.set_value(np.std(xs, axis=0, keepdims=True) + 1e-8)
         if self.use_trust_region and self.first_optimized:
-            old_prob = self.f_prob(xs)
-            inputs = [xs, ys, old_prob]
+            old_p = self.f_p(xs)
+            inputs = [xs, ys, old_p]
             optimizer = self.tr_optimizer
         else:
             inputs = [xs, ys]
@@ -155,19 +143,13 @@ class CategoricalMLPRegressor(LayersPowered, Serializable):
     def predict(self, xs):
         return self.f_predict(np.asarray(xs))
 
+    def sample_predict(self, xs):
+        p = self.f_p(xs)
+        return self._dist.sample(dict(p=p))
+
     def predict_log_likelihood(self, xs, ys):
-        prob = self.f_prob(np.asarray(xs))
-        return self._dist.log_likelihood(np.asarray(ys), dict(prob=prob))
-
-    def dist_info_sym(self, x_var):
-        normalized_xs_var = (x_var - self.x_mean_var) / self.x_std_var
-        prob = L.get_output(self.l_prob, {self.prob_network.input_layer: normalized_xs_var})
-        return dict(prob=prob)
-
-    def log_likelihood_sym(self, x_var, y_var):
-        normalized_xs_var = (x_var - self.x_mean_var) / self.x_std_var
-        prob = L.get_output(self.l_prob, {self.prob_network.input_layer: normalized_xs_var})
-        return self._dist.log_likelihood_sym(y_var, dict(prob=prob))
+        p = self.f_p(np.asarray(xs))
+        return self._dist.log_likelihood(np.asarray(ys), dict(p=p))
 
     def get_param_values(self, **tags):
         return LayersPowered.get_param_values(self, **tags)
