@@ -453,17 +453,17 @@ class BatchPolopt(RLAlgorithm):
                         print('rew: {}'.format(sanity_pred[-1]))
     #                     import ipdb; ipdb.set_trace()
                         sanity_pred_im = sanity_pred[
-                            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+                            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
                         sanity_pred_im = sanity_pred_im * 256.
                         sanity_pred_im = np.around(sanity_pred_im).astype(int)
                         target_im = _targetss[0][
-                            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+                            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
                         target_im = target_im * 256.
                         target_im = np.around(target_im).astype(int)
                         im1 = fig_1.imshow(
-                            sanity_pred_im, interpolation='none', vmin=0, vmax=255)
+                            sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
                         im2 = fig_2.imshow(
-                            target_im, interpolation='none', vmin=0, vmax=255)
+                            target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
                         plt.draw()
                         plt.pause(0.000001)
                     except Exception:
@@ -483,12 +483,12 @@ class BatchPolopt(RLAlgorithm):
                                 sanity_pred = self.bnn.pred_fn(_inputs)
 
                                 sanity_pred_im = sanity_pred[
-                                    0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+                                    0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
                                 sanity_pred_im = sanity_pred_im * 256.
                                 sanity_pred_im = np.around(
                                     sanity_pred_im).astype(int)
                                 target_im = _targets[
-                                    0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
+                                    0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
                                 target_im = target_im * 256.
                                 target_im = np.around(target_im).astype(int)
                                 im1.set_data(sanity_pred_im)
@@ -573,16 +573,16 @@ class BatchPolopt(RLAlgorithm):
             self.baseline.log_diagnostics(paths)
             self.optimize_policy(itr, samples_data)
             logger.log("Saving snapshot ...")
-            params = self.get_itr_snapshot(itr, samples_data)
-            paths = samples_data["paths"]
-            if self.store_paths:
-                params["paths"] = paths
-            episode_rewards.extend(sum(p["rewards"]) for p in paths)
-            episode_lengths.extend(len(p["rewards"]) for p in paths)
-            params["episode_rewards"] = np.array(episode_rewards)
-            params["episode_lengths"] = np.array(episode_lengths)
-            params["algo"] = self
-            logger.save_itr_params(itr, params)
+#             params = self.get_itr_snapshot(itr, samples_data)
+#             paths = samples_data["paths"]
+#             if self.store_paths:
+#                 params["paths"] = paths
+#             episode_rewards.extend(sum(p["rewards"]) for p in paths)
+#             episode_lengths.extend(len(p["rewards"]) for p in paths)
+#             params["episode_rewards"] = np.array(episode_rewards)
+#             params["episode_lengths"] = np.array(episode_lengths)
+#             params["algo"] = self
+#             logger.save_itr_params(itr, params)
             logger.log("Saved.")
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()

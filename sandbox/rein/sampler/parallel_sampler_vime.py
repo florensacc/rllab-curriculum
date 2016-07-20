@@ -85,11 +85,11 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
         # KL vector assumes same shape as reward.
         kl = np.zeros(rew_orig.shape)
-        for j in xrange(int(np.ceil(obs.shape[0] / float(kl_batch_size)))):
+        for j in xrange(int(np.ceil((obs.shape[0] - 1) / float(kl_batch_size)))):
 
             start = j * kl_batch_size
             end = np.minimum(
-                (j + 1) * kl_batch_size, obs.shape[0] - 1)
+                (j + 1) * kl_batch_size, obs.shape[0])
 
             if surprise_type == G.dynamics.SurpriseType.INFGAIN:
                 if second_order_update:

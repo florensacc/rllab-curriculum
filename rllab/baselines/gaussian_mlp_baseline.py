@@ -4,9 +4,7 @@ from rllab.core.serializable import Serializable
 from rllab.core.parameterized import Parameterized
 from rllab.baselines.base import Baseline
 from rllab.misc.overrides import overrides
-from rllab.misc import logger
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
-from rllab.misc.ext import iterate_minibatches
 
 
 class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
@@ -33,10 +31,7 @@ class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
     def fit(self, paths):
         observations = np.concatenate([p["observations"] for p in paths])
         returns = np.concatenate([p["returns"] for p in paths])
-        # FIXME: Temp. hack to avoid OOM
-        for batch in iterate_minibatches(observations, returns, 10000, shuffle=True):
-            inputs, targets = batch
-            self._regressor.fit(inputs, targets.reshape((-1, 1)))
+        self._regressor.fit(observations, returns.reshape((-1, 1)))
 
     @overrides
     def predict(self, path):

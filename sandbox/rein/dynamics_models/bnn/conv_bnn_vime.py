@@ -336,9 +336,11 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     pad=layer_disc['pad'], stride=layer_disc['stride'],
                     disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'gaussian':
+                if 'nonlinearity' not in layer_disc.keys():
+                    layer_disc['nonlinearity'] = lasagne.nonlinearities.rectify
                 s_net = BayesianDenseLayer(
                     s_net, num_units=layer_disc[
-                        'n_units'], nonlinearity=self.transf, prior_sd=self.prior_sd,
+                        'n_units'], nonlinearity=layer_disc['nonlinearity'], prior_sd=self.prior_sd,
                     use_local_reparametrization_trick=True,
                     disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'deterministic':

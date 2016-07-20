@@ -7,6 +7,10 @@ import theano
 import itertools
 import numpy as np
 from rllab.misc.ext import sliced_fun
+from _ast import Num
+
+# Arbitrary magic number
+NUM_SLICES = 10
 
 
 class PerlmutterHvp(Serializable):
@@ -43,11 +47,20 @@ class PerlmutterHvp(Serializable):
             ),
         )
 
+#     def build_eval(self, inputs):
+#         def eval(x):
+#             xs = tuple(self.target.flat_to_params(x, trainable=True))
+#             ret = self.opt_fun["f_Hx_plain"](
+#                 *(inputs + xs)) + self.reg_coeff * x
+#             return ret
+#
+#         return eval
+
     def build_eval(self, inputs):
         def eval(x):
             xs = tuple(self.target.flat_to_params(x, trainable=True))
-            ret = self.opt_fun["f_Hx_plain"](
-                *(inputs + xs)) + self.reg_coeff * x
+            ret = sliced_fun(self.opt_fun["f_Hx_plain"], NUM_SLICES)(
+                inputs, xs) + self.reg_coeff * x
             return ret
 
         return eval
@@ -212,18 +225,16 @@ class ConjugateGradientOptimizer(Serializable):
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()
-        return self._opt_fun["f_loss"](*(inputs + extra_inputs))
+        return sliced_fun(self._opt_fun["f_loss"], NUM_SLICES)(inputs, extra_inputs)
 
     def constraint_val(self, inputs, extra_inputs=None):
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()
-        return self._opt_fun["f_constraint"](*(inputs + extra_inputs))
+        return sliced_fun(self._opt_fun["f_constraint"], NUM_SLICES)(inputs, extra_inputs)
 
     def optimize(self, inputs, extra_inputs=None, subsample_grouped_inputs=None):
-        # Arbitrary magic number
-        NUM_SLICES = 10
-        
+
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()

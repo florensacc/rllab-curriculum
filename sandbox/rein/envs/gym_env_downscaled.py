@@ -17,6 +17,14 @@ import scipy
 import numpy as np
 
 
+def rgb2gray(rgb):
+
+    r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+
+    return gray
+
+
 def convert_gym_space(space):
     if isinstance(space, gym.spaces.Box):
         return Box(low=space.low, high=space.high)
@@ -79,7 +87,7 @@ class GymEnv(Env, Serializable):
             self.monitoring = True
 
         self._observation_space = convert_gym_space(
-            gym.spaces.Box(0., 1., (3, 210, 160)))
+            gym.spaces.Box(0., 1., (1, 84, 84)))
         self._action_space = convert_gym_space(env.action_space)
         self._horizon = env.spec.timestep_limit
         self._log_dir = log_dir
@@ -98,16 +106,20 @@ class GymEnv(Env, Serializable):
 
     def reset(self):
         next_obs = self.env.reset()
-#         next_obs = scipy.misc.imresize(
-#             next_obs, (42, 32, 3), interp='bilinear', mode=None).transpose((2, 0, 1))
+        next_obs = scipy.misc.imresize(
+            next_obs, (84, 84, 3), interp='bilinear', mode=None)
         next_obs = next_obs / 256.
+        next_obs = rgb2gray(next_obs)
+        next_obs = next_obs[np.newaxis, :, :]
         return next_obs
 
     def step(self, action):
         next_obs, reward, done, info = self.env.step(action)
-#         next_obs = scipy.misc.imresize(
-#             next_obs, (42, 32, 3), interp='bilinear', mode=None).transpose((2, 0, 1))
+        next_obs = scipy.misc.imresize(
+            next_obs, (84, 84, 3), interp='bilinear', mode=None)
         next_obs = next_obs / 256.
+        next_obs = rgb2gray(next_obs)
+        next_obs = next_obs[np.newaxis, :, :]
         return Step(next_obs, reward, done, **info)
 
     def render(self):

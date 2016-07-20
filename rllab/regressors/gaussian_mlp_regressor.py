@@ -14,6 +14,7 @@ from rllab.misc.ext import compile_function
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
+from rllab.misc.ext import iterate_minibatches
 
 
 class GaussianMLPRegressor(LasagnePowered, Serializable):
@@ -199,7 +200,9 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             prefix = ""
         logger.record_tabular(prefix + 'LossBefore', loss_before)
         self._optimizer.optimize(inputs)
-        loss_after = self._optimizer.loss(inputs)
+        # FIXME: Temp. hack to avoid OOM
+        for batch in iterate_minibatches(inputs[0], inputs[1], 1000, shuffle=True):
+            loss_after = self._optimizer.loss(batch)
         logger.record_tabular(prefix + 'LossAfter', loss_after)
         if self._use_trust_region:
             logger.record_tabular(prefix + 'MeanKL', self._optimizer.constraint_val(inputs))
