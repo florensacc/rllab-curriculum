@@ -101,7 +101,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-pxl-a",
+        exp_prefix="trpo-vime-basic-a",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

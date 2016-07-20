@@ -199,10 +199,10 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         else:
             prefix = ""
         logger.record_tabular(prefix + 'LossBefore', loss_before)
-        self._optimizer.optimize(inputs)
         # FIXME: Temp. hack to avoid OOM
         for batch in iterate_minibatches(inputs[0], inputs[1], 1000, shuffle=True):
-            loss_after = self._optimizer.loss(batch)
+            self._optimizer.optimize(batch)
+        loss_after = self._optimizer.loss(inputs)
         logger.record_tabular(prefix + 'LossAfter', loss_after)
         if self._use_trust_region:
             logger.record_tabular(prefix + 'MeanKL', self._optimizer.constraint_val(inputs))

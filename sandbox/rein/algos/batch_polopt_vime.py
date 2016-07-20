@@ -14,8 +14,6 @@ from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_u
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
-import matplotlib as mpl
-mpl.use('Agg')
 
 # exploration imports
 # -------------------
@@ -209,6 +207,11 @@ class BatchPolopt(RLAlgorithm):
         :param store_paths: Whether to save all paths data to the snapshot.
         :return:
         """
+
+        # matplotlib without x-server.
+        import matplotlib as mpl
+        mpl.use('Agg')
+
         self.env = env
         self.policy = policy
         self.baseline = baseline
@@ -295,7 +298,7 @@ class BatchPolopt(RLAlgorithm):
         for _inputs, _targets in zip(_inputss, _targetss):
             _out = self.bnn.pred_fn(_inputs)
             if self.output_type == 'regression':
-                acc += np.mean(np.square(_out - _targets))
+                acc += np.mean(np.sum(np.square(_out - _targets), axis=1))
             elif self.output_type == 'classification':
                 # FIXME: only for Atari
                 _out2 = _out.reshape([-1, 256])
@@ -305,6 +308,38 @@ class BatchPolopt(RLAlgorithm):
                     np.equal(_targets, _argm2)) / float(_targets.size)
         acc /= len(_inputss)
         return acc
+
+    def plot_pred_imgs(self, inputs, targets, itr, count):
+        import matplotlib.pyplot as plt
+        if not hasattr(self, '_fig'):
+            self._fig = plt.figure()
+            self._fig_1 = self._fig.add_subplot(121)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._fig_2 = self._fig.add_subplot(122)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._im1, self._im2 = None, None
+        sanity_pred = self.bnn.pred_fn(inputs)
+        sanity_pred_im = sanity_pred[
+            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+        sanity_pred_im = sanity_pred_im * 256.
+        sanity_pred_im = np.around(
+            sanity_pred_im).astype(int)
+        target_im = targets[
+            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+        target_im = target_im * 256.
+        target_im = np.around(target_im).astype(int)
+        if self._im1 is None or self._im2 is None:
+            self._im1 = self._fig_1.imshow(
+                sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+            self._im2 = self._fig_2.imshow(
+                target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+        else:
+            self._im1.set_data(sanity_pred_im)
+            self._im2.set_data(target_im)
+        plt.savefig(
+            logger._snapshot_dir + '/autoenc_img_{}_{}.png'.format(itr, count))
 
     def train(self):
 
@@ -389,7 +424,6 @@ class BatchPolopt(RLAlgorithm):
 
         self.start_worker()
         self.init_opt()
-        episode_rewards, episode_lengths = [], []
         acc_before, acc_after = 0., 0.
 
         # KL rescaling factor for replay pool-based training.
@@ -443,66 +477,15 @@ class BatchPolopt(RLAlgorithm):
                         _inputss.append(_inputs)
                         _targetss.append(_targets)
 
-                    # PLOT
-                    # ----
-                    try:
-                        sanity_pred = self.bnn.pred_fn(_inputss[0])
-
-                        import matplotlib.pyplot as plt
-                        plt.ion()
-                        fig = plt.figure()
-                        fig_1 = fig.add_subplot(121)
-                        fig_2 = fig.add_subplot(122)
-                        print('rew: {}'.format(sanity_pred[-1]))
-                        sanity_pred_im = sanity_pred[
-                            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-                        sanity_pred_im = sanity_pred_im * 256.
-                        sanity_pred_im = np.around(sanity_pred_im).astype(int)
-                        target_im = _targetss[0][
-                            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-                        target_im = target_im * 256.
-                        target_im = np.around(target_im).astype(int)
-                        im1 = fig_1.imshow(
-                            sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-                        im2 = fig_2.imshow(
-                            target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-                        plt.draw()
-                        plt.pause(0.000001)
-                        plt.savefig()
-                    except Exception:
-                        pass
-                    # ----
-
 #                     acc_before = self.accuracy(_inputss, _targetss)
                     count = 0
                     for _inputs, _targets in zip(_inputss, _targetss):
                         train_err = self.bnn.train_fn(
                             _inputs, _targets, kl_factor)
-                        # PLOT
-                        # ----
                         if count % 100 == 0:
-                            try:
-                                print(train_err)
-                                sanity_pred = self.bnn.pred_fn(_inputs)
-
-                                sanity_pred_im = sanity_pred[
-                                    0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-                                sanity_pred_im = sanity_pred_im * 256.
-                                sanity_pred_im = np.around(
-                                    sanity_pred_im).astype(int)
-                                target_im = _targets[
-                                    0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-                                target_im = target_im * 256.
-                                target_im = np.around(target_im).astype(int)
-                                im1.set_data(sanity_pred_im)
-                                im2.set_data(target_im)
-                                plt.draw()
-                                plt.pause(0.000001)
-                            except Exception:
-                                pass
+                            print('train err: {}'.format(train_err))
+                            self.plot_pred_imgs(_inputs, _targets, itr, count)
                         count += 1
-                        # ----
-
 #                     acc_after = self.accuracy(_inputss, _targetss)
 
                     kl_factor *= self.replay_kl_schedule
