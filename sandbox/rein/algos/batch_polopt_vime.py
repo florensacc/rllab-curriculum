@@ -14,6 +14,8 @@ from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_u
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
+import matplotlib as mpl
+mpl.use('Agg')
 
 # exploration imports
 # -------------------
@@ -445,13 +447,13 @@ class BatchPolopt(RLAlgorithm):
                     # ----
                     try:
                         sanity_pred = self.bnn.pred_fn(_inputss[0])
+
                         import matplotlib.pyplot as plt
                         plt.ion()
                         fig = plt.figure()
                         fig_1 = fig.add_subplot(121)
                         fig_2 = fig.add_subplot(122)
                         print('rew: {}'.format(sanity_pred[-1]))
-    #                     import ipdb; ipdb.set_trace()
                         sanity_pred_im = sanity_pred[
                             0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
                         sanity_pred_im = sanity_pred_im * 256.
@@ -466,6 +468,7 @@ class BatchPolopt(RLAlgorithm):
                             target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
                         plt.draw()
                         plt.pause(0.000001)
+                        plt.savefig()
                     except Exception:
                         pass
                     # ----

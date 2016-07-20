@@ -9,17 +9,15 @@ import numpy as np
 from rllab.misc.ext import sliced_fun
 from _ast import Num
 
-# Arbitrary magic number
-NUM_SLICES = 10
-
 
 class PerlmutterHvp(Serializable):
 
-    def __init__(self):
+    def __init__(self, num_slices=1):
         Serializable.quick_init(self, locals())
         self.target = None
         self.reg_coeff = None
         self.opt_fun = None
+        self._num_slices = num_slices
 
     def update_opt(self, f, target, inputs, reg_coeff):
         self.target = target
@@ -47,19 +45,10 @@ class PerlmutterHvp(Serializable):
             ),
         )
 
-#     def build_eval(self, inputs):
-#         def eval(x):
-#             xs = tuple(self.target.flat_to_params(x, trainable=True))
-#             ret = self.opt_fun["f_Hx_plain"](
-#                 *(inputs + xs)) + self.reg_coeff * x
-#             return ret
-#
-#         return eval
-
     def build_eval(self, inputs):
         def eval(x):
             xs = tuple(self.target.flat_to_params(x, trainable=True))
-            ret = sliced_fun(self.opt_fun["f_Hx_plain"], NUM_SLICES)(
+            ret = sliced_fun(self.opt_fun["f_Hx_plain"], self._num_slices)(
                 inputs, xs) + self.reg_coeff * x
             return ret
 
@@ -68,11 +57,12 @@ class PerlmutterHvp(Serializable):
 
 class FiniteDifferenceHvp(Serializable):
 
-    def __init__(self, base_eps=1e-8, symmetric=True, grad_clip=None):
+    def __init__(self, base_eps=1e-8, symmetric=True, grad_clip=None, num_slices=1):
         Serializable.quick_init(self, locals())
         self.base_eps = base_eps
         self.symmetric = symmetric
         self.grad_clip = grad_clip
+        self._num_slices = num_slices
 
     def update_opt(self, f, target, inputs, reg_coeff):
         self.target = target
@@ -118,8 +108,8 @@ class FiniteDifferenceHvp(Serializable):
     def build_eval(self, inputs):
         def eval(x):
             xs = tuple(self.target.flat_to_params(x, trainable=True))
-            ret = self.opt_fun["f_Hx_plain"](
-                *(inputs + xs)) + self.reg_coeff * x
+            ret = sliced_fun(self.opt_fun["f_Hx_plain"], self._num_slices)(
+                inputs, xs) + self.reg_coeff * x
             return ret
 
         return eval
@@ -140,7 +130,8 @@ class ConjugateGradientOptimizer(Serializable):
             backtrack_ratio=0.8,
             max_backtracks=15,
             accept_violation=False,
-            hvp_approach=None):
+            hvp_approach=None,
+            num_slices=1):
         """
 
         :param cg_iters: The number of CG iterations used to calculate A^-1 g
@@ -157,6 +148,7 @@ class ConjugateGradientOptimizer(Serializable):
         self._subsample_factor = subsample_factor
         self._backtrack_ratio = backtrack_ratio
         self._max_backtracks = max_backtracks
+        self._num_slices = num_slices
 
         self._opt_fun = None
         self._target = None
@@ -226,13 +218,13 @@ class ConjugateGradientOptimizer(Serializable):
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()
-        return sliced_fun(self._opt_fun["f_loss"], NUM_SLICES)(inputs, extra_inputs)
+        return sliced_fun(self._opt_fun["f_loss"], self._num_slices)(inputs, extra_inputs)
 
     def constraint_val(self, inputs, extra_inputs=None):
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()
-        return sliced_fun(self._opt_fun["f_constraint"], NUM_SLICES)(inputs, extra_inputs)
+        return sliced_fun(self._opt_fun["f_constraint"], self._num_slices)(inputs, extra_inputs)
 
     def optimize(self, inputs, extra_inputs=None, subsample_grouped_inputs=None):
 
@@ -253,12 +245,12 @@ class ConjugateGradientOptimizer(Serializable):
             subsample_inputs = inputs
 
         logger.log("computing loss before")
-        loss_before = sliced_fun(self._opt_fun["f_loss"], NUM_SLICES)(
+        loss_before = sliced_fun(self._opt_fun["f_loss"], self._num_slices)(
             inputs, extra_inputs)
         logger.log("performing update")
         logger.log("computing descent direction")
 
-        flat_g = sliced_fun(self._opt_fun["f_grad"], NUM_SLICES)(
+        flat_g = sliced_fun(self._opt_fun["f_grad"], self._num_slices)(
             inputs, extra_inputs)
 
         Hx = self._hvp_approach.build_eval(subsample_inputs + extra_inputs)
@@ -282,7 +274,7 @@ class ConjugateGradientOptimizer(Serializable):
             cur_param = prev_param - cur_step
             self._target.set_param_values(cur_param, trainable=True)
             loss, constraint_val = sliced_fun(
-                self._opt_fun["f_loss_constraint"], NUM_SLICES)(inputs, extra_inputs)
+                self._opt_fun["f_loss_constraint"], self._num_slices)(inputs, extra_inputs)
             if loss < loss_before and constraint_val <= self._max_constraint_val:
                 break
         if (np.isnan(loss) or np.isnan(constraint_val) or loss >= loss_before or constraint_val >=
