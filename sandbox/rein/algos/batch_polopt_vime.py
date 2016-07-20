@@ -310,36 +310,40 @@ class BatchPolopt(RLAlgorithm):
         return acc
 
     def plot_pred_imgs(self, inputs, targets, itr, count):
-        import matplotlib.pyplot as plt
-        if not hasattr(self, '_fig'):
-            self._fig = plt.figure()
-            self._fig_1 = self._fig.add_subplot(121)
-            plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                            labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_2 = self._fig.add_subplot(122)
-            plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                            labelbottom='off', right='off', left='off', labelleft='off')
-            self._im1, self._im2 = None, None
-        sanity_pred = self.bnn.pred_fn(inputs)
-        sanity_pred_im = sanity_pred[
-            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-        sanity_pred_im = sanity_pred_im * 256.
-        sanity_pred_im = np.around(
-            sanity_pred_im).astype(int)
-        target_im = targets[
-            0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-        target_im = target_im * 256.
-        target_im = np.around(target_im).astype(int)
-        if self._im1 is None or self._im2 is None:
-            self._im1 = self._fig_1.imshow(
-                sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im2 = self._fig_2.imshow(
-                target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-        else:
-            self._im1.set_data(sanity_pred_im)
-            self._im2.set_data(target_im)
-        plt.savefig(
-            logger._snapshot_dir + '/autoenc_img_{}_{}.png'.format(itr, count))
+        try:
+            # This is specific to Atari.
+            import matplotlib.pyplot as plt
+            if not hasattr(self, '_fig'):
+                self._fig = plt.figure()
+                self._fig_1 = self._fig.add_subplot(121)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._fig_2 = self._fig.add_subplot(122)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._im1, self._im2 = None, None
+            sanity_pred = self.bnn.pred_fn(inputs)
+            sanity_pred_im = sanity_pred[
+                0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+            sanity_pred_im = sanity_pred_im * 256.
+            sanity_pred_im = np.around(
+                sanity_pred_im).astype(int)
+            target_im = targets[
+                0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+            target_im = target_im * 256.
+            target_im = np.around(target_im).astype(int)
+            if self._im1 is None or self._im2 is None:
+                self._im1 = self._fig_1.imshow(
+                    sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im2 = self._fig_2.imshow(
+                    target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+            else:
+                self._im1.set_data(sanity_pred_im)
+                self._im2.set_data(target_im)
+            plt.savefig(
+                logger._snapshot_dir + '/autoenc_img_{}_{}.png'.format(itr, count))
+        except Exception:
+            pass
 
     def train(self):
 
@@ -477,7 +481,7 @@ class BatchPolopt(RLAlgorithm):
                         _inputss.append(_inputs)
                         _targetss.append(_targets)
 
-#                     acc_before = self.accuracy(_inputss, _targetss)
+                    acc_before = self.accuracy(_inputss, _targetss)
                     count = 0
                     for _inputs, _targets in zip(_inputss, _targetss):
                         train_err = self.bnn.train_fn(
@@ -486,7 +490,7 @@ class BatchPolopt(RLAlgorithm):
                             print('train err: {}'.format(train_err))
                             self.plot_pred_imgs(_inputs, _targets, itr, count)
                         count += 1
-#                     acc_after = self.accuracy(_inputss, _targetss)
+                    acc_after = self.accuracy(_inputss, _targetss)
 
                     kl_factor *= self.replay_kl_schedule
                     logger.record_tabular('KLFactor', kl_factor)

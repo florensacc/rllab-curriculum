@@ -10,7 +10,7 @@ from sandbox.rein.algos.trpo_vime import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
 from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
@@ -35,8 +35,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         hidden_sizes=(32,),
     )
 
-    baseline = LinearFeatureBaseline(
+    baseline = GaussianMLPBaseline(
         mdp.spec,
+        regressor_args=dict(hidden_sizes=(32,), batchsize=5000),
     )
 
     algo = TRPO(
