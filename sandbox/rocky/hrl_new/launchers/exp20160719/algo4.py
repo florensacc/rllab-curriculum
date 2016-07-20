@@ -49,8 +49,8 @@ class PredictionBonusEvaluator(object):
         all_bonuses = -self.regressor.predict_log_likelihood(xs, next_observations)
         self.bonus_scale = np.median(all_bonuses)
 
-    def log_diagnostics(self, samples_data):
-        bonuses = np.concatenate(map(self.predict, samples_data["paths"]))
+    def log_diagnostics(self, paths):
+        bonuses = np.concatenate(map(self.predict, paths))
         logger.record_tabular("AverageBonus", np.mean(bonuses))
         logger.record_tabular("MaxBonus", np.max(bonuses))
         logger.record_tabular("MinBonus", np.min(bonuses))
@@ -131,14 +131,13 @@ class StateGoalSurpriseBonusEvaluator(object):
     def fit_after_process_samples(self, samples_data):
         pass
 
-    def log_diagnostics(self, samples_data):
-        bonuses = np.concatenate(map(self.predict, samples_data["paths"]))
+    def log_diagnostics(self, paths):
+        bonuses = np.concatenate(map(self.predict, paths))
         logger.record_tabular("AverageBonus", np.mean(bonuses))
         logger.record_tabular("MaxBonus", np.max(bonuses))
         logger.record_tabular("MinBonus", np.min(bonuses))
         logger.record_tabular("StdBonus", np.std(bonuses))
 
-        paths = samples_data["paths"]
         obs = np.concatenate([p["observations"][:-1] for p in paths])
         goal = np.concatenate([p["agent_infos"]["subgoal"][:-1] for p in paths])
         next_obs = np.concatenate([p["observations"][1:] for p in paths])
@@ -362,9 +361,9 @@ class BonusTRPO(TRPO):
         self.bonus_coeff = bonus_coeff
         super(BonusTRPO, self).__init__(*args, **kwargs)
 
-    def log_diagnostics(self, samples_data):
-        super(BonusTRPO, self).log_diagnostics(samples_data)
-        self.bonus_evaluator.log_diagnostics(samples_data)
+    def log_diagnostics(self, paths):
+        super(BonusTRPO, self).log_diagnostics(paths)
+        self.bonus_evaluator.log_diagnostics(paths)
 
     def process_samples(self, itr, paths):
         logger.log("fitting bonus evaluator before processing...")

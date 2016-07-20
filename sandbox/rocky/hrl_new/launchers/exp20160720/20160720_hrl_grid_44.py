@@ -129,8 +129,8 @@ class VG(VariantGenerator):
                 env=env,
                 policy=policy,
                 baseline=baseline,
-                max_path_length=200,
-                batch_size=10000,
+                max_path_length=10,
+                batch_size=100,
                 n_itr=500,
                 discount=0.99,
                 gae_lambda=1.0,
@@ -158,8 +158,9 @@ for v in variants:
         v["algo"].train(),
         exp_prefix="0719-hrl-grid-44",
         seed=v["seed"],
-        n_parallel=4,
+        n_parallel=2,
         snapshot_mode="last",
         mode="local",
         variant=v,
     )
+    break

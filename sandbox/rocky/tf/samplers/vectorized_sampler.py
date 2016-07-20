@@ -1,6 +1,6 @@
 from __future__ import print_function
 from __future__ import absolute_import
-from sandbox.rocky.tf.samplers.base import BaseSampler
+from rllab.sampler.base import BaseSampler
 from sandbox.rocky.tf.envs.parallel_vec_env_executor import ParallelVecEnvExecutor
 from rllab.misc import tensor_utils
 import numpy as np
