@@ -24,6 +24,7 @@ class VectorizedSampler(BaseSampler):
         self.vec_env.terminate()
 
     def obtain_samples(self, itr):
+        logger.log("Obtaining samples for iteration %d..." % itr)
         paths = []
         n_samples = 0
         obses = self.vec_env.reset()

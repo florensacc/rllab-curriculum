@@ -4,19 +4,14 @@ from __future__ import print_function
 from rllab.misc.instrument import stub, run_experiment_lite
 
 """
-#39 with actual bug fix in batch weighted sampling...
+Do not include obstacles etc. in the map observation
 """
 
-from sandbox.rocky.hrl_imitation.algos.fixed_clock_imitation22 import FixedClockImitation, SeqGridPolicyModule
+from sandbox.rocky.hrl_new.launchers.exp20160721.fixed_clock_imitation23 import FixedClockImitation, SeqGridPolicyModule
 
 stub(globals())
 from rllab.misc.instrument import VariantGenerator
 
-# import tensorflow as tf
-# from rllab.misc import logger
-
-
-# seed 11: doesn't work
 vg = VariantGenerator()
 vg.add("seed", [x * 100 + 11 for x in range(10)])
 vg.add("learning_rate", [1e-3])#1e-3, 7.5e-4, 5e-4, 2.5e-4, 1e-4])
@@ -45,10 +40,9 @@ for v in variants:
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="seq_grid_imitation_40",
+        exp_prefix="seq-grid-imitation-41",
         seed=v["seed"],
         variant=v,
-        mode="local",
+        mode="lab_kube",
         snapshot_mode="last",
     )
-    # break

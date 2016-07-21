@@ -3,12 +3,14 @@ from __future__ import absolute_import
 import numpy as np
 import cPickle as pickle
 from sandbox.rocky.tf.misc import tensor_utils
+from rllab.misc import logger
 
 from rllab.sampler.stateful_pool import singleton_pool
 import uuid
 
 
 def worker_init_envs(G, alloc, scope, env):
+    logger.log("initializing environment on worker %d" % G.worker_id)
     if not hasattr(G, 'parallel_vec_envs'):
         G.parallel_vec_envs = dict()
         G.parallel_vec_env_template = dict()
@@ -19,7 +21,17 @@ def worker_init_envs(G, alloc, scope, env):
 # For these two methods below, we pack the data into batch numpy arrays whenever possible, to reduce communication cost
 
 def worker_run_reset(G, flags, scope):
-    assert hasattr(G, 'parallel_vec_envs')
+    if not hasattr(G, 'parallel_vec_envs'):
+        logger.log("on worker %d" % G.worker_id)
+        import traceback
+        for line in traceback.format_stack():
+            logger.log(line)
+        # log the stacktrace at least
+        logger.log("oops")
+        for k, v in G.__dict__.iteritems():
+            logger.log(str(k) + " : " + str(v))
+        assert hasattr(G, 'parallel_vec_envs')
+
     assert scope in G.parallel_vec_envs
     N = len(G.parallel_vec_envs[scope])
     env_template = G.parallel_vec_env_template[scope]
