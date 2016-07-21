@@ -261,6 +261,9 @@ class BatchPolopt(RLAlgorithm):
         self._pool_args = pool_args
         # ----------------------
 
+        if self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
+            assert self.use_replay_pool is False
+
         if self.second_order_update:
             assert self.n_itr_update == 1
 
@@ -424,6 +427,7 @@ class BatchPolopt(RLAlgorithm):
 
         self.start_worker()
         self.init_opt()
+        episode_rewards, episode_lengths = [], []
         acc_before, acc_after = 0., 0.
 
         # KL rescaling factor for replay pool-based training.
@@ -511,43 +515,29 @@ class BatchPolopt(RLAlgorithm):
                 T_train = [
                     np.hstack((lst_obs_nxt, np.asarray(lst_rew)[:, np.newaxis]))]
 
-                # PLOT
-                # ----
-                sanity_pred = self.bnn.pred_fn(X_train[0])
-                import matplotlib.pyplot as plt
-                plt.ion()
-                fig = plt.figure()
-                fig_1 = fig.add_subplot(121)
-                fig_2 = fig.add_subplot(122)
-                print('rew: {}'.format(sanity_pred[-1]))
-                sanity_pred_im = sanity_pred[
-                    0, :-1].reshape(self.state_dim).transpose(1, 2, 0)
-                im1 = fig_1.imshow(
-                    sanity_pred_im, interpolation='none')
-                im2 = fig_2.imshow(
-                    T_train[0][0, :-1].reshape(self.state_dim).transpose(1, 2, 0), interpolation='none')
-                plt.draw()
-                plt.pause(0.000001)
-                # ----
-
                 acc_before = self.accuracy(X_train, T_train)
+                count = 0
                 # Save old parameters as new prior.
                 self.bnn.save_params()
+                if self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
+                    logp_before = self.bnn.fn_logp(X_train[0], T_train[0])
                 # Num of runs needed to get to n_updates_per_sample
                 for _ in xrange(n_iterations):
                     # Num batches to traverse.
                     for batch in iterate_minibatches(X_train[0], T_train[0], self.pool_batch_size, shuffle=True):
                         # Don't use kl_factor when using no replay pool.
-                        print(self.bnn.train_fn(batch[0], batch[1], 1.))
-
-                    sanity_pred = self.bnn.pred_fn(X_train[0])
-                    im1.set_data(sanity_pred[
-                        0, :-1].reshape(self.state_dim).transpose(1, 2, 0))
-                    plt.draw()
-                    plt.pause(0.000001)
-                    # ----
-
+                        train_err = self.bnn.train_fn(batch[0], batch[1], 1.)
+                        if count % int(np.ceil(n_iterations * self.pool_batch_size / 5.)) == 0:
+                            print('train err: {}'.format(train_err))
+                            self.plot_pred_imgs(batch[0], batch[1], itr, count)
+                        count += 1
+                if self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
+                    logp_after = self.bnn.fn_logp(
+                        X_train[0], T_train[0])[0].flatten()
+                    surpr = logp_after - logp_before
+                    print('surpr: {}'.format(np.mean(surpr)))
                 acc_after = self.accuracy(X_train, T_train)
+                print(self.bnn.kl_div().eval())
 
             logger.record_tabular(
                 'DynModelSqErrBefore', acc_before)
@@ -558,7 +548,7 @@ class BatchPolopt(RLAlgorithm):
             self.policy.log_diagnostics(paths)
             self.baseline.log_diagnostics(paths)
             self.optimize_policy(itr, samples_data)
-            logger.log("Saving snapshot ...")
+#             logger.log("Saving snapshot ...")
 #             params = self.get_itr_snapshot(itr, samples_data)
 #             paths = samples_data["paths"]
 #             if self.store_paths:
@@ -569,7 +559,7 @@ class BatchPolopt(RLAlgorithm):
 #             params["episode_lengths"] = np.array(episode_lengths)
 #             params["algo"] = self
 #             logger.save_itr_params(itr, params)
-            logger.log("Saved.")
+#             logger.log("Saved.")
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
             if self.plot:

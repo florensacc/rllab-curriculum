@@ -242,11 +242,21 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             T.square(input - mu) / (2 * T.square(sigma))
         return T.sum(log_normal)
 
+    def _log_prob_normal_nonsum(self, input, mu=0., sigma=1.):
+        log_normal = - \
+            T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - \
+            T.square(input - mu) / (2 * T.square(sigma))
+        return T.sum(log_normal, axis=1)
+
     def pred_sym(self, input):
         return lasagne.layers.get_output(self.network, input)
 
     def likelihood_regression(self, target, prediction, likelihood_sd):
         return self._log_prob_normal(
+            target, prediction, likelihood_sd)
+
+    def likelihood_regression_nonsum(self, target, prediction, likelihood_sd):
+        return self._log_prob_normal_nonsum(
             target, prediction, likelihood_sd)
 
     def likelihood_classification(self, target, prediction):
@@ -265,12 +275,21 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         ll = T.sum(T.log(prediction_selected))
         return ll
 
+    def logp(self, input, target, **kwargs):
+        assert self.output_type == ConvBNNVIME.OutputType.REGRESSION
+        log_p_D_given_w = 0.
+        for _ in xrange(self.n_samples):
+            prediction = self.pred_sym(input)
+            lh = self.likelihood_regression_nonsum(
+                target, prediction, **kwargs)
+            log_p_D_given_w += lh
+        return log_p_D_given_w / self.n_samples
+
     def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
 
         # MC samples.
-        _log_p_D_given_w = []
+        log_p_D_given_w = 0.
         for _ in xrange(self.n_samples):
-            # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
             if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
@@ -280,8 +299,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             else:
                 raise Exception(
                     'Uknown output_type {}'.format(self.output_type))
-            _log_p_D_given_w.append(lh)
-        log_p_D_given_w = sum(_log_p_D_given_w)
+            log_p_D_given_w += lh
 
         if disable_kl:
             return - log_p_D_given_w / self.n_samples
@@ -556,9 +574,13 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         elif self.surprise_type == ConvBNNVIME.SurpriseType.BALD:
             # BALD
-            pass
-#             self.train_update_fn = ext.compile_function(
-#                 [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
+            self.train_update_fn = ext.compile_function(
+                [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
+        elif self.surprise_type == ConvBNNVIME.SurpriseType.COMPR:
+            # COMPR IMPR (no KL)
+            # Calculate logp.
+            self.fn_logp = ext.compile_function(
+                [input_var, target_var], self.logp(input_var, target_var, likelihood_sd=self.likelihood_sd), log_name='fn_logp')
 
 if __name__ == '__main__':
     pass

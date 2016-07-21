@@ -101,7 +101,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
                     # conservative step (actual step should be 1.0)
                     step_size = 1.0
-                    kl_div = G.dynamics.train_update_fn(
+                    surpr = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
 
                 else:
@@ -115,17 +115,22 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                             _inputs[start:end], _targets[start:end])
 
                     # Calculate current minibatch KL.
-                    kl_div = G.dynamics.fn_surprise()
+                    surpr = G.dynamics.fn_surprise()
 
                     # Reset to old params after each surprise calc.
                     G.dynamics.load_prev_params()
 
             elif surprise_type == G.dynamics.SurpriseType.BALD:
-                kl_div = G.dynamics.train_update_fn(
+                surpr = G.dynamics.train_update_fn(
                     _inputs[start:end])
+            elif surprise_type == G.dynamics.SurpriseType.COMPR:
+                # TODO: Essentially, for using compression gain, we require Bayesian
+                # update rather than replay pool (otherwise we are doing double
+                # work). So require use_replay_pool=False.
+                surpr = 1.0
 
             for k in xrange(start, end):
-                kl[k] = kl_div
+                kl[k] = surpr
 
         # Last element in KL vector needs to be replaced by second last one
         # because the actual last observation has no next observation.

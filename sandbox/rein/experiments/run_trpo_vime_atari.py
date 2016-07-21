@@ -17,8 +17,8 @@ os.environ["THEANO_FLAGS"] = "device=gpu"
 stub(globals())
 
 # Param ranges
-seeds = range(5)
-etas = [0, 0.01, 0.1]
+seeds = range(3)
+etas = [0.1]
 # seeds = range(5)
 # etas = [0, 0.001, 0.01, 0.1]
 normalize_rewards = [False]
@@ -57,7 +57,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
     baseline = GaussianMLPBaseline(
         mdp.spec,
         regressor_args=dict(mean_network=network,
-                            batchsize=50),
+                            batchsize=1000),
     )
 
     algo = TRPO(
@@ -67,26 +67,26 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=100,
+        batch_size=50000,
         whole_paths=True,
-        max_path_length=10,
-        n_itr=500,
+        max_path_length=5000,
+        n_itr=100,
         step_size=0.01,
-        optimizer_args=dict(num_slices=10),
+        optimizer_args=dict(num_slices=20),
         # -------------
 
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=1,
+        snn_n_samples=10,
         use_replay_pool=True,
         pool_args=dict(subsample_factor=0.1),
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=32,
         normalize_reward=normalize_reward,
-        replay_pool_size=1000,
-        n_updates_per_sample=100,
+        replay_pool_size=100000,
+        n_updates_per_sample=500000,
         second_order_update=True,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
@@ -110,12 +110,12 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
-                 n_units=256),
+                 n_units=1024),
             dict(name='gaussian',
-                 n_units=512),
+                 n_units=1024),
             dict(name='outerprod'),
             dict(name='gaussian',
-                 n_units=256),
+                 n_units=1024),
             dict(name='split',
                  n_units=128),
             dict(name='gaussian',
@@ -141,12 +141,12 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
                  pad=(0, 0),
                  nonlinearity=lasagne.nonlinearities.linear),
         ],
-        unn_learning_rate=0.005,
+        unn_learning_rate=0.001,
         surprise_transform=BatchPolopt.SurpriseTransform.CAP90PERC,
         update_likelihood_sd=True,
         replay_kl_schedule=0.98,
         output_type=BNN.OutputType.REGRESSION,
-        pool_batch_size=32,
+        pool_batch_size=8,
         likelihood_sd_init=0.1,
         prior_sd=0.05,
         # -------------
@@ -161,11 +161,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-pxl-c",
+        exp_prefix="trpo-vime-freeway-pxl-a",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

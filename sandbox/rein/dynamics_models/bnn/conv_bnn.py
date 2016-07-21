@@ -611,16 +611,6 @@ class ConvBNN(LasagnePowered, Serializable):
                         lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_old_new() for l in layers)
 
-    def compr_impr(self, input, target, **kwargs):
-        """Measure compression improvement only in output."""
-        # Given a particular target, sample multiple predictions, then look at
-        # what their likelihood is.
-        logp_after = self.logp(input, target, **kwargs)
-        self.load_prev_params()
-        logp_before = self.logp(input, target, **kwargs)
-        self.load_cur_params()
-        return logp_before - logp_after
-
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
         layers = filter(lambda l: isinstance(l, BayesianLayer),
@@ -971,6 +961,11 @@ class ConvBNN(LasagnePowered, Serializable):
             # BALD
             self.train_update_fn = ext.compile_function(
                 [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
+        elif self.surprise_type == ConvBNN.SurpriseType.COMPR:
+            # COMPR IMPR (no KL)
+            # Calculate logp.
+            self.fn_logp = ext.compile_function(
+                [input_var, target_var], self.logp(input_var, target_var, likelihood_sd=self.likelihood_sd), log_name='fn_logp')
 
 if __name__ == '__main__':
     pass
