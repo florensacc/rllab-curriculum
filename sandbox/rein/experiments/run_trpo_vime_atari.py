@@ -57,7 +57,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
     baseline = GaussianMLPBaseline(
         mdp.spec,
         regressor_args=dict(mean_network=network,
-                            batchsize=5000),
+                            batchsize=50),
     )
 
     algo = TRPO(
@@ -67,9 +67,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=10000,
+        batch_size=100,
         whole_paths=True,
-        max_path_length=5000,
+        max_path_length=10,
         n_itr=500,
         step_size=0.01,
         optimizer_args=dict(num_slices=10),
@@ -85,8 +85,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=32,
         normalize_reward=normalize_reward,
-        replay_pool_size=100000,
-        n_updates_per_sample=10000,
+        replay_pool_size=1000,
+        n_updates_per_sample=100,
         second_order_update=True,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
@@ -165,7 +165,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

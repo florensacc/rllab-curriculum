@@ -213,6 +213,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         else:
             prefix = ""
         logger.record_tabular(prefix + 'LossBefore', loss_before)
+        self._batchsize = None
         if self._batchsize is None:
             self._optimizer.optimize(inputs)
         else:
