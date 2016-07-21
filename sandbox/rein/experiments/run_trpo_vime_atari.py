@@ -1,3 +1,4 @@
+from sandbox.rein.algos.trpo_vime import TRPO
 import os
 from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
@@ -8,7 +9,6 @@ from rllab.core.network import ConvNetwork
 import lasagne
 
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from sandbox.rein.algos.trpo_vime import TRPO
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
 from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
@@ -56,7 +56,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
     )
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(mean_network=network),
+        regressor_args=dict(mean_network=network,
+                            batchsize=5000),
     )
 
     algo = TRPO(
@@ -66,9 +67,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=100,
+        batch_size=10000,
         whole_paths=True,
-        max_path_length=20  ,
+        max_path_length=5000,
         n_itr=500,
         step_size=0.01,
         optimizer_args=dict(num_slices=10),
@@ -79,13 +80,13 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         eta=eta,
         snn_n_samples=1,
         use_replay_pool=True,
-        pool_args=dict(subsample_factor=1.0),
+        pool_args=dict(subsample_factor=0.1),
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=4,
+        kl_batch_size=32,
         normalize_reward=normalize_reward,
-        replay_pool_size=1000,
-        n_updates_per_sample=500,
+        replay_pool_size=100000,
+        n_updates_per_sample=10000,
         second_order_update=True,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
@@ -160,11 +161,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-pxl-b",
+        exp_prefix="trpo-vime-freeway-pxl-c",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

@@ -242,14 +242,14 @@ class BayesianDenseLayer(lasagne.layers.Layer):
         self.b = b
         return b
 
-    def save_old_params(self):
+    def save_params(self):
         """Save old parameter values for KL calculation."""
         self.mu_old.set_value(self.mu.get_value())
         self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
         self.b_rho_old.set_value(self.b_rho.get_value())
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         """Reset to old parameter values for KL calculation."""
         self.mu.set_value(self.mu_old.get_value())
         self.rho.set_value(self.rho_old.get_value())
@@ -488,23 +488,23 @@ class BNN(LasagnePowered, Serializable):
         # Compile theano functions.
         self.build_model()
 
-    def save_old_params(self):
+    def save_params(self):
         layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.save_old_params()
+            layer.save_params()
         if self.update_likelihood_sd:
             self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.reset_to_old_params()
+            layer.load_prev_params()
         if self.update_likelihood_sd:
             self.likelihood_sd.set_value(self.old_likelihood_sd.get_value())
 
-    def compression_improvement(self):
+    def compr_impr(self):
         """KL divergence KL[old_param||new_param]"""
         layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
@@ -560,7 +560,7 @@ class BNN(LasagnePowered, Serializable):
     def surprise(self, **kwargs):
 
         if self.surprise_type == BNN.SurpriseType.COMPR:
-            surpr = self.compression_improvement()
+            surpr = self.compr_impr()
         elif self.surprise_type == BNN.SurpriseType.INFGAIN:
             surpr = self.inf_gain()
         elif self.surprise_type == BNN.SurpriseType.BALD:

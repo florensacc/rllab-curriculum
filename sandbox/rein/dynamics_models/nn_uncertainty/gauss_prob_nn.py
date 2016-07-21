@@ -239,7 +239,7 @@ class VBNNLayer(lasagne.layers.Layer):
         b = self.b_mu + T.log(1 + T.exp(self.b_rho)) * epsilon
         return b
 
-    def save_old_params(self):
+    def save_params(self):
         self.mu_old.set_value(self.mu.get_value())
         self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
@@ -413,13 +413,13 @@ class VBNN:
 
         return loss
 
-    def save_old_params(self):
+    def save_params(self):
         layers_mean = lasagne.layers.get_all_layers(self.network_mean)[1:]
         layers_stdn = lasagne.layers.get_all_layers(self.network_stdn)[1:]
         layers = layers_mean + layers_stdn
         for layer in layers:
             if layer.name == 'problayer':
-                layer.save_old_params()
+                layer.save_params()
 
     def build_network(self):
 
@@ -586,7 +586,7 @@ class VBNN:
             for batch in iterate_minibatches(X_train, T_train, self.batch_size, shuffle=True):
                 inputs, targets = batch
                 # Save old params for every update.
-                self.save_old_params()
+                self.save_params()
                 # Update model weights based on current minibatch.
                 train_err += self.train_fn(inputs, targets)
                 # Calculate kl divergence between q(w') and q(w).

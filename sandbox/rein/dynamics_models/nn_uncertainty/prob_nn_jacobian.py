@@ -130,14 +130,14 @@ class VBNNLayer(lasagne.layers.Layer):
 
         return self.nonlinearity(activation)
 
-    def save_old_params(self):
+    def save_params(self):
         """Save old parameter values for KL calculation."""
         self.mu_old.set_value(self.mu.get_value())
         self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
         self.b_rho_old.set_value(self.b_rho.get_value())
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         self.mu.set_value(self.mu_old.get_value())
         self.rho.set_value(self.rho_old.get_value())
         self.b_mu.set_value(self.b_mu_old.get_value())
@@ -272,17 +272,17 @@ class VBNN:
         if self.use_reverse_kl_reg:
             assert self.symbolic_prior_kl == True
 
-    def save_old_params(self):
+    def save_params(self):
         layers = filter(lambda l: l.name == 'problayer',
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.save_old_params()
+            layer.save_params()
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         layers = filter(lambda l: l.name == 'problayer',
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.reset_to_old_params()
+            layer.load_prev_params()
 
     def get_kl_div_sampled(self):
         """Sampled KL calculation"""
@@ -664,7 +664,7 @@ class VBNN:
             for batch in iterate_minibatches(X_train, T_train, self.batch_size, shuffle=True):
 
                 # Fix old params for KL divergence computation.
-                self.save_old_params()
+                self.save_params()
 
                 # Train current minibatch.
                 inputs, targets = batch

@@ -208,10 +208,6 @@ class BatchPolopt(RLAlgorithm):
         :return:
         """
 
-        # matplotlib without x-server.
-        import matplotlib as mpl
-        mpl.use('Agg')
-
         self.env = env
         self.policy = policy
         self.baseline = baseline
@@ -486,7 +482,7 @@ class BatchPolopt(RLAlgorithm):
                     for _inputs, _targets in zip(_inputss, _targetss):
                         train_err = self.bnn.train_fn(
                             _inputs, _targets, kl_factor)
-                        if count % 100 == 0:
+                        if count % int(np.ceil(len(_inputss) / 5.)) == 0:
                             print('train err: {}'.format(train_err))
                             self.plot_pred_imgs(_inputs, _targets, itr, count)
                         count += 1
@@ -536,7 +532,7 @@ class BatchPolopt(RLAlgorithm):
 
                 acc_before = self.accuracy(X_train, T_train)
                 # Save old parameters as new prior.
-                self.bnn.save_old_params()
+                self.bnn.save_params()
                 # Num of runs needed to get to n_updates_per_sample
                 for _ in xrange(n_iterations):
                     # Num batches to traverse.

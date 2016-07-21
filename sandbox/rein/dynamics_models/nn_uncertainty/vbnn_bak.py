@@ -150,14 +150,14 @@ class VBNNLayer(lasagne.layers.Layer):
         else:
             return self.get_output_for_default(input, **kwargs)
 
-    def save_old_params(self):
+    def save_params(self):
         """Save old parameter values for KL calculation."""
         self.mu_old.set_value(self.mu.get_value())
         self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
         self.b_rho_old.set_value(self.b_rho.get_value())
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         self.mu.set_value(self.mu_old.get_value())
         self.rho.set_value(self.rho_old.get_value())
         self.b_mu.set_value(self.b_mu_old.get_value())
@@ -308,13 +308,13 @@ class VBNN(LasagnePowered, Serializable):
                             lasagne.layers.get_all_layers(self.network)[1:])
         return layers
 
-    def save_old_params(self):
+    def save_params(self):
         for layer in self._get_prob_layers():
-            layer.save_old_params()
+            layer.save_params()
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         for layer in self._get_prob_layers():
-            layer.reset_to_old_params()
+            layer.load_prev_params()
 
     def get_kl_div_sampled(self):
         """Sampled KL calculation"""
@@ -739,7 +739,7 @@ class VBNN(LasagnePowered, Serializable):
             for batch in iterate_minibatches(X_train, T_train, self.batch_size, shuffle=True):
 
                 # Fix old params for KL divergence computation.
-                self.save_old_params()
+                self.save_params()
 
                 # Train current minibatch.
                 inputs, targets = batch

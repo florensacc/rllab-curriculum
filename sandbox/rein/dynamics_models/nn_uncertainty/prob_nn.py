@@ -163,14 +163,14 @@ class GaussianLayer(lasagne.layers.Layer):
 
         return self.nonlinearity(activation)
 
-    def save_old_params(self):
+    def save_params(self):
         """Save old parameter values for KL calculation."""
         self.mu_old.set_value(self.mu.get_value())
         self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
         self.b_rho_old.set_value(self.b_rho.get_value())
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         """Reset to old parameter values for KL calculation."""
         self.mu.set_value(self.mu_old.get_value())
         self.rho.set_value(self.rho_old.get_value())
@@ -297,19 +297,19 @@ class ProbNN(LasagnePowered, Serializable):
         # Compile theano functions.
         self.build_model()
         
-    def save_old_params(self):
+    def save_params(self):
         layers = filter(lambda l: isinstance(l, GaussianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.save_old_params()
+            layer.save_params()
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         layers = filter(lambda l: isinstance(l, GaussianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.reset_to_old_params()
+            layer.load_prev_params()
 
-    def compression_improvement(self):
+    def compr_impr_kl(self):
         """KL divergence KL[old_param||new_param]"""
         layers = filter(lambda l: isinstance(l, GaussianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
@@ -324,7 +324,7 @@ class ProbNN(LasagnePowered, Serializable):
     def surprise(self):
         surpr = 0.
         if self.compression:
-            surpr += self.compression_improvement()
+            surpr += self.compr_impr_kl()
         if self.information_gain:
             surpr += self.inf_gain()
         return surpr

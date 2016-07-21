@@ -135,23 +135,23 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         print('num_weights: {}'.format(self.num_weights()))
 
-    def save_old_params(self):
+    def save_params(self):
         layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.save_old_params()
+            layer.save_params()
         if self.update_likelihood_sd:
             self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.reset_to_old_params()
+            layer.load_prev_params()
         if self.update_likelihood_sd:
             self.likelihood_sd.set_value(self.old_likelihood_sd.get_value())
 
-    def compression_improvement(self):
+    def compr_impr(self):
         """KL divergence KL[old_param||new_param]"""
         layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
@@ -208,7 +208,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
     def surprise(self, **kwargs):
 
         if self.surprise_type == ConvBNNVIME.SurpriseType.COMPR:
-            surpr = self.compression_improvement()
+            surpr = self.compr_impr()
         elif self.surprise_type == ConvBNNVIME.SurpriseType.INFGAIN:
             surpr = self.inf_gain()
         elif self.surprise_type == ConvBNNVIME.SurpriseType.BALD:

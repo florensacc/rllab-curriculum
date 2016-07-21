@@ -111,7 +111,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         for batch in iterate_minibatches(X_train, T_train, model.batch_size, shuffle=True):
 
             # Fix old params for KL divergence computation.
-            model.save_old_params()
+            model.save_params()
 
             # Train current minibatch.
             inputs, targets = batch

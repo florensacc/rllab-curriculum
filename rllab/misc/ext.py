@@ -369,20 +369,6 @@ def sliced_fun(f, n_slices):
 def stdize(data, eps=1e-6):
     return (data - np.mean(data, axis=0)) / (np.std(data, axis=0) + eps)
 
-
-def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
-    assert len(inputs) == len(targets)
-    if shuffle:
-        indices = np.arange(len(inputs))
-        np.random.shuffle(indices)
-    for start_idx in range(0, len(inputs) - batchsize + 1, batchsize):
-        if shuffle:
-            excerpt = indices[start_idx:start_idx + batchsize]
-        else:
-            excerpt = slice(start_idx, start_idx + batchsize)
-        yield inputs[excerpt], targets[excerpt]
-
-
 def iterate_minibatches_generic(input_lst=None, batchsize=None, shuffle=False):
 
     assert all(len(x) == len(input_lst[0]) for x in input_lst)
@@ -390,7 +376,7 @@ def iterate_minibatches_generic(input_lst=None, batchsize=None, shuffle=False):
     if shuffle:
         indices = np.arange(len(input_lst[0]))
         np.random.shuffle(indices)
-    for start_idx in range(0, len(input_lst[0]) - batchsize + 1, batchsize):
+    for start_idx in xrange(0, len(input_lst[0]) + 1, batchsize):
         if shuffle:
             excerpt = indices[start_idx:start_idx + batchsize]
         else:

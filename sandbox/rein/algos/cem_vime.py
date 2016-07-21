@@ -365,7 +365,7 @@ class CEM(RLAlgorithm, Serializable):
                     for j in xrange(int(np.ceil(obs.shape[0] / float(self.kl_batch_size)))):
 
                         # Save old params for every update.
-                        self.vbnn.save_old_params()
+                        self.vbnn.save_params()
 
                         start = j * self.kl_batch_size
                         end = np.minimum(
@@ -376,7 +376,7 @@ class CEM(RLAlgorithm, Serializable):
                             # step_size * invH * grad
                             best_loss_value = np.inf
                             for step_size in [0.01]:
-                                self.vbnn.save_old_params()
+                                self.vbnn.save_params()
                                 loss_value = self.vbnn.train_update_fn(
                                     _inputs[start:end], _targets[start:end], step_size)
                                 if loss_value < best_loss_value:
@@ -385,7 +385,7 @@ class CEM(RLAlgorithm, Serializable):
                                     float(self.vbnn.f_kl_div_closed_form()), 0, 50)
                                 # If using replay pool, undo updates.
                                 if self.use_replay_pool:
-                                    self.vbnn.reset_to_old_params()
+                                    self.vbnn.load_prev_params()
                         else:
                             # Update model weights based on current minibatch.
                             for _ in xrange(self.n_itr_update):
@@ -401,7 +401,7 @@ class CEM(RLAlgorithm, Serializable):
 
                         # If using replay pool, undo updates.
                         if self.use_replay_pool:
-                            self.vbnn.reset_to_old_params()
+                            self.vbnn.load_prev_params()
 
                     # Last element in KL vector needs to be replaced by second last one
                     # because the actual last observation has no next

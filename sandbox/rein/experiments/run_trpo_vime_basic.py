@@ -37,7 +37,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(hidden_sizes=(32,), batchsize=5000),
+        regressor_args=dict(hidden_sizes=(32,),
+                            batchsize=900),
     )
 
     algo = TRPO(
@@ -52,6 +53,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         max_path_length=100,
         n_itr=100,
         step_size=0.01,
+        optimizer_args=dict(num_slices=2),
         # -------------
 
         # VIME settings
@@ -65,7 +67,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         kl_batch_size=4,
         normalize_reward=normalize_reward,
         replay_pool_size=1000,
-        n_updates_per_sample=100,
+        n_updates_per_sample=10000,
         second_order_update=True,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),

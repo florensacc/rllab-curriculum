@@ -97,7 +97,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     # step_size * invH * grad
                     #                 best_loss_value = np.inf
                     # Save old params.
-                    G.dynamics.save_old_params()
+                    G.dynamics.save_params()
 
                     # conservative step (actual step should be 1.0)
                     step_size = 1.0
@@ -107,7 +107,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 else:
                     # First-order updates.
                     # Save old params for every update.
-                    G.dynamics.save_old_params()
+                    G.dynamics.save_params()
 
                     # Update model weights based on current minibatch.
                     for _ in xrange(n_itr_update):
@@ -118,7 +118,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     kl_div = G.dynamics.fn_surprise()
 
                     # Reset to old params after each surprise calc.
-                    G.dynamics.reset_to_old_params()
+                    G.dynamics.load_prev_params()
 
             elif surprise_type == G.dynamics.SurpriseType.BALD:
                 kl_div = G.dynamics.train_update_fn(
