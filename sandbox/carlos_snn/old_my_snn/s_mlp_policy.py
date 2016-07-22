@@ -240,19 +240,8 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
 
     @contextmanager
     def set_std_to_0(self):
-        print 'about to set the std to 0'
         self._set_std_to_0 = True
-        # try:
-        #     print 'now doig something'
-        #     yield
-        # finally:
-        #     print 'and finally closing it'
-        #     self._set_std_to_0 = False
         yield
-        print 'all the work done!'
-        self._set_std_to_0 = False
-
-    def unset_std_to_0(self):
         self._set_std_to_0 = False
 
     @overrides

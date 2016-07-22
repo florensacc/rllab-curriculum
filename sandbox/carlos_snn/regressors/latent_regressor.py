@@ -65,7 +65,10 @@ class Latent_regressor(Parameterized, Serializable):
             regressor_args = dict()
 
         if optimizer == 'first_order':
-            self.optimizer = FirstOrderOptimizer()
+            self.optimizer = FirstOrderOptimizer(
+                max_epochs=10,  # both of these are to match Rocky's 10
+                batch_size=128,
+            )
         elif optimizer is None:
             self.optimizer = None
         else:
@@ -116,6 +119,7 @@ class Latent_regressor(Parameterized, Serializable):
             raise NotImplementedError
 
     def fit(self, paths):
+        logger.log('fitting the regressor...')
         if self.recurrent:
             observations = np.array([p["observations"][:, self.obs_regressed] for p in paths])
             # print 'the obs shape is: ', np.shape(observations)
@@ -138,6 +142,7 @@ class Latent_regressor(Parameterized, Serializable):
                                                 scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
                                                 size=np.shape(obs_actions))
             self._regressor.fit(obs_actions, latents.reshape((-1, self.latent_dim)))  # why reshape??
+        logger.log('done fitting the regressor')
 
     def predict(self, path):
         if self.recurrent:
