@@ -67,7 +67,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=50000,
+        batch_size=25000,
         whole_paths=True,
         max_path_length=5000,
         n_itr=100,

@@ -433,16 +433,17 @@ class BatchPolopt(RLAlgorithm):
         # KL rescaling factor for replay pool-based training.
         kl_factor = 1.0
 
+        # ATTENTION: important to know when 'rewards' and 'rewards_orig' needs
+        # to be used!
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
             paths = self.obtain_samples(itr)
-            samples_data = self.process_samples(itr, paths)
 
             if self.use_replay_pool:
                 # Fill replay pool.
                 logger.log("Fitting dynamics model using replay pool ...")
-                for path in samples_data['paths']:
+                for path in paths:
                     path_len = len(path['rewards'])
                     for i in xrange(path_len):
                         obs = path['observations'][i]
@@ -501,14 +502,14 @@ class BatchPolopt(RLAlgorithm):
                 logger.log(
                     "Fitting dynamics model to current sample batch ...")
                 lst_obs, lst_obs_nxt, lst_act, lst_rew = [], [], [], []
-                for path in samples_data['paths']:
+                for path in paths:
                     len_path = len(path['observations'])
                     for i in xrange(len_path - 1):
                         lst_obs.append(path['observations'][i])
                         lst_obs_nxt.append(
                             path['observations'][i + 1])
                         lst_act.append(path['actions'][i])
-                        lst_rew.append(path['rewards'][i])
+                        lst_rew.append(path['rewards_orig'][i])
 
                 # Stack into input and target set.
                 X_train = [np.hstack((lst_obs, lst_act))]
@@ -516,10 +517,11 @@ class BatchPolopt(RLAlgorithm):
                     np.hstack((lst_obs_nxt, np.asarray(lst_rew)[:, np.newaxis]))]
 
                 acc_before = self.accuracy(X_train, T_train)
+
                 count = 0
                 # Save old parameters as new prior.
                 self.bnn.save_params()
-                if self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
+                if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
                     logp_before = self.bnn.fn_logp(X_train[0], T_train[0])
                 # Num of runs needed to get to n_updates_per_sample
                 for _ in xrange(n_iterations):
@@ -531,18 +533,26 @@ class BatchPolopt(RLAlgorithm):
                             print('train err: {}'.format(train_err))
                             self.plot_pred_imgs(batch[0], batch[1], itr, count)
                         count += 1
-                if self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
+                if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
+                    # FIXME: WRONG because of KL[-2] KL[-1] thing!!!
                     logp_after = self.bnn.fn_logp(
                         X_train[0], T_train[0])[0].flatten()
                     surpr = logp_after - logp_before
+                    pc = 0
+                    import ipdb
+                    ipdb.set_trace()
+                    for path in paths:
+                        path['KL'] = surpr[pc:pc + len(path['KL'])]
+                        pc += len(path['KL'])
                     print('surpr: {}'.format(np.mean(surpr)))
                 acc_after = self.accuracy(X_train, T_train)
-                print(self.bnn.kl_div().eval())
 
             logger.record_tabular(
                 'DynModelSqErrBefore', acc_before)
             logger.record_tabular(
                 'DynModelSqErrAfter', acc_after)
+
+            samples_data = self.process_samples(itr, paths)
 
             self.env.log_diagnostics(paths)
             self.policy.log_diagnostics(paths)
