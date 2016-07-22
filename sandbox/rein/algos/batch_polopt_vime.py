@@ -292,20 +292,18 @@ class BatchPolopt(RLAlgorithm):
     def shutdown_worker(self):
         pass
 
-    def accuracy(self, _inputss, _targetss):
+    def accuracy(self, _inputs, _targets):
         acc = 0.
-        for _inputs, _targets in zip(_inputss, _targetss):
-            _out = self.bnn.pred_fn(_inputs)
-            if self.output_type == 'regression':
-                acc += np.mean(np.sum(np.square(_out - _targets), axis=1))
-            elif self.output_type == 'classification':
-                # FIXME: only for Atari
-                _out2 = _out.reshape([-1, 256])
-                _argm = np.argmax(_out2, axis=1)
-                _argm2 = _argm.reshape([-1, 128])
-                acc += np.sum(
-                    np.equal(_targets, _argm2)) / float(_targets.size)
-        acc /= len(_inputss)
+        _out = self.bnn.pred_fn(_inputs)
+        if self.output_type == 'regression':
+            acc += np.mean(np.sum(np.square(_out - _targets), axis=1))
+        elif self.output_type == 'classification':
+            # FIXME: only for Atari
+            _out2 = _out.reshape([-1, 256])
+            _argm = np.argmax(_out2, axis=1)
+            _argm2 = _argm.reshape([-1, 128])
+            acc += np.sum(
+                np.equal(_targets, _argm2)) / float(_targets.size)
         return acc
 
     def plot_pred_imgs(self, inputs, targets, itr, count):
@@ -428,7 +426,7 @@ class BatchPolopt(RLAlgorithm):
         self.start_worker()
         self.init_opt()
         episode_rewards, episode_lengths = [], []
-        acc_before, acc_after = 0., 0.
+        acc_before, acc_after, train_loss = 0., 0., 0.
 
         # KL rescaling factor for replay pool-based training.
         kl_factor = 1.0
@@ -456,12 +454,13 @@ class BatchPolopt(RLAlgorithm):
                 # if self.pool is large enough.
                 if self.pool.size >= self.min_pool_size:
                     obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
-                    _inputss = []
-                    _targetss = []
+                    acc_before, acc_after, train_loss, itr_tot = 0., 0., 0., self.n_updates_per_sample / \
+                        self.pool_batch_size
 
-                    for _ in xrange(self.n_updates_per_sample / self.pool_batch_size):
-                        batch = self.pool.random_batch(
-                            self.pool_batch_size)
+                    for i in xrange(itr_tot):
+
+                        batch = self.pool.random_batch(self.pool_batch_size)
+
                         act = (batch['actions'] - act_mean) / \
                             (act_std + 1e-8)
                         # FIXME: and True for atari.
@@ -473,25 +472,24 @@ class BatchPolopt(RLAlgorithm):
                                 (obs_std + 1e-8)
                             next_obs = (
                                 batch['next_observations'] - obs_mean) / (obs_std + 1e-8)
-                        _inputs = np.hstack(
-                            [obs, act])
+
+                        _inputs = np.hstack([obs, act])
                         _targets = next_obs
                         if self.predict_reward:
                             _targets = np.hstack(
                                 (next_obs, batch['rewards'][:, None]))
-                        _inputss.append(_inputs)
-                        _targetss.append(_targets)
 
-                    acc_before = self.accuracy(_inputss, _targetss)
-                    count = 0
-                    for _inputs, _targets in zip(_inputss, _targetss):
-                        train_err = self.bnn.train_fn(
+                        acc_before += self.accuracy(_inputs, _targets)
+                        train_loss += self.bnn.train_fn(
                             _inputs, _targets, kl_factor)
-                        if count % int(np.ceil(len(_inputss) / 5.)) == 0:
-                            print('train err: {}'.format(train_err))
-                            self.plot_pred_imgs(_inputs, _targets, itr, count)
-                        count += 1
-                    acc_after = self.accuracy(_inputss, _targetss)
+                        if i % int(np.ceil(itr_tot / 5.)) == 0:
+                            self.plot_pred_imgs(
+                                _inputs, _targets, itr, i)
+                        acc_after += self.accuracy(_inputs, _targets)
+
+                    train_loss /= itr_tot
+                    acc_before /= itr_tot
+                    acc_after /= itr_tot
 
                     kl_factor *= self.replay_kl_schedule
                     logger.record_tabular('KLFactor', kl_factor)
@@ -512,45 +510,47 @@ class BatchPolopt(RLAlgorithm):
                         lst_rew.append(path['rewards_orig'][i])
 
                 # Stack into input and target set.
-                X_train = [np.hstack((lst_obs, lst_act))]
-                T_train = [
-                    np.hstack((lst_obs_nxt, np.asarray(lst_rew)[:, np.newaxis]))]
+                X_train = np.hstack((lst_obs, lst_act))
+                T_train = np.hstack(
+                    (lst_obs_nxt, np.asarray(lst_rew)[:, np.newaxis]))
 
                 acc_before = self.accuracy(X_train, T_train)
-
                 count = 0
                 # Save old parameters as new prior.
                 self.bnn.save_params()
                 if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
-                    logp_before = self.bnn.fn_logp(X_train[0], T_train[0])
+                    logp_before = self.bnn.fn_logp(X_train, T_train)
                 # Num of runs needed to get to n_updates_per_sample
                 for _ in xrange(n_iterations):
                     # Num batches to traverse.
-                    for batch in iterate_minibatches(X_train[0], T_train[0], self.pool_batch_size, shuffle=True):
+                    for batch in iterate_minibatches(X_train, T_train, self.pool_batch_size, shuffle=True):
                         # Don't use kl_factor when using no replay pool.
-                        train_err = self.bnn.train_fn(batch[0], batch[1], 1.)
+                        train_loss = self.bnn.train_fn(batch[0], batch[1], 1.)
                         if count % int(np.ceil(n_iterations * self.pool_batch_size / 5.)) == 0:
-                            print('train err: {}'.format(train_err))
+                            print('train err: {}'.format(train_loss))
                             self.plot_pred_imgs(batch[0], batch[1], itr, count)
                         count += 1
                 if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
-                    # FIXME: WRONG because of KL[-2] KL[-1] thing!!!
+                    # Samples will default path['KL'] to np.nan. It is filled in here.
                     logp_after = self.bnn.fn_logp(
-                        X_train[0], T_train[0])[0].flatten()
+                        X_train, T_train)[0].flatten()
                     surpr = logp_after - logp_before
                     pc = 0
-                    import ipdb
-                    ipdb.set_trace()
                     for path in paths:
-                        path['KL'] = surpr[pc:pc + len(path['KL'])]
-                        pc += len(path['KL'])
+                        _l = len(path['KL']) - 1
+                        path['KL'] = np.append(
+                            surpr[pc:pc + _l], surpr[pc + _l - 1])
+                        assert not np.isnan(path['KL']).any()
+                        pc += _l
                     print('surpr: {}'.format(np.mean(surpr)))
                 acc_after = self.accuracy(X_train, T_train)
 
             logger.record_tabular(
-                'DynModelSqErrBefore', acc_before)
+                'DynModel_SqErrBefore', acc_before)
             logger.record_tabular(
-                'DynModelSqErrAfter', acc_after)
+                'DynModel_SqErrAfter', acc_after)
+            logger.record_tabular(
+                'DynModel_TrainLoss', train_loss)
 
             samples_data = self.process_samples(itr, paths)
 

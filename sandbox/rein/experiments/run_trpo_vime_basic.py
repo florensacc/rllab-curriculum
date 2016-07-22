@@ -59,7 +59,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=3,
+        snn_n_samples=1,
         use_replay_pool=False,
         pool_args=dict(subsample_factor=1.0),
         use_kl_ratio=kl_ratio,
@@ -84,9 +84,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
                  n_units=mdp.spec.observation_space.shape[0],
                  nonlinearity=lasagne.nonlinearities.linear),
         ],
-        unn_learning_rate=0.001,
+        unn_learning_rate=0.01,
         surprise_transform=BatchPolopt.SurpriseTransform.CAP90PERC,
-        update_likelihood_sd=False,
+        update_likelihood_sd=True,
         replay_kl_schedule=0.98,
         output_type=BNN.OutputType.REGRESSION,
         pool_batch_size=32,
