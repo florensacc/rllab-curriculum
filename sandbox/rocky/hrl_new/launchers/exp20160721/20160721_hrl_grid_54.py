@@ -4,7 +4,7 @@ from __future__ import absolute_import
 from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.rocky.hrl_new.envs.image_grid_world import ImageGridWorld
 from sandbox.rocky.hrl.envs.compound_action_sequence_env import CompoundActionSequenceEnv
-from sandbox.rocky.hrl_new.launchers.exp20160721.algo import BonusTRPO, BottleneckStateGoalSurpriseBonusEvaluator, \
+from sandbox.rocky.hrl_new.launchers.exp20160721.algo1 import BonusTRPO, BottleneckStateGoalSurpriseBonusEvaluator, \
     FixedClockPolicy
 from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
@@ -15,7 +15,7 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 """
-Measure MI via bottleneck states instead of raw states. i.e. I(g;z'|z) instead of I(g;s'|s)
+Use k-step prediction for subgoals, where k is the subgoal interval
 """
 
 
@@ -46,23 +46,19 @@ class VG(VariantGenerator):
 
     @variant
     def mi_coeff(self):
-        return [0., 1.]
+        return [1., 0.]
 
     @variant
     def surprise_coeff(self):
         return [0., 1.]
 
     @variant
-    def bottleneck_mi_coeff(self):
-        return [1., 0.]
-
-    @variant
-    def bottleneck_surprise_coeff(self):
-        return [0., 1.]
-
-    @variant
     def subgoal_interval(self):
-        return [3, 1]
+        return [3, 2, 1, 4]
+
+    @variant
+    def predict_interval_ahead(self):
+        return [True, False]
 
     @variant
     def hidden_sizes(self):
@@ -70,7 +66,7 @@ class VG(VariantGenerator):
 
     @variant
     def env_mode(self):
-        return ["easy"]  # , "medium", "hard"]
+        return ["easy", "medium", "hard"]
 
     @variant(hide=True)
     def env(self, env_mode):
@@ -131,7 +127,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def algo(self, setup, env, policy, bonus_coeff, regressor_use_trust_region, subgoal_dim, mi_coeff,
-             surprise_coeff, bottleneck_mi_coeff, bottleneck_surprise_coeff, subgoal_interval):
+             surprise_coeff, subgoal_interval, predict_interval_ahead):
         if setup == "flat_policy" or setup == "hrl_policy":
             baseline = LinearFeatureBaseline(env_spec=env.spec)
             yield BonusTRPO(
@@ -149,8 +145,7 @@ class VG(VariantGenerator):
                     subgoal_interval=subgoal_interval,
                     mi_coeff=mi_coeff,
                     surprise_coeff=surprise_coeff,
-                    bottleneck_mi_coeff=bottleneck_mi_coeff,
-                    bottleneck_surprise_coeff=bottleneck_surprise_coeff,
+                    predict_interval_ahead=predict_interval_ahead,
                     regressor_args=dict(
                         use_trust_region=regressor_use_trust_region,
                         hidden_sizes=(200, 200),
@@ -169,7 +164,7 @@ print("#Experiments: %d" % len(variants))
 for v in variants:
     run_experiment_lite(
         v["algo"].train(),
-        exp_prefix="0721-hrl-grid-53",
+        exp_prefix="0721-hrl-grid-54",
         seed=v["seed"],
         n_parallel=4,
         snapshot_mode="last",

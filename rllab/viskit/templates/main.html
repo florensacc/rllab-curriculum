@@ -94,6 +94,10 @@
             <div class="checkbox pull-left" style="margin-left: 10px">
                 <label><input type="checkbox" name="smooth_curve" value="">Smooth Curve</label><br>
             </div>
+            <div class="checkbox pull-left" style="margin-left: 10px">
+                <label><input type="checkbox" name="normalize_error" value="">Normalize Error Bar</label><br>
+            </div>
+
         </div>
         <div class="form-group">
             <label class="control-label pull-left">(Figure) Split by:</label>
@@ -192,6 +196,7 @@
         var onlyShowBestFinal = $controlPanel.find("input[type=checkbox][name=only_show_best_final]").is(':checked');
         var filterNaN = $controlPanel.find("input[type=checkbox][name=filter_nan]").is(':checked');
         var smoothCurve = $controlPanel.find("input[type=checkbox][name=smooth_curve]").is(':checked');
+        var normalizeError = $controlPanel.find("input[type=checkbox][name=normalize_error]").is(':checked');
         if (useMedian === true) {
             useMedian = "True";
         }
@@ -207,6 +212,9 @@
         if (smoothCurve === true) {
             smoothCurve = "True";
         }
+        if (normalizeError === true) {
+            normalizeError = "True";
+        }
         var clipPlotValue = $controlPanel.find("input[name=clip_plot_value]").val();
         var plotWidth = $controlPanel.find("input[name=plot_width]").val();
         var plotHeight = $controlPanel.find("input[name=plot_height]").val();
@@ -221,7 +229,7 @@
                     "only_show_best": onlyShowBest, "clip_plot_value": clipPlotValue,
                     "plot_width": plotWidth, "plot_height": plotHeight, "filter_nan": filterNaN,
                     "smooth_curve": smoothCurve, "custom_filter": customFilter, "legend_post_processor":
-                    legendPostProcessor, "only_show_best_final": onlyShowBestFinal,
+                    legendPostProcessor, "only_show_best_final": onlyShowBestFinal, "normalize_error": normalizeError,
                 }, options),
                 function (data) {
                     $("#plot_wrapper").empty().append(data);
