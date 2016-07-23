@@ -108,7 +108,7 @@ class BatchPolopt(RLAlgorithm):
             for itr in xrange(self.start_itr, self.n_itr):
                 with logger.prefix('itr #%d | ' % itr):
                     paths = self.obtain_samples(itr)
-                    samples_data = self.sampler.process_samples(itr, paths)
+                    samples_data = self.process_samples(itr, paths)
                     self.log_diagnostics(paths)
                     self.optimize_policy(itr, samples_data)
                     logger.log("saving snapshot...")

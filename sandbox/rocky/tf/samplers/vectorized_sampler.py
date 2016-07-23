@@ -2,6 +2,7 @@ from __future__ import print_function
 from __future__ import absolute_import
 from rllab.sampler.base import BaseSampler
 from sandbox.rocky.tf.envs.parallel_vec_env_executor import ParallelVecEnvExecutor
+from sandbox.rocky.tf.envs.vec_env_executor import VecEnvExecutor
 from rllab.misc import tensor_utils
 import numpy as np
 from rllab.sampler.stateful_pool import ProgBarCounter
@@ -13,7 +14,7 @@ class VectorizedSampler(BaseSampler):
     def start_worker(self):
         estimated_envs = int(self.algo.batch_size / self.algo.max_path_length)
         estimated_envs = max(1, min(estimated_envs, 100))
-        self.vec_env = ParallelVecEnvExecutor(
+        self.vec_env = VecEnvExecutor(
             self.algo.env,
             n=estimated_envs,
             max_path_length=self.algo.max_path_length
@@ -24,6 +25,7 @@ class VectorizedSampler(BaseSampler):
         self.vec_env.terminate()
 
     def obtain_samples(self, itr):
+        logger.log("Obtaining samples for iteration %d..." % itr)
         paths = []
         n_samples = 0
         obses = self.vec_env.reset()

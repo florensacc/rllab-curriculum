@@ -216,7 +216,7 @@ def check_nan(exp):
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
                          only_show_best=False, only_show_best_final=False, gen_eps=False, clip_plot_value=None, plot_width=None,
                          plot_height=None, filter_nan=False, smooth_curve=False, custom_filter=None,
-                         legend_post_processor=None):
+                         legend_post_processor=None, normalize_error=False):
     print(plot_key, split_key, group_key, filters)
     if filter_nan:
         nonnan_exps_data = filter(check_nan, exps_data)
@@ -347,6 +347,8 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                         else:
                             means = np.nanmean(progresses, axis=0)
                             stds = np.nanstd(progresses, axis=0)
+                            if normalize_error:# and len(progresses) > 0:
+                                stds /= np.sqrt(np.sum((1. - np.isnan(progresses)), axis=0))
                             if smooth_curve:
                                 means = sliding_mean(means,
                                                      window=window_size)
@@ -449,6 +451,7 @@ def plot_div():
     gen_eps = args.get("eps", "") == 'True'
     only_show_best = args.get("only_show_best", "") == 'True'
     only_show_best_final = args.get("only_show_best_final", "") == 'True'
+    normalize_error = args.get("normalize_error", "") == 'True'
     filter_nan = args.get("filter_nan", "") == 'True'
     smooth_curve = args.get("smooth_curve", "") == 'True'
     clip_plot_value = parse_float_arg(args, "clip_plot_value")
@@ -469,7 +472,7 @@ def plot_div():
                                     only_show_best=only_show_best, only_show_best_final=only_show_best_final,
                                     clip_plot_value=clip_plot_value, plot_width=plot_width, plot_height=plot_height,
                                     smooth_curve=smooth_curve, custom_filter=custom_filter,
-                                    legend_post_processor=legend_post_processor)
+                                    legend_post_processor=legend_post_processor, normalize_error=normalize_error)
     # print plot_div
     return plot_div
 
