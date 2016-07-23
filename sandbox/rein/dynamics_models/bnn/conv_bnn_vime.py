@@ -9,7 +9,6 @@ from collections import OrderedDict
 import theano
 from sandbox.rein.dynamics_models.utils import enum
 from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, BayesianDeConvLayer, BayesianDenseLayer, BayesianLayer
-from lasagne.layers.shape import PadLayer
 
 
 class OuterProdLayer(lasagne.layers.MergeLayer):
@@ -440,7 +439,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         elif self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
 
-            target_var = T.imatrix('targets')
+            target_var = T.imatrix('targets',
+                                   dtype=theano.config.floatX)
 
             # Loss function.
             loss = self.loss(
@@ -470,6 +470,40 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.train_fn = ext.compile_function(
             [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
 
+        # Surprise functions:
+        # INFGAIN: useable with 2nd_order_update = True/False
+        # BALD: useable
+        # COMPGAIN: useable with 2nd_order_update = True/False, 
+        # needs to be calculated using logp, not KL!
+        # ---------------------------------------
+
+        def second_order_update(loss, params, oldparams, step_size):
+            """Second-order update method for optimizing loss_last_sample, so basically,
+            KL term (new params || old params) + NLL of latest sample. The Hessian is
+            evaluated at the origin and provides curvature information to make a more
+            informed step in the correct descent direction."""
+            grads = theano.grad(loss, params)
+            updates = OrderedDict()
+
+            for i in xrange(len(params)):
+                param = params[i]
+                grad = grads[i]
+
+                if param.name == 'mu' or param.name == 'b_mu':
+                    oldparam_rho = oldparams[i + 1]
+                    invH = T.square(T.log(1 + T.exp(oldparam_rho)))
+                elif param.name == 'rho' or param.name == 'b_rho':
+                    oldparam_rho = oldparams[i]
+                    p = param
+                    H = 2. * (T.exp(2 * p)) / \
+                        (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                    invH = 1. / H
+                elif param.name == 'likelihood_sd':
+                    invH = 0.
+                updates[param] = param - step_size * invH * grad
+
+            return updates
+
         if self.surprise_type == ConvBNNVIME.SurpriseType.INFGAIN:
             if self.second_order_update:
 
@@ -477,33 +511,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     self.network, oldparam=True)
                 step_size = T.scalar('step_size',
                                      dtype=theano.config.floatX)
-
-                def second_order_update(loss, params, oldparams, step_size):
-                    """Second-order update method for optimizing loss_last_sample, so basically,
-                    KL term (new params || old params) + NLL of latest sample. The Hessian is
-                    evaluated at the origin and provides curvature information to make a more
-                    informed step in the correct descent direction."""
-                    grads = theano.grad(loss, params)
-                    updates = OrderedDict()
-
-                    for i in xrange(len(params)):
-                        param = params[i]
-                        grad = grads[i]
-
-                        if param.name == 'mu' or param.name == 'b_mu':
-                            oldparam_rho = oldparams[i + 1]
-                            invH = T.square(T.log(1 + T.exp(oldparam_rho)))
-                        elif param.name == 'rho' or param.name == 'b_rho':
-                            oldparam_rho = oldparams[i]
-                            p = param
-                            H = 2. * (T.exp(2 * p)) / \
-                                (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
-                            invH = 1. / H
-                        elif param.name == 'likelihood_sd':
-                            invH = 0.
-                        updates[param] = param - step_size * invH * grad
-
-                    return updates
 
                 def fast_kl_div(loss, params, oldparams, step_size):
                     # FIXME: doesn't work yet for group_variance_by!='weight'.
@@ -581,6 +588,16 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             # Calculate logp.
             self.fn_logp = ext.compile_function(
                 [input_var, target_var], self.logp(input_var, target_var, likelihood_sd=self.likelihood_sd), log_name='fn_logp')
+            if self.second_order_update:
+                oldparams = lasagne.layers.get_all_params(
+                    self.network, oldparam=True)
+                step_size = T.scalar('step_size',
+                                     dtype=theano.config.floatX)
+                updates_kl = second_order_update(
+                    loss_only_last_sample, params, oldparams, step_size)
+
+                self.train_update_fn = ext.compile_function(
+                    [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
 
 if __name__ == '__main__':
     pass

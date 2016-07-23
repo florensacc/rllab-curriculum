@@ -714,10 +714,20 @@ class ConvBNN(LasagnePowered, Serializable):
         return ll
 
     def logp(self, input, target, **kwargs):
-        # MC samples.
-        _log_p_D_given_w = []
+        assert self.output_type == ConvBNN.OutputType.REGRESSION
+        log_p_D_given_w = 0.
         for _ in xrange(self.n_samples):
-            # Make prediction.
+            prediction = self.pred_sym(input)
+            lh = self.likelihood_regression_nonsum(
+                target, prediction, **kwargs)
+            log_p_D_given_w += lh
+        return log_p_D_given_w / self.n_samples
+
+    def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
+
+        # MC samples.
+        log_p_D_given_w = 0.
+        for _ in xrange(self.n_samples):
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
             if self.output_type == ConvBNN.OutputType.CLASSIFICATION:
@@ -727,18 +737,16 @@ class ConvBNN(LasagnePowered, Serializable):
             else:
                 raise Exception(
                     'Uknown output_type {}'.format(self.output_type))
-            _log_p_D_given_w.append(lh)
-        return sum(_log_p_D_given_w) / float(self.n_samples)
+            log_p_D_given_w += lh
 
-    def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
         if disable_kl:
-            return - self.logp()
+            return - log_p_D_given_w / self.n_samples
         else:
             if self.update_prior:
                 kl = self.kl_div()
             else:
                 kl = self.log_p_w_q_w_kl()
-            return kl / self.n_batches * kl_factor - self.logp()
+            return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
 
     def loss_last_sample(self, input, target, **kwargs):
         """The difference with the original loss is that we only update based on the latest sample.

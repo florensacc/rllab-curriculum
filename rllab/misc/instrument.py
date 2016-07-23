@@ -349,6 +349,7 @@ def run_experiment_lite(
 
     global exp_count
     global remote_confirmed
+    config.USE_GPU = use_gpu
 
     # params_list = []
 

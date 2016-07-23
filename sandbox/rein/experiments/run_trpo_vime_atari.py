@@ -22,7 +22,7 @@ etas = [0.1]
 # seeds = range(5)
 # etas = [0, 0.001, 0.01, 0.1]
 normalize_rewards = [False]
-kl_ratios = [True]
+kl_ratios = [False]
 mdps = [GymEnv("Freeway-v0", record_video=False)]
 
 param_cart_product = itertools.product(
@@ -67,7 +67,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=25000,
+        batch_size=10000,
         whole_paths=True,
         max_path_length=5000,
         n_itr=100,
@@ -79,15 +79,14 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # -------------
         eta=eta,
         snn_n_samples=10,
-        use_replay_pool=True,
-        pool_args=dict(subsample_factor=0.1),
+        use_replay_pool=False,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=32,
         normalize_reward=normalize_reward,
         replay_pool_size=100000,
-        n_updates_per_sample=500000,
-        second_order_update=True,
+        n_updates_per_sample=50000,
+        second_order_update=False,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
         reward_dim=(1,),
@@ -110,12 +109,12 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
-                 n_units=1024),
+                 n_units=512),
             dict(name='gaussian',
-                 n_units=1024),
+                 n_units=512),
             dict(name='outerprod'),
             dict(name='gaussian',
-                 n_units=1024),
+                 n_units=512),
             dict(name='split',
                  n_units=128),
             dict(name='gaussian',
@@ -141,18 +140,19 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
                  pad=(0, 0),
                  nonlinearity=lasagne.nonlinearities.linear),
         ],
-        unn_learning_rate=0.001,
-        surprise_transform=BatchPolopt.SurpriseTransform.CAP90PERC,
+        unn_learning_rate=0.005,
+        surprise_transform=None,#BatchPolopt.SurpriseTransform.CAP90PERC,
         update_likelihood_sd=True,
         replay_kl_schedule=0.98,
         output_type=BNN.OutputType.REGRESSION,
         pool_batch_size=8,
         likelihood_sd_init=0.1,
         prior_sd=0.05,
+        predict_delta=True,
         # -------------
         disable_variance=False,
         group_variance_by=BNN.GroupVarianceBy.WEIGHT,
-        surprise_type=BNN.SurpriseType.INFGAIN,
+        surprise_type=BNN.SurpriseType.COMPR,
         predict_reward=True,
         use_local_reparametrization_trick=True,
         n_itr_update=1,

@@ -89,7 +89,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
             start = j * kl_batch_size
             end = np.minimum(
-                (j + 1) * kl_batch_size, obs.shape[0])
+                (j + 1) * kl_batch_size, _inputs.shape[0])
 
             if surprise_type == G.dynamics.SurpriseType.INFGAIN:
                 if second_order_update:
@@ -123,14 +123,38 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
             elif surprise_type == G.dynamics.SurpriseType.BALD:
                 surpr = G.dynamics.train_update_fn(
                     _inputs[start:end])
+
             elif surprise_type == G.dynamics.SurpriseType.COMPR:
                 # TODO: Essentially, for using compression gain, we require Bayesian
                 # update rather than replay pool (otherwise we are doing double
                 # work). So require use_replay_pool=False.
-                surpr = np.nan
+                if second_order_update:
+                    G.dynamics.save_params()
 
+                    logp_before = G.dynamics.fn_logp(
+                        _inputs[start:end], _targets[start:end])
+                    # conservative step (actual step should be 1.0)
+                    step_size = 0.1
+                    G.dynamics.train_update_fn(
+                        _inputs[start:end], _targets[start:end], step_size)
+
+                    # Calculate current minibatch surprise.
+                    logp_after = G.dynamics.fn_logp(
+                        _inputs[start:end], _targets[start:end])
+                    surpr = logp_after - logp_before
+#                     surpr[surpr < 0] = 0.
+
+                    # Reset to old params after each surprise calc.
+                    G.dynamics.load_prev_params()
+                else:
+                    surpr = np.nan
+
+            # Load suprise into np.array.
             for k in xrange(start, end):
-                kl[k] = surpr
+                if isinstance(surpr, float):
+                    kl[k] = surpr
+                else:
+                    kl[k] = surpr[k - start]
 
         # Last element in KL vector needs to be replaced by second last one
         # because the actual last observation has no next observation.
