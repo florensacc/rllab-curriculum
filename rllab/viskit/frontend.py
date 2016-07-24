@@ -216,7 +216,7 @@ def check_nan(exp):
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
                          only_show_best=False, only_show_best_final=False, gen_eps=False, clip_plot_value=None, plot_width=None,
                          plot_height=None, filter_nan=False, smooth_curve=False, custom_filter=None,
-                         legend_post_processor=None, normalize_error=False):
+                         legend_post_processor=None, normalize_error=False, custom_series_splitter=None):
     print(plot_key, split_key, group_key, filters)
     if filter_nan:
         nonnan_exps_data = filter(check_nan, exps_data)
@@ -232,6 +232,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
     if custom_filter is not None:
         selector = selector.custom_filter(custom_filter)
     # print selector._filters
+
     if split_key is not None:
         vs = [vs for k, vs in distinct_params if k == split_key][0]
         split_selectors = [selector.where(split_key, v) for v in vs]
@@ -242,15 +243,27 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
     plots = []
     counter = 1
     for split_selector, split_legend in zip(split_selectors, split_legends):
-        if group_key and group_key is not "exp_name":
-            vs = [vs for k, vs in distinct_params if k == group_key][0]
-            group_selectors = [split_selector.where(group_key, v) for v in vs]
-            group_legends = map(lambda x: str(x), vs)
+        if custom_series_splitter is not None:
+            exps = split_selector.extract()
+            splitted_dict = dict()
+            for exp in exps:
+                key = custom_series_splitter(exp)
+                if key not in splitted_dict:
+                    splitted_dict[key] = list()
+                splitted_dict[key].append(exp)
+            splitted = splitted_dict.items()
+            group_selectors = [core.Selector(list(x[1])) for x in splitted]
+            group_legends = [x[0] for x in splitted]
         else:
-            group_key = "exp_name"
-            vs = sorted([x.params["exp_name"] for x in split_selector.extract()])
-            group_selectors = [split_selector.where(group_key, v) for v in vs]
-            group_legends = [summary_name(x.extract()[0], split_selector) for x in group_selectors]
+            if group_key and group_key is not "exp_name":
+                vs = [vs for k, vs in distinct_params if k == group_key][0]
+                group_selectors = [split_selector.where(group_key, v) for v in vs]
+                group_legends = map(lambda x: str(x), vs)
+            else:
+                group_key = "exp_name"
+                vs = sorted([x.params["exp_name"] for x in split_selector.extract()])
+                group_selectors = [split_selector.where(group_key, v) for v in vs]
+                group_legends = [summary_name(x.extract()[0], split_selector) for x in group_selectors]
         # group_selectors = [split_selector]
         # group_legends = [split_legend]
         to_plot = []
@@ -458,6 +471,7 @@ def plot_div():
     plot_width = parse_float_arg(args, "plot_width")
     plot_height = parse_float_arg(args, "plot_height")
     custom_filter = args.get("custom_filter", None)
+    custom_series_splitter = args.get("custom_series_splitter", None)
     if custom_filter is not None and len(custom_filter.strip()) > 0:
         custom_filter = eval(custom_filter)
     else:
@@ -467,12 +481,17 @@ def plot_div():
         legend_post_processor = eval(legend_post_processor)
     else:
         legend_post_processor = None
+    if custom_series_splitter is not None and len(custom_series_splitter.strip()) > 0:
+        custom_series_splitter = eval(custom_series_splitter)
+    else:
+        custom_series_splitter = None
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, filter_nan=filter_nan,
                                     group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps,
                                     only_show_best=only_show_best, only_show_best_final=only_show_best_final,
                                     clip_plot_value=clip_plot_value, plot_width=plot_width, plot_height=plot_height,
                                     smooth_curve=smooth_curve, custom_filter=custom_filter,
-                                    legend_post_processor=legend_post_processor, normalize_error=normalize_error)
+                                    legend_post_processor=legend_post_processor, normalize_error=normalize_error,
+                                    custom_series_splitter=custom_series_splitter)
     # print plot_div
     return plot_div
 

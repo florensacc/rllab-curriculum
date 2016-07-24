@@ -52,6 +52,8 @@ class VectorizedSampler(BaseSampler):
             env_infos = tensor_utils.split_tensor_dict_list(env_infos)
             if env_infos is None:
                 env_infos = [dict() for _ in xrange(self.vec_env.num_envs)]
+            if agent_infos is None:
+                agent_infos = [dict() for _ in xrange(self.vec_env.num_envs)]
             for idx, observation, action, reward, env_info, agent_info, done in zip(itertools.count(), obses, actions,
                                                                                     rewards, env_infos, agent_infos,
                                                                                     dones):

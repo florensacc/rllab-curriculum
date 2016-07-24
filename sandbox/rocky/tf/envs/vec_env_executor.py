@@ -29,6 +29,7 @@ class VecEnvExecutor(object):
 
     def reset(self):
         results = [env.reset() for env in self.envs]
+        self.ts[:] = 0
         return results
 
     @property

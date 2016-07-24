@@ -45,6 +45,14 @@
                        autocomplete="on"/>
             </div>
         </div>
+        <div class="form-group">
+            <label for="custom_series_splitter" class="control-label pull-left">Custom Series Split By: </label>
+            <div class="col-xs-8">
+                <input type="text" class="form-control" id="custom_series_splitter" name="custom_series_splitter"
+                       placeholder="Write an anonymous function returning the key used for splitting, and the only argument is 'exp'"
+                       autocomplete="on"/>
+            </div>
+        </div>
         <div class="form-group ">
             <label for="clip_plot_value" class="control-label pull-left">Clip absolute value:</label>
             <div class="col-xs-2">
@@ -220,6 +228,7 @@
         var plotHeight = $controlPanel.find("input[name=plot_height]").val();
         var customFilter = $controlPanel.find("input[name=custom_filter]").val();
         var legendPostProcessor = $controlPanel.find("input[name=legend_post_processor]").val();
+        var customSeriesSplitter = $controlPanel.find("input[name=custom_series_splitter]").val();
         console.log(useMedian);
         console.log("updating");
         $.get("/plot_div",
@@ -230,6 +239,7 @@
                     "plot_width": plotWidth, "plot_height": plotHeight, "filter_nan": filterNaN,
                     "smooth_curve": smoothCurve, "custom_filter": customFilter, "legend_post_processor":
                     legendPostProcessor, "only_show_best_final": onlyShowBestFinal, "normalize_error": normalizeError,
+                    "custom_series_splitter": customSeriesSplitter,
                 }, options),
                 function (data) {
                     $("#plot_wrapper").empty().append(data);
