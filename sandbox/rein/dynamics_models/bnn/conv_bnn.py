@@ -119,9 +119,11 @@ class BayesianLayer(lasagne.layers.Layer):
 
         # Bias priors.
         self.b_mu_old = self.add_param(
-            np.zeros(self.get_b_shape()), self.get_b_shape(),  name="b_mu_old", regularizable=False,   trainable=False, oldparam=True)
+            np.zeros(self.get_b_shape()), self.get_b_shape(),  name="b_mu_old", regularizable=False,
+            trainable=False, oldparam=True)
         self.b_rho_old = self.add_param(
-            np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False, trainable=False, oldparam=True)
+            np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False,
+            trainable=False, oldparam=True)
 
     def num_weights(self):
         return np.prod(self.get_W_shape())
@@ -182,20 +184,16 @@ class BayesianLayer(lasagne.layers.Layer):
         if self._matrix_variate_gaussian:
             epsilon = self._srng.normal(size=(self.num_inputs + self.num_units, ), avg=0., std=1.,
                                         dtype=theano.config.floatX)
-            return self.mu + \
-                (self.softplus(self.rho) * epsilon * mask).dimshuffle(0, 'x')
+            return self.mu + (self.softplus(self.rho) * epsilon * mask).dimshuffle(0, 'x')
         else:
-            epsilon = self._srng.normal(size=self.get_W_shape(), avg=0., std=1.,
-                                        dtype=theano.config.floatX)
+            epsilon = self._srng.normal(size=self.get_W_shape(), avg=0., std=1., dtype=theano.config.floatX)
             return self.mu + self.softplus(self.rho) * epsilon * mask
 
     def get_b(self):
         mask = 0 if self.disable_variance else 1
         if self._matrix_variate_gaussian:
-            epsilon = self._srng.normal(size=(1,), avg=0., std=1.,
-                                        dtype=theano.config.floatX)
-            return self.b_mu + \
-                T.mean(self.softplus(self.b_rho)) * epsilon * mask
+            epsilon = self._srng.normal(size=(1,), avg=0., std=1., dtype=theano.config.floatX)
+            return self.b_mu + T.mean(self.softplus(self.b_rho)) * epsilon * mask
         else:
             epsilon = self._srng.normal(size=self.get_b_shape(), avg=0., std=1.,
                                         dtype=theano.config.floatX)
@@ -204,32 +202,25 @@ class BayesianLayer(lasagne.layers.Layer):
     # We don't calculate the KL for biases, as they should be able to
     # arbitrarily shift.
     def kl_div_new_old(self):
-        return self.kl_div_p_q(
-            self.mu, self.softplus(self.rho), self.mu_old, self.softplus(self.rho_old))
+        return self.kl_div_p_q(self.mu, self.softplus(self.rho), self.mu_old, self.softplus(self.rho_old))
 
     def kl_div_old_new(self):
-        return self.kl_div_p_q(
-            self.mu_old, self.softplus(self.rho_old), self.mu, self.softplus(self.rho))
+        return self.kl_div_p_q(self.mu_old, self.softplus(self.rho_old), self.mu, self.softplus(self.rho))
 
     def kl_div_new_prior(self):
-        return self.kl_div_p_q(
-            self.mu, self.softplus(self.rho), 0., self.prior_sd)
+        return self.kl_div_p_q(self.mu, self.softplus(self.rho), 0., self.prior_sd)
 
     def kl_div_old_prior(self):
-        return self.kl_div_p_q(
-            self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
+        return self.kl_div_p_q(self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
 
     def kl_div_prior_new(self):
-        return self.kl_div_p_q(
-            0., self.prior_sd, self.mu,  self.softplus(self.rho))
+        return self.kl_div_p_q(0., self.prior_sd, self.mu,  self.softplus(self.rho))
 
     def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
-        numerator = T.square(p_mean - q_mean) + \
-            T.square(p_std) - T.square(q_std)
+        numerator = T.square(p_mean - q_mean) + T.square(p_std) - T.square(q_std)
         denominator = 2 * T.square(q_std) + 1e-8
-        return T.sum(
-            numerator / denominator + T.log(q_std) - T.log(p_std))
+        return T.sum(numerator / denominator + T.log(q_std) - T.log(p_std))
 
 
 class BayesianMatrixVariateLayer(BayesianLayer):
@@ -284,14 +275,17 @@ class BayesianMatrixVariateLayer(BayesianLayer):
         self.mu_old = self.add_param(
             np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
         self.rho_old = self.add_param(
-            np.zeros((self.num_inputs + self.num_units,)), (self.num_inputs + self.num_units,),
+            lasagne.init.Constant(self.prior_rho), (self.num_inputs + self.num_units,),
             name='rho_old', trainable=False, oldparam=True)
 
         # Bias priors.
         self.b_mu_old = self.add_param(
-            np.zeros(self.get_b_shape()), self.get_b_shape(),  name="b_mu_old", regularizable=False,   trainable=False, oldparam=True)
+            np.zeros(self.get_b_shape()), self.get_b_shape(),  name="b_mu_old", regularizable=False,
+            trainable=False, oldparam=True)
         self.b_rho_old = self.add_param(
-            np.zeros((1,)), (1,), name="b_rho_old", regularizable=False, trainable=False, oldparam=True)
+            lasagne.init.Constant(self.prior_rho),
+            (1,), name="b_rho_old", regularizable=False,
+            trainable=False, oldparam=True)
 
     def get_W(self):
         mask = 0 if self.disable_variance else 1
@@ -306,48 +300,61 @@ class BayesianMatrixVariateLayer(BayesianLayer):
 
     def get_b(self):
         mask = 0 if self.disable_variance else 1
-        epsilon = self._srng.normal(size=(1,), avg=0., std=1.,
-                                    dtype=theano.config.floatX)
-        return self.b_mu + \
-            T.mean(self.softplus(self.b_rho)) * epsilon * mask
+        epsilon = self._srng.normal(size=(1,), avg=0., std=1., dtype=theano.config.floatX)
+        return self.b_mu + T.mean(self.softplus(self.b_rho)) * epsilon * mask
 
     # We don't calculate the KL for biases, as they should be able to
     # arbitrarily shift.
     # TODO: calculate matrix variate Gaussian KLs
     def kl_div_new_old(self):
-        return self.kl_div_p_q(
-            self.mu, self.softplus(self.rho), self.mu_old, self.softplus(self.rho_old))
+        return self.kl_div_p_q(self.mu, self.softplus(self.rho), self.mu_old, self.softplus(self.rho_old))
 
     def kl_div_old_new(self):
-        return self.kl_div_p_q(
-            self.mu_old, self.softplus(self.rho_old), self.mu, self.softplus(self.rho))
+        return self.kl_div_p_q(self.mu_old, self.softplus(self.rho_old), self.mu, self.softplus(self.rho))
 
     def kl_div_new_prior(self):
-        return self.kl_div_p_q(
-            self.mu, self.softplus(self.rho), 0., self.prior_sd)
+        return np.nan
+        return self.kl_div_p_q(self.mu, self.softplus(self.rho), 0., self.prior_sd)
 
     def kl_div_old_prior(self):
-        return self.kl_div_p_q(
-            self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
+        return np.nan
+        return self.kl_div_p_q(self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
 
     def kl_div_prior_new(self):
-        return self.kl_div_p_q(
-            0., self.prior_sd, self.mu,  self.softplus(self.rho))
+        return np.nan
+        return self.kl_div_p_q(0., self.prior_sd, self.mu,  self.softplus(self.rho))
 
     def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
+
+        p_s_u = p_std[self.num_inputs:]
+        p_s_v = p_std[:self.num_inputs]
+
+        q_s_u = q_std[self.num_inputs:]
+        q_s_v = q_std[:self.num_inputs]
+        q_s_u_inv = 1. / q_s_u
+        q_s_v_inv = 1. / q_s_v
+
+        kl_part = T.sum(q_s_u_inv * p_s_u) * T.sum(q_s_v_inv * p_s_v)
+        # In our implementation, W rxc is cxr
+        kl_part += T.nlinalg.trace(T.dot((q_mean - p_mean) * q_s_u_inv, (q_mean - p_mean).T * q_s_v_inv))
+        kl_part += - self.num_units * self.num_inputs
+        kl_part += self.num_units * T.sum(q_s_u) + self.num_inputs * T.sum(q_s_v)
+        kl_part += - self.num_inputs * T.sum(p_s_u) - self.num_units * T.sum(p_s_v)
+        kl = kl_part * 0.5
+        return kl
+
+    def kl_div_p_qx(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
         def transf(std):
-            s_u = p_std[self.num_inputs:]
-            s_v = p_std[:self.num_inputs]
+            s_u = std[self.num_inputs:]
+            s_v = std[:self.num_inputs]
             s_u = T.tile(s_u, reps=[self.num_inputs, 1])
             s_v = T.tile(s_v, reps=[self.num_units, 1])
             return s_u * s_v.T
         p_std, q_std = transf(p_std), transf(q_std)
-        numerator = T.square(p_mean - q_mean) + \
-            T.square(p_std) - T.square(q_std)
+        numerator = T.square(p_mean - q_mean) + T.square(p_std) - T.square(q_std)
         denominator = 2 * T.square(q_std) + 1e-8
-        return T.sum(
-            numerator / denominator + T.log(q_std) - T.log(p_std))
+        return T.sum(numerator / denominator + T.log(q_std) - T.log(p_std))
 
 
 class BayesianConvLayer(BayesianLayer):

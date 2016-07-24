@@ -143,8 +143,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
     def load_prev_params(self):
-        layers = filter(lambda l: isinstance(l, BayesianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.load_prev_params()
         if self.update_likelihood_sd:
@@ -152,20 +151,17 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def compr_impr(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_old_new() for l in layers)
 
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
     def num_weights(self):
         print('Disclaimer: only work with BNNLayers!')
-        layers = filter(lambda l: isinstance(l, BayesianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.num_weights() for l in layers)
 
     def ent(self, input):
@@ -193,16 +189,13 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 sampled_mean = self.pred_sym(input)
                 # Calculate model likelihood log(P(D|w)).
                 if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
-                    lh = self.likelihood_classification(
-                        sampled_mean, prediction)
+                    lh = self.likelihood_classification(sampled_mean, prediction)
                 elif self.output_type == ConvBNNVIME.OutputType.REGRESSION:
-                    lh = self.likelihood_regression(
-                        sampled_mean, prediction, likelihood_sd)
+                    lh = self.likelihood_regression(sampled_mean, prediction, likelihood_sd)
                 _log_p_D_given_w.append(lh)
         log_p_D_given_w = sum(_log_p_D_given_w)
 
-        return - log_p_D_given_w / (self.n_samples)**2 + 0.5 * (np.log(2 * np.pi
-                                                                       * likelihood_sd**2) + 1)
+        return - log_p_D_given_w / (self.n_samples)**2 + 0.5 * (np.log(2 * np.pi * likelihood_sd**2) + 1)
 
     def surprise(self, **kwargs):
 
@@ -217,52 +210,42 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         return surpr
 
     def get_all_params(self):
-        layers = filter(lambda l: isinstance(l, BayesianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
         all_mu = np.sort(np.concatenate([l.mu.eval().flatten() for l in layers]))
         all_rho = np.sort(np.concatenate([l.softplus(l.rho).eval().flatten() for l in layers]))
         return all_mu, all_rho
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer),  lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_prior_new() for l in layers)
 
     def _log_prob_normal(self, input, mu=0., sigma=1.):
-        log_normal = - \
-            T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - \
-            T.square(input - mu) / (2 * T.square(sigma))
+        log_normal = - T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - T.square(input - mu) / (2 * T.square(sigma))
         return T.sum(log_normal)
 
     def _log_prob_normal_nonsum(self, input, mu=0., sigma=1.):
-        log_normal = - \
-            T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - \
-            T.square(input - mu) / (2 * T.square(sigma))
+        log_normal = - T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - T.square(input - mu) / (2 * T.square(sigma))
         return T.sum(log_normal, axis=1)
 
     def pred_sym(self, input):
         return lasagne.layers.get_output(self.network, input)
 
     def likelihood_regression(self, target, prediction, likelihood_sd):
-        return self._log_prob_normal(
-            target, prediction, likelihood_sd)
+        return self._log_prob_normal(target, prediction, likelihood_sd)
 
     def likelihood_regression_nonsum(self, target, prediction, likelihood_sd):
-        return self._log_prob_normal_nonsum(
-            target, prediction, likelihood_sd)
+        return self._log_prob_normal_nonsum(target, prediction, likelihood_sd)
 
     def likelihood_classification(self, target, prediction):
         # Cross-entropy; target vector selecting correct prediction
@@ -275,8 +258,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         target3 = target2.T.ravel()
         idx = T.arange(target.shape[0])
         idx2 = T.tile(idx, self.num_output_dim)
-        prediction_selected = prediction[
-            idx2, target3].reshape([self.num_output_dim, target.shape[0]]).T
+        prediction_selected = prediction[idx2, target3].reshape([self.num_output_dim, target.shape[0]]).T
         ll = T.sum(T.log(prediction_selected))
         return ll
 
@@ -285,8 +267,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         log_p_D_given_w = 0.
         for _ in xrange(self.n_samples):
             prediction = self.pred_sym(input)
-            lh = self.likelihood_regression_nonsum(
-                target, prediction, **kwargs)
+            lh = self.likelihood_regression_nonsum(target, prediction, **kwargs)
             log_p_D_given_w += lh
         return log_p_D_given_w / self.n_samples
 
@@ -310,7 +291,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             return - log_p_D_given_w / self.n_samples
         else:
             if self.update_prior:
-                kl = self.kl_div()# + 0.01 * self.log_p_w_q_w_kl()
+                kl = self.kl_div()  # + 0.01 * self.log_p_w_q_w_kl()
             else:
                 kl = self.log_p_w_q_w_kl()
             return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
@@ -326,8 +307,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
     def build_network(self):
         # TODO: build action fuse according to Oh2015.
 
-        print('f: {} x {} -> {} x {}'.format(self.state_dim,
-                                             self.action_dim, self.state_dim, self.reward_dim))
+        print('f: {} x {} -> {} x {}'.format(self.state_dim, self.action_dim, self.state_dim, self.reward_dim))
 
         # Make sure that we are able to unmerge the s_in and a_in.
 
@@ -336,14 +316,11 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         a_flat_dim = np.prod(self.action_dim)
         r_flat_dim = np.prod(self.reward_dim)
 
-        input = lasagne.layers.InputLayer(
-            shape=(None, s_flat_dim + a_flat_dim))
+        input = lasagne.layers.InputLayer(shape=(None, s_flat_dim + a_flat_dim))
 
         # Split input into state and action.
-        s_net = lasagne.layers.SliceLayer(
-            input, indices=slice(None, s_flat_dim), axis=1)
-        a_net = lasagne.layers.SliceLayer(
-            input, indices=slice(s_flat_dim, None), axis=1)
+        s_net = lasagne.layers.SliceLayer(input, indices=slice(None, s_flat_dim), axis=1)
+        a_net = lasagne.layers.SliceLayer(input, indices=slice(s_flat_dim, None), axis=1)
         r_net = None
 
         # Reshape according to the input_dim

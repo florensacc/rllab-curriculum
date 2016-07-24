@@ -395,7 +395,7 @@ class BatchPolopt(RLAlgorithm):
             likelihood_sd_init=self.likelihood_sd_init,
             disable_variance=self.disable_variance
         )
-
+        
         # Number of weights in BNN, excluding biases.
         self.num_weights = self.bnn.num_weights()
 
@@ -542,6 +542,7 @@ class BatchPolopt(RLAlgorithm):
                     num_itr = int(np.ceil(float(self.num_sample_updates) / self.kl_batch_size))
                     for _ in xrange(num_itr):
                         train_loss = self.bnn.train_fn(X_train[idx], T_train[idx], 1.)
+                        print(loss_before, train_loss)
                         if np.isinf(train_loss) or np.isnan(train_loss):
                             import ipdb
                             ipdb.set_trace()
