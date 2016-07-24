@@ -22,9 +22,11 @@ os.environ["THEANO_FLAGS"] = "device=cpu"
 stub(globals())
 
 # Param ranges
-seeds = range(10)
-etas = [0, 0.0001, 0.001, 0.01, 0.1]
-batch_sizes = [1000, 5000]
+# seeds = range(10)
+# etas = [0, 0.0001, 0.001, 0.01, 0.1]
+seeds = [0]
+etas = [0.1]
+batch_sizes = [5000]
 normalize_rewards = [False]
 kl_ratios = [False]
 update_likelihood_sds = [True]
@@ -32,7 +34,8 @@ update_likelihood_sds = [True]
 #                MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class())
 #         for mdp_class in mdp_classes]
-mdp_classes = [CartpoleSwingupEnvX, DoublePendulumEnvX, MountainCarEnvX]
+# mdp_classes = [CartpoleSwingupEnvX, DoublePendulumEnvX, MountainCarEnvX]
+mdp_classes = [CartpoleSwingupEnvX]
 mdps = [mdp_class() for mdp_class in mdp_classes]
 
 param_cart_product = itertools.product(
@@ -71,10 +74,10 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=20,
+        snn_n_samples=1,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=1,
+        kl_batch_size=8,
         normalize_reward=normalize_reward,
         dyn_pool_args=dict(
             enable=False,
@@ -109,7 +112,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         replay_kl_schedule=0.98,
         output_type=BNN.OutputType.REGRESSION,
         likelihood_sd_init=1.0,
-        prior_sd=0.05,
+        prior_sd=0.5,
         predict_delta=False,
         # -------------
         disable_variance=False,

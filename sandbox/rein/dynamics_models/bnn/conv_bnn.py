@@ -90,59 +90,38 @@ class BayesianLayer(lasagne.layers.Layer):
         self.num_inputs = int(np.prod(self.input_shape[1:]))
         self.prior_rho = self.inv_softplus(self.prior_sd)
         self.disable_variance = disable_variance
-        self._matrix_variate_gaussian = matrix_variate_gaussian
         self.mu_tmp, self.b_mu_tmp, self.rho_tmp, self.b_rho_tmp = None, None, None, None
 
         if self.disable_variance:
             print('Variance disabled!')
 
     def init_params(self):
-        if self._matrix_variate_gaussian:
-            # Weight distributions are parametrized according to Louizos2016,
-            # which is a combination of the previous out and in variance
-            # tying.
-            self.mu = self.add_param(
-                lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
-            # So we should have weights (self.num_units + self.num_inputs,)
-            # instead of (self.num_units, self.num_inputs).
-            self.rho = self.add_param(
-                lasagne.init.Constant(self.prior_rho), (self.num_inputs + self.num_units,), name='rho')
 
-            self.b_mu = self.add_param(
-                lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
-            # Single bias variance, since outgoing weights are tied.
-            self.b_rho = self.add_param(
-                lasagne.init.Constant(self.prior_rho),
-                (1,),
-                name="b_rho",
-                regularizable=False
-            )
-        else:
-            # In fact, this should be initialized to np.zeros(self.get_W_shape()),
-            # but this trains much slower.
-            self.mu = self.add_param(
-                lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
-            self.rho = self.add_param(
-                lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho')
+        # In fact, this should be initialized to np.zeros(self.get_W_shape()),
+        # but this trains much slower.
+        self.mu = self.add_param(
+            lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
+        self.rho = self.add_param(
+            lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho')
 
-            # TODO: Perhaps biases should have a postive value, to avoid zeroing the
-            # relus.
-            self.b_mu = self.add_param(
-                lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
-            self.b_rho = self.add_param(
-                lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False)
+        # TODO: Perhaps biases should have a postive value, to avoid zeroing the
+        # relus.
+        self.b_mu = self.add_param(
+            lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
+        self.b_rho = self.add_param(
+            lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False)
 
-            # Backup params for KL calculations.
-            self.mu_old = self.add_param(
-                np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
-            self.rho_old = self.add_param(
-                np.zeros(self.get_W_shape()),  self.get_W_shape(), name='rho_old', trainable=False, oldparam=True)
+        # Backup params for KL calculations.
+        self.mu_old = self.add_param(
+            np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
+        self.rho_old = self.add_param(
+            np.zeros(self.get_W_shape()),  self.get_W_shape(), name='rho_old', trainable=False, oldparam=True)
 
-            # Bias priors.
-            self.b_mu_old = self.add_param(
-                np.zeros(self.get_b_shape()), self.get_b_shape(),  name="b_mu_old", regularizable=False,   trainable=False, oldparam=True)
-            self.b_rho_old = self.add_param(
-                np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False, trainable=False, oldparam=True)
+        # Bias priors.
+        self.b_mu_old = self.add_param(
+            np.zeros(self.get_b_shape()), self.get_b_shape(),  name="b_mu_old", regularizable=False,   trainable=False, oldparam=True)
+        self.b_rho_old = self.add_param(
+            np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False, trainable=False, oldparam=True)
 
     def num_weights(self):
         return np.prod(self.get_W_shape())
@@ -246,6 +225,124 @@ class BayesianLayer(lasagne.layers.Layer):
 
     def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
+        numerator = T.square(p_mean - q_mean) + \
+            T.square(p_std) - T.square(q_std)
+        denominator = 2 * T.square(q_std) + 1e-8
+        return T.sum(
+            numerator / denominator + T.log(q_std) - T.log(p_std))
+
+
+class BayesianMatrixVariateLayer(BayesianLayer):
+    """Matrix Variate Gaussian Bayesian layer"""
+
+    def __init__(self,
+                 incoming,
+                 num_units,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 prior_sd=None,
+                 disable_variance=False,
+                 matrix_variate_gaussian=False,
+                 **kwargs):
+        super(BayesianMatrixVariateLayer, self).__init__(
+            incoming, num_units, nonlinearity, prior_sd, disable_variance, matrix_variate_gaussian, **kwargs)
+
+        self._srng = RandomStreams()
+
+        self.nonlinearity = nonlinearity
+        self.prior_sd = prior_sd
+        self.num_units = num_units
+        self.num_inputs = int(np.prod(self.input_shape[1:]))
+        self.prior_rho = self.inv_softplus(self.prior_sd)
+        self.disable_variance = disable_variance
+        self.mu_tmp, self.b_mu_tmp, self.rho_tmp, self.b_rho_tmp = None, None, None, None
+
+        if self.disable_variance:
+            print('Variance disabled!')
+
+    def init_params(self):
+        # Weight distributions are parametrized according to Louizos2016,
+        # which is a combination of the previous out and in variance
+        # tying.
+        self.mu = self.add_param(
+            lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
+        # So we should have weights (self.num_units + self.num_inputs,)
+        # instead of (self.num_units, self.num_inputs).
+        self.rho = self.add_param(
+            lasagne.init.Constant(self.prior_rho), (self.num_inputs + self.num_units,), name='rho')
+
+        self.b_mu = self.add_param(
+            lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
+        # Single bias variance, since outgoing weights are tied.
+        self.b_rho = self.add_param(
+            lasagne.init.Constant(self.prior_rho),
+            (1,),
+            name="b_rho",
+            regularizable=False
+        )
+
+        # Backup params for KL calculations.
+        self.mu_old = self.add_param(
+            np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
+        self.rho_old = self.add_param(
+            np.zeros((self.num_inputs + self.num_units,)), (self.num_inputs + self.num_units,),
+            name='rho_old', trainable=False, oldparam=True)
+
+        # Bias priors.
+        self.b_mu_old = self.add_param(
+            np.zeros(self.get_b_shape()), self.get_b_shape(),  name="b_mu_old", regularizable=False,   trainable=False, oldparam=True)
+        self.b_rho_old = self.add_param(
+            np.zeros((1,)), (1,), name="b_rho_old", regularizable=False, trainable=False, oldparam=True)
+
+    def get_W(self):
+        mask = 0 if self.disable_variance else 1
+        epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
+                                    dtype=theano.config.floatX)
+        rho_u = self.rho[self.num_inputs:]
+        rho_v = self.rho[:self.num_inputs]
+        s_u = T.tile(self.softplus(rho_u), reps=[self.num_inputs, 1])
+        s_v = T.tile(self.softplus(rho_v), reps=[self.num_units, 1])
+        s = s_u * s_v.T
+        return self.mu + s * epsilon * mask
+
+    def get_b(self):
+        mask = 0 if self.disable_variance else 1
+        epsilon = self._srng.normal(size=(1,), avg=0., std=1.,
+                                    dtype=theano.config.floatX)
+        return self.b_mu + \
+            T.mean(self.softplus(self.b_rho)) * epsilon * mask
+
+    # We don't calculate the KL for biases, as they should be able to
+    # arbitrarily shift.
+    # TODO: calculate matrix variate Gaussian KLs
+    def kl_div_new_old(self):
+        return self.kl_div_p_q(
+            self.mu, self.softplus(self.rho), self.mu_old, self.softplus(self.rho_old))
+
+    def kl_div_old_new(self):
+        return self.kl_div_p_q(
+            self.mu_old, self.softplus(self.rho_old), self.mu, self.softplus(self.rho))
+
+    def kl_div_new_prior(self):
+        return self.kl_div_p_q(
+            self.mu, self.softplus(self.rho), 0., self.prior_sd)
+
+    def kl_div_old_prior(self):
+        return self.kl_div_p_q(
+            self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
+
+    def kl_div_prior_new(self):
+        return self.kl_div_p_q(
+            0., self.prior_sd, self.mu,  self.softplus(self.rho))
+
+    def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
+        """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
+        def transf(std):
+            s_u = p_std[self.num_inputs:]
+            s_v = p_std[:self.num_inputs]
+            s_u = T.tile(s_u, reps=[self.num_inputs, 1])
+            s_v = T.tile(s_v, reps=[self.num_units, 1])
+            return s_u * s_v.T
+        p_std, q_std = transf(p_std), transf(q_std)
         numerator = T.square(p_mean - q_mean) + \
             T.square(p_std) - T.square(q_std)
         denominator = 2 * T.square(q_std) + 1e-8
@@ -420,7 +517,7 @@ class BayesianDeConvLayer(BayesianLayer):
         return self.nonlinearity(activation)
 
 
-class BayesianDenseLayer(BayesianLayer):
+class BayesianDenseLayer(BayesianMatrixVariateLayer):
     """Probabilistic layer that uses Gaussian weights.
 
     Each weight has two parameters: mean and standard deviation (std).
@@ -439,6 +536,8 @@ class BayesianDenseLayer(BayesianLayer):
 
         self.group_variance_by = group_variance_by
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
+        # FIXME: fixed setting
+        self.use_local_reparametrization_trick = False
 
         self.init_params()
 

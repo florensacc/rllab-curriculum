@@ -530,6 +530,7 @@ class BatchPolopt(RLAlgorithm):
                 count = 0
                 lst_idx = np.arange(len(X_train))
                 np.random.shuffle(lst_idx)
+                loss_before, loss_after = 0., 0.
                 for idx in lst_idx:
                     # Don't use kl_factor when using no replay pool. So here we form an outer
                     # loop around the individual minibatches, the model gets updated on each minibatch.
@@ -537,11 +538,11 @@ class BatchPolopt(RLAlgorithm):
                         logp_before = self.bnn.fn_logp(X_train[idx], T_train[idx])
                     # Save old posterior as new prior.
                     self.bnn.save_params()
-#                     loss_before = self.bnn.fn_loss(X_train[idx], T_train[idx], 1.)
+                    loss_before = float(self.bnn.fn_loss(X_train[idx], T_train[idx], 1.))
                     num_itr = int(np.ceil(float(self.num_sample_updates) / self.kl_batch_size))
                     for _ in xrange(num_itr):
                         train_loss = self.bnn.train_fn(X_train[idx], T_train[idx], 1.)
-                        if np.isinf(train_loss):
+                        if np.isinf(train_loss) or np.isnan(train_loss):
                             import ipdb
                             ipdb.set_trace()
                         assert not np.isnan(train_loss)
@@ -549,7 +550,7 @@ class BatchPolopt(RLAlgorithm):
                         if count % int(np.ceil(len(X_train) * num_itr / float(self.kl_batch_size) / 5.)) == 0:
                             self.plot_pred_imgs(X_train[idx], T_train[idx], itr, count)
                         count += 1
-#                     loss_after = self.bnn.fn_loss(X_train[idx], T_train[idx], 1.)
+                    loss_after = float(self.bnn.fn_loss(X_train[idx], T_train[idx], 1.))
                     if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
                         # Samples will default path['KL'] to np.nan. It is filled in here.
                         logp_after = self.bnn.fn_logp(X_train[idx], T_train[idx])

@@ -213,9 +213,15 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         elif self.surprise_type == ConvBNNVIME.SurpriseType.BALD:
             surpr = self.entropy(**kwargs)
         else:
-            raise Exception(
-                'Uknown surprise_type {}'.format(self.surprise_type))
+            raise Exception('Uknown surprise_type {}'.format(self.surprise_type))
         return surpr
+
+    def get_all_params(self):
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
+                        lasagne.layers.get_all_layers(self.network)[1:])
+        all_mu = np.sort(np.concatenate([l.mu.eval().flatten() for l in layers]))
+        all_rho = np.sort(np.concatenate([l.softplus(l.rho).eval().flatten() for l in layers]))
+        return all_mu, all_rho
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
@@ -304,7 +310,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             return - log_p_D_given_w / self.n_samples
         else:
             if self.update_prior:
-                kl = self.kl_div()
+                kl = self.kl_div()# + 0.01 * self.log_p_w_q_w_kl()
             else:
                 kl = self.log_p_w_q_w_kl()
             return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
@@ -469,12 +475,25 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         if self.update_prior:
             # When using posterior chaining, prefer SGD as we dont want to build up
             # momentum between prior-posterior updates.
-            updates = lasagne.updates.sgd(
+            def sgd_clip_likelihood_sd(loss, params, learning_rate):
+                grads = theano.grad(loss, params)
+                updates = OrderedDict()
+                for param, grad in zip(params, grads):
+                    if param.name == 'likelihood_sd':
+                        updates[param] = param - learning_rate * grad
+                    elif param.name == 'rho' or param.name == 'b_rho':
+                        updates[param] = param - learning_rate * grad
+                    else:
+                        updates[param] = param - learning_rate * grad
+
+                return updates
+            # Clipping likelihood_sd grads seems necessary to prevent explosion.
+            updates = sgd_clip_likelihood_sd(
                 loss, params, learning_rate=self.learning_rate)
         else:
             updates = lasagne.updates.adam(
                 loss, params, learning_rate=self.learning_rate)
-            
+
         # We want to resample when actually updating the BNN itself, otherwise
         # you will fit to the specific noise.
         self.train_fn = ext.compile_function(
