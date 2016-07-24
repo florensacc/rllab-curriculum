@@ -24,21 +24,22 @@ stub(globals())
 # Param ranges
 seeds = range(10)
 etas = [0, 0.0001, 0.001, 0.01, 0.1]
+batch_sizes = [1000, 5000]
 normalize_rewards = [False]
 kl_ratios = [False]
-update_likelihood_sds = [False, True]
+update_likelihood_sds = [True]
 # mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv,
-#                MountainCarEnv, DoublePendulumEnvX, MountainCarEnvX,
-#                CartpoleSwingupEnvX]
-mdp_classes = [CartpoleSwingupEnv, CartpoleSwingupEnvX]
-mdps = [mdp_class()
-        for mdp_class in mdp_classes]
+#                MountainCarEnv]
+# mdps = [NormalizedEnv(env=mdp_class())
+#         for mdp_class in mdp_classes]
+mdp_classes = [CartpoleSwingupEnvX, DoublePendulumEnvX, MountainCarEnvX]
+mdps = [mdp_class() for mdp_class in mdp_classes]
 
 param_cart_product = itertools.product(
-    update_likelihood_sds, kl_ratios, normalize_rewards, mdps, etas, seeds
+    batch_sizes, update_likelihood_sds, kl_ratios, normalize_rewards, mdps, etas, seeds
 )
 
-for update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
+for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
@@ -51,6 +52,7 @@ for update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed in param_ca
                             batchsize=1000),
     )
 
+    # TODO: group all args into meaningful arg dicts.
     algo = TRPO(
         # TRPO settings
         # -------------
@@ -58,7 +60,7 @@ for update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed in param_ca
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=5000,
+        batch_size=batch_size,
         whole_paths=True,
         max_path_length=500,
         n_itr=1000,
@@ -69,14 +71,13 @@ for update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed in param_ca
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=10,
-        use_replay_pool=False,
+        snn_n_samples=20,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=4,
+        kl_batch_size=1,
         normalize_reward=normalize_reward,
-        replay_pool_size=100000,
-        n_updates_per_sample=10000,
+        dyn_pool_args=dict(enable=False, size=100000, min_size=10, batch_size=32),
+        num_sample_updates=10,
         second_order_update=False,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
@@ -93,13 +94,12 @@ for update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed in param_ca
                  n_units=mdp.spec.observation_space.shape[0],
                  nonlinearity=lasagne.nonlinearities.linear),
         ],
-        unn_learning_rate=0.005,
+        unn_learning_rate=0.001,
         surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP90PERC,
         update_likelihood_sd=update_likelihood_sd,
         replay_kl_schedule=0.98,
         output_type=BNN.OutputType.REGRESSION,
-        pool_batch_size=32,
-        likelihood_sd_init=0.1,
+        likelihood_sd_init=1.0,
         prior_sd=0.05,
         # -------------
         disable_variance=False,
@@ -113,11 +113,11 @@ for update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed in param_ca
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-basic-a",
+        exp_prefix="trpo-vime-basic-b",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=False,
         script="sandbox/rein/experiments/run_experiment_lite.py",

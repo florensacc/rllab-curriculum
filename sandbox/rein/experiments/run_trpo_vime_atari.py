@@ -18,12 +18,14 @@ stub(globals())
 
 # Param ranges
 seeds = range(3)
-etas = [0.1]
-# seeds = range(5)
-# etas = [0, 0.001, 0.01, 0.1]
+etas = [0, 0.00001, 0.001, 0.1]
 normalize_rewards = [False]
 kl_ratios = [False]
-mdps = [GymEnv("Freeway-v0", record_video=False)]
+RECORD_VIDEO = True
+mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
+        GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
+        GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),
+        GymEnv("MontezumaRevenge-v0", record_video=RECORD_VIDEO)]
 
 param_cart_product = itertools.product(
     kl_ratios, normalize_rewards, mdps, etas, seeds
@@ -67,7 +69,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=10000,
+        batch_size=50000,
         whole_paths=True,
         max_path_length=5000,
         n_itr=100,
@@ -141,7 +143,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
                  nonlinearity=lasagne.nonlinearities.linear),
         ],
         unn_learning_rate=0.005,
-        surprise_transform=None,#BatchPolopt.SurpriseTransform.CAP90PERC,
+        surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP90PERC,
         update_likelihood_sd=True,
         replay_kl_schedule=0.98,
         output_type=BNN.OutputType.REGRESSION,

@@ -317,6 +317,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         return self.loss(input, target, disable_kl=True, **kwargs)
 
     def build_network(self):
+        # TODO: build action fuse according to Oh2015.
 
         print('f: {} x {} -> {} x {}'.format(self.state_dim,
                                              self.action_dim, self.state_dim, self.reward_dim))
@@ -459,21 +460,31 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         if self.output_type == 'regression' and self.update_likelihood_sd:
             # No likelihood sd for classification tasks.
             params.append(self.likelihood_sd)
-        updates = lasagne.updates.adam(
-            loss, params, learning_rate=self.learning_rate)
 
         # Train/val fn.
         self.pred_fn = ext.compile_function(
             [input_var], self.pred_sym(input_var), log_name='fn_pred')
+
+        POSTERIOR_CHAINING = True
+        if POSTERIOR_CHAINING:
+            # When using posterior chaining, prefer SGD as we dont want to build up
+            # momentum between prior-posterior updates.
+            updates = lasagne.updates.sgd(
+                loss, params, learning_rate=self.learning_rate)
+        else:
+            updates = lasagne.updates.adam(
+                loss, params, learning_rate=self.learning_rate)
         # We want to resample when actually updating the BNN itself, otherwise
         # you will fit to the specific noise.
         self.train_fn = ext.compile_function(
             [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
+        self.fn_loss = ext.compile_function(
+            [input_var, target_var, kl_factor], loss, log_name='fn_loss')
 
         # Surprise functions:
         # INFGAIN: useable with 2nd_order_update = True/False
         # BALD: useable
-        # COMPGAIN: useable with 2nd_order_update = True/False, 
+        # COMPGAIN: useable with 2nd_order_update = True/False,
         # needs to be calculated using logp, not KL!
         # ---------------------------------------
 
@@ -495,8 +506,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 elif param.name == 'rho' or param.name == 'b_rho':
                     oldparam_rho = oldparams[i]
                     p = param
-                    H = 2. * (T.exp(2 * p)) / \
-                        (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                    H = 2. * (T.exp(2 * p)) / (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                     invH = 1. / H
                 elif param.name == 'likelihood_sd':
                     invH = 0.
@@ -526,20 +536,17 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                             oldparam_rho = oldparams[i + 1]
                             if self.group_variance_by == 'unit':
                                 if not isinstance(oldparam_rho, float):
-                                    oldparam_rho = oldparam_rho.dimshuffle(
-                                        0, 'x')
+                                    oldparam_rho = oldparam_rho.dimshuffle(0, 'x')
                             invH = T.square(T.log(1 + T.exp(oldparam_rho)))
                         elif param.name == 'rho' or param.name == 'b_rho':
                             oldparam_rho = oldparams[i]
                             p = param
-                            H = 2. * (T.exp(2 * p)) / \
-                                (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                            H = 2. * (T.exp(2 * p)) / (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
                             invH = 1. / H
                         elif param.name == 'likelihood_sd':
                             invH = 0.
 
-                        kl_component.append(
-                            T.sum(0.5 * T.square(step_size) * T.square(grad) * invH))
+                        kl_component.append(T.sum(0.5 * T.square(step_size) * T.square(grad) * invH))
 
                     return sum(kl_component)
 
@@ -577,17 +584,20 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     loss_only_last_sample, params, learning_rate=self.learning_rate)
 
                 self.train_update_fn = ext.compile_function(
-                    [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
+                    [input_var, target_var], loss_only_last_sample, updates=updates_kl,
+                    log_name='fn_surprise_1st', no_default_updates=False)
 
         elif self.surprise_type == ConvBNNVIME.SurpriseType.BALD:
             # BALD
             self.train_update_fn = ext.compile_function(
-                [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
+                [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd),
+                log_name='fn_surprise_bald')
         elif self.surprise_type == ConvBNNVIME.SurpriseType.COMPR:
             # COMPR IMPR (no KL)
             # Calculate logp.
             self.fn_logp = ext.compile_function(
-                [input_var, target_var], self.logp(input_var, target_var, likelihood_sd=self.likelihood_sd), log_name='fn_logp')
+                [input_var, target_var], self.logp(input_var, target_var, likelihood_sd=self.likelihood_sd),
+                log_name='fn_logp')
             if self.second_order_update:
                 oldparams = lasagne.layers.get_all_params(
                     self.network, oldparam=True)
@@ -597,7 +607,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     loss_only_last_sample, params, oldparams, step_size)
 
                 self.train_update_fn = ext.compile_function(
-                    [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
+                    [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl,
+                    log_name='fn_surprise_2nd', no_default_updates=False)
 
 if __name__ == '__main__':
     pass
