@@ -9,6 +9,7 @@ from rllab.spaces.product import Product as TheanoProduct
 from sandbox.rocky.tf.spaces.discrete import Discrete
 from sandbox.rocky.tf.spaces.box import Box
 from sandbox.rocky.tf.spaces.product import Product
+from cached_property import cached_property
 
 
 def to_tf_space(space):
@@ -23,15 +24,16 @@ def to_tf_space(space):
 
 
 class TfEnv(ProxyEnv):
-    @property
+
+    @cached_property
     def observation_space(self):
         return to_tf_space(self.wrapped_env.observation_space)
 
-    @property
+    @cached_property
     def action_space(self):
         return to_tf_space(self.wrapped_env.action_space)
 
-    @property
+    @cached_property
     def spec(self):
         return EnvSpec(
             observation_space=self.observation_space,
