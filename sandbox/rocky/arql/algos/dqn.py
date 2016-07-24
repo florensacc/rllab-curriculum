@@ -80,6 +80,7 @@ class DQN(object):
             double_dqn=True,
             replay_pool_size=1000000,
             min_pool_size=10000,
+            update_interval=1,
             target_update_interval=10000,
             max_path_length=500,
             eval_max_path_length=500,
@@ -127,6 +128,7 @@ class DQN(object):
         self.double_dqn = double_dqn
         self.learning_rate = learning_rate
         self.n_epochs = n_epochs
+        self.update_interval = update_interval
         self.epoch_length = epoch_length
         self.batch_size = batch_size
         self.eval_samples = eval_samples
@@ -189,6 +191,10 @@ class DQN(object):
 
     def train(self):
         self.init_opt()
+
+        observation_space = self.env.observation_space
+        action_space = self.env.action_space
+
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
             self.target_qf.set_param_values(self.qf.get_param_values())
@@ -224,15 +230,18 @@ class DQN(object):
                     path_length += 1
                     path_return += reward
 
+                    flat_obs = observation_space.flatten(obs)
+                    flat_action = action_space.flatten(action)
+
+                    self.replay_pool.add_sample(
+                        observation=flat_obs,
+                        action=flat_action,
+                        reward=reward * self.scale_reward,
+                        terminal=done
+                    )
+
                     if not done and path_length >= self.max_path_length:
                         done = True
-                    else:
-                        self.replay_pool.add_sample(
-                            observation=self.env.observation_space.flatten(obs),
-                            action=self.env.action_space.flatten(action),
-                            reward=reward * self.scale_reward,
-                            terminal=done
-                        )
 
                     obs = next_obs
 
@@ -273,6 +282,5 @@ class DQN(object):
         batch_next_obs = batch["next_observations"]
         batch_rewards = batch["rewards"]
         batch_terminals = batch["terminals"]
-        self.logged_columns.append(
-            self.f_train(batch_obs, batch_actions, batch_next_obs, batch_rewards, batch_terminals)[1:]
-        )
+        train_results = self.f_train(batch_obs, batch_actions, batch_next_obs, batch_rewards, batch_terminals)[1:]
+        self.logged_columns.append(train_results)
