@@ -314,6 +314,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         This means that instead of using the prior p(w), we use the previous approximated posterior
         q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
         """
+        # TODO: check out if this is still correct.
         return self.loss(input, target, disable_kl=True, **kwargs)
 
     def build_network(self):
@@ -465,8 +466,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.pred_fn = ext.compile_function(
             [input_var], self.pred_sym(input_var), log_name='fn_pred')
 
-        POSTERIOR_CHAINING = True
-        if POSTERIOR_CHAINING:
+        if self.update_prior:
             # When using posterior chaining, prefer SGD as we dont want to build up
             # momentum between prior-posterior updates.
             updates = lasagne.updates.sgd(
@@ -474,6 +474,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         else:
             updates = lasagne.updates.adam(
                 loss, params, learning_rate=self.learning_rate)
+            
         # We want to resample when actually updating the BNN itself, otherwise
         # you will fit to the specific noise.
         self.train_fn = ext.compile_function(

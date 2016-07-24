@@ -125,6 +125,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     _inputs[start:end])
 
             elif surprise_type == G.dynamics.SurpriseType.COMPR:
+                # FIXME: This doesn't work well.
                 # TODO: Essentially, for using compression gain, we require Bayesian
                 # update rather than replay pool (otherwise we are doing double
                 # work). So require use_replay_pool=False.
@@ -142,7 +143,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     logp_after = G.dynamics.fn_logp(
                         _inputs[start:end], _targets[start:end])
                     surpr = logp_after - logp_before
-#                     surpr[surpr < 0] = 0.
+                    surpr[surpr < 0] = 0.
 
                     # Reset to old params after each surprise calc.
                     G.dynamics.load_prev_params()

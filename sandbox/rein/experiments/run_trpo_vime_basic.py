@@ -76,8 +76,17 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=1,
         normalize_reward=normalize_reward,
-        dyn_pool_args=dict(enable=False, size=100000, min_size=10, batch_size=32),
-        num_sample_updates=10,
+        dyn_pool_args=dict(
+            enable=False,
+            size=100000,
+            min_size=10,
+            batch_size=32
+        ),
+        vime_args=dict( # TODO: fill in
+        ),
+        dyn_model_args=dict( # TODO: fill in
+        ),
+        num_sample_updates=10,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         second_order_update=False,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
@@ -101,6 +110,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         output_type=BNN.OutputType.REGRESSION,
         likelihood_sd_init=1.0,
         prior_sd=0.05,
+        predict_delta=False,
         # -------------
         disable_variance=False,
         group_variance_by=BNN.GroupVarianceBy.WEIGHT,
