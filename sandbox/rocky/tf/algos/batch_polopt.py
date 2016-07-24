@@ -99,7 +99,7 @@ class BatchPolopt(RLAlgorithm):
         return self.sampler.obtain_samples(itr)
 
     def process_samples(self, itr, paths):
-        return self.sampler.process_samples()
+        return self.sampler.process_samples(itr, paths)
 
     def train(self):
         with tf.Session() as sess:

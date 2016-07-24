@@ -17,13 +17,6 @@ import uuid
 import cPickle as pickle
 import base64
 import joblib
-import multiprocessing
-import logging
-
-multiprocessing.get_logger().setLevel(multiprocessing.util.SUBDEBUG)
-hdler = logging.StreamHandler()
-hdler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-multiprocessing.get_logger().addHandler(hdler)
 
 
 def run_experiment(argv):

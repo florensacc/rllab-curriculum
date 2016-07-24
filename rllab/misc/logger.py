@@ -256,6 +256,8 @@ def stub_to_json(stub_sth):
             args=stub_to_json(stub_sth.args),
             kwargs=stub_to_json(stub_sth.kwargs),
         )
+    elif isinstance(stub_sth, instrument.BinaryOp):
+        return "binary_op"
     elif isinstance(stub_sth, instrument.StubClass):
         return stub_sth.proxy_class.__module__ + "." + stub_sth.proxy_class.__name__
     elif isinstance(stub_sth, dict):
