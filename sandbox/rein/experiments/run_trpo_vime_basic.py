@@ -17,6 +17,7 @@ from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
 from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
 from rllab.envs.box2d.mountain_car_env import MountainCarEnv
+
 os.environ["THEANO_FLAGS"] = "device=cpu"
 
 stub(globals())
@@ -43,7 +44,6 @@ param_cart_product = itertools.product(
 )
 
 for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
-
     policy = GaussianMLPPolicy(
         env_spec=mdp.spec,
         hidden_sizes=(32,),
@@ -74,7 +74,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=10,
+        snn_n_samples=2,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=8,
@@ -85,9 +85,9 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
             min_size=10,
             batch_size=32
         ),
-        vime_args=dict( # TODO: fill in
+        vime_args=dict(  # TODO: fill in
         ),
-        dyn_model_args=dict( # TODO: fill in
+        dyn_model_args=dict(  # TODO: fill in
         ),
         num_sample_updates=10,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         second_order_update=False,
@@ -96,17 +96,23 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         reward_dim=(1,),
         layers_disc=[
             dict(name='gaussian',
-                 n_units=32),
-            dict(name='outerprod'),
+                 n_units=128,
+                 matrix_variate_gaussian=True),
+            dict(name='hadamard',
+                 n_units=128,
+                 matrix_variate_gaussian=True),
             dict(name='gaussian',
-                 n_units=32),
+                 n_units=128,
+                 matrix_variate_gaussian=True),
             dict(name='split',
-                 n_units=32),
+                 n_units=32,
+                 matrix_variate_gaussian=True),
             dict(name='gaussian',
                  n_units=mdp.spec.observation_space.shape[0],
+                 matrix_variate_gaussian=True,
                  nonlinearity=lasagne.nonlinearities.linear),
         ],
-        unn_learning_rate=0.0001,
+        unn_learning_rate=0.001,
         surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP90PERC,
         update_likelihood_sd=update_likelihood_sd,
         replay_kl_schedule=0.98,

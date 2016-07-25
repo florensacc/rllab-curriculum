@@ -90,6 +90,7 @@ class BayesianLayer(lasagne.layers.Layer):
         self.num_inputs = int(np.prod(self.input_shape[1:]))
         self.prior_rho = self.inv_softplus(self.prior_sd)
         self.disable_variance = disable_variance
+        self._matrix_variate_gaussian = matrix_variate_gaussian
         self.mu_tmp, self.b_mu_tmp, self.rho_tmp, self.b_rho_tmp = None, None, None, None
 
         if self.disable_variance:
@@ -97,33 +98,72 @@ class BayesianLayer(lasagne.layers.Layer):
 
     def init_params(self):
 
-        # In fact, this should be initialized to np.zeros(self.get_W_shape()),
-        # but this trains much slower.
-        self.mu = self.add_param(
-            lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
-        self.rho = self.add_param(
-            lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho')
+        if self._matrix_variate_gaussian:
+            # Weight distributions are parametrized according to Louizos2016,
+            # which is a combination of the previous out and in variance
+            # tying.
+            self.mu = self.add_param(
+                lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
+            # So we should have weights (self.num_units + self.num_inputs,)
+            # instead of (self.num_units, self.num_inputs).
+            self.rho = self.add_param(
+                lasagne.init.Constant(self.inv_softplus(np.sqrt(self.prior_sd))), (self.num_inputs + self.num_units,),
+                name='rho')
 
-        # TODO: Perhaps biases should have a postive value, to avoid zeroing the
-        # relus.
-        self.b_mu = self.add_param(
-            lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
-        self.b_rho = self.add_param(
-            lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False)
+            self.b_mu = self.add_param(
+                lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
+            # Single bias variance, since outgoing weights are tied.
+            self.b_rho = self.add_param(
+                lasagne.init.Constant(self.prior_rho),
+                (1,),
+                name="b_rho",
+                regularizable=False
+            )
 
-        # Backup params for KL calculations.
-        self.mu_old = self.add_param(
-            np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
-        self.rho_old = self.add_param(
-            np.zeros(self.get_W_shape()),  self.get_W_shape(), name='rho_old', trainable=False, oldparam=True)
+            # Backup params for KL calculations.
+            self.mu_old = self.add_param(
+                np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
+            self.rho_old = self.add_param(
+                lasagne.init.Constant(self.prior_rho), (self.num_inputs + self.num_units,),
+                name='rho_old', trainable=False, oldparam=True)
 
-        # Bias priors.
-        self.b_mu_old = self.add_param(
-            np.zeros(self.get_b_shape()), self.get_b_shape(),  name="b_mu_old", regularizable=False,
-            trainable=False, oldparam=True)
-        self.b_rho_old = self.add_param(
-            np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False,
-            trainable=False, oldparam=True)
+            # Bias priors.
+            self.b_mu_old = self.add_param(
+                np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_mu_old", regularizable=False,
+                trainable=False, oldparam=True)
+            self.b_rho_old = self.add_param(
+                lasagne.init.Constant(self.prior_rho),
+                (1,), name="b_rho_old", regularizable=False,
+                trainable=False, oldparam=True)
+
+        else:
+            # In fact, this should be initialized to np.zeros(self.get_W_shape()),
+            # but this trains much slower.
+            self.mu = self.add_param(
+                lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
+            self.rho = self.add_param(
+                lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho')
+
+            # TODO: Perhaps biases should have a postive value, to avoid zeroing the
+            # relus.
+            self.b_mu = self.add_param(
+                lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
+            self.b_rho = self.add_param(
+                lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False)
+
+            # Backup params for KL calculations.
+            self.mu_old = self.add_param(
+                np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
+            self.rho_old = self.add_param(
+                np.zeros(self.get_W_shape()), self.get_W_shape(), name='rho_old', trainable=False, oldparam=True)
+
+            # Bias priors.
+            self.b_mu_old = self.add_param(
+                np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_mu_old", regularizable=False,
+                trainable=False, oldparam=True)
+            self.b_rho_old = self.add_param(
+                np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False,
+                trainable=False, oldparam=True)
 
     def num_weights(self):
         return np.prod(self.get_W_shape())
@@ -182,9 +222,14 @@ class BayesianLayer(lasagne.layers.Layer):
     def get_W(self):
         mask = 0 if self.disable_variance else 1
         if self._matrix_variate_gaussian:
-            epsilon = self._srng.normal(size=(self.num_inputs + self.num_units, ), avg=0., std=1.,
+            epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
                                         dtype=theano.config.floatX)
-            return self.mu + (self.softplus(self.rho) * epsilon * mask).dimshuffle(0, 'x')
+            rho_u = self.rho[self.num_inputs:]
+            rho_v = self.rho[:self.num_inputs]
+            s_u = T.tile(self.softplus(rho_u), reps=[self.num_inputs, 1])
+            s_v = T.tile(self.softplus(rho_v), reps=[self.num_units, 1])
+            s = s_u * s_v.T
+            return self.mu + s * epsilon * mask
         else:
             epsilon = self._srng.normal(size=self.get_W_shape(), avg=0., std=1., dtype=theano.config.floatX)
             return self.mu + self.softplus(self.rho) * epsilon * mask
@@ -195,8 +240,7 @@ class BayesianLayer(lasagne.layers.Layer):
             epsilon = self._srng.normal(size=(1,), avg=0., std=1., dtype=theano.config.floatX)
             return self.b_mu + T.mean(self.softplus(self.b_rho)) * epsilon * mask
         else:
-            epsilon = self._srng.normal(size=self.get_b_shape(), avg=0., std=1.,
-                                        dtype=theano.config.floatX)
+            epsilon = self._srng.normal(size=self.get_b_shape(), avg=0., std=1., dtype=theano.config.floatX)
             return self.b_mu + self.softplus(self.b_rho) * epsilon * mask
 
     # We don't calculate the KL for biases, as they should be able to
@@ -214,115 +258,23 @@ class BayesianLayer(lasagne.layers.Layer):
         return self.kl_div_p_q(self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
 
     def kl_div_prior_new(self):
-        return self.kl_div_p_q(0., self.prior_sd, self.mu,  self.softplus(self.rho))
+        return self.kl_div_p_q(0., self.prior_sd, self.mu, self.softplus(self.rho))
 
     def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
+        if self._matrix_variate_gaussian:
+            def transf(std):
+                s_u = std[self.num_inputs:]
+                s_v = std[:self.num_inputs]
+                return T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
+
+            p_std, q_std = transf(p_std), transf(q_std)
+
         numerator = T.square(p_mean - q_mean) + T.square(p_std) - T.square(q_std)
         denominator = 2 * T.square(q_std) + 1e-8
         return T.sum(numerator / denominator + T.log(q_std) - T.log(p_std))
 
-
-class BayesianMatrixVariateLayer(BayesianLayer):
-    """Matrix Variate Gaussian Bayesian layer"""
-
-    def __init__(self,
-                 incoming,
-                 num_units,
-                 nonlinearity=lasagne.nonlinearities.rectify,
-                 prior_sd=None,
-                 disable_variance=False,
-                 matrix_variate_gaussian=False,
-                 **kwargs):
-        super(BayesianMatrixVariateLayer, self).__init__(
-            incoming, num_units, nonlinearity, prior_sd, disable_variance, matrix_variate_gaussian, **kwargs)
-
-        self._srng = RandomStreams()
-
-        self.nonlinearity = nonlinearity
-        self.prior_sd = prior_sd
-        self.num_units = num_units
-        self.num_inputs = int(np.prod(self.input_shape[1:]))
-        self.prior_rho = self.inv_softplus(self.prior_sd)
-        self.disable_variance = disable_variance
-        self.mu_tmp, self.b_mu_tmp, self.rho_tmp, self.b_rho_tmp = None, None, None, None
-
-        if self.disable_variance:
-            print('Variance disabled!')
-
-    def init_params(self):
-        # Weight distributions are parametrized according to Louizos2016,
-        # which is a combination of the previous out and in variance
-        # tying.
-        self.mu = self.add_param(
-            lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
-        # So we should have weights (self.num_units + self.num_inputs,)
-        # instead of (self.num_units, self.num_inputs).
-        self.rho = self.add_param(
-            lasagne.init.Constant(self.prior_rho), (self.num_inputs + self.num_units,), name='rho')
-
-        self.b_mu = self.add_param(
-            lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
-        # Single bias variance, since outgoing weights are tied.
-        self.b_rho = self.add_param(
-            lasagne.init.Constant(self.prior_rho),
-            (1,),
-            name="b_rho",
-            regularizable=False
-        )
-
-        # Backup params for KL calculations.
-        self.mu_old = self.add_param(
-            np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
-        self.rho_old = self.add_param(
-            lasagne.init.Constant(self.prior_rho), (self.num_inputs + self.num_units,),
-            name='rho_old', trainable=False, oldparam=True)
-
-        # Bias priors.
-        self.b_mu_old = self.add_param(
-            np.zeros(self.get_b_shape()), self.get_b_shape(),  name="b_mu_old", regularizable=False,
-            trainable=False, oldparam=True)
-        self.b_rho_old = self.add_param(
-            lasagne.init.Constant(self.prior_rho),
-            (1,), name="b_rho_old", regularizable=False,
-            trainable=False, oldparam=True)
-
-    def get_W(self):
-        mask = 0 if self.disable_variance else 1
-        epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
-                                    dtype=theano.config.floatX)
-        rho_u = self.rho[self.num_inputs:]
-        rho_v = self.rho[:self.num_inputs]
-        s_u = T.tile(self.softplus(rho_u), reps=[self.num_inputs, 1])
-        s_v = T.tile(self.softplus(rho_v), reps=[self.num_units, 1])
-        s = s_u * s_v.T
-        return self.mu + s * epsilon * mask
-
-    def get_b(self):
-        mask = 0 if self.disable_variance else 1
-        epsilon = self._srng.normal(size=(1,), avg=0., std=1., dtype=theano.config.floatX)
-        return self.b_mu + T.mean(self.softplus(self.b_rho)) * epsilon * mask
-
-    # We don't calculate the KL for biases, as they should be able to
-    # arbitrarily shift.
-    # TODO: calculate matrix variate Gaussian KLs
-    def kl_div_new_old(self):
-        return self.kl_div_p_q(self.mu, self.softplus(self.rho), self.mu_old, self.softplus(self.rho_old))
-
-    def kl_div_old_new(self):
-        return self.kl_div_p_q(self.mu_old, self.softplus(self.rho_old), self.mu, self.softplus(self.rho))
-
-    def kl_div_new_prior(self):
-        return self.kl_div_p_q(self.mu, self.softplus(self.rho), 0., self.prior_sd)
-
-    def kl_div_old_prior(self):
-        return self.kl_div_p_q(self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
-
-    def kl_div_prior_new(self):
-        return self.kl_div_p_q(0., self.prior_sd, self.mu,  self.softplus(self.rho))
-
     def kl_div_p_q_mvg_full(self, p_mean, p_std, q_mean, q_std):
-
         p_s_u = p_std[self.num_inputs:]
         p_s_v = p_std[:self.num_inputs]
 
@@ -340,35 +292,22 @@ class BayesianMatrixVariateLayer(BayesianLayer):
         kl = kl_part * 0.5
         return kl
 
-    def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
-        """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
-        def transf(std):
-            s_u = std[self.num_inputs:]
-            s_v = std[:self.num_inputs]
-            s_u = T.tile(s_u, reps=[self.num_inputs, 1])
-            s_v = T.tile(s_v, reps=[self.num_units, 1])
-            return s_u * s_v.T
-        p_std, q_std = transf(p_std), transf(q_std)
-        numerator = T.square(p_mean - q_mean) + T.square(p_std) - T.square(q_std)
-        denominator = 2 * T.square(q_std) + 1e-8
-        return T.sum(numerator / denominator + T.log(q_std) - T.log(p_std))
-
 
 class BayesianConvLayer(BayesianLayer):
     """Bayesian Convolutional layer"""
 
     def __init__(
-        self,
-        incoming,
-        num_filters,
-        filter_size,
-        stride=(1, 1),
-        pad=0,
-        untie_biases=False,
-        nonlinearity=lasagne.nonlinearities.rectify,
-        flip_filters=True,
-        prior_sd=None,
-        **kwargs
+            self,
+            incoming,
+            num_filters,
+            filter_size,
+            stride=(1, 1),
+            pad=0,
+            untie_biases=False,
+            nonlinearity=lasagne.nonlinearities.rectify,
+            flip_filters=True,
+            prior_sd=None,
+            **kwargs
     ):
         super(BayesianConvLayer, self).__init__(
             incoming, num_filters, nonlinearity, prior_sd, **kwargs)
@@ -428,14 +367,12 @@ class BayesianConvLayer(BayesianLayer):
         if self.untie_biases:
             activation = conved + T.shape_padleft(self.get_b(), 1)
         else:
-            activation = conved + \
-                self.get_b().dimshuffle(('x', 0) + ('x',) * self.n)
+            activation = conved + self.get_b().dimshuffle(('x', 0) + ('x',) * self.n)
 
         return self.nonlinearity(activation)
 
 
 class BayesianDeConvLayer(BayesianLayer):
-
     def __init__(self,
                  incoming,
                  num_filters,
@@ -516,12 +453,12 @@ class BayesianDeConvLayer(BayesianLayer):
             activation = conved + T.shape_padleft(self.get_b(), 1)
         else:
             activation = conved + \
-                self.get_b().dimshuffle(('x', 0) + ('x',) * self.n)
+                         self.get_b().dimshuffle(('x', 0) + ('x',) * self.n)
 
         return self.nonlinearity(activation)
 
 
-class BayesianDenseLayer(BayesianMatrixVariateLayer):
+class BayesianDenseLayer(BayesianLayer):
     """Probabilistic layer that uses Gaussian weights.
 
     Each weight has two parameters: mean and standard deviation (std).
@@ -540,16 +477,14 @@ class BayesianDenseLayer(BayesianMatrixVariateLayer):
 
         self.group_variance_by = group_variance_by
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
-        # FIXME: fixed setting
-        self.use_local_reparametrization_trick = False
 
         self.init_params()
 
     def get_W_shape(self):
-        return (self.num_inputs, self.num_units)
+        return self.num_inputs, self.num_units
 
     def get_b_shape(self):
-        return (self.num_units,)
+        return self.num_units,
 
     def get_output_for_reparametrization(self, input, **kwargs):
         """Implementation of the local reparametrization trick.
@@ -568,8 +503,16 @@ class BayesianDenseLayer(BayesianMatrixVariateLayer):
             input = input.flatten(2)
 
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-        delta = T.dot(T.square(input), T.square(self.softplus(
-            self.rho))) + T.square(self.softplus(self.b_rho)).dimshuffle('x', 0)
+
+        if self._matrix_variate_gaussian:
+            s = self.softplus(self.rho)
+            s_u = s[self.num_inputs:]
+            s_v = s[:self.num_inputs]
+            s = T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
+            delta = T.dot(T.square(input), T.square(s)) + T.mean(T.square(self.softplus(self.b_rho)))
+        else:
+            delta = T.dot(T.square(input), T.square(self.softplus(self.rho))) \
+                    + T.square(self.softplus(self.b_rho)).dimshuffle('x', 0)
 
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
@@ -591,7 +534,7 @@ class BayesianDenseLayer(BayesianMatrixVariateLayer):
             input = input.flatten(2)
 
         activation = T.dot(input, self.get_W()) + \
-            self.get_b().dimshuffle('x', 0)
+                     self.get_b().dimshuffle('x', 0)
 
         return self.nonlinearity(activation)
 
@@ -759,8 +702,8 @@ class ConvBNN(LasagnePowered, Serializable):
                 _log_p_D_given_w.append(lh)
         log_p_D_given_w = sum(_log_p_D_given_w)
 
-        return - log_p_D_given_w / (self.n_samples)**2 + 0.5 * (np.log(2 * np.pi
-                                                                       * likelihood_sd**2) + 1)
+        return - log_p_D_given_w / (self.n_samples) ** 2 + 0.5 * (np.log(2 * np.pi
+                                                                         * likelihood_sd ** 2) + 1)
 
     def surprise(self, **kwargs):
 
@@ -789,8 +732,8 @@ class ConvBNN(LasagnePowered, Serializable):
 
     def _log_prob_normal(self, input, mu=0., sigma=1.):
         log_normal = - \
-            T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - \
-            T.square(input - mu) / (2 * T.square(sigma))
+                         T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - \
+                     T.square(input - mu) / (2 * T.square(sigma))
         return T.sum(log_normal)
 
     def pred_sym(self, input):
@@ -872,8 +815,9 @@ class ConvBNN(LasagnePowered, Serializable):
 
             if layer_disc['name'] == 'convolution':
                 network = BayesianConvLayer(network, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'],
-                    disable_variance=self.disable_variance)
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd,
+                                            stride=layer_disc['stride'],
+                                            disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'pool':
                 network = lasagne.layers.Pool2DLayer(
                     network, pool_size=layer_disc['pool_size'])
@@ -888,8 +832,9 @@ class ConvBNN(LasagnePowered, Serializable):
                     network, num_units=layer_disc['n_units'], nonlinearity=self.transf)
             elif layer_disc['name'] == 'deconvolution':
                 network = BayesianDeConvLayer(network, num_filters=layer_disc[
-                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd, stride=layer_disc['stride'],
-                    disable_variance=self.disable_variance)
+                    'n_filters'], filter_size=layer_disc['filter_size'], prior_sd=self.prior_sd,
+                                              stride=layer_disc['stride'],
+                                              disable_variance=self.disable_variance)
             elif layer_disc['name'] == 'upscale':
                 network = lasagne.layers.Upscale2DLayer(
                     network, scale_factor=layer_disc['scale_factor'])
@@ -897,7 +842,7 @@ class ConvBNN(LasagnePowered, Serializable):
                 network = lasagne.layers.ReshapeLayer(
                     network, shape=layer_disc['shape'])
             else:
-                raise(Exception('Unknown layer!'))
+                raise (Exception('Unknown layer!'))
 
             print('layer {}: {}\n\toutsize: {}'.format(
                 i, layer_disc, network.output_shape))
@@ -994,7 +939,7 @@ class ConvBNN(LasagnePowered, Serializable):
                             oldparam_rho = oldparams[i]
                             p = param
                             H = 2. * (T.exp(2 * p)) / \
-                                (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                                (1 + T.exp(p)) ** 2 / (T.log(1 + T.exp(p)) ** 2)
                             invH = 1. / H
                         elif param.name == 'likelihood_sd':
                             invH = 0.
@@ -1022,7 +967,7 @@ class ConvBNN(LasagnePowered, Serializable):
                             oldparam_rho = oldparams[i]
                             p = param
                             H = 2. * (T.exp(2 * p)) / \
-                                (1 + T.exp(p))**2 / (T.log(1 + T.exp(p))**2)
+                                (1 + T.exp(p)) ** 2 / (T.log(1 + T.exp(p)) ** 2)
                             invH = 1. / H
                         elif param.name == 'likelihood_sd':
                             invH = 0.
@@ -1036,15 +981,16 @@ class ConvBNN(LasagnePowered, Serializable):
                     loss_only_last_sample, params, oldparams, step_size)
 
                 self.train_update_fn = ext.compile_function(
-                    [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast', no_default_updates=False)
+                    [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast',
+                    no_default_updates=False)
 
                 # Code to actually perform second order updates
                 # ---------------------------------------------
-    #             updates_kl = second_order_update(
-    #                 loss_only_last_sample, params, oldparams, step_size)
-    #
-    #             self.train_update_fn = ext.compile_function(
-    #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
+                #             updates_kl = second_order_update(
+                #                 loss_only_last_sample, params, oldparams, step_size)
+                #
+                #             self.train_update_fn = ext.compile_function(
+                #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
                 # ---------------------------------------------
 
             else:
@@ -1066,17 +1012,21 @@ class ConvBNN(LasagnePowered, Serializable):
                     loss_only_last_sample, params, learning_rate=self.learning_rate)
 
                 self.train_update_fn = ext.compile_function(
-                    [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st', no_default_updates=False)
+                    [input_var, target_var], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_1st',
+                    no_default_updates=False)
 
         elif self.surprise_type == ConvBNN.SurpriseType.BALD:
             # BALD
             self.train_update_fn = ext.compile_function(
-                [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd), log_name='fn_surprise_bald')
+                [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd),
+                log_name='fn_surprise_bald')
         elif self.surprise_type == ConvBNN.SurpriseType.COMPR:
             # COMPR IMPR (no KL)
             # Calculate logp.
             self.fn_logp = ext.compile_function(
-                [input_var, target_var], self.logp(input_var, target_var, likelihood_sd=self.likelihood_sd), log_name='fn_logp')
+                [input_var, target_var], self.logp(input_var, target_var, likelihood_sd=self.likelihood_sd),
+                log_name='fn_logp')
+
 
 if __name__ == '__main__':
     pass

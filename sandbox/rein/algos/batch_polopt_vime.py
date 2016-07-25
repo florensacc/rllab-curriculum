@@ -7,10 +7,11 @@ from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup,\
+from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup, \
     plot_mnist_digit
 from scipy import stats, misc
 from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_unformat_image
+
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
@@ -22,6 +23,8 @@ import lasagne
 from collections import deque
 import time
 from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
+
+
 # -------------------
 
 
@@ -177,7 +180,7 @@ class BatchPolopt(RLAlgorithm):
             disable_variance=False,
             predict_delta=False,
             dyn_pool_args=dict(enable=False, size=100000, min_size=10, batch_size=32),
-            ** kwargs
+            **kwargs
     ):
         """
         :param env: Environment
@@ -326,12 +329,12 @@ class BatchPolopt(RLAlgorithm):
                 sanity_pred_im += input_im
                 target_im += input_im
 
-            sanity_pred_im = sanity_pred_im * 256.
+            sanity_pred_im *= 256.
             sanity_pred_im = np.around(sanity_pred_im).astype(int)
-            target_im = target_im * 256.
+            target_im *= 256.
             target_im = np.around(target_im).astype(int)
             err = np.abs(target_im - sanity_pred_im)
-            input_im = input_im * 256.
+            input_im *= 256.
             input_im = np.around(input_im).astype(int)
 
             if self._im1 is None or self._im2 is None:
@@ -395,7 +398,7 @@ class BatchPolopt(RLAlgorithm):
             likelihood_sd_init=self.likelihood_sd_init,
             disable_variance=self.disable_variance
         )
-        
+
         # Number of weights in BNN, excluding biases.
         self.num_weights = self.bnn.num_weights()
 
@@ -537,6 +540,7 @@ class BatchPolopt(RLAlgorithm):
                     if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
                         logp_before = self.bnn.fn_logp(X_train[idx], T_train[idx])
                     # Save old posterior as new prior.
+                    import ipdb; ipdb.set_trace()
                     self.bnn.save_params()
                     loss_before = float(self.bnn.fn_loss(X_train[idx], T_train[idx], 1.))
                     num_itr = int(np.ceil(float(self.num_sample_updates) / self.kl_batch_size))
@@ -544,8 +548,8 @@ class BatchPolopt(RLAlgorithm):
                     for _ in xrange(self.num_sample_updates):
                         train_loss = self.bnn.train_fn(X_train[idx], T_train[idx], 1.)
                         print(loss_before, train_loss)
-#                         print(self.bnn.get_all_params()[0])
-#                         print(self.bnn.get_all_params()[1])
+                        #                         print(self.bnn.get_all_params()[0])
+                        #                         print(self.bnn.get_all_params()[1])
                         if np.isinf(train_loss) or np.isnan(train_loss):
                             import ipdb
                             ipdb.set_trace()
@@ -559,10 +563,10 @@ class BatchPolopt(RLAlgorithm):
                         # Samples will default path['KL'] to np.nan. It is filled in here.
                         logp_after = self.bnn.fn_logp(X_train[idx], T_train[idx])
                         lst_surpr[idx] = logp_after - logp_before
-#                         if (lst_surpr[idx] < 0).any():
-#                             print('\t\t >> ', float(loss_before), float(loss_after), float(lst_surpr[idx]))
-#                         else:
-#                             print(float(loss_before), float(loss_after), float(lst_surpr[idx]))
+                        #                         if (lst_surpr[idx] < 0).any():
+                        #                             print('\t\t >> ', float(loss_before), float(loss_after), float(lst_surpr[idx]))
+                        #                         else:
+                        #                             print(float(loss_before), float(loss_after), float(lst_surpr[idx]))
 
                 if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
                     # Make sure surprise >= 0
@@ -604,7 +608,7 @@ class BatchPolopt(RLAlgorithm):
             params["episode_rewards"] = np.array(episode_rewards)
             params["episode_lengths"] = np.array(episode_lengths)
             params["algo"] = self
-#             logger.save_itr_params(itr, params)
+            #             logger.save_itr_params(itr, params)
             logger.log("Saved.")
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
@@ -912,11 +916,9 @@ class BatchPolopt(RLAlgorithm):
             )
 
             valids = [np.ones_like(path["returns"]) for path in paths]
-            valids = np.array(
-                [tensor_utils.pad_tensor(v, max_path_length) for v in valids])
+            valids = np.array([tensor_utils.pad_tensor(v, max_path_length) for v in valids])
 
-            average_discounted_return = \
-                np.mean([path["returns"][0] for path in paths])
+            average_discounted_return = np.mean([path["returns"][0] for path in paths])
 
             undiscounted_returns = [
                 sum(path["rewards_orig"]) for path in paths]
