@@ -540,9 +540,12 @@ class BatchPolopt(RLAlgorithm):
                     self.bnn.save_params()
                     loss_before = float(self.bnn.fn_loss(X_train[idx], T_train[idx], 1.))
                     num_itr = int(np.ceil(float(self.num_sample_updates) / self.kl_batch_size))
-                    for _ in xrange(num_itr):
+                    print('---')
+                    for _ in xrange(self.num_sample_updates):
                         train_loss = self.bnn.train_fn(X_train[idx], T_train[idx], 1.)
                         print(loss_before, train_loss)
+#                         print(self.bnn.get_all_params()[0])
+#                         print(self.bnn.get_all_params()[1])
                         if np.isinf(train_loss) or np.isnan(train_loss):
                             import ipdb
                             ipdb.set_trace()

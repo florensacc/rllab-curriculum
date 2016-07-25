@@ -313,18 +313,15 @@ class BayesianMatrixVariateLayer(BayesianLayer):
         return self.kl_div_p_q(self.mu_old, self.softplus(self.rho_old), self.mu, self.softplus(self.rho))
 
     def kl_div_new_prior(self):
-        return np.nan
         return self.kl_div_p_q(self.mu, self.softplus(self.rho), 0., self.prior_sd)
 
     def kl_div_old_prior(self):
-        return np.nan
         return self.kl_div_p_q(self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
 
     def kl_div_prior_new(self):
-        return np.nan
         return self.kl_div_p_q(0., self.prior_sd, self.mu,  self.softplus(self.rho))
 
-    def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
+    def kl_div_p_q_mvg_full(self, p_mean, p_std, q_mean, q_std):
 
         p_s_u = p_std[self.num_inputs:]
         p_s_v = p_std[:self.num_inputs]
@@ -343,7 +340,7 @@ class BayesianMatrixVariateLayer(BayesianLayer):
         kl = kl_part * 0.5
         return kl
 
-    def kl_div_p_qx(self, p_mean, p_std, q_mean, q_std):
+    def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
         def transf(std):
             s_u = std[self.num_inputs:]
