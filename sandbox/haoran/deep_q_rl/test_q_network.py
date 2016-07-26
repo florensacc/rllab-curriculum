@@ -135,6 +135,7 @@ class LinearTests(unittest.TestCase):
         state = mdp.states[0]
         action_index = 0
         reward, next_state, terminal = mdp.act(state, action_index)
+        import pdb; pdb.set_trace()
         net.train(state, mdp.actions[action_index], reward, next_state,
                   terminal)
 

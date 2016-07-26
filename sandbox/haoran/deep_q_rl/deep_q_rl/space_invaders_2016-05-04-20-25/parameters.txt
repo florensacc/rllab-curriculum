@@ -1,8 +1,0 @@
-Last commit: d0f56b2 print out best episode and epoch handle being given the directory name instead
-epsilon_decay: 1000000
-epsilon_min: 0.1
-epsilon_start: 1.0
-phi_length: 4
-replay_memory_size: 1000000
-replay_start_size: 50000
-update_frequency: 4

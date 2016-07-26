@@ -1,7 +1,0 @@
-epsilon_decay: 100000.0
-epsilon_min: 0.1
-epsilon_start: 0.5
-phi_length: 4
-replay_memory_size: 100000
-replay_start_size: 5000
-update_frequency: 4

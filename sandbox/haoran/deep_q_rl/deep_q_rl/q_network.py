@@ -201,7 +201,6 @@ class DeepQLearner:
 
         Returns: average loss
         """
-
         self.states_shared.set_value(states)
         self.next_states_shared.set_value(next_states)
         self.actions_shared.set_value(actions)
