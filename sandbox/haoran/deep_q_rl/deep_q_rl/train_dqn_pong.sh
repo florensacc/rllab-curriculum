@@ -1,0 +1,1 @@
+python run_double.py --rom ../roms/pong.bin -s 100000 -t 10000 --epsilon-start 0.5 --nn-file ~/Academics/CS280/project/deep_q_rl-master/deep_q_rl/pong_2016-05-01-09-50/network_file_2.pkl --epsilon-decay 100000 --max-history 100000 --replay-start-size 5000
