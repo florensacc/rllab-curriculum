@@ -27,7 +27,7 @@ stub(globals())
 seeds = range(5)
 # mdp_classes = [MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
-RECORD_VIDEO = True
+RECORD_VIDEO = False
 mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
         GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
         GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),
@@ -84,7 +84,7 @@ for mdp, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix="trpo-atari-a",
-        n_parallel=8,
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

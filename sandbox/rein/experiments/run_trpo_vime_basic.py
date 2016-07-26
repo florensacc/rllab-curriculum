@@ -74,7 +74,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=2,
+        snn_n_samples=10,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=8,
@@ -89,20 +89,20 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         ),
         dyn_model_args=dict(  # TODO: fill in
         ),
-        num_sample_updates=10,  # Every sample in traj batch will be used in `num_sample_updates' updates.
+        num_sample_updates=20,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         second_order_update=False,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
         reward_dim=(1,),
         layers_disc=[
             dict(name='gaussian',
-                 n_units=128,
+                 n_units=32,
                  matrix_variate_gaussian=True),
             dict(name='hadamard',
-                 n_units=128,
+                 n_units=32,
                  matrix_variate_gaussian=True),
             dict(name='gaussian',
-                 n_units=128,
+                 n_units=32,
                  matrix_variate_gaussian=True),
             dict(name='split',
                  n_units=32,

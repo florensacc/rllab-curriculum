@@ -426,9 +426,12 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # the r_net value, e.g., the reward signal.
         s_net = lasagne.layers.reshape(s_net, ([0], -1))
         r_net = BayesianDenseLayer(
-            r_net, num_units=r_flat_dim, nonlinearity=self.transf, prior_sd=self.prior_sd,
+            r_net,
+            num_units=r_flat_dim,
+            nonlinearity=lasagne.nonlinearities.linear,
+            prior_sd=self.prior_sd,
             use_local_reparametrization_trick=True,
-            matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
+            matrix_variate_gaussian=False)
         r_net = lasagne.layers.reshape(r_net, ([0], -1))
         self.network = ConcatLayer([s_net, r_net])
 
@@ -493,21 +496,15 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         if self.update_prior:
             # When using posterior chaining, prefer SGD as we dont want to build up
             # momentum between prior-posterior updates.
-            def sgd_clip_likelihood_sd(loss, params, learning_rate):
+            def sgd_clip(loss, params, learning_rate):
                 grads = theano.grad(loss, params)
                 updates = OrderedDict()
                 for param, grad in zip(params, grads):
-                    if param.name == 'likelihood_sd':
-                        updates[param] = param - learning_rate * grad
-                    elif param.name == 'rho' or param.name == 'b_rho':
-                        updates[param] = param - learning_rate * grad
-                    else:
-                        updates[param] = param - learning_rate * grad
-
+                    updates[param] = param - learning_rate * T.clip(grad, -1., 1.)
                 return updates
 
-            # Clipping likelihood_sd grads seems necessary to prevent explosion.
-            updates = sgd_clip_likelihood_sd(
+            # Clipping grads seems necessary to prevent explosion.
+            updates = sgd_clip(
                 loss, params, learning_rate=self.learning_rate)
         else:
             updates = lasagne.updates.adam(

@@ -224,11 +224,11 @@ class BayesianLayer(lasagne.layers.Layer):
         if self._matrix_variate_gaussian:
             epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
                                         dtype=theano.config.floatX)
-            rho_u = self.rho[self.num_inputs:]
-            rho_v = self.rho[:self.num_inputs]
-            s_u = T.tile(self.softplus(rho_u), reps=[self.num_inputs, 1])
-            s_v = T.tile(self.softplus(rho_v), reps=[self.num_units, 1])
-            s = s_u * s_v.T
+            s = self.softplus(self.rho)
+            s_u = s[self.num_inputs:]
+            s_v = s[:self.num_inputs]
+            s_v = s[:self.num_inputs]
+            s = T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
             return self.mu + s * epsilon * mask
         else:
             epsilon = self._srng.normal(size=self.get_W_shape(), avg=0., std=1., dtype=theano.config.floatX)
@@ -507,6 +507,7 @@ class BayesianDenseLayer(BayesianLayer):
         if self._matrix_variate_gaussian:
             s = self.softplus(self.rho)
             s_u = s[self.num_inputs:]
+            s_v = s[:self.num_inputs]
             s_v = s[:self.num_inputs]
             s = T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
             delta = T.dot(T.square(input), T.square(s)) + T.mean(T.square(self.softplus(self.b_rho)))
@@ -990,7 +991,8 @@ class ConvBNN(LasagnePowered, Serializable):
                 #                 loss_only_last_sample, params, oldparams, step_size)
                 #
                 #             self.train_update_fn = ext.compile_function(
-                #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
+                #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl,
+                #  log_name='fn_surprise_2nd', no_default_updates=False)
                 # ---------------------------------------------
 
             else:
