@@ -17,6 +17,9 @@ import ale_experiment
 import ale_agent
 import q_network
 
+from sandbox.haoran.hashing.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
+from sandbox.haoran.hashing.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
+
 def process_args(args, defaults, description):
     """
     Handle the command line.
@@ -42,7 +45,7 @@ def process_args(args, defaults, description):
                         action='store_true', default=False,
                         help='Show the game screen.')
     parser.add_argument('--experiment-prefix', dest="experiment_prefix",
-                        default=None,
+                        default=defaults.EXPERIMENT_PREFIX,
                         help='Experiment name prefix '
                         '(default is the name of the game)')
     parser.add_argument('--frame-skip', dest="frame_skip",
@@ -77,6 +80,10 @@ def process_args(args, defaults, description):
                               '(default: %(default)s)'))
     parser.add_argument('--clip-delta', dest="clip_delta", type=float,
                         default=defaults.CLIP_DELTA,
+                        help=('Max absolute value for Q-update delta value. ' +
+                              '(default: %(default)s)'))
+    parser.add_argument('--clip-reward', dest="clip_reward", type=float,
+                        default=defaults.CLIP_REWARD,
                         help=('Max absolute value for Q-update delta value. ' +
                               '(default: %(default)s)'))
     parser.add_argument('--discount', type=float, default=defaults.DISCOUNT,
@@ -142,20 +149,20 @@ def process_args(args, defaults, description):
     parser.add_argument('--use_double', dest="use_double",
                         type=bool, default=defaults.USE_DOUBLE,
                         help=('Whether to use Double DQN. ' +
-                              '(default: %(default)s)'))    
-    parser.add_argument('--experiment-directory', dest="experiment_directory", 
-        default=None,
+                              '(default: %(default)s)'))
+    parser.add_argument('--experiment-directory', dest="experiment_directory",
+        default=defaults.EXPERIMENT_DIRECTORY,
         help=('Specify exact directory where to save output to ' +
             '(default: combination of prefix and game name and current ' +
-            'date and parameters)'))    
-    parser.add_argument('--no-record', dest="recording", default=True, 
+            'date and parameters)'))
+    parser.add_argument('--no-record', dest="recording", default=True,
         action="store_false",
         help=('Do not record anything about the experiment ' +
             '(best games, epoch networks, test results, etc)'))
-    parser.add_argument('--record-video', dest="record_video", 
+    parser.add_argument('--record-video', dest="record_video",
         default=False, action="store_true",
         help='Record screen captures')
-    parser.add_argument('--episodes', dest="episodes", default=False, 
+    parser.add_argument('--episodes', dest="episodes", default=False,
         action="store_true",
         help=('This changes the lengths of training epochs and test ' +
         'epochs to be measured in episodes (games) instead of steps'))
@@ -163,8 +170,7 @@ def process_args(args, defaults, description):
 
     parameters = parser.parse_args(args)
     if parameters.experiment_prefix is None:
-        name = os.path.splitext(os.path.basename(parameters.rom))[0]
-        parameters.experiment_prefix = name
+        parameters.experiment_prefix = ""
 
     if parameters.death_ends_episode == 'true':
         parameters.death_ends_episode = True
@@ -212,9 +218,14 @@ def launch(args, defaults, description):
 
     if parameters.experiment_directory:
         experiment_directory = parameters.experiment_directory
-    else:    
-        time_str = time.strftime("_%Y-%m-%d-%H-%M")
-        experiment_directory = parameters.experiment_prefix + time_str
+    else:
+        game_name = os.path.splitext(os.path.basename(parameters.rom))[0]
+        time_str = time.strftime("%Y-%m-%d-%H-%M")
+        experiment_directory = os.path.join(
+            parameters.experiment_prefix,
+            game_name,
+            time_str
+        )
 
 
     ale = ale_python_interface.ALEInterface()
@@ -250,27 +261,46 @@ def launch(args, defaults, description):
     num_actions = len(ale.getMinimalActionSet())
 
     if parameters.nn_file is None:
-        network = q_network.DeepQLearner(defaults.RESIZED_WIDTH,
-                                         defaults.RESIZED_HEIGHT,
-                                         num_actions,
-                                         parameters.phi_length,
-                                         parameters.discount,
-                                         parameters.learning_rate,
-                                         parameters.rms_decay,
-                                         parameters.rms_epsilon,
-                                         parameters.momentum,
-                                         parameters.clip_delta,
-                                         parameters.freeze_interval,
-                                         parameters.use_double,
-                                         parameters.batch_size,
-                                         parameters.network_type,
-                                         parameters.update_rule,
-                                         parameters.batch_accumulator,
-                                         rng)
+        network = q_network.DeepQLearner(
+            input_width=defaults.RESIZED_WIDTH,
+            input_height=defaults.RESIZED_HEIGHT,
+            num_actions=num_actions,
+            num_frames=parameters.phi_length,
+            discount=parameters.discount,
+            learning_rate=parameters.learning_rate,
+            rho=parameters.rms_decay,
+            rms_epsilon=parameters.rms_epsilon,
+            momentum=parameters.momentum,
+            clip_delta=parameters.clip_delta,
+            freeze_interval=parameters.freeze_interval,
+            use_double=parameters.use_double,
+            batch_size=parameters.batch_size,
+            network_type=parameters.network_type,
+            update_rule=parameters.update_rule,
+            batch_accumulator=parameters.batch_accumulator,
+            rng=rng,
+            input_scale=255.0,
+            )
     else:
         handle = open(parameters.nn_file, 'r')
         network = cPickle.load(handle)
 
+    img_preprocessor = ImageVectorizePreprocessor(
+        n_chanllel=parameters.phi_length,
+        width=defaults.RESIZED_WIDTH,
+        height=defaults.RESIZED_HEIGHT,
+    )
+    bonus_evaluator = ALEHashingBonusEvaluator(
+        state_dim=img_preprocessor.output_dim,
+        img_preprocessor=img_preprocessor,
+        num_actions=num_actions,
+        hash_list=[],
+        count_mode="s",
+        bonus_mode="s_next",
+        bonus_coeff=1.0,
+        state_bonus_mode="1/n_s",
+        state_action_bonus_mode="log(n_s)/n_sa",
+    )
     agent = ale_agent.NeuralAgent(network,
                                   parameters.epsilon_start,
                                   parameters.epsilon_min,
@@ -280,6 +310,8 @@ def launch(args, defaults, description):
                                   parameters.replay_start_size,
                                   parameters.update_frequency,
                                   rng,
+                                  clip_reward=parameters.clip_reward,
+                                  bonus_evaluator=bonus_evaluator,
                                   recording=parameters.recording)
     experiment = ale_experiment.ALEExperiment(ale, agent,
                                               defaults.RESIZED_WIDTH,

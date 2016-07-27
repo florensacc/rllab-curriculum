@@ -4,9 +4,10 @@ Q-learning agent in the Arcade Learning Environment.
 Author: Nathan Sprague
 
 """
-import logging
+from rllab.misc import logger
 import numpy as np
 import cv2
+import time
 
 # Number of rows to crop off the bottom of the (downsampled) screen.
 # This is appropriate for breakout, but it may need to be modified
@@ -42,9 +43,9 @@ class ALEExperiment(object):
         self.max_start_nullops = max_start_nullops
         self.rng = rng
 
-        # Whether the lengths (test_length and epoch_length) are specified in 
+        # Whether the lengths (test_length and epoch_length) are specified in
         # episodes. This is mainly for testing
-        self.length_in_episodes = length_in_episodes 
+        self.length_in_episodes = length_in_episodes
 
     def run(self):
         """
@@ -74,10 +75,11 @@ class ALEExperiment(object):
         """
         self.terminal_lol = False # Make sure each epoch starts with a reset.
         steps_left = num_steps
+        start_time = time.clock()
         while steps_left > 0:
             prefix = "testing" if testing else "training"
-            logging.info(prefix + " epoch: " + str(epoch) + " steps_left: " +
-                         str(steps_left))
+            total_time = time.clock() - start_time
+            logger.log(prefix + " epoch: " + str(epoch) + " steps_left: " + str(steps_left) + "\n total time: %2.f secs"%(total_time))
             _, num_steps = self.run_episode(steps_left, testing)
             print "Number of time steps in this episode: %d"%(num_steps)
 
@@ -89,7 +91,6 @@ class ALEExperiment(object):
         actions to ensure that the screen buffer is ready and optionally
         performs a randomly determined number of null action to randomize
         the initial game state."""
-
         if not self.terminal_lol or self.ale.game_over():
             self.ale.reset_game()
 
@@ -111,13 +112,13 @@ class ALEExperiment(object):
 
         """
         reward = self.ale.act(action)
-        
+
         # replace the current buffer image by the current screen
         index = self.buffer_count % self.buffer_length
         self.ale.getScreenGrayscale(self.screen_buffer[index, ...])
 
         # count the total number of images seen
-        self.buffer_count += 1 
+        self.buffer_count += 1
         return reward
 
     def _step(self, action):
@@ -200,4 +201,3 @@ class ALEExperiment(object):
                               interpolation=cv2.INTER_LINEAR)
         else:
             raise ValueError('Unrecognized image resize method.')
-

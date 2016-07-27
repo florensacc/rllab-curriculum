@@ -84,7 +84,7 @@ class LinearTests(unittest.TestCase):
 
         # Divide the desired learning rate by two, because loss is
         # defined as L^2, not 1/2 L^2.
-        self.learning_rate = .1 / 2.0
+        self.learning_rate = .1
 
         self.discount = .5
         self.mdp = ChainMDP()
@@ -127,7 +127,8 @@ class LinearTests(unittest.TestCase):
             network_type='linear',
             update_rule='sgd',
             batch_accumulator='sum',
-            rng=1.0)
+            rng=1,
+            input_scale=1.0)
 
         mdp = self.mdp
 
@@ -135,7 +136,6 @@ class LinearTests(unittest.TestCase):
         state = mdp.states[0]
         action_index = 0
         reward, next_state, terminal = mdp.act(state, action_index)
-        import pdb; pdb.set_trace()
         net.train(state, mdp.actions[action_index], reward, next_state,
                   terminal)
 
@@ -171,7 +171,7 @@ class LinearTests(unittest.TestCase):
                                      self.discount,
                                      self.learning_rate, 0, 0, 0, 0,
                                      freeze_interval, False, 1, 'linear',
-                                     'sgd', 'sum', 1.0)
+                                     'sgd', 'sum', 1,1.0)
 
 
         self.train(net, 1000)
@@ -192,7 +192,7 @@ class LinearTests(unittest.TestCase):
                                      self.discount,
                                      self.learning_rate, 0, 0, 0, 0,
                                      freeze_interval, False, 1, 'linear',
-                                     'sgd', 'sum', 1.0)
+                                     'sgd', 'sum', 1,1.0)
 
         # Randomize initial q-values:
         params = lasagne.layers.helper.get_all_param_values(net.l_out)
@@ -217,7 +217,7 @@ class LinearTests(unittest.TestCase):
                                      self.discount,
                                      self.learning_rate, 0, 0, 0, 0,
                                      freeze_interval, False, 1, 'linear',
-                                     'sgd', 'sum', 1.0)
+                                     'sgd', 'sum',1, 1.0)
 
         self.train(net, 1000)
 
@@ -232,7 +232,7 @@ class LinearTests(unittest.TestCase):
                                      self.discount,
                                      self.learning_rate, 0, 0, 0, 0,
                                      freeze_interval, False, 1, 'linear',
-                                     'sgd', 'sum', 1.0)
+                                     'sgd', 'sum', 1,1.0)
 
         self.train(net, 1000)
 
@@ -247,7 +247,7 @@ class LinearTests(unittest.TestCase):
                                      self.discount,
                                      self.learning_rate, 0, 0, 0, 0,
                                      freeze_interval, False, 1, 'linear',
-                                     'sgd', 'sum', 1.0)
+                                     'sgd', 'sum', 1, 1.0)
 
         self.train(net, freeze_interval * 2)
 

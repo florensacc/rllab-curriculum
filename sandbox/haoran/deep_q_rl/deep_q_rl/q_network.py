@@ -63,7 +63,7 @@ class DeepQLearner:
             self.reset_q_hat()
 
         states = T.tensor4('states')
-        next_states = T.tensor4('next_states')
+        next_states = T.tensor4('next_states') # "next" = "target"
         rewards = T.col('rewards')
         actions = T.icol('actions')
         terminals = T.icol('terminals')
@@ -470,6 +470,7 @@ class DeepQLearner:
         """
         Build a simple linear learner.  Useful for creating
         tests that sanity-check the weight update code.
+        For one-hot discrete states, this is exactly tabular look-up, with zero initial Q-values.
         """
 
         l_in = lasagne.layers.InputLayer(

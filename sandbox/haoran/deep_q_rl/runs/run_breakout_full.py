@@ -7,6 +7,8 @@ Playing Atari with Deep Reinforcement Learning
 NIPS Deep Learning Workshop 2013
 
 """
+import sys
+sys.path.append("sandbox/haoran/deep_q_rl/deep_q_rl")
 
 import launcher
 import sys
@@ -15,14 +17,16 @@ class Defaults:
     # ----------------------
     # Experiment Parameters
     # ----------------------
-    STEPS_PER_EPOCH = 10000
-    EPOCHS = 10
-    STEPS_PER_TEST = 100
+    STEPS_PER_EPOCH = 250000
+    EPOCHS = 100
+    STEPS_PER_TEST = 10000
+    EXPERIMENT_PREFIX = "data/local/deep_q_rl/"
+    EXPERIMENT_DIRECTORY = None
 
     # ----------------------
     # ALE Parameters
     # ----------------------
-    BASE_ROM_PATH = "../roms/"
+    BASE_ROM_PATH = "sandbox/haoran/deep_q_rl/roms/"
     ROM = 'breakout.bin'
     FRAME_SKIP = 4
     REPEAT_ACTION_PROBABILITY = 0
@@ -56,6 +60,7 @@ class Defaults:
     DETERMINISTIC = True
     CUDNN_DETERMINISTIC = False
     USE_DOUBLE = False
+    CLIP_REWARD = True
 
 if __name__ == "__main__":
     launcher.launch(sys.argv[1:], Defaults, __doc__)

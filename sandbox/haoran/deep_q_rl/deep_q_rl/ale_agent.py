@@ -9,7 +9,7 @@ Author: Nathan Sprague
 import os
 import cPickle
 import time
-import logging
+from rllab.misc import logger
 
 import numpy as np
 
@@ -22,7 +22,7 @@ class NeuralAgent(object):
 
     def __init__(self, q_network, epsilon_start, epsilon_min,
                  epsilon_decay, replay_memory_size, experiment_directory,
-                 replay_start_size, update_frequency, rng, 
+                 replay_start_size, update_frequency, rng, clip_reward, bonus_evaluator=None,
                  recording=True):
 
         self.results_file = self.learning_file = None
@@ -42,6 +42,8 @@ class NeuralAgent(object):
         self.image_height = self.network.input_height
 
         self.recording = recording
+
+        self.clip_reward = clip_reward
 
         self.exp_dir = experiment_directory
         if self.recording:
@@ -90,10 +92,12 @@ class NeuralAgent(object):
         self.last_img = None
         self.last_action = None
 
+        self.bonus_evaluator = bonus_evaluator
+
     def _open_results_file(self):
         if not self.recording:
             return
-        logging.info("OPENING " + self.exp_dir + '/results.csv')
+        logger.log("OPENING " + self.exp_dir + '/results.csv')
         self.results_file = open(self.exp_dir + '/results.csv', 'w', 0)
         self.results_file.write(\
             'epoch,num_episodes,total_reward,reward_per_epoch,best_reward,mean_q\n')
@@ -168,7 +172,7 @@ class NeuralAgent(object):
 
             for variable in sorted('epsilon_start epsilon_min epsilon_decay phi_length replay_memory_size   replay_start_size update_frequency'.split()):
                 parameters_file.write('%s: %s\n' % (variable, getattr(self, variable)))
-                logging.info('%s: %s' % (variable, getattr(self, variable)))
+                logger.log('%s: %s' % (variable, getattr(self, variable)))
 
         gitdiff = subprocess.check_output('git diff'.split()).strip()
         if gitdiff:
@@ -206,10 +210,12 @@ class NeuralAgent(object):
         self.step_counter += 1
 
         #TESTING---------------------------
+        if self.clip_reward:
+            reward = np.clip(reward, -1, 1)
         if self.testing:
             self.episode_reward += reward
             action = self._choose_action(self.test_data_set, .05,
-                                         observation, np.clip(reward, -1, 1))
+                                         observation, reward)
 
         #NOT TESTING---------------------------
         else:
@@ -220,7 +226,7 @@ class NeuralAgent(object):
 
                 action = self._choose_action(self.data_set, self.epsilon,
                                              observation,
-                                             np.clip(reward, -1, 1))
+                                             reward)
 
                 if self.step_counter % self.update_frequency == 0:
                     loss = self._do_training()
@@ -230,8 +236,7 @@ class NeuralAgent(object):
             else: # Still gathering initial random data...
                 action = self._choose_action(self.data_set, self.epsilon,
                                              observation,
-                                             np.clip(reward, -1, 1))
-
+                                             reward)
 
         self.last_action = action
         self.last_img = observation
@@ -248,6 +253,10 @@ class NeuralAgent(object):
         if self.step_counter >= self.phi_length:
             phi = data_set.phi(cur_img)
             action = self.network.choose_action(phi, epsilon)
+            if self.bonus_evaluator is not None:
+                states = np.asarray([phi])
+                actions = np.asarray([action])
+                self.bonus_evaluator.update(states,actions)
         else:
             action = self.rng.randint(0, self.num_actions)
 
@@ -262,8 +271,12 @@ class NeuralAgent(object):
         states, actions, rewards, next_states, terminals = \
                                 self.data_set.random_batch(
                                     self.network.batch_size)
-        return self.network.train(states, actions, rewards,
-                                  next_states, terminals)
+
+        if self.bonus_evaluator is not None:
+            bonus_rewards = self.bonus_evaluator.evaluate(states,actions,next_states)
+            rewards += bonus_rewards.reshape((len(bonus_rewards),1))
+        loss =  self.network.train(states, actions, rewards, next_states, terminals)
+        return loss
 
 
     def end_episode(self, reward, terminal=True):
@@ -300,12 +313,12 @@ class NeuralAgent(object):
                                      np.clip(reward, -1, 1),
                                      True)
 
-            logging.info("steps/second: {:.2f}".format(\
+            logger.log("steps/second: {:.2f}".format(\
                             self.step_counter/total_time))
 
             if self.batch_counter > 0:
                 self._update_learning_file()
-                logging.info("average loss: {:.4f}".format(\
+                logger.log("average loss: {:.4f}".format(\
                                 np.mean(self.loss_averages)))
 
 
@@ -316,14 +329,6 @@ class NeuralAgent(object):
                         '.pkl', 'w')
         cPickle.dump(self.network, net_file, -1)
         net_file.close()
-        
-        # store images and actions for later analysis ------------------------
-        data_set_file = open(self.exp_dir + '/img_act_file_' + str(epoch) + \
-                           '.npz','w')
-        np.savez(data_set_file,
-                 imgs=self.data_set.imgs,
-                 actions=self.data_set.actions)
-        data_set_file.close()
 
     def start_testing(self):
         self.testing = True
