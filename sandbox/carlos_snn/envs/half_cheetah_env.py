@@ -53,7 +53,6 @@ class HalfCheetahEnv(MujocoEnv, Serializable):
 
     # @overrides
     def log_diagnostics(self, paths):
-        print 'logging env with prefix: ' + logger._tabular_prefix_str
         progs = [
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths
@@ -62,13 +61,13 @@ class HalfCheetahEnv(MujocoEnv, Serializable):
         logger.record_tabular('MaxForwardProgress', np.max(progs))
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
-        if logger._tabular_prefix_str == 'all_lat_':
-            largest_positive_prog = max(0, np.max(progs))
-            largest_negative_prog = min(0, np.min(progs))
-            if abs(largest_negative_prog) > 10e-8 and abs(largest_positive_prog) > 10e-8:
-                bimod_ratio = min(abs(largest_negative_prog/largest_positive_prog),
-                                  abs(largest_positive_prog/largest_negative_prog))
-            else:
-                bimod_ratio = 0
-            logger.record_tabular('BimodalityProgress', bimod_ratio)
+
+        largest_positive_prog = max(0, np.max(progs))
+        largest_negative_prog = min(0, np.min(progs))
+        if abs(largest_negative_prog) > 10e-8 and abs(largest_positive_prog) > 10e-8:
+            bimod_ratio = min(abs(largest_negative_prog/largest_positive_prog),
+                              abs(largest_positive_prog/largest_negative_prog))
+        else:
+            bimod_ratio = 0
+        logger.record_tabular('BimodalityProgress', bimod_ratio)
 

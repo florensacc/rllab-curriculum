@@ -33,7 +33,12 @@ def lqr(A, B, Q, R, k):
     return P, TT.dot(inv(R + TT.dot(B.T, TT.dot(P, B))), TT.dot(B.T, TT.dot(P, A)))
 
 class RecurrentLQRPolicy(Policy, Serializable):
-    def __init__(self, env_spec, Q, R, state_dim=None, physical_dim=None, recurrences=10):
+    def __init__(self, env_spec, Q, R,
+            state_dim=None,
+            physical_dim=None,
+            net_hidden_sizes=[100],
+            recurrences=10
+    ):
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.observation_space, Box)
         assert isinstance(env_spec.action_space, Box)
@@ -58,7 +63,7 @@ class RecurrentLQRPolicy(Policy, Serializable):
         # self._B = util.init_weights(observation_dim, action_dim)
         self._dynamics_net = MLP(
                 output_dim=state_dim * (state_dim + action_dim),
-                hidden_sizes=[50, 100],
+                hidden_sizes=net_hidden_sizes,
                 hidden_nonlinearity=NL.rectify,
                 output_nonlinearity=NL.rectify,
                 # input_var=obs_var[-physical_dim:],
@@ -99,7 +104,7 @@ class RecurrentLQRPolicy(Policy, Serializable):
         net_out = L.get_output(self._dynamics_net.output_layer, inputs=physical_var)[0]
         # With regards to taking only the first row of output:                       ^
         # It's ok because the physical parameters will not change mid-episode
-        
+
         A = net_out[:self._state_dim**2].reshape((self._state_dim, self._state_dim))
         B = net_out[self._state_dim**2:].reshape((self._state_dim, self._action_dim))
         return A, B

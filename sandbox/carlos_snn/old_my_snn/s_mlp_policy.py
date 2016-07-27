@@ -3,6 +3,7 @@ import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import theano.tensor as TT
 import numpy as np
+from contextlib import contextmanager
 
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
@@ -18,6 +19,8 @@ from rllab.misc import logger
 from rllab.misc import ext
 from rllab.misc import autoargs
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
+
+from sandbox.carlos_snn.distributions.categorical import Categorical
 from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
 
 
@@ -45,9 +48,8 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
             ##CF - latents units at the input
             latent_dim=2,
             latent_name='bernoulli',
-            # hot_encoding=False,
             bilinear_integration=False,
-            resample=True,
+            resample=False,
             hidden_sizes=(32, 32),
             learn_std=True,
             init_std=1.0,
@@ -63,9 +65,11 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         self.latent_name = latent_name
         self.bilinear_integration = bilinear_integration
         self.resample = resample
+        self.min_std = min_std
+
         self.pre_fix_latent = np.array([])  # if this is not empty when using reset() it will use this latent
         self.latent_fix = np.array([])  # this will hold the latents variable sampled in reset()
-        self.min_std = min_std
+        self._set_std_to_0 = False
 
         if latent_name == 'normal':
             self.latent_dist = DiagonalGaussian(self.latent_dim)
@@ -73,6 +77,13 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         elif latent_name == 'bernoulli':
             self.latent_dist = Bernoulli(self.latent_dim)
             self.latent_dist_info = dict(p=0.5 * np.ones(self.latent_dim))
+        elif latent_name == 'categorical':
+            self.latent_dist = Categorical(self.latent_dim)
+            if self.latent_dim > 0:
+                self.latent_dist_info = dict(prob=1./self.latent_dim * np.ones(self.latent_dim))
+            else:
+                self.latent_dist_info = dict(prob=np.ones(self.latent_dim))
+            print self.latent_dist_info
         else:
             raise NotImplementedError
 
@@ -181,12 +192,16 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         if self.latent_dim:
             if self.resample:
                 latents = [self.latent_dist.sample(self.latent_dist_info) for _ in observations]
+                # print 'resampling the latents'
             else:
-                if not len(self.latent_fix) == self.latent_dim:  # we decide to reset based on if smthing in the fix
+                if not np.size(self.latent_fix) == self.latent_dim:  # we decide to reset based on if smthing in the fix
+                    # logger.log('Reset for latents: the latent_fix {} not match latent_dim{}'.format(self.latent_fix, self.latent_dim))
                     self.reset()
                 if len(self.pre_fix_latent) == self.latent_dim:  # If we have a pre_fix, reset will put the latent to it
+                    # logger.log('Reset for latents: we have a pre_fix to fix!')
                     self.reset()  # this overwrites the latent sampled or in latent_fix
                 latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation better...
+                # print 'not resample, use latent_fix, obtaining: ', latents
             if self.bilinear_integration:
                 # print 'the obs is: ' , observations, '\nwith time length: {}\n'.format(observations.shape[0])
                 # print 'the reshaped bilinear is:\n' , np.reshape(observations[:, np.newaxis, :] * latents[:, :, np.newaxis],
@@ -207,8 +222,13 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         # print 'the extened_obs are:\n', extended_obs
         # make mean, log_std also depend on the latents (as observ.)
         mean, log_std = self._f_dist(extended_obs)
-        rnd = np.random.normal(size=mean.shape)
-        actions = rnd * np.exp(log_std) + mean
+
+        if self._set_std_to_0:
+            actions = mean
+            log_std = -1e6 * np.ones_like(log_std)
+        else:
+            rnd = np.random.normal(size=mean.shape)
+            actions = rnd * np.exp(log_std) + mean
         # print latents
         return actions, dict(mean=mean, log_std=log_std, latents=latents)
 
@@ -218,8 +238,15 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
     def unset_pre_fix_latent(self):
         self.pre_fix_latent = np.array([])
 
+    @contextmanager
+    def set_std_to_0(self):
+        self._set_std_to_0 = True
+        yield
+        self._set_std_to_0 = False
+
     @overrides
     def reset(self):  # executed at the start of every rollout. Will fix the latent if needed.
+        # print 'entering reset'
         if not self.resample:
             if self.pre_fix_latent.size > 0:
                 self.latent_fix = self.pre_fix_latent

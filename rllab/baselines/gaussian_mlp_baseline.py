@@ -4,7 +4,6 @@ from rllab.core.serializable import Serializable
 from rllab.core.parameterized import Parameterized
 from rllab.baselines.base import Baseline
 from rllab.misc.overrides import overrides
-from rllab.misc import logger
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 
 
@@ -13,12 +12,14 @@ class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
     def __init__(
             self,
             env_spec,
+            subsample_factor=1.,
             regressor_args=None,
     ):
         Serializable.quick_init(self, locals())
         super(GaussianMLPBaseline, self).__init__(env_spec)
         if regressor_args is None:
             regressor_args = dict()
+
         self._regressor = GaussianMLPRegressor(
             input_shape=(env_spec.observation_space.flat_dim,),
             output_dim=1,

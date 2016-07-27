@@ -7,6 +7,8 @@ from rllab.misc import logger
 
 # the regressor will be choosen to be from the same distribution as the latents
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
+from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
+from sandbox.carlos_snn.regressors.categorical_recurrent_regressor import CategoricalRecurrentRegressor
 from sandbox.carlos_snn.regressors.bernoulli_mlp_regressor import BernoulliMLPRegressor
 from sandbox.carlos_snn.regressors.bernoulli_recurrent_regressor import BernoulliRecurrentRegressor
 
@@ -19,26 +21,31 @@ class Latent_regressor(Parameterized, Serializable):
             env_spec,
             policy,
             recurrent=False,
+            predict_all=True,
             obs_regressed='all',
             act_regressed='all',
             use_only_sign=False,
             noisify_traj_coef=0,
             optimizer=None,  # this defaults to LBFGS
-            regressor_args=None,  # here goes all args straight to the regressor: predict_all, optimizer, step_size....
+            regressor_args=None,  # here goes all args straight to the regressor: hidden_sizes, TR, step_size....
     ):
         """
         :param env_spec:
         :param policy:
         :param recurrent:
+        :param predict_all: this is only for the recurrent case, to use all hidden states as predictions
         :param obs_regressed: list of index of the obs variables used to fit the regressor. default string 'all'
         :param act_regressed: list of index of the act variables used to fit the regressor. default string 'all'
         :param regressor_args:
         """
-        self.latent_dim = policy.latent_dim
+        self.env_spec = env_spec
         self.policy = policy
+        self.latent_dim = policy.latent_dim
         self.recurrent = recurrent
+        self.predict_all = predict_all
         self.use_only_sign = use_only_sign
         self.noisify_traj_coef = noisify_traj_coef
+        self.regressor_args = regressor_args
         # decide what obs variables will be regressed upon
         if obs_regressed == 'all':
             self.obs_regressed = range(env_spec.observation_space.flat_dim)
@@ -58,22 +65,44 @@ class Latent_regressor(Parameterized, Serializable):
             regressor_args = dict()
 
         if optimizer == 'first_order':
-            self.optimizer = FirstOrderOptimizer()
+            self.optimizer = FirstOrderOptimizer(
+                max_epochs=10,  # both of these are to match Rocky's 10
+                batch_size=128,
+            )
         elif optimizer is None:
             self.optimizer = None
         else:
             raise NotImplementedError
 
         if policy.latent_name == 'bernoulli':
-            if recurrent:
+            if self.recurrent:
                 self._regressor = BernoulliRecurrentRegressor(
+                    input_shape=(self.obs_act_dim,),
+                    output_dim=policy.latent_dim,
+                    optimizer=self.optimizer,
+                    predict_all=self.predict_all,
+                    **regressor_args
+                )
+            else:
+                self._regressor = BernoulliMLPRegressor(
                     input_shape=(self.obs_act_dim,),
                     output_dim=policy.latent_dim,
                     optimizer=self.optimizer,
                     **regressor_args
                 )
+        elif policy.latent_name == 'categorical':
+            if self.recurrent:
+                print 'setting a recurrent categorical regressor'
+                self._regressor = CategoricalRecurrentRegressor(  # not implemented
+                    input_shape=(self.obs_act_dim,),
+                    output_dim=policy.latent_dim,
+                    optimizer=self.optimizer,
+                    # predict_all=self.predict_all,
+                    **regressor_args
+                )
             else:
-                self._regressor = BernoulliMLPRegressor(
+                print 'setting a MLP categorical regressor'
+                self._regressor = CategoricalMLPRegressor(
                     input_shape=(self.obs_act_dim,),
                     output_dim=policy.latent_dim,
                     optimizer=self.optimizer,
@@ -90,6 +119,7 @@ class Latent_regressor(Parameterized, Serializable):
             raise NotImplementedError
 
     def fit(self, paths):
+        logger.log('fitting the regressor...')
         if self.recurrent:
             observations = np.array([p["observations"][:, self.obs_regressed] for p in paths])
             # print 'the obs shape is: ', np.shape(observations)
@@ -101,7 +131,7 @@ class Latent_regressor(Parameterized, Serializable):
                                                 scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
                                                 size=np.shape(obs_actions))
             latents = np.array([p['agent_infos']['latents'] for p in paths])
-            self._regressor.fit(obs_actions, latents)  # why reshape??
+            self._regressor.fit(obs_actions, latents)  # the input shapes are (traj, time, dim)
         else:
             observations = np.concatenate([p["observations"][:, self.obs_regressed] for p in paths])
             actions = np.concatenate([p["actions"][:, self.act_regressed] for p in paths])
@@ -112,6 +142,7 @@ class Latent_regressor(Parameterized, Serializable):
                                                 scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
                                                 size=np.shape(obs_actions))
             self._regressor.fit(obs_actions, latents.reshape((-1, self.latent_dim)))  # why reshape??
+        logger.log('done fitting the regressor')
 
     def predict(self, path):
         if self.recurrent:
@@ -156,15 +187,19 @@ class Latent_regressor(Parameterized, Serializable):
         if self.recurrent:
             observations = np.array([p["observations"][:, self.obs_regressed] for p in paths])
             actions = np.array([p["actions"][:, self.act_regressed] for p in paths])
-            obs_actions = np.concatenate([observations, actions], axis=2)
+            obs_actions = np.concatenate([observations, actions], axis=2)  # latents must match first 2dim: (batch,time)
+            # print 'CF the obs are:', observations, 'CF the act are: ', actions, 'CF the combined are: ', obs_actions
         else:
             observations = np.concatenate([p["observations"][:, self.obs_regressed] for p in paths])
             actions = np.concatenate([p["actions"][:, self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate(latents, axis=0)
         if self.noisify_traj_coef:
-            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
-                                            size=np.shape(obs_actions))
+            noise = np.random.multivariate_normal(mean=np.zeros_like(np.mean(obs_actions, axis=0)),
+                                                         cov=np.diag(np.mean(np.abs(obs_actions),
+                                                                     axis=0) * self.noisify_traj_coef),
+                                                         size=np.shape(obs_actions)[0])
+            obs_actions += noise
         if self.use_only_sign:
             obs_actions = np.sign(obs_actions)
         return self._regressor.predict_log_likelihood(obs_actions, latents)  # see difference with fit above...
@@ -181,8 +216,10 @@ class Latent_regressor(Parameterized, Serializable):
             obs_actions = np.concatenate([observations, actions], axis=1)
             latents = np.concatenate([p['agent_infos']["latents"][times[0]:times[1]] for p in paths])
         if self.noisify_traj_coef:
-            obs_actions += np.random.normal(loc=0.0, scale=float(np.mean(np.abs(obs_actions))) * self.noisify_traj_coef,
-                                            size=np.shape(obs_actions))
+            obs_actions += np.random.multivariate_normal(mean=np.zeros_like(np.mean(obs_actions,axis=0)),
+                                                         cov=np.diag(np.mean(np.abs(obs_actions),
+                                                                     axis=0) * self.noisify_traj_coef),
+                                                         size=np.shape(obs_actions)[0])
         if self.use_only_sign:
             obs_actions = np.sign(obs_actions)
         H_latent = self.policy.latent_dist.entropy(self.policy.latent_dist_info)  # sum of entropies latents in

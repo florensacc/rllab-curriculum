@@ -12,7 +12,7 @@ USE_REPARAMETRIZATION_TRICK = True
 # ----------------
 
 
-def log_to_std(rho):
+def softplus(rho):
     """Transformation for allowing rho in \mathbb{R}, rather than \mathbb{R}_+
 
     This makes sure that we don't get negative stds. However, a downside might be
@@ -21,8 +21,8 @@ def log_to_std(rho):
     return T.log(1 + T.exp(rho))
 
 
-def std_to_log(sigma):
-    """Reverse log_to_std transformation."""
+def inv_softplus(sigma):
+    """Reverse softplus transformation."""
     return np.log(np.exp(sigma) - 1)
 
 
@@ -52,7 +52,7 @@ class GaussianLayer(lasagne.layers.Layer):
         self.num_units = num_units
         self.prior_sd = prior_sd
 
-        prior_rho = std_to_log(self.prior_sd)
+        prior_rho = inv_softplus(self.prior_sd)
 
         self.W = np.random.normal(0., prior_sd,
                                   (self.num_inputs, self.num_units))  # @UndefinedVariable
@@ -126,7 +126,7 @@ class GaussianLayer(lasagne.layers.Layer):
                                     dtype=theano.config.floatX)  # @UndefinedVariable
         # Here we calculate weights based on shifting and rescaling according
         # to mean and variance (paper step 2)
-        W = self.mu + log_to_std(self.rho) * epsilon
+        W = self.mu + softplus(self.rho) * epsilon
         self.W = W
         return W
 
@@ -134,7 +134,7 @@ class GaussianLayer(lasagne.layers.Layer):
         # Here we generate random epsilon values from a normal distribution
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
-        b = self.b_mu + log_to_std(self.b_rho) * epsilon
+        b = self.b_mu + softplus(self.b_rho) * epsilon
         self.b = b
         return b
 
@@ -154,8 +154,8 @@ class GaussianLayer(lasagne.layers.Layer):
             input = input.flatten(2)
 
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-        delta = T.dot(T.square(input), T.square(log_to_std(
-            self.rho))) + T.square(log_to_std(self.b_rho)).dimshuffle('x', 0)
+        delta = T.dot(T.square(input), T.square(softplus(
+            self.rho))) + T.square(softplus(self.b_rho)).dimshuffle('x', 0)
         epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                     dtype=theano.config.floatX)  # @UndefinedVariable
 
@@ -163,14 +163,14 @@ class GaussianLayer(lasagne.layers.Layer):
 
         return self.nonlinearity(activation)
 
-    def save_old_params(self):
+    def save_params(self):
         """Save old parameter values for KL calculation."""
         self.mu_old.set_value(self.mu.get_value())
         self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
         self.b_rho_old.set_value(self.b_rho.get_value())
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         """Reset to old parameter values for KL calculation."""
         self.mu.set_value(self.mu_old.get_value())
         self.rho.set_value(self.rho_old.get_value())
@@ -187,37 +187,37 @@ class GaussianLayer(lasagne.layers.Layer):
 
     def kl_div_new_old(self):
         kl_div = self.kl_div_p_q(
-            self.mu, log_to_std(self.rho), self.mu_old, log_to_std(self.rho_old))
-        kl_div += self.kl_div_p_q(self.b_mu, log_to_std(self.b_rho),
-                                  self.b_mu_old, log_to_std(self.b_rho_old))
+            self.mu, softplus(self.rho), self.mu_old, softplus(self.rho_old))
+        kl_div += self.kl_div_p_q(self.b_mu, softplus(self.b_rho),
+                                  self.b_mu_old, softplus(self.b_rho_old))
         return kl_div
 
     def kl_div_old_new(self):
         kl_div = self.kl_div_p_q(
-            self.mu_old, log_to_std(self.rho_old), self.mu, log_to_std(self.rho))
+            self.mu_old, softplus(self.rho_old), self.mu, softplus(self.rho))
         kl_div += self.kl_div_p_q(self.b_mu_old,
-                                  log_to_std(self.b_rho_old), self.b_mu, log_to_std(self.b_rho))
+                                  softplus(self.b_rho_old), self.b_mu, softplus(self.b_rho))
         return kl_div
 
     def kl_div_new_prior(self):
         kl_div = self.kl_div_p_q(
-            self.mu, log_to_std(self.rho), 0., self.prior_sd)
+            self.mu, softplus(self.rho), 0., self.prior_sd)
         kl_div += self.kl_div_p_q(self.b_mu,
-                                  log_to_std(self.b_rho), 0., self.prior_sd)
+                                  softplus(self.b_rho), 0., self.prior_sd)
         return kl_div
 
     def kl_div_old_prior(self):
         kl_div = self.kl_div_p_q(
-            self.mu_old, log_to_std(self.rho_old), 0., self.prior_sd)
+            self.mu_old, softplus(self.rho_old), 0., self.prior_sd)
         kl_div += self.kl_div_p_q(self.b_mu_old,
-                                  log_to_std(self.b_rho_old), 0., self.prior_sd)
+                                  softplus(self.b_rho_old), 0., self.prior_sd)
         return kl_div
 
     def kl_div_prior_new(self):
         kl_div = self.kl_div_p_q(
-            0., self.prior_sd, self.mu,  log_to_std(self.rho))
+            0., self.prior_sd, self.mu,  softplus(self.rho))
         kl_div += self.kl_div_p_q(0., self.prior_sd,
-                                  self.b_mu, log_to_std(self.b_rho))
+                                  self.b_mu, softplus(self.b_rho))
         return kl_div
 
     def get_output_for(self, input, **kwargs):
@@ -297,19 +297,19 @@ class ProbNN(LasagnePowered, Serializable):
         # Compile theano functions.
         self.build_model()
         
-    def save_old_params(self):
+    def save_params(self):
         layers = filter(lambda l: isinstance(l, GaussianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.save_old_params()
+            layer.save_params()
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         layers = filter(lambda l: isinstance(l, GaussianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.reset_to_old_params()
+            layer.load_prev_params()
 
-    def compression_improvement(self):
+    def compr_impr_kl(self):
         """KL divergence KL[old_param||new_param]"""
         layers = filter(lambda l: isinstance(l, GaussianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
@@ -324,7 +324,7 @@ class ProbNN(LasagnePowered, Serializable):
     def surprise(self):
         surpr = 0.
         if self.compression:
-            surpr += self.compression_improvement()
+            surpr += self.compr_impr_kl()
         if self.information_gain:
             surpr += self.inf_gain()
         return surpr

@@ -80,7 +80,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
         for j in xrange(int(np.ceil(obs.shape[0] / float(kl_batch_size)))):
 
             # Save old params for every update.
-            G.dynamics.save_old_params()
+            G.dynamics.save_params()
 
             start = j * kl_batch_size
             end = np.minimum(
@@ -91,7 +91,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 # step_size * invH * grad
                 #                 best_loss_value = np.inf
                 for step_size in [0.01]:
-                    G.dynamics.save_old_params()
+                    G.dynamics.save_params()
 #                     loss_value = G.dynamics.train_update_fn(
 #                         _inputs[start:end], _targets[start:end], step_size)
                     out = G.dynamics.pred_fn(_inputs)
@@ -101,7 +101,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 #                         float(G.dynamics.f_kl_div_closed_form()), 0, 1000)
                     # If using replay pool, undo updates.
                     if use_replay_pool:
-                        G.dynamics.reset_to_old_params()
+                        G.dynamics.load_prev_params()
             else:
                 # Update model weights based on current minibatch.
                 for _ in xrange(n_itr_update):
@@ -115,7 +115,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 kl[k] = kl_div
             # If using replay pool, undo updates.
             if use_replay_pool:
-                G.dynamics.reset_to_old_params()
+                G.dynamics.load_prev_params()
 
         # Last element in KL vector needs to be replaced by second last one
         # because the actual last observation has no next observation.

@@ -40,7 +40,7 @@ class BayesianDenseLayer(lasagne.layers.Layer):
         self.disable_variance = disable_variance
 
         # Convert prior_sd into prior_rho.
-        prior_rho = self.std_to_log(self.prior_sd)
+        prior_rho = self.inv_softplus(self.prior_sd)
 
         self.num_weights = self.num_inputs * (self.num_units + 1)
 
@@ -178,7 +178,7 @@ class BayesianDenseLayer(lasagne.layers.Layer):
                 oldparam=True
             )
 
-    def log_to_std(self, rho):
+    def softplus(self, rho):
         """Transformation for allowing rho in \mathbb{R}, rather than \mathbb{R}_+
 
         This makes sure that we don't get negative stds. However, a downside might be
@@ -186,8 +186,8 @@ class BayesianDenseLayer(lasagne.layers.Layer):
         """
         return T.log(1 + T.exp(rho))
 
-    def std_to_log(self, sigma):
-        """Reverse log_to_std transformation."""
+    def inv_softplus(self, sigma):
+        """Reverse softplus transformation."""
         return np.log(np.exp(sigma) - 1)
 
     def get_W(self):
@@ -198,18 +198,18 @@ class BayesianDenseLayer(lasagne.layers.Layer):
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(1, 1), avg=0., std=1.,
                                         dtype=theano.config.floatX)
-            W = self.mu + T.mean(self.log_to_std(self.rho)) * epsilon * mask
+            W = self.mu + T.mean(self.softplus(self.rho)) * epsilon * mask
         elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, ), avg=0., std=1.,
                                         dtype=theano.config.floatX)
             W = self.mu + \
-                (self.log_to_std(self.rho) * epsilon * mask).dimshuffle(0, 'x')
+                (self.softplus(self.rho) * epsilon * mask).dimshuffle(0, 'x')
         elif self.group_variance_by == BNN.GroupVarianceBy.WEIGHT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
                                         dtype=theano.config.floatX)
-            W = self.mu + epsilon * self.log_to_std(self.rho) * mask
+            W = self.mu + epsilon * self.softplus(self.rho) * mask
         else:
             raise Exception('Group variance by unknown!')
         self.W = W
@@ -225,31 +225,31 @@ class BayesianDenseLayer(lasagne.layers.Layer):
                                         dtype=theano.config.floatX)
             # T.mean is a hack to get 2D broadcasting on a scalar.
             b = self.b_mu + \
-                T.mean(self.log_to_std(self.b_rho)) * epsilon * mask
+                T.mean(self.softplus(self.b_rho)) * epsilon * mask
         elif self.group_variance_by == BNN.GroupVarianceBy.UNIT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(1,), avg=0., std=1.,
                                         dtype=theano.config.floatX)
             b = self.b_mu + \
-                T.mean(self.log_to_std(self.b_rho)) * epsilon * mask
+                T.mean(self.softplus(self.b_rho)) * epsilon * mask
         elif self.group_variance_by == BNN.GroupVarianceBy.WEIGHT:
             # Here we generate random epsilon values from a normal distribution
             epsilon = self._srng.normal(size=(self.num_units,), avg=0., std=1.,
                                         dtype=theano.config.floatX)
-            b = self.b_mu + self.log_to_std(self.b_rho) * epsilon * mask
+            b = self.b_mu + self.softplus(self.b_rho) * epsilon * mask
         else:
             raise Exception('Group variance by unknown!')
         self.b = b
         return b
 
-    def save_old_params(self):
+    def save_params(self):
         """Save old parameter values for KL calculation."""
         self.mu_old.set_value(self.mu.get_value())
         self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
         self.b_rho_old.set_value(self.b_rho.get_value())
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         """Reset to old parameter values for KL calculation."""
         self.mu.set_value(self.mu_old.get_value())
         self.rho.set_value(self.rho_old.get_value())
@@ -274,37 +274,37 @@ class BayesianDenseLayer(lasagne.layers.Layer):
 
     def kl_div_new_old(self):
         kl_div = self.kl_div_p_q(
-            self.mu, self.log_to_std(self.rho), self.mu_old, self.log_to_std(self.rho_old))
-#         kl_div += self.kl_div_p_q(self.b_mu, self.log_to_std(self.b_rho),
-# self.b_mu_old, self.log_to_std(self.b_rho_old))
+            self.mu, self.softplus(self.rho), self.mu_old, self.softplus(self.rho_old))
+#         kl_div += self.kl_div_p_q(self.b_mu, self.softplus(self.b_rho),
+# self.b_mu_old, self.softplus(self.b_rho_old))
         return kl_div
 
     def kl_div_old_new(self):
         kl_div = self.kl_div_p_q(
-            self.mu_old, self.log_to_std(self.rho_old), self.mu, self.log_to_std(self.rho))
+            self.mu_old, self.softplus(self.rho_old), self.mu, self.softplus(self.rho))
 #         kl_div += self.kl_div_p_q(self.b_mu_old,
-# self.log_to_std(self.b_rho_old), self.b_mu, self.log_to_std(self.b_rho))
+# self.softplus(self.b_rho_old), self.b_mu, self.softplus(self.b_rho))
         return kl_div
 
     def kl_div_new_prior(self):
         kl_div = self.kl_div_p_q(
-            self.mu, self.log_to_std(self.rho), 0., self.prior_sd)
+            self.mu, self.softplus(self.rho), 0., self.prior_sd)
 #         kl_div += self.kl_div_p_q(self.b_mu,
-# self.log_to_std(self.b_rho), 0., self.prior_sd)
+# self.softplus(self.b_rho), 0., self.prior_sd)
         return kl_div
 
     def kl_div_old_prior(self):
         kl_div = self.kl_div_p_q(
-            self.mu_old, self.log_to_std(self.rho_old), 0., self.prior_sd)
+            self.mu_old, self.softplus(self.rho_old), 0., self.prior_sd)
 #         kl_div += self.kl_div_p_q(self.b_mu_old,
-# self.log_to_std(self.b_rho_old), 0., self.prior_sd)
+# self.softplus(self.b_rho_old), 0., self.prior_sd)
         return kl_div
 
     def kl_div_prior_new(self):
         kl_div = self.kl_div_p_q(
-            0., self.prior_sd, self.mu,  self.log_to_std(self.rho))
+            0., self.prior_sd, self.mu,  self.softplus(self.rho))
 #         kl_div += self.kl_div_p_q(0., self.prior_sd,
-#                                   self.b_mu, self.log_to_std(self.b_rho))
+#                                   self.b_mu, self.softplus(self.b_rho))
         return kl_div
 
     def get_output_for(self, input, **kwargs):
@@ -337,12 +337,12 @@ class BayesianDenseLayer(lasagne.layers.Layer):
                 'Local reparametrization trick not supported for tied variances per layer!')
 
         elif self.group_variance_by == 'unit':
-            delta = T.dot(T.square(input), T.tile(T.square(self.log_to_std(self.rho)), [
-                          self.num_units, 1]).T) + T.tile(T.square(self.log_to_std(self.b_rho)), self.num_units)
+            delta = T.dot(T.square(input), T.tile(T.square(self.softplus(self.rho)), [
+                          self.num_units, 1]).T) + T.tile(T.square(self.softplus(self.b_rho)), self.num_units)
 
         elif self.group_variance_by == 'weight':
-            delta = T.dot(T.square(input), T.square(self.log_to_std(
-                self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
+            delta = T.dot(T.square(input), T.square(self.softplus(
+                self.rho))) + T.square(self.softplus(self.b_rho)).dimshuffle('x', 0)
 
         else:
             raise Exception(
@@ -488,23 +488,23 @@ class BNN(LasagnePowered, Serializable):
         # Compile theano functions.
         self.build_model()
 
-    def save_old_params(self):
+    def save_params(self):
         layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.save_old_params()
+            layer.save_params()
         if self.update_likelihood_sd:
             self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.reset_to_old_params()
+            layer.load_prev_params()
         if self.update_likelihood_sd:
             self.likelihood_sd.set_value(self.old_likelihood_sd.get_value())
 
-    def compression_improvement(self):
+    def compr_impr(self):
         """KL divergence KL[old_param||new_param]"""
         layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
@@ -560,7 +560,7 @@ class BNN(LasagnePowered, Serializable):
     def surprise(self, **kwargs):
 
         if self.surprise_type == BNN.SurpriseType.COMPR:
-            surpr = self.compression_improvement()
+            surpr = self.compr_impr()
         elif self.surprise_type == BNN.SurpriseType.INFGAIN:
             surpr = self.inf_gain()
         elif self.surprise_type == BNN.SurpriseType.BALD:

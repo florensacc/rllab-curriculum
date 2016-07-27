@@ -10,6 +10,7 @@ from sandbox.rocky.tf.misc import tensor_utils
 from sandbox.rocky.tf.distributions.categorical import Categorical
 from sandbox.rocky.tf.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from sandbox.rocky.tf.optimizers.lbfgs_optimizer import LbfgsOptimizer
+from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 import sandbox.rocky.tf.core.layers as L
 from rllab.core.serializable import Serializable
 from rllab.misc import ext
@@ -33,9 +34,11 @@ class CategoricalMLPRegressor(LayersPowered, Serializable):
             hidden_sizes=(32, 32),
             hidden_nonlinearity=tf.nn.tanh,
             optimizer=None,
+            tr_optimizer=None,
             use_trust_region=True,
             step_size=0.01,
             normalize_inputs=True,
+            no_initial_trust_region=True,
     ):
         """
         :param input_shape: Shape of the input data.
@@ -49,15 +52,14 @@ class CategoricalMLPRegressor(LayersPowered, Serializable):
         Serializable.quick_init(self, locals())
 
         with tf.variable_scope(name):
-
             if optimizer is None:
-                if use_trust_region:
-                    optimizer = PenaltyLbfgsOptimizer(name="optimizer")
-                else:
-                    optimizer = LbfgsOptimizer(name="optimizer")
+                optimizer = LbfgsOptimizer(name="optimizer")
+            if tr_optimizer is None:
+                tr_optimizer = ConjugateGradientOptimizer()
 
             self.output_dim = output_dim
-            self._optimizer = optimizer
+            self.optimizer = optimizer
+            self.tr_optimizer = tr_optimizer
 
             if prob_network is None:
                 prob_network = MLP(
@@ -103,72 +105,68 @@ class CategoricalMLPRegressor(LayersPowered, Serializable):
 
             predicted = tensor_utils.to_onehot_sym(tf.argmax(prob_var, dimension=1), output_dim)
 
-            self._prob_network = prob_network
-            self._f_predict = tensor_utils.compile_function([xs_var], predicted)
-            self._f_prob = tensor_utils.compile_function([xs_var], prob_var)
-            self._l_prob = l_prob
+            self.prob_network = prob_network
+            self.f_predict = tensor_utils.compile_function([xs_var], predicted)
+            self.f_prob = tensor_utils.compile_function([xs_var], prob_var)
+            self.l_prob = l_prob
 
-            optimizer_args = dict(
-                loss=loss,
-                target=self,
-                network_outputs=[prob_var],
-            )
+            self.optimizer.update_opt(loss=loss, target=self, network_outputs=[prob_var], inputs=[xs_var, ys_var])
+            self.tr_optimizer.update_opt(loss=loss, target=self, network_outputs=[prob_var],
+                                         inputs=[xs_var, ys_var, old_prob_var],
+                                         leq_constraint=(mean_kl, step_size)
+                                         )
 
-            if use_trust_region:
-                optimizer_args["leq_constraint"] = (mean_kl, step_size)
-                optimizer_args["inputs"] = [xs_var, ys_var, old_prob_var]
-            else:
-                optimizer_args["inputs"] = [xs_var, ys_var]
+            self.use_trust_region = use_trust_region
+            self.name = name
 
-            self._optimizer.update_opt(**optimizer_args)
-
-            self._use_trust_region = use_trust_region
-            self._name = name
-
-            self._normalize_inputs = normalize_inputs
-            self._x_mean_var = x_mean_var
-            self._x_std_var = x_std_var
+            self.normalize_inputs = normalize_inputs
+            self.x_mean_var = x_mean_var
+            self.x_std_var = x_std_var
+            self.first_optimized = not no_initial_trust_region
 
     def fit(self, xs, ys):
-        if self._normalize_inputs:
+        if self.normalize_inputs:
             # recompute normalizing constants for inputs
             new_mean = np.mean(xs, axis=0, keepdims=True)
             new_std = np.std(xs, axis=0, keepdims=True) + 1e-8
             tf.get_default_session().run(tf.group(
-                tf.assign(self._x_mean_var, new_mean),
-                tf.assign(self._x_std_var, new_std),
+                tf.assign(self.x_mean_var, new_mean),
+                tf.assign(self.x_std_var, new_std),
             ))
-        if self._use_trust_region:
-            old_prob = self._f_prob(xs)
+        if self.use_trust_region and self.first_optimized:
+            old_prob = self.f_prob(xs)
             inputs = [xs, ys, old_prob]
+            optimizer = self.tr_optimizer
         else:
             inputs = [xs, ys]
-        loss_before = self._optimizer.loss(inputs)
-        if self._name:
-            prefix = self._name + "_"
+            optimizer = self.optimizer
+        loss_before = optimizer.loss(inputs)
+        if self.name:
+            prefix = self.name + "_"
         else:
             prefix = ""
         logger.record_tabular(prefix + 'LossBefore', loss_before)
-        self._optimizer.optimize(inputs)
-        loss_after = self._optimizer.loss(inputs)
+        optimizer.optimize(inputs)
+        loss_after = optimizer.loss(inputs)
         logger.record_tabular(prefix + 'LossAfter', loss_after)
         logger.record_tabular(prefix + 'dLoss', loss_before - loss_after)
+        self.first_optimized = True
 
     def predict(self, xs):
-        return self._f_predict(np.asarray(xs))
+        return self.f_predict(np.asarray(xs))
 
     def predict_log_likelihood(self, xs, ys):
-        prob = self._f_prob(np.asarray(xs))
+        prob = self.f_prob(np.asarray(xs))
         return self._dist.log_likelihood(np.asarray(ys), dict(prob=prob))
 
     def dist_info_sym(self, x_var):
-        normalized_xs_var = (x_var - self._x_mean_var) / self._x_std_var
-        prob = L.get_output(self._l_prob, {self._prob_network.input_layer: normalized_xs_var})
+        normalized_xs_var = (x_var - self.x_mean_var) / self.x_std_var
+        prob = L.get_output(self.l_prob, {self.prob_network.input_layer: normalized_xs_var})
         return dict(prob=prob)
 
     def log_likelihood_sym(self, x_var, y_var):
-        normalized_xs_var = (x_var - self._x_mean_var) / self._x_std_var
-        prob = L.get_output(self._l_prob, {self._prob_network.input_layer: normalized_xs_var})
+        normalized_xs_var = (x_var - self.x_mean_var) / self.x_std_var
+        prob = L.get_output(self.l_prob, {self.prob_network.input_layer: normalized_xs_var})
         return self._dist.log_likelihood_sym(y_var, dict(prob=prob))
 
     def get_param_values(self, **tags):

@@ -36,6 +36,40 @@ class StubBase(object):
                 raise
             return StubAttr(self, item)
 
+    def __pow__(self, power, modulo=None):
+        return StubMethodCall(self, "__pow__", [power, modulo], dict())
+
+    def __call__(self, *args, **kwargs):
+        return StubMethodCall(self.obj, self.attr_name, args, kwargs)
+
+    def __add__(self, other):
+        return StubMethodCall(self, "__add__", [other], dict())
+
+    def __rmul__(self, other):
+        return StubMethodCall(self, "__rmul__", [other], dict())
+
+    def __div__(self, other):
+        return StubMethodCall(self, "__div__", [other], dict())
+
+    def __rdiv__(self, other):
+        return StubMethodCall(BinaryOp(), "rdiv", [self, other], dict())#self, "__rdiv__", [other], dict())
+
+    def __rpow__(self, power, modulo=None):
+        return StubMethodCall(self, "__rpow__", [power, modulo], dict())
+
+
+class BinaryOp(Serializable):
+
+    def __init__(self):
+        Serializable.quick_init(self, locals())
+
+    def rdiv(self, a, b):
+        return b / a
+    # def __init__(self, opname, a, b):
+    #     self.opname = opname
+    #     self.a = a
+    #     self.b = b
+
 
 class StubAttr(StubBase):
     def __init__(self, obj, attr_name):
@@ -49,9 +83,6 @@ class StubAttr(StubBase):
     @property
     def attr_name(self):
         return self.__dict__["_attr_name"]
-
-    def __call__(self, *args, **kwargs):
-        return StubMethodCall(self.obj, self.attr_name, args, kwargs)
 
     def __str__(self):
         return "StubAttr(%s, %s)" % (str(self.obj), str(self.attr_name))
@@ -255,7 +286,8 @@ def stub(glbs):
     # replace the __init__ method in all classes
     # hacky!!!
     for k, v in glbs.items():
-        if isinstance(v, type) and v != StubClass:  # look at all variables that are instances of a class (not yet Stub)
+        # look at all variables that are instances of a class (not yet Stub)
+        if isinstance(v, type) and v != StubClass:
             glbs[k] = StubClass(v)  # and replaces them by a the same but Stub
 
 
@@ -339,6 +371,7 @@ def run_experiment_lite(
 
     global exp_count
     global remote_confirmed
+    config.USE_GPU = use_gpu
 
     # params_list = []
 
@@ -546,12 +579,13 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
     params = dict(params, log_dir=docker_log_dir)
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
-    #     command_list.append('sleep 9999999')
     if pre_commands is not None:
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
     command_list.append(to_local_command(
         params, osp.join(config.DOCKER_CODE_DIR, script), use_gpu=use_gpu))
+    # We for 2 min sleep after termination to allow for last syncs.
+    post_commands = ['sleep 120']
     if post_commands is not None:
         command_list.extend(post_commands)
     return command_prefix + "'" + "; ".join(command_list) + "'"

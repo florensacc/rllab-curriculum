@@ -17,6 +17,7 @@ from rllab.misc import special
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 
+
 class BernoulliMLPRegressor(LasagnePowered, Serializable):
     """
     A class for performing regression (or classification, really) by fitting a bernoulli distribution to each of the
@@ -27,6 +28,7 @@ class BernoulliMLPRegressor(LasagnePowered, Serializable):
             self,
             input_shape,
             output_dim,
+            predict_all=True,
             hidden_sizes=(32, 32),
             hidden_nonlinearity=NL.rectify,
             optimizer=None,
@@ -63,7 +65,6 @@ class BernoulliMLPRegressor(LasagnePowered, Serializable):
             output_nonlinearity=NL.sigmoid,
         )
 
-
         l_p = p_network.output_layer
 
         LasagnePowered.__init__(self, [l_p])
@@ -90,16 +91,18 @@ class BernoulliMLPRegressor(LasagnePowered, Serializable):
         old_info_vars = dict(p=old_p_var)
         info_vars = dict(p=p_var)  # posterior of the latent at every step, wrt obs-act. Same along batch if recurrent
 
-        dist = self._dist = Bernoulli()
+        dist = self._dist = Bernoulli(output_dim)
 
         mean_kl = TT.mean(dist.kl_sym(old_info_vars, info_vars))
+        self._mean_kl = ext.compile_function([xs_var, old_p_var], mean_kl)  # if not using TR, still log KL
 
-        loss = - TT.mean(dist.log_likelihood_sym(ys_var, info_vars)) # regressor just wants to min -loglik of data ys
+        loss = - TT.mean(dist.log_likelihood_sym(ys_var, info_vars))  # regressor just wants to min -loglik of data ys
 
-        predicted = p_var >= 0.5
+        predicted = p_var >= 0.5  # this gives 0 or 1, depending what is closer to the p_var
 
         self._f_predict = ext.compile_function([xs_var], predicted)
-        self._f_p = ext.compile_function([xs_var], p_var)  # for consistency with gauss_mlp_reg this should be ._f_pdists
+        self._f_p = ext.compile_function([xs_var],
+                                         p_var)  # for consistency with gauss_mlp_reg this should be ._f_pdists
         self._l_p = l_p
 
         optimizer_args = dict(
@@ -128,8 +131,8 @@ class BernoulliMLPRegressor(LasagnePowered, Serializable):
             # recompute normalizing constants for inputs
             self._x_mean_var.set_value(np.mean(xs, axis=0, keepdims=True))
             self._x_std_var.set_value(np.std(xs, axis=0, keepdims=True) + 1e-8)
+        old_p = self._f_p(xs)  #this is only needed for TR or for logging the mean KL
         if self._use_trust_region:
-            old_p = self._f_p(xs)
             inputs = [xs, ys, old_p]
         else:
             inputs = [xs, ys]
@@ -138,10 +141,14 @@ class BernoulliMLPRegressor(LasagnePowered, Serializable):
             prefix = self._name + "_"
         else:
             prefix = ""
+        mean_kl_before = self._mean_kl(xs, old_p)
+        logger.record_tabular(prefix + 'MeanKL_Before', mean_kl_before)
         logger.record_tabular(prefix + 'LossBefore', loss_before)
         self._optimizer.optimize(inputs)
         loss_after = self._optimizer.loss(inputs)
+        mean_kl_after = self._mean_kl(xs, old_p)
         logger.record_tabular(prefix + 'LossAfter', loss_after)
+        logger.record_tabular(prefix + 'MeanKL_After', mean_kl_after)
         logger.record_tabular(prefix + 'dLoss', loss_before - loss_after)
 
     def predict(self, xs):

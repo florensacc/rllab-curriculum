@@ -1,0 +1,60 @@
+{
+  "args_data": "Y2NvcHlfcmVnCl9yZWNvbnN0cnVjdG9yCnAxCihjcmxsYWIubWlzYy5pbnN0cnVtZW50ClN0dWJNZXRob2RDYWxsCnAyCmNfX2J1aWx0aW5fXwpvYmplY3QKcDMKTnRScDQKKGRwNQpTJ19fYXJncycKcDYKKGcxCihjcmxsYWIubWlzYy5pbnN0cnVtZW50ClN0dWJPYmplY3QKcDcKZzMKTnRScDgKKGRwOQpTJ2FyZ3MnCnAxMAoodHNTJ3Byb3h5X2NsYXNzJwpwMTEKY3JsbGFiLmFsZ29zLnRycG8KVFJQTwpwMTIKc1Mna3dhcmdzJwpwMTMKKGRwMTQKUydiYXNlbGluZScKcDE1CmcxCihnNwpnMwpOdFJwMTYKKGRwMTcKZzEwCih0c2cxMQpjcmxsYWIuYmFzZWxpbmVzLmxpbmVhcl9mZWF0dXJlX2Jhc2VsaW5lCkxpbmVhckZlYXR1cmVCYXNlbGluZQpwMTgKc2cxMwooZHAxOQpTJ2Vudl9zcGVjJwpwMjAKZzEKKGNybGxhYi5taXNjLmluc3RydW1lbnQKU3R1YkF0dHIKcDIxCmczCk50UnAyMgooZHAyMwpTJ19vYmonCnAyNApnMQooZzcKZzMKTnRScDI1CihkcDI2CmcxMAoodHNnMTEKY3JsbGFiLmVudnMubm9ybWFsaXplZF9lbnYKTm9ybWFsaXplZEVudgpwMjcKc2cxMwooZHAyOApTJ2VudicKcDI5CmcxCihnNwpnMwpOdFJwMzAKKGRwMzEKZzEwCih0c2cxMQpjcmxsYWIuZW52cy5tdWpvY28uc3dpbW1lcl9lbnYKU3dpbW1lckVudgpwMzIKc2cxMwooZHAzMwpzYnNzYnNTJ19hdHRyX25hbWUnCnAzNApTJ3NwZWMnCnAzNQpzYnNzYnNTJ2JhdGNoX3NpemUnCnAzNgpJNTAwMDAKc1MnZGlzY291bnQnCnAzNwpGMC45ODk5OTk5OTk5OTk5OTk5OQpzUydzdGVwX3NpemUnCnAzOApGMC4wMQpzUyduX2l0cicKcDM5CkkyMDAKc2cyOQpnMjUKc1MncG9saWN5JwpwNDAKZzEKKGc3CmczCk50UnA0MQooZHA0MgpnMTAKKHRzZzExCmNybGxhYi5wb2xpY2llcy5nYXVzc2lhbl9tbHBfcG9saWN5CkdhdXNzaWFuTUxQUG9saWN5CnA0MwpzZzEzCihkcDQ0CmcyMApnMQooZzIxCmczCk50UnA0NQooZHA0NgpnMjQKZzI1CnNnMzQKZzM1CnNic1MnaGlkZGVuX3NpemVzJwpwNDcKKEkzMgpJMzIKdHA0OApzc2JzUydtYXhfcGF0aF9sZW5ndGgnCnA0OQpJNTAwCnNzYlMndHJhaW4nCnA1MAoodChkcDUxCnRwNTIKc1MnX19rd2FyZ3MnCnA1MwooZHA1NApzYi4=", 
+  "exp_name": "swimmer-trpo-50kBs-200itr-500pl-20", 
+  "json_args": {
+    "algo": {
+      "_name": "rllab.algos.trpo.TRPO", 
+      "batch_size": 50000, 
+      "discount": 0.99, 
+      "max_path_length": 500, 
+      "n_itr": 200, 
+      "step_size": 0.01
+    }, 
+    "baseline": {
+      "_name": "rllab.baselines.linear_feature_baseline.LinearFeatureBaseline", 
+      "env_spec": {
+        "attr": "spec", 
+        "obj": {
+          "_name": "rllab.envs.normalized_env.NormalizedEnv", 
+          "env": {
+            "_name": "rllab.envs.mujoco.swimmer_env.SwimmerEnv"
+          }
+        }
+      }
+    }, 
+    "env": {
+      "_name": "rllab.envs.normalized_env.NormalizedEnv", 
+      "env": {
+        "_name": "rllab.envs.mujoco.swimmer_env.SwimmerEnv"
+      }
+    }, 
+    "policy": {
+      "_name": "rllab.policies.gaussian_mlp_policy.GaussianMLPPolicy", 
+      "env_spec": {
+        "attr": "spec", 
+        "obj": {
+          "_name": "rllab.envs.normalized_env.NormalizedEnv", 
+          "env": {
+            "_name": "rllab.envs.mujoco.swimmer_env.SwimmerEnv"
+          }
+        }
+      }, 
+      "hidden_sizes": [
+        32, 
+        32
+      ]
+    }
+  }, 
+  "log_dir": "/tmp/expt", 
+  "log_tabular_only": false, 
+  "n_parallel": 8, 
+  "params_log_file": "params.json", 
+  "plot": false, 
+  "resume_from": null, 
+  "seed": 20, 
+  "snapshot_mode": "last", 
+  "tabular_log_file": "progress.csv", 
+  "text_log_file": "debug.log", 
+  "variant_data": null, 
+  "variant_log_file": "variant.json"
+}

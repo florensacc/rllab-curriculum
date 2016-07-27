@@ -98,11 +98,13 @@ def load_dataset_MNIST():
 
 def load_dataset_MNIST_plus():
     X_train, y_train, X_test, y_test = load_dataset_MNIST()
+#     X_train = X_train - 1.
     # add action and reward signal.
     act = np.tanh(np.linspace(0, 1, X_train.shape[0]))
     act = np.vstack((act, act)).T
     rew = np.sin(np.linspace(0, 1, X_train.shape[0]))[:, None]
     return X_train, y_train, X_test, y_test, act, rew
+
 
 def plot_mnist_digit(image, im):
     """ Plot a single MNIST image."""
@@ -211,9 +213,9 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
     if shuffle:
         indices = np.arange(len(inputs))
         np.random.shuffle(indices)
-    for start_idx in range(0, len(inputs) - batchsize + 1, batchsize):
+    for start_idx in xrange(0, len(inputs), batchsize):
         if shuffle:
             excerpt = indices[start_idx:start_idx + batchsize]
         else:
             excerpt = slice(start_idx, start_idx + batchsize)
-        yield inputs[excerpt], targets[excerpt]
+        yield inputs[excerpt], targets[excerpt], excerpt

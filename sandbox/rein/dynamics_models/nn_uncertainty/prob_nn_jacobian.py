@@ -92,7 +92,7 @@ class VBNNLayer(lasagne.layers.Layer):
                                            dtype=theano.config.floatX)  # @UndefinedVariable
         # Here we calculate weights based on shifting and rescaling according
         # to mean and variance (paper step 2)
-        W = self.mu + self.log_to_std(self.rho) * self.epsilon_W_ph
+        W = self.mu + self.softplus(self.rho) * self.epsilon_W_ph
         self.W = W
         return W
 
@@ -101,7 +101,7 @@ class VBNNLayer(lasagne.layers.Layer):
         # (paper step 1)
         self.epsilon_b = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
                                            dtype=theano.config.floatX)  # @UndefinedVariable
-        b = self.b_mu + self.log_to_std(self.b_rho) * self.epsilon_b_ph
+        b = self.b_mu + self.softplus(self.b_rho) * self.epsilon_b_ph
         self.b = b
         return b
 
@@ -122,22 +122,22 @@ class VBNNLayer(lasagne.layers.Layer):
             input = input.flatten(2)
 
         gamma = T.dot(input, self.mu) + self.b_mu.dimshuffle('x', 0)
-        delta = T.dot(T.square(input), T.square(self.log_to_std(
-            self.rho))) + T.square(self.log_to_std(self.b_rho)).dimshuffle('x', 0)
+        delta = T.dot(T.square(input), T.square(self.softplus(
+            self.rho))) + T.square(self.softplus(self.b_rho)).dimshuffle('x', 0)
         self.epsilon_T = self._srng.normal(size=(self.num_units,), avg=0., std=self.prior_sd,
                                            dtype=theano.config.floatX)  # @UndefinedVariable
         activation = gamma + T.sqrt(delta) * self.epsilon_T_ph
 
         return self.nonlinearity(activation)
 
-    def save_old_params(self):
+    def save_params(self):
         """Save old parameter values for KL calculation."""
         self.mu_old.set_value(self.mu.get_value())
         self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
         self.b_rho_old.set_value(self.b_rho.get_value())
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         self.mu.set_value(self.mu_old.get_value())
         self.rho.set_value(self.rho_old.get_value())
         self.b_mu.set_value(self.b_mu_old.get_value())
@@ -151,7 +151,7 @@ class VBNNLayer(lasagne.layers.Layer):
         return T.sum(
             numerator / denominator + T.log(q_std) - T.log(p_std))
 
-    def log_to_std(self, rho):
+    def softplus(self, rho):
         """Transformation for allowing rho in \mathbb{R}, rather than \mathbb{R}_+
 
         This makes sure that we don't get negative stds. However, a downside might be
@@ -161,30 +161,30 @@ class VBNNLayer(lasagne.layers.Layer):
 
     def kl_div_new_old(self):
         old_mean = self.mu_old
-        old_std = self.log_to_std(self.rho_old) * self.prior_sd
+        old_std = self.softplus(self.rho_old) * self.prior_sd
         new_mean = self.mu
-        new_std = self.log_to_std(self.rho) * self.prior_sd
+        new_std = self.softplus(self.rho) * self.prior_sd
         kl_div = self.kl_div_p_q(new_mean, new_std, old_mean, old_std)
 
         old_mean = self.b_mu_old
-        old_std = self.log_to_std(self.b_rho_old) * self.prior_sd
+        old_std = self.softplus(self.b_rho_old) * self.prior_sd
         new_mean = self.b_mu
-        new_std = self.log_to_std(self.b_rho) * self.prior_sd
+        new_std = self.softplus(self.b_rho) * self.prior_sd
         kl_div += self.kl_div_p_q(new_mean, new_std, old_mean, old_std)
 
         return kl_div
 
     def kl_div_old_new(self):
         old_mean = self.mu_old
-        old_std = self.log_to_std(self.rho_old) * self.prior_sd
+        old_std = self.softplus(self.rho_old) * self.prior_sd
         new_mean = self.mu
-        new_std = self.log_to_std(self.rho) * self.prior_sd
+        new_std = self.softplus(self.rho) * self.prior_sd
         kl_div = self.kl_div_p_q(old_mean, old_std, new_mean, new_std)
 
         old_mean = self.b_mu_old
-        old_std = self.log_to_std(self.b_rho_old) * self.prior_sd
+        old_std = self.softplus(self.b_rho_old) * self.prior_sd
         new_mean = self.b_mu
-        new_std = self.log_to_std(self.b_rho) * self.prior_sd
+        new_std = self.softplus(self.b_rho) * self.prior_sd
         kl_div += self.kl_div_p_q(old_mean, old_std, new_mean, new_std)
 
         return kl_div
@@ -193,11 +193,11 @@ class VBNNLayer(lasagne.layers.Layer):
         prior_mean = 0.
         prior_std = self.prior_sd
         new_mean = self.mu
-        new_std = self.log_to_std(self.rho) * self.prior_sd
+        new_std = self.softplus(self.rho) * self.prior_sd
         kl_div = self.kl_div_p_q(new_mean, new_std, prior_mean, prior_std)
 
         new_mean = self.b_mu
-        new_std = self.log_to_std(self.b_rho) * self.prior_sd
+        new_std = self.softplus(self.b_rho) * self.prior_sd
         kl_div += self.kl_div_p_q(new_mean, new_std, prior_mean, prior_std)
 
         return kl_div
@@ -206,11 +206,11 @@ class VBNNLayer(lasagne.layers.Layer):
         prior_mean = 0.
         prior_std = self.prior_sd
         new_mean = self.mu
-        new_std = self.log_to_std(self.rho) * self.prior_sd
+        new_std = self.softplus(self.rho) * self.prior_sd
         kl_div = self.kl_div_p_q(prior_mean, prior_std, new_mean, new_std)
 
         new_mean = self.b_mu
-        new_std = self.log_to_std(self.b_rho) * self.prior_sd
+        new_std = self.softplus(self.b_rho) * self.prior_sd
         kl_div += self.kl_div_p_q(prior_mean, prior_std, new_mean, new_std)
 
         return kl_div
@@ -272,17 +272,17 @@ class VBNN:
         if self.use_reverse_kl_reg:
             assert self.symbolic_prior_kl == True
 
-    def save_old_params(self):
+    def save_params(self):
         layers = filter(lambda l: l.name == 'problayer',
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.save_old_params()
+            layer.save_params()
 
-    def reset_to_old_params(self):
+    def load_prev_params(self):
         layers = filter(lambda l: l.name == 'problayer',
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
-            layer.reset_to_old_params()
+            layer.load_prev_params()
 
     def get_kl_div_sampled(self):
         """Sampled KL calculation"""
@@ -664,7 +664,7 @@ class VBNN:
             for batch in iterate_minibatches(X_train, T_train, self.batch_size, shuffle=True):
 
                 # Fix old params for KL divergence computation.
-                self.save_old_params()
+                self.save_params()
 
                 # Train current minibatch.
                 inputs, targets = batch

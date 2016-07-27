@@ -36,6 +36,7 @@ class NPO_snn(BatchPolopt):
             reward_coef=0,
             self_normalize=False,
             log_individual_latents=False,  # to log the progress of each individual latent
+            log_deterministic=False,  # log the performance of the policy with std=0 (for each latent separate)
             logged_MI=[],  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
             n_samples=0,
             optimizer=None,
@@ -49,6 +50,7 @@ class NPO_snn(BatchPolopt):
         self.optimizer = optimizer
         self.step_size = step_size
         self.log_individual_latents = log_individual_latents
+        self.log_deterministic = log_deterministic
 
         self.hallucinator = hallucinator
         self.latent_regressor = latent_regressor
@@ -66,24 +68,26 @@ class NPO_snn(BatchPolopt):
             for a in range(self.env.spec.action_space.flat_dim):
                 self.logged_MI.append(([], [a]))
         self.other_regressors = []
-        for (obs, actions) in self.logged_MI:
-            temp_lat_reg = Latent_regressor(
-                env_spec=self.env.spec,
-                policy=self.policy,
-                recurrent=True,
-                obs_regressed=obs,  # this is the x-position of the com
-                act_regressed=actions,
-                use_only_sign=False,  # for the regressor we use only the sign to estimate the post
-                noisify_traj_coef=0,
-                optimizer=None,  # this defaults to LBFGS, for first order, put 'fist_order'
-                regressor_args={
-                    'hidden_sizes': (32, 32),
-                    'name': 'latent_reg_obs{}_act{}'.format(obs, actions),
-                    'predict_all': True,  # use all the predictions and not only the last
-                    'use_trust_region': True,
+        if self.latent_regressor:  # check that there is a latent_regressor. there isn't if latent_dim=0.
+            for reg_dict in self.logged_MI:  # this is poorly done, should fuse better the 2 dicts
+                regressor_args = self.latent_regressor.regressor_args
+                regressor_args['name'] = 'latent_reg_obs{}_act{}'.format(reg_dict['obs_regressed'], reg_dict['act_regressed'])
+                extra_regressor_args = {
+                    'env_spec': self.latent_regressor.env_spec,
+                    'policy': self.latent_regressor.policy,
+                    'recurrent': reg_dict['recurrent'],
+                    'predict_all': self.latent_regressor.predict_all,
+                    'obs_regressed': self.latent_regressor.obs_regressed,
+                    'act_regressed': self.latent_regressor.act_regressed,
+                    'use_only_sign': self.latent_regressor.use_only_sign,
+                    # 'optimizer': self.latent_regressor.optimizer,
+                    'regressor_args': self.latent_regressor.regressor_args,
                 }
-            )
-            self.other_regressors.append(temp_lat_reg)
+                for key, value in reg_dict.iteritems():
+                    extra_regressor_args[key] = value
+                temp_lat_reg = Latent_regressor(**extra_regressor_args)
+                self.other_regressors.append(temp_lat_reg)
+            pass
 
     # @overrides
     def process_samples(self, itr, paths):
@@ -97,7 +101,6 @@ class NPO_snn(BatchPolopt):
                 print 'the params of the nn are: ', self.policy.get_param_values()
             if np.isnan(path['rewards']).any():
                 print 'The RAW rewards of path {} have a Nan: '.format(i), path['rewards'][0]
-
         undiscounted_returns = [sum(path["rewards"]) for path in paths]
         logger.record_tabular('TrueAverageReturn', np.mean(undiscounted_returns))
 
@@ -107,25 +110,27 @@ class NPO_snn(BatchPolopt):
                 self.latent_regressor.fit(paths)
 
                 for i, path in enumerate(paths):
-                    if np.isnan(path['observations']).any():
-                        print '(after reg.fit) The observation of path {} have a NaN: '.format(i), path['observations'][0]
-                    if np.isnan(path['actions']).any():
-                        print '(after reg.fit) The actions of path {} have a NaN: '.format(i), path['actions'][0]
-                    if np.isnan(path['rewards']).any():
-                        print '(after reg.fit) The rewards of path {} have a Nan: '.format(i), path['rewards'][0]
+                    # if np.isnan(path['observations']).any():
+                    #     print '(after reg.fit) The observation of path {} have a NaN: '.format(i), path['observations'][
+                    #         0]
+                    # if np.isnan(path['actions']).any():
+                    #     print '(after reg.fit) The actions of path {} have a NaN: '.format(i), path['actions'][0]
+                    # if np.isnan(path['rewards']).any():
+                    #     print '(after reg.fit) The rewards of path {} have a Nan: '.format(i), path['rewards'][0]
 
                     path['logli_latent_regressor'] = self.latent_regressor.predict_log_likelihood(
                         [path], [path['agent_infos']['latents']])[0]  # this is for paths usually..
 
-                    if np.isnan(path['logli_latent_regressor']).any():
-                        print 'The logli_latent_reg of path {} have NaN: '.format(i), path['logli_latent_regressor'][0]
+                    # if np.isnan(path['logli_latent_regressor']).any():
+                    #     print 'The logli_latent_reg of path {} have NaN: '.format(i), path['logli_latent_regressor'][0]
 
                     # print "(after reg.pred) The latent sampled in path {} was: {}, " \
                     #       "the mean/actual action was {}{}, the probability of that one is: {}".format(
                     #         i, path['agent_infos']['latents'][0], path['agent_infos']['mean'][0],
                     #         path['actions'][0], path['logli_latent_regressor'][0])
 
-                    path['true_rewards'] = path['rewards']
+                    # print path
+                    path['true_rewards'] = list(path['rewards'])
                     path['rewards'] += self.reward_coef * path[
                         'logli_latent_regressor']  # the logli of the latent is the variable
                     # of the mutual information
@@ -188,35 +193,50 @@ class NPO_snn(BatchPolopt):
     @overrides
     def log_diagnostics(self, paths):
         BatchPolopt.log_diagnostics(self, paths)
-        if self.latent_regressor:
-            with logger.prefix(' Latent regressor logging | '):  # this is mostly useless as log_diagnostics is only tabular
-                self.latent_regressor.log_diagnostics(paths)
-        # log the MI with other obs and action
-        for i, lat_reg in enumerate(self.other_regressors):
-            with logger.prefix(' Extra latent regressor {} | '.format(i)):  # same as above
-                lat_reg.fit(paths)
-                lat_reg.log_diagnostics(paths)
+        if self.policy.latent_dim:
+            if self.latent_regressor:
+                with logger.prefix(
+                        ' Latent regressor logging | '):  # this is mostly useless as log_diagnostics is only tabular
+                    self.latent_regressor.log_diagnostics(paths)
+            # log the MI with other obs and action
+            for i, lat_reg in enumerate(self.other_regressors):
+                with logger.prefix(' Extra latent regressor {} | '.format(i)):  # same as above
+                    lat_reg.fit(paths)
+                    lat_reg.log_diagnostics(paths)
 
-        # we will here add a measure of multimodality: do X rollouts with each value of the latents. ONLY for NOresample
-        if not self.policy.resample:
-            if self.policy.latent_name == 'bernoulli':
-                all_latents = [np.array(i) for i in itertools.product([0, 1], repeat=self.policy.latent_dim)]
-                all_latent_paths = []
-                for lat in all_latents:
-                    self.policy.pre_fix_latent = lat
-                    # perform 5 rollouts with each set of latent values
-                    present_latent_paths = []
-                    for _ in xrange(5):
-                        path = rollout(self.env, self.policy, self.max_path_length)
-                        present_latent_paths.append(path)
-                        all_latent_paths.append(path)
-                    if self.log_individual_latents:
-                        with logger.tabular_prefix(str(lat)), logger.prefix(str(lat)):
-                            self.env.log_diagnostics(present_latent_paths)
-                self.policy.pre_fix_latent = np.array([])
-                # Here I should prevent this to run if I'm not in an environment that has prefix! Now it will just error
+            if self.log_individual_latents and not self.policy.resample: # this is only valid for finite discrete latents!!
+                all_latent_avg_returns = []
+                clustered_by_latents = {}  # this could be done within the distribution to be more general, but ugly
+                for path in paths:
+                    lat = str(path['agent_infos']['latents'][0])
+                    if lat not in clustered_by_latents:
+                        clustered_by_latents[lat] = [path]
+                    else:
+                        clustered_by_latents[lat].append(path)
+                for latent_code, paths in clustered_by_latents.iteritems():
+                    with logger.tabular_prefix(latent_code), logger.prefix(latent_code):
+                        undiscounted_rewards = [sum(path["true_rewards"]) for path in paths]
+                        all_latent_avg_returns.append(np.mean(undiscounted_rewards))
+                        logger.record_tabular('Avg_TrueReturn', np.mean(undiscounted_rewards))
+                        logger.record_tabular('Std_TrueReturn', np.std(undiscounted_rewards))
+                        logger.record_tabular('Max_TrueReturn', np.max(undiscounted_rewards))
+                        if self.log_deterministic:
+                            with self.policy.set_std_to_0():
+                                path = rollout(self.env, self.policy, self.max_path_length)
+                                # path2 = rollout(self.env, self.policy, self.max_path_length)
+                                # diff_rewards = path['rewards'] - path2['rewards']
+                                # print diff_rewards
+                            logger.record_tabular('Deterministic_TrueReturn', np.sum(path["rewards"]))
+
                 with logger.tabular_prefix('all_lat_'), logger.prefix('all_lat_'):
-                    self.env.log_diagnostics(all_latent_paths)
+                    logger.record_tabular('MaxAvgReturn', np.max(all_latent_avg_returns))
+                    logger.record_tabular('MinAvgReturn', np.min(all_latent_avg_returns))
+                    logger.record_tabular('StdAvgReturn', np.std(all_latent_avg_returns))
+        else:
+            if self.log_deterministic:
+                with self.policy.set_std_to_0():
+                    path = rollout(self.env, self.policy, self.max_path_length)
+                logger.record_tabular('Deterministic_TrueReturn', np.sum(path["rewards"]))
 
     @overrides
     def init_opt(self):
@@ -313,7 +333,7 @@ class NPO_snn(BatchPolopt):
         # this should always be 0. If it's not there is a problem.
         mean_kl_before = self.optimizer.constraint_val(all_input_values)
         logger.record_tabular('MeanKL_Before', mean_kl_before)
-        
+
         with logger.prefix(' PolicyOptimize | '):
             self.optimizer.optimize(all_input_values)
 
