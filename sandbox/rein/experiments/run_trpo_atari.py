@@ -9,7 +9,7 @@ from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.core.network import ConvNetwork
 
-os.environ["THEANO_FLAGS"] = "device=cpu"
+os.environ["THEANO_FLAGS"] = "device=gpu"
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
@@ -24,7 +24,7 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(5)
+seeds = range(1)
 # mdp_classes = [MountainCarEnv]
 # mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
 RECORD_VIDEO = False
@@ -38,34 +38,52 @@ param_cart_product = itertools.product(
 )
 
 for mdp, seed in param_cart_product:
-
     network = ConvNetwork(
         input_shape=mdp.spec.observation_space.shape,
         output_dim=mdp.spec.action_space.flat_dim,
-        hidden_sizes=(32,),
-        conv_filters=(16, 16, 16),
-        conv_filter_sizes=(6, 6, 6),
-        conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
+        hidden_sizes=(20,),
+        conv_filters=(16, 16),
+        conv_filter_sizes=(4, 4),
+        conv_strides=(2, 2),
+        conv_pads=(0, 0),
     )
+    # network = ConvNetwork(
+    #     input_shape=mdp.spec.observation_space.shape,
+    #     output_dim=mdp.spec.action_space.flat_dim,
+    #     hidden_sizes=(32,),
+    #     conv_filters=(16, 16, 16),
+    #     conv_filter_sizes=(6, 6, 6),
+    #     conv_strides=(2, 2, 2),
+    #     conv_pads=(0, 2, 2),
+    # )
     policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
         prob_network=network,
     )
 
+    # network = ConvNetwork(
+    #     input_shape=mdp.spec.observation_space.shape,
+    #     output_dim=1,
+    #     hidden_sizes=(32,),
+    #     conv_filters=(16, 16, 16),
+    #     conv_filter_sizes=(6, 6, 6),
+    #     conv_strides=(2, 2, 2),
+    #     conv_pads=(0, 2, 2),
+    # )
     network = ConvNetwork(
         input_shape=mdp.spec.observation_space.shape,
         output_dim=1,
-        hidden_sizes=(32,),
-        conv_filters=(16, 16, 16),
-        conv_filter_sizes=(6, 6, 6),
-        conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
+        hidden_sizes=(20,),
+        conv_filters=(16, 16),
+        conv_filter_sizes=(4, 4),
+        conv_strides=(2, 2),
+        conv_pads=(0, 0),
     )
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(mean_network=network,
-                            batchsize=1000),
+        regressor_args=dict(
+            mean_network=network,
+            batchsize=20000),
     )
 
     algo = TRPO(
@@ -78,15 +96,18 @@ for mdp, seed in param_cart_product:
         max_path_length=5000,
         n_itr=250,
         step_size=0.01,
-        optimizer_args=dict(num_slices=20),
+        optimizer_args=dict(
+            num_slices=10,
+            subsample_factor=0.1),
     )
 
     run_experiment_lite(
         algo.train(),
         exp_prefix="trpo-atari-a",
-        n_parallel=1,
+        n_parallel=2,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",
+        use_gpu=False,
         dry=False,
     )

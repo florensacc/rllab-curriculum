@@ -302,7 +302,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             return - log_p_D_given_w / self.n_samples
         else:
             if self.update_prior:
-                kl = self.kl_div()  # + 0.01 * self.log_p_w_q_w_kl()
+                kl = self.kl_div()
             else:
                 kl = self.log_p_w_q_w_kl()
             return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
@@ -560,6 +560,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
                 def fast_kl_div(loss, params, oldparams, step_size):
                     # FIXME: doesn't work yet for group_variance_by!='weight'.
+                    # FIXME: doesn't work with MVG.
 
                     grads = T.grad(loss, params)
 

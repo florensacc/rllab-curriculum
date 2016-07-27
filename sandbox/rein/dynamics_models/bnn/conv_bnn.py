@@ -79,6 +79,7 @@ class BayesianLayer(lasagne.layers.Layer):
                  prior_sd=None,
                  disable_variance=False,
                  matrix_variate_gaussian=False,
+                 mvg_rank=2,
                  **kwargs):
         super(BayesianLayer, self).__init__(incoming, **kwargs)
 
@@ -91,6 +92,7 @@ class BayesianLayer(lasagne.layers.Layer):
         self.prior_rho = self.inv_softplus(self.prior_sd)
         self.disable_variance = disable_variance
         self._matrix_variate_gaussian = matrix_variate_gaussian
+        self.mvg_rank = mvg_rank
         self.mu_tmp, self.b_mu_tmp, self.rho_tmp, self.b_rho_tmp = None, None, None, None
 
         if self.disable_variance:
@@ -107,7 +109,8 @@ class BayesianLayer(lasagne.layers.Layer):
             # So we should have weights (self.num_units + self.num_inputs,)
             # instead of (self.num_units, self.num_inputs).
             self.rho = self.add_param(
-                lasagne.init.Constant(self.inv_softplus(np.sqrt(self.prior_sd))), (self.num_inputs + self.num_units,),
+                lasagne.init.Constant(self.inv_softplus(np.sqrt(self.prior_sd))),
+                ((self.num_inputs + self.num_units) * self.mvg_rank,),
                 name='rho')
 
             self.b_mu = self.add_param(
@@ -124,7 +127,8 @@ class BayesianLayer(lasagne.layers.Layer):
             self.mu_old = self.add_param(
                 np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
             self.rho_old = self.add_param(
-                lasagne.init.Constant(self.prior_rho), (self.num_inputs + self.num_units,),
+                lasagne.init.Constant(self.prior_rho),
+                ((self.num_inputs + self.num_units) * self.mvg_rank,),
                 name='rho_old', trainable=False, oldparam=True)
 
             # Bias priors.
@@ -268,20 +272,63 @@ class BayesianLayer(lasagne.layers.Layer):
                 s_v = std[:self.num_inputs]
                 return T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
 
-            p_std, q_std = transf(p_std), transf(q_std)
+            if not isinstance(p_std, float):
+                p_std = transf(p_std)
+            if not isinstance(q_std, float):
+                q_std = transf(q_std)
 
         numerator = T.square(p_mean - q_mean) + T.square(p_std) - T.square(q_std)
         denominator = 2 * T.square(q_std) + 1e-8
         return T.sum(numerator / denominator + T.log(q_std) - T.log(p_std))
 
     def kl_div_p_q_mvg_full(self, p_mean, p_std, q_mean, q_std):
-        p_s_u = p_std[self.num_inputs:]
-        p_s_v = p_std[:self.num_inputs]
+        # Split rho's into different R1 matrices.
+        lst_psu, lst_psv, lst_qsu, lst_qsv = [], [], [], []
 
-        q_s_u = q_std[self.num_inputs:]
-        q_s_v = q_std[:self.num_inputs]
-        q_s_u_inv = 1. / q_s_u
-        q_s_v_inv = 1. / q_s_v
+        def extract_uv(std, lst_su, lst_sv):
+            for i in xrange(self.mvg_rank):
+                su = std[
+                     i * (self.num_inputs + self.num_units) + self.num_inputs:(i + 1) * (
+                         self.num_inputs + self.num_units)]
+                sv = p_std[i * (self.num_inputs + self.num_units): (i + 1) * (
+                    self.num_inputs + self.num_units) + self.num_inputs]
+                lst_su.append(su)
+                lst_sv.append(sv)
+
+        extract_uv(p_std, lst_psu, lst_psv)
+        extract_uv(q_std, lst_qsu, lst_qsv)
+
+        # Sherman-Morrison
+        def sherman_morrison(lst_s):
+            A_inv = np.identity(self.num_inputs, dtype=theano.config.floatX)
+            lst_A_inv = [A_inv]
+            for i in xrange(self.mvg_rank):
+                _a = T.dot(A_inv, lst_s[i].dimshuffle(0, 'x'))
+                _b = T.dot(_a, lst_s[i].dimshuffle('x', 0))
+                _c = T.dot(_b, A_inv)
+                A_inv -= _c
+                lst_A_inv.append(A_inv)
+            return A_inv, lst_A_inv
+
+        qsu_inv, lst_qsu_inv = sherman_morrison(lst_qsu)
+        qsv_inv, lst_qsv_inv = sherman_morrison(lst_qsv)
+        psu_inv, lst_psu_inv = sherman_morrison(lst_psu)
+        psv_inv, lst_psv_inv = sherman_morrison(lst_psv)
+
+        # Calculate log determinant for rank1 updates.
+        def log_determinant(lst_s, lst_s_inv):
+            A_logdet = np.identity(self.num_inputs, dtype=theano.config.floatX)
+            for i in xrange(self.mvg_rank):
+                _a = T.dot(lst_s[i].dimshuffle('x', 0), lst_s_inv[i])
+                _b = T.dot(_a, lst_s[i].dimshuffle(0, 'x'))
+                _c = 1 + _b
+                A_logdet += _c
+            return A_logdet
+
+        qsu_logdet = log_determinant(lst_qsu, lst_qsu_inv)
+        qsv_logdet = log_determinant(lst_qsv, lst_qsv_inv)
+        psu_logdet = log_determinant(lst_psu, lst_psu_inv)
+        psv_logdet = log_determinant(lst_psv, lst_psv_inv)
 
         kl_part = T.sum(q_s_u_inv * p_s_u) * T.sum(q_s_v_inv * p_s_v)
         # In our implementation, W rxc is cxr

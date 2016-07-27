@@ -23,21 +23,18 @@ os.environ["THEANO_FLAGS"] = "device=cpu"
 stub(globals())
 
 # Param ranges
-# seeds = range(10)
-# etas = [0, 0.0001, 0.001, 0.01, 0.1]
-seeds = [0]
-etas = [0.1]
+seeds = range(10)
+etas = [0, 0.0001, 0.001, 0.01, 0.1]
+# seeds = [0]
+# etas = [0.1]
 batch_sizes = [5000]
 normalize_rewards = [False]
 kl_ratios = [False]
 update_likelihood_sds = [True]
-# mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv,
-#                MountainCarEnv]
-# mdps = [NormalizedEnv(env=mdp_class())
-#         for mdp_class in mdp_classes]
-# mdp_classes = [CartpoleSwingupEnvX, DoublePendulumEnvX, MountainCarEnvX]
-mdp_classes = [CartpoleSwingupEnvX]
+mdp_classes = [CartpoleEnv, CartpoleSwingupEnv, DoublePendulumEnv, MountainCarEnv]
 mdps = [mdp_class() for mdp_class in mdp_classes]
+# mdp_classes = [CartpoleSwingupEnvX, DoublePendulumEnvX, MountainCarEnvX]
+# mdps = [mdp_class() for mdp_class in mdp_classes]
 
 param_cart_product = itertools.product(
     batch_sizes, update_likelihood_sds, kl_ratios, normalize_rewards, mdps, etas, seeds
@@ -52,7 +49,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
     baseline = GaussianMLPBaseline(
         mdp.spec,
         regressor_args=dict(hidden_sizes=(32,),
-                            batchsize=1000),
+                            batchsize=20000),
     )
 
     # TODO: group all args into meaningful arg dicts.
@@ -68,7 +65,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         max_path_length=500,
         n_itr=1000,
         step_size=0.01,
-        optimizer_args=dict(num_slices=2),
+        optimizer_args=dict(num_slices=1),
         # -------------
 
         # VIME settings
@@ -89,23 +86,23 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         ),
         dyn_model_args=dict(  # TODO: fill in
         ),
-        num_sample_updates=20,  # Every sample in traj batch will be used in `num_sample_updates' updates.
+        num_sample_updates=10,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         second_order_update=False,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
         reward_dim=(1,),
         layers_disc=[
             dict(name='gaussian',
-                 n_units=32,
+                 n_units=128,
                  matrix_variate_gaussian=True),
             dict(name='hadamard',
-                 n_units=32,
+                 n_units=128,
                  matrix_variate_gaussian=True),
             dict(name='gaussian',
-                 n_units=32,
+                 n_units=128,
                  matrix_variate_gaussian=True),
             dict(name='split',
-                 n_units=32,
+                 n_units=128,
                  matrix_variate_gaussian=True),
             dict(name='gaussian',
                  n_units=mdp.spec.observation_space.shape[0],
@@ -113,12 +110,12 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
                  nonlinearity=lasagne.nonlinearities.linear),
         ],
         unn_learning_rate=0.001,
-        surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP90PERC,
+        surprise_transform=BatchPolopt.SurpriseTransform.CAP99PERC,
         update_likelihood_sd=update_likelihood_sd,
         replay_kl_schedule=0.98,
         output_type=BNN.OutputType.REGRESSION,
         likelihood_sd_init=1.0,
-        prior_sd=0.05,
+        prior_sd=0.5,
         predict_delta=False,
         # -------------
         disable_variance=False,
@@ -132,7 +129,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-basic-b",
+        exp_prefix="trpo-vime-basic-a",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
