@@ -1,14 +1,18 @@
 import numpy as np
 # from sandbox.rein.dynamics_models.bnn.conv_bnn import ConvBNN
 import lasagne
-from sandbox.rein.dynamics_models.utils import iterate_minibatches, plot_mnist_digit, load_dataset_MNIST, load_dataset_MNIST_plus
+from sandbox.rein.dynamics_models.utils import iterate_minibatches, plot_mnist_digit, load_dataset_MNIST, \
+    load_dataset_MNIST_plus
 import time
 from sandbox.rein.dynamics_models.bnn.conv_bnn_vime import ConvBNNVIME
+
+
 # import theano
 # theano.config.exception_verbosity='high'
 
 
-def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, plt=None, act=None, rew=None, im=None):
+def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, plt=None, act=None, rew=None,
+          im=None):
     # Train convolutional BNN to autoencode MNIST digits.
 
     pred_in = np.hstack(
@@ -38,14 +42,12 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
         # Iterate over all minibatches and train on each of them.
         for batch in iterate_minibatches(X, Y, model.batch_size, shuffle=True):
-
             # Fix old params for KL divergence computation.
             model.save_params()
 
             # Train current minibatch.
-            inputs, targets = batch
-            _train_err = model.train_fn(
-                inputs, targets, 1.0)
+            inputs, targets, _ = batch
+            _train_err = model.train_fn(inputs, targets, 1.0)
 
             train_err += _train_err
             train_batches += 1
@@ -53,13 +55,14 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         pred = model.pred_fn(X)
         acc = np.mean(np.square(pred - Y))
         print('sqerr: {}'.format(acc))
+        print('likelihood_sd: {}'.format(model.likelihood_sd.eval()))
 
         pred = model.pred_fn(X)
         pred_s = pred[0, :28 * 28]
         pred_r = pred[:5, -1]
-#         print(pred_r)
-#         print(Y[:5, -1])
-#         pred_s = pred_s + 1.
+        #         print(pred_r)
+        #         print(Y[:5, -1])
+        #         pred_s = pred_s + 1.
         plot_mnist_digit(pred_s.reshape(28, 28), im)
 
         # Then we print the results for this epoch:
@@ -72,12 +75,11 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
 
 
 def main():
-
     num_epochs = 1000
     batch_size = 2
 
     print("Loading data ...")
-    X_train, T_train, X_test, T_test, act, rew = load_dataset_MNIST_plus()
+    X_train, X_test, act, rew = load_dataset_MNIST_plus()
     n_batches = int(np.ceil(len(X_train) / float(batch_size)))
 
     import matplotlib.pyplot as plt
@@ -98,88 +100,61 @@ def main():
             dict(name='convolution',
                  n_filters=2,
                  filter_size=(filter_sizes, filter_sizes),
-                 stride=(2, 2)),
+                 stride=(2, 2),
+                 pad=(0, 0)),
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
-                 n_units=338),
+                 n_units=338,
+                 matrix_variate_gaussian=True),
             dict(name='gaussian',
-                 n_units=128),
-            dict(name='outerprod'),
+                 n_units=128,
+                 matrix_variate_gaussian=True),
+            dict(name='hadamard',
+                 n_units=128,
+                 matrix_variate_gaussian=True),
             dict(name='gaussian',
-                 n_units=338),
+                 n_units=338,
+                 matrix_variate_gaussian=True),
             dict(name='split',
-                 n_units=128),
+                 n_units=128,
+                 matrix_variate_gaussian=True),
             dict(name='reshape',
                  shape=([0], 2, 13, 13)),
             dict(name='deconvolution',
                  n_filters=deconv_filters,
                  filter_size=(filter_sizes, filter_sizes),
                  stride=(2, 2),
+                 pad=(0, 0),
                  nonlinearity=lasagne.nonlinearities.linear)
         ],
         n_batches=n_batches,
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=10,
+        n_samples=2,
         prior_sd=0.05,
-        update_likelihood_sd=False,
+        update_likelihood_sd=True,
         learning_rate=0.001,
         group_variance_by=ConvBNNVIME.GroupVarianceBy.UNIT,
         use_local_reparametrization_trick=True,
-        likelihood_sd_init=0.01,
+        likelihood_sd_init=0.1,
         output_type=ConvBNNVIME.OutputType.REGRESSION,
-        surprise_type=ConvBNNVIME.SurpriseType.BALD,
+        surprise_type=ConvBNNVIME.SurpriseType.COMPR,
         num_classes=None,
         num_output_dim=None,
         disable_variance=False,
-        second_order_update=True,
-        debug=True
+        second_order_update=False,
+        debug=True,
+        # ---
+        ind_softmax=True
     )
-#     bnn = ConvBNN(
-#         input_dim=(1, 28, 28),
-#         output_dim=(1, 28, 28),
-#         layers_disc=[
-#             dict(name='convolution', n_filters=2,
-#                  filter_size=(filter_sizes, filter_sizes),
-#                  stride=(1, 1)),
-#             dict(name='pool', pool_size=(2, 2)),
-#             dict(name='reshape', shape=([0], -1)),
-#             dict(name='gaussian', n_units=288),
-#             dict(name='gaussian', n_units=24),
-#             dict(name='gaussian', n_units=288),
-#             dict(name='reshape', shape=(
-#                 [0], 2, 12, 12)),
-#             dict(name='upscale', scale_factor=2),
-#             dict(name='deconvolution', n_filters=deconv_filters,
-#                  filter_size=(filter_sizes, filter_sizes),
-#                  stride=(1, 1))
-#         ],
-#         n_batches=n_batches,
-#         trans_func=lasagne.nonlinearities.rectify,
-#         out_func=lasagne.nonlinearities.linear,
-#         batch_size=batch_size,
-#         n_samples=10,
-#         prior_sd=0.05,
-#         update_likelihood_sd=False,
-#         learning_rate=0.001,
-#         group_variance_by=ConvBNN.GroupVarianceBy.UNIT,
-#         use_local_reparametrization_trick=True,
-#         likelihood_sd_init=0.01,
-#         output_type=ConvBNN.OutputType.REGRESSION,
-#         surprise_type=ConvBNN.SurpriseType.BALD,
-#         num_classes=None,
-#         num_output_dim=None,
-#         disable_variance=False,
-#         second_order_update=True,
-#         debug=True
-#     )
 
     # Train the model.
     train(bnn, num_epochs=num_epochs, X_train=X_train,
-          T_train=T_train, X_test=X_test, T_test=T_test, act=act, rew=rew, im=im)
+          X_test=X_test, act=act, rew=rew, im=im)
     print('Done.')
+
 
 if __name__ == '__main__':
     main()

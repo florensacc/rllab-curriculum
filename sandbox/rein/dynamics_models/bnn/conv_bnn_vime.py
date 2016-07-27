@@ -85,8 +85,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                  output_type=OutputType.REGRESSION,
                  num_classes=None,
                  num_output_dim=None,
-                 disable_variance=False,
-                 debug=False
+                 disable_variance=False,  # Disable variances in BNN.
+                 debug=False,
+                 ind_softmax=False  # Independent softmax output instead of regression.
                  ):
 
         Serializable.quick_init(self, locals())
@@ -115,6 +116,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.num_output_dim = num_output_dim
         self.disable_variance = disable_variance
         self.debug = debug
+        self.ind_softmax = ind_softmax
 
         if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
             assert self.num_classes is not None
@@ -412,6 +414,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     use_local_reparametrization_trick=True,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
+            elif layer_disc['name'] == 'ind_softmax':
+                # Independent softmax classification
+                # TODO: work in progress
+                pass
             else:
                 raise (Exception('Unknown layer!'))
 

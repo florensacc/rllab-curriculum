@@ -79,7 +79,7 @@ class BayesianLayer(lasagne.layers.Layer):
                  prior_sd=None,
                  disable_variance=False,
                  matrix_variate_gaussian=False,
-                 mvg_rank=2,
+                 mvg_rank=1,
                  **kwargs):
         super(BayesianLayer, self).__init__(incoming, **kwargs)
 
@@ -223,6 +223,10 @@ class BayesianLayer(lasagne.layers.Layer):
         self.b_mu.set_value(self.b_mu_tmp)
         self.b_rho.set_value(self.b_rho_tmp)
 
+    def get_W_full(self):
+        # W = M + U ^ 0.5 * E * V ^ 0.5
+        pass
+
     def get_W(self):
         mask = 0 if self.disable_variance else 1
         if self._matrix_variate_gaussian:
@@ -312,8 +316,7 @@ class BayesianLayer(lasagne.layers.Layer):
 
         # Sherman-Morrison
         def sherman_morrison(lst_s):
-            A_inv = np.identity(lst_s[0].shape[0]
-            dtype = theano.config.floatX)
+            A_inv = np.identity(lst_s[0].shape[0], dtype=theano.config.floatX)
             lst_A_inv = [A_inv]
             for i in xrange(self.mvg_rank):
                 _a = T.dot(A_inv, lst_s[i].dimshuffle(0, 'x'))
