@@ -60,6 +60,7 @@ class ALEExperiment(object):
                 self.agent.start_testing()
                 self.run_epoch(epoch, self.test_length, True)
                 self.agent.finish_testing(epoch)
+            logger.dump_tabular(with_prefix=False)
         self.agent.cleanup()
 
     def run_epoch(self, epoch, num_steps, testing=False):
@@ -73,17 +74,56 @@ class ALEExperiment(object):
         testing - True if this Epoch is used for testing and not training
 
         """
+        phase = "Test" if testing else "Train"
         self.terminal_lol = False # Make sure each epoch starts with a reset.
         steps_left = num_steps
         start_time = time.clock()
+        episode_count = 0
+        episode_reward_list = []
+        episode_length_list = []
         while steps_left > 0:
-            prefix = "testing" if testing else "training"
+            _, episode_length, episode_reward = self.run_episode(steps_left, testing)
+            episode_reward_list.append(episode_reward)
+            episode_length_list.append(episode_length)
             total_time = time.clock() - start_time
-            logger.log(prefix + " epoch: " + str(epoch) + " steps_left: " + str(steps_left) + "\n total time: %2.f secs"%(total_time))
-            _, num_steps = self.run_episode(steps_left, testing)
-            print "Number of time steps in this episode: %d"%(num_steps)
+            episode_count += 1
+            logger.log("""
+                {phase} epoch: {epoch_count}, steps left: {steps_left}, total time: {total_time},
+                episode: {episode_count}, episode length: {episode_length}, episode reward: {episode_reward},
+                """.format(
+                phase=phase,
+                epoch_count=epoch,
+                steps_left=steps_left,
+                total_time="%.0f secs"%(total_time),
+                episode_count=episode_count,
+                episode_length=episode_length,
+                episode_reward=episode_reward,
+                ))
+            steps_left -= episode_length
 
-            steps_left -= num_steps
+        # logging
+        if phase == "Train":
+            logger.record_tabular("Epoch",epoch)
+        logger.record_tabular("%sEpochTime"%(phase),"%.0f"%(total_time))
+        logger.record_tabular("%sAverageReturn"%(phase), np.average(episode_reward_list))
+        logger.record_tabular("%sStdReturn"%(phase), np.std(episode_reward_list))
+        logger.record_tabular("%sMedianReturn"%(phase), np.median(episode_reward_list))
+        logger.record_tabular("%sMaxReturn"%(phase), np.amax(episode_reward_list))
+        logger.record_tabular("%sMinReturn"%(phase), np.amin(episode_reward_list))
+
+        logger.record_tabular("%sAverageEpisodeLength"%(phase), np.average(episode_length_list))
+        logger.record_tabular("%sStdEpisodeLength"%(phase), np.std(episode_length_list))
+        logger.record_tabular("%sMedianEpisodeLength"%(phase), np.median(episode_length_list))
+        logger.record_tabular("%sMaxEpisodeLength"%(phase), np.amax(episode_length_list))
+        logger.record_tabular("%sMinEpisodeLength"%(phase), np.amin(episode_length_list))
+
+        # save iteration parameters
+        logger.log("Saving iteration parameters...")
+        params = dict(
+            epoch=epoch,
+            agent=self.agent,
+        )
+        logger.save_itr_params(epoch,params)
 
 
     def _init_episode(self):
@@ -148,8 +188,10 @@ class ALEExperiment(object):
 
         action = self.agent.start_episode(self.get_observation())
         num_steps = 0
+        total_reward = 0
         while True:
             reward = self._step(self.min_action_set[action])
+            total_reward += reward
             self.terminal_lol = (self.death_ends_episode and not testing and
                                  self.ale.lives() < start_lives)
             terminal = self.ale.game_over() or self.terminal_lol
@@ -163,9 +205,9 @@ class ALEExperiment(object):
 
         # if the lengths are in episodes, this episode counts as 1 "step"
         if self.length_in_episodes:
-            return terminal, 1
+            return terminal, 1, total_reward
         else:
-            return terminal, num_steps
+            return terminal, num_steps, total_reward
 
 
     def get_observation(self):

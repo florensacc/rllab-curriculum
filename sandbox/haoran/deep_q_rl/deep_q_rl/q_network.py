@@ -487,6 +487,11 @@ class DeepQLearner:
 
         return l_out
 
+    def get_param_values(self):
+        params = lasagne.layers.get_all_param_values(self.l_out)
+        return params
+
+
 def main():
     net = DeepQLearner(84, 84, 16, 4, .99, .00025, .95, .95, 10000, False,
                        32, 'nature_cuda')

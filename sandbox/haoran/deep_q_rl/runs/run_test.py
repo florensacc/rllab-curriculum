@@ -17,9 +17,9 @@ class Defaults:
     # ----------------------
     # Experiment Parameters
     # ----------------------
-    STEPS_PER_EPOCH = 10000
-    EPOCHS = 1
-    STEPS_PER_TEST = 10000
+    STEPS_PER_EPOCH = 300
+    EPOCHS = 2
+    STEPS_PER_TEST = 300
     EXPERIMENT_DIRECTORY = None # use default, see launcher.py
     EXPERIMENT_PREFIX = "data/local/deep_q_rl/"
 
@@ -61,6 +61,8 @@ class Defaults:
     CUDNN_DETERMINISTIC = False
     USE_DOUBLE = True
     CLIP_REWARD = True
+    USE_BONUS = True
+    AGENT_UNPICKLABLE_LIST = ["data_set","test_data_set"]
 
 if __name__ == "__main__":
     launcher.launch(sys.argv[1:], Defaults, __doc__)

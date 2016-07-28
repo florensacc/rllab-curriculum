@@ -119,7 +119,7 @@ next_states for batch_size randomly chosen state transitions.
             initial_indices = np.arange(index, index + self.phi_length)
             transition_indices = initial_indices + 1
             end_index = index + self.phi_length - 1
-            
+
             # Check that the initial state corresponds entirely to a
             # single episode, meaning none but the last frame may be
             # terminal. If the last frame of the initial state is

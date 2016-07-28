@@ -50,17 +50,18 @@ class Defaults:
     REPLAY_MEMORY_SIZE = 1000000
     BATCH_SIZE = 32
     NETWORK_TYPE = "nips_dnn"
-    FREEZE_INTERVAL = -1
-    REPLAY_START_SIZE = 100
+    FREEZE_INTERVAL = 10000
+    REPLAY_START_SIZE = 50000
     RESIZE_METHOD = 'crop'
     RESIZED_WIDTH = 84
     RESIZED_HEIGHT = 84
-    DEATH_ENDS_EPISODE = 'false'
-    MAX_START_NULLOPS = 0
+    DEATH_ENDS_EPISODE = 'true'
+    MAX_START_NULLOPS = 30
     DETERMINISTIC = True
     CUDNN_DETERMINISTIC = False
     USE_DOUBLE = False
     CLIP_REWARD = True
+    USE_BONUS = True
 
 if __name__ == "__main__":
     launcher.launch(sys.argv[1:], Defaults, __doc__)

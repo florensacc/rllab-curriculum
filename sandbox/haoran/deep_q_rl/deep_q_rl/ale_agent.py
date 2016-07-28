@@ -23,7 +23,9 @@ class NeuralAgent(object):
     def __init__(self, q_network, epsilon_start, epsilon_min,
                  epsilon_decay, replay_memory_size, experiment_directory,
                  replay_start_size, update_frequency, rng, clip_reward, bonus_evaluator=None,
-                 recording=True):
+                 recording=True,
+                 unpicklable_list=["data_set","test_data_set"]
+                 ):
 
         self.results_file = self.learning_file = None
         self.best_epoch_reward = None
@@ -93,6 +95,15 @@ class NeuralAgent(object):
         self.last_action = None
 
         self.bonus_evaluator = bonus_evaluator
+
+        self.unpicklable_list = unpicklable_list
+
+    def __getstate__(self):
+        return dict(
+                (k, v)
+                for (k, v) in self.__dict__.iteritems()
+                if k not in self.unpicklable_list
+            )
 
     def _open_results_file(self):
         if not self.recording:
@@ -290,7 +301,6 @@ class NeuralAgent(object):
         Returns:
             None
         """
-
         self.episode_reward += reward
         self.step_counter += 1
         total_time = time.time() - self.start_time
@@ -306,11 +316,11 @@ class NeuralAgent(object):
             if self.best_epoch_reward is None or self.episode_reward > self.best_epoch_reward:
                 self.best_epoch_reward = self.episode_reward
         else:
-
+            reward = np.clip(reward, -1, 1)
             # Store the latest sample.
             self.data_set.add_sample(self.last_img,
                                      self.last_action,
-                                     np.clip(reward, -1, 1),
+                                     reward,
                                      True)
 
             logger.log("steps/second: {:.2f}".format(\
@@ -325,10 +335,14 @@ class NeuralAgent(object):
     def finish_epoch(self, epoch):
         if not self.recording:
             return
-        net_file = open(self.exp_dir + '/network_file_' + str(epoch) + \
-                        '.pkl', 'w')
-        cPickle.dump(self.network, net_file, -1)
-        net_file.close()
+        # net_file = open(self.exp_dir + '/network_file_' + str(epoch) + \
+        #                 '.pkl', 'w')
+        # cPickle.dump(self.network, net_file, -1)
+        # net_file.close()
+
+        if self.bonus_evaluator is not None:
+            self.bonus_evaluator.finish_epoch()
+
 
     def start_testing(self):
         self.testing = True
