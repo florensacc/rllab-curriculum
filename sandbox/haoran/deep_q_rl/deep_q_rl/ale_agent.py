@@ -220,16 +220,19 @@ class NeuralAgent(object):
 
         self.step_counter += 1
 
+        # beware that the clipped reward is only added to the replay memory, not any report statistics
         #TESTING---------------------------
-        if self.clip_reward:
-            reward = np.clip(reward, -1, 1)
         if self.testing:
-            self.episode_reward += reward
+            self.episode_reward += reward # do not record clipped reward
+            if self.clip_reward:
+                reward = np.clip(reward, -1, 1)
             action = self._choose_action(self.test_data_set, .05,
                                          observation, reward)
 
         #NOT TESTING---------------------------
         else:
+            if self.clip_reward:
+                reward = np.clip(reward, -1, 1)
 
             if len(self.data_set) > self.replay_start_size:
                 self.epsilon = max(self.epsilon_min,

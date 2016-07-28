@@ -5,12 +5,10 @@ class ImageVectorizePreprocessor(Preprocessor):
         self._input_dim = (n_chanllel,width,height)
         self._output_dim = n_chanllel * width * height
 
-    @property
-    def input_dim(self):
+    def get_input_dim(self):
         return self._input_dim
 
-    @property
-    def output_dim(self):
+    def get_output_dim(self):
         return self._output_dim
 
     def process(self,imgs):

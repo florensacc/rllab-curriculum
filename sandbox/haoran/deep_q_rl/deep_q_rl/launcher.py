@@ -17,14 +17,14 @@ import ale_experiment
 import ale_agent
 import q_network
 
-from sandbox.haoran.hashing.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
-from sandbox.haoran.hashing.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
 
 class Launcher(object):
     def __init__(self,args,defaults,description):
         self.args = args
         self.defaults = defaults
         self.description = description
+
+        self.prepare_experiment()
 
     def process_args(self,args, defaults, description):
         """
@@ -48,7 +48,7 @@ class Launcher(object):
                             type=int, default=defaults.STEPS_PER_TEST,
                             help='Number of steps per test (default: %(default)s)')
         parser.add_argument('--display-screen', dest="display_screen",
-                            action='store_true', default=False,
+                            action='store_true', default=defaults.DISPLAY_SCREEN,
                             help='Show the game screen.')
         parser.add_argument('--experiment-prefix', dest="experiment_prefix",
                             default=defaults.EXPERIMENT_PREFIX,
@@ -139,7 +139,7 @@ class Launcher(object):
                             help='Pickle file containing trained net.')
         parser.add_argument('--death-ends-episode', dest="death_ends_episode",
                             type=str, default=defaults.DEATH_ENDS_EPISODE,
-                            help=('true|false (default: %(default)s)'))
+                            help=('Whether to end an episode upon death (only during training): true|false (default: %(default)s)'))
         parser.add_argument('--max-start-nullops', dest="max_start_nullops",
                             type=int, default=defaults.MAX_START_NULLOPS,
                             help=('Maximum number of null-ops at the start ' +
@@ -174,8 +174,8 @@ class Launcher(object):
             'epochs to be measured in episodes (games) instead of steps'))
         parser.add_argument('--tabular_log_file', type=str, default='progress.csv',
                             help='Name of the tabular log file (in csv).')
-        parser.add_argument('--use-bonus', type=bool, default=defaults.USE_BONUS, help='Whether to use the bonus reward.')
         parser.add_argument("--agent-unpicklable-list",type=str,nargs='+',help="A list of attributes of the agent that should not be pickled (to save disk space).",default=defaults.AGENT_UNPICKLABLE_LIST)
+        parser.add_argument("--seed",type=str,nargs='?',help="Random seed for both the algorithm and ALE.",default=defaults.SEED)
 
 
         parameters = parser.parse_args(args)
@@ -202,7 +202,7 @@ class Launcher(object):
 
 
 
-    def launch(self):
+    def prepare_experiment(self):
         """
         Execute a complete training run.
         """
@@ -223,7 +223,7 @@ class Launcher(object):
         if parameters.deterministic:
             rng = np.random.RandomState(123456)
         else:
-            rng = np.random.RandomState()
+            rng = np.random.RandomState(parameters.seed)
 
         if parameters.cudnn_deterministic:
             theano.config.dnn.conv.algo_bwd = 'deterministic'
@@ -244,7 +244,7 @@ class Launcher(object):
 
 
         ale = ale_python_interface.ALEInterface()
-        ale.setInt('random_seed', rng.randint(1000))
+        ale.setInt('random_seed', parameters.seed)
 
         if parameters.display_screen:
             if sys.platform == 'darwin':
@@ -300,23 +300,6 @@ class Launcher(object):
             handle = open(parameters.nn_file, 'r')
             network = cPickle.load(handle)
 
-        if parameters.use_bonus:
-            img_preprocessor = ImageVectorizePreprocessor(
-                n_chanllel=parameters.phi_length,
-                width=defaults.RESIZED_WIDTH,
-                height=defaults.RESIZED_HEIGHT,
-            )
-            bonus_evaluator = ALEHashingBonusEvaluator(
-                state_dim=img_preprocessor.output_dim,
-                img_preprocessor=img_preprocessor,
-                num_actions=num_actions,
-                hash_list=[],
-                count_mode="s",
-                bonus_mode="s_next",
-                bonus_coeff=1.0,
-                state_bonus_mode="1/n_s",
-                state_action_bonus_mode="log(n_s)/n_sa",
-            )
         agent = ale_agent.NeuralAgent(network,
               parameters.epsilon_start,
               parameters.epsilon_min,
@@ -327,9 +310,8 @@ class Launcher(object):
               parameters.update_frequency,
               rng,
               clip_reward=parameters.clip_reward,
-              bonus_evaluator=bonus_evaluator,
               recording=parameters.recording)
-        experiment = ale_experiment.ALEExperiment(ale, agent,
+        self.experiment = ale_experiment.ALEExperiment(ale, agent,
               defaults.RESIZED_WIDTH,
               defaults.RESIZED_HEIGHT,
               parameters.resize_method,
@@ -341,9 +323,20 @@ class Launcher(object):
               parameters.max_start_nullops,
               rng,
               length_in_episodes=parameters.episodes)
+        self.ale = ale
 
-        experiment.run()
+    def set_agent_attr(self,k,v):
+        setattr(self.experiment.agent,k,v)
 
+    def launch(self):
+        self._launch()
+
+    def _launch(self):
+        self.experiment.run()
+
+    def get_num_actions(self):
+        num_actions = len(self.ale.getMinimalActionSet())
+        return num_actions
 
 
 if __name__ == '__main__':
