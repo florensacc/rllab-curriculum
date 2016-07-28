@@ -11,6 +11,7 @@ from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungro
     plot_mnist_digit
 from scipy import stats, misc
 from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_unformat_image
+from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianLayer
 
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
@@ -128,7 +129,11 @@ class BatchPolopt(RLAlgorithm):
 
     # Enums
     SurpriseTransform = enum(
-        CAP1000='cap at 1000', LOG='log(1+surprise)', ZERO100='0-100', CAP90PERC='cap at 90th percentile')
+        CAP1000='cap at 1000',
+        LOG='log(1+surprise)',
+        ZERO100='0-100',
+        CAP90PERC='cap at 90th percentile',
+        CAP99PERC='cap at 99th percentile')
 
     def __init__(
             self,
@@ -540,14 +545,13 @@ class BatchPolopt(RLAlgorithm):
                     if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
                         logp_before = self.bnn.fn_logp(X_train[idx], T_train[idx])
                     # Save old posterior as new prior.
-                    import ipdb; ipdb.set_trace()
                     self.bnn.save_params()
                     loss_before = float(self.bnn.fn_loss(X_train[idx], T_train[idx], 1.))
                     num_itr = int(np.ceil(float(self.num_sample_updates) / self.kl_batch_size))
-                    print('---')
+                    # print('---')
                     for _ in xrange(self.num_sample_updates):
                         train_loss = self.bnn.train_fn(X_train[idx], T_train[idx], 1.)
-                        print(loss_before, train_loss)
+                        # print(loss_before, train_loss)
                         #                         print(self.bnn.get_all_params()[0])
                         #                         print(self.bnn.get_all_params()[1])
                         if np.isinf(train_loss) or np.isnan(train_loss):
@@ -719,14 +723,15 @@ class BatchPolopt(RLAlgorithm):
 
             kls_flat = np.hstack(kls)
 
-            logger.record_tabular('VIME_MeanSurpr', np.mean(kls_flat))
-            logger.record_tabular('VIME_StdSurpr', np.std(kls_flat))
-            logger.record_tabular('VIME_MinSurpr', np.min(kls_flat))
-            logger.record_tabular('VIME_MaxSurpr', np.max(kls_flat))
-            logger.record_tabular('VIME_MedianSurpr', np.median(kls_flat))
-            logger.record_tabular('VIME_25percSurpr', np.percentile(kls_flat, 25))
-            logger.record_tabular('VIME_75percSurpr', np.percentile(kls_flat, 75))
-            logger.record_tabular('VIME_90percSurpr', np.percentile(kls_flat, 90))
+            logger.record_tabular('S_avg', np.mean(kls_flat))
+            logger.record_tabular('S_std', np.std(kls_flat))
+            logger.record_tabular('S_min', np.min(kls_flat))
+            logger.record_tabular('S_max', np.max(kls_flat))
+            logger.record_tabular('S_25p', np.percentile(kls_flat, 25))
+            logger.record_tabular('S_med', np.median(kls_flat))
+            logger.record_tabular('S_75p', np.percentile(kls_flat, 75))
+            logger.record_tabular('S_90p', np.percentile(kls_flat, 90))
+            logger.record_tabular('S_99p', np.percentile(kls_flat, 99))
 
             # Transform intrinsic rewards.
             if self.surprise_transform == BatchPolopt.SurpriseTransform.LOG:
@@ -738,6 +743,11 @@ class BatchPolopt(RLAlgorithm):
                 # Cap max KL for stabilization.
                 for i in xrange(len(paths)):
                     kls[i] = np.minimum(kls[i], perc90)
+            elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP99PERC:
+                perc99 = np.percentile(np.hstack(kls), 99)
+                # Cap max KL for stabilization.
+                for i in xrange(len(paths)):
+                    kls[i] = np.minimum(kls[i], perc99)
             elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP1000:
                 # Cap max KL for stabilization.
                 for i in xrange(len(paths)):
@@ -750,16 +760,6 @@ class BatchPolopt(RLAlgorithm):
                 kls = group(zerohunderd, lens)
 
             kls_flat = np.hstack(kls)
-
-            if self.surprise_transform is not None:
-                logger.record_tabular('VIME_MeanSurpr_transf', np.mean(kls_flat))
-                logger.record_tabular('VIME_StdSurpr_transf', np.std(kls_flat))
-                logger.record_tabular('VIME_MinSurpr_transf', np.min(kls_flat))
-                logger.record_tabular('VIME_MaxSurpr_transf', np.max(kls_flat))
-                logger.record_tabular('VIME_MedianSurpr_transf', np.median(kls_flat))
-                logger.record_tabular('VIME_25percSurpr_transf', np.percentile(kls_flat, 25))
-                logger.record_tabular('VIME_75percSurpr_transf', np.percentile(kls_flat, 75))
-                logger.record_tabular('VIME_90percSurpr_transf', np.percentile(kls_flat, 90))
 
             # Normalize intrinsic rewards.
             if self.use_kl_ratio:
@@ -793,24 +793,15 @@ class BatchPolopt(RLAlgorithm):
                 paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
 
         else:
-            logger.record_tabular('VIME_MeanSurpr', 0.)
-            logger.record_tabular('VIME_StdSurpr', 0.)
-            logger.record_tabular('VIME_MinSurpr', 0.)
-            logger.record_tabular('VIME_MaxSurpr', 0.)
-            logger.record_tabular('VIME_MedianSurpr', 0.)
-            logger.record_tabular('VIME_25percSurpr', 0.)
-            logger.record_tabular('VIME_75percSurpr', 0.)
-            logger.record_tabular('VIME_90percSurpr', 0.)
-
-            if self.surprise_transform is not None:
-                logger.record_tabular('VIME_MeanSurpr_transf', 0.)
-                logger.record_tabular('VIME_StdSurpr_transf', 0.)
-                logger.record_tabular('VIME_MinSurpr_transf', 0.)
-                logger.record_tabular('VIME_MaxSurpr_transf', 0.)
-                logger.record_tabular('VIME_MedianSurpr_transf', 0.)
-                logger.record_tabular('VIME_25percSurpr_transf', 0.)
-                logger.record_tabular('VIME_75percSurpr_transf', 0.)
-                logger.record_tabular('VIME_90percSurpr_transf', 0.)
+            logger.record_tabular('S_avg', 0.)
+            logger.record_tabular('S_std', 0.)
+            logger.record_tabular('S_min', 0.)
+            logger.record_tabular('S_max', 0.)
+            logger.record_tabular('S_25p', 0.)
+            logger.record_tabular('S_med', 0.)
+            logger.record_tabular('S_75p', 0.)
+            logger.record_tabular('S_90p', 0.)
+            logger.record_tabular('S_99p', 0.)
 
             if self.use_kl_ratio:
                 logger.record_tabular('VIME_MeanSurpr_norm', 0.)

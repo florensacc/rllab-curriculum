@@ -85,8 +85,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                  output_type=OutputType.REGRESSION,
                  num_classes=None,
                  num_output_dim=None,
-                 disable_variance=False,
-                 debug=False
+                 disable_variance=False,  # Disable variances in BNN.
+                 debug=False,
+                 ind_softmax=False  # Independent softmax output instead of regression.
                  ):
 
         Serializable.quick_init(self, locals())
@@ -115,6 +116,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.num_output_dim = num_output_dim
         self.disable_variance = disable_variance
         self.debug = debug
+        self.ind_softmax = ind_softmax
 
         if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
             assert self.num_classes is not None
@@ -302,7 +304,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             return - log_p_D_given_w / self.n_samples
         else:
             if self.update_prior:
-                kl = self.kl_div()  # + 0.01 * self.log_p_w_q_w_kl()
+                kl = self.kl_div()
             else:
                 kl = self.log_p_w_q_w_kl()
             return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
@@ -412,6 +414,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     use_local_reparametrization_trick=True,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
+            elif layer_disc['name'] == 'ind_softmax':
+                # Independent softmax classification
+                # TODO: work in progress
+                pass
             else:
                 raise (Exception('Unknown layer!'))
 
@@ -426,9 +432,12 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # the r_net value, e.g., the reward signal.
         s_net = lasagne.layers.reshape(s_net, ([0], -1))
         r_net = BayesianDenseLayer(
-            r_net, num_units=r_flat_dim, nonlinearity=self.transf, prior_sd=self.prior_sd,
+            r_net,
+            num_units=r_flat_dim,
+            nonlinearity=lasagne.nonlinearities.linear,
+            prior_sd=self.prior_sd,
             use_local_reparametrization_trick=True,
-            matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
+            matrix_variate_gaussian=False)
         r_net = lasagne.layers.reshape(r_net, ([0], -1))
         self.network = ConcatLayer([s_net, r_net])
 
@@ -493,21 +502,15 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         if self.update_prior:
             # When using posterior chaining, prefer SGD as we dont want to build up
             # momentum between prior-posterior updates.
-            def sgd_clip_likelihood_sd(loss, params, learning_rate):
+            def sgd_clip(loss, params, learning_rate):
                 grads = theano.grad(loss, params)
                 updates = OrderedDict()
                 for param, grad in zip(params, grads):
-                    if param.name == 'likelihood_sd':
-                        updates[param] = param - learning_rate * grad
-                    elif param.name == 'rho' or param.name == 'b_rho':
-                        updates[param] = param - learning_rate * grad
-                    else:
-                        updates[param] = param - learning_rate * grad
-
+                    updates[param] = param - learning_rate * T.clip(grad, -1., 1.)
                 return updates
 
-            # Clipping likelihood_sd grads seems necessary to prevent explosion.
-            updates = sgd_clip_likelihood_sd(
+            # Clipping grads seems necessary to prevent explosion.
+            updates = sgd_clip(
                 loss, params, learning_rate=self.learning_rate)
         else:
             updates = lasagne.updates.adam(
@@ -563,6 +566,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
                 def fast_kl_div(loss, params, oldparams, step_size):
                     # FIXME: doesn't work yet for group_variance_by!='weight'.
+                    # FIXME: doesn't work with MVG.
 
                     grads = T.grad(loss, params)
 

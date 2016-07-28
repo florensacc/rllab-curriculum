@@ -79,6 +79,7 @@ class BayesianLayer(lasagne.layers.Layer):
                  prior_sd=None,
                  disable_variance=False,
                  matrix_variate_gaussian=False,
+                 mvg_rank=1,
                  **kwargs):
         super(BayesianLayer, self).__init__(incoming, **kwargs)
 
@@ -91,6 +92,7 @@ class BayesianLayer(lasagne.layers.Layer):
         self.prior_rho = self.inv_softplus(self.prior_sd)
         self.disable_variance = disable_variance
         self._matrix_variate_gaussian = matrix_variate_gaussian
+        self.mvg_rank = mvg_rank
         self.mu_tmp, self.b_mu_tmp, self.rho_tmp, self.b_rho_tmp = None, None, None, None
 
         if self.disable_variance:
@@ -107,7 +109,8 @@ class BayesianLayer(lasagne.layers.Layer):
             # So we should have weights (self.num_units + self.num_inputs,)
             # instead of (self.num_units, self.num_inputs).
             self.rho = self.add_param(
-                lasagne.init.Constant(self.inv_softplus(np.sqrt(self.prior_sd))), (self.num_inputs + self.num_units,),
+                lasagne.init.Constant(self.inv_softplus(np.sqrt(self.prior_sd))),
+                ((self.num_inputs + self.num_units) * self.mvg_rank,),
                 name='rho')
 
             self.b_mu = self.add_param(
@@ -124,7 +127,8 @@ class BayesianLayer(lasagne.layers.Layer):
             self.mu_old = self.add_param(
                 np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
             self.rho_old = self.add_param(
-                lasagne.init.Constant(self.prior_rho), (self.num_inputs + self.num_units,),
+                lasagne.init.Constant(self.prior_rho),
+                ((self.num_inputs + self.num_units) * self.mvg_rank,),
                 name='rho_old', trainable=False, oldparam=True)
 
             # Bias priors.
@@ -219,16 +223,20 @@ class BayesianLayer(lasagne.layers.Layer):
         self.b_mu.set_value(self.b_mu_tmp)
         self.b_rho.set_value(self.b_rho_tmp)
 
+    def get_W_full(self):
+        # W = M + U ^ 0.5 * E * V ^ 0.5
+        pass
+
     def get_W(self):
         mask = 0 if self.disable_variance else 1
         if self._matrix_variate_gaussian:
             epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
                                         dtype=theano.config.floatX)
-            rho_u = self.rho[self.num_inputs:]
-            rho_v = self.rho[:self.num_inputs]
-            s_u = T.tile(self.softplus(rho_u), reps=[self.num_inputs, 1])
-            s_v = T.tile(self.softplus(rho_v), reps=[self.num_units, 1])
-            s = s_u * s_v.T
+            s = self.softplus(self.rho)
+            s_u = s[self.num_inputs:]
+            s_v = s[:self.num_inputs]
+            s_v = s[:self.num_inputs]
+            s = T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
             return self.mu + s * epsilon * mask
         else:
             epsilon = self._srng.normal(size=self.get_W_shape(), avg=0., std=1., dtype=theano.config.floatX)
@@ -268,28 +276,93 @@ class BayesianLayer(lasagne.layers.Layer):
                 s_v = std[:self.num_inputs]
                 return T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
 
-            p_std, q_std = transf(p_std), transf(q_std)
+            if not isinstance(p_std, float):
+                p_std = transf(p_std)
+            if not isinstance(q_std, float):
+                q_std = transf(q_std)
 
         numerator = T.square(p_mean - q_mean) + T.square(p_std) - T.square(q_std)
         denominator = 2 * T.square(q_std) + 1e-8
         return T.sum(numerator / denominator + T.log(q_std) - T.log(p_std))
 
     def kl_div_p_q_mvg_full(self, p_mean, p_std, q_mean, q_std):
-        p_s_u = p_std[self.num_inputs:]
-        p_s_v = p_std[:self.num_inputs]
+        # Split rho's into different R1 matrices.
+        lst_psu, lst_psv, lst_qsu, lst_qsv = [], [], [], []
 
-        q_s_u = q_std[self.num_inputs:]
-        q_s_v = q_std[:self.num_inputs]
-        q_s_u_inv = 1. / q_s_u
-        q_s_v_inv = 1. / q_s_v
+        def extract_uv(std, lst_su, lst_sv):
+            for i in xrange(self.mvg_rank):
+                su = std[
+                     i * (self.num_inputs + self.num_units) + self.num_inputs:(i + 1) * (
+                         self.num_inputs + self.num_units)]
+                sv = p_std[i * (self.num_inputs + self.num_units): (i + 1) * (
+                    self.num_inputs + self.num_units) + self.num_inputs]
+                lst_su.append(su)
+                lst_sv.append(sv)
 
-        kl_part = T.sum(q_s_u_inv * p_s_u) * T.sum(q_s_v_inv * p_s_v)
-        # In our implementation, W rxc is cxr
-        kl_part += T.nlinalg.trace(T.dot((q_mean - p_mean) * q_s_u_inv, (q_mean - p_mean).T * q_s_v_inv))
-        kl_part += - self.num_units * self.num_inputs
-        kl_part += self.num_units * T.sum(q_s_u) + self.num_inputs * T.sum(q_s_v)
-        kl_part += - self.num_inputs * T.sum(p_s_u) - self.num_units * T.sum(p_s_v)
-        kl = kl_part * 0.5
+        extract_uv(p_std, lst_psu, lst_psv)
+        extract_uv(q_std, lst_qsu, lst_qsv)
+
+        def construct_matrix(lst_s):
+            s = np.identity(lst_s[0].shape[0], dtype=theano.config.floatX)
+            for i in xrange(self.mvg_rank):
+                _a = T.dot(lst_s[i].dimshuffle(0, 'x'), lst_s[i].dimshuffle('x', 0))
+                s += _a
+            return s
+
+        qsu = construct_matrix(lst_qsu)
+        qsv = construct_matrix(lst_qsv)
+        psu = construct_matrix(lst_psu)
+        psv = construct_matrix(lst_psv)
+
+        # Sherman-Morrison
+        def sherman_morrison(lst_s):
+            A_inv = np.identity(lst_s[0].shape[0], dtype=theano.config.floatX)
+            lst_A_inv = [A_inv]
+            for i in xrange(self.mvg_rank):
+                _a = T.dot(A_inv, lst_s[i].dimshuffle(0, 'x'))
+                _b = T.dot(_a, lst_s[i].dimshuffle('x', 0))
+                _c = T.dot(_b, A_inv)
+                A_inv -= _c
+                lst_A_inv.append(A_inv)
+            return A_inv, lst_A_inv
+
+        qsu_inv, lst_qsu_inv = sherman_morrison(lst_qsu)
+        qsv_inv, lst_qsv_inv = sherman_morrison(lst_qsv)
+        psu_inv, lst_psu_inv = sherman_morrison(lst_psu)
+        psv_inv, lst_psv_inv = sherman_morrison(lst_psv)
+
+        # Calculate log determinant for rank1 updates.
+        def log_determinant(lst_s, lst_s_inv):
+            A_logdet = np.identity(lst_s[0].shape[0], dtype=theano.config.floatX)
+            for i in xrange(self.mvg_rank):
+                _a = T.dot(lst_s[i].dimshuffle('x', 0), lst_s_inv[i])
+                _b = T.dot(_a, lst_s[i].dimshuffle(0, 'x'))
+                _c = 1 + _b
+                A_logdet += _c
+            return A_logdet
+
+        qsu_logdet = log_determinant(lst_qsu, lst_qsu_inv)
+        qsv_logdet = log_determinant(lst_qsv, lst_qsv_inv)
+        psu_logdet = log_determinant(lst_psu, lst_psu_inv)
+        psv_logdet = log_determinant(lst_psv, lst_psv_inv)
+
+        _a = T.nlinalg.trace(T.dot(qsu_inv, psu))
+        _b = T.nlinalg.trace(T.dot(qsv_inv, psv))
+        _c = _a * _b
+
+        _d = T.dot(q_mean - p_mean, qsu_inv)
+        _e = T.dot(_d, (q_mean - p_mean).T)
+        _f = T.dot(_e, qsv_inv)
+        _g = T.nlinalg.trace(_f)
+
+        _h = self.num_inputs * self.num_units
+        _i = self.num_inputs * qsu_logdet
+        _j = self.num_units * qsv_logdet
+        _k = self.num_inputs * psu_logdet
+        _l = self.num_units * psv_logdet
+
+        kl = 0.5 * (_c + _g - _h + _i + _j - _k - _l)
+
         return kl
 
 
@@ -508,6 +581,7 @@ class BayesianDenseLayer(BayesianLayer):
             s = self.softplus(self.rho)
             s_u = s[self.num_inputs:]
             s_v = s[:self.num_inputs]
+            s_v = s[:self.num_inputs]
             s = T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
             delta = T.dot(T.square(input), T.square(s)) + T.mean(T.square(self.softplus(self.b_rho)))
         else:
@@ -545,7 +619,7 @@ class BayesianDenseLayer(BayesianLayer):
 class ConvBNN(LasagnePowered, Serializable):
     """(Convolutional) Bayesian neural network (BNN), according to Blundell2016.
 
-    The input and output to the network is a flat array. Internally, the shapes of input_dim 
+    The input and output to the network is a flat array. Internally, the shapes of input_dim
     and output_dim are used. Use layers_disc to describe the layers between the input and output
     layers.
     """
@@ -990,7 +1064,8 @@ class ConvBNN(LasagnePowered, Serializable):
                 #                 loss_only_last_sample, params, oldparams, step_size)
                 #
                 #             self.train_update_fn = ext.compile_function(
-                #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl, log_name='fn_surprise_2nd', no_default_updates=False)
+                #                 [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl,
+                #  log_name='fn_surprise_2nd', no_default_updates=False)
                 # ---------------------------------------------
 
             else:

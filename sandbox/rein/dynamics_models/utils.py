@@ -84,26 +84,24 @@ def load_dataset_MNIST():
     PATH = '/media/ssd/MNIST/'
     import os
     if not os.path.isdir(PATH):
-        PATH = '/home/rein/openai/datasets/mnist/'
+        PATH = '/Users/rein/openai/datasets/mnist/'
 
     X_train = load_mnist_images(PATH + 'train-images-idx3-ubyte.gz')
-    y_train = load_mnist_labels(PATH + 'train-labels-idx1-ubyte.gz')
     X_test = load_mnist_images(PATH + 't10k-images-idx3-ubyte.gz')
-    y_test = load_mnist_labels(PATH + 't10k-labels-idx1-ubyte.gz')
 
     # We just return all the arrays in order, as expected in main().
     # (It doesn't matter how we do this as long as we can read them again.)
-    return X_train[:100], y_train[:100], X_test, y_test
+    return X_train[:100], X_test
 
 
 def load_dataset_MNIST_plus():
-    X_train, y_train, X_test, y_test = load_dataset_MNIST()
-#     X_train = X_train - 1.
+    X_train, X_test = load_dataset_MNIST()
+    #     X_train = X_train - 1.
     # add action and reward signal.
     act = np.tanh(np.linspace(0, 1, X_train.shape[0]))
     act = np.vstack((act, act)).T
     rew = np.sin(np.linspace(0, 1, X_train.shape[0]))[:, None]
-    return X_train, y_train, X_test, y_test, act, rew
+    return X_train, X_test, act, rew
 
 
 def plot_mnist_digit(image, im):
@@ -135,12 +133,12 @@ def load_dataset_1Dregression():
         v = rng.normal(0, 0.02, size=x.shape)
         # TODO: Write y.
         y = x + 0.3 * np.sin(2. * np.pi * (x + v)) + 0.3 * \
-            np.sin(4. * np.pi * (x + v)) + v
-#         y += np.random.randint(low=0, high=2, size=(len(y), 1))
-#         rand = np.zeros((len(x), 1))
-#         for i in xrange(rand.shape[0]):
-#             rand[i] = random.choice([-1,1])
-#         x += rand * 2
+                                                     np.sin(4. * np.pi * (x + v)) + v
+        #         y += np.random.randint(low=0, high=2, size=(len(y), 1))
+        #         rand = np.zeros((len(x), 1))
+        #         for i in xrange(rand.shape[0]):
+        #             rand[i] = random.choice([-1,1])
+        #         x += rand * 2
         # 90% for training, 10% testing
         train_x = x[:len(x) * 0.9]
         train_y = y[:len(y) * 0.9]
@@ -156,12 +154,12 @@ def load_dataset_1Dregression():
         test_x = np.vstack([x2, test_x])
         test_y = np.vstack([y2, test_y])
 
-#         print(train_x.shape)
-        train_x = np.hstack([train_x, train_x**2, train_x**3, train_x**4])
-        test_x = np.hstack([test_x, test_x**2, test_x**3, test_x**4])
-#         print(new_train_x.shape)
-#         print(new_train_x[:,0][:,None].shape)
-#         print(train_x == new_train_x[:,0][:,None])
+        #         print(train_x.shape)
+        train_x = np.hstack([train_x, train_x ** 2, train_x ** 3, train_x ** 4])
+        test_x = np.hstack([test_x, test_x ** 2, test_x ** 3, test_x ** 4])
+        #         print(new_train_x.shape)
+        #         print(new_train_x[:,0][:,None].shape)
+        #         print(train_x == new_train_x[:,0][:,None])
         return (train_x, train_y), (test_x, test_y)
 
     return generate_synthetic_data(1e3)
@@ -176,12 +174,12 @@ def load_dataset_4Dregression():
         v = rng.normal(0, 0.02, size=x.shape)
         # TODO: Write y.
         y = x + 0.3 * np.sin(2. * np.pi * (x + v)) + 0.3 * \
-            np.sin(4. * np.pi * (x + v)) + v
-#         y += np.random.randint(low=0, high=2, size=(len(y), 1))
-#         rand = np.zeros((len(x), 1))
-#         for i in xrange(rand.shape[0]):
-#             rand[i] = random.choice([-1,1])
-#         x += rand * 2
+                                                     np.sin(4. * np.pi * (x + v)) + v
+        #         y += np.random.randint(low=0, high=2, size=(len(y), 1))
+        #         rand = np.zeros((len(x), 1))
+        #         for i in xrange(rand.shape[0]):
+        #             rand[i] = random.choice([-1,1])
+        #         x += rand * 2
         # 90% for training, 10% testing
         train_x = x[:len(x) * 0.9]
         train_y = y[:len(y) * 0.9]
@@ -197,12 +195,12 @@ def load_dataset_4Dregression():
         test_x = np.vstack([x2, test_x])
         test_y = np.vstack([y2, test_y])
 
-#         print(train_x.shape)
-        train_x = np.hstack([train_x, train_x**2, train_x**3, train_x**4])
-        test_x = np.hstack([test_x, test_x**2, test_x**3, test_x**4])
-#         print(new_train_x.shape)
-#         print(new_train_x[:,0][:,None].shape)
-#         print(train_x == new_train_x[:,0][:,None])
+        #         print(train_x.shape)
+        train_x = np.hstack([train_x, train_x ** 2, train_x ** 3, train_x ** 4])
+        test_x = np.hstack([test_x, test_x ** 2, test_x ** 3, test_x ** 4])
+        #         print(new_train_x.shape)
+        #         print(new_train_x[:,0][:,None].shape)
+        #         print(train_x == new_train_x[:,0][:,None])
         return (train_x, train_y), (test_x, test_y)
 
     return generate_synthetic_data(1e3)
