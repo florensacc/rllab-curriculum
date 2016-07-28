@@ -39,3 +39,6 @@ rllab/config_personal.py
 *.dat
 *.sublime-project
 *.sublime-workspace
+*.bin
+*.sh
+*.pkl
