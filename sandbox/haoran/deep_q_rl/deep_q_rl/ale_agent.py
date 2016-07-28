@@ -335,16 +335,9 @@ class NeuralAgent(object):
                                 np.mean(self.loss_averages)))
 
 
-    def finish_epoch(self, epoch):
-        if not self.recording:
-            return
-        # net_file = open(self.exp_dir + '/network_file_' + str(epoch) + \
-        #                 '.pkl', 'w')
-        # cPickle.dump(self.network, net_file, -1)
-        # net_file.close()
-
+    def finish_epoch(self, epoch,phase):
         if self.bonus_evaluator is not None:
-            self.bonus_evaluator.finish_epoch()
+            self.bonus_evaluator.finish_epoch(epoch,phase)
 
 
     def start_testing(self):

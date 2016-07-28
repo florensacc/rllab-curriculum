@@ -14,32 +14,12 @@ from rllab.misc.ext import AttrDict
 stub(globals())
 os.path.join(config.PROJECT_PATH)
 
-# check for uncommitted changes ------------------------------
-import git
-repo = git.Repo('.')
-if repo.is_dirty():
-    answer = ''
-    while answer not in ['y','Y','n','N']:
-        answer = raw_input("The repository has uncommitted changes. Do you want to continue? (y/n)")
-    if answer in ['n','N']:
-        sys.exit(1)
 
 # define running mode specific params -----------------------------------
 exp_prefix = os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_run"
+mode = "local_test"
 snapshot_mode = "all"
-plot = False
-
-if mode == "ec2_cpu":
-    config.AWS_INSTANCE_TYPE = "m4.large"
-    config.AWS_SPOT_PRICE = '0.1'
-    plot = False
-    raise NotImplementedError
-elif mode == "ec2_gpu":
-    config.AWS_INSTANCE_TYPE = "g2.2xlarge"
-    config.AWS_SPOT_PRICE = '1.0'
-    plot = False
-
+plot = True
 
 # different training params ------------------------------------------
 from rllab.misc.instrument import VariantGenerator, variant
@@ -61,6 +41,28 @@ class VG(VariantGenerator):
         return ["breakout", "freeway"]
 
 variants = VG().variants()
+
+# mode specific settings -----------------------------------
+if mode == "ec2_cpu":
+    config.AWS_INSTANCE_TYPE = "m4.large"
+    config.AWS_SPOT_PRICE = '0.1'
+    plot = False
+    raise NotImplementedError
+elif mode == "ec2_gpu":
+    config.AWS_INSTANCE_TYPE = "g2.2xlarge"
+    config.AWS_SPOT_PRICE = '1.0'
+    plot = False
+
+
+# check for uncommitted changes ------------------------------
+import git
+repo = git.Repo('.')
+if repo.is_dirty():
+    answer = ''
+    while answer not in ['y','Y','n','N']:
+        answer = raw_input("The repository has uncommitted changes. Do you want to continue? (y/n)")
+    if answer in ['n','N']:
+        sys.exit(1)
 
 for v in variants:
     defaults = AttrDict(

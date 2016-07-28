@@ -140,15 +140,15 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         for hash in self.hash_list:
             hash.reset()
 
-    def finish_epoch(self):
+    def finish_epoch(self,epoch,phase):
         # record counts
         if self.count_mode == "s":
-            logger.record_tabular_misc_stat("StateCount",self.epoch_hash_count_list)
+            logger.record_tabular_misc_stat("%sStateCount"%(phase),self.epoch_hash_count_list)
         else:
             raise NotImplementedError
 
         # record bonus
-        logger.record_tabular_misc_stat("BonusReward",self.epoch_bonus_list)
+        logger.record_tabular_misc_stat("%sBonusReward"%(phase),self.epoch_bonus_list)
 
         self.epoch_hash_count_list = []
         self.epoch_bonus_list = []

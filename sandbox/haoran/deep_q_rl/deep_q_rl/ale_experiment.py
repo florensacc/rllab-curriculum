@@ -54,12 +54,12 @@ class ALEExperiment(object):
         """
         for epoch in range(1, self.num_epochs + 1):
             self.run_epoch(epoch, self.epoch_length)
-            self.agent.finish_epoch(epoch)
+            self.agent.finish_epoch(epoch,phase="Train")
 
             if self.test_length > 0:
                 self.agent.start_testing()
                 self.run_epoch(epoch, self.test_length, True)
-                self.agent.finish_testing(epoch)
+                self.agent.finish_testing(epoch,phase="Test")
             logger.dump_tabular(with_prefix=False)
         self.agent.cleanup()
 
