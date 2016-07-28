@@ -1,9 +1,11 @@
 import numpy as np
 
 from rllab.algos.base import RLAlgorithm
+from rllab.misc.ext import sliced_fun
 from sandbox.rein.sampler import parallel_sampler_vime as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
+from rllab.misc.ext import sliced_fun
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
@@ -294,16 +296,20 @@ class BatchPolopt(RLAlgorithm):
 
     def accuracy(self, _inputs, _targets):
         acc = 0.
-        _out = self.bnn.pred_fn(_inputs)
-        if self.output_type == 'regression':
-            acc += np.mean(np.sum(np.square(_out - _targets), axis=1))
-        elif self.output_type == 'classification':
-            # FIXME: only for Atari
-            _out2 = _out.reshape([-1, 256])
-            _argm = np.argmax(_out2, axis=1)
-            _argm2 = _argm.reshape([-1, 128])
-            acc += np.sum(np.equal(_targets, _argm2)) / float(_targets.size)
-        return acc
+        for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
+            _i, _t, _ = batch
+            print(_i.shape, _t.shape)
+            _o = self.bnn.pred_fn(_i)
+            print(_o.shape)
+            if self.output_type == 'regression':
+                acc += np.sum(np.square(_o - _t))
+            elif self.output_type == 'classification':
+                # FIXME: only for Atari
+                _out2 = _o.reshape([-1, 256])
+                _argm = np.argmax(_out2, axis=1)
+                _argm2 = _argm.reshape([-1, 128])
+                acc += np.sum(np.equal(_targets, _argm2))
+        return acc / _inputs.shape[0]
 
     def plot_pred_imgs(self, inputs, targets, itr, count):
         try:
@@ -559,7 +565,7 @@ class BatchPolopt(RLAlgorithm):
                             ipdb.set_trace()
                         assert not np.isnan(train_loss)
                         assert not np.isinf(train_loss)
-                        if count % int(np.ceil(len(X_train) * num_itr / float(self.kl_batch_size) / 5.)) == 0:
+                        if count % int(np.ceil(self.num_sample_updates * len(lst_idx) / 5.)) == 0:
                             self.plot_pred_imgs(X_train[idx], T_train[idx], itr, count)
                         count += 1
                     loss_after = float(self.bnn.fn_loss(X_train[idx], T_train[idx], 1.))

@@ -203,6 +203,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             self._y_std_var.set_value(
                 (np.std(ys, axis=0, keepdims=True) + 1e-8).astype(theano.config.floatX))
         if self._use_trust_region:
+            # FIXME: needs batch computation to avoid OOM.
             old_means, old_log_stds = self._f_pdists(xs)
             inputs = [xs, ys, old_means, old_log_stds]
         else:

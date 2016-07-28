@@ -12,17 +12,17 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
 from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
+
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
 # Param ranges
-seeds = range(1)
-etas = [0, 0.00001, 0.001, 0.1]
-etas = [0.01]
+seeds = range(5)
+etas = [0.001, 0.01, 0.1]
 normalize_rewards = [False]
 kl_ratios = [False]
-RECORD_VIDEO = True
+RECORD_VIDEO = False
 mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
         GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
         GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),
@@ -33,7 +33,6 @@ param_cart_product = itertools.product(
 )
 
 for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
-
     network = ConvNetwork(
         input_shape=mdp.spec.observation_space.shape,
         output_dim=mdp.spec.action_space.flat_dim,
@@ -77,8 +76,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
     )
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(mean_network=network,
-                            batchsize=20000),
+        regressor_args=dict(
+            mean_network=network,
+            batchsize=20000),
     )
 
     algo = TRPO(
@@ -88,12 +88,14 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=5000,
+        batch_size=50000,
         whole_paths=True,
         max_path_length=5000,
         n_itr=250,
         step_size=0.01,
-        optimizer_args=dict(num_slices=30),
+        optimizer_args=dict(
+            num_slices=30,
+            subsample_factor=0.1),
         # -------------
 
         # VIME settings
@@ -102,8 +104,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         snn_n_samples=1,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=128,
-        num_sample_updates=1,  # Every sample in traj batch will be used in `num_sample_updates' updates.
+        kl_batch_size=8,
+        num_sample_updates=10,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=normalize_reward,
         dyn_pool_args=dict(
             enable=False,
@@ -177,7 +179,6 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         update_likelihood_sd=True,
         replay_kl_schedule=0.98,
         output_type=BNN.OutputType.REGRESSION,
-        pool_batch_size=8,
         likelihood_sd_init=0.01,
         prior_sd=0.05,
         predict_delta=True,
@@ -193,11 +194,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-pxl-b",
+        exp_prefix="trpo-vime-atari-pxl-f",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

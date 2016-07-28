@@ -93,7 +93,10 @@ class BayesianLayer(lasagne.layers.Layer):
         self.disable_variance = disable_variance
         self._matrix_variate_gaussian = matrix_variate_gaussian
         self.mvg_rank = mvg_rank
+
         self.mu_tmp, self.b_mu_tmp, self.rho_tmp, self.b_rho_tmp = None, None, None, None
+        self.mu, self.rho, self.b_mu, self.b_rho = None, None, None, None
+        self.mu_old, self.rho_old, self.b_mu_old, self.b_rho_old = None, None, None, None
 
         if self.disable_variance:
             print('Variance disabled!')
@@ -581,10 +584,13 @@ class BayesianDenseLayer(BayesianLayer):
             s = self.softplus(self.rho)
             s_u = s[self.num_inputs:]
             s_v = s[:self.num_inputs]
-            s_v = s[:self.num_inputs]
-            s = T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
+            s = T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).dimshuffle(1, 0)
+            # input \in M x num_inputs; s_u \in num_units x 1; s_v \in 1 x num_inputs
+            # s \in num_inputs x num_units
+            # out \in M x num_units
             delta = T.dot(T.square(input), T.square(s)) + T.mean(T.square(self.softplus(self.b_rho)))
         else:
+            # input \in M x num_inputs; rho \in num_inputs x num_units; out \in M x num_units
             delta = T.dot(T.square(input), T.square(self.softplus(self.rho))) \
                     + T.square(self.softplus(self.b_rho)).dimshuffle('x', 0)
 

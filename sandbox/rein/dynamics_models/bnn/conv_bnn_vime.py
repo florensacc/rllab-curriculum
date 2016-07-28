@@ -118,6 +118,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.debug = debug
         self.ind_softmax = ind_softmax
 
+        self.network = None
+
         if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
             assert self.num_classes is not None
             assert self.num_output_dim is not None
@@ -143,7 +145,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         LasagnePowered.__init__(self, [self.network])
 
         # Compile theano functions.
-        self.build_model
+        self.build_model()
 
         print('num_weights: {}'.format(self.num_weights()))
 
@@ -441,7 +443,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         r_net = lasagne.layers.reshape(r_net, ([0], -1))
         self.network = ConcatLayer([s_net, r_net])
 
-    @property
     def build_model(self):
 
         # Prepare Theano variables for inputs and targets
