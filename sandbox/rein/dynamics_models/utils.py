@@ -55,6 +55,25 @@ def sliding_mean(data_array, window=5):
     return np.array(new_list)
 
 
+def load_dataset_Atari():
+    import pickle
+
+    path = '/Users/rein/programming/openai/vime'
+    file_handler = open(path + '/dataset.pkl', 'r')
+    _dataset = pickle.load(file_handler)
+    return _dataset['x'].transpose(0, 3, 1, 2), _dataset['y'].transpose(0, 3, 1, 2)
+
+
+def load_dataset_Atari_plus():
+    X_train, T_train = load_dataset_Atari()
+    #     X_train = X_train - 1.
+    # add action and reward signal.
+    act = np.tanh(np.linspace(0, 1, X_train.shape[0]))
+    act = np.vstack((act, act)).T
+    rew = np.sin(np.linspace(0, 1, X_train.shape[0]))[:, None]
+    return X_train, T_train, act, rew
+
+
 def load_dataset_MNIST():
     """MNIST dataset loader"""
 

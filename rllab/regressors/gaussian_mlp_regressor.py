@@ -202,30 +202,32 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
                 np.mean(ys, axis=0, keepdims=True).astype(theano.config.floatX))
             self._y_std_var.set_value(
                 (np.std(ys, axis=0, keepdims=True) + 1e-8).astype(theano.config.floatX))
-        if self._use_trust_region:
-            # FIXME: needs batch computation to avoid OOM.
-            old_means, old_log_stds = self._f_pdists(xs)
-            inputs = [xs, ys, old_means, old_log_stds]
-        else:
-            inputs = [xs, ys]
-        loss_before = self._optimizer.loss(inputs)
         if self._name:
             prefix = self._name + "_"
         else:
             prefix = ""
-        logger.record_tabular(prefix + 'LossBefore', loss_before)
-        if self._batchsize is None:
+        # FIXME: needs batch computation to avoid OOM.
+        loss_before, loss_after, mean_kl, batch_count = 0., 0., 0., 0
+        for batch in iterate_minibatches_generic(input_lst=[xs, ys], batchsize=self._batchsize, shuffle=True):
+            batch_count += 1
+            xs, ys = batch
+            if self._use_trust_region:
+                old_means, old_log_stds = self._f_pdists(xs)
+                inputs = [xs, ys, old_means, old_log_stds]
+            else:
+                inputs = [xs, ys]
+            loss_before += self._optimizer.loss(inputs)
+
             self._optimizer.optimize(inputs)
-        else:
-            # FIXME: preventing OOM.
-            for batch in iterate_minibatches_generic(input_lst=inputs, batchsize=self._batchsize, shuffle=True):
-                self._optimizer.optimize(batch)
-        loss_after = self._optimizer.loss(inputs)
-        logger.record_tabular(prefix + 'LossAfter', loss_after)
+            loss_after += self._optimizer.loss(inputs)
+            if self._use_trust_region:
+                mean_kl += self._optimizer.constraint_val(inputs)
+
+        logger.record_tabular(prefix + 'LossBefore', loss_before / batch_count)
+        logger.record_tabular(prefix + 'LossAfter', loss_after / batch_count)
+        logger.record_tabular(prefix + 'dLoss', loss_before - loss_after / batch_count)
         if self._use_trust_region:
-            logger.record_tabular(
-                prefix + 'MeanKL', self._optimizer.constraint_val(inputs))
-        logger.record_tabular(prefix + 'dLoss', loss_before - loss_after)
+            logger.record_tabular(prefix + 'MeanKL', mean_kl / batch_count)
 
     def predict(self, xs):
         """
@@ -253,7 +255,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
 
         normalized_means_var, normalized_log_stds_var = \
             L.get_output([self._l_mean, self._l_log_std], {
-                         self._mean_network.input_layer: normalized_xs_var})
+                self._mean_network.input_layer: normalized_xs_var})
 
         means_var = normalized_means_var * self._y_std_var + self._y_mean_var
         log_stds_var = normalized_log_stds_var + TT.log(self._y_std_var)

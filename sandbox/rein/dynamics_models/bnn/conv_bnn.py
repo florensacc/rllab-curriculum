@@ -147,7 +147,7 @@ class BayesianLayer(lasagne.layers.Layer):
             # In fact, this should be initialized to np.zeros(self.get_W_shape()),
             # but this trains much slower.
             self.mu = self.add_param(
-                lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
+                lasagne.init.Normal(0.01, 0.), self.get_W_shape(), name='mu')
             self.rho = self.add_param(
                 lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho')
 

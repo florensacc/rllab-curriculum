@@ -20,6 +20,8 @@ stub(globals())
 # Param ranges
 seeds = range(5)
 etas = [0.001, 0.01, 0.1]
+# seeds = [1]
+# etas = [0.1]
 normalize_rewards = [False]
 kl_ratios = [False]
 RECORD_VIDEO = False
@@ -78,7 +80,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         mdp.spec,
         regressor_args=dict(
             mean_network=network,
-            batchsize=20000),
+            batchsize=5000),
     )
 
     algo = TRPO(
@@ -101,7 +103,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=1,
+        snn_n_samples=10,
+        num_train_samples=1,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=8,
@@ -176,10 +179,10 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         ],
         unn_learning_rate=0.005,
         surprise_transform=BatchPolopt.SurpriseTransform.CAP99PERC,
-        update_likelihood_sd=True,
+        update_likelihood_sd=False,
         replay_kl_schedule=0.98,
         output_type=BNN.OutputType.REGRESSION,
-        likelihood_sd_init=0.01,
+        likelihood_sd_init=0.001,
         prior_sd=0.05,
         predict_delta=True,
         # -------------
@@ -194,7 +197,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-pxl-f",
+        exp_prefix="trpo-vime-atari-pxl-g",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

@@ -65,7 +65,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             plt.draw()
             plt.pause(0.00001)
 
-        elif PLOT_OUTPUT_REGIONS and epoch % 30 == 0 and epoch != 0:
+        elif PLOT_OUTPUT_REGIONS and epoch % 1 == 0 and epoch != 0:
             import matplotlib.pyplot as plt
 
             ys = []
@@ -122,6 +122,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             epoch + 1, num_epochs, time.time() - start_time))
         print("  training loss:\t\t{:.6f}".format(
             train_err / train_batches))
+        print(model.likelihood_sd.eval())
 
     print("Done training.")
 
@@ -145,35 +146,39 @@ def main():
         layers_disc=[
             dict(name='gaussian',
                  n_units=32,
-                 matrix_variate_gaussian=True),
+                 matrix_variate_gaussian=False,
+                 nonlinearity=np.sin),
             dict(name='gaussian',
                  n_units=32,
-                 matrix_variate_gaussian=True),
+                 matrix_variate_gaussian=False,
+                 nonlinearity=np.sin),
             dict(name='hadamard',
                  n_units=32,
-                 matrix_variate_gaussian=True),
+                 matrix_variate_gaussian=False,
+                 nonlinearity=np.sin),
             dict(name='gaussian',
                  n_units=32,
-                 matrix_variate_gaussian=True),
+                 matrix_variate_gaussian=False,
+                 nonlinearity=np.sin),
             dict(name='split',
                  n_units=32,
-                 matrix_variate_gaussian=True),
+                 matrix_variate_gaussian=False,
+                 nonlinearity=np.sin),
             dict(name='gaussian',
                  n_units=1,
-                 matrix_variate_gaussian=True,
+                 matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.linear),
         ],
         n_batches=n_batches,
-        trans_func=lasagne.nonlinearities.rectify,
-        out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=2,
+        n_samples=1,
+        num_train_samples=1,
         prior_sd=0.05,
         update_likelihood_sd=False,
         learning_rate=0.001,
         group_variance_by=ConvBNNVIME.GroupVarianceBy.UNIT,
         use_local_reparametrization_trick=True,
-        likelihood_sd_init=0.01,
+        likelihood_sd_init=0.001,
         output_type=ConvBNNVIME.OutputType.REGRESSION,
         surprise_type=ConvBNNVIME.SurpriseType.COMPR,
         disable_variance=False,
