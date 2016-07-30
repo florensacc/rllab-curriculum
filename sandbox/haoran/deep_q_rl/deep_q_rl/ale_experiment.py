@@ -8,6 +8,7 @@ from rllab.misc import logger
 import numpy as np
 import cv2
 import time
+from ale_python_interface.ale_python_interface import ALEInterface
 
 # Number of rows to crop off the bottom of the (downsampled) screen.
 # This is appropriate for breakout, but it may need to be modified
@@ -16,11 +17,26 @@ CROP_OFFSET = 8
 
 
 class ALEExperiment(object):
-    def __init__(self, ale, agent, resized_width, resized_height,
+    def __init__(self, ale_args, agent, resized_width, resized_height,
                  resize_method, num_epochs, epoch_length, test_length,
-                 frame_skip, death_ends_episode, max_start_nullops, rng,
+                 frame_skip, death_ends_episode, max_start_nullops,
                  length_in_episodes=False):
+        self.ale_args = ale_args
+        ale = ALEInterface()
+        ale.setInt('random_seed', ale_args["seed"])
+
+        if ale_args["plot"]:
+            if sys.platform == 'darwin':
+                import pygame
+                pygame.init()
+                ale.setBool('sound', False) # Sound doesn't work on OSX
+
+        ale.setBool('display_screen', ale_args["plot"])
+        ale.setFloat('repeat_action_probability',
+                     ale_args["repeat_action_probability"])
+        ale.loadROM(ale_args["rom_path"])
         self.ale = ale
+
         self.agent = agent
         self.num_epochs = num_epochs
         self.epoch_length = epoch_length
@@ -41,7 +57,6 @@ class ALEExperiment(object):
 
         self.terminal_lol = False # Most recent episode ended on a loss of life
         self.max_start_nullops = max_start_nullops
-        self.rng = rng
 
         # Whether the lengths (test_length and epoch_length) are specified in
         # episodes. This is mainly for testing
@@ -53,13 +68,16 @@ class ALEExperiment(object):
         is conducted after each training epoch.
         """
         for epoch in range(1, self.num_epochs + 1):
+            self.agent.start_epoch(epoch,phase="Train")
             self.run_epoch(epoch, self.epoch_length)
             self.agent.finish_epoch(epoch,phase="Train")
 
             if self.test_length > 0:
                 self.agent.start_testing()
+                self.agent.start_epoch(epoch,phase="Test")
                 self.run_epoch(epoch, self.test_length, True)
-                self.agent.finish_testing(epoch,phase="Test")
+                self.agent.finish_epoch(epoch,phase="Test")
+                self.agent.finish_testing(epoch)
             logger.dump_tabular(with_prefix=False)
         self.agent.cleanup()
 
@@ -135,7 +153,7 @@ class ALEExperiment(object):
             self.ale.reset_game()
 
             if self.max_start_nullops > 0:
-                random_actions = self.rng.randint(0, self.max_start_nullops+1)
+                random_actions = np.random.randint(0, self.max_start_nullops+1)
                 for _ in range(random_actions):
                     self._act(0) # Null action
 

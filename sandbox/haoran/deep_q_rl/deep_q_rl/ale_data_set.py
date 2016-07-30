@@ -13,15 +13,13 @@ class DataSet(object):
 actions, and rewards.
 
     """
-    def __init__(self, width, height, rng, max_steps=1000, phi_length=4):
+    def __init__(self, width, height, max_steps=1000, phi_length=4):
         """Construct a DataSet.
 
         Arguments:
             width, height - image size
             max_steps - the number of time steps to store
             phi_length - number of images to concatenate into a state
-            rng - initialized numpy random number generator, used to
-            choose random minibatches
 
         """
         # TODO: Specify capacity in number of state transitions, not
@@ -32,7 +30,6 @@ actions, and rewards.
         self.height = height
         self.max_steps = max_steps
         self.phi_length = phi_length
-        self.rng = rng
 
         # Allocate the circular buffers and indices.
         self.imgs = np.zeros((max_steps, height, width), dtype='uint8')
@@ -113,7 +110,7 @@ next_states for batch_size randomly chosen state transitions.
         count = 0
         while count < batch_size:
             # Randomly choose a time step from the replay memory.
-            index = self.rng.randint(self.bottom,
+            index = np.random.randint(self.bottom,
                                      self.bottom + self.size - self.phi_length)
 
             initial_indices = np.arange(index, index + self.phi_length)

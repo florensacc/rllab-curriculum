@@ -10,7 +10,7 @@ NIPS Deep Learning Workshop 2013
 import sys
 sys.path.append("sandbox/haoran/deep_q_rl/deep_q_rl")
 
-import launcher
+from launcher import Launcher
 import sys
 
 class Defaults:
@@ -62,6 +62,11 @@ class Defaults:
     USE_DOUBLE = False
     CLIP_REWARD = True
     USE_BONUS = True
+    DISPLAY_SCREEN = False
+    AGENT_UNPICKLABLE_LIST = ["data_set","test_data_set"],
+    SEED = 0,
+
 
 if __name__ == "__main__":
-    launcher.launch(sys.argv[1:], Defaults, __doc__)
+    launcher = Launcher(sys.argv[1:], Defaults, __doc__)
+    launcher.launch()

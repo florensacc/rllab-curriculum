@@ -23,7 +23,7 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         ):
         self.state_dim = state_dim
         if img_preprocessor is not None:
-            assert img_preprocessor.output_dim == state_dim
+            assert img_preprocessor.get_output_dim() == state_dim
             self.img_preprocessor = img_preprocessor
         else:
             self.img_preprocessor = None
@@ -59,6 +59,8 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         self.state_action_bonus_mode = state_action_bonus_mode
         self.epoch_hash_count_list = [] # record the hash counts of all state (state-action) they are *updated* (not evaluated) in this epoch
         self.epoch_bonus_list = [] # record the bonus given throughout the epoch
+        self.new_state_count = 0
+        self.new_state_action_count = 0
 
     def preprocess(self,states):
         if self.img_preprocessor is not None:
@@ -71,11 +73,18 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         """
         states = self.preprocess(states)
         if self.count_mode == "s":
-            self.hash_list[0].inc_hash(states)
+            hash = self.hash_list[0]
+            hash.inc(states)
+            counts = hash.query(states)
+            self.new_state_count += list(counts).count(1)
         elif self.count_mode == "sa":
             for s,a in zip(states,actions):
                 s = s.reshape((1,len(s)))
-                self.hash_list[a].inc_hash(s)
+                hash = self.hash_list[a]
+                hash.inc(s)
+
+                if int(hash.query(s)) == 1:
+                    self.new_state_action_count += 1
         else:
             raise NotImplementedError
 
@@ -85,14 +94,14 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         """
         if self.bonus_mode == "s":
             states = self.preprocess(states)
-            counts = self.hash_list[0].query_hash(states)
+            counts = self.hash_list[0].query(states)
             bonus = self.compute_state_bonus(counts)
         elif self.bonus_mode == "sa":
             states = self.preprocess(states)
             # for each state, query the state-action count for each possible action
             counts = [
                 [
-                    hash.query_hash(s.reshape((1,len(s)))).ravel()
+                    hash.query(s.reshape((1,len(s)))).ravel()
                     for hash in self.hash_list
                 ]
                 for s in states
@@ -100,7 +109,7 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
             self.compute_state_action_bonus(counts, actions)
         elif self.bonus_mode == "s_next":
             next_states = self.preprocess(next_states)
-            counts = self.hash_list[0].query_hash(next_states)
+            counts = self.hash_list[0].query(next_states)
             bonus = self.compute_state_bonus(counts)
         else:
             raise NotImplementedError
@@ -126,10 +135,10 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
     def count(self,states,actions):
         states = self.preprocess(states)
         if self.count_mode == "s":
-            counts = self.hash_list[0].query_hash(states)
+            counts = self.hash_list[0].query(states)
         elif self.count_mode == "sa":
             counts = [
-                int(self.hash_list[a].query_hash(s.reshape((1,len(s)))))
+                int(self.hash_list[a].query(s.reshape((1,len(s)))))
                 for s,a in zip(states,actions)
             ]
         else:
@@ -142,16 +151,28 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
 
     def finish_epoch(self,epoch,phase):
         # record counts
-        if self.count_mode == "s":
-            logger.record_tabular_misc_stat("%sStateCount"%(phase),self.epoch_hash_count_list)
-        else:
-            raise NotImplementedError
+        if phase == "Train":
+            if self.count_mode == "s":
+                logger.record_tabular_misc_stat(
+                    "ReplayedStateCount",
+                    self.epoch_hash_count_list
+                )
+                logger.record_tabular(
+                    "NewStateCount",
+                    self.new_state_count,
+                )
+            else:
+                raise NotImplementedError
 
-        # record bonus
-        logger.record_tabular_misc_stat("%sBonusReward"%(phase),self.epoch_bonus_list)
+            # record bonus
+            logger.record_tabular_misc_stat(
+                "BonusReward",
+                self.epoch_bonus_list
+            )
 
         self.epoch_hash_count_list = []
         self.epoch_bonus_list = []
+        self.new_state_count = 0
 
     def log_diagnostics(self, paths):
         pass

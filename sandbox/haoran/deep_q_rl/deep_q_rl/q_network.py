@@ -18,9 +18,9 @@ import numpy as np
 import theano
 import theano.tensor as T
 from updates import deepmind_rmsprop
+from rllab.core.serializable import Serializable
 
-
-class DeepQLearner:
+class DeepQLearner(Serializable):
     """
     Deep Q-learning network using Lasagne.
     """
@@ -29,7 +29,8 @@ class DeepQLearner:
                  num_frames, discount, learning_rate, rho,
                  rms_epsilon, momentum, clip_delta, freeze_interval,
                  use_double, batch_size, network_type, update_rule,
-                 batch_accumulator, rng, input_scale=255.0):
+                 batch_accumulator, input_scale=255.0):
+        Serializable.quick_init(self,locals())
 
         self.input_width = input_width
         self.input_height = input_height
@@ -44,13 +45,11 @@ class DeepQLearner:
         self.clip_delta = clip_delta
         self.freeze_interval = freeze_interval
         self.use_double = use_double
-        self.rng = rng
 
         # Using Double DQN is pointless without periodic freezing
         if self.use_double:
             assert self.freeze_interval > 0
 
-        lasagne.random.set_rng(self.rng)
 
         self.update_counter = 0
 
@@ -221,8 +220,8 @@ class DeepQLearner:
         return self._q_vals()[0]
 
     def choose_action(self, state, epsilon):
-        if self.rng.rand() < epsilon:
-            return self.rng.randint(0, self.num_actions)
+        if np.random.uniform() < epsilon:
+            return np.random.randint(0, self.num_actions)
         q_vals = self.q_vals(state)
         return np.argmax(q_vals)
 

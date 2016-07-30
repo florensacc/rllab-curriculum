@@ -6,10 +6,11 @@ run_nips.py or run_nature.py.
 """
 import os, sys
 import argparse
+sys.path.append('.')
 from rllab.misc import logger
 import time
 import ale_python_interface
-import cPickle
+import cPickle as pickle
 import numpy as np
 import theano
 
@@ -161,7 +162,7 @@ class Launcher(object):
             help=('Specify exact directory where to save output to ' +
                 '(default: combination of prefix and game name and current ' +
                 'date and parameters)'))
-        parser.add_argument('--no-record', dest="recording", default=True,
+        parser.add_argument('--no-record', dest="recording", default=False,
             action="store_false",
             help=('Do not record anything about the experiment ' +
                 '(best games, epoch networks, test results, etc)'))
@@ -239,8 +240,6 @@ class Launcher(object):
                 game_name,
                 time_str
             )
-        tabular_log_file = os.path.join(experiment_directory, parameters.tabular_log_file)
-        logger.add_tabular_output(tabular_log_file)
 
 
         ale = ale_python_interface.ALEInterface()
@@ -298,7 +297,7 @@ class Launcher(object):
                 )
         else:
             handle = open(parameters.nn_file, 'r')
-            network = cPickle.load(handle)
+            network = pickle.load(handle)
 
         agent = ale_agent.NeuralAgent(network,
               parameters.epsilon_start,
@@ -325,8 +324,6 @@ class Launcher(object):
               length_in_episodes=parameters.episodes)
         self.ale = ale
 
-    def set_agent_attr(self,k,v):
-        setattr(self.experiment.agent,k,v)
 
     def launch(self):
         self._launch()

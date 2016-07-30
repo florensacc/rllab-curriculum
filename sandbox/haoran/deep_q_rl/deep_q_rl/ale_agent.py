@@ -22,7 +22,7 @@ class NeuralAgent(object):
 
     def __init__(self, q_network, epsilon_start, epsilon_min,
                  epsilon_decay, replay_memory_size, experiment_directory,
-                 replay_start_size, update_frequency, rng, clip_reward, bonus_evaluator=None,
+                 replay_start_size, update_frequency, clip_reward, bonus_evaluator=None,
                  recording=True,
                  unpicklable_list=["data_set","test_data_set"]
                  ):
@@ -37,7 +37,6 @@ class NeuralAgent(object):
         self.replay_memory_size = replay_memory_size
         self.replay_start_size = replay_start_size
         self.update_frequency = update_frequency
-        self.rng = rng
 
         self.phi_length = self.network.num_frames
         self.image_width = self.network.input_width
@@ -59,18 +58,20 @@ class NeuralAgent(object):
         self.num_actions = self.network.num_actions
 
 
-        self.data_set = ale_data_set.DataSet(width=self.image_width,
-                                             height=self.image_height,
-                                             rng=rng,
-                                             max_steps=self.replay_memory_size,
-                                             phi_length=self.phi_length)
+        self.data_set = ale_data_set.DataSet(
+            width=self.image_width,
+            height=self.image_height,
+            max_steps=self.replay_memory_size,
+            phi_length=self.phi_length
+        )
 
         # just needs to be big enough to create phi's
-        self.test_data_set = ale_data_set.DataSet(width=self.image_width,
-                                                  height=self.image_height,
-                                                  rng=rng,
-                                                  max_steps=self.phi_length * 2,
-                                                  phi_length=self.phi_length)
+        self.test_data_set = ale_data_set.DataSet(
+            width=self.image_width,
+            height=self.image_height,
+            max_steps=self.phi_length * 2,
+            phi_length=self.phi_length
+        )
         self.epsilon = self.epsilon_start
         if self.epsilon_decay != 0:
             self.epsilon_rate = ((self.epsilon_start - self.epsilon_min) /
@@ -134,7 +135,7 @@ class NeuralAgent(object):
     def _update_learning_file(self):
         if not self.recording:
             return
-        out = "{},{}\n".format(np.mean(self.loss_averages),
+        out = "{},{}\n".format(np.mean(self.episode_td_losses),
                                self.epsilon)
         self.learning_file.write(out)
         self.learning_file.flush()
@@ -157,10 +158,10 @@ class NeuralAgent(object):
         self.episode_reward = 0
 
         # We report the mean loss for every epoch.
-        self.loss_averages = []
+        self.episode_td_losses = []
 
         self.start_time = time.time()
-        return_action = self.rng.randint(0, self.num_actions)
+        return_action = np.random.randint(0, self.num_actions)
 
         self.last_action = return_action
 
@@ -245,7 +246,7 @@ class NeuralAgent(object):
                 if self.step_counter % self.update_frequency == 0:
                     loss = self._do_training()
                     self.batch_counter += 1
-                    self.loss_averages.append(loss)
+                    self.episode_td_losses.append(loss)
 
             else: # Still gathering initial random data...
                 action = self._choose_action(self.data_set, self.epsilon,
@@ -272,7 +273,7 @@ class NeuralAgent(object):
                 actions = np.asarray([action])
                 self.bonus_evaluator.update(states,actions)
         else:
-            action = self.rng.randint(0, self.num_actions)
+            action = np.random.randint(0, self.num_actions)
 
         return action
 
@@ -332,12 +333,23 @@ class NeuralAgent(object):
             if self.batch_counter > 0:
                 self._update_learning_file()
                 logger.log("average loss: {:.4f}".format(\
-                                np.mean(self.loss_averages)))
+                                np.mean(self.episode_td_losses)))
 
+        self.epoch_td_losses += list(self.episode_td_losses)
+
+    def start_epoch(self,epoch,phase):
+        self.epoch_td_losses = []
 
     def finish_epoch(self, epoch,phase):
         if self.bonus_evaluator is not None:
             self.bonus_evaluator.finish_epoch(epoch,phase)
+
+        if phase == "Train":
+            logger.record_tabular(
+                "AverageTDLoss",
+                np.average(self.epoch_td_losses)
+            )
+        logger.record_tabular("%sEpsilon"%(phase),self.epsilon)
 
 
     def start_testing(self):

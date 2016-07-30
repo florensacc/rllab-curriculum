@@ -42,3 +42,4 @@ rllab/config_personal.py
 *.bin
 *.sh
 *.pkl
+runs

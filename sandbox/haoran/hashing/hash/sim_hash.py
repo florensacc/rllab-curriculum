@@ -40,7 +40,7 @@ class SimHash(Hash):
         keys = np.cast['int'](binaries.dot(self.mods_list)) % self.bucket_sizes
         return keys
 
-    def inc_hash(self, items):
+    def inc(self, items):
         """
         Increment hash table counts for many items (row-wise stacked as a matrix)
         """
@@ -48,7 +48,7 @@ class SimHash(Hash):
         for idx in xrange(len(self.bucket_sizes)):
             np.add.at(self.tables[idx], keys[:, idx], 1)
 
-    def query_hash(self, items):
+    def query(self, items):
         """
         For each item, return the min of all counts from all buckets.
         """
