@@ -8,6 +8,7 @@ from rllab.misc import logger
 import numpy as np
 import cv2
 import time
+import sys
 from ale_python_interface.ale_python_interface import ALEInterface
 
 # Number of rows to crop off the bottom of the (downsampled) screen.

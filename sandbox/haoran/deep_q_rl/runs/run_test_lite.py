@@ -32,10 +32,12 @@ if repo.is_dirty():
 
 # define running mode specific params -----------------------------------
 exp_prefix = os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_test"
+mode = "local_docker_test"
 snapshot_mode = "all"
 plot = False
+use_gpu = True
 
+# config.DOCKER_IMAGE = 'tsukuyomi2044/rllab'
 if "ec2_cpu" in mode:
     config.AWS_INSTANCE_TYPE = "m4.large"
     config.AWS_SPOT_PRICE = '0.1'
@@ -223,7 +225,9 @@ for v in variants:
 
     # run --------------------------------------------------
     terminate_machine = "test" not in mode
-    if "local" in mode:
+    if "local_docker" in mode:
+        actual_mode = "local_docker"
+    elif "local" in mode:
         actual_mode = "local"
     elif "ec2" in mode:
         actual_mode = "ec2"
@@ -239,8 +243,8 @@ for v in variants:
         snapshot_mode=snapshot_mode,
         mode=actual_mode,
         variant=v,
-        terminate_machine=True,
-        use_gpu=True,
+        terminate_machine=terminate_machine,
+        use_gpu=use_gpu,
     )
     if "test" in mode:
         sys.exit(0)

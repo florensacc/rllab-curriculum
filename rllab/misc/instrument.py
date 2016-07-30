@@ -150,7 +150,7 @@ class StubObject(StubBase):
     def __getattr__(self, item):
         if hasattr(self.proxy_class, item):
             return StubAttr(self, item)
-        raise AttributeError
+        raise AttributeError('Cannot get attribute %s from %s'%(item, self.proxy_class))
 
     def __str__(self):
         return "StubObject(%s, *%s, **%s)" % (str(self.proxy_class), str(self.args), str(self.kwargs))
@@ -428,7 +428,12 @@ def run_experiment_lite(
             del task["remote_log_dir"]
             env = task.pop("env", None)
             command = to_docker_command(
-                task, docker_image=docker_image, script=script, env=env)
+                task,
+                docker_image=docker_image,
+                script=script,
+                env=env,
+                use_gpu=use_gpu,
+            )
             print(command)
             if dry:
                 return
@@ -570,12 +575,16 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
     command_prefix += " -v {local_mujoco_key_dir}:{docker_mujoco_key_dir}".format(
         local_mujoco_key_dir=config.MUJOCO_KEY_PATH, docker_mujoco_key_dir='/root/.mujoco')
-    command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
-                                                                    docker_log_dir=docker_log_dir)
+    command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(
+        local_log_dir=log_dir,
+        docker_log_dir=docker_log_dir
+    )
     if local_code_dir is None:
         local_code_dir = config.PROJECT_PATH
-    command_prefix += " -v {local_code_dir}:{docker_code_dir}".format(local_code_dir=local_code_dir,
-                                                                      docker_code_dir=config.DOCKER_CODE_DIR)
+    command_prefix += " -v {local_code_dir}:{docker_code_dir}".format(
+        local_code_dir=local_code_dir,
+        docker_code_dir=config.DOCKER_CODE_DIR
+    )
     params = dict(params, log_dir=docker_log_dir)
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()

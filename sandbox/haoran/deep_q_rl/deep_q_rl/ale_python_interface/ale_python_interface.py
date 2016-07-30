@@ -7,10 +7,13 @@ __all__ = ['ALEInterface']
 from ctypes import *
 import numpy as np
 from numpy.ctypeslib import as_ctypes
-import os
+import os, platform
 
+lib_file = 'libale_c_{platform}.so'.format(
+    platform=platform.system()
+)
 ale_lib = cdll.LoadLibrary(os.path.join(os.path.dirname(__file__),
-                                        'libale_c.so'))
+                                        lib_file))
 
 ale_lib.ALE_new.argtypes = None
 ale_lib.ALE_new.restype = c_void_p
