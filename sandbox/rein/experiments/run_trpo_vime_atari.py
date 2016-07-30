@@ -12,16 +12,19 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
 from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
+
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
 # Param ranges
-seeds = range(3)
-etas = [0, 0.00001, 0.001, 0.1]
+seeds = range(5)
+etas = [0.001, 0.01, 0.1]
+# seeds = [1]
+# etas = [0.1]
 normalize_rewards = [False]
 kl_ratios = [False]
-RECORD_VIDEO = True
+RECORD_VIDEO = False
 mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
         GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
         GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),
@@ -32,34 +35,52 @@ param_cart_product = itertools.product(
 )
 
 for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
-
     network = ConvNetwork(
         input_shape=mdp.spec.observation_space.shape,
         output_dim=mdp.spec.action_space.flat_dim,
-        hidden_sizes=(32,),
-        conv_filters=(16, 16, 16),
-        conv_filter_sizes=(6, 6, 6),
-        conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
+        hidden_sizes=(20,),
+        conv_filters=(16, 16),
+        conv_filter_sizes=(4, 4),
+        conv_strides=(2, 2),
+        conv_pads=(0, 0),
     )
+    # network = ConvNetwork(
+    #     input_shape=mdp.spec.observation_space.shape,
+    #     output_dim=mdp.spec.action_space.flat_dim,
+    #     hidden_sizes=(32,),
+    #     conv_filters=(16, 16, 16),
+    #     conv_filter_sizes=(6, 6, 6),
+    #     conv_strides=(2, 2, 2),
+    #     conv_pads=(0, 2, 2),
+    # )
     policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
         prob_network=network,
     )
 
+    # network = ConvNetwork(
+    #     input_shape=mdp.spec.observation_space.shape,
+    #     output_dim=1,
+    #     hidden_sizes=(32,),
+    #     conv_filters=(16, 16, 16),
+    #     conv_filter_sizes=(6, 6, 6),
+    #     conv_strides=(2, 2, 2),
+    #     conv_pads=(0, 2, 2),
+    # )
     network = ConvNetwork(
         input_shape=mdp.spec.observation_space.shape,
         output_dim=1,
-        hidden_sizes=(32,),
-        conv_filters=(16, 16, 16),
-        conv_filter_sizes=(6, 6, 6),
-        conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
+        hidden_sizes=(20,),
+        conv_filters=(16, 16),
+        conv_filter_sizes=(4, 4),
+        conv_strides=(2, 2),
+        conv_pads=(0, 0),
     )
     baseline = GaussianMLPBaseline(
         mdp.spec,
-        regressor_args=dict(mean_network=network,
-                            batchsize=1000),
+        regressor_args=dict(
+            mean_network=network,
+            batchsize=5000),
     )
 
     algo = TRPO(
@@ -69,25 +90,32 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=5000,
+        batch_size=50000,
         whole_paths=True,
         max_path_length=5000,
-        n_itr=100,
+        n_itr=250,
         step_size=0.01,
-        optimizer_args=dict(num_slices=20),
+        optimizer_args=dict(
+            num_slices=30,
+            subsample_factor=0.1),
         # -------------
 
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=1,
-        use_replay_pool=False,
+        snn_n_samples=10,
+        num_train_samples=1,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=32,
+        kl_batch_size=8,
+        num_sample_updates=10,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=normalize_reward,
-        replay_pool_size=100000,
-        n_updates_per_sample=50000,
+        dyn_pool_args=dict(
+            enable=False,
+            size=100000,
+            min_size=10,
+            batch_size=32
+        ),
         second_order_update=False,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
@@ -150,12 +178,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
                  nonlinearity=lasagne.nonlinearities.linear),
         ],
         unn_learning_rate=0.005,
-        surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP90PERC,
-        update_likelihood_sd=True,
+        surprise_transform=BatchPolopt.SurpriseTransform.CAP99PERC,
+        update_likelihood_sd=False,
         replay_kl_schedule=0.98,
         output_type=BNN.OutputType.REGRESSION,
-        pool_batch_size=8,
-        likelihood_sd_init=0.1,
+        likelihood_sd_init=0.001,
         prior_sd=0.05,
         predict_delta=True,
         # -------------
@@ -170,11 +197,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-freeway-pxl-a",
+        exp_prefix="trpo-vime-atari-pxl-g",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local_docker",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

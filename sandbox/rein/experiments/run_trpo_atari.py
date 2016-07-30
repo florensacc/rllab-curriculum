@@ -24,15 +24,12 @@ import itertools
 stub(globals())
 
 # Param ranges
-seeds = range(1)
-# mdp_classes = [MountainCarEnv]
-# mdps = [NormalizedEnv(env=mdp_class()) for mdp_class in mdp_classes]
+seeds = range(10)
 RECORD_VIDEO = False
 mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
         GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
         GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),
         GymEnv("MontezumaRevenge-v0", record_video=RECORD_VIDEO)]
-# mdps = [GymEnv("Reacher-v1", record_video=False)]
 param_cart_product = itertools.product(
     mdps, seeds
 )
@@ -103,8 +100,8 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-atari-a",
-        n_parallel=2,
+        exp_prefix="trpo-atari-c",
+        n_parallel=8,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

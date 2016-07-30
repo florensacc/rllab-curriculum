@@ -49,7 +49,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
     baseline = GaussianMLPBaseline(
         mdp.spec,
         regressor_args=dict(hidden_sizes=(32,),
-                            batchsize=20000),
+                            batchsize=100),
     )
 
     # TODO: group all args into meaningful arg dicts.
@@ -71,7 +71,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=10,
+        snn_n_samples=1,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=8,

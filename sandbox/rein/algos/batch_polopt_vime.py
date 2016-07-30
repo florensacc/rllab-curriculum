@@ -1,9 +1,13 @@
 import numpy as np
+import os
+import pickle
 
 from rllab.algos.base import RLAlgorithm
+from rllab.misc.ext import sliced_fun
 from sandbox.rein.sampler import parallel_sampler_vime as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
+from rllab.misc.ext import sliced_fun
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
@@ -157,6 +161,7 @@ class BatchPolopt(RLAlgorithm):
             # exploration params
             eta=1.,
             snn_n_samples=10,
+            num_train_samples=1,
             prior_sd=0.5,
             use_kl_ratio=False,
             kl_q_len=10,
@@ -228,6 +233,7 @@ class BatchPolopt(RLAlgorithm):
         # ----------------------
         self.eta = eta
         self.snn_n_samples = snn_n_samples
+        self.num_train_samples = num_train_samples
         self.prior_sd = prior_sd
         self.use_kl_ratio = use_kl_ratio
         self.kl_q_len = kl_q_len
@@ -294,16 +300,54 @@ class BatchPolopt(RLAlgorithm):
 
     def accuracy(self, _inputs, _targets):
         acc = 0.
-        _out = self.bnn.pred_fn(_inputs)
-        if self.output_type == 'regression':
-            acc += np.mean(np.sum(np.square(_out - _targets), axis=1))
-        elif self.output_type == 'classification':
-            # FIXME: only for Atari
-            _out2 = _out.reshape([-1, 256])
-            _argm = np.argmax(_out2, axis=1)
-            _argm2 = _argm.reshape([-1, 128])
-            acc += np.sum(np.equal(_targets, _argm2)) / float(_targets.size)
-        return acc
+        for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
+            _i, _t, _ = batch
+            _o = self.bnn.pred_fn(_i)
+            if self.output_type == 'regression':
+                acc += np.sum(np.square(_o - _t))
+            elif self.output_type == 'classification':
+                # FIXME: only for Atari
+                _out2 = _o.reshape([-1, 256])
+                _argm = np.argmax(_out2, axis=1)
+                _argm2 = _argm.reshape([-1, 128])
+                acc += np.sum(np.equal(_targets, _argm2))
+        return acc / _inputs.shape[0]
+
+    def make_train_set(self, inputs, targets):
+
+        inputs = np.array(inputs)
+        targets = np.array(targets)
+
+        input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
+        target_im = targets[:, :-1].reshape(tuple([-1]) + self.state_dim).transpose(0, 2, 3, 1)
+        input_im = input_im[:, :].reshape(tuple([-1]) + self.state_dim).transpose(0, 2, 3, 1)
+
+
+        if self._predict_delta:
+            target_im += input_im
+
+        # Subsample
+        idx = np.random.randint(0, len(input_im), 100)
+        inputs = input_im[idx]
+        targets = target_im[idx]
+
+        path = '/Users/rein/programming/openai/vime'
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        if os.path.exists(path + '/dataset.pkl'):
+            _dataset = pickle.load(open(path + '/dataset.pkl', 'wb'))
+            _dataset['x'] = np.concatenate((_dataset['x'], inputs))
+            _dataset['y'] = np.concatenate((_dataset['y'], targets))
+
+        else:
+            _dataset = dict(x=inputs, y=targets)
+
+        pickle.dump(_dataset, open(path + '/dataset.pkl', 'wb'))
+
+        import ipdb; ipdb.set_trace()
+        tmp = pickle.load(open(path + '/dataset.pkl', 'r'))
+        print(tmp)
 
     def plot_pred_imgs(self, inputs, targets, itr, count):
         try:
@@ -389,6 +433,7 @@ class BatchPolopt(RLAlgorithm):
             out_func=lasagne.nonlinearities.linear,
             batch_size=batch_size,
             n_samples=self.snn_n_samples,
+            num_train_samples=self.num_train_samples,
             prior_sd=self.prior_sd,
             second_order_update=self.second_order_update,
             learning_rate=self.unn_learning_rate,
@@ -533,6 +578,8 @@ class BatchPolopt(RLAlgorithm):
 
                 acc_before = self.accuracy(np.vstack(X_train), np.vstack(T_train))
 
+                self.make_train_set(np.vstack(X_train), np.vstack(T_train))
+
                 # Do posterior chaining: this means that we update the model on each individual
                 # minibatch and update the prior to the new posterior.
                 count = 0
@@ -546,31 +593,21 @@ class BatchPolopt(RLAlgorithm):
                         logp_before = self.bnn.fn_logp(X_train[idx], T_train[idx])
                     # Save old posterior as new prior.
                     self.bnn.save_params()
-                    loss_before = float(self.bnn.fn_loss(X_train[idx], T_train[idx], 1.))
                     num_itr = int(np.ceil(float(self.num_sample_updates) / self.kl_batch_size))
-                    # print('---')
                     for _ in xrange(self.num_sample_updates):
                         train_loss = self.bnn.train_fn(X_train[idx], T_train[idx], 1.)
-                        # print(loss_before, train_loss)
-                        #                         print(self.bnn.get_all_params()[0])
-                        #                         print(self.bnn.get_all_params()[1])
                         if np.isinf(train_loss) or np.isnan(train_loss):
                             import ipdb
                             ipdb.set_trace()
                         assert not np.isnan(train_loss)
                         assert not np.isinf(train_loss)
-                        if count % int(np.ceil(len(X_train) * num_itr / float(self.kl_batch_size) / 5.)) == 0:
+                        if count % int(np.ceil(self.num_sample_updates * len(lst_idx) / 5.)) == 0:
                             self.plot_pred_imgs(X_train[idx], T_train[idx], itr, count)
                         count += 1
-                    loss_after = float(self.bnn.fn_loss(X_train[idx], T_train[idx], 1.))
                     if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
                         # Samples will default path['KL'] to np.nan. It is filled in here.
                         logp_after = self.bnn.fn_logp(X_train[idx], T_train[idx])
                         lst_surpr[idx] = logp_after - logp_before
-                        #                         if (lst_surpr[idx] < 0).any():
-                        #                             print('\t\t >> ', float(loss_before), float(loss_after), float(lst_surpr[idx]))
-                        #                         else:
-                        #                             print(float(loss_before), float(loss_after), float(lst_surpr[idx]))
 
                 if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
                     # Make sure surprise >= 0
