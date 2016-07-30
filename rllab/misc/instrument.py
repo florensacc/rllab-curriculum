@@ -25,7 +25,6 @@ from rllab.viskit.core import flatten
 
 
 class StubBase(object):
-
     def __getitem__(self, item):
         return StubMethodCall(self, "__getitem__", args=[item], kwargs=dict())
 
@@ -37,9 +36,42 @@ class StubBase(object):
                 raise
             return StubAttr(self, item)
 
+    def __pow__(self, power, modulo=None):
+        return StubMethodCall(self, "__pow__", [power, modulo], dict())
+
+    def __call__(self, *args, **kwargs):
+        return StubMethodCall(self.obj, self.attr_name, args, kwargs)
+
+    def __add__(self, other):
+        return StubMethodCall(self, "__add__", [other], dict())
+
+    def __rmul__(self, other):
+        return StubMethodCall(self, "__rmul__", [other], dict())
+
+    def __div__(self, other):
+        return StubMethodCall(self, "__div__", [other], dict())
+
+    def __rdiv__(self, other):
+        return StubMethodCall(BinaryOp(), "rdiv", [self, other], dict())#self, "__rdiv__", [other], dict())
+
+    def __rpow__(self, power, modulo=None):
+        return StubMethodCall(self, "__rpow__", [power, modulo], dict())
+
+
+class BinaryOp(Serializable):
+
+    def __init__(self):
+        Serializable.quick_init(self, locals())
+
+    def rdiv(self, a, b):
+        return b / a
+    # def __init__(self, opname, a, b):
+    #     self.opname = opname
+    #     self.a = a
+    #     self.b = b
+
 
 class StubAttr(StubBase):
-
     def __init__(self, obj, attr_name):
         self.__dict__["_obj"] = obj
         self.__dict__["_attr_name"] = attr_name
@@ -52,18 +84,11 @@ class StubAttr(StubBase):
     def attr_name(self):
         return self.__dict__["_attr_name"]
 
-    def __call__(self, *args, **kwargs):
-        return StubMethodCall(self.obj, self.attr_name, args, kwargs)
-
-    def __add__(self, other):
-        return StubMethodCall(self, "__add__", [other], dict())
-
     def __str__(self):
         return "StubAttr(%s, %s)" % (str(self.obj), str(self.attr_name))
 
 
 class StubMethodCall(StubBase, Serializable):
-
     def __init__(self, obj, method_name, args, kwargs):
         self._serializable_initialized = False
         Serializable.quick_init(self, locals())
@@ -78,7 +103,6 @@ class StubMethodCall(StubBase, Serializable):
 
 
 class StubClass(StubBase):
-
     def __init__(self, proxy_class):
         self.proxy_class = proxy_class
 
@@ -106,7 +130,6 @@ class StubClass(StubBase):
 
 
 class StubObject(StubBase):
-
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
             spec = inspect.getargspec(__proxy_class.__init__)
@@ -127,14 +150,13 @@ class StubObject(StubBase):
     def __getattr__(self, item):
         if hasattr(self.proxy_class, item):
             return StubAttr(self, item)
-        raise AttributeError
+        raise AttributeError('Cannot get attribute %s from %s'%(item, self.proxy_class))
 
     def __str__(self):
         return "StubObject(%s, *%s, **%s)" % (str(self.proxy_class), str(self.args), str(self.kwargs))
 
 
 class VariantDict(AttrDict):
-
     def __init__(self, d, hidden_keys):
         super(VariantDict, self).__init__(d)
         self._hidden_keys = hidden_keys
@@ -349,6 +371,7 @@ def run_experiment_lite(
 
     global exp_count
     global remote_confirmed
+    config.USE_GPU = use_gpu
 
     # params_list = []
 
@@ -363,7 +386,7 @@ def run_experiment_lite(
                 exp_prefix, timestamp, exp_count)
         if task.get("log_dir", None) is None:
             task["log_dir"] = config.LOG_DIR + "/local/" + \
-                exp_prefix.replace("_", "-") + "/" + task["exp_name"]
+                              exp_prefix.replace("_", "-") + "/" + task["exp_name"]
         if task.get("variant", None) is not None:
             variant = task.pop("variant")
             if "exp_name" not in variant:
@@ -405,7 +428,12 @@ def run_experiment_lite(
             del task["remote_log_dir"]
             env = task.pop("env", None)
             command = to_docker_command(
-                task, docker_image=docker_image, script=script, env=env)
+                task,
+                docker_image=docker_image,
+                script=script,
+                env=env,
+                use_gpu=use_gpu,
+            )
             print(command)
             if dry:
                 return
@@ -547,12 +575,16 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
     command_prefix += " -v {local_mujoco_key_dir}:{docker_mujoco_key_dir}".format(
         local_mujoco_key_dir=config.MUJOCO_KEY_PATH, docker_mujoco_key_dir='/root/.mujoco')
-    command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(local_log_dir=log_dir,
-                                                                    docker_log_dir=docker_log_dir)
+    command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(
+        local_log_dir=log_dir,
+        docker_log_dir=docker_log_dir
+    )
     if local_code_dir is None:
         local_code_dir = config.PROJECT_PATH
-    command_prefix += " -v {local_code_dir}:{docker_code_dir}".format(local_code_dir=local_code_dir,
-                                                                      docker_code_dir=config.DOCKER_CODE_DIR)
+    command_prefix += " -v {local_code_dir}:{docker_code_dir}".format(
+        local_code_dir=local_code_dir,
+        docker_code_dir=config.DOCKER_CODE_DIR
+    )
     params = dict(params, log_dir=docker_log_dir)
     command_prefix += " -t " + docker_image + " /bin/bash -c "
     command_list = list()
@@ -782,7 +814,7 @@ def s3_sync_code(config, dry=False):
     cache_cmds = ["aws", "s3", "sync"] + \
                  [cache_path, full_path]
     cmds = ["aws", "s3", "sync"] + \
-        flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+           flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
            [".", full_path]
     caching_cmds = ["aws", "s3", "sync"] + \
                    [full_path, cache_path]

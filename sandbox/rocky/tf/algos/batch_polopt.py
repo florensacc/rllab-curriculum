@@ -99,7 +99,7 @@ class BatchPolopt(RLAlgorithm):
         return self.sampler.obtain_samples(itr)
 
     def process_samples(self, itr, paths):
-        return self.sampler.process_samples()
+        return self.sampler.process_samples(itr, paths)
 
     def train(self):
         with tf.Session() as sess:
@@ -108,7 +108,7 @@ class BatchPolopt(RLAlgorithm):
             for itr in xrange(self.start_itr, self.n_itr):
                 with logger.prefix('itr #%d | ' % itr):
                     paths = self.obtain_samples(itr)
-                    samples_data = self.sampler.process_samples(itr, paths)
+                    samples_data = self.process_samples(itr, paths)
                     self.log_diagnostics(paths)
                     self.optimize_policy(itr, samples_data)
                     logger.log("saving snapshot...")

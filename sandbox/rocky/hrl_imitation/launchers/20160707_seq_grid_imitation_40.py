@@ -48,7 +48,7 @@ for v in variants:
         exp_prefix="seq_grid_imitation_40",
         seed=v["seed"],
         variant=v,
-        mode="lab_kube",
+        mode="local",
         snapshot_mode="last",
     )
     # break

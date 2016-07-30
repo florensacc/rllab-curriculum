@@ -1,20 +1,19 @@
 import numpy as np
-import theano
 import time
 from rllab.core.serializable import Serializable
 from rllab.misc.ext import extract
-
-floatX = theano.config.floatX
 
 
 def center_advantages(advantages):
     return (advantages - np.mean(advantages)) / (advantages.std() + 1e-8)
 
+
 def shift_advantages_to_positive(advantages):
     return (advantages - np.min(advantages)) + 1e-8
 
+
 def sign(x):
-    return 1.*(x>=0) - 1.*(x<0)
+    return 1. * (x >= 0) - 1. * (x < 0)
 
 
 class ReplayPool(Serializable):
@@ -28,8 +27,8 @@ class ReplayPool(Serializable):
             observation_shape,
             action_dim,
             max_steps,
-            observation_dtype=floatX,
-            action_dtype=floatX,
+            observation_dtype=np.float32,
+            action_dtype=np.float32,
             concat_observations=False,
             concat_length=1,
             rng=None):
@@ -52,9 +51,8 @@ class ReplayPool(Serializable):
         self.observations = np.zeros(
             (max_steps,) + observation_shape, dtype=observation_dtype)
         self.actions = np.zeros((max_steps, action_dim), dtype=action_dtype)
-        self.rewards = np.zeros((max_steps,), dtype=floatX)
+        self.rewards = np.zeros((max_steps,), dtype=np.float32)
         self.terminals = np.zeros((max_steps,), dtype='bool')
-        #self.horizon_terminals = np.zeros((max_steps,), dtype='bool')
         self.extras = None
         self.concat_observations = concat_observations
         self.concat_length = concat_length
@@ -94,11 +92,11 @@ class ReplayPool(Serializable):
     def __setstate__(self, d):
         super(ReplayPool, self).__setstate__(d)
         self.bottom, self.top, self.size, self.observations, self.actions, \
-            self.rewards, self.terminals, self.extras, self.rng = extract(
-                d,
-                "bottom", "top", "size", "observations", "actions", "rewards",
-                "terminals", "extras", "rng"
-            )
+        self.rewards, self.terminals, self.extras, self.rng = extract(
+            d,
+            "bottom", "top", "size", "observations", "actions", "rewards",
+            "terminals", "extras", "rng"
+        )
 
     def add_sample(self, observation, action, reward, terminal, extra=None):
         """Add a time step record.
@@ -114,7 +112,7 @@ class ReplayPool(Serializable):
         self.actions[self.top] = action
         self.rewards[self.top] = reward
         self.terminals[self.top] = terminal
-        #self.horizon_terminals[self.top] = horizon_terminal
+        # self.horizon_terminals[self.top] = horizon_terminal
         if extra is not None:
             if self.extras is None:
                 assert self.size == 0, "extra must be consistent"
@@ -227,7 +225,7 @@ class ReplayPool(Serializable):
             if np.any(self.terminals.take(initial_indices[0:-1], mode='wrap')):
                 continue
             # do not pick samples which terminated because of horizon
-            #if np.any(self.horizon_terminals.take(initial_indices[0:-1],
+            # if np.any(self.horizon_terminals.take(initial_indices[0:-1],
             #    mode='wrap')) or self.horizon_terminals[end_index]:
             #    continue
 
@@ -265,7 +263,6 @@ class ReplayPool(Serializable):
             extras=extras,
             next_extras=next_extras,
         )
-            
 
 
 # TESTING CODE BELOW THIS POINT...
@@ -300,7 +297,6 @@ def simple_tests():
 
 
 def speed_tests():
-
     dataset = ReplayPool(
         observation_shape=(80, 80),
         action_dim=1,
@@ -329,7 +325,6 @@ def speed_tests():
 
 
 def trivial_tests():
-
     dataset = ReplayPool(
         observation_shape=(1, 2),
         action_dim=1,
@@ -409,6 +404,7 @@ def main():
     # test_memory_usage_ok()
     max_size_tests()
     simple_tests()
+
 
 if __name__ == "__main__":
     main()

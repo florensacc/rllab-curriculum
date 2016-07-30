@@ -1,16 +1,22 @@
 import numpy as np
+import os
+import pickle
 
 from rllab.algos.base import RLAlgorithm
+from rllab.misc.ext import sliced_fun
 from sandbox.rein.sampler import parallel_sampler_vime as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
+from rllab.misc.ext import sliced_fun
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup,\
+from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup, \
     plot_mnist_digit
 from scipy import stats, misc
 from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_unformat_image
+from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianLayer
+
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
@@ -22,6 +28,8 @@ import lasagne
 from collections import deque
 import time
 from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
+
+
 # -------------------
 
 
@@ -35,14 +43,12 @@ class SimpleReplayPool(object):
             action_dim,
             observation_dtype=theano.config.floatX,
             action_dtype=theano.config.floatX,
-            subsample_factor=1.
     ):
         self._observation_shape = observation_shape
         self._action_dim = action_dim
         self._observation_dtype = observation_dtype
         self._action_dtype = action_dtype
         self._max_pool_size = max_pool_size
-        self._subsample_factor = subsample_factor
 
         self._observations = np.zeros(
             (max_pool_size,) + observation_shape,
@@ -66,19 +72,15 @@ class SimpleReplayPool(object):
         return ', '.join(sb)
 
     def add_sample(self, observation, action, reward, terminal):
-        # Uniformly sample from [0,1], then apply subsampling factor to throw
-        # out samples.
-        rnd = np.random.uniform(0, 1)
-        if rnd < self._subsample_factor:
-            self._observations[self._top] = observation
-            self._actions[self._top] = action
-            self._rewards[self._top] = reward
-            self._terminals[self._top] = terminal
-            self._top = (self._top + 1) % self._max_pool_size
-            if self._size >= self._max_pool_size:
-                self._bottom = (self._bottom + 1) % self._max_pool_size
-            else:
-                self._size = self._size + 1
+        self._observations[self._top] = observation
+        self._actions[self._top] = action
+        self._rewards[self._top] = reward
+        self._terminals[self._top] = terminal
+        self._top = (self._top + 1) % self._max_pool_size
+        if self._size >= self._max_pool_size:
+            self._bottom = (self._bottom + 1) % self._max_pool_size
+        else:
+            self._size = self._size + 1
 
     def random_batch(self, batch_size):
         assert self._size > batch_size
@@ -105,17 +107,18 @@ class SimpleReplayPool(object):
         )
 
     def mean_obs_act(self):
-        if self._size >= self._max_pool_size:
-            obs = self._observations
-            act = self._actions
-        else:
-            obs = self._observations[:self._top + 1]
-            act = self._actions[:self._top + 1]
-        obs_mean = np.mean(obs, axis=0)
-        obs_std = np.std(obs, axis=0)
-        act_mean = np.mean(act, axis=0)
-        act_std = np.std(act, axis=0)
-        return obs_mean, obs_std, act_mean, act_std
+        #         if self._size >= self._max_pool_size:
+        #             obs = self._observations
+        #             act = self._actions
+        #         else:
+        #             obs = self._observations[:self._top + 1]
+        #             act = self._actions[:self._top + 1]
+        #         obs_mean = np.mean(obs, axis=0)
+        #         obs_std = np.std(obs, axis=0)
+        #         act_mean = np.mean(act, axis=0)
+        #         act_std = np.std(act, axis=0)
+        #         return obs_mean, obs_std, act_mean, act_std
+        return 0., 0., 1., 1.
 
     @property
     def size(self):
@@ -130,7 +133,11 @@ class BatchPolopt(RLAlgorithm):
 
     # Enums
     SurpriseTransform = enum(
-        CAP1000='cap at 1000', LOG='log(1+surprise)', ZERO100='0-100', CAP90PERC='cap at 90th percentile')
+        CAP1000='cap at 1000',
+        LOG='log(1+surprise)',
+        ZERO100='0-100',
+        CAP90PERC='cap at 90th percentile',
+        CAP99PERC='cap at 99th percentile')
 
     def __init__(
             self,
@@ -154,14 +161,11 @@ class BatchPolopt(RLAlgorithm):
             # exploration params
             eta=1.,
             snn_n_samples=10,
+            num_train_samples=1,
             prior_sd=0.5,
             use_kl_ratio=False,
             kl_q_len=10,
-            use_replay_pool=True,
-            replay_pool_size=100000,
-            min_pool_size=50,
-            n_updates_per_sample=500,
-            pool_batch_size=10,
+            num_sample_updates=1,
             n_itr_update=5,
             reward_alpha=0.001,
             kl_alpha=0.001,
@@ -184,8 +188,9 @@ class BatchPolopt(RLAlgorithm):
             group_variance_by='weight',
             likelihood_sd_init=1.0,
             disable_variance=False,
-            pool_args=dict(),
-            ** kwargs
+            predict_delta=False,
+            dyn_pool_args=dict(enable=False, size=100000, min_size=10, batch_size=32),
+            **kwargs
     ):
         """
         :param env: Environment
@@ -228,14 +233,11 @@ class BatchPolopt(RLAlgorithm):
         # ----------------------
         self.eta = eta
         self.snn_n_samples = snn_n_samples
+        self.num_train_samples = num_train_samples
         self.prior_sd = prior_sd
         self.use_kl_ratio = use_kl_ratio
         self.kl_q_len = kl_q_len
-        self.use_replay_pool = use_replay_pool
-        self.replay_pool_size = replay_pool_size
-        self.min_pool_size = min_pool_size
-        self.n_updates_per_sample = n_updates_per_sample
-        self.pool_batch_size = pool_batch_size
+        self.num_sample_updates = num_sample_updates
         self.n_itr_update = n_itr_update
         self.reward_alpha = reward_alpha
         self.kl_alpha = kl_alpha
@@ -258,11 +260,15 @@ class BatchPolopt(RLAlgorithm):
         self.group_variance_by = group_variance_by
         self.likelihood_sd_init = likelihood_sd_init
         self.disable_variance = disable_variance
-        self._pool_args = pool_args
+        self._predict_delta = predict_delta
+        self._dyn_pool_args = dyn_pool_args
         # ----------------------
 
         if self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
-            assert self.use_replay_pool is False
+            assert self._dyn_pool_args['enable'] is False
+            assert self.use_kl_ratio is False
+            print('ATTENTION: running {} with second_order_update={}'.format(
+                self.surprise_type, self.second_order_update))
 
         if self.second_order_update:
             assert self.n_itr_update == 1
@@ -292,21 +298,56 @@ class BatchPolopt(RLAlgorithm):
     def shutdown_worker(self):
         pass
 
-    def accuracy(self, _inputss, _targetss):
+    def accuracy(self, _inputs, _targets):
         acc = 0.
-        for _inputs, _targets in zip(_inputss, _targetss):
-            _out = self.bnn.pred_fn(_inputs)
+        for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
+            _i, _t, _ = batch
+            _o = self.bnn.pred_fn(_i)
             if self.output_type == 'regression':
-                acc += np.mean(np.sum(np.square(_out - _targets), axis=1))
+                acc += np.sum(np.square(_o - _t))
             elif self.output_type == 'classification':
                 # FIXME: only for Atari
-                _out2 = _out.reshape([-1, 256])
+                _out2 = _o.reshape([-1, 256])
                 _argm = np.argmax(_out2, axis=1)
                 _argm2 = _argm.reshape([-1, 128])
-                acc += np.sum(
-                    np.equal(_targets, _argm2)) / float(_targets.size)
-        acc /= len(_inputss)
-        return acc
+                acc += np.sum(np.equal(_targets, _argm2))
+        return acc / _inputs.shape[0]
+
+    def make_train_set(self, inputs, targets):
+
+        inputs = np.array(inputs)
+        targets = np.array(targets)
+
+        input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
+        target_im = targets[:, :-1].reshape(tuple([-1]) + self.state_dim).transpose(0, 2, 3, 1)
+        input_im = input_im[:, :].reshape(tuple([-1]) + self.state_dim).transpose(0, 2, 3, 1)
+
+
+        if self._predict_delta:
+            target_im += input_im
+
+        # Subsample
+        idx = np.random.randint(0, len(input_im), 100)
+        inputs = input_im[idx]
+        targets = target_im[idx]
+
+        path = '/Users/rein/programming/openai/vime'
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        if os.path.exists(path + '/dataset.pkl'):
+            _dataset = pickle.load(open(path + '/dataset.pkl', 'wb'))
+            _dataset['x'] = np.concatenate((_dataset['x'], inputs))
+            _dataset['y'] = np.concatenate((_dataset['y'], targets))
+
+        else:
+            _dataset = dict(x=inputs, y=targets)
+
+        pickle.dump(_dataset, open(path + '/dataset.pkl', 'wb'))
+
+        import ipdb; ipdb.set_trace()
+        tmp = pickle.load(open(path + '/dataset.pkl', 'r'))
+        print(tmp)
 
     def plot_pred_imgs(self, inputs, targets, itr, count):
         try:
@@ -314,33 +355,53 @@ class BatchPolopt(RLAlgorithm):
             import matplotlib.pyplot as plt
             if not hasattr(self, '_fig'):
                 self._fig = plt.figure()
-                self._fig_1 = self._fig.add_subplot(121)
+                self._fig_1 = self._fig.add_subplot(141)
                 plt.tick_params(axis='both', which='both', bottom='off', top='off',
                                 labelbottom='off', right='off', left='off', labelleft='off')
-                self._fig_2 = self._fig.add_subplot(122)
+                self._fig_2 = self._fig.add_subplot(142)
                 plt.tick_params(axis='both', which='both', bottom='off', top='off',
                                 labelbottom='off', right='off', left='off', labelleft='off')
-                self._im1, self._im2 = None, None
+                self._fig_3 = self._fig.add_subplot(143)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._fig_4 = self._fig.add_subplot(144)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._im1, self._im2, self._im3, self._im4 = None, None, None, None
             sanity_pred = self.bnn.pred_fn(inputs)
-            sanity_pred_im = sanity_pred[
-                0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-            sanity_pred_im = sanity_pred_im * 256.
-            sanity_pred_im = np.around(
-                sanity_pred_im).astype(int)
-            target_im = targets[
-                0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-            target_im = target_im * 256.
+            input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
+            input_im = input_im[0, :].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+            sanity_pred_im = sanity_pred[0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+            target_im = targets[0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+
+            if self._predict_delta:
+                sanity_pred_im += input_im
+                target_im += input_im
+
+            sanity_pred_im *= 256.
+            sanity_pred_im = np.around(sanity_pred_im).astype(int)
+            target_im *= 256.
             target_im = np.around(target_im).astype(int)
+            err = np.abs(target_im - sanity_pred_im)
+            input_im *= 256.
+            input_im = np.around(input_im).astype(int)
+
             if self._im1 is None or self._im2 is None:
                 self._im1 = self._fig_1.imshow(
-                    sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                    input_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
                 self._im2 = self._fig_2.imshow(
                     target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im3 = self._fig_3.imshow(
+                    sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im4 = self._fig_4.imshow(
+                    err, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
             else:
-                self._im1.set_data(sanity_pred_im)
+                self._im1.set_data(input_im)
                 self._im2.set_data(target_im)
+                self._im3.set_data(sanity_pred_im)
+                self._im4.set_data(err)
             plt.savefig(
-                logger._snapshot_dir + '/autoenc_img_{}_{}.png'.format(itr, count))
+                logger._snapshot_dir + '/dynpred_img_{}_{}.png'.format(itr, count), bbox_inches='tight')
         except Exception:
             pass
 
@@ -350,35 +411,17 @@ class BatchPolopt(RLAlgorithm):
         # it is purely Bayesian. We then divide the KL divergence term by the
         # number of batches in each iteration `batch'. Also the batch size
         # would be given correctly.
-        if self.use_replay_pool:
+        if self._dyn_pool_args['enable']:
+            logger.log('Dynamics replay pool is ON.')
             batch_size = 1
             n_batches = 50  # FIXME, there is no correct value!
         else:
-            batch_size = int(self.pool_batch_size)
-            n_batches = int(
-                np.ceil(float(self.batch_size) / self.pool_batch_size))
-            n_iterations = int(
-                np.ceil(float(self.n_updates_per_sample) / self.batch_size))
-            logger.log(
-                'Using {} BNN minibatches of size {} to train, each epoch has {} iterations.'.format(n_batches, batch_size, n_iterations))
-
-        # MDP observation and action dimensions.
-        obs_dim = np.sum(self.env.observation_space.shape)
-        act_dim = self.env.action_dim
+            logger.log('Dynamics replay pool is OFF.')
+            batch_size = 1
+            n_batches = 1
 
         logger.log("Building BNN model (eta={}) ...".format(self.eta))
         start_time = time.time()
-
-        # FIXME: doesnt work
-        if self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
-            n_out = 128 * 256
-        elif self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.REGRESSION:
-            n_out = obs_dim
-
-        # FIXME: predict reward is hardcode atm.
-#         if self.predict_reward:
-#             # One extra output dimension to predict the reward or return.
-#             n_out += 1
 
         self.bnn = conv_bnn_vime.ConvBNNVIME(
             state_dim=self.state_dim,
@@ -390,11 +433,12 @@ class BatchPolopt(RLAlgorithm):
             out_func=lasagne.nonlinearities.linear,
             batch_size=batch_size,
             n_samples=self.snn_n_samples,
+            num_train_samples=self.num_train_samples,
             prior_sd=self.prior_sd,
             second_order_update=self.second_order_update,
             learning_rate=self.unn_learning_rate,
             surprise_type=self.surprise_type,
-            update_prior=(not self.use_replay_pool),
+            update_prior=(not self._dyn_pool_args['enable']),
             update_likelihood_sd=self.update_likelihood_sd,
             group_variance_by=self.group_variance_by,
             output_type=self.output_type,
@@ -408,10 +452,10 @@ class BatchPolopt(RLAlgorithm):
         # Number of weights in BNN, excluding biases.
         self.num_weights = self.bnn.num_weights()
 
-        logger.log(
-            "Model built ({:.1f} sec, {} weights).".format((time.time() - start_time), self.num_weights))
+        logger.log("Model built ({:.1f} sec, {} weights).".format((time.time() - start_time),
+                                                                  self.num_weights))
 
-        if self.use_replay_pool:
+        if self._dyn_pool_args['enable']:
             if self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
                 observation_dtype = int
             elif self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.REGRESSION:
@@ -420,7 +464,7 @@ class BatchPolopt(RLAlgorithm):
                 max_pool_size=self.replay_pool_size,
                 # self.env.observation_space.shape,
                 observation_shape=(self.env.observation_space.flat_dim,),
-                action_dim=act_dim,
+                action_dim=self.env.action_dim,
                 observation_dtype=observation_dtype,
                 **self._pool_args
             )
@@ -428,7 +472,7 @@ class BatchPolopt(RLAlgorithm):
         self.start_worker()
         self.init_opt()
         episode_rewards, episode_lengths = [], []
-        acc_before, acc_after = 0., 0.
+        acc_before, acc_after, train_loss = 0., 0., 0.
 
         # KL rescaling factor for replay pool-based training.
         kl_factor = 1.0
@@ -440,8 +484,11 @@ class BatchPolopt(RLAlgorithm):
 
             paths = self.obtain_samples(itr)
 
-            if self.use_replay_pool:
-                # Fill replay pool.
+            if self._dyn_pool_args['enable']:
+                # USE REPLAY POOL
+                # ---------------
+                # Fill replay pool with samples of current batch. Exclude the
+                # last one.
                 logger.log("Fitting dynamics model using replay pool ...")
                 for path in paths:
                     path_len = len(path['rewards'])
@@ -450,107 +497,141 @@ class BatchPolopt(RLAlgorithm):
                         act = path['actions'][i]
                         rew_orig = path['rewards_orig'][i]
                         term = (i == path_len - 1)
-                        self.pool.add_sample(obs, act, rew_orig, term)
+                        if not term:
+                            self.pool.add_sample(obs, act, rew_orig, term)
 
                 # Now we train the dynamics model using the replay self.pool; only
                 # if self.pool is large enough.
                 if self.pool.size >= self.min_pool_size:
                     obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
-                    _inputss = []
-                    _targetss = []
+                    acc_before, acc_after, train_loss = 0., 0., 0.
+                    itr_tot = int(
+                        np.ceil(self.num_sample_updates * float(self.batch_size) / self._dyn_pool_args['batch_size']))
 
-                    for _ in xrange(self.n_updates_per_sample / self.pool_batch_size):
-                        batch = self.pool.random_batch(
-                            self.pool_batch_size)
-                        act = (batch['actions'] - act_mean) / \
-                            (act_std + 1e-8)
+                    for i in xrange(itr_tot):
+
+                        batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+
+                        act = (batch['actions'] - act_mean) / (act_std + 1e-8)
                         # FIXME: and True for atari.
-                        if self.output_type == 'classification' or True:
+                        if self._predict_delta:
+                            # Predict \Delta(s',s)
                             obs = batch['observations']
-                            next_obs = batch['next_observations']
-                        elif self.output_type == 'regression':
-                            obs = (batch['observations'] - obs_mean) / \
-                                (obs_std + 1e-8)
-                            next_obs = (
-                                batch['next_observations'] - obs_mean) / (obs_std + 1e-8)
-                        _inputs = np.hstack(
-                            [obs, act])
+                            next_obs = batch['next_observations'] - batch['observations']
+                        else:
+                            if self.output_type == 'classification':
+                                obs = batch['observations']
+                                next_obs = batch['next_observations']
+                            elif self.output_type == 'regression':
+                                obs = (batch['observations'] - obs_mean) / (obs_std + 1e-8)
+                                next_obs = (batch['next_observations'] - obs_mean) / (obs_std + 1e-8)
+
+                        _inputs = np.hstack([obs, act])
                         _targets = next_obs
                         if self.predict_reward:
-                            _targets = np.hstack(
-                                (next_obs, batch['rewards'][:, None]))
-                        _inputss.append(_inputs)
-                        _targetss.append(_targets)
+                            _targets = np.hstack((next_obs, batch['rewards'][:, None]))
 
-                    acc_before = self.accuracy(_inputss, _targetss)
-                    count = 0
-                    for _inputs, _targets in zip(_inputss, _targetss):
-                        train_err = self.bnn.train_fn(
+                        acc_before += self.accuracy(_inputs, _targets)
+                        train_loss += self.bnn.train_fn(
                             _inputs, _targets, kl_factor)
-                        if count % int(np.ceil(len(_inputss) / 5.)) == 0:
-                            print('train err: {}'.format(train_err))
-                            self.plot_pred_imgs(_inputs, _targets, itr, count)
-                        count += 1
-                    acc_after = self.accuracy(_inputss, _targetss)
+                        if i % int(np.ceil(itr_tot / 5.)) == 0:
+                            self.plot_pred_imgs(_inputs, _targets, itr, i)
+                        acc_after += self.accuracy(_inputs, _targets)
+
+                    train_loss /= itr_tot
+                    acc_before /= itr_tot
+                    acc_after /= itr_tot
 
                     kl_factor *= self.replay_kl_schedule
-                    logger.record_tabular('KLFactor', kl_factor)
 
             else:
+                # NO REPLAY POOL
+                # --------------
                 # Here we should take the current batch of samples and shuffle
                 # them for i.d.d. purposes.
                 logger.log(
                     "Fitting dynamics model to current sample batch ...")
                 lst_obs, lst_obs_nxt, lst_act, lst_rew = [], [], [], []
                 for path in paths:
-                    len_path = len(path['observations'])
-                    for i in xrange(len_path - 1):
-                        lst_obs.append(path['observations'][i])
-                        lst_obs_nxt.append(
-                            path['observations'][i + 1])
-                        lst_act.append(path['actions'][i])
-                        lst_rew.append(path['rewards_orig'][i])
+                    for i in xrange(len(path['observations']) - 1):
+                        if i % self.kl_batch_size == 0:
+                            obs, obs_nxt, act, rew = [], [], [], []
+                            lst_obs.append(obs)
+                            lst_obs_nxt.append(obs_nxt)
+                            lst_act.append(act)
+                            lst_rew.append(rew)
+                        obs.append(path['observations'][i])
+                        act.append(path['actions'][i])
+                        rew.append(path['rewards_orig'][i])
+                        if self._predict_delta:
+                            # Predict \Delta(s',s)
+                            obs_nxt.append(path['observations'][i + 1] - path['observations'][i])
+                        else:
+                            obs_nxt.append(path['observations'][i + 1])
 
                 # Stack into input and target set.
-                X_train = [np.hstack((lst_obs, lst_act))]
-                T_train = [
-                    np.hstack((lst_obs_nxt, np.asarray(lst_rew)[:, np.newaxis]))]
+                X_train = [np.hstack((obs, act)) for obs, act in zip(lst_obs, lst_act)]
+                T_train = [np.hstack((obs_nxt, np.asarray(rew)[:, np.newaxis]))
+                           for obs_nxt, rew in zip(lst_obs_nxt, lst_rew)]
+                lst_surpr = [np.empty((_e.shape)) for _e in X_train]
+                [_e.fill(np.nan) for _e in lst_surpr]
 
-                acc_before = self.accuracy(X_train, T_train)
+                acc_before = self.accuracy(np.vstack(X_train), np.vstack(T_train))
 
+                self.make_train_set(np.vstack(X_train), np.vstack(T_train))
+
+                # Do posterior chaining: this means that we update the model on each individual
+                # minibatch and update the prior to the new posterior.
                 count = 0
-                # Save old parameters as new prior.
-                self.bnn.save_params()
-                if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
-                    logp_before = self.bnn.fn_logp(X_train[0], T_train[0])
-                # Num of runs needed to get to n_updates_per_sample
-                for _ in xrange(n_iterations):
-                    # Num batches to traverse.
-                    for batch in iterate_minibatches(X_train[0], T_train[0], self.pool_batch_size, shuffle=True):
-                        # Don't use kl_factor when using no replay pool.
-                        train_err = self.bnn.train_fn(batch[0], batch[1], 1.)
-                        if count % int(np.ceil(n_iterations * self.pool_batch_size / 5.)) == 0:
-                            print('train err: {}'.format(train_err))
-                            self.plot_pred_imgs(batch[0], batch[1], itr, count)
+                lst_idx = np.arange(len(X_train))
+                np.random.shuffle(lst_idx)
+                loss_before, loss_after = 0., 0.
+                for idx in lst_idx:
+                    # Don't use kl_factor when using no replay pool. So here we form an outer
+                    # loop around the individual minibatches, the model gets updated on each minibatch.
+                    if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
+                        logp_before = self.bnn.fn_logp(X_train[idx], T_train[idx])
+                    # Save old posterior as new prior.
+                    self.bnn.save_params()
+                    num_itr = int(np.ceil(float(self.num_sample_updates) / self.kl_batch_size))
+                    for _ in xrange(self.num_sample_updates):
+                        train_loss = self.bnn.train_fn(X_train[idx], T_train[idx], 1.)
+                        if np.isinf(train_loss) or np.isnan(train_loss):
+                            import ipdb
+                            ipdb.set_trace()
+                        assert not np.isnan(train_loss)
+                        assert not np.isinf(train_loss)
+                        if count % int(np.ceil(self.num_sample_updates * len(lst_idx) / 5.)) == 0:
+                            self.plot_pred_imgs(X_train[idx], T_train[idx], itr, count)
                         count += 1
-                if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
-                    # FIXME: WRONG because of KL[-2] KL[-1] thing!!!
-                    logp_after = self.bnn.fn_logp(
-                        X_train[0], T_train[0])[0].flatten()
-                    surpr = logp_after - logp_before
-                    pc = 0
-                    import ipdb
-                    ipdb.set_trace()
-                    for path in paths:
-                        path['KL'] = surpr[pc:pc + len(path['KL'])]
-                        pc += len(path['KL'])
-                    print('surpr: {}'.format(np.mean(surpr)))
-                acc_after = self.accuracy(X_train, T_train)
+                    if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
+                        # Samples will default path['KL'] to np.nan. It is filled in here.
+                        logp_after = self.bnn.fn_logp(X_train[idx], T_train[idx])
+                        lst_surpr[idx] = logp_after - logp_before
 
-            logger.record_tabular(
-                'DynModelSqErrBefore', acc_before)
-            logger.record_tabular(
-                'DynModelSqErrAfter', acc_after)
+                if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
+                    # Make sure surprise >= 0
+                    lst_surpr = np.concatenate(lst_surpr)
+                    lst_surpr[lst_surpr < 0] = 0.
+                    pc = 0
+                    for path in paths:
+                        _l = len(path['KL']) - 1
+                        path['KL'] = np.append(lst_surpr[pc:pc + _l], lst_surpr[pc + _l - 1])
+                        assert not np.isnan(path['KL']).any()
+                        pc += _l
+
+                acc_after = self.accuracy(np.vstack(X_train), np.vstack(T_train))
+
+            # At this point, the dynamics model has been updated
+            # according to new data, either from the replay pool
+            # or from the current batch, using coarse- or fine-grained
+            # posterior chaining.
+            logger.log('Dynamics model updated.')
+
+            logger.record_tabular('SurprFactor', kl_factor)
+            logger.record_tabular('DynModel_SqErrBefore', acc_before)
+            logger.record_tabular('DynModel_SqErrAfter', acc_after)
+            logger.record_tabular('DynModel_TrainLoss', train_loss)
 
             samples_data = self.process_samples(itr, paths)
 
@@ -558,18 +639,18 @@ class BatchPolopt(RLAlgorithm):
             self.policy.log_diagnostics(paths)
             self.baseline.log_diagnostics(paths)
             self.optimize_policy(itr, samples_data)
-#             logger.log("Saving snapshot ...")
-#             params = self.get_itr_snapshot(itr, samples_data)
-#             paths = samples_data["paths"]
-#             if self.store_paths:
-#                 params["paths"] = paths
-#             episode_rewards.extend(sum(p["rewards"]) for p in paths)
-#             episode_lengths.extend(len(p["rewards"]) for p in paths)
-#             params["episode_rewards"] = np.array(episode_rewards)
-#             params["episode_lengths"] = np.array(episode_lengths)
-#             params["algo"] = self
-#             logger.save_itr_params(itr, params)
-#             logger.log("Saved.")
+            logger.log("Saving snapshot ...")
+            params = self.get_itr_snapshot(itr, samples_data)
+            paths = samples_data["paths"]
+            if self.store_paths:
+                params["paths"] = paths
+            episode_rewards.extend(sum(p["rewards"]) for p in paths)
+            episode_lengths.extend(len(p["rewards"]) for p in paths)
+            params["episode_rewards"] = np.array(episode_rewards)
+            params["episode_lengths"] = np.array(episode_lengths)
+            params["algo"] = self
+            #             logger.save_itr_params(itr, params)
+            logger.log("Saved.")
             logger.dump_tabular(with_prefix=False)
             logger.pop_prefix()
             if self.plot:
@@ -616,7 +697,7 @@ class BatchPolopt(RLAlgorithm):
             reward_std = np.mean(np.asarray(self._reward_std))
 
         # Mean/std obs/act based on replay pool.
-        if self.use_replay_pool:
+        if self._dyn_pool_args['enable']:
             obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
         else:
             obs_mean, obs_std, act_mean, act_std = 0, 1, 0, 1
@@ -632,7 +713,7 @@ class BatchPolopt(RLAlgorithm):
             reward_std=reward_std,
             kl_batch_size=self.kl_batch_size,
             n_itr_update=self.n_itr_update,
-            use_replay_pool=self.use_replay_pool,
+            use_replay_pool=self._dyn_pool_args['enable'],
             obs_mean=obs_mean,
             obs_std=obs_std,
             act_mean=act_mean,
@@ -664,26 +745,30 @@ class BatchPolopt(RLAlgorithm):
             reward_mean = np.mean(np.asarray(self._reward_mean))
             reward_std = np.mean(np.asarray(self._reward_std))
             for i in xrange(len(paths)):
-                paths[i]['rewards'] = (
-                    paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
+                paths[i]['rewards'] = (paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
 
         if itr > 0:
             kls = []
             for i in xrange(len(paths)):
                 # We divide the KL by the number of weights in the network, to
                 # get a more normalized surprise measure accross models.
-                kls.append(paths[i]['KL'] / float(self.num_weights))
+                if self.surprise_type is not conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
+                    # Don't normalize by weight division in case of compr gain.
+                    kls.append(paths[i]['KL'])
+                else:
+                    kls.append(paths[i]['KL'] / float(self.num_weights))
 
             kls_flat = np.hstack(kls)
 
-            logger.record_tabular('BNN_MeanKL', np.mean(kls_flat))
-            logger.record_tabular('BNN_StdKL', np.std(kls_flat))
-            logger.record_tabular('BNN_MinKL', np.min(kls_flat))
-            logger.record_tabular('BNN_MaxKL', np.max(kls_flat))
-            logger.record_tabular('BNN_MedianKL', np.median(kls_flat))
-            logger.record_tabular('BNN_25percKL', np.percentile(kls_flat, 25))
-            logger.record_tabular('BNN_75percKL', np.percentile(kls_flat, 75))
-            logger.record_tabular('BNN_90percKL', np.percentile(kls_flat, 90))
+            logger.record_tabular('S_avg', np.mean(kls_flat))
+            logger.record_tabular('S_std', np.std(kls_flat))
+            logger.record_tabular('S_min', np.min(kls_flat))
+            logger.record_tabular('S_max', np.max(kls_flat))
+            logger.record_tabular('S_25p', np.percentile(kls_flat, 25))
+            logger.record_tabular('S_med', np.median(kls_flat))
+            logger.record_tabular('S_75p', np.percentile(kls_flat, 75))
+            logger.record_tabular('S_90p', np.percentile(kls_flat, 90))
+            logger.record_tabular('S_99p', np.percentile(kls_flat, 99))
 
             # Transform intrinsic rewards.
             if self.surprise_transform == BatchPolopt.SurpriseTransform.LOG:
@@ -695,6 +780,11 @@ class BatchPolopt(RLAlgorithm):
                 # Cap max KL for stabilization.
                 for i in xrange(len(paths)):
                     kls[i] = np.minimum(kls[i], perc90)
+            elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP99PERC:
+                perc99 = np.percentile(np.hstack(kls), 99)
+                # Cap max KL for stabilization.
+                for i in xrange(len(paths)):
+                    kls[i] = np.minimum(kls[i], perc99)
             elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP1000:
                 # Cap max KL for stabilization.
                 for i in xrange(len(paths)):
@@ -703,23 +793,10 @@ class BatchPolopt(RLAlgorithm):
                 cap = np.percentile(kls_flat, 95)
                 kls = [np.minimum(kl, cap) for kl in kls]
                 kls_flat, lens = ungroup(kls)
-                zerohunderd = stats.rankdata(
-                    kls_flat, "average") / len(kls_flat)
+                zerohunderd = stats.rankdata(kls_flat, "average") / len(kls_flat)
                 kls = group(zerohunderd, lens)
 
             kls_flat = np.hstack(kls)
-
-            logger.record_tabular('VIME_MeanKL_transf', np.mean(kls_flat))
-            logger.record_tabular('VIME_StdKL_transf', np.std(kls_flat))
-            logger.record_tabular('VIME_MinKL_transf', np.min(kls_flat))
-            logger.record_tabular('VIME_MaxKL_transf', np.max(kls_flat))
-            logger.record_tabular('VIME_MedianKL_transf', np.median(kls_flat))
-            logger.record_tabular(
-                'VIME_25percKL_transf', np.percentile(kls_flat, 25))
-            logger.record_tabular(
-                'VIME_75percKL_transf', np.percentile(kls_flat, 75))
-            logger.record_tabular(
-                'VIME_90percKL_transf', np.percentile(kls_flat, 90))
 
             # Normalize intrinsic rewards.
             if self.use_kl_ratio:
@@ -738,63 +815,50 @@ class BatchPolopt(RLAlgorithm):
 
             kls_flat = np.hstack(kls)
 
-            logger.record_tabular('VIME_MeanKL_norm', np.mean(kls_flat))
-            logger.record_tabular('VIME_StdKL_norm', np.std(kls_flat))
-            logger.record_tabular('VIME_MinKL_norm', np.min(kls_flat))
-            logger.record_tabular('VIME_MaxKL_norm', np.max(kls_flat))
-            logger.record_tabular('VIME_MedianKL_norm', np.median(kls_flat))
-            logger.record_tabular(
-                'VIME_25percKL_norm', np.percentile(kls_flat, 25))
-            logger.record_tabular(
-                'VIME_75percKL_norm', np.percentile(kls_flat, 75))
-            logger.record_tabular(
-                'VIME_90percKL_norm', np.percentile(kls_flat, 90))
+            if self.use_kl_ratio:
+                logger.record_tabular('VIME_MeanSurpr_norm', np.mean(kls_flat))
+                logger.record_tabular('VIME_StdSurpr_norm', np.std(kls_flat))
+                logger.record_tabular('VIME_MinSurpr_norm', np.min(kls_flat))
+                logger.record_tabular('VIME_MaxSurpr_norm', np.max(kls_flat))
+                logger.record_tabular('VIME_MedianSurpr_norm', np.median(kls_flat))
+                logger.record_tabular('VIME_25percSurpr_norm', np.percentile(kls_flat, 25))
+                logger.record_tabular('VIME_75percSurpr_norm', np.percentile(kls_flat, 75))
+                logger.record_tabular('VIME_90percSurpr_norm', np.percentile(kls_flat, 90))
 
-            # Add KL as intrinsic reward to external reward
+            # Add Surpr as intrinsic reward to external reward
             for i in xrange(len(paths)):
                 paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
 
         else:
-            logger.record_tabular('VIME_MeanKL', 0.)
-            logger.record_tabular('VIME_StdKL', 0.)
-            logger.record_tabular('VIME_MinKL', 0.)
-            logger.record_tabular('VIME_MaxKL', 0.)
-            logger.record_tabular('VIME_MedianKL', 0.)
-            logger.record_tabular('VIME_25percKL', 0.)
-            logger.record_tabular('VIME_75percKL', 0.)
-            logger.record_tabular('VIME_90percKL', 0.)
+            logger.record_tabular('S_avg', 0.)
+            logger.record_tabular('S_std', 0.)
+            logger.record_tabular('S_min', 0.)
+            logger.record_tabular('S_max', 0.)
+            logger.record_tabular('S_25p', 0.)
+            logger.record_tabular('S_med', 0.)
+            logger.record_tabular('S_75p', 0.)
+            logger.record_tabular('S_90p', 0.)
+            logger.record_tabular('S_99p', 0.)
 
-            logger.record_tabular('VIME_MeanKL_transf', 0.)
-            logger.record_tabular('VIME_StdKL_transf', 0.)
-            logger.record_tabular('VIME_MinKL_transf', 0.)
-            logger.record_tabular('VIME_MaxKL_transf', 0.)
-            logger.record_tabular('VIME_MedianKL_transf', 0.)
-            logger.record_tabular('VIME_25percKL_transf', 0.)
-            logger.record_tabular('VIME_75percKL_transf', 0.)
-            logger.record_tabular('VIME_90percKL_transf', 0.)
-
-            logger.record_tabular('VIME_MeanKL_norm', 0.)
-            logger.record_tabular('VIME_StdKL_norm', 0.)
-            logger.record_tabular('VIME_MinKL_norm', 0.)
-            logger.record_tabular('VIME_MaxKL_norm', 0.)
-            logger.record_tabular('VIME_MedianKL_norm', 0.)
-            logger.record_tabular('VIME_25percKL_norm', 0.)
-            logger.record_tabular('VIME_75percKL_norm', 0.)
-            logger.record_tabular('VIME_90percKL_norm', 0.)
+            if self.use_kl_ratio:
+                logger.record_tabular('VIME_MeanSurpr_norm', 0.)
+                logger.record_tabular('VIME_StdSurpr_norm', 0.)
+                logger.record_tabular('VIME_MinSurpr_norm', 0.)
+                logger.record_tabular('VIME_MaxSurpr_norm', 0.)
+                logger.record_tabular('VIME_MedianSurpr_norm', 0.)
+                logger.record_tabular('VIME_25percSurpr_norm', 0.)
+                logger.record_tabular('VIME_75percSurpr_norm', 0.)
+                logger.record_tabular('VIME_90percSurpr_norm', 0.)
 
         baselines = []
         returns = []
         for path in paths:
             path_baselines = np.append(self.baseline.predict(path), 0)
-            deltas = path["rewards"] + \
-                self.discount * path_baselines[1:] - \
-                path_baselines[:-1]
-            path["advantages"] = special.discount_cumsum(
-                deltas, self.discount * self.gae_lambda)
+            deltas = path["rewards"] + self.discount * path_baselines[1:] - path_baselines[:-1]
+            path["advantages"] = special.discount_cumsum(deltas, self.discount * self.gae_lambda)
             # FIXME: does this have to be rewards_orig or rewards? DEFAULT:
             # rewards_orig
-            path["returns"] = special.discount_cumsum(
-                path["rewards_orig"], self.discount)
+            path["returns"] = special.discount_cumsum(path["rewards_orig"], self.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
 
@@ -818,11 +882,9 @@ class BatchPolopt(RLAlgorithm):
             if self.positive_adv:
                 advantages = util.shift_advantages_to_positive(advantages)
 
-            average_discounted_return = \
-                np.mean([path["returns"][0] for path in paths])
+            average_discounted_return = np.mean([path["returns"][0] for path in paths])
 
-            undiscounted_returns = [
-                sum(path["rewards_orig"]) for path in paths]
+            undiscounted_returns = [sum(path["rewards_orig"]) for path in paths]
 
             ent = np.mean(self.policy.distribution.entropy(agent_infos))
 
@@ -882,11 +944,9 @@ class BatchPolopt(RLAlgorithm):
             )
 
             valids = [np.ones_like(path["returns"]) for path in paths]
-            valids = np.array(
-                [tensor_utils.pad_tensor(v, max_path_length) for v in valids])
+            valids = np.array([tensor_utils.pad_tensor(v, max_path_length) for v in valids])
 
-            average_discounted_return = \
-                np.mean([path["returns"][0] for path in paths])
+            average_discounted_return = np.mean([path["returns"][0] for path in paths])
 
             undiscounted_returns = [
                 sum(path["rewards_orig"]) for path in paths]

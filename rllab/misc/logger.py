@@ -3,6 +3,7 @@ from rllab.misc.tabulate import tabulate
 from rllab.misc.console import mkdir_p
 from rllab.misc.autoargs import get_all_parameters
 from contextlib import contextmanager
+import numpy as np
 import os
 import os.path as osp
 import sys
@@ -256,6 +257,8 @@ def stub_to_json(stub_sth):
             args=stub_to_json(stub_sth.args),
             kwargs=stub_to_json(stub_sth.kwargs),
         )
+    elif isinstance(stub_sth, instrument.BinaryOp):
+        return "binary_op"
     elif isinstance(stub_sth, instrument.StubClass):
         return stub_sth.proxy_class.__module__ + "." + stub_sth.proxy_class.__name__
     elif isinstance(stub_sth, dict):
@@ -296,3 +299,10 @@ def log_variant(log_file, variant_data):
     variant_json = stub_to_json(variant_data)
     with open(log_file, "w") as f:
         json.dump(variant_json, f, indent=2, sort_keys=True)
+
+def record_tabular_misc_stat(key,values):
+    record_tabular("Average"+key, np.average(values))
+    record_tabular("Std"+key, np.std(values))
+    record_tabular("Median"+key, np.median(values))
+    record_tabular("Min"+key, np.amin(values))
+    record_tabular("Max"+key, np.amax(values))
