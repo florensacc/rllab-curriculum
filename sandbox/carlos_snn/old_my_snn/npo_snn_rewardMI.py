@@ -16,6 +16,9 @@ from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
+import joblib
+import os.path as osp
+import os
 import rllab.plotter as plotter
 from rllab.sampler.utils import rollout
 import itertools
@@ -42,6 +45,7 @@ class NPO_snn(BatchPolopt):
             optimizer=None,
             optimizer_args=None,
             step_size=0.01,
+            warm_pkl_path=None,
             **kwargs):
         if optimizer is None:
             if optimizer_args is None:
@@ -57,8 +61,24 @@ class NPO_snn(BatchPolopt):
         self.reward_coef = reward_coef
         self.self_normalize = self_normalize
         self.n_samples = n_samples
+        self.warm_pkl_path = warm_pkl_path
         super(NPO_snn, self).__init__(**kwargs)
 
+        # initialize the policy params to the value of the warm policy
+        if self.warm_pkl_path:
+            # logger.log('Downloading snapshots and other files...')
+            # remote_file = osp.join(config.AWS_S3_PATH, self.warm_pkl_path)
+            # local_dir = osp.join(*self.warm_pkl_path.split('/')[:-1])
+            # print local_dir
+            # if not osp.isdir(local_dir):
+            #     os.system("mkdir -p %s" % local_dir)
+            # command = """
+            #     aws s3 cp {remote_file} {local_dir}/.""".format(remote_file=remote_file, local_dir=local_dir)
+            # os.system(command)
+            data = joblib.load(self.warm_pkl_path)
+            old_policy = data['policy']
+            warm_policy_params = old_policy.get_param_values()
+            self.policy.set_param_values(warm_policy_params)
         # see what are the MI that want to be logged (it has to be done after initializing the super to have self.env)
         self.logged_MI = logged_MI
         if self.logged_MI == 'all_individual':
@@ -71,7 +91,8 @@ class NPO_snn(BatchPolopt):
         if self.latent_regressor:  # check that there is a latent_regressor. there isn't if latent_dim=0.
             for reg_dict in self.logged_MI:  # this is poorly done, should fuse better the 2 dicts
                 regressor_args = self.latent_regressor.regressor_args
-                regressor_args['name'] = 'latent_reg_obs{}_act{}'.format(reg_dict['obs_regressed'], reg_dict['act_regressed'])
+                regressor_args['name'] = 'latent_reg_obs{}_act{}'.format(reg_dict['obs_regressed'],
+                                                                         reg_dict['act_regressed'])
                 extra_regressor_args = {
                     'env_spec': self.latent_regressor.env_spec,
                     'policy': self.latent_regressor.policy,
@@ -204,7 +225,7 @@ class NPO_snn(BatchPolopt):
                     lat_reg.fit(paths)
                     lat_reg.log_diagnostics(paths)
 
-            if self.log_individual_latents and not self.policy.resample: # this is only valid for finite discrete latents!!
+            if self.log_individual_latents and not self.policy.resample:  # this is only valid for finite discrete latents!!
                 all_latent_avg_returns = []
                 clustered_by_latents = {}  # this could be done within the distribution to be more general, but ugly
                 for path in paths:
