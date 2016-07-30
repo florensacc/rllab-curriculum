@@ -260,5 +260,7 @@ class ALEExperiment(object):
             return cv2.resize(image,
                               (self.resized_width, self.resized_height),
                               interpolation=cv2.INTER_LINEAR)
+        elif self.resize_method == 'none':
+            return image
         else:
             raise ValueError('Unrecognized image resize method.')
