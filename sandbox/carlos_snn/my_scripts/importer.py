@@ -1,5 +1,3 @@
-import matplotlib.pyplot as plt
-import numpy as np
 import joblib
 import sys
 import os.path as osp
