@@ -49,7 +49,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
     baseline = GaussianMLPBaseline(
         mdp.spec,
         regressor_args=dict(hidden_sizes=(32,),
-                            batchsize=20000),
+                            batchsize=100),
     )
 
     # TODO: group all args into meaningful arg dicts.

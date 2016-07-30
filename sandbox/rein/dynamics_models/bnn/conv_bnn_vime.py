@@ -73,6 +73,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                  out_func=lasagne.nonlinearities.linear,
                  batch_size=100,
                  n_samples=10,
+                 num_train_samples=1,
                  prior_sd=0.5,
                  second_order_update=False,
                  learning_rate=0.0001,
@@ -100,6 +101,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.transf = trans_func
         self.outf = out_func
         self.n_samples = n_samples
+        self.num_train_samples = num_train_samples
         self.prior_sd = prior_sd
         self.layers_disc = layers_disc
         self.n_batches = n_batches
@@ -117,6 +119,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.disable_variance = disable_variance
         self.debug = debug
         self.ind_softmax = ind_softmax
+
+        self.network = None
 
         if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
             assert self.num_classes is not None
@@ -143,7 +147,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         LasagnePowered.__init__(self, [self.network])
 
         # Compile theano functions.
-        self.build_model
+        self.build_model()
 
         print('num_weights: {}'.format(self.num_weights()))
 
@@ -288,7 +292,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # MC samples.
         log_p_D_given_w = 0.
-        for _ in xrange(self.n_samples):
+        for _ in xrange(self.num_train_samples):
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
             if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
@@ -306,7 +310,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             if self.update_prior:
                 kl = self.kl_div()
             else:
-                kl = self.log_p_w_q_w_kl()
+                kl = self.log_p_w_q_w_kl() #+ self.reverse_log_p_w_q_w_kl()
             return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
 
     def loss_last_sample(self, input, target, **kwargs):
@@ -441,7 +445,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         r_net = lasagne.layers.reshape(r_net, ([0], -1))
         self.network = ConcatLayer([s_net, r_net])
 
-    @property
     def build_model(self):
 
         # Prepare Theano variables for inputs and targets
