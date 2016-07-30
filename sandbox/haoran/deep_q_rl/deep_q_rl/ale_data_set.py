@@ -142,120 +142,120 @@ next_states for batch_size randomly chosen state transitions.
 
 # TESTING CODE BELOW THIS POINT...
 
-def simple_tests():
-    np.random.seed(222)
-    dataset = DataSet(width=2, height=3,
-                      rng=np.random.RandomState(42),
-                      max_steps=6, phi_length=4)
-    for i in range(10):
-        img = np.random.randint(0, 256, size=(3, 2))
-        action = np.random.randint(16)
-        reward = np.random.random()
-        terminal = False
-        if np.random.random() < .05:
-            terminal = True
-        print 'img', img
-        dataset.add_sample(img, action, reward, terminal)
-        print "I", dataset.imgs
-        print "A", dataset.actions
-        print "R", dataset.rewards
-        print "T", dataset.terminal
-        print "SIZE", dataset.size
-        print
-    print "LAST PHI", dataset.last_phi()
-    print
-    print 'BATCH', dataset.random_batch(2)
-
-
-def speed_tests():
-
-    dataset = DataSet(width=80, height=80,
-                      rng=np.random.RandomState(42),
-                      max_steps=20000, phi_length=4)
-
-    img = np.random.randint(0, 256, size=(80, 80))
-    action = np.random.randint(16)
-    reward = np.random.random()
-    start = time.time()
-    for i in range(100000):
-        terminal = False
-        if np.random.random() < .05:
-            terminal = True
-        dataset.add_sample(img, action, reward, terminal)
-    print "samples per second: ", 100000 / (time.time() - start)
-
-    start = time.time()
-    for i in range(200):
-        a = dataset.random_batch(32)
-    print "batches per second: ", 200 / (time.time() - start)
-
-    print dataset.last_phi()
-
-
-def trivial_tests():
-
-    dataset = DataSet(width=2, height=1,
-                      rng=np.random.RandomState(42),
-                      max_steps=3, phi_length=2)
-
-    img1 = np.array([[1, 1]], dtype='uint8')
-    img2 = np.array([[2, 2]], dtype='uint8')
-    img3 = np.array([[3, 3]], dtype='uint8')
-
-    dataset.add_sample(img1, 1, 1, False)
-    dataset.add_sample(img2, 2, 2, False)
-    dataset.add_sample(img3, 2, 2, True)
-    print "last", dataset.last_phi()
-    print "random", dataset.random_batch(1)
-
-
-def max_size_tests():
-    dataset1 = DataSet(width=3, height=4,
-                      rng=np.random.RandomState(42),
-                      max_steps=10, phi_length=4)
-    dataset2 = DataSet(width=3, height=4,
-                      rng=np.random.RandomState(42),
-                      max_steps=1000, phi_length=4)
-    for i in range(100):
-        img = np.random.randint(0, 256, size=(4, 3))
-        action = np.random.randint(16)
-        reward = np.random.random()
-        terminal = False
-        if np.random.random() < .05:
-            terminal = True
-        dataset1.add_sample(img, action, reward, terminal)
-        dataset2.add_sample(img, action, reward, terminal)
-        np.testing.assert_array_almost_equal(dataset1.last_phi(),
-                                             dataset2.last_phi())
-        print "passed"
-
-
-def test_memory_usage_ok():
-    import memory_profiler
-    dataset = DataSet(width=80, height=80,
-                      rng=np.random.RandomState(42),
-                      max_steps=100000, phi_length=4)
-    last = time.time()
-
-    for i in xrange(1000000000):
-        if (i % 100000) == 0:
-            print i
-        dataset.add_sample(np.random.random((80, 80)), 1, 1, False)
-        if i > 200000:
-            states, actions, rewards, next_states, terminals = \
-                                        dataset.random_batch(32)
-        if (i % 10007) == 0:
-            print time.time() - last
-            mem_usage = memory_profiler.memory_usage(-1)
-            print len(dataset), mem_usage
-        last = time.time()
-
-
-def main():
-    speed_tests()
-    test_memory_usage_ok()
-    max_size_tests()
-    simple_tests()
-
-if __name__ == "__main__":
-    main()
+# def simple_tests():
+#     np.random.seed(222)
+#     dataset = DataSet(width=2, height=3,
+#                       rng=np.random.RandomState(42),
+#                       max_steps=6, phi_length=4)
+#     for i in range(10):
+#         img = np.random.randint(0, 256, size=(3, 2))
+#         action = np.random.randint(16)
+#         reward = np.random.random()
+#         terminal = False
+#         if np.random.random() < .05:
+#             terminal = True
+#         print 'img', img
+#         dataset.add_sample(img, action, reward, terminal)
+#         print "I", dataset.imgs
+#         print "A", dataset.actions
+#         print "R", dataset.rewards
+#         print "T", dataset.terminal
+#         print "SIZE", dataset.size
+#         print
+#     print "LAST PHI", dataset.last_phi()
+#     print
+#     print 'BATCH', dataset.random_batch(2)
+#
+#
+# def speed_tests():
+#
+#     dataset = DataSet(width=80, height=80,
+#                       rng=np.random.RandomState(42),
+#                       max_steps=20000, phi_length=4)
+#
+#     img = np.random.randint(0, 256, size=(80, 80))
+#     action = np.random.randint(16)
+#     reward = np.random.random()
+#     start = time.time()
+#     for i in range(100000):
+#         terminal = False
+#         if np.random.random() < .05:
+#             terminal = True
+#         dataset.add_sample(img, action, reward, terminal)
+#     print "samples per second: ", 100000 / (time.time() - start)
+#
+#     start = time.time()
+#     for i in range(200):
+#         a = dataset.random_batch(32)
+#     print "batches per second: ", 200 / (time.time() - start)
+#
+#     print dataset.last_phi()
+#
+#
+# def trivial_tests():
+#
+#     dataset = DataSet(width=2, height=1,
+#                       rng=np.random.RandomState(42),
+#                       max_steps=3, phi_length=2)
+#
+#     img1 = np.array([[1, 1]], dtype='uint8')
+#     img2 = np.array([[2, 2]], dtype='uint8')
+#     img3 = np.array([[3, 3]], dtype='uint8')
+#
+#     dataset.add_sample(img1, 1, 1, False)
+#     dataset.add_sample(img2, 2, 2, False)
+#     dataset.add_sample(img3, 2, 2, True)
+#     print "last", dataset.last_phi()
+#     print "random", dataset.random_batch(1)
+#
+#
+# def max_size_tests():
+#     dataset1 = DataSet(width=3, height=4,
+#                       rng=np.random.RandomState(42),
+#                       max_steps=10, phi_length=4)
+#     dataset2 = DataSet(width=3, height=4,
+#                       rng=np.random.RandomState(42),
+#                       max_steps=1000, phi_length=4)
+#     for i in range(100):
+#         img = np.random.randint(0, 256, size=(4, 3))
+#         action = np.random.randint(16)
+#         reward = np.random.random()
+#         terminal = False
+#         if np.random.random() < .05:
+#             terminal = True
+#         dataset1.add_sample(img, action, reward, terminal)
+#         dataset2.add_sample(img, action, reward, terminal)
+#         np.testing.assert_array_almost_equal(dataset1.last_phi(),
+#                                              dataset2.last_phi())
+#         print "passed"
+#
+#
+# def test_memory_usage_ok():
+#     import memory_profiler
+#     dataset = DataSet(width=80, height=80,
+#                       rng=np.random.RandomState(42),
+#                       max_steps=100000, phi_length=4)
+#     last = time.time()
+#
+#     for i in xrange(1000000000):
+#         if (i % 100000) == 0:
+#             print i
+#         dataset.add_sample(np.random.random((80, 80)), 1, 1, False)
+#         if i > 200000:
+#             states, actions, rewards, next_states, terminals = \
+#                                         dataset.random_batch(32)
+#         if (i % 10007) == 0:
+#             print time.time() - last
+#             mem_usage = memory_profiler.memory_usage(-1)
+#             print len(dataset), mem_usage
+#         last = time.time()
+#
+#
+# def main():
+#     speed_tests()
+#     test_memory_usage_ok()
+#     max_size_tests()
+#     simple_tests()
+#
+# if __name__ == "__main__":
+#     main()

@@ -21,21 +21,21 @@ from sandbox.haoran.hashing.preprocessor.image_vectorize_preprocessor import Ima
 stub(globals())
 
 # check for uncommitted changes ------------------------------
-import git
-repo = git.Repo('.')
-if repo.is_dirty():
-    answer = ''
-    while answer not in ['y','Y','n','N']:
-        answer = raw_input("The repository has uncommitted changes. Do you want to continue? (y/n)")
-    if answer in ['n','N']:
-        sys.exit(1)
+# import git
+# repo = git.Repo('.')
+# if repo.is_dirty():
+#     answer = ''
+#     while answer not in ['y','Y','n','N']:
+#         answer = raw_input("The repository has uncommitted changes. Do you want to continue? (y/n)")
+#     if answer in ['n','N']:
+#         sys.exit(1)
 
 # define running mode specific params -----------------------------------
 exp_prefix = os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_docker_test"
+mode = "local_test"
 snapshot_mode = "all"
 plot = False
-use_gpu = True
+use_gpu = False # should change conv_type and ~/.theanorc
 
 # config.DOCKER_IMAGE = 'tsukuyomi2044/rllab'
 if "ec2_cpu" in mode:
@@ -116,7 +116,8 @@ for v in variants:
     update_frequency = 1
     replay_memory_size = 1000000
     batch_size = 32
-    network_type = "nips_dnn"
+    network_type = "nips"
+    conv_type = ""
     freeze_interval = 1
     replay_start_size = 100
     resize_method = 'crop'
@@ -189,6 +190,7 @@ for v in variants:
         use_double=use_double,
         batch_size=batch_size,
         network_type=network_type,
+        conv_type=conv_type,
         update_rule=update_rule,
         batch_accumulator=batch_accumulator,
         input_scale=255.0,
