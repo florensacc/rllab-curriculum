@@ -93,7 +93,7 @@ class ExperimentDatabase(object):
         files = []
         for name_or_pattern in name_or_patterns:
             matched_files = glob(osp.join(data_folder, name_or_pattern)) #golb gives a list of all files satisfying pattern
-            files += matched_files
+            files += matched_files  # this will include twice the same file if it satisfies 2 patterns
         experiments = []
         progress_f = None
         params_f = None

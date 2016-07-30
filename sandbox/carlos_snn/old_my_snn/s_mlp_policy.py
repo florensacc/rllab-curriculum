@@ -24,7 +24,7 @@ from sandbox.carlos_snn.distributions.categorical import Categorical
 from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
 
 
-class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
+class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # also inherits form Parametrized
     @autoargs.arg('hidden_sizes', type=int, nargs='*',
                   help='list of sizes for the fully-connected hidden layers')
     @autoargs.arg('std_sizes', type=int, nargs='*',
@@ -66,6 +66,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
         self.bilinear_integration = bilinear_integration
         self.resample = resample
         self.min_std = min_std
+        self.hidden_sizes = hidden_sizes
 
         self.pre_fix_latent = np.array([])  # if this is not empty when using reset() it will use this latent
         self.latent_fix = np.array([])  # this will hold the latents variable sampled in reset()
