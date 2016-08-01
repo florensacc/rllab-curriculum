@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 from progressbar import ETA, Bar, Percentage, ProgressBar
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture
+import rllab.misc.logger as logger
 import sys
 
 
@@ -13,8 +14,8 @@ class VAE(object):
                  dataset,
                  batch_size,
                  exp_name="experiment",
-                 log_dir="logs",
-                 checkpoint_dir="ckt",
+                 # log_dir="logs",
+                 # checkpoint_dir="ckt",
                  max_epoch=100,
                  updates_per_epoch=100,
                  snapshot_interval=10000,
@@ -46,8 +47,8 @@ class VAE(object):
         self.weight_redundancy = weight_redundancy
         self.max_epoch = max_epoch
         self.exp_name = exp_name
-        self.log_dir = log_dir
-        self.checkpoint_dir = checkpoint_dir
+        self.log_dir = logger.get_snapshot_dir()
+        self.checkpoint_dir = logger.get_snapshot_dir()
         self.snapshot_interval = snapshot_interval
         self.updates_per_epoch = updates_per_epoch
         self.summary_interval = summary_interval
@@ -313,21 +314,11 @@ class VAE(object):
                 avg_log_vals = np.mean(np.array(all_log_vals), axis=0)
                 log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, avg_log_vals))
 
-                print(log_line)
-                # d1 = (sess.run(self.model.latent_dist.dists[0].prior_dist_info(1)))['mean']
-                # d2 = (sess.run(self.model.latent_dist.dists[1].prior_dist_info(1)))['mean']
-                # print(np.linalg.norm(d1 - d2), d1, d2)
-                # d3 = (sess.run(self.model.latent_dist.dists[2].prior_dist_info(1)))['mean']
-                # print(np.linalg.norm(d1 - d3))
-                # # sys.stdout.flush()
-                # if (epoch+1) % 50 == 0:
-                #     import matplotlib.pyplot as plt
-                #     plt.close('all')
-                #     for d in self.model.latent_dist.dists: plt.figure(); plt.imshow(sess.run(self.model.decode(d.prior_dist_info(1)["mean"])[1])['p'].reshape((28, 28)),cmap='Greys_r'); plt.show(block=False)
-                #     import ipdb; ipdb.set_trace()
-
-                # if epoch == 15:
-                #     import ipdb; ipdb.set_trace()
+                logger.log(log_line)
+                for k,v in zip(log_keys, avg_log_vals):
+                    logger.record_tabular("train_%s"%k, v)
+                for k,v in zip(log_keys, avg_test_log_vals):
+                    logger.record_tabular("vali_%s"%k, v)
 
 
     def restore(self):

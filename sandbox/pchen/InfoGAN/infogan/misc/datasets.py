@@ -152,14 +152,21 @@ class MnistDataset(object):
         )
         self.test = dataset.test
         self.validation = dataset.validation
-        self.image_dim = 28 * 28
-        self.image_shape = (28, 28, 1)
+        self._image_dim = 28 * 28
+        self._image_shape = (28, 28, 1)
 
     def transform(self, data):
         return data
 
     def inverse_transform(self, data):
         return data
+
+    @property
+    def image_dim(self):
+        return self._image_dim
+    @property
+    def image_shape(self):
+        return self._image_shape
 
 '''
 Binarized MNIST (by Hugo Larochelle)

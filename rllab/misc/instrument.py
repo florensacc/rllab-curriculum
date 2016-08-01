@@ -148,6 +148,9 @@ class StubObject(StubBase):
         self.proxy_class = dict["proxy_class"]
 
     def __getattr__(self, item):
+        # why doesnt the commented code work?
+        # return StubAttr(self, item)
+        # checks bypassed to allow for accesing instance fileds
         if hasattr(self.proxy_class, item):
             return StubAttr(self, item)
         raise AttributeError('Cannot get attribute %s from %s'%(item, self.proxy_class))
@@ -1016,7 +1019,7 @@ def concretize(maybe_stub):
         obj = concretize(maybe_stub.obj)
         attr_name = maybe_stub.attr_name
         attr_val = getattr(obj, attr_name)
-        return attr_val
+        return concretize(attr_val)
     elif isinstance(maybe_stub, StubObject):
         if not hasattr(maybe_stub, "__stub_cache"):
             args = concretize(maybe_stub.args)
