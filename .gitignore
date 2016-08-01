@@ -43,3 +43,5 @@ rllab/config_personal.py
 *.bin
 *.sh
 runs
+MNIST/
+logs/

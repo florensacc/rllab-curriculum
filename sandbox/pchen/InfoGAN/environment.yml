@@ -1,0 +1,34 @@
+name: infogan
+channels:
+    - https://conda.anaconda.org/kne 
+    - https://conda.binstar.org/tlatorre 
+    - https://conda.anaconda.org/cjs14
+    - https://conda.anaconda.org/menpo
+    - jjhelmus
+dependencies:
+    - python==2.7.10
+    - numpy==1.10.4
+    - scipy
+    - python-dateutil
+    - joblib
+    - h5py
+    - matplotlib
+    - opencv
+    - scikit-learn
+    - tensorflow=0.8.0
+    - pillow
+    - pip:
+        - ipdb
+        - prettytensor
+        - progressbar
+        - python-dateutil
+        - jupyter
+        # liunux
+        # - https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.9.0rc0-cp27-none-linux_x86_64.whl
+        # mac
+        - https://storage.googleapis.com/tensorflow/mac/tensorflow-0.9.0-py2-none-any.whl
+        - Theano
+        - sacred
+
+
+
