@@ -1,5 +1,4 @@
 data
-data_upload
 *.pyc
 *-checkpoint.ipynb
 .DS_Store
@@ -42,4 +41,4 @@ rllab/config_personal.py
 *.sublime-workspace
 *.bin
 *.sh
-runs
+*.pkl
