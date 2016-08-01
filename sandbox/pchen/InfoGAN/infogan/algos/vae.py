@@ -284,7 +284,6 @@ class VAE(object):
                     log_vals = sess.run([self.trainer] + log_vars, {self.input_tensor: x})[1:]
                     all_log_vals.append(log_vals)
 
-                    counter += 1
 
                     if counter % self.snapshot_interval == 0:
                         snapshot_name = "%s_%s" % (self.exp_name, str(counter))
@@ -310,6 +309,8 @@ class VAE(object):
                                     simple_value=float(v),
                                 )
                         summary_writer.add_summary(summary, counter)
+                    # need to ensure avg_test_log is always available
+                    counter += 1
 
                 avg_log_vals = np.mean(np.array(all_log_vals), axis=0)
                 log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, avg_log_vals))
@@ -319,6 +320,7 @@ class VAE(object):
                     logger.record_tabular("train_%s"%k, v)
                 for k,v in zip(log_keys, avg_test_log_vals):
                     logger.record_tabular("vali_%s"%k, v)
+                logger.dump_tabular(with_prefix=False)
 
 
     def restore(self):
