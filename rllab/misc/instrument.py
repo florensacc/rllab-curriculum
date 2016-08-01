@@ -365,8 +365,14 @@ def run_experiment_lite(
     assert stub_method_call is not None or batch_tasks is not None, "Must provide at least either stub_method_call or batch_tasks"
     if batch_tasks is None:
         batch_tasks = [
-            dict(kwargs, stub_method_call=stub_method_call, exp_name=exp_name, log_dir=log_dir, env=env,
-                 variant=variant)
+            dict(
+                kwargs,
+                stub_method_call=stub_method_call,
+                exp_name=exp_name,
+                log_dir=log_dir,
+                env=env,
+                variant=variant
+            )
         ]
 
     global exp_count
