@@ -63,7 +63,7 @@ class VG(VariantGenerator):
 
     @variant
     def nr(self):
-        return [2,5,20]
+        return [2,]
 
     # @variant
     # def nm(self):
@@ -167,7 +167,7 @@ for v in variants:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_vae",
+            exp_prefix="res_vae_showent",
             seed=v["seed"],
             mode="local",
             variant=v,
