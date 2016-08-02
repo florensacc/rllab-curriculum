@@ -127,6 +127,10 @@ class VAE(object):
             loss = - vlb
             surr_loss = - surr_vlb
 
+            self.log_vars.append((
+                "ent_x_given_z",
+                tf.reduce_mean(self.model.output_dist.entropy(x_dist_info)) / ndim
+            ))
             self.log_vars.append(("vlb", vlb))
             self.log_vars.append(("kl", kl))
             self.log_vars.append(("true_vlb", true_vlb))
