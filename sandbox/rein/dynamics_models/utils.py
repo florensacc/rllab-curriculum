@@ -58,8 +58,7 @@ def sliding_mean(data_array, window=5):
 def load_dataset_Atari():
     import pickle
 
-    path = '/Users/rein/programming/openai/vime'
-    file_handler = open(path + '/dataset.pkl', 'r')
+    file_handler = open('sandbox/rein/datasets/dataset.pkl', 'r')
     _dataset = pickle.load(file_handler)
     return _dataset['x'].transpose(0, 3, 1, 2), _dataset['y'].transpose(0, 3, 1, 2)
 
