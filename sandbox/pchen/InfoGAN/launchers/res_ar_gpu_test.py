@@ -35,7 +35,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.0001, 0.001]
+        return [0.001]
 
     @variant
     def seed(self):
@@ -52,18 +52,18 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.03, 0.05, 0.01, 0.1] #0.05, 0.1]
+        return [0.01, ] #0.05, 0.1]
     #
     @variant
     def nar(self):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0,1,2]
+        return [1,]
 
     @variant
     def nr(self):
-        return [2,5,20]
+        return [5,]
 
     # @variant
     # def nm(self):
@@ -173,14 +173,7 @@ for v in variants[:]:
             mode="lab_kube",
             variant=v,
             n_parallel=0,
-            resources=dict(
-                requests=dict(
-                    cpu=3.8,
-                ),
-                limits=dict(
-                    cpu=3.8,
-                )
-            )
+            use_gpu=True
         )
 
 
