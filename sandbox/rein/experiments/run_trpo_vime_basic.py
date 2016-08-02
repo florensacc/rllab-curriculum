@@ -113,7 +113,7 @@ for batch_size, update_likelihood_sd, kl_ratio, normalize_reward, mdp, eta, seed
         surprise_transform=BatchPolopt.SurpriseTransform.CAP99PERC,
         update_likelihood_sd=update_likelihood_sd,
         replay_kl_schedule=0.98,
-        output_type=BNN.OutputType.REGRESSION,
+        output_type=BNN.OutputType.CLASSIFICATION,
         likelihood_sd_init=1.0,
         prior_sd=0.5,
         predict_delta=False,

@@ -619,7 +619,7 @@ class BayesianDenseLayer(BayesianLayer):
         return self.nonlinearity(activation)
 
     def get_output_shape_for(self, input_shape):
-        return (input_shape[0], self.num_units)
+        return input_shape[0], self.num_units
 
 
 class ConvBNN(LasagnePowered, Serializable):

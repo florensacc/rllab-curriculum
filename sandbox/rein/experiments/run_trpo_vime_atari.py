@@ -80,7 +80,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         mdp.spec,
         regressor_args=dict(
             mean_network=network,
-            batchsize=5000),
+            batchsize=7000),
     )
 
     algo = TRPO(
@@ -90,9 +90,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=50000,
+        batch_size=5000,
         whole_paths=True,
-        max_path_length=5000,
+        max_path_length=500,
         n_itr=250,
         step_size=0.01,
         optimizer_args=dict(
@@ -103,12 +103,12 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=10,
+        snn_n_samples=20,
         num_train_samples=1,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=8,
-        num_sample_updates=10,  # Every sample in traj batch will be used in `num_sample_updates' updates.
+        kl_batch_size=128,
+        num_sample_updates=5,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=normalize_reward,
         dyn_pool_args=dict(
             enable=False,
@@ -139,16 +139,16 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
-                 n_units=512,
+                 n_units=256,
                  matrix_variate_gaussian=True),
             dict(name='gaussian',
-                 n_units=512,
+                 n_units=256,
                  matrix_variate_gaussian=True),
             dict(name='hadamard',
-                 n_units=512,
+                 n_units=256,
                  matrix_variate_gaussian=True),
             dict(name='gaussian',
-                 n_units=512,
+                 n_units=256,
                  matrix_variate_gaussian=True),
             dict(name='split',
                  n_units=128,
@@ -197,11 +197,11 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-pxl-g",
+        exp_prefix="trpo-vime-atari-pxl-h",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",
