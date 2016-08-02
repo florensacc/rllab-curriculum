@@ -52,23 +52,22 @@ class StubBase(object):
         return StubMethodCall(self, "__div__", [other], dict())
 
     def __rdiv__(self, other):
-        return StubMethodCall(BinaryOp(), "rdiv", [self, other], dict())#self, "__rdiv__", [other], dict())
+        return StubMethodCall(BinaryOp(), "rdiv", [self, other], dict())  # self, "__rdiv__", [other], dict())
 
     def __rpow__(self, power, modulo=None):
         return StubMethodCall(self, "__rpow__", [power, modulo], dict())
 
 
 class BinaryOp(Serializable):
-
     def __init__(self):
         Serializable.quick_init(self, locals())
 
     def rdiv(self, a, b):
         return b / a
-    # def __init__(self, opname, a, b):
-    #     self.opname = opname
-    #     self.a = a
-    #     self.b = b
+        # def __init__(self, opname, a, b):
+        #     self.opname = opname
+        #     self.a = a
+        #     self.b = b
 
 
 class StubAttr(StubBase):
@@ -153,7 +152,7 @@ class StubObject(StubBase):
         # checks bypassed to allow for accesing instance fileds
         if hasattr(self.proxy_class, item):
             return StubAttr(self, item)
-        raise AttributeError('Cannot get attribute %s from %s'%(item, self.proxy_class))
+        raise AttributeError('Cannot get attribute %s from %s' % (item, self.proxy_class))
 
     def __str__(self):
         return "StubObject(%s, *%s, **%s)" % (str(self.proxy_class), str(self.args), str(self.kwargs))
@@ -546,7 +545,7 @@ def _to_param_val(v):
 def to_local_command(params, script=osp.join(config.PROJECT_PATH, 'scripts/run_experiment.py'), use_gpu=False):
     command = "python " + script
     if use_gpu and not config.USE_TF:
-        command = "THEANO_FLAGS='device=gpu' " + command
+        command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto' " + command
     for k, v in params.iteritems():
         if isinstance(v, dict):
             for nk, nv in v.iteritems():

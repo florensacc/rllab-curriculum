@@ -1,7 +1,7 @@
 from __future__ import print_function
 # matplotlib without x-server.
 import matplotlib as mpl
-mpl.use('Agg')
+# mpl.use('Agg')
 
 import sys
 
@@ -19,7 +19,6 @@ import ast
 import uuid
 import cPickle as pickle
 import base64
-
 
 def run_experiment(argv):
 

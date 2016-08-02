@@ -15,7 +15,6 @@ from rllab.misc.overrides import overrides
 from rllab.envs.mujoco.maze.maze_env_utils import ray_segment_intersect, point_distance
 
 
-
 class MazeEnv(ProxyEnv, Serializable):
     MODEL_CLASS = None
     ORI_IND = None
@@ -38,12 +37,19 @@ class MazeEnv(ProxyEnv, Serializable):
             n_bins=20,
             sensor_range=10.,
             sensor_span=math.pi,
+            maze_id=0,
+            length=1,
+            maze_height=0.5,
+            maze_size_scaling=4,
             *args,
             **kwargs):
 
         self._n_bins = n_bins
         self._sensor_range = sensor_range
         self._sensor_span = sensor_span
+        self._maze_id = maze_id
+        self.__class__.MAZE_HEIGHT = maze_height
+        self.__class__.MAZE_SIZE_SCALING = maze_size_scaling
 
         model_cls = self.__class__.MODEL_CLASS
         if model_cls is None:
@@ -54,7 +60,65 @@ class MazeEnv(ProxyEnv, Serializable):
 
         size_scaling = self.__class__.MAZE_SIZE_SCALING
         height = self.__class__.MAZE_HEIGHT
-        structure = self.__class__.MAZE_STRUCTURE
+
+        # define the maze to use
+        if self._maze_id == 0:
+            structure = self.__class__.MAZE_STRUCTURE
+        elif self._maze_id == 1:  # donuts maze: can reach the single goal by 2 equal paths
+            c = length + 4
+            M = np.ones((c,c))
+            M[1:c-2,(1,c-2)] = 0
+            M[(1, c-2), 1:c-2] = 0
+            M = M.tolist()
+            M[1][c/2] = 'r'
+            M[c-2][c/2] = 'g'
+            structure = M
+            self.__class__.MAZE_STRUCTURE = structure
+            print structure
+
+        elif self._maze_id == 2:  # spiral maze: need to use all the keys
+            c = length + 4
+            M = np.ones((c,c))
+            M[1:c-2,(1,c-2)] = 0
+            M[(1, c-2), 1:c-2] = 0
+            M = M.astype(int).tolist()
+            M[1][c/2] = 'r'
+            # now block one of the ways and put the goal on the other side
+            M[1][c/2-1] = 1
+            M[1][c/2-2] = 'g'
+            structure = M
+            self.__class__.MAZE_STRUCTURE = structure
+            print structure
+
+        elif self._maze_id == 3:  # corridor with goals at the 2 extremes
+            structure = [
+                [1] * (2 * length + 3),
+                [1, 'g'] + [0] * length + ['r'] + [0] * length + ['g', 1],
+                [1] * (2 * length + 3),
+            ]
+            self.__class__.MAZE_STRUCTURE = structure
+            print structure
+
+        elif self._maze_id == 4:  # cross corridor
+            c = 2*length + 5
+            M = np.ones((c, c))
+            M = M - np.diag(np.ones(c))
+            M = M - np.diag(np.ones(c-1), 1) - np.diag(np.ones(c-1), -1)
+            i = np.arange(c)
+            j = i[::-1]
+            M[i, j] = 0
+            M[i[:-1], j[1:]] = 0
+            M[i[1:], j[:-1]] = 0
+            M[np.array([0,c-1]),:] = 1
+            M[:, np.array([0, c-1])] = 1
+            M = M.astype(int).tolist()
+            M[c/2][c/2] = 'r'
+            for i in [1,c-2]:
+                for j in [1, c-2]:
+                    M[i][j] = 'g'
+            structure = M
+            self.__class__.MAZE_STRUCTURE = structure
+            print structure
 
         torso_x, torso_y = self._find_robot()
         self._init_torso_x = torso_x
@@ -262,3 +326,4 @@ class MazeEnv(ProxyEnv, Serializable):
 
     def action_from_key(self, key):
         return self.wrapped_env.action_from_key(key)
+

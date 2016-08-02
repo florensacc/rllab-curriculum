@@ -25,7 +25,7 @@ class IndependentSoftmaxLayer(lasagne.layers.Layer):
     def get_output_for(self, input, **kwargs):
         input_tiled = T.tile(input.dimshuffle(0, 1, 'x'), reps=[1, 1, self._num_bins])
         _a = input_tiled * self.W
-        _b = T.exp(_a) + 1e-8
+        _b = T.exp(_a - T.max(_a))
         _c = T.sum(_b, axis=2).dimshuffle(0, 1, 'x')
         return _b / _c
 
@@ -53,7 +53,7 @@ class HadamardLayer(lasagne.layers.MergeLayer):
         return None, input_shapes[0][1]
 
     def get_output_for(self, inputs, **kwargs):
-        return inputs[0] * inputs[1]
+        return inputs[0] + inputs[1]
 
 
 class ConcatLayer(lasagne.layers.MergeLayer):
@@ -136,17 +136,11 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
         self.output_type = output_type
         self.num_classes = num_classes
-        self.num_output_dim = num_output_dim
         self.disable_variance = disable_variance
         self.debug = debug
         self._ind_softmax = ind_softmax
 
         self.network = None
-
-        if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
-            assert self.num_classes is not None
-            assert self.num_output_dim is not None
-            assert self.n_out == self.num_classes * self.num_output_dim
 
         if self.group_variance_by == ConvBNNVIME.GroupVarianceBy.LAYER and self.use_local_reparametrization_trick:
             print(
@@ -285,41 +279,38 @@ class ConvBNNVIME(LasagnePowered, Serializable):
     def likelihood_regression_nonsum(self, target, prediction, likelihood_sd):
         return self._log_prob_normal_nonsum(target, prediction, likelihood_sd)
 
-    def likelihood_classification(self, target, prediction):
+    def _log_prob_softmax(self, target, prediction):
         # Cross-entropy; target vector selecting correct prediction
         # entries.
-
         target = T.cast(target, 'int32')
         out_dim = np.prod(self.state_dim)
-
         target2 = target.reshape((prediction.shape[0], -1)) + T.arange(out_dim) * self.num_classes
         prediction_selected = prediction[:, target2]
-        ll = T.sum(T.log(prediction_selected))
+        ll = T.sum(T.log(prediction_selected), axis=1)
         return ll
 
-    def Xlikelihood_classification(self, target, prediction):
-        # Cross-entropy; target vector selecting correct prediction
-        # entries.
+    def likelihood_classification(self, target, prediction):
+        return T.sum(self._log_prob_softmax(target, prediction))
 
-        # Numerical stability.
-        prediction += 1e-8
-
-        target2 = target + T.arange(target.shape[1]) * self.num_classes
-        target3 = target2.T.ravel()
-        idx = T.arange(target.shape[0])
-        idx2 = T.tile(idx, self.num_output_dim)
-        prediction_selected = prediction[idx2, target3].reshape([self.num_output_dim, target.shape[0]]).T
-        ll = T.sum(T.log(prediction_selected))
-        return ll
+    def likelihood_classification_nonsum(self, target, prediction):
+        return self._log_prob_softmax(target, prediction)
 
     def logp(self, input, target, **kwargs):
-        assert self.output_type == ConvBNNVIME.OutputType.REGRESSION
-        log_p_D_given_w = 0.
-        for _ in xrange(self.n_samples):
-            prediction = self.pred_sym(input)
-            lh = self.likelihood_regression_nonsum(target, prediction, **kwargs)
-            log_p_D_given_w += lh
-        return log_p_D_given_w / self.n_samples
+        if not self._ind_softmax:
+            log_p_D_given_w = 0.
+            for _ in xrange(self.n_samples):
+                prediction = self.pred_sym(input)
+                lh = self.likelihood_regression_nonsum(target, prediction, **kwargs)
+                log_p_D_given_w += lh
+            return log_p_D_given_w / self.n_samples
+        else:
+            log_p_D_given_w = 0.
+            for _ in xrange(self.n_samples):
+                pred = self.pred_sym(input)
+                lh = self.likelihood_regression(target[:, -1], pred[:, -1], **kwargs) + \
+                     self.likelihood_classification_nonsum(target[:, :-1], pred[:, :-1])
+                log_p_D_given_w += lh
+            return log_p_D_given_w / self.n_samples
 
     def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
         if self.disable_variance:
@@ -329,14 +320,13 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         for _ in xrange(self.num_train_samples):
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
-            if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION or self._ind_softmax:
-                lh = self.likelihood_regression(target[:, -1:], prediction[:, -1:], **kwargs) + \
-                     self.likelihood_classification(target[:, :-1], prediction[:, :-1])
-            elif self.output_type == ConvBNNVIME.OutputType.REGRESSION:
-                lh = self.likelihood_regression(target, prediction, **kwargs)
+            if self._ind_softmax:
+                # lh = self.likelihood_regression(target[:, -1:], prediction[:, -1:], **kwargs) + \
+                #      self.likelihood_classification(target[:, :-1], prediction[:, :-1])
+                lh = self.likelihood_classification(target[:, :-1], prediction[:, :-1])
+
             else:
-                raise Exception(
-                    'Unknown output_type {}'.format(self.output_type))
+                lh = self.likelihood_regression(target, prediction, **kwargs)
             log_p_D_given_w += lh
 
         if disable_kl:
@@ -398,7 +388,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     s_net, num_units=layer_disc['n_units'],
                     nonlinearity=layer_disc['nonlinearity'],
                     prior_sd=self.prior_sd,
-                    use_local_reparametrization_trick=True,
+                    use_local_reparametrization_trick=self.use_local_reparametrization_trick ,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
             elif layer_disc['name'] == 'deterministic':
@@ -434,7 +424,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     s_net, num_units=layer_disc['n_units'],
                     nonlinearity=layer_disc['nonlinearity'],
                     prior_sd=self.prior_sd,
-                    use_local_reparametrization_trick=True,
+                    use_local_reparametrization_trick=self.use_local_reparametrization_trick ,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
                 s_net = HadamardLayer([s_net, a_net])
@@ -449,7 +439,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     num_units=layer_disc['n_units'],
                     nonlinearity=self.transf,
                     prior_sd=self.prior_sd,
-                    use_local_reparametrization_trick=True,
+                    use_local_reparametrization_trick=self.use_local_reparametrization_trick ,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
             else:
@@ -477,7 +467,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             nonlinearity=lasagne.nonlinearities.linear,
             prior_sd=self.prior_sd,
             disable_variance=self.disable_variance,
-            use_local_reparametrization_trick=True,
+            use_local_reparametrization_trick=self.use_local_reparametrization_trick ,
             matrix_variate_gaussian=False)
         r_net = lasagne.layers.reshape(r_net, ([0], -1))
         self.network = ConcatLayer([s_net, r_net])

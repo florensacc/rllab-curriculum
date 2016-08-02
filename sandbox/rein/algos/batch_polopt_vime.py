@@ -303,14 +303,14 @@ class BatchPolopt(RLAlgorithm):
         for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
             _i, _t, _ = batch
             _o = self.bnn.pred_fn(_i)
-            if self.output_type == 'regression':
+            if self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
+                _o_s = _o[:, :-1]
+                _o_r = _o[:, -1]
+                _o_s = _o_s.reshape((-1, np.prod(self.state_dim), 256))
+                _o_s = np.argmax(_o_s, axis=2)
+                acc += np.sum(np.square(_o_s - _t[:, :-1])) + np.sum(np.square(_o_r - _t[:, -1]))
+            else:
                 acc += np.sum(np.square(_o - _t))
-            elif self.output_type == 'classification':
-                # FIXME: only for Atari
-                _out2 = _o.reshape([-1, 256])
-                _argm = np.argmax(_out2, axis=1)
-                _argm2 = _argm.reshape([-1, 128])
-                acc += np.sum(np.equal(_targets, _argm2))
         return acc / _inputs.shape[0]
 
     def make_train_set(self, inputs, targets):
@@ -440,12 +440,12 @@ class BatchPolopt(RLAlgorithm):
             update_prior=(not self._dyn_pool_args['enable']),
             update_likelihood_sd=self.update_likelihood_sd,
             group_variance_by=self.group_variance_by,
-            output_type=self.output_type,
+            output_type=conv_bnn_vime.ConvBNNVIME.OutputType.REGRESSION,
             num_classes=256,
-            num_output_dim=128,
             use_local_reparametrization_trick=self.use_local_reparametrization_trick,
             likelihood_sd_init=self.likelihood_sd_init,
-            disable_variance=self.disable_variance
+            disable_variance=self.disable_variance,
+            ind_softmax=(self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION),
         )
 
         # Number of weights in BNN, excluding biases.
@@ -455,10 +455,7 @@ class BatchPolopt(RLAlgorithm):
                                                                   self.num_weights))
 
         if self._dyn_pool_args['enable']:
-            if self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
-                observation_dtype = int
-            elif self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.REGRESSION:
-                observation_dtype = float
+            observation_dtype = float
             self.pool = SimpleReplayPool(
                 max_pool_size=self.replay_pool_size,
                 # self.env.observation_space.shape,

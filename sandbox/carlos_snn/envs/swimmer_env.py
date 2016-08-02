@@ -8,7 +8,6 @@ from rllab.misc import autoargs
 
 
 class SwimmerEnv(MujocoEnv, Serializable):
-
     FILE = 'swimmer.xml'
 
     @autoargs.arg('ctrl_cost_coeff', type=float,
@@ -42,11 +41,22 @@ class SwimmerEnv(MujocoEnv, Serializable):
 
     @overrides
     def log_diagnostics(self, paths):
+        # instead of just path["obs"][-1][-3] we will look at the distance to origin
         progs = [
-            path["observations"][-1][-3] - path["observations"][0][-3]
+            np.linalg.norm(path["observations"][-1][-3:-1] - path["observations"][0][-3:-1])  # gives (x,y) coord -not last z
             for path in paths
-        ]
+            ]
         logger.record_tabular('AverageForwardProgress', np.mean(progs))
         logger.record_tabular('MaxForwardProgress', np.max(progs))
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
+        # now we will grid the space and check how much of it the policy is covering
+        visitation = np.zeros((120, 120))  # we assume the furthest it can go is 6 Check it!!
+        for path in paths:
+            com_x = np.clip(((np.array(path['observations'][:][-3]) + 6) * 10).astype(int), 0, 119)
+            com_y = np.clip(((np.array(path['observations'][:][-2]) + 6) * 10).astype(int), 0, 119)
+            coms = zip(com_x, com_y)
+            for com in coms:
+                visitation[com] += 1
+        total_visitation = np.count_nonzero(visitation)
+        logger.record_tabular('VisitationTotal', total_visitation)
