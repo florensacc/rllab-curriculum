@@ -35,11 +35,11 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.0001, ]
+        return [0.001]
 
     @variant
     def seed(self):
-        return [3389, 98, ]
+        return [42, 1984, 21]
         # return [123124234]
 
     @variant
@@ -52,18 +52,18 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.03, ] #0.05, 0.1]
+        return [0.01, ] #0.05, 0.1]
     #
     @variant
     def nar(self):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [1]
+        return [1,]
 
     @variant
     def nr(self):
-        return [2,]
+        return [5,]
 
     # @variant
     # def nm(self):
@@ -93,7 +93,7 @@ variants = vg.variants(randomized=True)
 
 print(len(variants))
 
-for v in variants:
+for v in variants[:]:
 
     # with skip_if_exception():
 
@@ -104,7 +104,7 @@ for v in variants:
 
         print("Exp name: %s" % exp_name)
 
-        set_seed(v["seed"])
+        # set_seed(v["seed"])
 
         dataset = BinarizedMnistDataset()
         # dataset = MnistDataset()
@@ -167,11 +167,13 @@ for v in variants:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_vae_showent",
+            exp_prefix="res_vae_sweep",
             seed=v["seed"],
-            mode="local",
+            # mode="local",
+            mode="lab_kube",
             variant=v,
             n_parallel=0,
+            use_gpu=True
         )
 
 

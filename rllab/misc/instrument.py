@@ -544,7 +544,7 @@ def _to_param_val(v):
 
 def to_local_command(params, script=osp.join(config.PROJECT_PATH, 'scripts/run_experiment.py'), use_gpu=False):
     command = "python " + script
-    if use_gpu:
+    if use_gpu and not config.USE_TF:
         command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto' " + command
     for k, v in params.iteritems():
         if isinstance(v, dict):
