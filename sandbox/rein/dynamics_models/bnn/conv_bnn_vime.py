@@ -12,6 +12,27 @@ from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, Bayesia
     BayesianLayer
 
 
+class IndependentSoftmaxLayer(lasagne.layers.Layer):
+    def __init__(self, incoming, num_bins, W=lasagne.init.GlorotUniform(), **kwargs):
+        super(IndependentSoftmaxLayer, self).__init__(incoming, **kwargs)
+
+        self._num_bins = num_bins
+        num_inputs = int(np.prod(self.input_shape[1:]))
+        self.num_units = num_inputs
+
+        self.W = self.add_param(W, (self.num_units, self._num_bins), name="W")
+
+    def get_output_for(self, input, **kwargs):
+        input_tiled = T.tile(input.dimshuffle(0, 1, 'x'), reps=[1, 1, self._num_bins])
+        _a = input_tiled * self.W
+        _b = T.exp(_a) + 1e-8
+        _c = T.sum(_b, axis=2).dimshuffle(0, 1, 'x')
+        return _b / _c
+
+    def get_output_shape_for(self, input_shape):
+        return input_shape[0], input_shape[1], self._num_bins
+
+
 class OuterProdLayer(lasagne.layers.MergeLayer):
     def __init__(self, incomings, **kwargs):
         super(OuterProdLayer, self).__init__(incomings, **kwargs)
@@ -118,7 +139,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.num_output_dim = num_output_dim
         self.disable_variance = disable_variance
         self.debug = debug
-        self.ind_softmax = ind_softmax
+        self._ind_softmax = ind_softmax
 
         self.network = None
 
@@ -268,6 +289,18 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # Cross-entropy; target vector selecting correct prediction
         # entries.
 
+        target = T.cast(target, 'int32')
+        out_dim = np.prod(self.state_dim)
+
+        target2 = target.reshape((prediction.shape[0], -1)) + T.arange(out_dim) * self.num_classes
+        prediction_selected = prediction[:, target2]
+        ll = T.sum(T.log(prediction_selected))
+        return ll
+
+    def Xlikelihood_classification(self, target, prediction):
+        # Cross-entropy; target vector selecting correct prediction
+        # entries.
+
         # Numerical stability.
         prediction += 1e-8
 
@@ -290,18 +323,20 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
 
+        disable_kl = True
         # MC samples.
         log_p_D_given_w = 0.
         for _ in xrange(self.num_train_samples):
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
-            if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
-                lh = self.likelihood_classification(target, prediction)
+            if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION or self._ind_softmax:
+                lh = self.likelihood_regression(target[:, -1:], prediction[:, -1:], **kwargs) + \
+                     self.likelihood_classification(target[:, :-1], prediction[:, :-1])
             elif self.output_type == ConvBNNVIME.OutputType.REGRESSION:
                 lh = self.likelihood_regression(target, prediction, **kwargs)
             else:
                 raise Exception(
-                    'Uknown output_type {}'.format(self.output_type))
+                    'Unknown output_type {}'.format(self.output_type))
             log_p_D_given_w += lh
 
         if disable_kl:
@@ -310,7 +345,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             if self.update_prior:
                 kl = self.kl_div()
             else:
-                kl = self.log_p_w_q_w_kl() #+ self.reverse_log_p_w_q_w_kl()
+                kl = self.log_p_w_q_w_kl()  # + self.reverse_log_p_w_q_w_kl()
             return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
 
     def loss_last_sample(self, input, target, **kwargs):
@@ -322,7 +357,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         return self.loss(input, target, disable_kl=True, **kwargs)
 
     def build_network(self):
-        # TODO: build action fuse according to Oh2015.
 
         print('f: {} x {} -> {} x {}'.format(self.state_dim, self.action_dim, self.state_dim, self.reward_dim))
 
@@ -418,10 +452,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     use_local_reparametrization_trick=True,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
-            elif layer_disc['name'] == 'ind_softmax':
-                # Independent softmax classification
-                # TODO: work in progress
-                pass
             else:
                 raise (Exception('Unknown layer!'))
 
@@ -435,6 +465,12 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # Output of output_dim is flattened again. But ofc, we need to output
         # the r_net value, e.g., the reward signal.
         s_net = lasagne.layers.reshape(s_net, ([0], -1))
+        if self._ind_softmax:
+            s_net = IndependentSoftmaxLayer(
+                s_net,
+                num_bins=self.num_classes,
+            )
+            s_net = lasagne.layers.reshape(s_net, ([0], -1))
         r_net = BayesianDenseLayer(
             r_net,
             num_units=r_flat_dim,
@@ -477,8 +513,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         elif self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
 
-            target_var = T.imatrix('targets',
-                                   dtype=theano.config.floatX)
+            target_var = T.matrix('targets', dtype=theano.config.floatX)
 
             # Loss function.
             loss = self.loss(

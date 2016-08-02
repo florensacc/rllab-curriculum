@@ -322,7 +322,6 @@ class BatchPolopt(RLAlgorithm):
         target_im = targets[:, :-1].reshape(tuple([-1]) + self.state_dim).transpose(0, 2, 3, 1)
         input_im = input_im[:, :].reshape(tuple([-1]) + self.state_dim).transpose(0, 2, 3, 1)
 
-
         if self._predict_delta:
             target_im += input_im
 
@@ -345,7 +344,7 @@ class BatchPolopt(RLAlgorithm):
 
         pickle.dump(_dataset, open(path + '/dataset.pkl', 'wb'))
 
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         tmp = pickle.load(open(path + '/dataset.pkl', 'r'))
         print(tmp)
 
@@ -578,7 +577,7 @@ class BatchPolopt(RLAlgorithm):
 
                 acc_before = self.accuracy(np.vstack(X_train), np.vstack(T_train))
 
-                self.make_train_set(np.vstack(X_train), np.vstack(T_train))
+                # self.make_train_set(np.vstack(X_train), np.vstack(T_train))
 
                 # Do posterior chaining: this means that we update the model on each individual
                 # minibatch and update the prior to the new posterior.
@@ -596,9 +595,6 @@ class BatchPolopt(RLAlgorithm):
                     num_itr = int(np.ceil(float(self.num_sample_updates) / self.kl_batch_size))
                     for _ in xrange(self.num_sample_updates):
                         train_loss = self.bnn.train_fn(X_train[idx], T_train[idx], 1.)
-                        if np.isinf(train_loss) or np.isnan(train_loss):
-                            import ipdb
-                            ipdb.set_trace()
                         assert not np.isnan(train_loss)
                         assert not np.isinf(train_loss)
                         if count % int(np.ceil(self.num_sample_updates * len(lst_idx) / 5.)) == 0:
