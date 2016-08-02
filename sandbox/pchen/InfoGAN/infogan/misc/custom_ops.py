@@ -2,7 +2,7 @@ from contextlib import contextmanager
 
 import prettytensor as pt
 import tensorflow as tf
-from prettytensor.pretty_tensor_class import Phase
+from prettytensor.pretty_tensor_class import Phase, join_pretty_tensors, PrettyTensor
 import numpy as np
 
 
@@ -815,6 +815,25 @@ class wnorm_fc(prettytensor.VarStoreMethod):
         # books.add_histogram_summary(y, '%s/activations' % y.op.name)
         return input_layer.with_tensor(y, parameters=self.vars)
 
+@prettytensor.Register(assign_defaults=('activation_fn'))
+class nl(prettytensor.VarStoreMethod):
+    def __call__(self,
+                 input_layer,
+                 activation_fn=None,
+                 ):
+        books = input_layer.bookkeeper
+        y = input_layer.tensor
+        if activation_fn is not None:
+            if not isinstance(activation_fn, collections.Sequence):
+                activation_fn = (activation_fn,)
+            y = layers.apply_activation(
+                books,
+                y,
+                activation_fn[0],
+                activation_args=activation_fn[1:])
+        # books.add_histogram_summary(y, '%s/activations' % y.op.name)
+        return input_layer.with_tensor(y, parameters=self.vars)
+
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import state_ops
@@ -874,3 +893,23 @@ class AdamaxOptimizer(optimizer.Optimizer):
 
     def _apply_sparse(self, grad, var):
         raise NotImplementedError("Sparse gradient updates are not supported.")
+
+
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1):
+    seq = l_in.sequential()
+    with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
+        blk.conv2d_mod(kernel, nch, stride=stride)
+        blk.conv2d_mod(kernel, nch, activation_fn=None)
+        blk.apply(lambda x: x*add_coeff)
+        if stride != 1:
+            origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
+    return seq.as_layer().nl()
+
+def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1):
+    seq = l_in.sequential()
+    with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
+        blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel)
+        blk.conv2d_mod(kernel, nch, activation_fn=None)
+        blk.apply(lambda x: x*add_coeff)
+        origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None)
+    return seq.as_layer().nl()
