@@ -345,6 +345,12 @@ class Bernoulli(Distribution):
             reduction_indices=1
         )
 
+    def entropy(self, dist_info):
+        prob = dist_info["p"]
+        neg_prob = 1. - prob
+        return -tf.reduce_sum(prob * tf.log(prob + TINY), reduction_indices=1) \
+                -tf.reduce_sum(neg_prob * tf.log(neg_prob + TINY), reduction_indices=1)
+
     def nonreparam_logli(self, x_var, dist_info):
         return self.logli(x_var, dist_info)
 
