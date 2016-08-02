@@ -1,7 +1,7 @@
 from __future__ import print_function
 # matplotlib without x-server.
 import matplotlib as mpl
-# mpl.use('Agg')
+mpl.use('Agg')
 
 import sys
 

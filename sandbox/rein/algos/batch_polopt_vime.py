@@ -601,8 +601,12 @@ class BatchPolopt(RLAlgorithm):
                         # Samples will default path['KL'] to np.nan. It is filled in here.
                         logp_after = self.bnn.fn_logp(X_train[idx], T_train[idx])
                         lst_surpr[idx] = logp_after - logp_before
+                    elif itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.INFGAIN and not self.second_order_update:
+                        lst_surpr[idx] = np.tile(self.bnn.fn_kl(), reps=X_train[idx].shape[0])
 
-                if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
+                if itr > 0 and (self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR \
+                                        or self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.INFGAIN) \
+                        and not self.second_order_update:
                     # Make sure surprise >= 0
                     lst_surpr = np.concatenate(lst_surpr)
                     lst_surpr[lst_surpr < 0] = 0.
