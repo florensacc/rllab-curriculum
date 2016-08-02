@@ -43,7 +43,8 @@ class Experiment(object):
             # In each epoch, we do a full pass over the training data:
             train_err, train_batches, start_time, kl_values = 0, 0, time.time(), []
 
-            print('KL[post||prior]: {}'.format(model.log_p_w_q_w_kl().eval()))
+            if not model.disable_variance:
+                print('KL[post||prior]: {}'.format(model.log_p_w_q_w_kl().eval()))
 
             # Iterate over all minibatches and train on each of them.
             for batch in iterate_minibatches(X, Y, model.batch_size, shuffle=True):
@@ -91,13 +92,13 @@ class Experiment(object):
             img *= num_bins
 
     def main(self):
-        num_epochs = 1000
-        batch_size = 2
+        num_epochs = 10000
+        batch_size = 64
         IND_SOFTMAX = True
         NUM_BINS = 30
 
         print("Loading data ...")
-        X_train, T_train, act, rew = load_dataset_MNIST_plus()
+        # X_train, T_train, act, rew = load_dataset_MNIST_plus()
         X_train, T_train, act, rew = load_dataset_Atari_plus()
         if IND_SOFTMAX:
             self.bin_img(X_train, NUM_BINS)
@@ -221,14 +222,14 @@ class Experiment(object):
             num_train_samples=1,
             prior_sd=0.005,
             update_likelihood_sd=False,
-            learning_rate=0.005,
+            learning_rate=0.001,
             group_variance_by=ConvBNNVIME.GroupVarianceBy.UNIT,
             use_local_reparametrization_trick=True,
             likelihood_sd_init=0.01,
             output_type=ConvBNNVIME.OutputType.REGRESSION,
             surprise_type=ConvBNNVIME.SurpriseType.COMPR,
             num_output_dim=None,
-            disable_variance=False,
+            disable_variance=True,
             second_order_update=False,
             debug=True,
             # ---

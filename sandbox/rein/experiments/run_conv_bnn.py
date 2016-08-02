@@ -14,6 +14,6 @@ run_experiment_lite(
     exp_prefix="conv_bnn_a",
     mode="lab_kube",
     dry=False,
-    use_gpu=False,
+    use_gpu=True,
     script="sandbox/rein/experiments/run_experiment_lite.py",
 )
