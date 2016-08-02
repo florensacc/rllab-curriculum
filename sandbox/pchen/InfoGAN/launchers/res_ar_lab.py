@@ -35,7 +35,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.0001, 0.001,]
+        return [0.0001, ]
 
     @variant
     def seed(self):
@@ -48,21 +48,22 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [32, 64]#[12, 32]
+        return [64]#[12, 32]
 
     @variant
     def min_kl(self):
-        return [0.01, 0.03, 0.1] #0.05, 0.1]
+        return [0.03, ] #0.05, 0.1]
     #
     @variant
     def nar(self):
         # return [0,]#2,4]
         # return [2,]#2,4]
-        return [0,1,]#4]
+        # return [0,1,]#4]
+        return [1]
 
     @variant
     def nr(self):
-        return [10]
+        return [2,5,20]
 
     # @variant
     # def nm(self):
@@ -83,7 +84,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def wnorm(self):
-        return [True, False]
+        return [True, ]
 
 
 vg = VG()
@@ -170,7 +171,7 @@ for v in variants:
             seed=v["seed"],
             mode="local",
             variant=v,
+            n_parallel=0,
         )
-        raise "12`123"
 
 
