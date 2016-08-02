@@ -19,7 +19,7 @@ class VAE(object):
                  max_epoch=100,
                  updates_per_epoch=100,
                  snapshot_interval=10000,
-                 vali_eval_interval=500,
+                 vali_eval_interval=400,
                  learning_rate=1e-3,
                  summary_interval=100,
                  monte_carlo_kl=False,
@@ -119,6 +119,10 @@ class VAE(object):
                     tf.stop_gradient(log_p_x_given_z) * self.model.latent_dist.nonreparam_logli(z_var, z_dist_info)
                 )
             # Normalize by the dimensionality of the data distribution
+            self.log_vars.append(("vlb_sum", vlb))
+            self.log_vars.append(("kl_sum", kl))
+            self.log_vars.append(("true_vlb_sum", true_vlb))
+
             true_vlb /= ndim
             vlb /= ndim
             surr_vlb /= ndim

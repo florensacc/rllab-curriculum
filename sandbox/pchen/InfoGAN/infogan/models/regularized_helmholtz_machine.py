@@ -114,14 +114,14 @@ class RegularizedHelmholtzMachine(object):
                         (pt.template('input', self.book).
                          reshape([self.batch_size] + list(image_shape)).
                          conv2d_mod(5, 16, ).
-                         conv2d_mod(5, 16, residual=False).#True).
-                         conv2d_mod(5, 16, residual=False).#True).
+                         conv2d_mod(5, 16, residual=True).
+                         conv2d_mod(5, 16, residual=True).
                          conv2d_mod(5, 32, stride=2). # out 32*14*14
-                         conv2d_mod(5, 32, residual=False).#True).
-                         conv2d_mod(5, 32, residual=False).#True).
+                         conv2d_mod(5, 32, residual=True).
+                         conv2d_mod(5, 32, residual=True).
                          conv2d_mod(5, 32, stride=2). # out 32*7*7
-                         conv2d_mod(5, 32, residual=False).#True).
-                         conv2d_mod(5, 32, residual=False).#True).
+                         conv2d_mod(5, 32, residual=True).
+                         conv2d_mod(5, 32, residual=True).
                          flatten().
                          wnorm_fc(450, ).
                          wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
@@ -135,15 +135,63 @@ class RegularizedHelmholtzMachine(object):
                          reshape([self.batch_size, 7, 7, 32]).
                          # reshape([self.batch_size, 1, 1, 450]).
                          # custom_deconv2d([0] + [7,7,32], k_h=1, k_w=1).
-                         conv2d_mod(5, 32, residual=False).#True).
-                         conv2d_mod(5, 32, residual=False).#True).
+                         conv2d_mod(5, 32, residual=True).
+                         conv2d_mod(5, 32, residual=True).
                          custom_deconv2d([0] + [14,14,32], k_h=5, k_w=5).
-                         conv2d_mod(5, 32, residual=False).#True).
-                         conv2d_mod(5, 32, residual=False).#True).
+                         conv2d_mod(5, 32, residual=True).
+                         conv2d_mod(5, 32, residual=True).
                          custom_deconv2d([0] + [28,28,16], k_h=5, k_w=5).
-                         conv2d_mod(5, 16, residual=False).#True).
-                         conv2d_mod(5, 16, residual=False).#True).
+                         conv2d_mod(5, 16, residual=True).
+                         conv2d_mod(5, 16, residual=True).
                          conv2d_mod(5, 1, activation_fn=None).
+                         flatten()
+                         )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "small_res_small_kern":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(activation_fn=tf.nn.elu, data_init=UnboundVariable('data_init'), wnorm=self.wnorm):
+                    self.encoder_template = \
+                        (pt.template('input', self.book).
+                         reshape([self.batch_size] + list(image_shape)).
+                         conv2d_mod(3, 16, ).
+                         conv2d_mod(3, 16, residual=True).
+                         conv2d_mod(3, 16, residual=True).
+                         conv2d_mod(3, 32, stride=2). # out 32*14*14
+                         conv2d_mod(3, 32, residual=True).
+                         conv2d_mod(3, 32, residual=True).
+                         conv2d_mod(3, 32, stride=2). # out 32*7*7
+                         conv2d_mod(3, 32, residual=True).
+                         conv2d_mod(3, 32, residual=True).
+                         flatten().
+                         wnorm_fc(450, ).
+                         wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
+                         )
+                    self.decoder_template = \
+                        (pt.template('input', self.book).
+                         wnorm_fc(450, ).
+                         wnorm_fc(1568, ).
+                         # fully_connected(450, ).
+                         # fully_connected(1568, ).
+                         reshape([self.batch_size, 7, 7, 32]).
+                         # reshape([self.batch_size, 1, 1, 450]).
+                         # custom_deconv2d([0] + [7,7,32], k_h=1, k_w=1).
+                         conv2d_mod(3, 32, residual=True).
+                         conv2d_mod(3, 32, residual=True).
+                         custom_deconv2d([0] + [14,14,32], k_h=5, k_w=5).
+                         conv2d_mod(3, 32, residual=True).
+                         conv2d_mod(3, 32, residual=True).
+                         custom_deconv2d([0] + [28,28,16], k_h=5, k_w=5).
+                         conv2d_mod(3, 16, residual=True).
+                         conv2d_mod(3, 16, residual=True).
+                         conv2d_mod(3, 1, activation_fn=None).
                          flatten()
                          )
                     self.reg_encoder_template = \

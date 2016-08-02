@@ -21,7 +21,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 250
+max_epoch = 500
 
 stub(globals())
 
@@ -39,7 +39,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 1984, 21]
+        return [42, 1984, ]
         # return [123124234]
 
     @variant
@@ -48,7 +48,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [64]#[12, 32]
+        return [32]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -59,11 +59,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [1,]
+        return [0, 1,]
 
     @variant
-    def nr(self):
-        return [5,]
+    def nr(self, nar):
+        if nar == 0:
+            return [1]
+        else:
+            return [5,]
 
     # @variant
     # def nm(self):
@@ -81,6 +84,7 @@ class VG(VariantGenerator):
         # yield "deep_mlp"
         # yield "mlp"
         yield "small_res"
+        yield "small_res_small_kern"
 
     @variant(hide=False)
     def wnorm(self):
@@ -167,7 +171,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_vae_sweep",
+            exp_prefix="res_vae_long_arch_test",
             seed=v["seed"],
             # mode="local",
             mode="lab_kube",
