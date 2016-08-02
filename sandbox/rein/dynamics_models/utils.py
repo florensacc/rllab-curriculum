@@ -69,7 +69,9 @@ def load_dataset_Atari_plus():
     # add action and reward signal.
     act = np.tanh(np.linspace(0, 1, X_train.shape[0]))
     act = np.vstack((act, act)).T
+    act *= 0
     rew = np.sin(np.linspace(0, 1, X_train.shape[0]))[:, None]
+    rew *= 0
     return X_train, T_train, act, rew
 
 
