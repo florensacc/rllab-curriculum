@@ -39,7 +39,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [3389, 98, ]
+        return [3389, 98, 42]
         # return [123124234]
 
     @variant
@@ -93,7 +93,7 @@ variants = vg.variants(randomized=True)
 
 print(len(variants))
 
-for v in variants:
+for v in variants[:5]:
 
     # with skip_if_exception():
 
@@ -104,7 +104,7 @@ for v in variants:
 
         print("Exp name: %s" % exp_name)
 
-        set_seed(v["seed"])
+        # set_seed(v["seed"])
 
         dataset = BinarizedMnistDataset()
         # dataset = MnistDataset()
@@ -167,11 +167,20 @@ for v in variants:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_vae",
+            exp_prefix="res_vae_test",
             seed=v["seed"],
-            mode="local",
+            # mode="local",
+            mode="lab_kube",
             variant=v,
             n_parallel=0,
+            resources=dict(
+                requests=dict(
+                    cpu=3.8,
+                ),
+                limits=dict(
+                    cpu=3.8,
+                )
+            )
         )
 
 
