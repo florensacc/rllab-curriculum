@@ -322,8 +322,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         return log_p_D_given_w / self.n_samples
 
     def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
-
-        disable_kl = True
+        if self.disable_variance:
+            disable_kl = True
         # MC samples.
         log_p_D_given_w = 0.
         for _ in xrange(self.num_train_samples):
@@ -340,13 +340,13 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             log_p_D_given_w += lh
 
         if disable_kl:
-            return - log_p_D_given_w / self.n_samples
+            return - log_p_D_given_w / self.num_train_samples
         else:
             if self.update_prior:
                 kl = self.kl_div()
             else:
                 kl = self.log_p_w_q_w_kl()  # + self.reverse_log_p_w_q_w_kl()
-            return kl / self.n_batches * kl_factor - log_p_D_given_w / self.n_samples
+            return kl / self.n_batches * kl_factor - log_p_D_given_w / self.num_train_samples
 
     def loss_last_sample(self, input, target, **kwargs):
         """The difference with the original loss is that we only update based on the latest sample.
@@ -476,6 +476,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             num_units=r_flat_dim,
             nonlinearity=lasagne.nonlinearities.linear,
             prior_sd=self.prior_sd,
+            disable_variance=self.disable_variance,
             use_local_reparametrization_trick=True,
             matrix_variate_gaussian=False)
         r_net = lasagne.layers.reshape(r_net, ([0], -1))

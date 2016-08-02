@@ -111,66 +111,74 @@ class BayesianLayer(lasagne.layers.Layer):
                 lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
             # So we should have weights (self.num_units + self.num_inputs,)
             # instead of (self.num_units, self.num_inputs).
-            self.rho = self.add_param(
-                lasagne.init.Constant(self.inv_softplus(np.sqrt(self.prior_sd))),
-                ((self.num_inputs + self.num_units) * self.mvg_rank,),
-                name='rho')
+            if not self.disable_variance:
+                self.rho = self.add_param(
+                    lasagne.init.Constant(self.inv_softplus(np.sqrt(self.prior_sd))),
+                    ((self.num_inputs + self.num_units) * self.mvg_rank,),
+                    name='rho')
 
             self.b_mu = self.add_param(
                 lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
             # Single bias variance, since outgoing weights are tied.
-            self.b_rho = self.add_param(
-                lasagne.init.Constant(self.prior_rho),
-                (1,),
-                name="b_rho",
-                regularizable=False
-            )
+            if not self.disable_variance:
+                self.b_rho = self.add_param(
+                    lasagne.init.Constant(self.prior_rho),
+                    (1,),
+                    name="b_rho",
+                    regularizable=False
+                )
 
             # Backup params for KL calculations.
             self.mu_old = self.add_param(
                 np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
-            self.rho_old = self.add_param(
-                lasagne.init.Constant(self.prior_rho),
-                ((self.num_inputs + self.num_units) * self.mvg_rank,),
-                name='rho_old', trainable=False, oldparam=True)
+            if not self.disable_variance:
+                self.rho_old = self.add_param(
+                    lasagne.init.Constant(self.prior_rho),
+                    ((self.num_inputs + self.num_units) * self.mvg_rank,),
+                    name='rho_old', trainable=False, oldparam=True)
 
             # Bias priors.
             self.b_mu_old = self.add_param(
                 np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_mu_old", regularizable=False,
                 trainable=False, oldparam=True)
-            self.b_rho_old = self.add_param(
-                lasagne.init.Constant(self.prior_rho),
-                (1,), name="b_rho_old", regularizable=False,
-                trainable=False, oldparam=True)
+            if not self.disable_variance:
+                self.b_rho_old = self.add_param(
+                    lasagne.init.Constant(self.prior_rho),
+                    (1,), name="b_rho_old", regularizable=False,
+                    trainable=False, oldparam=True)
 
         else:
             # In fact, this should be initialized to np.zeros(self.get_W_shape()),
             # but this trains much slower.
             self.mu = self.add_param(
                 lasagne.init.Normal(0.01, 0.), self.get_W_shape(), name='mu')
-            self.rho = self.add_param(
-                lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho')
+            if not self.disable_variance:
+                self.rho = self.add_param(
+                    lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho')
 
             # TODO: Perhaps biases should have a postive value, to avoid zeroing the
             # relus.
             self.b_mu = self.add_param(
                 lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
-            self.b_rho = self.add_param(
-                lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False)
+            if not self.disable_variance:
+                self.b_rho = self.add_param(
+                    lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False)
 
             # Backup params for KL calculations.
             self.mu_old = self.add_param(
                 np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
-            self.rho_old = self.add_param(
-                np.zeros(self.get_W_shape()), self.get_W_shape(), name='rho_old', trainable=False, oldparam=True)
+            if not self.disable_variance:
+                self.rho_old = self.add_param(
+                    np.zeros(self.get_W_shape()), self.get_W_shape(), name='rho_old', trainable=False, oldparam=True)
 
             # Bias priors.
             self.b_mu_old = self.add_param(
                 np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_mu_old", regularizable=False,
                 trainable=False, oldparam=True)
-            self.b_rho_old = self.add_param(
-                np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False,
-                trainable=False, oldparam=True)
+            if not self.disable_variance:
+                self.b_rho_old = self.add_param(
+                    np.zeros(self.get_b_shape()), self.get_b_shape(), name="b_rho_old", regularizable=False,
+                    trainable=False, oldparam=True)
 
     def num_weights(self):
         return np.prod(self.get_W_shape())
@@ -198,61 +206,76 @@ class BayesianLayer(lasagne.layers.Layer):
     def save_params(self):
         """Save old parameter values for KL calculation."""
         self.mu_old.set_value(self.mu.get_value())
-        self.rho_old.set_value(self.rho.get_value())
         self.b_mu_old.set_value(self.b_mu.get_value())
-        self.b_rho_old.set_value(self.b_rho.get_value())
+        if not self.disable_variance:
+            self.rho_old.set_value(self.rho.get_value())
+            self.b_rho_old.set_value(self.b_rho.get_value())
 
     def load_prev_params(self):
         """Reset to old parameter values for KL calculation."""
         self.mu_tmp = self.mu.get_value()
         self.b_mu_tmp = self.b_mu.get_value()
-        self.rho_tmp = self.rho.get_value()
-        self.b_rho_tmp = self.b_rho.get_value()
+        if not self.disable_variance:
+            self.rho_tmp = self.rho.get_value()
+            self.b_rho_tmp = self.b_rho.get_value()
 
         self.mu.set_value(self.mu_old.get_value())
-        self.rho.set_value(self.rho_old.get_value())
         self.b_mu.set_value(self.b_mu_old.get_value())
-        self.b_rho.set_value(self.b_rho_old.get_value())
+        if not self.disable_variance:
+            self.rho.set_value(self.rho_old.get_value())
+            self.b_rho.set_value(self.b_rho_old.get_value())
 
     def load_cur_params(self):
         """Reset to old parameter values for KL calculation."""
         self.mu_tmp = self.mu_old.get_value()
         self.b_mu_tmp = self.b_mu_old.get_value()
-        self.rho_tmp = self.rho_old.get_value()
-        self.b_rho_tmp = self.b_rho_old.get_value()
+        if not self.disable_variance:
+            self.rho_tmp = self.rho_old.get_value()
+            self.b_rho_tmp = self.b_rho_old.get_value()
 
         self.mu.set_value(self.mu_tmp)
-        self.rho.set_value(self.rho_tmp)
         self.b_mu.set_value(self.b_mu_tmp)
-        self.b_rho.set_value(self.b_rho_tmp)
+        if self.disable_variance:
+            self.rho.set_value(self.rho_tmp)
+            self.b_rho.set_value(self.b_rho_tmp)
 
     def get_W_full(self):
         # W = M + U ^ 0.5 * E * V ^ 0.5
         pass
 
     def get_W(self):
-        mask = 0 if self.disable_variance else 1
         if self._matrix_variate_gaussian:
-            epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
-                                        dtype=theano.config.floatX)
-            s = self.softplus(self.rho)
-            s_u = s[self.num_inputs:]
-            s_v = s[:self.num_inputs]
-            s_v = s[:self.num_inputs]
-            s = T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
-            return self.mu + s * epsilon * mask
+            if not self.disable_variance:
+                s = self.softplus(self.rho)
+                s_u = s[self.num_inputs:]
+                s_v = s[:self.num_inputs]
+                s_v = s[:self.num_inputs]
+                s = T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
+                epsilon = self._srng.normal(size=(self.num_inputs, self.num_units), avg=0., std=1.,
+                                            dtype=theano.config.floatX)
+                return self.mu + s * epsilon
+            else:
+                return self.mu
         else:
-            epsilon = self._srng.normal(size=self.get_W_shape(), avg=0., std=1., dtype=theano.config.floatX)
-            return self.mu + self.softplus(self.rho) * epsilon * mask
+            if not self.disable_variance:
+                epsilon = self._srng.normal(size=self.get_W_shape(), avg=0., std=1., dtype=theano.config.floatX)
+                return self.mu + self.softplus(self.rho) * epsilon
+            else:
+                return self.mu
 
     def get_b(self):
-        mask = 0 if self.disable_variance else 1
         if self._matrix_variate_gaussian:
-            epsilon = self._srng.normal(size=(1,), avg=0., std=1., dtype=theano.config.floatX)
-            return self.b_mu + T.mean(self.softplus(self.b_rho)) * epsilon * mask
+            if not self.disable_variance:
+                epsilon = self._srng.normal(size=(1,), avg=0., std=1., dtype=theano.config.floatX)
+                return self.b_mu + T.mean(self.softplus(self.b_rho)) * epsilon
+            else:
+                return self.b_mu
         else:
-            epsilon = self._srng.normal(size=self.get_b_shape(), avg=0., std=1., dtype=theano.config.floatX)
-            return self.b_mu + self.softplus(self.b_rho) * epsilon * mask
+            if not self.disable_variance:
+                epsilon = self._srng.normal(size=self.get_b_shape(), avg=0., std=1., dtype=theano.config.floatX)
+                return self.b_mu + self.softplus(self.b_rho) * epsilon
+            else:
+                return self.b_mu
 
     # We don't calculate the KL for biases, as they should be able to
     # arbitrarily shift.
@@ -602,7 +625,7 @@ class BayesianDenseLayer(BayesianLayer):
         return self.nonlinearity(activation)
 
     def get_output_for(self, input, **kwargs):
-        if self.use_local_reparametrization_trick:
+        if self.use_local_reparametrization_trick and not self.disable_variance:
             return self.get_output_for_reparametrization(input, **kwargs)
         else:
             return self.get_output_for_default(input, **kwargs)
@@ -850,6 +873,9 @@ class ConvBNN(LasagnePowered, Serializable):
         return log_p_D_given_w / self.n_samples
 
     def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
+
+        if self.disable_variance:
+            disable_kl = True
 
         # MC samples.
         log_p_D_given_w = 0.
