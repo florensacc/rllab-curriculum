@@ -83,9 +83,10 @@ class VG(VariantGenerator):
         # yield "small_conv"
         # yield "deep_mlp"
         # yield "mlp"
-        yield "conv1_k5"
+        # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
+        yield "resv1_k3"
 
     @variant(hide=False)
     def wnorm(self):
@@ -172,13 +173,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_vae_long_arch_test",
+            exp_prefix="archdebug",
             seed=v["seed"],
-            # mode="local",
-            mode="lab_kube",
+            mode="local",
+            # mode="lab_kube",
             variant=v,
             n_parallel=0,
-            use_gpu=True
+            # use_gpu=True
         )
 
 
