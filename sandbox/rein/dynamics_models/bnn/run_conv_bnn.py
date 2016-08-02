@@ -106,8 +106,7 @@ class Experiment(object):
 
             self.plot_pred_imgs(model, X_train, T_train, epoch, 1)
 
-            # Then we print the results for this epoch:
-            logger.record_tabular('train loss',train_err / train_batches)
+            logger.record_tabular('train loss', train_err / float(train_batches))
             logger.record_tabular('obs err', acc)
             logger.log("Epoch {} of {} took {:.3f}s".format(
                 epoch + 1, num_epochs, time.time() - start_time))
