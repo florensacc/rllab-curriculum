@@ -41,3 +41,6 @@ dependencies:
         - awscli
         - git+https://github.com/openai/gym.git
         - pyglet
+        - git+https://github.com/neocxi/prettytensor.git
+        - jupyter
+        - progressbar

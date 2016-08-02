@@ -107,7 +107,6 @@ def run_experiment(argv):
     else:
         # read from stdin
         data = pickle.loads(base64.b64decode(args.args_data))
-
         maybe_iter = concretize(data)
         if is_iterable(maybe_iter):
             for _ in maybe_iter:
