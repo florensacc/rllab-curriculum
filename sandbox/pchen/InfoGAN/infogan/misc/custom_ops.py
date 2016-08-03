@@ -79,12 +79,12 @@ class custom_conv2d(pt.VarStoreMethod):
 
 
 @pt.Register(
-    assign_defaults=('activation_fn', 'data_init', 'wnorm'))
+    assign_defaults=('activation_fn', 'data_init', 'wnorm', 'pixel_bias'))
 class custom_deconv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_shape,
                  k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
                  name="deconv2d", activation_fn=None, data_init=False, init_scale=0.1,
-                 wnorm=False,
+                 wnorm=False, pixel_bias=False,
                  ):
         print "data init: ", data_init
         output_shape[0] = input_layer.shape[0]
@@ -105,6 +105,7 @@ class custom_deconv2d(pt.VarStoreMethod):
             deconv = tf.nn.conv2d_transpose(input_layer, w_norm,
                                                 output_shape=ts_output_shape,
                                                 strides=[1, d_h, d_w, 1])
+            bias_shp = [1,]+output_shape[1:] if pixel_bias else [1, 1, 1, output_shape[-1]]
             if wnorm:
                 m_init, v_init = tf.nn.moments(deconv, [0,1,2], keep_dims=True)
                 p_s_init = init_scale / tf.sqrt(v_init + 1e-9)
@@ -115,8 +116,8 @@ class custom_deconv2d(pt.VarStoreMethod):
                 )
                 biases = self.variable(
                     'biases',
-                    [1,1,1,output_shape[-1]],
-                    init=lambda *_,**__: -m_init*p_s_init
+                    bias_shp, #[1,1,1,output_shape[-1]],
+                    init=lambda *_,**__: tf.ones(bias_shp)*-m_init*p_s_init
                 )
                 if data_init:
                     biases = biases.initialized_value()
@@ -125,7 +126,7 @@ class custom_deconv2d(pt.VarStoreMethod):
             else:
                 biases = self.variable(
                     'biases',
-                    [1,1,1,output_shape[-1]],
+                    bias_shp,
                     init=tf.constant_initializer(0.)
                 )
                 if data_init:
@@ -463,8 +464,11 @@ class arfc(prettytensor.VarStoreMethod):
 
 from prettytensor.pretty_tensor_image_methods import *
 @prettytensor.Register(
-    assign_defaults=('activation_fn', 'l2loss', 'stddev', 'batch_normalize',
-        'data_init', 'wnorm'))
+    assign_defaults=(
+            'activation_fn', 'l2loss', 'stddev', 'batch_normalize',
+            'data_init', 'wnorm', 'pixel_bias',
+    )
+)
 class conv2d_mod(prettytensor.VarStoreMethod):
 
   def __call__(self,
@@ -483,8 +487,10 @@ class conv2d_mod(prettytensor.VarStoreMethod):
                residual=False,
                data_init=False,
                wnorm=False,
+               pixel_bias=False,
                scale_init=0.1,
-               name=PROVIDED):
+               name=PROVIDED
+               ):
     """Adds a convolution to the stack of operations.
     The current head must be a rank 4 Tensor.
     Args:
@@ -539,6 +545,9 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     y = tf.nn.conv2d(input_layer, params_norm, stride, edges)
     layers.add_l2loss(books, params, l2loss)
 
+    out_w = int(y.get_shape()[1])
+    out_h = int(y.get_shape()[2])
+    bias_shp = [1, out_w, out_h, depth] if pixel_bias else [1, 1, 1, depth]
     if wnorm:
         m_init, v_init = tf.nn.moments(y, [0, 1, 2], keep_dims=True)
         p_s_init = scale_init / tf.sqrt(v_init + 1e-9)
@@ -550,8 +559,8 @@ class conv2d_mod(prettytensor.VarStoreMethod):
         )
         b = self.variable(
             'bias',
-            [1, 1, 1, depth],
-            lambda *_,**__: -m_init*p_s_init,
+            bias_shp,
+            lambda *_,**__: tf.ones(bias_shp)*-m_init*p_s_init,
             dt=dtype
         )
         if data_init:
@@ -562,7 +571,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     else:
         b = self.variable(
             'bias',
-            [1, 1, 1, depth],
+            bias_shp,
             tf.constant_initializer(0.),
             dt=dtype
         )

@@ -1,19 +1,13 @@
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
-
-from sandbox.carlos_snn.old_my_snn.trpo_snn import TRPO_snn
-import sys
-
-from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
-
 from sandbox.carlos_snn.hallucinators.prior_hallucinator import PriorHallucinator
-
+from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
+from sandbox.carlos_snn.old_my_snn.trpo_snn import TRPO_snn
 from sandbox.carlos_snn.regressors.latent_regressor import Latent_regressor
 
 # from rllab.envs.gym_env import GymEnv  # for ec2 this doesn't work yet..
 # from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
-from sandbox.carlos_snn.envs.half_cheetah_env import HalfCheetahEnv #change the reward to abs()
-from rllab.envs.normalized_env import normalize
+from sandbox.carlos_snn.envs.mujoco.half_cheetah_env import HalfCheetahEnv #change the reward to abs()
 
 stub(globals())
 
