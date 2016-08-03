@@ -68,12 +68,12 @@ class ExperimentPixelCNN(object):
     def main(self):
 
         seed = 1
-        batch_size = 16
-        init_batch_size = 100
-        sample_batch_size = 1
+        batch_size = 8
+        init_batch_size = 8
+        sample_batch_size = 8
         nr_resnet = 5
         nr_logistic_mix = 10
-        nr_gpu = 1
+        nr_gpu = 4
         learning_rate = 0.003
         nr_filters = 16
 
@@ -190,7 +190,6 @@ class ExperimentPixelCNN(object):
         def sample_from_model(sess):
             x_gen = np.zeros((sample_batch_size, im_size, im_size, 3), dtype=np.float32)
             for yi in range(im_size):
-                print(yi)
                 for xi in range(im_size):
                     new_x_gen_np = sess.run(new_x_gen, {x_sample: x_gen})
                     x_gen[:, yi, xi, :] = new_x_gen_np[:, yi, xi, :].copy()
@@ -204,8 +203,8 @@ class ExperimentPixelCNN(object):
         for i in range(nr_gpu):
             xs.append(tf.placeholder(tf.float32, shape=(batch_size, im_size, im_size, 3)))
 
-            # with tf.device('/gpu:%d' % i):
-            with tf.device('/cpu:%d' % i):
+            with tf.device('/gpu:%d' % i):
+            # with tf.device('/cpu:%d' % i):
                 # train
                 loss.append(-nn.discretized_mix_logistic(xs[i], conditioner(xs[i])))
 
@@ -216,8 +215,8 @@ class ExperimentPixelCNN(object):
                 loss_test.append(-nn.discretized_mix_logistic(xs[i], conditioner(xs[i], ema=ema)))
 
         # add gradients together and get training updates
-        # with tf.device('/gpu:0'):
-        with tf.device('/cpu:0'):
+        with tf.device('/gpu:0'):
+        # with tf.device('/cpu:0'):
             for i in range(1, nr_gpu):
                 loss[0] += loss[i]
                 loss_test[0] += loss_test[i]

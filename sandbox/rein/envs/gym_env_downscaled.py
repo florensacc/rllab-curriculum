@@ -18,7 +18,6 @@ import numpy as np
 
 
 def rgb2gray(rgb):
-
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
     gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
 
@@ -35,13 +34,11 @@ def convert_gym_space(space):
 
 
 class CappedCubicVideoSchedule(object):
-
     def __call__(self, count):
         return monitor.capped_cubic_video_schedule(count)
 
 
 class FixedIntervalVideoSchedule(object):
-
     def __init__(self, interval):
         self.interval = interval
 
@@ -50,13 +47,11 @@ class FixedIntervalVideoSchedule(object):
 
 
 class NoVideoSchedule(object):
-
     def __call__(self, count):
         return False
 
 
 class GymEnv(Env, Serializable):
-
     def __init__(self, env_name, record_video=True, video_schedule=None, log_dir=None, record_log=True):
         if log_dir is None:
             if logger.get_snapshot_dir() is None:
@@ -87,7 +82,7 @@ class GymEnv(Env, Serializable):
             self.monitoring = True
 
         self._observation_space = convert_gym_space(
-            gym.spaces.Box(0., 1., (1, 84, 84)))
+            gym.spaces.Box(0., 1., (1, 42, 42)))
         self._action_space = convert_gym_space(env.action_space)
         self._horizon = env.spec.timestep_limit
         self._log_dir = log_dir
@@ -107,7 +102,7 @@ class GymEnv(Env, Serializable):
     def reset(self):
         next_obs = self.env.reset()
         next_obs = scipy.misc.imresize(
-            next_obs, (84, 84, 3), interp='bilinear', mode=None)
+            next_obs, (42, 42, 3), interp='bilinear', mode=None)
         next_obs = next_obs / 256.
         next_obs = rgb2gray(next_obs)
         next_obs = next_obs[np.newaxis, :, :]
@@ -116,7 +111,7 @@ class GymEnv(Env, Serializable):
     def step(self, action):
         next_obs, reward, done, info = self.env.step(action)
         next_obs = scipy.misc.imresize(
-            next_obs, (84, 84, 3), interp='bilinear', mode=None)
+            next_obs, (42, 42, 3), interp='bilinear', mode=None)
         next_obs = next_obs / 256.
         next_obs = rgb2gray(next_obs)
         next_obs = next_obs[np.newaxis, :, :]

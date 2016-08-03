@@ -106,11 +106,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                  likelihood_sd_init=1.0,
                  output_type=OutputType.REGRESSION,
                  num_classes=None,
-                 num_output_dim=None,
                  disable_variance=False,  # Disable variances in BNN.
                  debug=False,
                  ind_softmax=False,  # Independent softmax output instead of regression.
-                 disable_act_rew_paths=False
+                 disable_act_rew_paths=False  # Disable action and reward modeling, just s -> s' prediction.
                  ):
 
         Serializable.quick_init(self, locals())
@@ -356,8 +355,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         return self.loss(input, target, disable_kl=True, **kwargs)
 
     def build_network(self):
-
-
 
         # Make sure that we are able to unmerge the s_in and a_in.
 
