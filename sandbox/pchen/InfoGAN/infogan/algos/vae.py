@@ -6,6 +6,7 @@ from progressbar import ETA, Bar, Percentage, ProgressBar
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture
 import rllab.misc.logger as logger
 import sys
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 
 
 class VAE(object):
@@ -14,13 +15,14 @@ class VAE(object):
                  dataset,
                  batch_size,
                  exp_name="experiment",
+                 optimizer=AdamaxOptimizer(),
                  # log_dir="logs",
                  # checkpoint_dir="ckt",
                  max_epoch=100,
                  updates_per_epoch=100,
                  snapshot_interval=10000,
                  vali_eval_interval=400,
-                 learning_rate=1e-3,
+                 # learning_rate=1e-3,
                  summary_interval=100,
                  monte_carlo_kl=False,
                  min_kl=0.,
@@ -37,6 +39,7 @@ class VAE(object):
         :type recog_reg_coeff: float
         :type learning_rate: float
         """
+        self.optimizer = optimizer
         self.vali_eval_interval = vali_eval_interval
         self.sample_zs = []
         self.sample_imgs = []
@@ -52,7 +55,7 @@ class VAE(object):
         self.snapshot_interval = snapshot_interval
         self.updates_per_epoch = updates_per_epoch
         self.summary_interval = summary_interval
-        self.learning_rate = learning_rate
+        # self.learning_rate = learning_rate
         self.trainer = None
         self.input_tensor = None
         self.log_vars = []
@@ -146,8 +149,7 @@ class VAE(object):
             if not init:
                 with tf.variable_scope("optim"):
                     # optimizer = tf.train.AdamOptimizer(self.learning_rate)
-                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
-                    optimizer = AdamaxOptimizer(self.learning_rate)
+                    optimizer = self.optimizer # AdamaxOptimizer(self.learning_rate)
                     self.trainer = pt.apply_optimizer(optimizer, losses=[surr_loss])
 
         if init:
