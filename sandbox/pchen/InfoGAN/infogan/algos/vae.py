@@ -287,6 +287,8 @@ class VAE(object):
                         summary_op = tf.merge_all_summaries()
                         summary_writer = tf.train.SummaryWriter(self.log_dir, sess.graph)
 
+                        # summary_writer.add_graph(sess.graph)
+
                         log_vals = sess.run([] + log_vars, {self.input_tensor: x})[:]
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
                         print("Initial: " + log_line)

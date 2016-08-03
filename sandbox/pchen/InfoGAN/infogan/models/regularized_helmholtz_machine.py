@@ -377,12 +377,22 @@ class RegularizedHelmholtzMachine(object):
                 raise NotImplementedError
 
     def init_mode(self):
+        self.output_dist.init_mode()
+        self.latent_dist.init_mode()
+        self.inference_dist.init_mode()
+        self.reg_latent_dist.init_mode()
+        self.nonreg_latent_dist.init_mode()
         self.data_init = True
         if self.book.summary_collections:
             self.book_summary_collections = self.book.summary_collections
             self.book.summary_collections = None
 
     def train_mode(self):
+        self.output_dist.train_mode()
+        self.latent_dist.train_mode()
+        self.inference_dist.train_mode()
+        self.reg_latent_dist.train_mode()
+        self.nonreg_latent_dist.train_mode()
         self.data_init = False
         self.book.summary_collections = self.book_summary_collections
 
