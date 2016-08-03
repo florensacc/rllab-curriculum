@@ -1,5 +1,4 @@
 import numpy as np
-# from sandbox.rein.dynamics_models.bnn.conv_bnn import ConvBNN
 import lasagne
 from sandbox.rein.dynamics_models.utils import iterate_minibatches, plot_mnist_digit, load_dataset_MNIST, \
     load_dataset_MNIST_plus, load_dataset_Atari_plus
@@ -7,9 +6,6 @@ from sandbox.rein.dynamics_models.bnn.conv_bnn_vime import ConvBNNVIME
 import time
 import rllab.misc.logger as logger
 
-
-# import theano
-# theano.config.exception_verbosity='high'
 
 class Experiment(object):
     def plot_pred_imgs(self, model, inputs, targets, itr, count):
@@ -35,7 +31,8 @@ class Experiment(object):
         sanity_pred = model.pred_fn(inputs)
         input_im = inputs
         input_im = input_im[idx, :].reshape((1, 84, 84)).transpose(1, 2, 0)[:, :, 0]
-        sanity_pred_im = sanity_pred[idx, :-1]
+        # sanity_pred_im = sanity_pred[idx, :-1]
+        sanity_pred_im = sanity_pred[idx, :]
         sanity_pred_im = sanity_pred_im.reshape((-1, model.num_classes))
         sanity_pred_im = np.argmax(sanity_pred_im, axis=1)
         sanity_pred_im = sanity_pred_im.reshape((1, 84, 84)).transpose(1, 2, 0)[:, :, 0]
@@ -70,8 +67,10 @@ class Experiment(object):
         im_size = X_train.shape[-1]
         X_train = X_train.reshape(-1, im_size * im_size)
         T_train = T_train.reshape(-1, im_size * im_size)
-        X = np.hstack((X_train, act))
-        Y = np.hstack((T_train, rew))
+        X = X_train
+        Y = T_train
+        # X = np.hstack((X_train, act))
+        # Y = np.hstack((T_train, rew))
 
         logger.log('Training ...')
 
@@ -97,12 +96,14 @@ class Experiment(object):
                 train_batches += 1
 
             pred = model.pred_fn(X)
-            pred_im = pred[:, :-1]
+            # pred_im = pred[:, :-1]
+            pred_im = pred
             if ind_softmax:
                 pred_im = pred_im.reshape((-1, im_size * im_size, model.num_classes))
                 pred_im = np.argmax(pred_im, axis=2)
 
-            acc = np.mean(np.sum(np.square(pred_im - Y[:, :-1]), axis=1), axis=0)
+            # acc = np.mean(np.sum(np.square(pred_im - Y[:, :-1]), axis=1), axis=0)
+            acc = np.mean(np.sum(np.square(pred_im - Y), axis=1), axis=0)
 
             self.plot_pred_imgs(model, X_train, T_train, epoch, 1)
 
@@ -220,15 +221,15 @@ class Experiment(object):
                 dict(name='gaussian',
                      n_units=2048,
                      matrix_variate_gaussian=False),
-                dict(name='hadamard',
-                     n_units=2048,
-                     matrix_variate_gaussian=False),
+                # dict(name='hadamard',
+                #      n_units=2048,
+                #      matrix_variate_gaussian=False),
                 dict(name='gaussian',
                      n_units=2048,
                      matrix_variate_gaussian=False),
-                dict(name='split',
-                     n_units=2048,
-                     matrix_variate_gaussian=False),
+                # dict(name='split',
+                #      n_units=2048,
+                #      matrix_variate_gaussian=False),
                 dict(name='gaussian',
                      n_units=1600,
                      matrix_variate_gaussian=False),
@@ -259,7 +260,7 @@ class Experiment(object):
             num_train_samples=1,
             prior_sd=0.05,
             update_likelihood_sd=False,
-            learning_rate=0.00001,
+            learning_rate=0.001,
             group_variance_by=ConvBNNVIME.GroupVarianceBy.UNIT,
             use_local_reparametrization_trick=False,
             likelihood_sd_init=0.1,
@@ -270,7 +271,8 @@ class Experiment(object):
             debug=True,
             # ---
             ind_softmax=IND_SOFTMAX,
-            num_classes=NUM_BINS
+            num_classes=NUM_BINS,
+            disable_act_rew_paths=True
         )
 
         # Train the model.

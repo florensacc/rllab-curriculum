@@ -1,4 +1,5 @@
 data
+data_upload
 *.pyc
 *-checkpoint.ipynb
 .DS_Store

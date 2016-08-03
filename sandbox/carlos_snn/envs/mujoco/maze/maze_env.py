@@ -24,9 +24,9 @@ class MazeEnv(ProxyEnv, Serializable):
     MAZE_MAKE_CONTACTS = False
     MAZE_STRUCTURE = [
         [1, 1, 1, 1, 1],
-        [1, 'r', 0, 'g', 1],
+        [1, 'r', 0, 0, 1],
         [1, 1, 1, 0, 1],
-        [1, 0, 0, 0, 1],
+        [1, 'g', 0, 0, 1],
         [1, 1, 1, 1, 1],
     ]
 
@@ -37,8 +37,8 @@ class MazeEnv(ProxyEnv, Serializable):
             n_bins=20,
             sensor_range=10.,
             sensor_span=math.pi,
-            maze_id=0,
-            length=1,
+            maze_id=3,
+            length=3,
             maze_height=0.5,
             maze_size_scaling=4,
             *args,
@@ -66,55 +66,56 @@ class MazeEnv(ProxyEnv, Serializable):
             structure = self.__class__.MAZE_STRUCTURE
         elif self._maze_id == 1:  # donuts maze: can reach the single goal by 2 equal paths
             c = length + 4
-            M = np.ones((c,c))
-            M[1:c-2,(1,c-2)] = 0
-            M[(1, c-2), 1:c-2] = 0
-            M = M.tolist()
-            M[1][c/2] = 'r'
-            M[c-2][c/2] = 'g'
-            structure = M
-            self.__class__.MAZE_STRUCTURE = structure
-            print structure
-
-        elif self._maze_id == 2:  # spiral maze: need to use all the keys
-            c = length + 4
-            M = np.ones((c,c))
-            M[1:c-2,(1,c-2)] = 0
-            M[(1, c-2), 1:c-2] = 0
+            M = np.ones((c, c))
+            M[1:c - 1, (1, c - 2)] = 0
+            M[(1, c - 2), 1:c - 1] = 0
             M = M.astype(int).tolist()
-            M[1][c/2] = 'r'
+            M[1][c / 2] = 'r'
+            M[c - 2][c / 2] = 'g'
+            structure = M
+            print self.__class__.MAZE_STRUCTURE
+            self.__class__.MAZE_STRUCTURE = structure
+            print "the new one is", self.__class__.MAZE_STRUCTURE
+
+        elif self._maze_id == 2:  # spiral maze: need to use all the keys (only makes sense for length >=3)
+            c = length + 4
+            M = np.ones((c, c))
+            M[1:c - 1, (1, c - 2)] = 0
+            M[(1, c - 2), 1:c - 1] = 0
+            M = M.astype(int).tolist()
+            M[1][c / 2] = 'r'
             # now block one of the ways and put the goal on the other side
-            M[1][c/2-1] = 1
-            M[1][c/2-2] = 'g'
+            M[1][c / 2 - 1] = 1
+            M[1][c / 2 - 2] = 'g'
             structure = M
             self.__class__.MAZE_STRUCTURE = structure
             print structure
 
         elif self._maze_id == 3:  # corridor with goals at the 2 extremes
             structure = [
-                [1] * (2 * length + 3),
+                [1] * (2 * length + 5),
                 [1, 'g'] + [0] * length + ['r'] + [0] * length + ['g', 1],
-                [1] * (2 * length + 3),
+                [1] * (2 * length + 5),
             ]
             self.__class__.MAZE_STRUCTURE = structure
             print structure
 
         elif self._maze_id == 4:  # cross corridor
-            c = 2*length + 5
+            c = 2 * length + 5
             M = np.ones((c, c))
             M = M - np.diag(np.ones(c))
-            M = M - np.diag(np.ones(c-1), 1) - np.diag(np.ones(c-1), -1)
+            M = M - np.diag(np.ones(c - 1), 1) - np.diag(np.ones(c - 1), -1)
             i = np.arange(c)
             j = i[::-1]
             M[i, j] = 0
             M[i[:-1], j[1:]] = 0
             M[i[1:], j[:-1]] = 0
-            M[np.array([0,c-1]),:] = 1
-            M[:, np.array([0, c-1])] = 1
+            M[np.array([0, c - 1]), :] = 1
+            M[:, np.array([0, c - 1])] = 1
             M = M.astype(int).tolist()
-            M[c/2][c/2] = 'r'
-            for i in [1,c-2]:
-                for j in [1, c-2]:
+            M[c / 2][c / 2] = 'r'
+            for i in [1, c - 2]:
+                for j in [1, c - 2]:
                     M[i][j] = 'g'
             structure = M
             self.__class__.MAZE_STRUCTURE = structure
@@ -326,4 +327,3 @@ class MazeEnv(ProxyEnv, Serializable):
 
     def action_from_key(self, key):
         return self.wrapped_env.action_from_key(key)
-

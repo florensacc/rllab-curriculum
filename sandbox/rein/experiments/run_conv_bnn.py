@@ -12,7 +12,7 @@ e = Experiment()
 run_experiment_lite(
     e.main(),
     exp_prefix="conv_bnn_c",
-    mode="lab_kube",
+    mode="local",
     dry=False,
     use_gpu=True,
     script="sandbox/rein/experiments/run_experiment_lite.py",

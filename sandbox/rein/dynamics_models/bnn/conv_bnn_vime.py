@@ -25,9 +25,9 @@ class IndependentSoftmaxLayer(lasagne.layers.Layer):
     def get_output_for(self, input, **kwargs):
         input_tiled = T.tile(input.dimshuffle(0, 1, 'x'), reps=[1, 1, self._num_bins])
         _a = input_tiled * self.W
-        _b = T.exp(_a - T.max(_a))
+        _b = T.exp(_a - T.max(_a, axis=2).dimshuffle(0, 1, 'x'))
         _c = T.sum(_b, axis=2).dimshuffle(0, 1, 'x')
-        return _b / _c
+        return T.clip(_b / _c, 1e-8, 1)
 
     def get_output_shape_for(self, input_shape):
         return input_shape[0], input_shape[1], self._num_bins
@@ -109,7 +109,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                  num_output_dim=None,
                  disable_variance=False,  # Disable variances in BNN.
                  debug=False,
-                 ind_softmax=False  # Independent softmax output instead of regression.
+                 ind_softmax=False,  # Independent softmax output instead of regression.
+                 disable_act_rew_paths=False
                  ):
 
         Serializable.quick_init(self, locals())
@@ -139,6 +140,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.disable_variance = disable_variance
         self.debug = debug
         self._ind_softmax = ind_softmax
+        self._disable_act_rew_paths = disable_act_rew_paths
+
+        if self._disable_act_rew_paths:
+            print('Warning: action and reward paths disabled, do not use a_net or r_net!')
 
         self.network = None
 
@@ -307,8 +312,11 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             log_p_D_given_w = 0.
             for _ in xrange(self.n_samples):
                 pred = self.pred_sym(input)
-                lh = self.likelihood_regression(target[:, -1], pred[:, -1], **kwargs) + \
-                     self.likelihood_classification_nonsum(target[:, :-1], pred[:, :-1])
+                if not self._disable_act_rew_paths:
+                    lh = self.likelihood_regression(target[:, -1], pred[:, -1], **kwargs) + \
+                         self.likelihood_classification_nonsum(target[:, :-1], pred[:, :-1])
+                else:
+                    lh = self.likelihood_classification_nonsum(target, pred)
                 log_p_D_given_w += lh
             return log_p_D_given_w / self.n_samples
 
@@ -321,10 +329,11 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
             if self._ind_softmax:
-                # lh = self.likelihood_regression(target[:, -1:], prediction[:, -1:], **kwargs) + \
-                #      self.likelihood_classification(target[:, :-1], prediction[:, :-1])
-                lh = self.likelihood_classification(target[:, :-1], prediction[:, :-1])
-
+                if not self._disable_act_rew_paths:
+                    lh = self.likelihood_regression(target[:, -1:], prediction[:, -1:], **kwargs) + \
+                         self.likelihood_classification(target[:, :-1], prediction[:, :-1])
+                else:
+                    lh = self.likelihood_classification(target, prediction)
             else:
                 lh = self.likelihood_regression(target, prediction, **kwargs)
             log_p_D_given_w += lh
@@ -348,27 +357,30 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def build_network(self):
 
-        print('f: {} x {} -> {} x {}'.format(self.state_dim, self.action_dim, self.state_dim, self.reward_dim))
+
 
         # Make sure that we are able to unmerge the s_in and a_in.
 
         # Input to the s_net is always flattened.
         s_flat_dim = np.prod(self.state_dim)
-        a_flat_dim = np.prod(self.action_dim)
-        r_flat_dim = np.prod(self.reward_dim)
 
-        input = lasagne.layers.InputLayer(shape=(None, s_flat_dim + a_flat_dim))
-
-        # Split input into state and action.
-        s_net = lasagne.layers.SliceLayer(input, indices=slice(None, s_flat_dim), axis=1)
-        a_net = lasagne.layers.SliceLayer(input, indices=slice(s_flat_dim, None), axis=1)
-        r_net = None
+        if not self._disable_act_rew_paths:
+            print('f: {} x {} -> {} x {}'.format(self.state_dim, self.action_dim, self.state_dim, self.reward_dim))
+            a_flat_dim = np.prod(self.action_dim)
+            r_flat_dim = np.prod(self.reward_dim)
+            input = lasagne.layers.InputLayer(shape=(None, s_flat_dim + a_flat_dim))
+            # Split input into state and action.
+            s_net = lasagne.layers.SliceLayer(input, indices=slice(None, s_flat_dim), axis=1)
+            a_net = lasagne.layers.SliceLayer(input, indices=slice(s_flat_dim, None), axis=1)
+            r_net = None
+            a_net = lasagne.layers.reshape(a_net, ([0],) + self.action_dim)
+            print('Slicing into {} and {}'.format(s_net.output_shape, a_net.output_shape))
+        else:
+            print('f: {} -> {}'.format(self.state_dim, self.state_dim))
+            s_net = lasagne.layers.InputLayer(shape=(None, s_flat_dim))
 
         # Reshape according to the input_dim
         s_net = lasagne.layers.reshape(s_net, ([0],) + self.state_dim)
-        a_net = lasagne.layers.reshape(a_net, ([0],) + self.action_dim)
-
-        print('Slicing into {} and {}'.format(s_net.output_shape, a_net.output_shape))
 
         for i, layer_disc in enumerate(self.layers_disc):
 
@@ -388,7 +400,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     s_net, num_units=layer_disc['n_units'],
                     nonlinearity=layer_disc['nonlinearity'],
                     prior_sd=self.prior_sd,
-                    use_local_reparametrization_trick=self.use_local_reparametrization_trick ,
+                    use_local_reparametrization_trick=self.use_local_reparametrization_trick,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
             elif layer_disc['name'] == 'deterministic':
@@ -424,7 +436,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     s_net, num_units=layer_disc['n_units'],
                     nonlinearity=layer_disc['nonlinearity'],
                     prior_sd=self.prior_sd,
-                    use_local_reparametrization_trick=self.use_local_reparametrization_trick ,
+                    use_local_reparametrization_trick=self.use_local_reparametrization_trick,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
                 s_net = HadamardLayer([s_net, a_net])
@@ -439,7 +451,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     num_units=layer_disc['n_units'],
                     nonlinearity=self.transf,
                     prior_sd=self.prior_sd,
-                    use_local_reparametrization_trick=self.use_local_reparametrization_trick ,
+                    use_local_reparametrization_trick=self.use_local_reparametrization_trick,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
             else:
@@ -447,9 +459,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
             print('layer {}: {}\n\toutsize: {}'.format(
                 i, layer_disc, s_net.output_shape))
-            if a_net is not None:
+            if not self._disable_act_rew_paths and a_net is not None:
                 print('\toutsize: {}'.format(a_net.output_shape))
-            if r_net is not None:
+            if not self._disable_act_rew_paths and r_net is not None:
                 print('\toutsize: {}'.format(r_net.output_shape))
 
         # Output of output_dim is flattened again. But ofc, we need to output
@@ -461,16 +473,20 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 num_bins=self.num_classes,
             )
             s_net = lasagne.layers.reshape(s_net, ([0], -1))
-        r_net = BayesianDenseLayer(
-            r_net,
-            num_units=r_flat_dim,
-            nonlinearity=lasagne.nonlinearities.linear,
-            prior_sd=self.prior_sd,
-            disable_variance=self.disable_variance,
-            use_local_reparametrization_trick=self.use_local_reparametrization_trick ,
-            matrix_variate_gaussian=False)
-        r_net = lasagne.layers.reshape(r_net, ([0], -1))
-        self.network = ConcatLayer([s_net, r_net])
+
+        if not self._disable_act_rew_paths:
+            r_net = BayesianDenseLayer(
+                r_net,
+                num_units=r_flat_dim,
+                nonlinearity=lasagne.nonlinearities.linear,
+                prior_sd=self.prior_sd,
+                disable_variance=self.disable_variance,
+                use_local_reparametrization_trick=self.use_local_reparametrization_trick,
+                matrix_variate_gaussian=False)
+            r_net = lasagne.layers.reshape(r_net, ([0], -1))
+            self.network = ConcatLayer([s_net, r_net])
+        else:
+            self.network = s_net
 
     def build_model(self):
 
@@ -642,24 +658,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             else:
                 # Use SGD to update the model for a single sample, in order to
                 # calculate the surprise.
-
-                def sgd(loss, params, learning_rate):
-                    grads = theano.grad(loss, params)
-                    updates = OrderedDict()
-                    for param, grad in zip(params, grads):
-                        if param.name == 'likelihood_sd':
-                            updates[param] = param  # - learning_rate * grad
-                        else:
-                            updates[param] = param - learning_rate * grad
-
-                    return updates
-
-                updates_kl = sgd(
-                    loss_only_last_sample, params, learning_rate=self.learning_rate)
-
-                self.train_update_fn = ext.compile_function(
-                    [input_var, target_var], loss_only_last_sample, updates=updates_kl,
-                    log_name='fn_surprise_1st', no_default_updates=False)
+                self.fn_kl = ext.compile_function(
+                    [], self.kl_div(), log_name='fn_kl'
+                )
 
         elif self.surprise_type == ConvBNNVIME.SurpriseType.BALD:
             # BALD

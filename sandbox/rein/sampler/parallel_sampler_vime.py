@@ -105,20 +105,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                         _inputs[start:end], _targets[start:end], step_size)
 
                 else:
-                    # First-order updates.
-                    # Save old params for every update.
-                    G.dynamics.save_params()
-
-                    # Update model weights based on current minibatch.
-                    for _ in xrange(n_itr_update):
-                        G.dynamics.train_update_fn(
-                            _inputs[start:end], _targets[start:end])
-
-                    # Calculate current minibatch KL.
-                    surpr = G.dynamics.fn_surprise()
-
-                    # Reset to old params after each surprise calc.
-                    G.dynamics.load_prev_params()
+                    surpr = np.nan
 
             elif surprise_type == G.dynamics.SurpriseType.BALD:
                 surpr = G.dynamics.train_update_fn(

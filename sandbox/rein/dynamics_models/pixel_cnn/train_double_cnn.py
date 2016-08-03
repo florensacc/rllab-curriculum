@@ -1,5 +1,3 @@
-import argparse
-import os
 import sys
 import time
 
@@ -16,7 +14,6 @@ sys.setrecursionlimit(10000)
 
 
 class ExperimentPixelCNN(object):
-
     def plot_pred_imgs(self, model, inputs, targets, itr, count):
         # This is specific to Atari.
         import matplotlib.pyplot as plt
@@ -71,18 +68,16 @@ class ExperimentPixelCNN(object):
     def main(self):
 
         seed = 1
-        batch_size = 32
+        batch_size = 16
         init_batch_size = 100
-        sample_batch_size = 64
+        sample_batch_size = 1
         nr_resnet = 5
         nr_logistic_mix = 10
-        nr_gpu = 8
+        nr_gpu = 1
         learning_rate = 0.003
-        nr_filters = 64
+        nr_filters = 16
 
         # load CIFAR-10 training data
-        # trainx, _ = cifar10_data.load('/home/tim/data/cifar-10-python')
-        trainx, testx = load_dataset_MNIST()
         trainx, testx = load_dataset_Atari()
         im_size = trainx.shape[-1]
         trainx = np.transpose(trainx, (0, 2, 3, 1))
@@ -90,8 +85,6 @@ class ExperimentPixelCNN(object):
         nr_batches_train = int(trainx.shape[0] / batch_size)
         nr_batches_train_per_gpu = nr_batches_train / nr_gpu
 
-        # load CIFAR-10 test data
-        # testx, _ = cifar10_data.load('/home/tim/data/cifar-10-python', subset='test')
         testx = np.transpose(testx, (0, 2, 3, 1))
         testx = np.concatenate((testx, testx, testx), axis=3)
         nr_batches_test = int(testx.shape[0] / batch_size)
@@ -197,6 +190,7 @@ class ExperimentPixelCNN(object):
         def sample_from_model(sess):
             x_gen = np.zeros((sample_batch_size, im_size, im_size, 3), dtype=np.float32)
             for yi in range(im_size):
+                print(yi)
                 for xi in range(im_size):
                     new_x_gen_np = sess.run(new_x_gen, {x_sample: x_gen})
                     x_gen[:, yi, xi, :] = new_x_gen_np[:, yi, xi, :].copy()
@@ -235,7 +229,6 @@ class ExperimentPixelCNN(object):
 
         # convert loss to bits / dim
         bits_per_dim = loss[0] / (nr_gpu * np.log(2.) * 3 * im_size * im_size * batch_size)
-        bits_per_dim_test = loss_test[0] / (nr_gpu * np.log(2.) * 3 * im_size * im_size * batch_size)
 
         # init & save
         initializer = tf.initialize_all_variables()
@@ -252,7 +245,6 @@ class ExperimentPixelCNN(object):
                 # init
                 if epoch == 0:
                     sess.run(initializer, {x_init: trainx[:init_batch_size]})
-                    # saver.restore(sess, '/local_home/tim/pixel_cnn/params.ckpt')
 
                 # train
                 train_loss = 0.
@@ -263,34 +255,21 @@ class ExperimentPixelCNN(object):
                         feed_dict[xs[i]] = trainx[td * batch_size:(td + 1) * batch_size]
                     l, _ = sess.run([bits_per_dim, optimizer], feed_dict)
                     train_loss += l
+                    print(l)
                     sess.run(maintain_averages_op)
                 train_loss /= nr_batches_train_per_gpu
 
-                # test
-                test_loss = 0.
-                for t in range(nr_batches_test_per_gpu):
-                    feed_dict = {}
-                    for i in range(nr_gpu):
-                        td = t + i * nr_batches_test_per_gpu
-                        feed_dict[xs[i]] = testx[td * batch_size:(td + 1) * batch_size]
-                    l = sess.run(bits_per_dim_test, feed_dict)
-                    test_loss += l
-                test_loss /= nr_batches_test_per_gpu
-
-                # log
-                print("Iteration %d, time = %ds, train bits_per_dim = %.4f, test bits_per_dim = %.4f" % (
-                    epoch, time.time() - begin, train_loss, test_loss))
+                print("Iteration %d, time = %ds, train bits_per_dim = %.4f" % (
+                    epoch, time.time() - begin, train_loss))
                 sys.stdout.flush()
 
                 if epoch % 1 == 0:
-                    import ipdb;
-                    ipdb.set_trace()
                     # generate samples from the model
                     sample_x = sample_from_model(sess)
                     img_tile = plotting.img_tile(sample_x, aspect_ratio=1.0, border_color=1.0, stretch=True)
-                    img = plotting.plot_img(img_tile, title='CIFAR10 samples')
-                    plotting.plt.savefig('/Users/rein/programming/openai/pixel-cnn/' + str(epoch) + '.png')
+                    img = plotting.plot_img(img_tile, title='Atari 84x84')
+                    plotting.plt.savefig(logger._snapshot_dir + '/dynpred_img_{}.png'.format(epoch))
                     plotting.plt.close('all')
 
                     # save params
-                    saver.save(sess, '/Users/rein/programming/openai/pixel-cnn/params.ckpt')
+                    saver.save(sess, logger._snapshot_dir + '/params.ckpt')

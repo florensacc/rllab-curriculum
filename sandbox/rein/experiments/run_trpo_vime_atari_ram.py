@@ -13,10 +13,10 @@ os.environ["THEANO_FLAGS"] = "device=gpu"
 stub(globals())
 
 # Param ranges
-# seeds = range(5)
-# etas = [0.001, 0.01, 0.1]
-seeds = [12345]
-etas = [0.1]
+seeds = range(5)
+etas = [0.001, 0.01, 0.1]
+# seeds = [12345]
+# etas = [0.1]
 normalize_rewards = [False]
 kl_ratios = [False]
 RECORD_VIDEO = False
@@ -65,8 +65,8 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         num_train_samples=1,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=128,
-        num_sample_updates=5,  # Every sample in traj batch will be used in `num_sample_updates' updates.
+        kl_batch_size=8,
+        num_sample_updates=2,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=normalize_reward,
         dyn_pool_args=dict(
             enable=False,
@@ -109,7 +109,7 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # -------------
         disable_variance=False,
         group_variance_by=BNN.GroupVarianceBy.WEIGHT,
-        surprise_type=BNN.SurpriseType.COMPR,
+        surprise_type=BNN.SurpriseType.INFGAIN,
         predict_reward=True,
         use_local_reparametrization_trick=True,
         n_itr_update=1,
