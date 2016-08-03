@@ -347,13 +347,12 @@ class BatchPolopt(RLAlgorithm):
 
 
         else:
-            _dataset = dict(x=inputs, y=targets)
+            _dataset = dict(x=inputs, y=targets, a=actions, r=rewards)
 
         pickle.dump(_dataset, open(path + '/dataset.pkl', 'wb'))
 
         # import ipdb; ipdb.set_trace()
         tmp = pickle.load(open(path + '/dataset.pkl', 'r'))
-        print(tmp)
 
     def plot_pred_imgs(self, inputs, targets, itr, count):
         try:
@@ -581,7 +580,7 @@ class BatchPolopt(RLAlgorithm):
 
                 acc_before = self.accuracy(np.vstack(X_train), np.vstack(T_train))
 
-                self.make_train_set(np.vstack(X_train), np.vstack(T_train))
+                # self.make_train_set(np.vstack(X_train), np.vstack(T_train))
 
                 # Do posterior chaining: this means that we update the model on each individual
                 # minibatch and update the prior to the new posterior.

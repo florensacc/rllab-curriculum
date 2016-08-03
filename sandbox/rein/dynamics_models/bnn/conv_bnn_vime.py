@@ -51,7 +51,7 @@ class HadamardLayer(lasagne.layers.MergeLayer):
         return None, input_shapes[0][1]
 
     def get_output_for(self, inputs, **kwargs):
-        return inputs[0] + inputs[1]
+        return inputs[0] * inputs[1]
 
 
 class ConcatLayer(lasagne.layers.MergeLayer):
@@ -320,6 +320,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
     def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
         if self.disable_variance:
             disable_kl = True
+        print('FIXME')
+        disable_kl=True
         # MC samples.
         log_p_D_given_w = 0.
         for _ in xrange(self.num_train_samples):
@@ -341,7 +343,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             if self.update_prior:
                 kl = self.kl_div()
             else:
-                kl = self.log_p_w_q_w_kl()  # + self.reverse_log_p_w_q_w_kl()
+                kl = self.log_p_w_q_w_kl()
             return kl / self.n_batches * kl_factor - log_p_D_given_w / self.num_train_samples
 
     def loss_last_sample(self, input, target, **kwargs):
