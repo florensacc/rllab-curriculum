@@ -11,7 +11,7 @@ e = ExperimentPixelCNN()
 run_experiment_lite(
     e.main(),
     exp_prefix="pixelcnn_a",
-    mode="local",
+    mode="lab_kube",
     dry=False,
     use_gpu=True,
     script="sandbox/rein/experiments/run_experiment_lite.py",

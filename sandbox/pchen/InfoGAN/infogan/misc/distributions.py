@@ -5,6 +5,8 @@ import tensorflow as tf
 import numpy as np
 import prettytensor as pt
 
+from rllab.misc.overrides import overrides
+
 TINY = 1e-8
 
 floatX = np.float32
@@ -109,6 +111,12 @@ class Distribution(object):
                  of which is jointly decided by batch_size and self.dim
         """
         raise NotImplementedError
+
+    def init_mode(self):
+        pass
+
+    def train_mode(self):
+        pass
 
 
 class Categorical(Distribution):
@@ -652,6 +660,8 @@ class AR(Distribution):
             depth=2,
             neuron_ratio=4,
             reverse=True,
+            nl=tf.nn.relu,
+            data_init_wnorm=False,
     ):
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
@@ -662,9 +672,16 @@ class AR(Distribution):
         self._iaf_template = pt.template("y")
         self._depth = depth
         self._reverse = reverse
+        self._wnorm = data_init_wnorm
+        self._data_init = data_init_wnorm
 
         assert depth >= 1
-        with pt.defaults_scope(activation_fn=tf.nn.relu):
+        from prettytensor import UnboundVariable
+        with pt.defaults_scope(
+                activation_fn=nl,
+                wnorm=data_init_wnorm,
+                data_init=UnboundVariable('data_init')
+        ):
             for di in xrange(depth):
                 self._iaf_template = \
                     self._iaf_template.arfc(
@@ -672,16 +689,28 @@ class AR(Distribution):
                         ngroups=dim,
                         zerodiagonal=di == 0, # only blocking the first layer can stop data flow
                     )
-        self._iaf_template = \
-            self._iaf_template.\
-                arfc(
-                    dim * 2,
-                    activation_fn=None,
-                    ngroups=dim,
-                ).\
-                reshape([-1, self._dim, 2]).\
-                apply(tf.transpose, [0, 2, 1]).\
-                reshape([-1, 2*self._dim])
+            self._iaf_template = \
+                self._iaf_template.\
+                    arfc(
+                        dim * 2,
+                        activation_fn=None,
+                        ngroups=dim,
+                    ).\
+                    reshape([-1, self._dim, 2]).\
+                    apply(tf.transpose, [0, 2, 1]).\
+                    reshape([-1, 2*self._dim])
+
+    @overrides
+    def init_mode(self):
+        if self._wnorm:
+            self._data_init = True
+            self._base_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        if self._wnorm:
+            self._data_init = False
+            self._base_dist.train_mode()
 
     @property
     def dim(self):
@@ -692,7 +721,7 @@ class AR(Distribution):
         return self._dim
 
     def infer(self, x_var):
-        flat_iaf = self._iaf_template.construct(y=x_var).tensor
+        flat_iaf = self._iaf_template.construct(y=x_var, data_init=self._data_init).tensor
         iaf_mu, iaf_logstd = flat_iaf[:, :self._dim], flat_iaf[:, self._dim:]
         return iaf_mu, (iaf_logstd)
 
