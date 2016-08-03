@@ -6,6 +6,9 @@ from rllab.core.serializable import Serializable
 from rllab.misc import logger
 from rllab.misc import autoargs
 
+import time
+from matplotlib import pyplot as plt
+
 
 class AntEnv(MujocoEnv, Serializable):
     FILE = 'ant.xml'
@@ -57,14 +60,26 @@ class AntEnv(MujocoEnv, Serializable):
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
         # now we will grid the space and check how much of it the policy is covering
-        furthest = 100
+
+        # problem with paths of different lenghts: call twice max
+        furthest = np.ceil(np.abs(np.max([np.max(path["observations"][:,-3:-1]) for path in paths])))
+        print 'THE FUTHEST IT WENT COMPONENT-WISE IS', furthest
+        furthest = max(furthest, 10)
+
         c_grid = furthest * 10 * 2
-        visitation = np.zeros((c_grid, c_grid))  # we assume the furthest it can go is 60 Check it!!
+        visitation = np.zeros((c_grid, c_grid))  # we assume the furthest it can go is 100, Check it!!
         for path in paths:
-            com_x = np.clip(((np.array(path['observations'][:][-3]) + furthest) * 10).astype(int), 0, c_grid -1)
-            com_y = np.clip(((np.array(path['observations'][:][-2]) + furthest) * 10).astype(int), 0, c_grid -1)
+            com_x = np.clip(((np.array(path['observations'][:, -3]) + furthest) * 10).astype(int), 0, c_grid - 1)
+            com_y = np.clip(((np.array(path['observations'][:, -2]) + furthest) * 10).astype(int), 0, c_grid - 1)
             coms = zip(com_x, com_y)
             for com in coms:
                 visitation[com] += 1
+
+        # if you want to have a heatmap of the visitations
+        plt.figure()
+        plt.pcolor(visitation)
+        t = str(int(time.time()))
+        plt.savefig('data/local/visitation_ant_0lat/visitation_map_' + t)
+
         total_visitation = np.count_nonzero(visitation)
         logger.record_tabular('VisitationTotal', total_visitation)
