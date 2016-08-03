@@ -34,7 +34,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
         scaling = (ub - lb) * 0.5
         ctrl_cost = 0.5 * self.ctrl_cost_coeff * np.sum(
             np.square(action / scaling))
-        forward_reward = np.linalg.norm(self.get_body_comvel("torso"))
+        forward_reward = np.linalg.norm(self.get_body_comvel("torso"))  # swimmer has no problem of jumping reward
         reward = forward_reward - ctrl_cost
         done = False
         return Step(next_obs, reward, done)
