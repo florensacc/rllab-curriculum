@@ -360,7 +360,11 @@ def get_linear_ar_mask_by_groups(n_in, n_out, ngroups, zerodiagonal=True):
     return mask
 
 
-@prettytensor.Register(assign_defaults=('activation_fn', 'l2loss', 'stddev', 'ngroups'))
+@prettytensor.Register(
+    assign_defaults=(
+            'activation_fn', 'l2loss', 'stddev', 'ngroups',
+            'wnorm', 'data_init',
+    ))
 class arfc(prettytensor.VarStoreMethod):
     def __call__(self,
                  input_layer,
@@ -374,6 +378,9 @@ class arfc(prettytensor.VarStoreMethod):
                  transpose_weights=False,
                  ngroups=None,
                  zerodiagonal=False,
+                 wnorm=False,
+                 data_init=False,
+                 init_scale=1.,
                  name=PROVIDED):
         """Adds the parameters for a fully connected layer and returns a tensor.
         The current head must be a rank 2 Tensor.
@@ -400,6 +407,7 @@ class arfc(prettytensor.VarStoreMethod):
           ValueError: if the head_shape is not rank 2  or the number of input nodes
           (second dim) is not known.
         """
+        # print "arfc data init", data_init
         # TODO(eiderman): bias_init shouldn't take a constant and stddev shouldn't
         # exist.
         if input_layer.get_shape().ndims != 2:
@@ -440,17 +448,59 @@ class arfc(prettytensor.VarStoreMethod):
             mask = get_linear_ar_mask(in_size, size, zerodiagonal=zerodiagonal)
         if transpose_weights:
             mask = tf.transpose(mask)
-        y = tf.matmul(input_layer, params * mask, transpose_b=transpose_weights)
-        layers.add_l2loss(books, params, l2loss)
-        if bias:
-            if isinstance(bias_init, tf.compat.real_types):
-                bias_init = tf.constant_initializer(bias_init)
-            y += self.variable(
+        # abusing bad design choice here. mask is actually being stored as a value (nontrainble)
+        mask = self.variable(
+            'masks',
+            weight_shape,
+            mask
+        )
+        assert not isinstance(mask, tf.Variable)
+        if wnorm:
+            params_init = params.initialized_value()
+            normalized_init = tf.nn.l2_normalize(params_init, 0)
+            y_init = tf.matmul(input_layer, normalized_init * mask, transpose_b=False)#transpose_weights)
+            y_init = debug("y_init", y_init)
+            y_mu, y_var = tf.nn.moments(y_init, [0], keep_dims=True)
+            y_var = debug("y_var", y_var)
+            p_s_init = init_scale / tf.sqrt(y_var + 1e-9)
+            params_scale = self.variable(
+                'weights_scale',
+                [1, size],
+                lambda *_,**__: p_s_init,
+                dt=dtype
+            )
+            bias = self.variable(
                 'bias',
-                [size],
-                bias_init,
-                dt=dtype)
+                [1, size],
+                lambda *_,**__: -y_mu * p_s_init,
+                dt=dtype
+            )
+        else:
+            bias = self.variable(
+                'bias',
+                [1, size],
+                tf.constant_initializer(0.),
+                dt=dtype
+            )
 
+        # real stuff
+        if data_init:
+            params = params.initialized_value()
+            bias = bias.initialized_value()
+            if wnorm:
+                params_scale = params_scale.initialized_value()
+
+        if wnorm:
+            normalized = tf.nn.l2_normalize(params, 0)
+        else:
+            normalized = params
+        inp = input_layer.tensor
+        y = tf.matmul(inp, normalized*mask, transpose_b=False)#transpose_weights)
+        if wnorm:
+            y = y*params_scale
+        y = y+bias
+
+        layers.add_l2loss(books, params, l2loss)
         if activation_fn is not None:
             if not isinstance(activation_fn, collections.Sequence):
                 activation_fn = (activation_fn,)
@@ -706,7 +756,6 @@ class wnorm_fc(prettytensor.VarStoreMethod):
     def __call__(self,
                  input_layer,
                  size,
-                 data_init=False,
                  init=None,
                  activation_fn=None,
                  l2loss=None,
@@ -715,8 +764,9 @@ class wnorm_fc(prettytensor.VarStoreMethod):
                  # bias_init=tf.zeros_initializer,
                  # transpose_weights=False,
                  init_scale=1.0,
-                 name=PROVIDED,
+                 data_init=False,
                  wnorm=False,
+                 name=PROVIDED,
                  ):
         """Adds the parameters for a fully connected layer and returns a tensor.
         The current head must be a rank 2 Tensor.

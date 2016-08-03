@@ -14,6 +14,7 @@ import dateutil
 import dateutil.tz
 import datetime
 import numpy as np
+import tensorflow as tf
 
 now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
@@ -22,7 +23,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 500
+max_epoch = 30
 
 stub(globals())
 
@@ -36,7 +37,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002]
+        return [0.002, 0.001] #0.001]
 
     @variant
     def seed(self):
@@ -60,14 +61,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [2,]
+        return [0, 1, 2, 3, 4]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [2, 5,]
+            return [2, 5, 10]
 
     # @variant
     # def nm(self):
@@ -84,6 +85,7 @@ class VG(VariantGenerator):
         # yield "small_conv"
         # yield "deep_mlp"
         # yield "mlp"
+        # yield "resv1_k3"
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
@@ -92,6 +94,14 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def wnorm(self):
         return [True, ]
+
+    @variant(hide=False)
+    def ar_wnorm(self):
+        return [True, False]
+
+    @variant(hide=False)
+    def ar_nl(self):
+        return [tf.nn.relu, tf.nn.elu]
 
 
 vg = VG()
@@ -118,7 +128,13 @@ for v in variants[:]:
 
         dist = Gaussian(zdim)
         for _ in xrange(v["nar"]):
-            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=True)
+            dist = AR(
+                zdim,
+                dist,
+                neuron_ratio=v["nr"],
+                data_init_wnorm=v["ar_wnorm"],
+                nl=v["ar_nl"],
+            )
 
         latent_spec = [
             # (Gaussian(128), False),
@@ -170,13 +186,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="archdebug",
+            exp_prefix="res_vae_wnorm_ar_short_test",
             seed=v["seed"],
-            mode="local",
-            # mode="lab_kube",
+            # mode="local",
+            mode="lab_kube",
             variant=v,
             n_parallel=0,
-            # use_gpu=True
+            use_gpu=True
         )
 
 
