@@ -519,7 +519,7 @@ class BayesianDeConvLayer(BayesianLayer):
         if self.untie_biases:
             return (self.num_units,) + self.output_shape[2:]
         else:
-            return (self.num_units,)
+            return self.num_units,
 
     def get_output_shape_for(self, input_shape):
         # when called from the constructor, self.crop is still called self.pad:

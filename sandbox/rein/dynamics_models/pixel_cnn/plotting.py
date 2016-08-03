@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 # Plot image examples.
 def plot_img(img, title=None):
     plt.figure()
-    plt.imshow(img, interpolation='nearest')
+    plt.imshow(img[:, :, 0], interpolation='nearest')
     if title is not None:
         plt.title(title)
     plt.axis('off')

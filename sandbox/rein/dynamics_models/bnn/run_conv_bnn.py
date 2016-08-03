@@ -8,7 +8,7 @@ import rllab.misc.logger as logger
 
 
 class Experiment(object):
-    def plot_pred_imgs(self, model, inputs, targets, itr, count, ind_softmax):
+    def plot_pred_imgs(self, model, inputs, targets, itr, count, ind_softmax, pred_delta):
         # This is specific to Atari.
         import matplotlib.pyplot as plt
         if not hasattr(self, '_fig'):
@@ -30,20 +30,24 @@ class Experiment(object):
         idx = np.random.randint(0, inputs.shape[0], 1)
         sanity_pred = model.pred_fn(inputs)
         input_im = inputs
-        input_im = input_im[idx, :].reshape((1, 84, 84)).transpose(1, 2, 0)[:, :, 0]
-        # sanity_pred_im = sanity_pred[idx, :-1]
-        sanity_pred_im = sanity_pred[idx, :]
+        input_im = input_im[idx, :].reshape((1, 42, 42)).transpose(1, 2, 0)[:, :, 0]
+        sanity_pred_im = sanity_pred[idx, :-1]
         if ind_softmax:
             sanity_pred_im = sanity_pred_im.reshape((-1, model.num_classes))
             sanity_pred_im = np.argmax(sanity_pred_im, axis=1)
-        sanity_pred_im = sanity_pred_im.reshape((1, 84, 84)).transpose(1, 2, 0)[:, :, 0]
-        target_im = targets[idx, :].reshape((1, 84, 84)).transpose(1, 2, 0)[:, :, 0]
+        sanity_pred_im = sanity_pred_im.reshape((1, 42, 42)).transpose(1, 2, 0)[:, :, 0]
+        target_im = targets[idx, :].reshape((1, 42, 42)).transpose(1, 2, 0)[:, :, 0]
+
+        if pred_delta:
+            sanity_pred_im += input_im
+            target_im += input_im
 
         if ind_softmax:
             sanity_pred_im = sanity_pred_im.astype(float) / float(model.num_classes)
             target_im = target_im.astype(float) / float(model.num_classes)
             input_im = input_im.astype(float) / float(model.num_classes)
-        err = np.abs(target_im - sanity_pred_im)
+
+        err = 1 -  np.abs(target_im - sanity_pred_im)
 
         if self._im1 is None or self._im2 is None:
             self._im1 = self._fig_1.imshow(
@@ -64,15 +68,13 @@ class Experiment(object):
 
     def train(self, model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, act=None,
               rew=None,
-              im=None, ind_softmax=False):
+              im=None, ind_softmax=False, pred_delta=False):
 
         im_size = X_train.shape[-1]
         X_train = X_train.reshape(-1, im_size * im_size)
         T_train = T_train.reshape(-1, im_size * im_size)
-        X = X_train
-        Y = T_train
-        # X = np.hstack((X_train, act))
-        # Y = np.hstack((T_train, rew))
+        X = np.hstack((X_train, act))
+        Y = np.hstack((T_train, rew))
 
         logger.log('Training ...')
 
@@ -98,16 +100,14 @@ class Experiment(object):
                 train_batches += 1
 
             pred = model.pred_fn(X)
-            # pred_im = pred[:, :-1]
-            pred_im = pred
+            pred_im = pred[:, :-1]
             if ind_softmax:
                 pred_im = pred_im.reshape((-1, im_size * im_size, model.num_classes))
                 pred_im = np.argmax(pred_im, axis=2)
 
-            # acc = np.mean(np.sum(np.square(pred_im - Y[:, :-1]), axis=1), axis=0)
-            acc = np.mean(np.sum(np.square(pred_im - Y), axis=1), axis=0)
+            acc = np.mean(np.sum(np.square(pred_im - Y[:, :-1]), axis=1), axis=0)
 
-            self.plot_pred_imgs(model, X_train, T_train, epoch, 1, ind_softmax)
+            self.plot_pred_imgs(model, X_train, T_train, epoch, 1, ind_softmax, pred_delta)
 
             logger.record_tabular('train loss', train_err / float(train_batches))
             logger.record_tabular('obs err', acc)
@@ -123,22 +123,14 @@ class Experiment(object):
             img *= num_bins
 
     def main(self):
-        num_epochs = 10000
+        num_epochs = 1000
         batch_size = 8
         IND_SOFTMAX = False
-        NUM_BINS = 30
-        PRED_DELTA = False
+        NUM_BINS = 10
+        PRED_DELTA = True
 
         print("Loading data ...")
         X_train, T_train, act, rew = load_dataset_Atari_plus()
-        X_train1 = np.vstack([X_train[1] for i in xrange(50)])
-        T_train1 = np.vstack([T_train[1] for i in xrange(50)])
-        X_train0 = np.vstack([X_train[0] for i in xrange(50)])
-        T_train0 = np.vstack([T_train[0] for i in xrange(50)])
-
-        X_train = np.vstack((X_train0, X_train1))
-        T_train = np.vstack((T_train0, T_train1))
-
         X_train = X_train[:, np.newaxis, :, :]
         T_train = T_train[:, np.newaxis, :, :]
         if IND_SOFTMAX:
@@ -153,65 +145,77 @@ class Experiment(object):
 
         print("Building model and compiling functions ...")
         bnn = ConvBNNVIME(
-            state_dim=(1, 84, 84),
+            state_dim=(1, 42, 42),
             action_dim=(2,),
             reward_dim=(1,),
             layers_disc=[
                 dict(name='convolution',
-                     n_filters=128,
+                     n_filters=16,
                      filter_size=(6, 6),
                      stride=(2, 2),
-                     pad=(0, 0)),
+                     pad=(0, 0),
+                     batch_norm=True),
                 dict(name='convolution',
-                     n_filters=128,
+                     n_filters=16,
                      filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(2, 2)),
+                     stride=(1, 1),
+                     pad=(0, 0),
+                     batch_norm=True),
                 dict(name='convolution',
-                     n_filters=128,
+                     n_filters=16,
                      filter_size=(6, 6),
                      stride=(2, 2),
-                     pad=(2, 2)),
+                     pad=(0, 0),
+                     batch_norm=True),
                 dict(name='reshape',
                      shape=([0], -1)),
                 dict(name='gaussian',
-                     n_units=2048,
-                     matrix_variate_gaussian=False),
+                     n_units=128,
+                     matrix_variate_gaussian=True,
+                     batch_norm=True),
                 dict(name='gaussian',
-                     n_units=2048,
-                     matrix_variate_gaussian=False),
-                # dict(name='hadamard',
-                #      n_units=2048,
-                #      matrix_variate_gaussian=False),
+                     n_units=128,
+                     matrix_variate_gaussian=True,
+                     batch_norm=True),
+                dict(name='hadamard',
+                     n_units=128,
+                     matrix_variate_gaussian=True,
+                     batch_norm=True),
                 dict(name='gaussian',
-                     n_units=2048,
-                     matrix_variate_gaussian=False),
-                # dict(name='split',
-                #      n_units=2048,
-                #      matrix_variate_gaussian=False),
+                     n_units=128,
+                     matrix_variate_gaussian=True,
+                     batch_norm=True),
+                dict(name='split',
+                     n_units=32,
+                     matrix_variate_gaussian=True,
+                     batch_norm=True),
                 dict(name='gaussian',
-                     n_units=1600,
-                     matrix_variate_gaussian=False),
+                     n_units=400,
+                     matrix_variate_gaussian=True,
+                     batch_norm=True),
                 dict(name='reshape',
-                     shape=([0], 16, 10, 10)),
+                     shape=([0], 16, 5, 5)),
                 dict(name='deconvolution',
-                     n_filters=128,
+                     n_filters=16,
                      filter_size=(6, 6),
                      stride=(2, 2),
-                     pad=(2, 2),
-                     nonlinearity=lasagne.nonlinearities.rectify),
+                     pad=(0, 0),
+                     nonlinearity=lasagne.nonlinearities.rectify,
+                     batch_norm=True),
                 dict(name='deconvolution',
-                     n_filters=128,
+                     n_filters=16,
                      filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(2, 2),
-                     nonlinearity=lasagne.nonlinearities.rectify),
+                     stride=(1, 1),
+                     pad=(0, 0),
+                     nonlinearity=lasagne.nonlinearities.rectify,
+                     batch_norm=True),
                 dict(name='deconvolution',
                      n_filters=1,
                      filter_size=(6, 6),
                      stride=(2, 2),
                      pad=(0, 0),
-                     nonlinearity=lasagne.nonlinearities.linear),
+                     nonlinearity=lasagne.nonlinearities.linear,
+                     batch_norm=False),
             ],
             n_batches=n_batches,
             batch_size=batch_size,
@@ -231,10 +235,10 @@ class Experiment(object):
             # ---
             ind_softmax=IND_SOFTMAX,
             num_classes=NUM_BINS,
-            disable_act_rew_paths=True
+            disable_act_rew_paths=False
         )
 
         # Train the model.
         self.train(bnn, num_epochs=num_epochs, X_train=X_train, T_train=T_train, act=act, rew=rew,
-                   ind_softmax=IND_SOFTMAX)
+                   ind_softmax=IND_SOFTMAX, pred_delta=PRED_DELTA)
         print('Done.')
