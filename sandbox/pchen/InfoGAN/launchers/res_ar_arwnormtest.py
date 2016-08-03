@@ -14,6 +14,7 @@ import dateutil
 import dateutil.tz
 import datetime
 import numpy as np
+import tensorflow as tf
 
 now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
@@ -22,7 +23,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 50
+max_epoch = 30
 
 stub(globals())
 
@@ -185,7 +186,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_vae_wnorm_ar_test",
+            exp_prefix="res_vae_wnorm_ar_short_test",
             seed=v["seed"],
             # mode="local",
             mode="lab_kube",
