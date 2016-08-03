@@ -87,7 +87,7 @@ class VG(VariantGenerator):
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        yield "resv1_k3"
+        yield "resv1_k3_pixel_bias"
 
     @variant(hide=False)
     def wnorm(self):

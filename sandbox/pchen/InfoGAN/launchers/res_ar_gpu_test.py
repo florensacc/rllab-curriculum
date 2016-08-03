@@ -36,7 +36,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002] #0.001]
+        return [0.002, 0.001] #0.001]
 
     @variant
     def seed(self):
@@ -84,10 +84,11 @@ class VG(VariantGenerator):
         # yield "small_conv"
         # yield "deep_mlp"
         # yield "mlp"
-        yield "resv1_k3"
-        yield "conv1_k5"
-        yield "small_res"
-        yield "small_res_small_kern"
+        # yield "resv1_k3"
+        # yield "conv1_k5"
+        # yield "small_res"
+        # yield "small_res_small_kern"
+        yield "resv1_k3_pixel_bias"
 
     @variant(hide=False)
     def wnorm(self):
