@@ -90,6 +90,7 @@ class BayesianLayer(lasagne.layers.Layer):
         self.num_units = num_units
         self.num_inputs = int(np.prod(self.input_shape[1:]))
         self.prior_rho = self.inv_softplus(self.prior_sd)
+        print('prior_rho: {}'.format(self.prior_rho))
         self.disable_variance = disable_variance
         self._matrix_variate_gaussian = matrix_variate_gaussian
         self.mvg_rank = mvg_rank
@@ -189,11 +190,11 @@ class BayesianLayer(lasagne.layers.Layer):
         This makes sure that we don't get negative stds. However, a downside might be
         that we have little gradient on close to 0 std (= -inf using this transformation).
         """
-        return T.log(1 + T.exp(rho))
+        return T.log(1 + T.exp(rho)) * 100.
 
     def inv_softplus(self, sigma):
         """Reverse softplus transformation."""
-        return np.log(np.exp(sigma) - 1)
+        return np.log(np.exp(sigma / 100.) - 1)
 
     def get_W_shape(self):
         raise NotImplementedError(
@@ -519,7 +520,7 @@ class BayesianDeConvLayer(BayesianLayer):
         if self.untie_biases:
             return (self.num_units,) + self.output_shape[2:]
         else:
-            return (self.num_units,)
+            return self.num_units,
 
     def get_output_shape_for(self, input_shape):
         # when called from the constructor, self.crop is still called self.pad:
@@ -569,12 +570,10 @@ class BayesianDenseLayer(BayesianLayer):
                  nonlinearity=lasagne.nonlinearities.rectify,
                  prior_sd=None,
                  use_local_reparametrization_trick=None,
-                 group_variance_by=None,
                  **kwargs):
         super(BayesianDenseLayer, self).__init__(
             incoming, num_units, nonlinearity, prior_sd, **kwargs)
 
-        self.group_variance_by = group_variance_by
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
 
         self.init_params()
@@ -674,7 +673,6 @@ class ConvBNN(LasagnePowered, Serializable):
                  surprise_type=SurpriseType.INFGAIN,
                  update_prior=False,
                  update_likelihood_sd=False,
-                 group_variance_by=GroupVarianceBy.WEIGHT,
                  use_local_reparametrization_trick=True,
                  likelihood_sd_init=1.0,
                  output_type=OutputType.REGRESSION,
@@ -701,7 +699,6 @@ class ConvBNN(LasagnePowered, Serializable):
         self.surprise_type = surprise_type
         self.update_prior = update_prior
         self.update_likelihood_sd = update_likelihood_sd
-        self.group_variance_by = group_variance_by
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
         self.output_type = output_type
         self.num_classes = num_classes
@@ -713,11 +710,6 @@ class ConvBNN(LasagnePowered, Serializable):
             assert self.num_classes is not None
             assert self.num_output_dim is not None
             assert self.n_out == self.num_classes * self.num_output_dim
-
-        if self.group_variance_by == ConvBNN.GroupVarianceBy.LAYER and self.use_local_reparametrization_trick:
-            print(
-                'Setting use_local_reparametrization_trick=True cannot be used with group_variance_by==\'layer\', changing to False')
-            self.use_local_reparametrization_trick = False
 
         if self.output_type == ConvBNN.OutputType.CLASSIFICATION and self.update_likelihood_sd:
             print(
@@ -1054,7 +1046,6 @@ class ConvBNN(LasagnePowered, Serializable):
                     return updates
 
                 def fast_kl_div(loss, params, oldparams, step_size):
-                    # FIXME: doesn't work yet for group_variance_by!='weight'.
                     grads = T.grad(loss, params)
 
                     kl_component = []
@@ -1064,10 +1055,6 @@ class ConvBNN(LasagnePowered, Serializable):
 
                         if param.name == 'mu' or param.name == 'b_mu':
                             oldparam_rho = oldparams[i + 1]
-                            if self.group_variance_by == 'unit':
-                                if not isinstance(oldparam_rho, float):
-                                    oldparam_rho = oldparam_rho.dimshuffle(
-                                        0, 'x')
                             invH = T.square(T.log(1 + T.exp(oldparam_rho)))
                         elif param.name == 'rho' or param.name == 'b_rho':
                             oldparam_rho = oldparams[i]

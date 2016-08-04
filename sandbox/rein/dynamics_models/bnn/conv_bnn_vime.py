@@ -2,6 +2,9 @@ from __future__ import print_function
 import numpy as np
 import theano.tensor as T
 import lasagne
+from lasagne.layers.noise import dropout
+from lasagne.layers.normalization import batch_norm
+
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
 from rllab.misc import ext
@@ -17,20 +20,16 @@ class IndependentSoftmaxLayer(lasagne.layers.Layer):
         super(IndependentSoftmaxLayer, self).__init__(incoming, **kwargs)
 
         self._num_bins = num_bins
-        num_inputs = int(np.prod(self.input_shape[1:]))
-        self.num_units = num_inputs
-
-        self.W = self.add_param(W, (self.num_units, self._num_bins), name="W")
+        self.W = self.add_param(W, (self.input_shape[1], self._num_bins), name="W")
 
     def get_output_for(self, input, **kwargs):
-        input_tiled = T.tile(input.dimshuffle(0, 1, 'x'), reps=[1, 1, self._num_bins])
-        _a = input_tiled * self.W
-        _b = T.exp(_a - T.max(_a, axis=2).dimshuffle(0, 1, 'x'))
-        _c = T.sum(_b, axis=2).dimshuffle(0, 1, 'x')
+        _a = T.dot(input.dimshuffle(0, 2, 3, 1), self.W)
+        _b = T.exp(_a - T.max(_a, axis=3).dimshuffle(0, 1, 2, 'x'))
+        _c = T.sum(_b, axis=3).dimshuffle(0, 1, 2, 'x')
         return T.clip(_b / _c, 1e-8, 1)
 
     def get_output_shape_for(self, input_shape):
-        return input_shape[0], input_shape[1], self._num_bins
+        return input_shape[0], input_shape[2], input_shape[3], self._num_bins
 
 
 class OuterProdLayer(lasagne.layers.MergeLayer):
@@ -53,7 +52,7 @@ class HadamardLayer(lasagne.layers.MergeLayer):
         return None, input_shapes[0][1]
 
     def get_output_for(self, inputs, **kwargs):
-        return inputs[0] + inputs[1]
+        return inputs[0] * inputs[1]
 
 
 class ConcatLayer(lasagne.layers.MergeLayer):
@@ -79,7 +78,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
     """
 
     # Enums
-    GroupVarianceBy = enum(WEIGHT='weight', UNIT='unit', LAYER='layer')
     OutputType = enum(REGRESSION='regression', CLASSIFICATION='classfication')
     SurpriseType = enum(
         INFGAIN='information gain', COMPR='compression gain', BALD='BALD')
@@ -101,7 +99,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                  surprise_type=SurpriseType.INFGAIN,
                  update_prior=False,
                  update_likelihood_sd=False,
-                 group_variance_by=GroupVarianceBy.WEIGHT,
                  use_local_reparametrization_trick=True,
                  likelihood_sd_init=1.0,
                  output_type=OutputType.REGRESSION,
@@ -132,7 +129,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.surprise_type = surprise_type
         self.update_prior = update_prior
         self.update_likelihood_sd = update_likelihood_sd
-        self.group_variance_by = group_variance_by
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
         self.output_type = output_type
         self.num_classes = num_classes
@@ -145,11 +141,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             print('Warning: action and reward paths disabled, do not use a_net or r_net!')
 
         self.network = None
-
-        if self.group_variance_by == ConvBNNVIME.GroupVarianceBy.LAYER and self.use_local_reparametrization_trick:
-            print(
-                'Setting use_local_reparametrization_trick=True cannot be used with group_variance_by==\'layer\', changing to False')
-            self.use_local_reparametrization_trick = False
 
         if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION and self.update_likelihood_sd:
             print(
@@ -275,7 +266,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         return T.sum(log_normal, axis=1)
 
     def pred_sym(self, input):
-        return lasagne.layers.get_output(self.network, input)
+        return lasagne.layers.get_output(self.network, input, deterministic=False)
 
     def likelihood_regression(self, target, prediction, likelihood_sd):
         return self._log_prob_normal(target, prediction, likelihood_sd)
@@ -343,7 +334,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             if self.update_prior:
                 kl = self.kl_div()
             else:
-                kl = self.log_p_w_q_w_kl()  # + self.reverse_log_p_w_q_w_kl()
+                kl = self.log_p_w_q_w_kl()
             return kl / self.n_batches * kl_factor - log_p_D_given_w / self.num_train_samples
 
     def loss_last_sample(self, input, target, **kwargs):
@@ -378,7 +369,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # Reshape according to the input_dim
         s_net = lasagne.layers.reshape(s_net, ([0],) + self.state_dim)
-
+        # FIXME: magic number
+        dropout_p = 0.5
         for i, layer_disc in enumerate(self.layers_disc):
 
             if layer_disc['name'] == 'convolution':
@@ -390,6 +382,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     pad=layer_disc['pad'],
                     stride=layer_disc['stride'],
                     disable_variance=self.disable_variance)
+                if layer_disc['dropout'] is True:
+                    s_net = dropout(s_net, p=dropout_p)
+                if layer_disc['batch_norm'] is True:
+                    s_net = batch_norm(s_net)
             elif layer_disc['name'] == 'gaussian':
                 if 'nonlinearity' not in layer_disc.keys():
                     layer_disc['nonlinearity'] = lasagne.nonlinearities.rectify
@@ -400,11 +396,17 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     use_local_reparametrization_trick=self.use_local_reparametrization_trick,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
+                if layer_disc['dropout'] is True:
+                    s_net = dropout(s_net, p=dropout_p)
+                if layer_disc['batch_norm'] is True:
+                    s_net = batch_norm(s_net)
             elif layer_disc['name'] == 'deterministic':
                 s_net = lasagne.layers.DenseLayer(
                     s_net,
                     num_units=layer_disc['n_units'],
                     nonlinearity=self.transf)
+                if layer_disc['batch_norm'] is True:
+                    s_net = batch_norm(s_net, p=dropout_p)
             elif layer_disc['name'] == 'deconvolution':
                 s_net = BayesianDeConvLayer(
                     s_net, num_filters=layer_disc['n_filters'],
@@ -414,6 +416,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     crop=layer_disc['pad'],
                     disable_variance=self.disable_variance,
                     nonlinearity=layer_disc['nonlinearity'])
+                if layer_disc['dropout'] is True:
+                    s_net = dropout(s_net, p=dropout_p)
+                if layer_disc['batch_norm'] is True:
+                    s_net = batch_norm(s_net)
             elif layer_disc['name'] == 'reshape':
                 s_net = lasagne.layers.ReshapeLayer(
                     s_net,
@@ -436,7 +442,11 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     use_local_reparametrization_trick=self.use_local_reparametrization_trick,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
+                if layer_disc['dropout'] is True:
+                    a_net = dropout(a_net, p=dropout_p)
                 s_net = HadamardLayer([s_net, a_net])
+                if layer_disc['batch_norm'] is True:
+                    s_net = batch_norm(s_net)
             elif layer_disc['name'] == 'outerprod':
                 # Here we fuse the s_net with the a_net through an outer
                 # product.
@@ -451,6 +461,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     use_local_reparametrization_trick=self.use_local_reparametrization_trick,
                     disable_variance=self.disable_variance,
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
+                if layer_disc['batch_norm'] is True:
+                    r_net = batch_norm(r_net)
             else:
                 raise (Exception('Unknown layer!'))
 
@@ -463,12 +475,14 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # Output of output_dim is flattened again. But ofc, we need to output
         # the r_net value, e.g., the reward signal.
-        s_net = lasagne.layers.reshape(s_net, ([0], -1))
         if self._ind_softmax:
             s_net = IndependentSoftmaxLayer(
                 s_net,
                 num_bins=self.num_classes,
             )
+            print('layer ind softmax:\n\toutsize: {}'.format(s_net.output_shape))
+            s_net = lasagne.layers.reshape(s_net, ([0], -1))
+        else:
             s_net = lasagne.layers.reshape(s_net, ([0], -1))
 
         if not self._disable_act_rew_paths:
@@ -607,7 +621,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                                      dtype=theano.config.floatX)
 
                 def fast_kl_div(loss, params, oldparams, step_size):
-                    # FIXME: doesn't work yet for group_variance_by!='weight'.
                     # FIXME: doesn't work with MVG.
 
                     grads = T.grad(loss, params)
@@ -619,9 +632,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
                         if param.name == 'mu' or param.name == 'b_mu':
                             oldparam_rho = oldparams[i + 1]
-                            if self.group_variance_by == 'unit':
-                                if not isinstance(oldparam_rho, float):
-                                    oldparam_rho = oldparam_rho.dimshuffle(0, 'x')
                             invH = T.square(T.log(1 + T.exp(oldparam_rho)))
                         elif param.name == 'rho' or param.name == 'b_rho':
                             oldparam_rho = oldparams[i]

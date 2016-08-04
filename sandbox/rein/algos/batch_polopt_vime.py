@@ -321,6 +321,8 @@ class BatchPolopt(RLAlgorithm):
         input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
         target_im = targets[:, :-1].reshape(tuple([-1]) + self.state_dim).transpose(0, 2, 3, 1)
         input_im = input_im[:, :].reshape(tuple([-1]) + self.state_dim).transpose(0, 2, 3, 1)
+        act = inputs[:, -self.env.spec.action_space.flat_dim:]
+        rew = targets[:, -1:]
 
         if self._predict_delta:
             target_im += input_im
@@ -329,6 +331,8 @@ class BatchPolopt(RLAlgorithm):
         idx = np.random.randint(0, len(input_im), 100)
         inputs = input_im[idx]
         targets = target_im[idx]
+        actions = act[idx]
+        rewards = rew[idx]
 
         path = '/Users/rein/programming/openai/vime'
         if not os.path.exists(path):
@@ -338,15 +342,17 @@ class BatchPolopt(RLAlgorithm):
             _dataset = pickle.load(open(path + '/dataset.pkl', 'wb'))
             _dataset['x'] = np.concatenate((_dataset['x'], inputs))
             _dataset['y'] = np.concatenate((_dataset['y'], targets))
+            _dataset['a'] = np.concatenate((_dataset['a'], actions))
+            _dataset['r'] = np.concatenate((_dataset['r'], rewards))
+
 
         else:
-            _dataset = dict(x=inputs, y=targets)
+            _dataset = dict(x=inputs, y=targets, a=actions, r=rewards)
 
         pickle.dump(_dataset, open(path + '/dataset.pkl', 'wb'))
 
         # import ipdb; ipdb.set_trace()
         tmp = pickle.load(open(path + '/dataset.pkl', 'r'))
-        print(tmp)
 
     def plot_pred_imgs(self, inputs, targets, itr, count):
         try:
@@ -574,7 +580,7 @@ class BatchPolopt(RLAlgorithm):
 
                 acc_before = self.accuracy(np.vstack(X_train), np.vstack(T_train))
 
-                self.make_train_set(np.vstack(X_train), np.vstack(T_train))
+                # self.make_train_set(np.vstack(X_train), np.vstack(T_train))
 
                 # Do posterior chaining: this means that we update the model on each individual
                 # minibatch and update the prior to the new posterior.

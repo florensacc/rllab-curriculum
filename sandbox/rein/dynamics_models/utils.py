@@ -58,22 +58,9 @@ def sliding_mean(data_array, window=5):
 def load_dataset_Atari():
     import pickle
 
-    file_handler = open('sandbox/rein/datasets/dataset.pkl', 'r')
+    file_handler = open('sandbox/rein/datasets/dataset_42x42.pkl', 'r')
     _dataset = pickle.load(file_handler)
-    return _dataset['x'].transpose(0, 3, 1, 2), _dataset['y'].transpose(0, 3, 1, 2)
-
-
-def load_dataset_Atari_plus():
-    X_train, T_train = load_dataset_Atari()
-    #     X_train = X_train - 1.
-    # add action and reward signal.
-    act = np.tanh(np.linspace(0, 1, X_train.shape[0]))
-    act = np.vstack((act, act)).T
-    act *= 0
-    rew = np.sin(np.linspace(0, 1, X_train.shape[0]))[:, None]
-    rew *= 0
-    return X_train, T_train, act, rew
-
+    return _dataset['x'].transpose(0, 3, 1, 2), _dataset['y'].transpose(0, 3, 1, 2), _dataset['a'], _dataset['r']
 
 def load_dataset_MNIST():
     """MNIST dataset loader"""
