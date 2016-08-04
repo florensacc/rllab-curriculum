@@ -380,7 +380,7 @@ class arfc(prettytensor.VarStoreMethod):
                  zerodiagonal=False,
                  wnorm=False,
                  data_init=False,
-                 init_scale=1.,
+                 init_scale=0.1,
                  name=PROVIDED):
         """Adds the parameters for a fully connected layer and returns a tensor.
         The current head must be a rank 2 Tensor.

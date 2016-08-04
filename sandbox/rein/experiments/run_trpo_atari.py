@@ -25,7 +25,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-RECORD_VIDEO = True
+RECORD_VIDEO = False
 mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
         GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
         GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),
@@ -82,8 +82,8 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-atari-a",
-        n_parallel=8,
+        exp_prefix="trpo-atari-b",
+        n_parallel=4,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

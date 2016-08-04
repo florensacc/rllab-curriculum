@@ -49,7 +49,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [32]#[12, 32]
+        return [64*4]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -60,14 +60,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [2]
+        return [10,]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [2, 5,]
+            return [1,]
 
     # @variant
     # def nm(self):
