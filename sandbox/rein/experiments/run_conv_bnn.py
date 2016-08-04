@@ -11,7 +11,7 @@ e = Experiment()
 
 run_experiment_lite(
     e.main(),
-    exp_prefix="conv_bnn_d",
+    exp_prefix="conv_bnn_a",
     mode="local",
     dry=False,
     use_gpu=True,

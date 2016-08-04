@@ -50,7 +50,7 @@ class Experiment(object):
             target_im = target_im.astype(float) / float(model.num_classes)
             input_im = input_im.astype(float) / float(model.num_classes)
 
-        err = 1 -  np.abs(target_im - sanity_pred_im)
+        err = 1 - np.abs(target_im - sanity_pred_im)
 
         if self._im1 is None or self._im2 is None:
             self._im1 = self._fig_1.imshow(
@@ -106,6 +106,7 @@ class Experiment(object):
             pred = []
             for _ in xrange(10):
                 pred.append(model.pred_fn(X))
+            print(np.mean(np.std(np.array(pred), axis=0), axis=1))
             pred = np.mean(np.array(pred), axis=0)
 
             pred_im = pred[:, :-1]
@@ -131,11 +132,12 @@ class Experiment(object):
             img *= num_bins
 
     def main(self):
-        num_epochs = 1000
+        num_epochs = 5000
         batch_size = 8
         IND_SOFTMAX = False
         NUM_BINS = 10
         PRED_DELTA = False
+        DROPOUT=False
 
         print("Loading data ...")
         X_train, T_train, act, rew = load_dataset_Atari()
@@ -162,45 +164,54 @@ class Experiment(object):
                      filter_size=(6, 6),
                      stride=(2, 2),
                      pad=(0, 0),
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='convolution',
                      n_filters=16,
                      filter_size=(6, 6),
                      stride=(1, 1),
                      pad=(0, 0),
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='convolution',
                      n_filters=16,
                      filter_size=(6, 6),
                      stride=(2, 2),
                      pad=(0, 0),
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='reshape',
                      shape=([0], -1)),
                 dict(name='gaussian',
                      n_units=64,
                      matrix_variate_gaussian=False,
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='gaussian',
                      n_units=64,
                      matrix_variate_gaussian=False,
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='hadamard',
                      n_units=64,
                      matrix_variate_gaussian=False,
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='gaussian',
                      n_units=64,
                      matrix_variate_gaussian=False,
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='split',
                      n_units=32,
                      matrix_variate_gaussian=False,
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='gaussian',
                      n_units=400,
                      matrix_variate_gaussian=False,
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='reshape',
                      shape=([0], 16, 5, 5)),
                 dict(name='deconvolution',
@@ -209,35 +220,37 @@ class Experiment(object):
                      stride=(2, 2),
                      pad=(0, 0),
                      nonlinearity=lasagne.nonlinearities.rectify,
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='deconvolution',
                      n_filters=16,
                      filter_size=(6, 6),
                      stride=(1, 1),
                      pad=(0, 0),
                      nonlinearity=lasagne.nonlinearities.rectify,
-                     batch_norm=True),
+                     batch_norm=True,
+                     dropout=DROPOUT),
                 dict(name='deconvolution',
                      n_filters=1,
                      filter_size=(6, 6),
                      stride=(2, 2),
                      pad=(0, 0),
                      nonlinearity=lasagne.nonlinearities.linear,
-                     batch_norm=False),
+                     batch_norm=False,
+                     dropout=False),
             ],
             n_batches=n_batches,
             batch_size=batch_size,
             n_samples=1,
             num_train_samples=1,
-            prior_sd=0.05,
+            prior_sd=0.005,
             update_likelihood_sd=False,
             learning_rate=0.001,
-            group_variance_by=ConvBNNVIME.GroupVarianceBy.UNIT,
-            use_local_reparametrization_trick=False,
+            use_local_reparametrization_trick=True,
             likelihood_sd_init=0.1,
             output_type=ConvBNNVIME.OutputType.REGRESSION,
-            surprise_type=ConvBNNVIME.SurpriseType.INFGAIN,
-            disable_variance=False,
+            surprise_type=ConvBNNVIME.SurpriseType.BALD,
+            disable_variance=True,
             second_order_update=False,
             debug=True,
             # ---
@@ -250,6 +263,7 @@ class Experiment(object):
         self.train(bnn, num_epochs=num_epochs, X_train=X_train, T_train=T_train, act=act, rew=rew,
                    ind_softmax=IND_SOFTMAX, pred_delta=PRED_DELTA)
         print('Done.')
+
 
 if __name__ == '__main__':
     Experiment().main()
