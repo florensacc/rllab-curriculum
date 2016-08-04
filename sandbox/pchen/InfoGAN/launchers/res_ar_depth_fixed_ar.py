@@ -22,7 +22,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 1000
+max_epoch = 500
 
 stub(globals())
 
@@ -60,14 +60,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0, 1, 2]
+        return [0, 2, 4, 8]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [5,]
+            return [2, 5, 10, 20]
 
     # @variant
     # def nm(self):
@@ -171,7 +171,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_vae_long_limit",
+            exp_prefix="res_vae_depth_ar",
             seed=v["seed"],
             # mode="local",
             mode="lab_kube",
