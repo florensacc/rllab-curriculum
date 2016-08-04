@@ -60,7 +60,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [10,]
+        return [0,]
 
     @variant
     def nr(self, nar):
@@ -166,6 +166,8 @@ for v in variants[:]:
             optimizer=AdamaxOptimizer(v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
+            k=8,
+            vali_eval_interval=100,
         )
 
         run_experiment_lite(

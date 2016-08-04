@@ -306,7 +306,7 @@ class RegularizedHelmholtzMachine(object):
                 ):
                     encoder = \
                         (pt.template('input', self.book).
-                         reshape([self.batch_size] + list(image_shape))
+                         reshape([-1] + list(image_shape))
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2) #14
@@ -324,7 +324,7 @@ class RegularizedHelmholtzMachine(object):
                     decoder = (pt.template('input', self.book).
                                wnorm_fc(450, ).
                                wnorm_fc(512, ).
-                               reshape([self.batch_size, 4, 4, 32])
+                               reshape([-1, 4, 4, 32])
                                )
                     decoder = resconv_v1(decoder, 3, 32, stride=1)
                     decoder = resdeconv_v1(decoder, 3, 32, out_wh=[7,7])
@@ -396,8 +396,13 @@ class RegularizedHelmholtzMachine(object):
         self.data_init = False
         self.book.summary_collections = self.book_summary_collections
 
-    def encode(self, x_var):
+    def encode(self, x_var, k=1):
         z_dist_flat = self.encoder_template.construct(input=x_var, data_init=self.data_init).tensor
+        if k != 1:
+            z_dist_flat = tf.reshape(
+                tf.tile(z_dist_flat, [1, k]),
+                [-1, self.inference_dist.dist_flat_dim],
+            )
         z_dist_info = self.inference_dist.activate_dist(z_dist_flat)
         return self.inference_dist.sample(z_dist_info), z_dist_info
 

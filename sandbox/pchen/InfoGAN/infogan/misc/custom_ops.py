@@ -86,7 +86,7 @@ class custom_deconv2d(pt.VarStoreMethod):
                  name="deconv2d", activation_fn=None, data_init=False, init_scale=0.1,
                  wnorm=False, pixel_bias=False,
                  ):
-        print "data init: ", data_init
+        # print "data init: ", data_init
         output_shape[0] = input_layer.shape[0]
         books = input_layer.bookkeeper
         ts_output_shape = tf.pack(output_shape)
@@ -572,7 +572,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
       ValueError: If head is not a rank 4 tensor or the  depth of the input
         (4th dim) is not known.
     """
-    print "data init: ", data_init
+    # print "data init: ", data_init
     if input_layer.get_shape().ndims != 4:
       raise ValueError('conv2d requires a rank 4 Tensor with a known depth %s' %
                        input_layer.get_shape())
@@ -795,7 +795,7 @@ class wnorm_fc(prettytensor.VarStoreMethod):
         """
         # TODO(eiderman): bias_init shouldn't take a constant and stddev shouldn't
         # exist.
-        print "data init: ", data_init
+        # print "data init: ", data_init
         if input_layer.get_shape().ndims != 2:
             raise ValueError(
                 'fully_connected requires a rank 2 Tensor with known second '
@@ -972,3 +972,7 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1):
         blk.apply(lambda x: x*add_coeff)
         origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None)
     return seq.as_layer().nl()
+
+def logsumexp(x):
+    x_max = tf.reduce_max(x, [1], keep_dims=True)
+    return tf.reshape(x_max, [-1]) + tf.log(tf.reduce_sum(tf.exp(x - x_max), [1]))
