@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
+from sandbox.carlos_snn.core.lasagne_layers import BilinearIntegrationLayer, CropLayer
 from rllab.spaces import Box
 
 from rllab.sampler.utils import rollout  # I need this for logging the diagnostics: run the policy with all diff latents
@@ -45,6 +46,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
     def __init__(
             self,
             env_spec,
+            env,
             ##CF - latents units at the input
             latent_dim=2,  # we keep all these as the dim of the output of the other MLP and others that we will need!
             latent_name='categorical',
@@ -72,8 +74,6 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         self.latent_fix = np.array([])  # this will hold the latents variable sampled in reset()
         self._set_std_to_0 = False
 
-        print env_spec
-
         if latent_name == 'normal':
             self.latent_dist = DiagonalGaussian(self.latent_dim)
             self.latent_dist_info = dict(mean=np.zeros(self.latent_dim), log_std=np.zeros(self.latent_dim))
@@ -93,52 +93,13 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
-        ## split the observations in maze and robot
-        obs_robot_dim = env_spec.robot_observation_space.flat_dim
-        obs_maze_dim = env_spec.maze_observation_space.flat_dim
+        # retreive dimensions and check consistency
+        all_obs_dim = env_spec.observation_space.flat_dim
+        obs_robot_dim = env.robot_observation_space().flat_dim
+        obs_maze_dim = env.maze_observation_space().flat_dim
+        assert all_obs_dim == obs_robot_dim + obs_maze_dim
 
-        ##CF - enlarge obs with the latents
-        if self.bilinear_integration:
-            obs_snn_dim = obs_robot_dim + latent_dim + \
-                          obs_robot_dim * latent_dim
-        else:
-            obs_snn_dim = obs_robot_dim + latent_dim  # here only if concat.
-
-        action_dim = env_spec.action_space.flat_dim
-
-        # create network
-        mean_network = MLP(
-            input_shape=(obs_snn_dim,),
-            output_dim=action_dim,
-            hidden_sizes=hidden_sizes,
-            hidden_nonlinearity=hidden_nonlinearity,
-            output_nonlinearity=output_nonlinearity,
-        )
-
-        l_mean = mean_network.output_layer
-        obs_snn_var = mean_network.input_layer.input_var
-
-        if adaptive_std:
-            l_log_std = MLP(
-                input_shape=(obs_snn_dim,),
-                input_var=obs_snn_var,
-                output_dim=action_dim,
-                hidden_sizes=std_hidden_sizes,
-                hidden_nonlinearity=std_hidden_nonlinearity,
-                output_nonlinearity=None,
-            ).output_layer
-        else:
-            l_log_std = ParamLayer(
-                mean_network.input_layer,
-                num_units=action_dim,
-                param=lasagne.init.Constant(np.log(init_std)),
-                name="output_log_std",
-                trainable=learn_std,
-            )
-
-        mean_var, log_std_var = L.get_output([l_mean, l_log_std])
-
-        # create other network with softmax output: it will be the latent!
+        # create network with softmax output: it will be the latent!
         latent_selection_network = MLP(
             input_shape=(obs_robot_dim + obs_maze_dim,),
             output_dim=latent_dim,
@@ -146,20 +107,60 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=NL.softmax,
         )
-        l_selection = latent_selection_network.output_layer
+        l_all_obs_var = latent_selection_network.input_layer
         all_obs_var = latent_selection_network.input_layer.input_var
 
-        selection_var = L.get_output([l_selection])
-
         # split all_obs into the robot and the maze obs
+        l_obs_robot = CropLayer(l_all_obs_var, start_index=None, end_index=obs_robot_dim)
+        l_obs_maze = CropLayer(l_all_obs_var, start_index=obs_robot_dim, end_index=None)
+
         obs_robot_var = all_obs_var[:, :obs_robot_dim]
         obs_maze_var = all_obs_var[:, obs_robot_dim:]
 
-        latent_var = selection_var
-        obs_snn_var = TT.concatenate([obs_robot_var, latent_var,
-                                      TT.flatten(obs_robot_var[:, :, np.newaxis] * latent_var[:, np.newaxis, :],
-                                                 outdim=2)]
-                                     , axis=1)
+        # collect the output to select the behavior of the robot controller (equivalent to latents)
+        l_selection = latent_selection_network.output_layer
+        selection_var = L.get_output(l_selection)
+
+        # Enlarge obs with the selectors (or latents)
+        if self.bilinear_integration:
+            obs_snn_dim = obs_robot_dim + latent_dim + \
+                          obs_robot_dim * latent_dim
+        else:
+            obs_snn_dim = obs_robot_dim + latent_dim  # here only if concat.
+
+        l_obs_snn = BilinearIntegrationLayer([l_obs_robot, l_selection])
+
+        action_dim = env_spec.action_space.flat_dim
+
+        # create network
+        mean_network = MLP(
+            input_layer=l_obs_snn,
+            output_dim=action_dim,
+            hidden_sizes=hidden_sizes,
+            hidden_nonlinearity=hidden_nonlinearity,
+            output_nonlinearity=output_nonlinearity,
+        )
+
+        l_mean = mean_network.output_layer
+
+        if adaptive_std:
+            l_log_std = MLP(
+                input_layer=l_obs_snn,
+                output_dim=action_dim,
+                hidden_sizes=std_hidden_sizes,
+                hidden_nonlinearity=std_hidden_nonlinearity,
+                output_nonlinearity=None,
+            ).output_layer
+        else:
+            l_log_std = ParamLayer(
+                incoming=mean_network.input_layer,
+                num_units=action_dim,
+                param=lasagne.init.Constant(np.log(init_std)),
+                name="output_log_std",
+                trainable=learn_std,
+            )
+
+        mean_var, log_std_var = L.get_output([l_mean, l_log_std])
 
         if self.min_std is not None:
             log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
@@ -170,7 +171,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         self._dist = DiagonalGaussian(action_dim)
 
         LasagnePowered.__init__(self, [l_mean, l_log_std])
-        super(GaussianMLPPolicy_snn, self).__init__(env_spec)
+        super(GaussianMLPPolicy_hier, self).__init__(env_spec)
 
         self._f_dist = ext.compile_function(
             inputs=[all_obs_var],
@@ -183,14 +184,6 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         return Box(low=-np.inf, high=np.inf, shape=(1,))
 
     def dist_info_sym(self, obs_var, state_info_var=None):
-        # # generate the generalized input (append latents to obs.)
-        # if self.bilinear_integration:
-        #     extended_obs_var = TT.concatenate([obs_var, latent_var,
-        #                                        TT.flatten(obs_var[:, :, np.newaxis] * latent_var[:, np.newaxis, :],
-        #                                                   outdim=2)]
-        #                                       , axis=1)
-        # else:
-        #     extended_obs_var = TT.concatenate([obs_var, latent_var], axis=1)
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
         if self.min_std is not None:
             log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
@@ -246,7 +239,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             rnd = np.random.normal(size=mean.shape)
             actions = rnd * np.exp(log_std) + mean
         # print latents
-        return actions, dict(mean=mean, log_std=log_std, latents=latents)
+        return actions, dict(mean=mean, log_std=log_std)
 
     def set_pre_fix_latent(self, latent):
         self.pre_fix_latent = np.array(latent)
