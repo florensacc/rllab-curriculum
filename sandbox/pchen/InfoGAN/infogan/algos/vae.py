@@ -31,6 +31,7 @@ class VAE(object):
                  bnn_decoder=False,
                  bnn_kl_coeff=1.,
                  k=1, # importance sampling ratio
+                 cond_px_ent=None,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -40,6 +41,7 @@ class VAE(object):
         :type recog_reg_coeff: float
         :type learning_rate: float
         """
+        self.cond_px_ent = cond_px_ent
         self.optimizer = optimizer
         self.vali_eval_interval = vali_eval_interval
         self.sample_zs = []
@@ -166,6 +168,18 @@ class VAE(object):
 
             loss = - vlb
             surr_loss = - surr_vlb
+            if self.cond_px_ent:
+                ld = self.model.latent_dist
+                prior_z_var = ld.sample_prior(self.batch_size)
+                _, prior_x_dist_info = self.model.decode(prior_z_var)
+                prior_ent = tf.reduce_mean(self.model.output_dist.entropy(prior_x_dist_info)) \
+                            / ndim
+                loss += self.cond_px_ent * prior_ent
+                log_vars.append((
+                    "prior_ent_x_given_z",
+                    prior_ent
+                ))
+
 
             log_vars.append((
                 "ent_x_given_z",
