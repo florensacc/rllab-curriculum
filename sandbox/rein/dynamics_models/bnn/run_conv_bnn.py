@@ -2,12 +2,23 @@ import numpy as np
 import lasagne
 from sandbox.rein.dynamics_models.utils import iterate_minibatches, plot_mnist_digit, load_dataset_MNIST, \
     load_dataset_MNIST_plus, load_dataset_Atari
-from sandbox.rein.dynamics_models.bnn.conv_bnn_vime import ConvBNNVIME
+
 import time
 import rllab.misc.logger as logger
 
 
 class Experiment(object):
+    def __init__(self, model,
+                 ind_softmax,
+                 num_epochs,
+                 pred_delta,
+                 num_bins):
+        self.model = model
+        self.ind_softmax = ind_softmax
+        self.num_epochs = num_epochs
+        self.pred_delta = pred_delta
+        self.num_bins = num_bins
+
     def plot_pred_imgs(self, model, inputs, targets, itr, count, ind_softmax, pred_delta):
         # This is specific to Atari.
         import matplotlib.pyplot as plt
@@ -31,6 +42,7 @@ class Experiment(object):
         pred = []
         for _ in xrange(10):
             pred.append(model.pred_fn(inputs))
+            import ipdb; ipdb.set_trace()
         sanity_pred = np.mean(np.array(pred), axis=0)
         input_im = inputs[:, :-3]
         input_im = input_im[idx, :].reshape((1, 42, 42)).transpose(1, 2, 0)[:, :, 0]
@@ -70,9 +82,8 @@ class Experiment(object):
         plt.savefig(
             logger._snapshot_dir + '/dynpred_img_{}_{}_act{}.png'.format(itr, count, act), bbox_inches='tight')
 
-    def train(self, model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test=None, act=None,
-              rew=None,
-              im=None, ind_softmax=False, pred_delta=False):
+    def train(self, model, num_epochs=500, X_train=None, T_train=None, act=None,
+              rew=None, ind_softmax=False, pred_delta=False):
 
         im_size = X_train.shape[-1]
         X_train = X_train.reshape(-1, im_size * im_size)
@@ -88,7 +99,10 @@ class Experiment(object):
             train_err, train_batches, start_time, kl_values = 0, 0, time.time(), []
 
             if not model.disable_variance:
-                print('KL[post||prior]: {}'.format(model.log_p_w_q_w_kl().eval()))
+                try:
+                    print('KL[post||prior]: {}'.format(model.log_p_w_q_w_kl().eval()))
+                except Exception:
+                    pass
 
             # Iterate over all minibatches and train on each of them.
             for batch in iterate_minibatches(X, Y, model.batch_size, shuffle=True):
@@ -98,7 +112,7 @@ class Experiment(object):
                 # Train current minibatch.
                 inputs, targets, _ = batch
 
-                _train_err = model.train_fn(inputs, targets, 1.0)
+                _train_err = model.train_fn(inputs, targets, 0.0)
 
                 train_err += _train_err
                 train_batches += 1
@@ -116,7 +130,8 @@ class Experiment(object):
 
             acc = np.mean(np.sum(np.square(pred_im - Y[:, :-1]), axis=1), axis=0)
 
-            self.plot_pred_imgs(model, X, Y, epoch, 1, ind_softmax, pred_delta)
+            if epoch % 30 == 0:
+                self.plot_pred_imgs(model, X, Y, epoch, 1, ind_softmax, pred_delta)
 
             logger.record_tabular('train loss', train_err / float(train_batches))
             logger.record_tabular('obs err', acc)
@@ -132,136 +147,22 @@ class Experiment(object):
             img *= num_bins
 
     def main(self):
-        num_epochs = 5000
-        batch_size = 8
-        IND_SOFTMAX = False
-        NUM_BINS = 10
-        PRED_DELTA = False
-        DROPOUT=False
 
         print("Loading data ...")
         X_train, T_train, act, rew = load_dataset_Atari()
         X_train = X_train[:, np.newaxis, :, :]
         T_train = T_train[:, np.newaxis, :, :]
-        if IND_SOFTMAX:
-            self.bin_img(X_train, NUM_BINS)
-            self.bin_img(T_train, NUM_BINS)
+        if self.ind_softmax:
+            self.bin_img(X_train, self.num_bins)
+            self.bin_img(T_train, self.num_bins)
             X_train = X_train.astype(int)
             T_train = T_train.astype(int)
-        elif PRED_DELTA:
+        elif self.pred_delta:
             T_train = X_train - T_train
 
-        n_batches = int(np.ceil(len(X_train) / float(batch_size)))
-
-        print("Building model and compiling functions ...")
-        bnn = ConvBNNVIME(
-            state_dim=(1, 42, 42),
-            action_dim=(2,),
-            reward_dim=(1,),
-            layers_disc=[
-                dict(name='convolution',
-                     n_filters=16,
-                     filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(0, 0),
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='convolution',
-                     n_filters=16,
-                     filter_size=(6, 6),
-                     stride=(1, 1),
-                     pad=(0, 0),
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='convolution',
-                     n_filters=16,
-                     filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(0, 0),
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='reshape',
-                     shape=([0], -1)),
-                dict(name='gaussian',
-                     n_units=64,
-                     matrix_variate_gaussian=False,
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='gaussian',
-                     n_units=64,
-                     matrix_variate_gaussian=False,
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='hadamard',
-                     n_units=64,
-                     matrix_variate_gaussian=False,
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='gaussian',
-                     n_units=64,
-                     matrix_variate_gaussian=False,
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='split',
-                     n_units=32,
-                     matrix_variate_gaussian=False,
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='gaussian',
-                     n_units=400,
-                     matrix_variate_gaussian=False,
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='reshape',
-                     shape=([0], 16, 5, 5)),
-                dict(name='deconvolution',
-                     n_filters=16,
-                     filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(0, 0),
-                     nonlinearity=lasagne.nonlinearities.rectify,
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='deconvolution',
-                     n_filters=16,
-                     filter_size=(6, 6),
-                     stride=(1, 1),
-                     pad=(0, 0),
-                     nonlinearity=lasagne.nonlinearities.rectify,
-                     batch_norm=True,
-                     dropout=DROPOUT),
-                dict(name='deconvolution',
-                     n_filters=1,
-                     filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(0, 0),
-                     nonlinearity=lasagne.nonlinearities.linear,
-                     batch_norm=False,
-                     dropout=False),
-            ],
-            n_batches=n_batches,
-            batch_size=batch_size,
-            n_samples=1,
-            num_train_samples=1,
-            prior_sd=0.005,
-            update_likelihood_sd=False,
-            learning_rate=0.001,
-            use_local_reparametrization_trick=True,
-            likelihood_sd_init=0.1,
-            output_type=ConvBNNVIME.OutputType.REGRESSION,
-            surprise_type=ConvBNNVIME.SurpriseType.BALD,
-            disable_variance=True,
-            second_order_update=False,
-            debug=True,
-            # ---
-            ind_softmax=IND_SOFTMAX,
-            num_classes=NUM_BINS,
-            disable_act_rew_paths=False
-        )
-
         # Train the model.
-        self.train(bnn, num_epochs=num_epochs, X_train=X_train, T_train=T_train, act=act, rew=rew,
-                   ind_softmax=IND_SOFTMAX, pred_delta=PRED_DELTA)
+        self.train(model=self.model, num_epochs=self.num_epochs, X_train=X_train, T_train=T_train, act=act, rew=rew,
+                   ind_softmax=self.ind_softmax, pred_delta=self.pred_delta)
         print('Done.')
 
 

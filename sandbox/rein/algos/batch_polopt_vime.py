@@ -185,7 +185,6 @@ class BatchPolopt(RLAlgorithm):
             output_type='regression',
             use_local_reparametrization_trick=True,
             predict_reward=False,
-            group_variance_by='weight',
             likelihood_sd_init=1.0,
             disable_variance=False,
             predict_delta=False,
@@ -257,7 +256,6 @@ class BatchPolopt(RLAlgorithm):
         self.output_type = output_type
         self.use_local_reparametrization_trick = use_local_reparametrization_trick
         self.predict_reward = predict_reward
-        self.group_variance_by = group_variance_by
         self.likelihood_sd_init = likelihood_sd_init
         self.disable_variance = disable_variance
         self._predict_delta = predict_delta
@@ -373,11 +371,14 @@ class BatchPolopt(RLAlgorithm):
                 plt.tick_params(axis='both', which='both', bottom='off', top='off',
                                 labelbottom='off', right='off', left='off', labelleft='off')
                 self._im1, self._im2, self._im3, self._im4 = None, None, None, None
+
+            idx = np.random.randint(0, inputs.shape[0], 1)
+
             sanity_pred = self.bnn.pred_fn(inputs)
             input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
-            input_im = input_im[0, :].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-            sanity_pred_im = sanity_pred[0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-            target_im = targets[0, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+            input_im = input_im[idx, :].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+            sanity_pred_im = sanity_pred[idx, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+            target_im = targets[idx, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
 
             if self._predict_delta:
                 sanity_pred_im += input_im
@@ -387,7 +388,7 @@ class BatchPolopt(RLAlgorithm):
             sanity_pred_im = np.around(sanity_pred_im).astype(int)
             target_im *= 256.
             target_im = np.around(target_im).astype(int)
-            err = np.abs(target_im - sanity_pred_im)
+            err = 256 - np.abs(target_im - sanity_pred_im)
             input_im *= 256.
             input_im = np.around(input_im).astype(int)
 
@@ -445,7 +446,6 @@ class BatchPolopt(RLAlgorithm):
             surprise_type=self.surprise_type,
             update_prior=(not self._dyn_pool_args['enable']),
             update_likelihood_sd=self.update_likelihood_sd,
-            group_variance_by=self.group_variance_by,
             output_type=conv_bnn_vime.ConvBNNVIME.OutputType.REGRESSION,
             num_classes=256,
             use_local_reparametrization_trick=self.use_local_reparametrization_trick,
@@ -580,6 +580,7 @@ class BatchPolopt(RLAlgorithm):
 
                 acc_before = self.accuracy(np.vstack(X_train), np.vstack(T_train))
 
+                # Uncomment to collect dataset.
                 # self.make_train_set(np.vstack(X_train), np.vstack(T_train))
 
                 # Do posterior chaining: this means that we update the model on each individual
@@ -587,7 +588,7 @@ class BatchPolopt(RLAlgorithm):
                 count = 0
                 lst_idx = np.arange(len(X_train))
                 np.random.shuffle(lst_idx)
-                loss_before, loss_after = 0., 0.
+                loss_before, loss_after, train_loss = 0., 0., 0.
                 for idx in lst_idx:
                     # Don't use kl_factor when using no replay pool. So here we form an outer
                     # loop around the individual minibatches, the model gets updated on each minibatch.
@@ -595,14 +596,16 @@ class BatchPolopt(RLAlgorithm):
                         logp_before = self.bnn.fn_logp(X_train[idx], T_train[idx])
                     # Save old posterior as new prior.
                     self.bnn.save_params()
-                    num_itr = int(np.ceil(float(self.num_sample_updates) / self.kl_batch_size))
+
                     for _ in xrange(self.num_sample_updates):
-                        train_loss = self.bnn.train_fn(X_train[idx], T_train[idx], 1.)
+                        train_loss = float(self.bnn.train_fn(X_train[idx], T_train[idx], 1.))
                         assert not np.isnan(train_loss)
                         assert not np.isinf(train_loss)
-                        if count % int(np.ceil(self.num_sample_updates * len(lst_idx) / 5.)) == 0:
+                        if count % int(np.ceil(self.num_sample_updates * len(lst_idx) / 20.)) == 0:
                             self.plot_pred_imgs(X_train[idx], T_train[idx], itr, count)
+                            print(self.bnn.likelihood_sd.eval())
                         count += 1
+
                     if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:
                         # Samples will default path['KL'] to np.nan. It is filled in here.
                         logp_after = self.bnn.fn_logp(X_train[idx], T_train[idx])

@@ -42,6 +42,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             normalize_outputs=True,
             name=None,
             batchsize=None,
+            subsample_factor=1.,
     ):
         """
         :param input_shape: Shape of the input data.
@@ -63,6 +64,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         Serializable.quick_init(self, locals())
 
         self._batchsize = batchsize
+        self._subsample_factor = subsample_factor
 
         if optimizer is None:
             if use_trust_region:
@@ -190,6 +192,12 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         self._y_std_var = y_std_var
 
     def fit(self, xs, ys):
+
+        if self._subsample_factor < 1:
+            num_samples_tot = xs.shape[0]
+            idx = np.random.randint(0, num_samples_tot, int(num_samples_tot * self._subsample_factor))
+            xs, ys = xs[idx], ys[idx]
+
         if self._normalize_inputs:
             # recompute normalizing constants for inputs
             self._x_mean_var.set_value(
