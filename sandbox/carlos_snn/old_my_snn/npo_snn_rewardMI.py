@@ -24,9 +24,6 @@ from rllab.sampler.utils import rollout
 import itertools
 
 
-# try to also plot the MC of the policy in the ec2 instance
-# from sandbox.carlos_snn.plotters.plt_results2D import plot_all_exp
-
 class NPO_snn(BatchPolopt):
     """
     Natural Policy Optimization.

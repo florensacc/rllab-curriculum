@@ -1019,6 +1019,11 @@ class Dataset(object):
         else:
             return self._images[start:end], self._labels[start:end]
 
+class BinarizedDataset(Dataset):
+    def next_batch(self, batch_size):
+        source, label = super(BinarizedDataset, self).next_batch(batch_size)
+        rand = np.random.random(source.shape)
+        return (rand <= source) * 1., label
 
 class FaceDataset(object):
     def __init__(self):
@@ -1156,3 +1161,55 @@ class BinarizedMnistDataset(object):
     @property
     def image_shape(self):
         return self._image_shape
+
+class ResamplingBinarizedMnistDataset(object):
+    def __init__(self):
+        data_directory = "MNIST"
+        if not os.path.exists(data_directory):
+            os.makedirs(data_directory)
+        dataset = mnist.input_data.read_data_sets(data_directory)
+        # make sure that each type of digits have exactly 10 samples
+        sup_images = []
+        sup_labels = []
+        # rnd_state = np.random.get_state()
+        # np.random.seed(0)
+        # for cat in range(10):
+        #     ids = np.where(self.train.labels == cat)[0]
+        #     np.random.shuffle(ids)
+        #     sup_images.extend(self.train.images[ids[:10]])
+        #     sup_labels.extend(self.train.labels[ids[:10]])
+        # np.random.set_state(rnd_state)
+        # self.supervised_train = Dataset(
+        #     np.asarray(sup_images),
+        #     np.asarray(sup_labels),
+        # )
+        self.train = BinarizedDataset(
+            dataset.train.images,
+            dataset.train.labels,
+        )
+        self.validation = BinarizedDataset(
+            dataset.validation.images,
+            dataset.validation.labels,
+        )
+        self.test = BinarizedDataset(
+            dataset.test.images,
+            dataset.test.labels,
+        )
+        # self.test = dataset.test
+        # self.validation = dataset.validation
+        self._image_dim = 28 * 28
+        self._image_shape = (28, 28, 1)
+
+    def transform(self, data):
+        return data
+
+    def inverse_transform(self, data):
+        return data
+
+    @property
+    def image_dim(self):
+        return self._image_dim
+    @property
+    def image_shape(self):
+        return self._image_shape
+

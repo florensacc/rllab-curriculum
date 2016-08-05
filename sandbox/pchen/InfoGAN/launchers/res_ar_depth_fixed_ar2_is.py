@@ -6,8 +6,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR
 
 import os
-from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset
+from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -23,7 +22,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 500
+max_epoch = 800
 
 stub(globals())
 
@@ -37,7 +36,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
@@ -50,7 +49,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [64*4]#[12, 32]
+        return [32]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -61,14 +60,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0,]
+        return [2, 4,6,]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [1,]
+            return [5, 10,]
 
     # @variant
     # def nm(self):
@@ -85,6 +84,7 @@ class VG(VariantGenerator):
         # yield "small_conv"
         # yield "deep_mlp"
         # yield "mlp"
+        # yield "resv1_k3"
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
@@ -93,6 +93,14 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def wnorm(self):
         return [True, ]
+
+    @variant(hide=False)
+    def ar_wnorm(self):
+        return [True, ]
+
+    @variant(hide=False)
+    def k(self):
+        return [4, 8, 16, 128]
 
 
 vg = VG()
@@ -114,13 +122,12 @@ for v in variants[:]:
 
         # set_seed(v["seed"])
 
-        dataset = ResamplingBinarizedMnistDataset()
-        # dataset = BinarizedMnistDataset()
+        dataset = BinarizedMnistDataset()
         # dataset = MnistDataset()
 
         dist = Gaussian(zdim)
         for _ in xrange(v["nar"]):
-            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=True)
+            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"])
 
         latent_spec = [
             # (Gaussian(128), False),
@@ -168,20 +175,18 @@ for v in variants[:]:
             optimizer=AdamaxOptimizer(v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
-            k=1,
-            cond_px_ent=1.0,
-            # vali_eval_interval=100,
+            k=v["k"],
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="archdebug",
+            exp_prefix="res_vae_depth_ar2",
             seed=v["seed"],
-            mode="local",
-            # mode="lab_kube",
+            # mode="local",
+            mode="lab_kube",
             variant=v,
             n_parallel=0,
-            # use_gpu=True
+            use_gpu=True,
         )
 
 
