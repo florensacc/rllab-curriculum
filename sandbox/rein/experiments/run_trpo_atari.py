@@ -62,7 +62,7 @@ for mdp, seed in param_cart_product:
         mdp.spec,
         regressor_args=dict(
             mean_network=network,
-            batchsize=50000),
+            subsample_factor=1.),
     )
 
     algo = TRPO(
@@ -70,7 +70,7 @@ for mdp, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=50000,
+        batch_size=10000,
         whole_paths=True,
         max_path_length=5000,
         n_itr=250,
@@ -82,7 +82,7 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-atari-b",
+        exp_prefix="trpo-atari-c",
         n_parallel=4,
         snapshot_mode="last",
         seed=seed,

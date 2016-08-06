@@ -162,7 +162,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         print('num_weights: {}'.format(self.num_weights()))
 
     def save_params(self):
-        layers = filter(lambda l: isinstance(l, BayesianLayer),
+        layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_params()
@@ -170,7 +170,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
     def load_prev_params(self):
-        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+                        lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.load_prev_params()
         if self.update_likelihood_sd:
@@ -178,12 +179,14 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def compr_impr(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+                        lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_old_new() for l in layers)
 
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+                        lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
     def num_weights(self):
@@ -244,17 +247,23 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+                        lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+                        lasagne.layers.get_all_layers(self.network))
+        print(layers)
+        for l in layers:
+            print(l.kl_div_new_prior().eval())
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
+        layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+                        lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.kl_div_prior_new() for l in layers)
 
     def _log_prob_normal(self, input, mu=0., sigma=1.):
@@ -313,6 +322,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
     def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
         if self.disable_variance:
             disable_kl = True
+
         # MC samples.
         log_p_D_given_w = 0.
         for _ in xrange(self.num_train_samples):
@@ -381,7 +391,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     prior_sd=self.prior_sd,
                     pad=layer_disc['pad'],
                     stride=layer_disc['stride'],
-                    disable_variance=self.disable_variance)
+                    disable_variance=layer_disc['deterministic'])
                 if layer_disc['dropout'] is True:
                     s_net = dropout(s_net, p=dropout_p)
                 if layer_disc['batch_norm'] is True:
@@ -394,7 +404,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     nonlinearity=layer_disc['nonlinearity'],
                     prior_sd=self.prior_sd,
                     use_local_reparametrization_trick=self.use_local_reparametrization_trick,
-                    disable_variance=self.disable_variance,
+                    disable_variance=layer_disc['deterministic'],
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
                 if layer_disc['dropout'] is True:
                     s_net = dropout(s_net, p=dropout_p)
@@ -414,7 +424,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     prior_sd=self.prior_sd,
                     stride=layer_disc['stride'],
                     crop=layer_disc['pad'],
-                    disable_variance=self.disable_variance,
+                    disable_variance=layer_disc['deterministic'],
                     nonlinearity=layer_disc['nonlinearity'])
                 if layer_disc['dropout'] is True:
                     s_net = dropout(s_net, p=dropout_p)
@@ -440,7 +450,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     nonlinearity=layer_disc['nonlinearity'],
                     prior_sd=self.prior_sd,
                     use_local_reparametrization_trick=self.use_local_reparametrization_trick,
-                    disable_variance=self.disable_variance,
+                    disable_variance=layer_disc['deterministic'],
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
                 if layer_disc['dropout'] is True:
                     a_net = dropout(a_net, p=dropout_p)
@@ -459,7 +469,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     nonlinearity=self.transf,
                     prior_sd=self.prior_sd,
                     use_local_reparametrization_trick=self.use_local_reparametrization_trick,
-                    disable_variance=self.disable_variance,
+                    disable_variance=layer_disc['deterministic'],
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
                 if layer_disc['batch_norm'] is True:
                     r_net = batch_norm(r_net)
@@ -491,7 +501,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 num_units=r_flat_dim,
                 nonlinearity=lasagne.nonlinearities.linear,
                 prior_sd=self.prior_sd,
-                disable_variance=self.disable_variance,
+                disable_variance=True,
                 use_local_reparametrization_trick=self.use_local_reparametrization_trick,
                 matrix_variate_gaussian=False)
             r_net = lasagne.layers.reshape(r_net, ([0], -1))
@@ -576,8 +586,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # you will fit to the specific noise.
         self.train_fn = ext.compile_function(
             [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
-        self.fn_loss = ext.compile_function(
-            [input_var, target_var, kl_factor], loss, log_name='fn_loss')
+        # self.fn_loss = ext.compile_function(
+        #     [input_var, target_var, kl_factor], loss, log_name='fn_loss')
 
         # Surprise functions:
         # INFGAIN: useable with 2nd_order_update = True/False
