@@ -404,7 +404,8 @@ class RegularizedHelmholtzMachine(object):
                 [-1, self.inference_dist.dist_flat_dim],
             )
         z_dist_info = self.inference_dist.activate_dist(z_dist_flat)
-        return self.inference_dist.sample(z_dist_info), z_dist_info
+        return self.inference_dist.sample_logli(z_dist_info) \
+               + (z_dist_info,)
 
     def reg_encode(self, x_var):
         reg_z_dist_flat = self.reg_encoder_template.construct(input=x_var, ).tensor
