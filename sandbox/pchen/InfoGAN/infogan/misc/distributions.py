@@ -750,6 +750,7 @@ class AR(Distribution):
         return self.sample_n(info=info)
 
     def sample_n(self, n=100, info=None):
+        print("warning, ar logli invoked")
         try:
             z, logpz = self._base_dist.sample_n(n=n, info=info)
         except AttributeError:
@@ -792,6 +793,7 @@ class IAR(AR):
         return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
 
     def logli(self, x_var, dist_info):
+        print("warning, iar logli invoked")
         go = x_var # place holder
         for i in xrange(self._dim):
             iaf_mu, iaf_logstd = self.infer(go)
