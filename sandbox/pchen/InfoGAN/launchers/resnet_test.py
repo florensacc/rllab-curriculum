@@ -161,6 +161,7 @@ for v in variants[:]:
                 zdim,
                 inf_dist,
                 data_init_wnorm=True,
+                data_init_scale=0.01,
             ),
             wnorm=v["wnorm"],
         )
