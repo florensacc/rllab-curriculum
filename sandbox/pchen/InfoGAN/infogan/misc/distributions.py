@@ -666,6 +666,7 @@ class AR(Distribution):
             reverse=True,
             nl=tf.nn.elu,
             data_init_wnorm=True,
+            data_init_scale=0.1,
     ):
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
@@ -678,13 +679,15 @@ class AR(Distribution):
         self._reverse = reverse
         self._wnorm = data_init_wnorm
         self._data_init = data_init_wnorm
+        self._data_init_scale = data_init_scale
 
         assert depth >= 1
         from prettytensor import UnboundVariable
         with pt.defaults_scope(
                 activation_fn=nl,
                 wnorm=data_init_wnorm,
-                data_init=UnboundVariable('data_init')
+                data_init=UnboundVariable('data_init'),
+                init_scale=self._data_init_scale,
         ):
             for di in xrange(depth):
                 self._iaf_template = \

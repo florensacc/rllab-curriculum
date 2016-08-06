@@ -363,7 +363,7 @@ def get_linear_ar_mask_by_groups(n_in, n_out, ngroups, zerodiagonal=True):
 @prettytensor.Register(
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'ngroups',
-            'wnorm', 'data_init',
+            'wnorm', 'data_init', 'init_scale',
     ))
 class arfc(prettytensor.VarStoreMethod):
     def __call__(self,
