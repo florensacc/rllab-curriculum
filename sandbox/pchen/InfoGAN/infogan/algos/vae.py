@@ -211,8 +211,8 @@ class VAE(object):
 
         with pt.defaults_scope(phase=pt.Phase.test):
                 with tf.variable_scope("model", reuse=True) as scope:
-                    z_var, _ = self.model.encode(input_tensor)
-                    _, x_dist_info = self.model.decode(z_var)
+                    # z_var, _ = self.model.encode(input_tensor)
+                    # _, x_dist_info = self.model.decode(z_var)
 
                     # just take the mean image
                     if isinstance(self.model.output_dist, Bernoulli):
