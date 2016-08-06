@@ -92,23 +92,23 @@ class VAE(object):
             self.input_tensor = input_tensor = tf.placeholder(tf.float32, [self.batch_size, self.dataset.image_dim])
 
         with pt.defaults_scope(phase=pt.Phase.train):
-            z_var, log_p_x_given_z, z_dist_info = self.model.encode(input_tensor, k=self.k if eval else 1)
+            z_var, log_p_z_given_x, z_dist_info = self.model.encode(input_tensor, k=self.k if eval else 1)
             x_var, x_dist_info = self.model.decode(z_var)
 
-            # log_p_x_given_z = self.model.output_dist.logli(
-            #     tf.reshape(
-            #         tf.tile(input_tensor, [1, self.k]),
-            #         [-1, self.dataset.image_dim],
-            #     ) if eval else input_tensor,
-            #     x_dist_info
-            # )
+            log_p_x_given_z = self.model.output_dist.logli(
+                tf.reshape(
+                    tf.tile(input_tensor, [1, self.k]),
+                    [-1, self.dataset.image_dim],
+                ) if eval else input_tensor,
+                x_dist_info
+            )
 
             ndim = self.model.output_dist.effective_dim
             if eval:
                 assert self.monte_carlo_kl
                 kls = (
                         - self.model.latent_dist.logli_prior(z_var) \
-                        + self.model.inference_dist.logli(z_var, z_dist_info)
+                        + log_p_z_given_x
                     )
                 kl = tf.reduce_mean(kls)
 
@@ -128,7 +128,7 @@ class VAE(object):
                     # Construct the variational lower bound
                     kl = tf.reduce_mean(
                         - self.model.latent_dist.logli_prior(z_var)  \
-                        + self.model.inference_dist.logli(z_var, z_dist_info)
+                        + log_p_z_given_x
                     )
                 else:
                     # Construct the variational lower bound
