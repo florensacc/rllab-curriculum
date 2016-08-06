@@ -3,7 +3,8 @@ from __future__ import absolute_import
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
-from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR
+from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
+    IAR
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
@@ -146,14 +147,20 @@ for v in variants[:]:
             ),
         ]
 
+        inf_dist = Gaussian(zdim)
         model = RegularizedHelmholtzMachine(
             output_dist=MeanBernoulli(dataset.image_dim),
             latent_spec=latent_spec,
             batch_size=batch_size,
             image_shape=dataset.image_shape,
             network_type=v["network"],
-            inference_dist=Gaussian(
+            # inference_dist=Gaussian(
+            #     zdim,
+            # ),
+            inference_dist=IAR(
                 zdim,
+                inf_dist,
+                data_init_wnorm=True,
             ),
             wnorm=v["wnorm"],
         )

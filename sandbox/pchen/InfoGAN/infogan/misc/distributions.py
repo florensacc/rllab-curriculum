@@ -97,6 +97,9 @@ class Distribution(object):
         raise NotImplementedError
 
     def sample(self, dist_info):
+        return self.sample_logli(dist_info)[0]
+
+    def sample_logli(self, dist_info):
         raise NotImplementedError
 
     def sample_prior(self, batch_size):
@@ -286,11 +289,12 @@ class Gaussian(Distribution):
             reduction_indices=1
         )
 
-    def sample(self, dist_info):
+    def sample_logli(self, dist_info):
         mean = dist_info["mean"]
         stddev = dist_info["stddev"]
         epsilon = tf.random_normal(tf.shape(mean))
-        return mean + epsilon * stddev
+        out = mean + epsilon * stddev
+        return out, self.logli(out, dist_info)
 
     @property
     def dist_info_keys(self):
@@ -660,8 +664,8 @@ class AR(Distribution):
             depth=2,
             neuron_ratio=4,
             reverse=True,
-            nl=tf.nn.relu,
-            data_init_wnorm=False,
+            nl=tf.nn.elu,
+            data_init_wnorm=True,
     ):
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
@@ -721,7 +725,10 @@ class AR(Distribution):
         return self._dim
 
     def infer(self, x_var):
-        flat_iaf = self._iaf_template.construct(y=x_var, data_init=self._data_init).tensor
+        flat_iaf = self._iaf_template.construct(
+            y=x_var,
+            data_init=self._data_init
+        ).tensor
         iaf_mu, iaf_logstd = flat_iaf[:, :self._dim], flat_iaf[:, self._dim:]
         return iaf_mu, (iaf_logstd)
 
@@ -730,7 +737,8 @@ class AR(Distribution):
         z = x_var / tf.exp(iaf_logstd) - iaf_mu
         if self._reverse:
             z = tf.reverse(z, [False, True])
-        return self._base_dist.logli_prior(z) - tf.reduce_sum(iaf_logstd, reduction_indices=1)
+        return self._base_dist.logli(z, dist_info) - \
+               tf.reduce_sum(iaf_logstd, reduction_indices=1)
 
     def logli_init_prior(self, x_var):
         return self._base_dist.logli_init_prior(x_var)
@@ -738,52 +746,56 @@ class AR(Distribution):
     def prior_dist_info(self, batch_size):
         return dict(n=batch_size)
 
-    def sample(self, info):
-        return self.sample_n(info["n"])[0]
+    def sample_logli(self, info):
+        return self.sample_n(info=info)
 
-
-    def sample_n(self, n=100):
+    def sample_n(self, n=100, info=None):
         try:
-            z, logpz = self._base_dist.sample_n(n=n)
+            z, logpz = self._base_dist.sample_n(n=n, info=info)
         except AttributeError:
-            z = self._base_dist.sample_prior(batch_size=n)
-            logpz = self._base_dist.logli_prior(z)
+            if info:
+                z, logpz = self._base_dist.sample_logli(info)
+            else:
+                z = self._base_dist.sample_prior(batch_size=n)
+                logpz = self._base_dist.logli_prior(z)
         if self._reverse:
             z = tf.reverse(z, [False, True])
         go = z # place holder
         for i in xrange(self._dim):
-            # mask = np.zeros((n, self._dim))
-            # mask[:, :(i+1)] = 1.
             iaf_mu, iaf_logstd = self.infer(go)
-            # iaf_mu *= mask
-            # iaf_std = mask * iaf_std
             go = iaf_mu + tf.exp(iaf_logstd)*z
         return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
 
 
     @property
     def dist_info_keys(self):
-        return []
+        return self._base_dist.dist_info_keys
+
+    @property
+    def dist_flat_dim(self):
+        return self._base_dist.dist_flat_dim
+
+    def activate_dist(self, flat):
+        return self._base_dist.activate_dist(flat)
 
     def nonreparam_logli(self, x_var, dist_info):
-        return tf.zeros_like(x_var[:, 0])
+        raise "not defined"
 
 class IAR(AR):
 
-    def sample_n(self, n=100):
-        try:
-            z, logpz = self._base_dist.sample_n(n=n)
-        except AttributeError:
-            z = self._base_dist.sample_prior(batch_size=n)
-            logpz = self._base_dist.logli_prior(z)
+    def sample_logli(self, dist_info):
+        z, logpz = self._base_dist.sample_logli(dist_info=dist_info)
         if self._reverse:
             z = tf.reverse(z, [False, True])
-        go = z # place holder
-        for i in xrange(self._dim):
-            # mask = np.zeros((n, self._dim))
-            # mask[:, :(i+1)] = 1.
-            iaf_mu, iaf_logstd = self.infer(go)
-            # iaf_mu *= mask
-            # iaf_std = mask * iaf_std
-            go = iaf_mu + tf.exp(iaf_logstd)*z
+        iaf_mu, iaf_logstd = self.infer(z)
+        go = iaf_mu + tf.exp(iaf_logstd)*z
         return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
+
+    def logli(self, x_var, dist_info):
+        go = x_var # place holder
+        for i in xrange(self._dim):
+            iaf_mu, iaf_logstd = self.infer(go)
+            go = iaf_mu + tf.exp(iaf_logstd)*x_var
+        logpz = self._base_dist.logli(go, dist_info)
+        return logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
+
