@@ -768,3 +768,22 @@ class AR(Distribution):
     def nonreparam_logli(self, x_var, dist_info):
         return tf.zeros_like(x_var[:, 0])
 
+class IAR(AR):
+
+    def sample_n(self, n=100):
+        try:
+            z, logpz = self._base_dist.sample_n(n=n)
+        except AttributeError:
+            z = self._base_dist.sample_prior(batch_size=n)
+            logpz = self._base_dist.logli_prior(z)
+        if self._reverse:
+            z = tf.reverse(z, [False, True])
+        go = z # place holder
+        for i in xrange(self._dim):
+            # mask = np.zeros((n, self._dim))
+            # mask[:, :(i+1)] = 1.
+            iaf_mu, iaf_logstd = self.infer(go)
+            # iaf_mu *= mask
+            # iaf_std = mask * iaf_std
+            go = iaf_mu + tf.exp(iaf_logstd)*z
+        return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)

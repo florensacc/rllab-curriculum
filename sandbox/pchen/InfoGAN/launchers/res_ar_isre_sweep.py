@@ -23,7 +23,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 800
+max_epoch = 600
 
 stub(globals())
 
@@ -37,11 +37,11 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.006, 0.004, 0.002, 0.0005, 0.0001] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
-        return [42, 1984, ]
+        return [42, 1984, 337, 33]
         # return [123124234]
 
     @variant
@@ -50,7 +50,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [32]#[12, 32]
+        return [16, 32]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -61,14 +61,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [3,]
+        return [4,]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [5,]
+            return [5, 10, 20]
 
     # @variant
     # def nm(self):
@@ -95,6 +95,14 @@ class VG(VariantGenerator):
     def wnorm(self):
         return [True, ]
 
+    @variant(hide=False)
+    def ar_wnorm(self):
+        return [True, ]
+
+    @variant(hide=False)
+    def k(self):
+        return [128, ]
+
 
 vg = VG()
 
@@ -116,12 +124,11 @@ for v in variants[:]:
         # set_seed(v["seed"])
 
         dataset = ResamplingBinarizedMnistDataset()
-        # dataset = BinarizedMnistDataset()
         # dataset = MnistDataset()
 
         dist = Gaussian(zdim)
         for _ in xrange(v["nar"]):
-            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=True)
+            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"])
 
         latent_spec = [
             # (Gaussian(128), False),
@@ -169,17 +176,18 @@ for v in variants[:]:
             optimizer=AdamaxOptimizer(v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
+            k=v["k"],
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_vae_ar_lr_sweep",
+            exp_prefix="res_ar_isre_sweep",
             seed=v["seed"],
             # mode="local",
             mode="lab_kube",
             variant=v,
             n_parallel=0,
-            use_gpu=True
+            use_gpu=True,
         )
 
 
