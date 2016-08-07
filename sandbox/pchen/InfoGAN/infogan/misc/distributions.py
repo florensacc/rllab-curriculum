@@ -747,7 +747,7 @@ class AR(Distribution):
         return self._base_dist.logli_init_prior(x_var)
 
     def prior_dist_info(self, batch_size):
-        return dict(n=batch_size)
+        return self._base_dist.prior_dist_info(batch_size)
 
     def sample_logli(self, info):
         return self.sample_n(info=info)

@@ -189,13 +189,17 @@ class VAE(object):
             log_vars.append(("kl", kl))
             log_vars.append(("true_vlb", true_vlb))
             log_vars.append(("loss", loss))
+            final_losses = [surr_loss]
+
+            self.init_hook(locals())
+
             if (not init) and (not eval):
                 for name, var in self.log_vars:
                     tf.scalar_summary(name, var)
                 with tf.variable_scope("optim"):
                     # optimizer = tf.train.AdamOptimizer(self.learning_rate)
                     optimizer = self.optimizer # AdamaxOptimizer(self.learning_rate)
-                    self.trainer = pt.apply_optimizer(optimizer, losses=[surr_loss])
+                    self.trainer = pt.apply_optimizer(optimizer, losses=final_losses)
 
         if init:
             # destroy all summaries
@@ -420,3 +424,6 @@ class VAE(object):
         import matplotlib.pyplot as plt
         for d in self.model.latent_dist.dists: plt.figure(); plt.imshow(sess.run(self.model.decode(d.prior_dist_info(1)["mean"])[1])['p'].reshape((28, 28)),cmap='Greys_r'); plt.show(block=False)
         import ipdb; ipdb.set_trace()
+
+    def init_hook(self, vars):
+        pass
