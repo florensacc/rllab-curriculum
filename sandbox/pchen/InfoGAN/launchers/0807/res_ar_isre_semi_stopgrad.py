@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 300
+max_epoch = 200
 
 stub(globals())
 
@@ -106,20 +106,26 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def npl(self):
-        return [2000, 5000]
+        return [10, 1000, ]
         # return [5, 10, 100, 1000]
 
     @variant(hide=False)
     def sup_bs(self, npl):
         return [
-            bs for bs in [5, 10, 100] if bs <= npl
+            bs for bs in [10, ] if bs <= npl
         ]
 
     @variant(hide=False)
     def sup_coeff(self, npl):
         return [
-            1., 0.01
+            1.,
             ]
+
+    @variant(hide=False)
+    def stop_grad(self, npl):
+        return [
+            True, False
+        ]
 
 
 vg = VG()
@@ -201,7 +207,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_ar_isre_semi_init",
+            exp_prefix="0807res_ar_isre_semi_stop_grad",
             seed=v["seed"],
             # mode="local",
             mode="lab_kube",

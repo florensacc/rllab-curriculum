@@ -18,6 +18,7 @@ class SemiVAE(VAE):
                  batch_size,
                  sup_batch_size,
                  sup_coeff,
+                 stop_grad=False,
                  **kwargs
     ):
         super(SemiVAE, self).__init__(
@@ -26,6 +27,7 @@ class SemiVAE(VAE):
             batch_size,
             **kwargs
         )
+        self.stop_grad = stop_grad
         self.sup_coeff = sup_coeff
         self.sup_batch_size = sup_batch_size
         self.label_dim = 10
@@ -73,6 +75,9 @@ class SemiVAE(VAE):
                     "sup_label"
                 )
             sup_z, _, _ = self.model.encode(sup_input_tensor, k=1)
+
+        if self.stop_grad:
+            sup_z = tf.stop_gradient(sup_z)
 
         sup_logits = self.classfication_template.construct(input=sup_z).tensor
         sup_loss = tf.reduce_mean(
