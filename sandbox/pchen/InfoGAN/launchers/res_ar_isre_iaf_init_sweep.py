@@ -62,7 +62,8 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4,]
+        # return [4,]
+        return [0]
 
     @variant
     def nr(self, nar):
