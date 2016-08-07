@@ -87,9 +87,17 @@ class VAE(object):
         if eval:
             self.eval_input_tensor = \
                 input_tensor = \
-                tf.placeholder(tf.float32, [self.eval_batch_size, self.dataset.image_dim])
+                tf.placeholder(
+                    tf.float32,
+                    [self.eval_batch_size, self.dataset.image_dim],
+                    "eval_input"
+                )
         else:
-            self.input_tensor = input_tensor = tf.placeholder(tf.float32, [self.batch_size, self.dataset.image_dim])
+            self.input_tensor = input_tensor = tf.placeholder(
+                tf.float32,
+                [self.batch_size, self.dataset.image_dim],
+                "train_input_init_%s" % init
+            )
 
         with pt.defaults_scope(phase=pt.Phase.train):
             z_var, log_p_z_given_x, z_dist_info = self.model.encode(input_tensor, k=self.k if eval else 1)
@@ -298,6 +306,20 @@ class VAE(object):
                     imgs = tf.expand_dims(imgs, 0)
                     tf.image_summary("pz_image", imgs, max_images=3)
 
+    def prepare_feed(self, data, bs):
+        x, _ = data.next_batch(bs)
+        x = np.tile(x, [self.weight_redundancy, 1])
+        return {
+            self.input_tensor: x,
+        }
+
+    def prepare_eval_feed(self, data, bs):
+        x, _ = data.next_batch(bs)
+        x = np.tile(x, [self.weight_redundancy, 1])
+        return {
+            self.eval_input_tensor: x,
+        }
+
     def train(self):
         sess = tf.Session()
         self.sess = sess
@@ -310,10 +332,6 @@ class VAE(object):
             init = tf.initialize_all_variables()
             if self.bnn_decoder:
                 assert False
-                sess.run([
-                    self.saved_prior_mean.assign(self.mean_var),
-                    self.saved_prior_std.assign(self.std_var),
-                ])
 
             saver = tf.train.Saver()
 
@@ -329,11 +347,12 @@ class VAE(object):
                 for i in range(self.updates_per_epoch):
 
                     pbar.update(i)
-                    x, _ = self.dataset.train.next_batch(self.true_batch_size)
-                    x = np.tile(x, [self.weight_redundancy, 1])
+                    # x, _ = self.dataset.train.next_batch(self.true_batch_size)
+                    # x = np.tile(x, [self.weight_redundancy, 1])
+                    feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
 
                     if counter == 0:
-                        sess.run(init, {self.input_tensor: x})
+                        sess.run(init, feed)
                         self.init_opt(init=False, eval=True)
                         self.init_opt(init=False, eval=False)
                         vs = tf.all_variables()
@@ -352,13 +371,15 @@ class VAE(object):
                         summary_op = tf.merge_all_summaries()
                         summary_writer = tf.train.SummaryWriter(self.log_dir, sess.graph)
 
-                        # summary_writer.add_graph(sess.graph)
-
-                        log_vals = sess.run([] + log_vars, {self.input_tensor: x})[:]
+                        feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
+                        log_vals = sess.run([] + log_vars, feed)[:]
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
                         print("Initial: " + log_line)
 
-                    log_vals = sess.run([self.trainer] + log_vars, {self.input_tensor: x})[1:]
+                    log_vals = sess.run(
+                        [self.trainer] + log_vars,
+                        feed
+                    )[1:]
                     all_log_vals.append(log_vals)
 
 
@@ -369,17 +390,21 @@ class VAE(object):
 
                     if counter % self.summary_interval == 0:
                         summary = tf.Summary()
-                        summary_str = sess.run(summary_op, {self.input_tensor: x})
+                        summary_str = sess.run(summary_op, feed)
                         summary.MergeFromString(summary_str)
                         if counter % self.vali_eval_interval == 0:
                             ds = self.dataset.validation
                             all_test_log_vals = []
                             for ti in xrange(ds.images.shape[0] / self.eval_batch_size):
-                                test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
-                                test_x = np.tile(test_x, [self.weight_redundancy, 1])
+                                # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
+                                # test_x = np.tile(test_x, [self.weight_redundancy, 1])
+                                eval_feed = self.prepare_eval_feed(
+                                    self.dataset.validation,
+                                    self.eval_batch_size,
+                                )
                                 test_log_vals = sess.run(
                                     eval_log_vars,
-                                    {self.eval_input_tensor: test_x}
+                                    eval_feed,
                                 )
                                 all_test_log_vals.append(test_log_vals)
                             avg_test_log_vals = np.mean(np.array(all_test_log_vals), axis=0)
