@@ -78,7 +78,7 @@ class SemiVAE(VAE):
             ("sup_cross_ent", sup_loss),
             ("accuracy", tf.reduce_mean(
                 tf.cast(
-                    tf.arg_max(sup_logits, 1) == tf.arg_max(sup_label_tensor, 1),
+                    tf.equal(tf.argmax(sup_logits, 1), tf.argmax(sup_label_tensor, 1)),
                     tf.float32,
                 )
             ))
@@ -95,9 +95,11 @@ class SemiVAE(VAE):
             self.sup_label_tensor: sy,
         }
 
-    # def prepare_eval_feed(self, data, bs):
-    #     x, _ = data.next_batch(bs)
-    #     x = np.tile(x, [self.weight_redundancy, 1])
-    #     return {
-    #         self.eval_input_tensor: x,
-    #     }
+    def prepare_eval_feed(self, data, bs):
+        x, y = data.next_batch(bs)
+        x = np.tile(x, [self.weight_redundancy, 1])
+        y = np.tile(y, [self.weight_redundancy, 1])
+        return {
+            self.eval_input_tensor: x,
+            self.eval_label_tensor: y,
+        }
