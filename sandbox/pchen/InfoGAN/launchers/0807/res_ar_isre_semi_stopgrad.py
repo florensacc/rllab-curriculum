@@ -203,6 +203,7 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
+            stop_grad=v["stop_grad"],
         )
 
         run_experiment_lite(
