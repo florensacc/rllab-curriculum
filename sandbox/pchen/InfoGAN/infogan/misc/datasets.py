@@ -1173,7 +1173,7 @@ class BinarizedMnistDataset(object):
         return self._image_shape
 
 class ResamplingBinarizedMnistDataset(object):
-    def __init__(self):
+    def __init__(self, labels_per_class=10):
         data_directory = "MNIST"
         if not os.path.exists(data_directory):
             os.makedirs(data_directory)
@@ -1198,8 +1198,8 @@ class ResamplingBinarizedMnistDataset(object):
         for cat in range(10):
             ids = np.where(self.train.labels == cat)[0]
             np.random.shuffle(ids)
-            sup_images.extend(self.train.images[ids[:10]])
-            sup_labels.extend(self.train.labels[ids[:10]])
+            sup_images.extend(self.train.images[ids[:labels_per_class]])
+            sup_labels.extend(self.train.labels[ids[:labels_per_class]])
         self.supervised_train = Dataset(
             np.asarray(sup_images),
             np.asarray(sup_labels),

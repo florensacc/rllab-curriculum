@@ -53,6 +53,10 @@ class SemiVAE(VAE):
                     "eval_label"
                 )
             sup_z = vars["z_var"]
+            sup_label_tensor = tf.reshape(
+                tf.tile(sup_label_tensor, [1, self.k]),
+                [-1, self.label_dim],
+            )
         else:
             self.sup_input_tensor = \
                 sup_input_tensor = \
