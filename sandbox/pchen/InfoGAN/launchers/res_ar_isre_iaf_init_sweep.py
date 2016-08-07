@@ -114,7 +114,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_init_scale(self):
-        return [0.1, 0.05, 0.01, 0.001]
+        return [0.1, 0.05, 0.01,]
 
 
 vg = VG()
