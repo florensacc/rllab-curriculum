@@ -153,9 +153,10 @@ class VAE(object):
             #     vlb -= prior_reg
 
 
-            surr_vlb = vlb + tf.reduce_mean(
-                    tf.stop_gradient(log_p_x_given_z) * self.model.latent_dist.nonreparam_logli(z_var, z_dist_info)
-                )
+            # surr_vlb = vlb + tf.reduce_mean(
+            #         tf.stop_gradient(log_p_x_given_z) * self.model.latent_dist.nonreparam_logli(z_var, z_dist_info)
+            #     )
+            # surr_vlb
             # Normalize by the dimensionality of the data distribution
             log_vars.append(("vlb_sum", vlb))
             log_vars.append(("kl_sum", kl))
@@ -163,23 +164,11 @@ class VAE(object):
 
             true_vlb /= ndim
             vlb /= ndim
-            surr_vlb /= ndim
+            # surr_vlb /= ndim
             kl /= ndim
 
-            loss = - vlb
-            surr_loss = - surr_vlb
-            if self.cond_px_ent:
-                ld = self.model.latent_dist
-                prior_z_var = ld.sample_prior(self.batch_size)
-                _, prior_x_dist_info = self.model.decode(prior_z_var)
-                prior_ent = tf.reduce_mean(self.model.output_dist.entropy(prior_x_dist_info)) \
-                            / ndim
-                loss += self.cond_px_ent * prior_ent
-                log_vars.append((
-                    "prior_ent_x_given_z",
-                    prior_ent
-                ))
-
+            # loss = - vlb
+            # surr_loss = - surr_vlb
 
             log_vars.append((
                 "ent_x_given_z",
@@ -188,9 +177,20 @@ class VAE(object):
             log_vars.append(("vlb", vlb))
             log_vars.append(("kl", kl))
             log_vars.append(("true_vlb", true_vlb))
-            log_vars.append(("loss", loss))
-            final_losses = [surr_loss]
+            final_losses = [-vlb]
 
+            if self.cond_px_ent:
+                ld = self.model.latent_dist
+                prior_z_var = ld.sample_prior(self.batch_size)
+                _, prior_x_dist_info = self.model.decode(prior_z_var)
+                prior_ent = tf.reduce_mean(self.model.output_dist.entropy(prior_x_dist_info)) \
+                            / ndim
+                # loss += self.cond_px_ent * prior_ent
+                final_losses.append(self.cond_px_ent * prior_ent)
+                log_vars.append((
+                    "prior_ent_x_given_z",
+                    prior_ent
+                ))
             self.init_hook(locals())
 
             if (not init) and (not eval):

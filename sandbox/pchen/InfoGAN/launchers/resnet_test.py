@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [64*4]#[12, 32]
+        return [32]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -62,14 +62,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0,]
+        return [1,]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [1,]
+            return [5,]
 
     # @variant
     # def nm(self):
@@ -121,7 +121,10 @@ for v in variants[:]:
 
         dist = Gaussian(zdim)
         for _ in xrange(v["nar"]):
-            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=True)
+            dist = AR(zdim, dist, neuron_ratio=v["nr"],
+                    data_init_wnorm=True,
+                data_init_scale=0.1,
+                    )
 
         latent_spec = [
             # (Gaussian(128), False),
@@ -161,7 +164,7 @@ for v in variants[:]:
                 zdim,
                 inf_dist,
                 data_init_wnorm=True,
-                data_init_scale=0.01,
+                data_init_scale=0.1,
             ),
             wnorm=v["wnorm"],
         )
@@ -177,7 +180,7 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=1,
-            cond_px_ent=1.0,
+            # cond_px_ent=1.0,
             # vali_eval_interval=100,
         )
 

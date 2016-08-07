@@ -323,7 +323,7 @@ class Uniform(Gaussian):
     #     raise NotImplementedError
 
     # def logli_prior(self, x_var)
-    #     # 
+    #     #
     #     raise NotImplementedError
 
     def sample_prior(self, batch_size):
@@ -664,7 +664,7 @@ class AR(Distribution):
             depth=2,
             neuron_ratio=4,
             reverse=True,
-            nl=tf.nn.elu,
+            nl=tf.nn.relu,
             data_init_wnorm=True,
             data_init_scale=0.1,
     ):
@@ -753,7 +753,7 @@ class AR(Distribution):
         return self.sample_n(info=info)
 
     def sample_n(self, n=100, info=None):
-        print("warning, ar logli invoked")
+        print("warning, ar sample invoked")
         try:
             z, logpz = self._base_dist.sample_n(n=n, info=info)
         except AttributeError:
