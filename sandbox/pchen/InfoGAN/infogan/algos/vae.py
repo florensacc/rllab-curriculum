@@ -100,7 +100,8 @@ class VAE(object):
             )
 
         with pt.defaults_scope(phase=pt.Phase.train):
-            z_var, log_p_z_given_x, z_dist_info = self.model.encode(input_tensor, k=self.k if eval else 1)
+            z_var, log_p_z_given_x, z_dist_info = \
+                self.model.encode(input_tensor, k=self.k if eval else 1)
             x_var, x_dist_info = self.model.decode(z_var)
 
             log_p_x_given_z = self.model.output_dist.logli(

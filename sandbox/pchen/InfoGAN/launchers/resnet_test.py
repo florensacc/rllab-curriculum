@@ -151,6 +151,14 @@ for v in variants[:]:
         ]
 
         inf_dist = Gaussian(zdim)
+        for _ in xrange(2):
+            inf_dist = IAR(
+                zdim,
+                inf_dist,
+                neuron_ratio=5,
+                data_init_scale=0.05,
+                linear_context=True,
+            )
         model = RegularizedHelmholtzMachine(
             output_dist=MeanBernoulli(dataset.image_dim),
             latent_spec=latent_spec,
@@ -160,12 +168,7 @@ for v in variants[:]:
             # inference_dist=Gaussian(
             #     zdim,
             # ),
-            inference_dist=IAR(
-                zdim,
-                inf_dist,
-                data_init_wnorm=True,
-                data_init_scale=0.1,
-            ),
+            inference_dist=inf_dist,
             wnorm=v["wnorm"],
         )
 
