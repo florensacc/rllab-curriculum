@@ -19,6 +19,7 @@ class SemiVAE(VAE):
                  sup_batch_size,
                  sup_coeff,
                  stop_grad=False,
+                 hidden_units=(30,),
                  **kwargs
     ):
         super(SemiVAE, self).__init__(
@@ -34,10 +35,12 @@ class SemiVAE(VAE):
         with pt.defaults_scope(
                 activation_fn=tf.nn.elu,
         ):
+            temp = pt.template('input')
+            for unit in hidden_units:
+                temp = temp.fully_connected(unit)
             self.classfication_template = (
-                pt.template('input').
-                fully_connected(30).
-                fully_connected(self.label_dim, activation_fn=None)
+                temp.
+                    fully_connected(self.label_dim, activation_fn=None)
             )
 
     def init_hook(self, vars):
