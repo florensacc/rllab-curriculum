@@ -15,7 +15,8 @@ class VAE(object):
                  dataset,
                  batch_size,
                  exp_name="experiment",
-                 optimizer=AdamaxOptimizer(),
+                 optimizer_cls=AdamaxOptimizer,
+                 optimizer_args={},
                  # log_dir="logs",
                  # checkpoint_dir="ckt",
                  max_epoch=100,
@@ -32,6 +33,7 @@ class VAE(object):
                  bnn_kl_coeff=1.,
                  k=1, # importance sampling ratio
                  cond_px_ent=None,
+                 anneal_after=None,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -41,8 +43,10 @@ class VAE(object):
         :type recog_reg_coeff: float
         :type learning_rate: float
         """
+        self.optimizer_cls = optimizer_cls
+        self.optimizer_args = optimizer_args
+        self.anneal_after = anneal_after
         self.cond_px_ent = cond_px_ent
-        self.optimizer = optimizer
         self.vali_eval_interval = vali_eval_interval
         self.sample_zs = []
         self.sample_imgs = []
@@ -207,7 +211,15 @@ class VAE(object):
                     tf.scalar_summary(name, var)
                 with tf.variable_scope("optim"):
                     # optimizer = tf.train.AdamOptimizer(self.learning_rate)
-                    optimizer = self.optimizer # AdamaxOptimizer(self.learning_rate)
+                    optimizer = self.optimizer_cls # AdamaxOptimizer(self.learning_rate)
+                    if self.anneal_after is not None:
+                        self.lr_var = tf.Variable(
+                            # assume lr is always set
+                            initial_value=self.optimizer_args["learning_rate"],
+                            name="opt_lr",
+                        )
+                        self.optimizer_args["learning_rate"] = self.lr_var
+                    optimizer = self.optimizer_cls(**self.optimizer_args)
                     self.trainer = pt.apply_optimizer(optimizer, losses=final_losses)
 
         if init:
@@ -430,6 +442,15 @@ class VAE(object):
                 for k,v in zip(eval_log_keys, avg_test_log_vals):
                     logger.record_tabular("vali_%s"%k, v)
                 logger.dump_tabular(with_prefix=False)
+
+                if epoch >= self.anneal_after:
+                    if (epoch % 100) == 0:
+                        lr_val = sess.run([
+                            self.lr_var.assign(
+                                self.lr_var * 0.75
+                            )
+                        ])
+                        logger.log("Learning rate annealed to %s" % lr_val)
 
 
     def restore(self):

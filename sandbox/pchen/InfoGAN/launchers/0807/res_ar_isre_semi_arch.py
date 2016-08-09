@@ -202,7 +202,10 @@ for v in variants[:]:
             exp_name=exp_name,
             max_epoch=max_epoch,
             updates_per_epoch=updates_per_epoch,
-            optimizer=AdamaxOptimizer(v["lr"]),
+            optimizer_cls=AdamaxOptimizer,
+            optimizer_args=dict(
+                learning_rate=v["lr"]
+            ),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
