@@ -351,6 +351,8 @@ class VAE(object):
             counter = 0
 
             for epoch in range(self.max_epoch):
+                self.pre_epoch(epoch)
+
                 logger.log("epoch %s" % epoch)
                 widgets = ["epoch #%d|" % epoch, Percentage(), Bar(), ETA()]
                 pbar = ProgressBar(maxval=self.updates_per_epoch, widgets=widgets)
@@ -443,7 +445,7 @@ class VAE(object):
                     logger.record_tabular("vali_%s"%k, v)
                 logger.dump_tabular(with_prefix=False)
 
-                if epoch >= self.anneal_after:
+                if self.anneal_after is not None and epoch >= self.anneal_after:
                     if (epoch % 100) == 0:
                         lr_val = sess.run([
                             self.lr_var.assign(
@@ -473,4 +475,7 @@ class VAE(object):
         import ipdb; ipdb.set_trace()
 
     def init_hook(self, vars):
+        pass
+
+    def pre_epoch(self, epoch):
         pass

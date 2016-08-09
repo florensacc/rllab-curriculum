@@ -20,6 +20,8 @@ class SemiVAE(VAE):
                  sup_coeff,
                  stop_grad=False,
                  hidden_units=(30,),
+                 dropout_keep_prob=1.,
+                 delay_until=0,
                  **kwargs
     ):
         super(SemiVAE, self).__init__(
@@ -28,6 +30,7 @@ class SemiVAE(VAE):
             batch_size,
             **kwargs
         )
+        self.delay_until = delay_until
         self.stop_grad = stop_grad
         self.sup_coeff = sup_coeff
         self.sup_batch_size = sup_batch_size
@@ -38,6 +41,8 @@ class SemiVAE(VAE):
             temp = pt.template('input')
             for unit in hidden_units:
                 temp = temp.fully_connected(unit)
+                if dropout_keep_prob != 1.:
+                    temp = temp.dropout(dropout_keep_prob)
             self.classfication_template = (
                 temp.
                     fully_connected(self.label_dim, activation_fn=None)
@@ -45,10 +50,13 @@ class SemiVAE(VAE):
 
     def init_hook(self, vars):
         from rllab.misc.ext import extract
-        eval, final_losses, log_vars = extract(
+        eval, final_losses, log_vars, init = extract(
             vars,
-            "eval", "final_losses", "log_vars"
+            "eval", "final_losses", "log_vars", "init"
         )
+        with tf.variable_scope("sup_flag", reuse=not init):
+            self.sup_train_flag = tf.get_variable("sup_train_flag", initializer=0.)
+        # self.sup_train_flag = 1.# tf.get_variable("sup_train_flag", initializer=0.)
         if eval:
             self.eval_label_tensor = \
                 sup_label_tensor = \
@@ -78,9 +86,11 @@ class SemiVAE(VAE):
                     "sup_label"
                 )
             sup_z, _, _ = self.model.encode(sup_input_tensor, k=1)
+            # self.sup_train_flag = tf.Variable(0., name="sup_train_flag")
 
         if self.stop_grad:
             sup_z = tf.stop_gradient(sup_z)
+
 
         sup_logits = self.classfication_template.construct(input=sup_z).tensor
         sup_loss = tf.reduce_mean(
@@ -95,7 +105,15 @@ class SemiVAE(VAE):
                 )
             ))
         ]
-        final_losses.append(sup_loss * self.sup_coeff)
+        final_losses.append(sup_loss * self.sup_coeff * self.sup_train_flag)
+
+    def pre_epoch(self, epoch):
+        if epoch >= self.delay_until:
+            print "enabling sup train at epoch %s" % epoch
+            self.sess.run(
+                [self.sup_train_flag.assign(1.)]
+            )
+        # return
 
     def prepare_feed(self, data, bs):
         x, _ = data.next_batch(bs)
