@@ -156,7 +156,8 @@ class GRULayer(L.Layer):
     def get_step_layer(self, l_in, l_prev_hidden):
         return GRUStepLayer(incomings=[l_in, l_prev_hidden], gru_layer=self)
 
-    def get_output_shape_for(self, input_shape):  # input is a list of batches, each of n_steps (exactly!). The dim comes later
+    def get_output_shape_for(self,
+                             input_shape):  # input is a list of batches, each of n_steps (exactly!). The dim comes later
         n_batch, n_steps = input_shape[:2]
         return n_batch, n_steps, self.num_units
 
@@ -166,7 +167,8 @@ class GRULayer(L.Layer):
         input = TT.reshape(input, (n_batches, n_steps, -1))  # This flattens all dim into one, the 3rd
         h0s = TT.tile(TT.reshape(self.h0, (1, self.num_units)), (n_batches, 1))  # set initial state h0 for every batch
         # flatten extra dimensions
-        shuffled_input = input.dimshuffle(1, 0, 2)  #scan iterates along the first dim of a tensor! so we need that to be steps and not batches
+        shuffled_input = input.dimshuffle(1, 0,
+                                          2)  # scan iterates along the first dim of a tensor! so we need that to be steps and not batches
         hs, _ = theano.scan(fn=self.step,
                             sequences=[shuffled_input],
                             outputs_info=h0s)  # this is the initialization AND will keep the updated states (hs is all)

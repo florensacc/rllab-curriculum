@@ -107,6 +107,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
             hidden_sizes=hidden_sizes,
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=output_nonlinearity,
+            name="meanMLP",
         )
 
         l_mean = mean_network.output_layer
@@ -120,6 +121,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
                 hidden_sizes=std_hidden_sizes,
                 hidden_nonlinearity=std_hidden_nonlinearity,
                 output_nonlinearity=None,
+                name="log_stdMLP"
             ).output_layer
         else:
             l_log_std = ParamLayer(
