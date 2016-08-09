@@ -54,8 +54,8 @@ class SemiVAE(VAE):
             vars,
             "eval", "final_losses", "log_vars", "init"
         )
-        with tf.variable_scope("sup_flag", reuse=not init):
-            self.sup_train_flag = tf.get_variable("sup_train_flag", initializer=0.)
+        # with tf.variable_scope("sup_flag", reuse=not init):
+        #     self.sup_train_flag = tf.get_variable("sup_train_flag", initializer=0.)
         # self.sup_train_flag = 1.# tf.get_variable("sup_train_flag", initializer=0.)
         if eval:
             self.eval_label_tensor = \
@@ -86,7 +86,7 @@ class SemiVAE(VAE):
                     "sup_label"
                 )
             sup_z, _, _ = self.model.encode(sup_input_tensor, k=1)
-            # self.sup_train_flag = tf.Variable(0., name="sup_train_flag")
+            self.sup_train_flag = tf.placeholder(tf.float32, )
 
         if self.stop_grad:
             sup_z = tf.stop_gradient(sup_z)
@@ -106,13 +106,15 @@ class SemiVAE(VAE):
             ))
         ]
         final_losses.append(sup_loss * self.sup_coeff * self.sup_train_flag)
+        self.cur_train_flag = 0.
 
     def pre_epoch(self, epoch):
-        if epoch >= self.delay_until:
+        if epoch >- self.delay_until:
             print "enabling sup train at epoch %s" % epoch
-            self.sess.run(
-                [self.sup_train_flag.assign(1.)]
-            )
+            # self.sess.run(
+            #     [self.sup_train_flag.assign(1.)]
+            # )
+            self.cur_train_flag = 1.
         # return
 
     def prepare_feed(self, data, bs):
@@ -123,6 +125,7 @@ class SemiVAE(VAE):
             self.input_tensor: x,
             self.sup_input_tensor: sx,
             self.sup_label_tensor: sy,
+            self.sup_train_flag: self.cur_train_flag,
         }
 
     def prepare_eval_feed(self, data, bs):
@@ -132,4 +135,5 @@ class SemiVAE(VAE):
         return {
             self.eval_input_tensor: x,
             self.eval_label_tensor: y,
+            self.sup_train_flag: 1.,
         }
