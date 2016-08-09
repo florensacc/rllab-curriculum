@@ -158,6 +158,7 @@ for v in variants[:]:
                 neuron_ratio=5,
                 data_init_scale=0.05,
                 linear_context=True,
+                gating_context=True,
             )
         model = RegularizedHelmholtzMachine(
             output_dist=MeanBernoulli(dataset.image_dim),

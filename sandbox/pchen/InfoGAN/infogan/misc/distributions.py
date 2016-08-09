@@ -668,7 +668,7 @@ class AR(Distribution):
             data_init_wnorm=True,
             data_init_scale=0.1,
             linear_context=False,
-            # multiplicative context?
+            gating_context=False,
     ):
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
@@ -683,9 +683,16 @@ class AR(Distribution):
         self._data_init = data_init_wnorm
         self._data_init_scale = data_init_scale
         self._linear_context = linear_context
-        self._context_dim = 2*dim*neuron_ratio
+        self._gating_context = gating_context
+        self._context_dim = 0
         if linear_context:
             lin_con = pt.template("linear_context")
+            self._linear_context_dim = 2*dim*neuron_ratio
+            self._context_dim += self._linear_context_dim
+        if gating_context:
+            gate_con = pt.template("gating_context")
+            self._gating_context_dim = 2*dim*neuron_ratio
+            self._context_dim += self._gating_context_dim
 
         assert depth >= 1
         from prettytensor import UnboundVariable
@@ -702,8 +709,11 @@ class AR(Distribution):
                         ngroups=dim,
                         zerodiagonal=di == 0, # only blocking the first layer can stop data flow
                     )
-                if di == 0 and linear_context:
-                    self._iaf_template += lin_con
+                if di == 0:
+                    if linear_context:
+                        self._iaf_template += lin_con
+                    if gating_context:
+                        self._iaf_template *= gate_con.apply(tf.exp)
             self._iaf_template = \
                 self._iaf_template.\
                     arfc(
@@ -735,19 +745,20 @@ class AR(Distribution):
     def effective_dim(self):
         return self._dim
 
-    def infer(self, x_var, lin_con=None):
+    def infer(self, x_var, lin_con=None, gating_con=None):
+        in_dict = dict(
+            y=x_var,
+            data_init=self._data_init,
+        )
         if self._linear_context:
             assert lin_con is not None
-            flat_iaf = self._iaf_template.construct(
-                y=x_var,
-                data_init=self._data_init,
-                linear_context=lin_con,
-            ).tensor
-        else:
-            flat_iaf = self._iaf_template.construct(
-                y=x_var,
-                data_init=self._data_init,
-            ).tensor
+            in_dict["linear_context"] = lin_con
+        if self._gating_context:
+            assert gating_con is not None
+            in_dict["gating_context"] = gating_con
+        flat_iaf = self._iaf_template.construct(
+            **in_dict
+        ).tensor
         iaf_mu, iaf_logstd = flat_iaf[:, :self._dim], flat_iaf[:, self._dim:]
         return iaf_mu, (iaf_logstd)
 
@@ -809,6 +820,7 @@ class IAR(AR):
         iaf_mu, iaf_logstd = self.infer(
             z,
             lin_con=dist_info.get("linear_context"),
+            gating_con=dist_info.get("gating_context"),
         )
         go = iaf_mu + tf.exp(iaf_logstd)*z
         return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
@@ -820,13 +832,14 @@ class IAR(AR):
             iaf_mu, iaf_logstd = self.infer(
                 go,
                 lin_con=dist_info.get("linear_context"),
+                gating_con=dist_info.get("gating_context"),
             )
             go = iaf_mu + tf.exp(iaf_logstd)*x_var
         logpz = self._base_dist.logli(go, dist_info)
         return logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
 
     def inserting_context(self):
-        return self._linear_context
+        return self._linear_context or self._gating_context
         # this is for sharing context version
         # keys = self._base_dist.dist_info_keys
         # return self._linear_context and ("linear_context" not in keys)
@@ -835,7 +848,10 @@ class IAR(AR):
     def dist_info_keys(self):
         keys = self._base_dist.dist_info_keys
         if self.inserting_context():
-            keys = keys + ["linear_context"]
+            if self._linear_context:
+                keys = keys + ["linear_context"]
+            if self._gating_context:
+                keys = keys + ["gating_context"]
         return keys
 
     @property
@@ -847,9 +863,17 @@ class IAR(AR):
 
     def activate_dist(self, flat):
         if self.inserting_context():
-            context = flat[:, :self._context_dim]
-            out = self._base_dist.activate_dist(flat[:, self._context_dim:])
-            return dict(out, linear_context=context)
+            out = dict()
+            if self._linear_context:
+                lin_context = flat[:, :self._linear_context_dim]
+                flat = flat[:, self._linear_context_dim:]
+                out["linear_context"] = lin_context
+            if self._gating_context:
+                lin_context = flat[:, :self._gating_context_dim]
+                flat = flat[:, self._gating_context_dim:]
+                out["gating_context"] = lin_context
+            out = dict(out, **self._base_dist.activate_dist(flat))
+            return out
         else:
             return self._base_dist.activate_dist(flat)
 
