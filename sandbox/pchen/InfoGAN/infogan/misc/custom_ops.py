@@ -976,3 +976,4 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1):
 def logsumexp(x):
     x_max = tf.reduce_max(x, [1], keep_dims=True)
     return tf.reshape(x_max, [-1]) + tf.log(tf.reduce_sum(tf.exp(x - x_max), [1]))
+
