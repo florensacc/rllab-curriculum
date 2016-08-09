@@ -62,15 +62,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        # return [4,]
-        return [0]
+        return [4,]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [10]
+            return [10, 20]
 
     # @variant
     # def nm(self):
@@ -123,8 +122,8 @@ class VG(VariantGenerator):
         return [
             [],
             ["linear"],
-            ["gating"],
-            ["linear", "gating"]
+            # ["gating"],
+            # ["linear", "gating"]
         ]
 
 
@@ -193,11 +192,12 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
+            vali_eval_interval=2500,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0808_res_pure_iaf_gating",
+            exp_prefix="0808_res_iaf_ar_hybrid",
             seed=v["seed"],
             variant=v,
             # mode="local",

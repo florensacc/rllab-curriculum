@@ -188,7 +188,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_ar_isre_long_test",
+            exp_prefix="0808_res_ar_anneal",
             seed=v["seed"],
             # mode="local",
             mode="lab_kube",
