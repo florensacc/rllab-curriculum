@@ -106,14 +106,15 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def npl(self):
-        return [10, 1000, 5000]
+        return [1000, 5000]
         # return [5, 10, 100, 1000]
 
     @variant(hide=False)
     def sup_bs(self, npl):
-        return [
-            bs for bs in [10, 100] if bs <= npl
-        ]
+        return [100]
+        # return [
+        #     bs for bs in [10, 100] if bs <= npl
+        # ]
 
     @variant(hide=False)
     def sup_coeff(self, npl):
@@ -133,14 +134,14 @@ class VG(VariantGenerator):
         return [
             1.,
             0.5,
-            0.3,
+            # 0.3,
         ]
 
     @variant(hide=False)
     def delay_until(self, ):
         return [
             0,
-            100,
+            # 100,
             200,
         ]
 
