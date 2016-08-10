@@ -1245,3 +1245,28 @@ class BinarizedOmniglotDataset(object):
     @property
     def image_shape(self):
         return self._image_shape
+
+class ResamplingBinarizedOmniglotDataset(object):
+    def __init__(self):
+        # train, valid, test = load_mnist_binarized()
+        # train, valid, test = load_omniglot_iwae()
+        train_x, test_x = load_omniglot()
+        self.train = BinarizedDataset(train_x)
+        # self.test = Dataset(valid)
+        self.validation = BinarizedDataset(test_x)
+        import ipdb; ipdb.set_trace()
+        self._image_dim = 28 * 28
+        self._image_shape = (28, 28, 1)
+
+    def transform(self, data):
+        return data
+
+    def inverse_transform(self, data):
+        return data
+
+    @property
+    def image_dim(self):
+        return self._image_dim
+    @property
+    def image_shape(self):
+        return self._image_shape
