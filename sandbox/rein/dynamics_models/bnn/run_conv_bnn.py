@@ -5,6 +5,9 @@ from sandbox.rein.dynamics_models.utils import iterate_minibatches, plot_mnist_d
 
 import time
 import rllab.misc.logger as logger
+import os
+
+os.environ["THEANO_FLAGS"] = "device=gpu"
 
 
 class Experiment(object):
@@ -42,7 +45,6 @@ class Experiment(object):
         pred = []
         for _ in xrange(10):
             pred.append(model.pred_fn(inputs))
-            import ipdb; ipdb.set_trace()
         sanity_pred = np.mean(np.array(pred), axis=0)
         input_im = inputs[:, :-3]
         input_im = input_im[idx, :].reshape((1, 42, 42)).transpose(1, 2, 0)[:, :, 0]
@@ -62,7 +64,7 @@ class Experiment(object):
             target_im = target_im.astype(float) / float(model.num_classes)
             input_im = input_im.astype(float) / float(model.num_classes)
 
-        err = 1 - np.abs(target_im - sanity_pred_im)
+        err = (1 - np.abs(target_im - sanity_pred_im) * 100.)
 
         if self._im1 is None or self._im2 is None:
             self._im1 = self._fig_1.imshow(
@@ -112,7 +114,10 @@ class Experiment(object):
                 # Train current minibatch.
                 inputs, targets, _ = batch
 
-                _train_err = model.train_fn(inputs, targets, 0.0)
+                _train_err = model.train_fn(inputs, targets, 1.0)
+                # if model.surprise_type == model.SurpriseType.VAR and train_batches % 30 == 0:
+                #     print(model.train_update_fn(inputs))
+                print(model.fn_l1())
 
                 train_err += _train_err
                 train_batches += 1
@@ -120,7 +125,6 @@ class Experiment(object):
             pred = []
             for _ in xrange(10):
                 pred.append(model.pred_fn(X))
-            print(np.mean(np.std(np.array(pred), axis=0), axis=1))
             pred = np.mean(np.array(pred), axis=0)
 
             pred_im = pred[:, :-1]
@@ -137,6 +141,7 @@ class Experiment(object):
             logger.record_tabular('obs err', acc)
             logger.log("Epoch {} of {} took {:.3f}s".format(
                 epoch + 1, num_epochs, time.time() - start_time))
+            logger.record_tabular('likelihood std', model.likelihood_sd.eval())
 
             logger.dump_tabular(with_prefix=False)
 
@@ -157,6 +162,13 @@ class Experiment(object):
             self.bin_img(T_train, self.num_bins)
             X_train = X_train.astype(int)
             T_train = T_train.astype(int)
+            X_train0 = np.tile(X_train[0], reps=[50, 1])
+            T_train0 = np.tile(T_train[0], reps=[50, 1])
+            X_train1 = np.tile(X_train[1], reps=[50, 1])
+            T_train1 = np.tile(T_train[1], reps=[50, 1])
+            X_train = np.vstack((X_train0, X_train1))
+            T_train = np.vstack((T_train0, T_train1))
+
         elif self.pred_delta:
             T_train = X_train - T_train
 

@@ -25,7 +25,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-RECORD_VIDEO = False
+RECORD_VIDEO = True
 mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
         GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
         GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),

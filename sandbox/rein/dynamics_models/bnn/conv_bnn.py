@@ -109,24 +109,24 @@ class BayesianLayer(lasagne.layers.Layer):
             # which is a combination of the previous out and in variance
             # tying.
             self.mu = self.add_param(
-                lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu')
+                lasagne.init.Normal(0.1, 0.), self.get_W_shape(), name='mu', bayesian=True)
             # So we should have weights (self.num_units + self.num_inputs,)
             # instead of (self.num_units, self.num_inputs).
             if not self.disable_variance:
                 self.rho = self.add_param(
                     lasagne.init.Constant(self.inv_softplus(np.sqrt(self.prior_sd))),
                     ((self.num_inputs + self.num_units) * self.mvg_rank,),
-                    name='rho')
+                    name='rho', bayesian=True)
 
             self.b_mu = self.add_param(
-                lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
+                lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False, bayesian=True)
             # Single bias variance, since outgoing weights are tied.
             if not self.disable_variance:
                 self.b_rho = self.add_param(
                     lasagne.init.Constant(self.prior_rho),
                     (1,),
                     name="b_rho",
-                    regularizable=False
+                    regularizable=False, bayesian=True
                 )
 
             # Backup params for KL calculations.
@@ -152,18 +152,19 @@ class BayesianLayer(lasagne.layers.Layer):
             # In fact, this should be initialized to np.zeros(self.get_W_shape()),
             # but this trains much slower.
             self.mu = self.add_param(
-                lasagne.init.Normal(0.01, 0.), self.get_W_shape(), name='mu')
+                lasagne.init.GlorotUniform(), self.get_W_shape(), name='mu', bayesian=True)
             if not self.disable_variance:
                 self.rho = self.add_param(
-                    lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho')
+                    lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho', bayesian=True)
 
             # TODO: Perhaps biases should have a postive value, to avoid zeroing the
             # relus.
             self.b_mu = self.add_param(
-                lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False)
+                lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False, bayesian=True)
             if not self.disable_variance:
                 self.b_rho = self.add_param(
-                    lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False)
+                    lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False,
+                    bayesian=True)
 
             # Backup params for KL calculations.
             self.mu_old = self.add_param(
@@ -220,11 +221,11 @@ class BayesianLayer(lasagne.layers.Layer):
             self.rho_tmp = self.rho.get_value()
             self.b_rho_tmp = self.b_rho.get_value()
 
-        self.mu.set_value(self.mu_old.get_value())
-        self.b_mu.set_value(self.b_mu_old.get_value())
+        self.mu.set_value(lasagne.utils.floatX(self.mu_old.get_value()))
+        self.b_mu.set_value(lasagne.utils.floatX(self.b_mu_old.get_value()))
         if not self.disable_variance:
-            self.rho.set_value(self.rho_old.get_value())
-            self.b_rho.set_value(self.b_rho_old.get_value())
+            self.rho.set_value(lasagne.utils.floatX(self.rho_old.get_value()))
+            self.b_rho.set_value(lasagne.utils.floatX(self.b_rho_old.get_value()))
 
     def load_cur_params(self):
         """Reset to old parameter values for KL calculation."""
@@ -278,6 +279,16 @@ class BayesianLayer(lasagne.layers.Layer):
             else:
                 return self.b_mu
 
+    def l1_new_old(self):
+        l1_a = T.abs_((self.mu - self.mu_old).flatten())
+        l1_b = T.abs_((self.b_mu - self.b_mu_old).flatten())
+        if not self.disable_variance:
+            l1_c = T.abs_((self.rho - self.rho_old).flatten())
+            l1_d = T.abs_((self.b_rho - self.b_rho_old).flatten())
+            return T.concatenate((l1_a, l1_b, l1_c, l1_d))
+        else:
+            return T.concatenate((l1_a, l1_b))
+
     # We don't calculate the KL for biases, as they should be able to
     # arbitrarily shift.
     def kl_div_new_old(self):
@@ -298,19 +309,20 @@ class BayesianLayer(lasagne.layers.Layer):
     def kl_div_p_q(self, p_mean, p_std, q_mean, q_std):
         """KL divergence D_{KL}[p(x)||q(x)] for a fully factorized Gaussian"""
         if self._matrix_variate_gaussian:
-            def transf(std):
-                s_u = std[self.num_inputs:]
-                s_v = std[:self.num_inputs]
-                return T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
-
-            if not isinstance(p_std, float):
-                p_std = transf(p_std)
-            if not isinstance(q_std, float):
-                q_std = transf(q_std)
-
-        numerator = T.square(p_mean - q_mean) + T.square(p_std) - T.square(q_std)
-        denominator = 2 * T.square(q_std) + 1e-8
-        return T.sum(numerator / denominator + T.log(q_std) - T.log(p_std))
+            # def transf(std):
+            #     s_u = std[self.num_inputs:]
+            #     s_v = std[:self.num_inputs]
+            #     return T.dot(s_u.dimshuffle(0, 'x'), s_v.dimshuffle('x', 0)).T
+            #
+            # if not isinstance(p_std, float):
+            #     p_std = transf(p_std)
+            # if not isinstance(q_std, float):
+            #     q_std = transf(q_std)
+            return self.kl_div_p_q_mvg_full(p_mean, p_std, q_mean, q_std)
+        else:
+            numerator = T.square(p_mean - q_mean) + T.square(p_std) - T.square(q_std)
+            denominator = 2 * T.square(q_std) + 1e-8
+            return T.sum(numerator / denominator + T.log(q_std) - T.log(p_std))
 
     def kl_div_p_q_mvg_full(self, p_mean, p_std, q_mean, q_std):
         # Split rho's into different R1 matrices.
@@ -321,29 +333,31 @@ class BayesianLayer(lasagne.layers.Layer):
                 su = std[
                      i * (self.num_inputs + self.num_units) + self.num_inputs:(i + 1) * (
                          self.num_inputs + self.num_units)]
-                sv = p_std[i * (self.num_inputs + self.num_units): (i + 1) * (
+                sv = std[i * (self.num_inputs + self.num_units): (i + 1) * (
                     self.num_inputs + self.num_units) + self.num_inputs]
                 lst_su.append(su)
                 lst_sv.append(sv)
 
         extract_uv(p_std, lst_psu, lst_psv)
-        extract_uv(q_std, lst_qsu, lst_qsv)
+        if not isinstance(q_mean, float):
+            extract_uv(q_std, lst_qsu, lst_qsv)
 
         def construct_matrix(lst_s):
-            s = np.identity(lst_s[0].shape[0], dtype=theano.config.floatX)
+            s = T.eye(lst_s[0].shape[0])
             for i in xrange(self.mvg_rank):
                 _a = T.dot(lst_s[i].dimshuffle(0, 'x'), lst_s[i].dimshuffle('x', 0))
                 s += _a
             return s
 
-        qsu = construct_matrix(lst_qsu)
-        qsv = construct_matrix(lst_qsv)
+        if not isinstance(q_mean, float):
+            qsu = construct_matrix(lst_qsu)
+            qsv = construct_matrix(lst_qsv)
         psu = construct_matrix(lst_psu)
         psv = construct_matrix(lst_psv)
 
         # Sherman-Morrison
         def sherman_morrison(lst_s):
-            A_inv = np.identity(lst_s[0].shape[0], dtype=theano.config.floatX)
+            A_inv = T.eye(lst_s[0].shape[0])
             lst_A_inv = [A_inv]
             for i in xrange(self.mvg_rank):
                 _a = T.dot(A_inv, lst_s[i].dimshuffle(0, 'x'))
@@ -353,14 +367,15 @@ class BayesianLayer(lasagne.layers.Layer):
                 lst_A_inv.append(A_inv)
             return A_inv, lst_A_inv
 
-        qsu_inv, lst_qsu_inv = sherman_morrison(lst_qsu)
-        qsv_inv, lst_qsv_inv = sherman_morrison(lst_qsv)
+        if not isinstance(q_mean, float):
+            qsu_inv, lst_qsu_inv = sherman_morrison(lst_qsu)
+            qsv_inv, lst_qsv_inv = sherman_morrison(lst_qsv)
         psu_inv, lst_psu_inv = sherman_morrison(lst_psu)
         psv_inv, lst_psv_inv = sherman_morrison(lst_psv)
 
         # Calculate log determinant for rank1 updates.
         def log_determinant(lst_s, lst_s_inv):
-            A_logdet = np.identity(lst_s[0].shape[0], dtype=theano.config.floatX)
+            A_logdet = T.eye(lst_s[0].shape[0])
             for i in xrange(self.mvg_rank):
                 _a = T.dot(lst_s[i].dimshuffle('x', 0), lst_s_inv[i])
                 _b = T.dot(_a, lst_s[i].dimshuffle(0, 'x'))
@@ -368,15 +383,24 @@ class BayesianLayer(lasagne.layers.Layer):
                 A_logdet += _c
             return A_logdet
 
-        qsu_logdet = log_determinant(lst_qsu, lst_qsu_inv)
-        qsv_logdet = log_determinant(lst_qsv, lst_qsv_inv)
+        if not isinstance(q_mean, float):
+            qsu_logdet = log_determinant(lst_qsu, lst_qsu_inv)
+            qsv_logdet = log_determinant(lst_qsv, lst_qsv_inv)
         psu_logdet = log_determinant(lst_psu, lst_psu_inv)
         psv_logdet = log_determinant(lst_psv, lst_psv_inv)
 
-        _a = T.nlinalg.trace(T.dot(qsu_inv, psu))
-        _b = T.nlinalg.trace(T.dot(qsv_inv, psv))
-        _c = _a * _b
+        if not isinstance(q_mean, float):
+            _a = T.nlinalg.trace(T.dot(qsu_inv, psu))
+            _b = T.nlinalg.trace(T.dot(qsv_inv, psv))
+        else:
+            _a = T.nlinalg.trace(psu)
+            _b = T.nlinalg.trace(psv)
+            qsu_logdet = 0
+            qsv_logdet = 0
+            qsv_inv = T.eye(lst_psv[0].shape[0])
+            qsu_inv = T.eye(lst_psu[0].shape[0])
 
+        _c = _a * _b
         _d = T.dot(q_mean - p_mean, qsu_inv)
         _e = T.dot(_d, (q_mean - p_mean).T)
         _f = T.dot(_e, qsv_inv)

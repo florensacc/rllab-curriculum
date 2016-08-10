@@ -16,17 +16,18 @@ from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, Bayesia
 
 
 class IndependentSoftmaxLayer(lasagne.layers.Layer):
-    def __init__(self, incoming, num_bins, W=lasagne.init.GlorotUniform(), **kwargs):
+    def __init__(self, incoming, num_bins, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0), **kwargs):
         super(IndependentSoftmaxLayer, self).__init__(incoming, **kwargs)
 
         self._num_bins = num_bins
-        self.W = self.add_param(W, (self.input_shape[1], self._num_bins), name="W")
+        self.W = self.add_param(W, (self.input_shape[1], self._num_bins), name='W')
+        self.b = self.add_param(b, (self._num_bins,), name='b')
 
     def get_output_for(self, input, **kwargs):
-        _a = T.dot(input.dimshuffle(0, 2, 3, 1), self.W)
-        _b = T.exp(_a - T.max(_a, axis=3).dimshuffle(0, 1, 2, 'x'))
-        _c = T.sum(_b, axis=3).dimshuffle(0, 1, 2, 'x')
-        return T.clip(_b / _c, 1e-8, 1)
+        _a = T.dot(input.dimshuffle(0, 2, 3, 1), self.W) + self.b
+        _b = T.exp(_a - T.max(_a, axis=3, keepdims=True))
+        _c = T.sum(_b, axis=3, keepdims=True)
+        return T.clip(_b / _c, 1e-8, 1 - 1e-8)
 
     def get_output_shape_for(self, input_shape):
         return input_shape[0], input_shape[2], input_shape[3], self._num_bins
@@ -80,7 +81,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
     # Enums
     OutputType = enum(REGRESSION='regression', CLASSIFICATION='classfication')
     SurpriseType = enum(
-        INFGAIN='information gain', COMPR='compression gain', BALD='BALD')
+        INFGAIN='information gain', COMPR='compression gain', BALD='BALD', VAR='variance', L1='l1')
 
     def __init__(self,
                  state_dim,
@@ -162,7 +163,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         print('num_weights: {}'.format(self.num_weights()))
 
     def save_params(self):
-        layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.save_params()
@@ -170,12 +171,28 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
     def load_prev_params(self):
-        layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
                         lasagne.layers.get_all_layers(self.network)[1:])
         for layer in layers:
             layer.load_prev_params()
         if self.update_likelihood_sd:
             self.likelihood_sd.set_value(self.old_likelihood_sd.get_value())
+
+    def get_bayesian_layers(self):
+        return filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+                      lasagne.layers.get_all_layers(self.network))
+
+    def l1(self):
+        layers = filter(lambda l: isinstance(l, BayesianLayer),
+                        lasagne.layers.get_all_layers(self.network))
+        lst_l1 = []
+        num_w = 0
+        for l in layers:
+            l1 = l.l1_new_old()
+            lst_l1.append(T.sum(l1))
+            num_w += l1.shape[0]
+        return sum(lst_l1) / num_w
+        # return sum(l.l1_new_old() for l in layers)
 
     def compr_impr(self):
         """KL divergence KL[old_param||new_param]"""
@@ -194,38 +211,44 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         layers = filter(lambda l: isinstance(l, BayesianLayer), lasagne.layers.get_all_layers(self.network)[1:])
         return sum(l.num_weights() for l in layers)
 
-    def ent(self, input):
-        # FIXME: work in progress
-        mtrx_pred = np.zeros((self.n_samples, self.n_out))
-        for i in xrange(self.n_samples):
-            # Make prediction.
-            mtrx_pred[i] = self.pred_fn(input)
-        cov = np.cov(mtrx_pred, rowvar=0)
-        if isinstance(cov, float):
-            var = np.trace(cov) / float(cov.shape[0])
-        else:
-            var = cov
-        return var
-
-    def entropy(self, input, likelihood_sd, **kwargs):
-        """ Entropy of a batch of input/output samples. """
+    def entropy(self, input, **kwargs):
+        """ Entropy approximation of a batch of input/output samples. """
+        from scipy.stats import norm
 
         # MC samples.
-        _log_p_D_given_w = []
+        lst_pred = []
         for _ in xrange(self.n_samples):
             # Make prediction.
-            prediction = self.pred_sym(input)
-            for _ in xrange(self.n_samples):
-                sampled_mean = self.pred_sym(input)
-                # Calculate model likelihood log(P(D|w)).
-                if self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
-                    lh = self.likelihood_classification(sampled_mean, prediction)
-                elif self.output_type == ConvBNNVIME.OutputType.REGRESSION:
-                    lh = self.likelihood_regression(sampled_mean, prediction, likelihood_sd)
-                _log_p_D_given_w.append(lh)
-        log_p_D_given_w = sum(_log_p_D_given_w)
+            lst_pred.append(self.pred_fn(input))
+        arr_pred = np.asarray(lst_pred)
 
-        return - log_p_D_given_w / (self.n_samples) ** 2 + 0.5 * (np.log(2 * np.pi * likelihood_sd ** 2) + 1)
+        # For each minibatch entry.
+        lst_ent = []
+        for idy in xrange(arr_pred.shape[1]):
+            # Fit isotropic multivariate Gaussian function to these predictions and calculate entropy: H(s'|a,hist).
+            log_var = 0.
+            for idz in xrange(arr_pred.shape[2]):
+                _, std = norm.fit(arr_pred[:, idy, idz])
+                log_var += np.log(std ** 2)
+            # I(S';\Theta) = H(s'|a,hist) - H(s'|a,hist;\theta)
+            # We drop the second term as it is independent of our samples.
+            ent = 0.5 * (arr_pred.shape[1] * (1 + np.log(2 * np.pi)) + log_var)
+            lst_ent.append(ent)
+
+        return np.asarray(lst_ent)
+
+    def variance(self, input, **kwargs):
+        """ Entropy approximation of a batch of input/output samples. """
+        from scipy.stats import norm
+
+        # MC samples.
+        lst_pred = []
+        for _ in xrange(self.n_samples):
+            # Make prediction.
+            lst_pred.append(self.pred_fn(input))
+        arr_pred = np.asarray(lst_pred)
+
+        return np.var(arr_pred, axis=(0, 2))
 
     def surprise(self, **kwargs):
 
@@ -352,8 +375,23 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         This means that instead of using the prior p(w), we use the previous approximated posterior
         q(w) for the KL term in the objective function: KL[q(w)|p(w)] becomems KL[q'(w)|q(w)].
         """
-        # TODO: check out if this is still correct.
-        return self.loss(input, target, disable_kl=True, **kwargs)
+
+        # MC samples.
+        log_p_D_given_w = 0.
+        for _ in xrange(self.n_samples):
+            prediction = self.pred_sym(input)
+            # Calculate model likelihood log(P(D|w)).
+            if self._ind_softmax:
+                if not self._disable_act_rew_paths:
+                    lh = self.likelihood_regression(target[:, -1:], prediction[:, -1:], **kwargs) + \
+                         self.likelihood_classification(target[:, :-1], prediction[:, :-1])
+                else:
+                    lh = self.likelihood_classification(target, prediction)
+            else:
+                lh = self.likelihood_regression(target, prediction, **kwargs)
+            log_p_D_given_w += lh
+
+        return self.kl_div() - log_p_D_given_w / self.n_samples
 
     def build_network(self):
 
@@ -383,11 +421,15 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         dropout_p = 0.5
         for i, layer_disc in enumerate(self.layers_disc):
 
+            if 'nonlinearity' in layer_disc.keys() and layer_disc['nonlinearity'] == 'sin':
+                layer_disc['nonlinearity'] = np.sin
+
             if layer_disc['name'] == 'convolution':
                 s_net = BayesianConvLayer(
                     s_net,
                     num_filters=layer_disc['n_filters'],
                     filter_size=layer_disc['filter_size'],
+                    nonlinearity=layer_disc['nonlinearity'],
                     prior_sd=self.prior_sd,
                     pad=layer_disc['pad'],
                     stride=layer_disc['stride'],
@@ -575,9 +617,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     updates[param] = param - learning_rate * T.clip(grad, -1., 1.)
                 return updates
 
-            # Clipping grads seems necessary to prevent explosion.
+            # Clipping grads seems necessary to prevent explosion. Learning rate tuned for adam should be decreased.
             updates = sgd_clip(
-                loss, params, learning_rate=self.learning_rate)
+                loss, params, learning_rate=self.learning_rate * 0.1)
         else:
             updates = lasagne.updates.adam(
                 loss, params, learning_rate=self.learning_rate)
@@ -586,6 +628,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # you will fit to the specific noise.
         self.train_fn = ext.compile_function(
             [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
+
         # self.fn_loss = ext.compile_function(
         #     [input_var, target_var, kl_factor], loss, log_name='fn_loss')
 
@@ -625,26 +668,25 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         if self.surprise_type == ConvBNNVIME.SurpriseType.INFGAIN:
             if self.second_order_update:
 
-                oldparams = lasagne.layers.get_all_params(
-                    self.network, oldparam=True)
                 step_size = T.scalar('step_size',
                                      dtype=theano.config.floatX)
 
-                def fast_kl_div(loss, params, oldparams, step_size):
+                def fast_kl_div(loss, params, step_size):
                     # FIXME: doesn't work with MVG.
 
                     grads = T.grad(loss, params)
 
                     kl_component = []
                     for i in xrange(len(params)):
+
                         param = params[i]
                         grad = grads[i]
 
                         if param.name == 'mu' or param.name == 'b_mu':
-                            oldparam_rho = oldparams[i + 1]
+                            oldparam_rho = params[i + 1]
                             invH = T.square(T.log(1 + T.exp(oldparam_rho)))
                         elif param.name == 'rho' or param.name == 'b_rho':
-                            oldparam_rho = oldparams[i]
+                            oldparam_rho = params[i]
                             p = param
                             H = 2. * (T.exp(2 * p)) / (1 + T.exp(p)) ** 2 / (T.log(1 + T.exp(p)) ** 2)
                             invH = 1. / H
@@ -655,9 +697,12 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
                     return sum(kl_component)
 
+                params_bayesian = []
+                params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
+                if self.output_type == 'regression' and self.update_likelihood_sd:
+                    params_bayesian.append(self.likelihood_sd)
                 compute_fast_kl_div = fast_kl_div(
-                    loss_only_last_sample, params, oldparams, step_size)
-
+                    loss_only_last_sample, params_bayesian, step_size)
                 self.train_update_fn = ext.compile_function(
                     [input_var, target_var, step_size], compute_fast_kl_div, log_name='fn_surprise_fast',
                     no_default_updates=False)
@@ -674,16 +719,59 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
             else:
                 # Use SGD to update the model for a single sample, in order to
-                # calculate the surprise.
+                # calculate the surprise. We only update the bayesian params, no batchnorm params.
+                params_bayesian = []
+                params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
+                if self.output_type == 'regression' and self.update_likelihood_sd:
+                    params_bayesian.append(self.likelihood_sd)
+                # Use the loss with KL[post'||post'].
+                loss_infgain = self.loss_last_sample(
+                    input_var, target_var, likelihood_sd=self.likelihood_sd)
+                # SGD rather than adam, we don't want momentum. Learning rate tuned for adam, needs to be smaller.
+                updates_infgain = lasagne.updates.adam(
+                    loss_infgain, params_bayesian, learning_rate=self.learning_rate)
+                self.train_update_fn = ext.compile_function(
+                    [input_var, target_var, kl_factor], loss_infgain, updates=updates_infgain,
+                    log_name='fn_train_infgain_1storder',
+                    no_default_updates=False)
+                # Need explicit kl calc.
                 self.fn_kl = ext.compile_function(
                     [], self.kl_div(), log_name='fn_kl'
                 )
 
         elif self.surprise_type == ConvBNNVIME.SurpriseType.BALD:
-            # BALD
+            # BALD: I(S';\Theta|a,hist) = H(S'|a,hist) - H(S'|a,hist;\theta)
+            self.train_update_fn = self.entropy
+
+        elif self.surprise_type == ConvBNNVIME.SurpriseType.VAR:
+            # Focus on maximum variance: basically, when we rewrite BALD as only the first entropy term,
+            # we can see it as focusing on variance.
+            self.train_update_fn = self.variance
+
+        elif self.surprise_type == ConvBNNVIME.SurpriseType.L1:
+            # Use SGD to update the model for a single sample, in order to
+            # calculate the surprise. We only update the bayesian params, no batchnorm params.
+            params_bayesian = []
+            params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
+            # Use the loss with KL[post'||post'].
+            loss_l1 = self.loss(
+                input_var, target_var, disable_kl=True, likelihood_sd=self.likelihood_sd)
+            # SGD rather than adam, we don't want momentum. Learning rate tuned for adam, needs to be smaller.
+            updates_l1 = lasagne.updates.sgd(
+                loss_l1, params_bayesian, learning_rate=self.learning_rate * 0.00001)
             self.train_update_fn = ext.compile_function(
-                [input_var], self.surprise(input=input_var, likelihood_sd=self.likelihood_sd),
-                log_name='fn_surprise_bald')
+                [input_var, target_var, kl_factor], loss_l1, updates=updates_l1,
+                log_name='fn_train_l1',
+                no_default_updates=False)
+            # Need explicit kl calc.
+            self.fn_l1 = ext.compile_function(
+                [], self.l1(), log_name='fn_l1'
+            )
+            # self.fn_loss = ext.compile_function(
+            #     [input_var, target_var, kl_factor], loss_l1,
+            #     log_name='fn_loss',
+            #     no_default_updates=False)
+
         elif self.surprise_type == ConvBNNVIME.SurpriseType.COMPR:
             # COMPR IMPR (no KL)
             # Calculate logp.
