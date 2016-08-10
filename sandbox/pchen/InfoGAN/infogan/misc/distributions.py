@@ -97,6 +97,9 @@ class Distribution(object):
         raise NotImplementedError
 
     def sample(self, dist_info):
+        return self.sample_logli(dist_info)[0]
+
+    def sample_logli(self, dist_info):
         raise NotImplementedError
 
     def sample_prior(self, batch_size):
@@ -286,11 +289,12 @@ class Gaussian(Distribution):
             reduction_indices=1
         )
 
-    def sample(self, dist_info):
+    def sample_logli(self, dist_info):
         mean = dist_info["mean"]
         stddev = dist_info["stddev"]
         epsilon = tf.random_normal(tf.shape(mean))
-        return mean + epsilon * stddev
+        out = mean + epsilon * stddev
+        return out, self.logli(out, dist_info)
 
     @property
     def dist_info_keys(self):
@@ -319,7 +323,7 @@ class Uniform(Gaussian):
     #     raise NotImplementedError
 
     # def logli_prior(self, x_var)
-    #     # 
+    #     #
     #     raise NotImplementedError
 
     def sample_prior(self, batch_size):
@@ -661,7 +665,10 @@ class AR(Distribution):
             neuron_ratio=4,
             reverse=True,
             nl=tf.nn.relu,
-            data_init_wnorm=False,
+            data_init_wnorm=True,
+            data_init_scale=0.1,
+            linear_context=False,
+            gating_context=False,
     ):
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
@@ -674,13 +681,26 @@ class AR(Distribution):
         self._reverse = reverse
         self._wnorm = data_init_wnorm
         self._data_init = data_init_wnorm
+        self._data_init_scale = data_init_scale
+        self._linear_context = linear_context
+        self._gating_context = gating_context
+        self._context_dim = 0
+        if linear_context:
+            lin_con = pt.template("linear_context")
+            self._linear_context_dim = 2*dim*neuron_ratio
+            self._context_dim += self._linear_context_dim
+        if gating_context:
+            gate_con = pt.template("gating_context")
+            self._gating_context_dim = 2*dim*neuron_ratio
+            self._context_dim += self._gating_context_dim
 
         assert depth >= 1
         from prettytensor import UnboundVariable
         with pt.defaults_scope(
                 activation_fn=nl,
                 wnorm=data_init_wnorm,
-                data_init=UnboundVariable('data_init')
+                data_init=UnboundVariable('data_init'),
+                init_scale=self._data_init_scale,
         ):
             for di in xrange(depth):
                 self._iaf_template = \
@@ -689,6 +709,11 @@ class AR(Distribution):
                         ngroups=dim,
                         zerodiagonal=di == 0, # only blocking the first layer can stop data flow
                     )
+                if di == 0:
+                    if linear_context:
+                        self._iaf_template += lin_con
+                    if gating_context:
+                        self._iaf_template *= gate_con.apply(tf.exp)
             self._iaf_template = \
                 self._iaf_template.\
                     arfc(
@@ -720,8 +745,20 @@ class AR(Distribution):
     def effective_dim(self):
         return self._dim
 
-    def infer(self, x_var):
-        flat_iaf = self._iaf_template.construct(y=x_var, data_init=self._data_init).tensor
+    def infer(self, x_var, lin_con=None, gating_con=None):
+        in_dict = dict(
+            y=x_var,
+            data_init=self._data_init,
+        )
+        if self._linear_context:
+            assert lin_con is not None
+            in_dict["linear_context"] = lin_con
+        if self._gating_context:
+            assert gating_con is not None
+            in_dict["gating_context"] = gating_con
+        flat_iaf = self._iaf_template.construct(
+            **in_dict
+        ).tensor
         iaf_mu, iaf_logstd = flat_iaf[:, :self._dim], flat_iaf[:, self._dim:]
         return iaf_mu, (iaf_logstd)
 
@@ -730,41 +767,113 @@ class AR(Distribution):
         z = x_var / tf.exp(iaf_logstd) - iaf_mu
         if self._reverse:
             z = tf.reverse(z, [False, True])
-        return self._base_dist.logli_prior(z) - tf.reduce_sum(iaf_logstd, reduction_indices=1)
+        return self._base_dist.logli(z, dist_info) - \
+               tf.reduce_sum(iaf_logstd, reduction_indices=1)
 
     def logli_init_prior(self, x_var):
         return self._base_dist.logli_init_prior(x_var)
 
     def prior_dist_info(self, batch_size):
-        return dict(n=batch_size)
+        return self._base_dist.prior_dist_info(batch_size)
 
-    def sample(self, info):
-        return self.sample_n(info["n"])[0]
+    def sample_logli(self, info):
+        return self.sample_n(info=info)
 
-
-    def sample_n(self, n=100):
+    def sample_n(self, n=100, info=None):
+        print("warning, ar sample invoked")
         try:
-            z, logpz = self._base_dist.sample_n(n=n)
+            z, logpz = self._base_dist.sample_n(n=n, info=info)
         except AttributeError:
-            z = self._base_dist.sample_prior(batch_size=n)
-            logpz = self._base_dist.logli_prior(z)
+            if info:
+                z, logpz = self._base_dist.sample_logli(info)
+            else:
+                z = self._base_dist.sample_prior(batch_size=n)
+                logpz = self._base_dist.logli_prior(z)
         if self._reverse:
             z = tf.reverse(z, [False, True])
         go = z # place holder
         for i in xrange(self._dim):
-            # mask = np.zeros((n, self._dim))
-            # mask[:, :(i+1)] = 1.
             iaf_mu, iaf_logstd = self.infer(go)
-            # iaf_mu *= mask
-            # iaf_std = mask * iaf_std
             go = iaf_mu + tf.exp(iaf_logstd)*z
         return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
 
+    @property
+    def dist_info_keys(self):
+        return self._base_dist.dist_info_keys
+
+    @property
+    def dist_flat_dim(self):
+        return self._base_dist.dist_flat_dim
+
+    def activate_dist(self, flat):
+        return self._base_dist.activate_dist(flat)
+
+    def nonreparam_logli(self, x_var, dist_info):
+        raise "not defined"
+
+class IAR(AR):
+
+    def sample_logli(self, dist_info):
+        z, logpz = self._base_dist.sample_logli(dist_info=dist_info)
+        if self._reverse:
+            z = tf.reverse(z, [False, True])
+        iaf_mu, iaf_logstd = self.infer(
+            z,
+            lin_con=dist_info.get("linear_context"),
+            gating_con=dist_info.get("gating_context"),
+        )
+        go = iaf_mu + tf.exp(iaf_logstd)*z
+        return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
+
+    def logli(self, x_var, dist_info):
+        print("warning, iar logli invoked")
+        go = x_var # place holder
+        for i in xrange(self._dim):
+            iaf_mu, iaf_logstd = self.infer(
+                go,
+                lin_con=dist_info.get("linear_context"),
+                gating_con=dist_info.get("gating_context"),
+            )
+            go = iaf_mu + tf.exp(iaf_logstd)*x_var
+        logpz = self._base_dist.logli(go, dist_info)
+        return logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
+
+    def inserting_context(self):
+        return self._linear_context or self._gating_context
+        # this is for sharing context version
+        # keys = self._base_dist.dist_info_keys
+        # return self._linear_context and ("linear_context" not in keys)
 
     @property
     def dist_info_keys(self):
-        return []
+        keys = self._base_dist.dist_info_keys
+        if self.inserting_context():
+            if self._linear_context:
+                keys = keys + ["linear_context"]
+            if self._gating_context:
+                keys = keys + ["gating_context"]
+        return keys
 
-    def nonreparam_logli(self, x_var, dist_info):
-        return tf.zeros_like(x_var[:, 0])
+    @property
+    def dist_flat_dim(self):
+        if self.inserting_context():
+            return self._base_dist.dist_flat_dim + self._context_dim
+        else:
+            return self._base_dist.dist_flat_dim
+
+    def activate_dist(self, flat):
+        if self.inserting_context():
+            out = dict()
+            if self._linear_context:
+                lin_context = flat[:, :self._linear_context_dim]
+                flat = flat[:, self._linear_context_dim:]
+                out["linear_context"] = lin_context
+            if self._gating_context:
+                lin_context = flat[:, :self._gating_context_dim]
+                flat = flat[:, self._gating_context_dim:]
+                out["gating_context"] = lin_context
+            out = dict(out, **self._base_dist.activate_dist(flat))
+            return out
+        else:
+            return self._base_dist.activate_dist(flat)
 

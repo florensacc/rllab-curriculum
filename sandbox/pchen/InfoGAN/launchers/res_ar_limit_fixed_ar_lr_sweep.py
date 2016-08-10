@@ -6,7 +6,8 @@ from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR
 
 import os
-from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset
+from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
+    ResamplingBinarizedMnistDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -114,7 +115,8 @@ for v in variants[:]:
 
         # set_seed(v["seed"])
 
-        dataset = BinarizedMnistDataset()
+        dataset = ResamplingBinarizedMnistDataset()
+        # dataset = BinarizedMnistDataset()
         # dataset = MnistDataset()
 
         dist = Gaussian(zdim)
@@ -171,7 +173,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="res_vae_long_limit_fixed_ar_lr_sweep",
+            exp_prefix="res_vae_ar_lr_sweep",
             seed=v["seed"],
             # mode="local",
             mode="lab_kube",

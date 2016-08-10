@@ -363,7 +363,7 @@ def get_linear_ar_mask_by_groups(n_in, n_out, ngroups, zerodiagonal=True):
 @prettytensor.Register(
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'ngroups',
-            'wnorm', 'data_init',
+            'wnorm', 'data_init', 'init_scale',
     ))
 class arfc(prettytensor.VarStoreMethod):
     def __call__(self,
@@ -976,3 +976,4 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1):
 def logsumexp(x):
     x_max = tf.reduce_max(x, [1], keep_dims=True)
     return tf.reshape(x_max, [-1]) + tf.log(tf.reduce_sum(tf.exp(x - x_max), [1]))
+

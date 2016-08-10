@@ -19,8 +19,6 @@ from rllab.envs.mujoco.maze.maze_env_utils import ray_segment_intersect, point_d
 from rllab.envs.env_spec import EnvSpec
 
 
-# from sandbox.carlos_snn.envs.env_maze_spec import EnvMazeSpec
-
 class MazeEnv(ProxyEnv, Serializable):
     MODEL_CLASS = None
     ORI_IND = None
@@ -43,8 +41,8 @@ class MazeEnv(ProxyEnv, Serializable):
             n_bins=20,
             sensor_range=10.,
             sensor_span=math.pi,
-            maze_id=4,
-            length=2,
+            maze_id=3,
+            length=0,
             maze_height=0.2,
             maze_size_scaling=4,
             *args,
@@ -349,13 +347,13 @@ class MazeEnv(ProxyEnv, Serializable):
         return spaces.Box(ub * -1, ub)
 
     # CF space of only the robot observations (they go first in the get current obs)
-    # @property
+    @property
     def robot_observation_space(self):
         shp = self.get_current_robot_obs().shape
         ub = BIG * np.ones(shp)
         return spaces.Box(ub * -1, ub)
 
-    # @property
+    @property
     def maze_observation_space(self):
         shp = self.get_current_maze_obs().shape
         ub = BIG * np.ones(shp)
@@ -364,7 +362,6 @@ class MazeEnv(ProxyEnv, Serializable):
     @property
     @overrides
     def spec(self):
-        print '\n\n Entering spec of maze_env \n\n'
         return EnvSpec(
             observation_space=self.observation_space,
             # maze_observation_space=self.maze_observation_space,

@@ -970,15 +970,22 @@ from tensorflow.examples.tutorials import mnist
 import os
 import numpy as np
 
+def to_onehots(idx, dim):
+    size = len(idx)
+    out = np.zeros([size, dim])
+    out[np.arange(size), idx] = 1.
+    return out
 
 class Dataset(object):
-    def __init__(self, images, labels=None):
+    def __init__(self, images, labels=None, to_one_hot=True):
         self._images = images.reshape(images.shape[0], -1)
         self._labels = labels
         self._epochs_completed = -1
         self._num_examples = images.shape[0]
         # shuffle on first run
         self._index_in_epoch = self._num_examples
+        self._to_one_hot = to_one_hot
+        self._label_dim = np.max(labels)+1 if labels is not None else 0
 
     @property
     def images(self):
@@ -1017,7 +1024,10 @@ class Dataset(object):
         if self._labels is None:
             return self._images[start:end], None
         else:
-            return self._images[start:end], self._labels[start:end]
+            labels = self._labels[start:end]
+            if self._to_one_hot:
+                labels = to_onehots(labels, self._label_dim)
+            return self._images[start:end], labels
 
 class BinarizedDataset(Dataset):
     def next_batch(self, batch_size):
@@ -1163,26 +1173,11 @@ class BinarizedMnistDataset(object):
         return self._image_shape
 
 class ResamplingBinarizedMnistDataset(object):
-    def __init__(self):
+    def __init__(self, labels_per_class=10):
         data_directory = "MNIST"
         if not os.path.exists(data_directory):
             os.makedirs(data_directory)
-        dataset = mnist.input_data.read_data_sets(data_directory)
-        # make sure that each type of digits have exactly 10 samples
-        sup_images = []
-        sup_labels = []
-        # rnd_state = np.random.get_state()
-        # np.random.seed(0)
-        # for cat in range(10):
-        #     ids = np.where(self.train.labels == cat)[0]
-        #     np.random.shuffle(ids)
-        #     sup_images.extend(self.train.images[ids[:10]])
-        #     sup_labels.extend(self.train.labels[ids[:10]])
-        # np.random.set_state(rnd_state)
-        # self.supervised_train = Dataset(
-        #     np.asarray(sup_images),
-        #     np.asarray(sup_labels),
-        # )
+        dataset = mnist.input_data.read_data_sets(data_directory, one_hot=False)
         self.train = BinarizedDataset(
             dataset.train.images,
             dataset.train.labels,
@@ -1194,6 +1189,20 @@ class ResamplingBinarizedMnistDataset(object):
         self.test = BinarizedDataset(
             dataset.test.images,
             dataset.test.labels,
+        )
+        # make sure that each type of digits have exactly 10 samples
+        sup_images = []
+        sup_labels = []
+        # rnd_state = np.random.get_state()
+        # np.random.seed(0)
+        for cat in range(10):
+            ids = np.where(self.train.labels == cat)[0]
+            np.random.shuffle(ids)
+            sup_images.extend(self.train.images[ids[:labels_per_class]])
+            sup_labels.extend(self.train.labels[ids[:labels_per_class]])
+        self.supervised_train = Dataset(
+            np.asarray(sup_images),
+            np.asarray(sup_labels),
         )
         # self.test = dataset.test
         # self.validation = dataset.validation
@@ -1213,3 +1222,26 @@ class ResamplingBinarizedMnistDataset(object):
     def image_shape(self):
         return self._image_shape
 
+class BinarizedOmniglotDataset(object):
+    def __init__(self):
+        # train, valid, test = load_mnist_binarized()
+        # train, valid, test = load_omniglot_iwae()
+        train_x, train_t, train_char, test_x, test_t, test_char = load_omniglot_iwae()
+        self.train = Dataset(train_x)
+        # self.test = Dataset(valid)
+        self.validation = Dataset(test_x)
+        self._image_dim = 28 * 28
+        self._image_shape = (28, 28, 1)
+
+    def transform(self, data):
+        return data
+
+    def inverse_transform(self, data):
+        return data
+
+    @property
+    def image_dim(self):
+        return self._image_dim
+    @property
+    def image_shape(self):
+        return self._image_shape

@@ -2,6 +2,7 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 from rllab.misc.instrument import run_experiment_lite, stub
+from sandbox.pchen.InfoGAN.infogan.algos.semi_vae import SemiVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
     IAR
@@ -102,7 +103,7 @@ variants = vg.variants(randomized=True)
 
 print(len(variants))
 
-for v in variants[:]:
+for v in variants[:1]:
 
     # with skip_if_exception():
 
@@ -115,7 +116,7 @@ for v in variants[:]:
 
         # set_seed(v["seed"])
 
-        dataset = ResamplingBinarizedMnistDataset()
+        dataset = ResamplingBinarizedMnistDataset(labels_per_class=20)
         # dataset = BinarizedMnistDataset()
         # dataset = MnistDataset()
 
@@ -151,15 +152,6 @@ for v in variants[:]:
         ]
 
         inf_dist = Gaussian(zdim)
-        for _ in xrange(1):
-            inf_dist = IAR(
-                zdim,
-                inf_dist,
-                neuron_ratio=5,
-                data_init_scale=0.05,
-                linear_context=True,
-                gating_context=True,
-            )
         model = RegularizedHelmholtzMachine(
             output_dist=MeanBernoulli(dataset.image_dim),
             latent_spec=latent_spec,
@@ -169,20 +161,25 @@ for v in variants[:]:
             # inference_dist=Gaussian(
             #     zdim,
             # ),
-            inference_dist=inf_dist,
+            inference_dist=IAR(
+                zdim,
+                inf_dist,
+                data_init_wnorm=True,
+                data_init_scale=0.1,
+            ),
             wnorm=v["wnorm"],
         )
 
-        algo = VAE(
+        algo = SemiVAE(
             model=model,
             dataset=dataset,
             batch_size=batch_size,
+            sup_batch_size=10,
+            sup_coeff=1.,
             exp_name=exp_name,
             max_epoch=max_epoch,
             updates_per_epoch=updates_per_epoch,
-            optimizer_cls=AdamaxOptimizer,
-            optimizer_args=dict(learning_rate=v["lr"]),
-            anneal_after=0,
+            optimizer=AdamaxOptimizer(v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=1,

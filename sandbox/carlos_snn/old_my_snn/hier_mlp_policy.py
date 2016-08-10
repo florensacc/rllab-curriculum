@@ -24,6 +24,8 @@ from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 from sandbox.carlos_snn.distributions.categorical import Categorical
 from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
 
+import joblib
+
 
 class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  # also inherits form Parametrized
     @autoargs.arg('hidden_sizes', type=int, nargs='*',
@@ -47,12 +49,14 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             self,
             env_spec,
             env,
+            path_to_pkl=None,
             ##CF - latents units at the input
             latent_dim=2,  # we keep all these as the dim of the output of the other MLP and others that we will need!
             latent_name='categorical',
             bilinear_integration=False,  # again, needs to match!
             resample=False,  # this can change: frequency of resampling the latent?
-            hidden_sizes=(32, 32),
+            hidden_sizes_snn=(32, 32),
+            hidden_sizes_selector=(10, 10),
             learn_std=True,
             init_std=1.0,
             adaptive_std=False,
@@ -68,7 +72,8 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         self.bilinear_integration = bilinear_integration
         self.resample = resample
         self.min_std = min_std
-        self.hidden_sizes = hidden_sizes
+        self.hidden_sizes_snn = hidden_sizes_snn
+        self.hidden_sizes_selector = hidden_sizes_selector
 
         self.pre_fix_latent = np.array([])  # if this is not empty when using reset() it will use this latent
         self.latent_fix = np.array([])  # this will hold the latents variable sampled in reset()
@@ -95,15 +100,15 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
 
         # retreive dimensions and check consistency
         all_obs_dim = env_spec.observation_space.flat_dim
-        obs_robot_dim = env.robot_observation_space().flat_dim
-        obs_maze_dim = env.maze_observation_space().flat_dim
+        obs_robot_dim = env.robot_observation_space.flat_dim
+        obs_maze_dim = env.maze_observation_space.flat_dim
         assert all_obs_dim == obs_robot_dim + obs_maze_dim
 
         # create network with softmax output: it will be the latent!
         latent_selection_network = MLP(
             input_shape=(obs_robot_dim + obs_maze_dim,),
             output_dim=latent_dim,
-            hidden_sizes=hidden_sizes,
+            hidden_sizes=self.hidden_sizes_selector,
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=NL.softmax,
         )
@@ -136,21 +141,26 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         mean_network = MLP(
             input_layer=l_obs_snn,
             output_dim=action_dim,
-            hidden_sizes=hidden_sizes,
+            hidden_sizes=self.hidden_sizes_snn,
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=output_nonlinearity,
+            name="meanMLP",
         )
 
+        self._layers_mean = mean_network.layers
         l_mean = mean_network.output_layer
 
         if adaptive_std:
-            l_log_std = MLP(
+            log_std_network = MLP(
                 input_layer=l_obs_snn,
                 output_dim=action_dim,
                 hidden_sizes=std_hidden_sizes,
                 hidden_nonlinearity=std_hidden_nonlinearity,
                 output_nonlinearity=None,
-            ).output_layer
+                name="log_stdMLP"
+            )
+            l_log_std = log_std_network.output_layer
+            self._layers_log_std = log_std_network.layers
         else:
             l_log_std = ParamLayer(
                 incoming=mean_network.input_layer,
@@ -159,6 +169,14 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
                 name="output_log_std",
                 trainable=learn_std,
             )
+            self._layers_log_std = [l_log_std]
+
+        self._layers_snn = self._layers_mean + self._layers_log_std  # this returns a list with the "snn" layers
+
+        if path_to_pkl:
+            data = joblib.load(path_to_pkl)
+            warm_params = data['policy'].get_params_internal()
+            self.set_params_snn(warm_params)
 
         mean_var, log_std_var = L.get_output([l_mean, l_log_std])
 
@@ -178,10 +196,26 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             outputs=[mean_var, log_std_var],
         )
 
-    ##CF
-    @property
-    def latent_space(self):
-        return Box(low=-np.inf, high=np.inf, shape=(1,))
+    # # I shouldn't need the latent space anymore
+    # @property
+    # def latent_space(self):
+    #     return Box(low=-np.inf, high=np.inf, shape=(1,))
+
+    def get_params_snn(self):
+        params = []
+        for layer in self._layers_snn:
+            params += layer.get_params()
+        return params
+
+    # another way will be to do as in parametrized.py and flatten_tensors (in numpy). But with this I check names
+    def set_params_snn(self, snn_params):
+        params_value_by_name = {}
+        for param in snn_params:
+            params_value_by_name[param.name] = param.get_value()
+
+        local_params = self.get_params_snn()
+        for param in local_params:
+            param.set_value(params_value_by_name[param.name])
 
     def dist_info_sym(self, obs_var, state_info_var=None):
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)

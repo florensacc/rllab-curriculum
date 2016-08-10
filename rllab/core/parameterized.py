@@ -25,7 +25,7 @@ class Parameterized(object):
         """
         raise NotImplementedError
 
-    def get_params(self, **tags):
+    def get_params(self, **tags):  # adds the list to the _cached_params dict under the tuple key (one)
         """
         Get the list of parameters, filtered by the provided tags.
         Some common tags include 'regularizable' and 'trainable'

@@ -15,7 +15,8 @@ class VAE(object):
                  dataset,
                  batch_size,
                  exp_name="experiment",
-                 optimizer=AdamaxOptimizer(),
+                 optimizer_cls=AdamaxOptimizer,
+                 optimizer_args={},
                  # log_dir="logs",
                  # checkpoint_dir="ckt",
                  max_epoch=100,
@@ -32,6 +33,7 @@ class VAE(object):
                  bnn_kl_coeff=1.,
                  k=1, # importance sampling ratio
                  cond_px_ent=None,
+                 anneal_after=None,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -41,8 +43,10 @@ class VAE(object):
         :type recog_reg_coeff: float
         :type learning_rate: float
         """
+        self.optimizer_cls = optimizer_cls
+        self.optimizer_args = optimizer_args
+        self.anneal_after = anneal_after
         self.cond_px_ent = cond_px_ent
-        self.optimizer = optimizer
         self.vali_eval_interval = vali_eval_interval
         self.sample_zs = []
         self.sample_imgs = []
@@ -87,12 +91,21 @@ class VAE(object):
         if eval:
             self.eval_input_tensor = \
                 input_tensor = \
-                tf.placeholder(tf.float32, [self.eval_batch_size, self.dataset.image_dim])
+                tf.placeholder(
+                    tf.float32,
+                    [self.eval_batch_size, self.dataset.image_dim],
+                    "eval_input"
+                )
         else:
-            self.input_tensor = input_tensor = tf.placeholder(tf.float32, [self.batch_size, self.dataset.image_dim])
+            self.input_tensor = input_tensor = tf.placeholder(
+                tf.float32,
+                [self.batch_size, self.dataset.image_dim],
+                "train_input_init_%s" % init
+            )
 
         with pt.defaults_scope(phase=pt.Phase.train):
-            z_var, z_dist_info = self.model.encode(input_tensor, k=self.k if eval else 1)
+            z_var, log_p_z_given_x, z_dist_info = \
+                self.model.encode(input_tensor, k=self.k if eval else 1)
             x_var, x_dist_info = self.model.decode(z_var)
 
             log_p_x_given_z = self.model.output_dist.logli(
@@ -108,7 +121,7 @@ class VAE(object):
                 assert self.monte_carlo_kl
                 kls = (
                         - self.model.latent_dist.logli_prior(z_var) \
-                        + self.model.inference_dist.logli(z_var, z_dist_info)
+                        + log_p_z_given_x
                     )
                 kl = tf.reduce_mean(kls)
 
@@ -128,7 +141,7 @@ class VAE(object):
                     # Construct the variational lower bound
                     kl = tf.reduce_mean(
                         - self.model.latent_dist.logli_prior(z_var)  \
-                        + self.model.inference_dist.logli(z_var, z_dist_info)
+                        + log_p_z_given_x
                     )
                 else:
                     # Construct the variational lower bound
@@ -153,9 +166,10 @@ class VAE(object):
             #     vlb -= prior_reg
 
 
-            surr_vlb = vlb + tf.reduce_mean(
-                    tf.stop_gradient(log_p_x_given_z) * self.model.latent_dist.nonreparam_logli(z_var, z_dist_info)
-                )
+            # surr_vlb = vlb + tf.reduce_mean(
+            #         tf.stop_gradient(log_p_x_given_z) * self.model.latent_dist.nonreparam_logli(z_var, z_dist_info)
+            #     )
+            # surr_vlb
             # Normalize by the dimensionality of the data distribution
             log_vars.append(("vlb_sum", vlb))
             log_vars.append(("kl_sum", kl))
@@ -163,23 +177,11 @@ class VAE(object):
 
             true_vlb /= ndim
             vlb /= ndim
-            surr_vlb /= ndim
+            # surr_vlb /= ndim
             kl /= ndim
 
-            loss = - vlb
-            surr_loss = - surr_vlb
-            if self.cond_px_ent:
-                ld = self.model.latent_dist
-                prior_z_var = ld.sample_prior(self.batch_size)
-                _, prior_x_dist_info = self.model.decode(prior_z_var)
-                prior_ent = tf.reduce_mean(self.model.output_dist.entropy(prior_x_dist_info)) \
-                            / ndim
-                loss += self.cond_px_ent * prior_ent
-                log_vars.append((
-                    "prior_ent_x_given_z",
-                    prior_ent
-                ))
-
+            # loss = - vlb
+            # surr_loss = - surr_vlb
 
             log_vars.append((
                 "ent_x_given_z",
@@ -188,14 +190,37 @@ class VAE(object):
             log_vars.append(("vlb", vlb))
             log_vars.append(("kl", kl))
             log_vars.append(("true_vlb", true_vlb))
-            log_vars.append(("loss", loss))
+            final_losses = [-vlb]
+
+            if self.cond_px_ent:
+                ld = self.model.latent_dist
+                prior_z_var = ld.sample_prior(self.batch_size)
+                _, prior_x_dist_info = self.model.decode(prior_z_var)
+                prior_ent = tf.reduce_mean(self.model.output_dist.entropy(prior_x_dist_info)) \
+                            / ndim
+                # loss += self.cond_px_ent * prior_ent
+                final_losses.append(self.cond_px_ent * prior_ent)
+                log_vars.append((
+                    "prior_ent_x_given_z",
+                    prior_ent
+                ))
+            self.init_hook(locals())
+
             if (not init) and (not eval):
                 for name, var in self.log_vars:
                     tf.scalar_summary(name, var)
                 with tf.variable_scope("optim"):
                     # optimizer = tf.train.AdamOptimizer(self.learning_rate)
-                    optimizer = self.optimizer # AdamaxOptimizer(self.learning_rate)
-                    self.trainer = pt.apply_optimizer(optimizer, losses=[surr_loss])
+                    optimizer = self.optimizer_cls # AdamaxOptimizer(self.learning_rate)
+                    if self.anneal_after is not None:
+                        self.lr_var = tf.Variable(
+                            # assume lr is always set
+                            initial_value=self.optimizer_args["learning_rate"],
+                            name="opt_lr",
+                        )
+                        self.optimizer_args["learning_rate"] = self.lr_var
+                    optimizer = self.optimizer_cls(**self.optimizer_args)
+                    self.trainer = pt.apply_optimizer(optimizer, losses=final_losses)
 
         if init:
             # destroy all summaries
@@ -211,8 +236,8 @@ class VAE(object):
 
         with pt.defaults_scope(phase=pt.Phase.test):
                 with tf.variable_scope("model", reuse=True) as scope:
-                    z_var, _ = self.model.encode(input_tensor)
-                    _, x_dist_info = self.model.decode(z_var)
+                    # z_var, _ = self.model.encode(input_tensor)
+                    # _, x_dist_info = self.model.decode(z_var)
 
                     # just take the mean image
                     if isinstance(self.model.output_dist, Bernoulli):
@@ -294,6 +319,20 @@ class VAE(object):
                     imgs = tf.expand_dims(imgs, 0)
                     tf.image_summary("pz_image", imgs, max_images=3)
 
+    def prepare_feed(self, data, bs):
+        x, _ = data.next_batch(bs)
+        x = np.tile(x, [self.weight_redundancy, 1])
+        return {
+            self.input_tensor: x,
+        }
+
+    def prepare_eval_feed(self, data, bs):
+        x, _ = data.next_batch(bs)
+        x = np.tile(x, [self.weight_redundancy, 1])
+        return {
+            self.eval_input_tensor: x,
+        }
+
     def train(self):
         sess = tf.Session()
         self.sess = sess
@@ -306,16 +345,14 @@ class VAE(object):
             init = tf.initialize_all_variables()
             if self.bnn_decoder:
                 assert False
-                sess.run([
-                    self.saved_prior_mean.assign(self.mean_var),
-                    self.saved_prior_std.assign(self.std_var),
-                ])
 
             saver = tf.train.Saver()
 
             counter = 0
 
             for epoch in range(self.max_epoch):
+                self.pre_epoch(epoch)
+
                 logger.log("epoch %s" % epoch)
                 widgets = ["epoch #%d|" % epoch, Percentage(), Bar(), ETA()]
                 pbar = ProgressBar(maxval=self.updates_per_epoch, widgets=widgets)
@@ -325,11 +362,12 @@ class VAE(object):
                 for i in range(self.updates_per_epoch):
 
                     pbar.update(i)
-                    x, _ = self.dataset.train.next_batch(self.true_batch_size)
-                    x = np.tile(x, [self.weight_redundancy, 1])
+                    # x, _ = self.dataset.train.next_batch(self.true_batch_size)
+                    # x = np.tile(x, [self.weight_redundancy, 1])
+                    feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
 
                     if counter == 0:
-                        sess.run(init, {self.input_tensor: x})
+                        sess.run(init, feed)
                         self.init_opt(init=False, eval=True)
                         self.init_opt(init=False, eval=False)
                         vs = tf.all_variables()
@@ -348,13 +386,15 @@ class VAE(object):
                         summary_op = tf.merge_all_summaries()
                         summary_writer = tf.train.SummaryWriter(self.log_dir, sess.graph)
 
-                        # summary_writer.add_graph(sess.graph)
-
-                        log_vals = sess.run([] + log_vars, {self.input_tensor: x})[:]
+                        feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
+                        log_vals = sess.run([] + log_vars, feed)[:]
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
                         print("Initial: " + log_line)
 
-                    log_vals = sess.run([self.trainer] + log_vars, {self.input_tensor: x})[1:]
+                    log_vals = sess.run(
+                        [self.trainer] + log_vars,
+                        feed
+                    )[1:]
                     all_log_vals.append(log_vals)
 
 
@@ -365,17 +405,21 @@ class VAE(object):
 
                     if counter % self.summary_interval == 0:
                         summary = tf.Summary()
-                        summary_str = sess.run(summary_op, {self.input_tensor: x})
+                        summary_str = sess.run(summary_op, feed)
                         summary.MergeFromString(summary_str)
                         if counter % self.vali_eval_interval == 0:
                             ds = self.dataset.validation
                             all_test_log_vals = []
                             for ti in xrange(ds.images.shape[0] / self.eval_batch_size):
-                                test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
-                                test_x = np.tile(test_x, [self.weight_redundancy, 1])
+                                # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
+                                # test_x = np.tile(test_x, [self.weight_redundancy, 1])
+                                eval_feed = self.prepare_eval_feed(
+                                    self.dataset.validation,
+                                    self.eval_batch_size,
+                                )
                                 test_log_vals = sess.run(
                                     eval_log_vars,
-                                    {self.eval_input_tensor: test_x}
+                                    eval_feed,
                                 )
                                 all_test_log_vals.append(test_log_vals)
                             avg_test_log_vals = np.mean(np.array(all_test_log_vals), axis=0)
@@ -401,6 +445,15 @@ class VAE(object):
                     logger.record_tabular("vali_%s"%k, v)
                 logger.dump_tabular(with_prefix=False)
 
+                if self.anneal_after is not None and epoch >= self.anneal_after:
+                    if (epoch % 100) == 0:
+                        lr_val = sess.run([
+                            self.lr_var.assign(
+                                self.lr_var * 0.75
+                            )
+                        ])
+                        logger.log("Learning rate annealed to %s" % lr_val)
+
 
     def restore(self):
 
@@ -420,3 +473,9 @@ class VAE(object):
         import matplotlib.pyplot as plt
         for d in self.model.latent_dist.dists: plt.figure(); plt.imshow(sess.run(self.model.decode(d.prior_dist_info(1)["mean"])[1])['p'].reshape((28, 28)),cmap='Greys_r'); plt.show(block=False)
         import ipdb; ipdb.set_trace()
+
+    def init_hook(self, vars):
+        pass
+
+    def pre_epoch(self, epoch):
+        pass
