@@ -44,7 +44,7 @@ class MazeEnv(ProxyEnv, Serializable):
             maze_id=3,
             length=0,
             maze_height=0.2,
-            maze_size_scaling=4,
+            maze_size_scaling=2,
             *args,
             **kwargs):
 
@@ -322,7 +322,7 @@ class MazeEnv(ProxyEnv, Serializable):
                     assert False
 
         obs = np.concatenate([
-            self.wrapped_env.get_current_obs(),  # how can I know how big is this part?
+            self.wrapped_env.get_current_obs(),
             wall_readings,
             goal_readings
         ])
