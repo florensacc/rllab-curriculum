@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.001, 0.002, ] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
@@ -69,7 +69,7 @@ class VG(VariantGenerator):
         if nar == 0:
             return [1]
         else:
-            return [10, 20]
+            return [20]
 
     # @variant
     # def nm(self):
@@ -114,7 +114,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_init_scale(self):
-        return [0.1,]
+        return [0.1, 0.01]
 
     @variant(hide=False)
     def i_context(self):
@@ -197,7 +197,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0809_res_iaf_ar_hybrid_long",
+            exp_prefix="0809_res_iaf_ar_hybrid_long_rerun",
             seed=v["seed"],
             variant=v,
             # mode="local",
