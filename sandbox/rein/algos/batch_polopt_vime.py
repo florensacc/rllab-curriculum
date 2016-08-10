@@ -43,6 +43,7 @@ class SimpleReplayPool(object):
             action_dim,
             observation_dtype=theano.config.floatX,
             action_dtype=theano.config.floatX,
+            **kwargs
     ):
         self._observation_shape = observation_shape
         self._action_dim = action_dim
@@ -80,7 +81,7 @@ class SimpleReplayPool(object):
         if self._size >= self._max_pool_size:
             self._bottom = (self._bottom + 1) % self._max_pool_size
         else:
-            self._size = self._size + 1
+            self._size += 1
 
     def random_batch(self, batch_size):
         assert self._size > batch_size
@@ -91,8 +92,9 @@ class SimpleReplayPool(object):
             index = np.random.randint(
                 self._bottom, self._bottom + self._size) % self._max_pool_size
             # make sure that the transition is valid: if we are at the end of the pool, we need to discard
-            # this sample
-            if index == self._size - 1 and self._size <= self._max_pool_size:
+            # this sample. Also check whether terminal sample: no next state exists.
+            # FIXME: still fetches terminal transition.
+            if (index == self._size - 1 and self._size <= self._max_pool_size) or self._terminals[index] is True:
                 continue
             transition_index = (index + 1) % self._max_pool_size
             indices[count] = index
@@ -118,7 +120,7 @@ class SimpleReplayPool(object):
         #         act_mean = np.mean(act, axis=0)
         #         act_std = np.std(act, axis=0)
         #         return obs_mean, obs_std, act_mean, act_std
-        return 0., 0., 1., 1.
+        return 0, 1, 0, 1
 
     @property
     def size(self):
@@ -388,7 +390,7 @@ class BatchPolopt(RLAlgorithm):
             sanity_pred_im = np.around(sanity_pred_im).astype(int)
             target_im *= 256.
             target_im = np.around(target_im).astype(int)
-            err = 256 - np.abs(target_im - sanity_pred_im)
+            err = (256 - np.abs(target_im - sanity_pred_im) * 100.)
             input_im *= 256.
             input_im = np.around(input_im).astype(int)
 
@@ -463,12 +465,12 @@ class BatchPolopt(RLAlgorithm):
         if self._dyn_pool_args['enable']:
             observation_dtype = float
             self.pool = SimpleReplayPool(
-                max_pool_size=self.replay_pool_size,
+                max_pool_size=self._dyn_pool_args['size'],
                 # self.env.observation_space.shape,
                 observation_shape=(self.env.observation_space.flat_dim,),
                 action_dim=self.env.action_dim,
                 observation_dtype=observation_dtype,
-                **self._pool_args
+                **self._dyn_pool_args
             )
 
         self.start_worker()
@@ -484,7 +486,25 @@ class BatchPolopt(RLAlgorithm):
         for itr in xrange(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
+            if itr > 0:
+                acc_tmp = 0.
+                for _ in xrange(20):
+                    batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                    _x = np.hstack([batch['observations'], batch['actions']])
+                    _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
+                    acc_tmp += self.accuracy(_x, _y)
+                acc_tmp /= 20.
+                print(acc_tmp)
             paths = self.obtain_samples(itr)
+            if itr > 0:
+                acc_tmp = 0.
+                for _ in xrange(20):
+                    batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                    _x = np.hstack([batch['observations'], batch['actions']])
+                    _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
+                    acc_tmp += self.accuracy(_x, _y)
+                acc_tmp /= 20.
+                print(acc_tmp)
 
             if self._dyn_pool_args['enable']:
                 # USE REPLAY POOL
@@ -499,50 +519,46 @@ class BatchPolopt(RLAlgorithm):
                         act = path['actions'][i]
                         rew_orig = path['rewards_orig'][i]
                         term = (i == path_len - 1)
-                        if not term:
-                            self.pool.add_sample(obs, act, rew_orig, term)
+                        self.pool.add_sample(obs, act, rew_orig, term)
 
                 # Now we train the dynamics model using the replay self.pool; only
                 # if self.pool is large enough.
-                if self.pool.size >= self.min_pool_size:
-                    obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
+                if self.pool.size >= self._dyn_pool_args['min_size']:
                     acc_before, acc_after, train_loss = 0., 0., 0.
                     itr_tot = int(
                         np.ceil(self.num_sample_updates * float(self.batch_size) / self._dyn_pool_args['batch_size']))
+
+                    for _ in xrange(20):
+                        batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                        _x = np.hstack([batch['observations'], batch['actions']])
+                        _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
+                        acc_before += self.accuracy(_x, _y)
+                    acc_before /= 20.
 
                     for i in xrange(itr_tot):
 
                         batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
 
-                        act = (batch['actions'] - act_mean) / (act_std + 1e-8)
-                        # FIXME: and True for atari.
+                        _x = np.hstack([batch['observations'], batch['actions']])
                         if self._predict_delta:
-                            # Predict \Delta(s',s)
-                            obs = batch['observations']
-                            next_obs = batch['next_observations'] - batch['observations']
+                            _y = np.hstack(
+                                [(batch['next_observations'] - batch['observations']), batch['rewards'][:, np.newaxis]])
                         else:
-                            if self.output_type == 'classification':
-                                obs = batch['observations']
-                                next_obs = batch['next_observations']
-                            elif self.output_type == 'regression':
-                                obs = (batch['observations'] - obs_mean) / (obs_std + 1e-8)
-                                next_obs = (batch['next_observations'] - obs_mean) / (obs_std + 1e-8)
+                            _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
 
-                        _inputs = np.hstack([obs, act])
-                        _targets = next_obs
-                        if self.predict_reward:
-                            _targets = np.hstack((next_obs, batch['rewards'][:, None]))
+                        _tl = self.bnn.train_fn(_x, _y, kl_factor)
+                        train_loss += _tl
+                        if i % int(np.ceil(itr_tot / 20.)) == 0:
+                            self.plot_pred_imgs(_x, _y, itr, i)
 
-                        acc_before += self.accuracy(_inputs, _targets)
-                        train_loss += self.bnn.train_fn(
-                            _inputs, _targets, kl_factor)
-                        if i % int(np.ceil(itr_tot / 5.)) == 0:
-                            self.plot_pred_imgs(_inputs, _targets, itr, i)
-                        acc_after += self.accuracy(_inputs, _targets)
+                    for _ in xrange(20):
+                        batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                        _x = np.hstack([batch['observations'], batch['actions']])
+                        _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
+                        acc_after += self.accuracy(_x, _y)
+                    acc_after /= 20.
 
                     train_loss /= itr_tot
-                    acc_before /= itr_tot
-                    acc_after /= itr_tot
 
                     kl_factor *= self.replay_kl_schedule
 
@@ -864,6 +880,7 @@ class BatchPolopt(RLAlgorithm):
             path["advantages"] = special.discount_cumsum(deltas, self.discount * self.gae_lambda)
             # FIXME: does this have to be rewards_orig or rewards? DEFAULT:
             # rewards_orig
+            # If we use rewards, rather than rewards_orig, we include the intrinsic reward in the baseline.
             path["returns"] = special.discount_cumsum(path["rewards_orig"], self.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])

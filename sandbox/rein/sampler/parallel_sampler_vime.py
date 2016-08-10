@@ -60,19 +60,17 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     # Path rollout.
     path = rollout(G.env, G.policy, max_path_length)
 
-    # Computing intrinsic rewards.
-    # ----------------------------
     # Save original reward.
     path['rewards_orig'] = np.array(path['rewards'])
 
     # We skip first iteration as it is often difficult to normalize the KL
     # divergence terms.
-    if itr > 0:
+    if itr > -1:
         # Iterate over all paths and compute intrinsic reward by updating the
         # model on each observation, calculating the KL divergence of the new
         # params to the old ones, and undoing this operation.
-        obs = (path['observations'] - obs_mean) / (obs_std + 1e-8)
-        act = (path['actions'] - act_mean) / (act_std + 1e-8)
+        obs = path['observations']
+        act = path['actions']
         rew_orig = path['rewards_orig']
         # inputs = (o,a), target = o'
         obs_nxt = np.vstack([obs[1:]])
@@ -85,31 +83,41 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
         # KL vector assumes same shape as reward.
         kl = np.zeros(rew_orig.shape)
+
         for j in xrange(int(np.ceil((obs.shape[0] - 1) / float(kl_batch_size)))):
 
             start = j * kl_batch_size
-            end = np.minimum(
-                (j + 1) * kl_batch_size, _inputs.shape[0])
+            end = np.minimum((j + 1) * kl_batch_size, _inputs.shape[0])
 
             if surprise_type == G.dynamics.SurpriseType.INFGAIN:
                 if second_order_update:
-                    # We do a line search over the best step sizes using
-                    # step_size * invH * grad
-                    #                 best_loss_value = np.inf
-                    # Save old params.
                     G.dynamics.save_params()
-
-                    # conservative step (actual step should be 1.0)
-                    step_size = 1.0
+                    step_size = 0.1
                     surpr = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
 
-                else:
-                    surpr = np.nan
+                elif use_replay_pool:
+                    G.dynamics.save_params()
+                    for _ in xrange(n_itr_update):
+                        G.dynamics.train_update_fn(
+                            _inputs[start:end], _targets[start:end], 1.0)
+                    surpr = G.dynamics.fn_kl()
+                    G.dynamics.load_prev_params()
 
             elif surprise_type == G.dynamics.SurpriseType.BALD:
-                surpr = G.dynamics.train_update_fn(
-                    _inputs[start:end])
+                surpr = G.dynamics.train_update_fn(_inputs[start:end])
+
+            elif surprise_type == G.dynamics.SurpriseType.VAR:
+                surpr = G.dynamics.train_update_fn(_inputs[start:end])
+
+            elif surprise_type == G.dynamics.SurpriseType.L1:
+                assert use_replay_pool
+                G.dynamics.save_params()
+                for _ in xrange(n_itr_update):
+                    G.dynamics.train_update_fn(
+                        _inputs[start:end], _targets[start:end], 1.0)
+                surpr = G.dynamics.fn_l1() * float(kl_batch_size) / (end - start)
+                G.dynamics.load_prev_params()
 
             elif surprise_type == G.dynamics.SurpriseType.COMPR:
                 # FIXME: This doesn't work well.
@@ -139,7 +147,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
             # Load suprise into np.array.
             for k in xrange(start, end):
-                if isinstance(surpr, float):
+                if isinstance(surpr, float) or len(surpr.shape) == 0:
                     kl[k] = surpr
                 else:
                     kl[k] = surpr[k - start]
@@ -151,7 +159,6 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
         # Stuff it in path
         path['KL'] = kl
-        # ----------------------------
 
     return path, len(path["rewards"])
 
