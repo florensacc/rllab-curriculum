@@ -1254,7 +1254,6 @@ class ResamplingBinarizedOmniglotDataset(object):
         self.train = BinarizedDataset(train_x)
         # self.test = Dataset(valid)
         self.validation = BinarizedDataset(test_x)
-        import ipdb; ipdb.set_trace()
         self._image_dim = 28 * 28
         self._image_shape = (28, 28, 1)
 
