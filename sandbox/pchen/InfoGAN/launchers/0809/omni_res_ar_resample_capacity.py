@@ -70,6 +70,7 @@ class VG(VariantGenerator):
         else:
             return [5, 10, 20, ]
 
+
     # @variant
     # def nm(self):
     #     return [10, ]
