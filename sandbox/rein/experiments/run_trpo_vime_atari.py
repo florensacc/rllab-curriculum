@@ -73,9 +73,9 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=100,
+        batch_size=1000,
         whole_paths=True,
-        max_path_length=50,
+        max_path_length=500,
         n_itr=250,
         step_size=0.01,
         optimizer_args=dict(

@@ -103,6 +103,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     surpr = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
 
+
                 elif use_replay_pool:
                     G.dynamics.save_params()
                     for _ in xrange(n_itr_update):
@@ -120,6 +121,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
             elif surprise_type == G.dynamics.SurpriseType.L1:
                 assert use_replay_pool
                 surpr = 0.
+
                 # G.dynamics.save_params()
                 # print('---')
                 # for _ in xrange(n_itr_update):

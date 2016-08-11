@@ -98,21 +98,20 @@ class SimpleReplayPool(object):
                 self._bottom, self._bottom + self._size) % self._max_pool_size
             # make sure that the transition is valid: if we are at the end of the pool, we need to discard
             # this sample. Also check whether terminal sample: no next state exists.
-            # FIXME: still fetches terminal transition.
-            if (index == self._size - 1 and self._size <= self._max_pool_size) or self._terminals[index] is True:
+            if (index == self._size - 1 and self._size <= self._max_pool_size) or self._terminals[index] == 1:
                 continue
             transition_index = (index + 1) % self._max_pool_size
             indices[count] = index
             transition_indices[count] = transition_index
             # Here we add num_seq_frames - 1 additional previous frames; until we encounter term frame, in which
             # case we add black frames.
-            lst_obs = []
+            lst_obs = [None] * self._num_seq_frames
             insert_empty = np.zeros(batch_size, dtype='bool')
             for i in xrange(self._num_seq_frames):
                 obs = self._observations[indices - i]
                 insert_empty = np.maximum(self._terminals[indices - i].astype('bool'), insert_empty)
                 obs[insert_empty] = 0
-                lst_obs.append(obs)
+                lst_obs[self._num_seq_frames - i - 1] = obs
 
             arr_obs = np.stack(lst_obs, axis=1).reshape((lst_obs[0].shape[0], -1))
 
@@ -375,65 +374,92 @@ class BatchPolopt(RLAlgorithm):
         tmp = pickle.load(open(path + '/dataset.pkl', 'r'))
 
     def plot_pred_imgs(self, inputs, targets, itr, count):
-        # try:
-        # This is specific to Atari.
-        import matplotlib.pyplot as plt
-        if not hasattr(self, '_fig'):
-            self._fig = plt.figure()
-            self._fig_1 = self._fig.add_subplot(141)
-            plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                            labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_2 = self._fig.add_subplot(142)
-            plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                            labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_3 = self._fig.add_subplot(143)
-            plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                            labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_4 = self._fig.add_subplot(144)
-            plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                            labelbottom='off', right='off', left='off', labelleft='off')
-            self._im1, self._im2, self._im3, self._im4 = None, None, None, None
+        try:
+            # This is specific to Atari.
+            import matplotlib.pyplot as plt
+            if not hasattr(self, '_fig'):
+                self._fig = plt.figure()
+                self._fig_1 = self._fig.add_subplot(241)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._fig_2 = self._fig.add_subplot(242)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._fig_3 = self._fig.add_subplot(243)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._fig_4 = self._fig.add_subplot(244)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._fig_5 = self._fig.add_subplot(245)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._fig_6 = self._fig.add_subplot(246)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._fig_7 = self._fig.add_subplot(247)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._fig_8 = self._fig.add_subplot(248)
+                plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                                labelbottom='off', right='off', left='off', labelleft='off')
+                self._im1, self._im2, self._im3, self._im4 = None, None, None, None
+                self._im5, self._im6, self._im7, self._im8 = None, None, None, None
 
-        idx = np.random.randint(0, inputs.shape[0], 1)
-        sanity_pred = self.bnn.pred_fn(inputs)
-        input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
-        input_im = input_im[:, -np.prod(self.state_dim):]
-        if (input_im < 1e-2).all():
-            import ipdb; ipdb.set_trace()
-        input_im = input_im[idx, :].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-        sanity_pred_im = sanity_pred[idx, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-        target_im = targets[idx, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+            idx = np.random.randint(0, inputs.shape[0], 1)
+            sanity_pred = self.bnn.pred_fn(inputs)
+            input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
+            lst_input_im = [input_im[idx, i * np.prod(self.state_dim):(i + 1) * np.prod(self.state_dim)].reshape(
+                self.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
+                            xrange(self._num_seq_frames)]
+            input_im = input_im[:, -np.prod(self.state_dim):]
+            input_im = input_im[idx, :].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+            sanity_pred_im = sanity_pred[idx, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+            target_im = targets[idx, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
 
-        if self._predict_delta:
-            sanity_pred_im += input_im
-            target_im += input_im
+            if self._predict_delta:
+                sanity_pred_im += input_im
+                target_im += input_im
 
-        sanity_pred_im *= 256.
-        sanity_pred_im = np.around(sanity_pred_im).astype(int)
-        target_im *= 256.
-        target_im = np.around(target_im).astype(int)
-        err = (256 - np.abs(target_im - sanity_pred_im) * 100.)
-        input_im *= 256.
-        input_im = np.around(input_im).astype(int)
+            sanity_pred_im *= 256.
+            sanity_pred_im = np.around(sanity_pred_im).astype(int)
+            target_im *= 256.
+            target_im = np.around(target_im).astype(int)
+            err = (256 - np.abs(target_im - sanity_pred_im) * 100.)
+            input_im *= 256.
+            input_im = np.around(input_im).astype(int)
 
-        if self._im1 is None or self._im2 is None:
-            self._im1 = self._fig_1.imshow(
-                input_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im2 = self._fig_2.imshow(
-                target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im3 = self._fig_3.imshow(
-                sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im4 = self._fig_4.imshow(
-                err, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-        else:
-            self._im1.set_data(input_im)
-            self._im2.set_data(target_im)
-            self._im3.set_data(sanity_pred_im)
-            self._im4.set_data(err)
-        plt.savefig(
-            logger._snapshot_dir + '/dynpred_img_{}_{}.png'.format(itr, count), bbox_inches='tight')
-        # # except Exception:
-        #     pass
+            if self._im1 is None or self._im2 is None:
+                self._im1 = self._fig_1.imshow(
+                    input_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im2 = self._fig_2.imshow(
+                    target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im3 = self._fig_3.imshow(
+                    sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im4 = self._fig_4.imshow(
+                    err, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im5 = self._fig_5.imshow(
+                    lst_input_im[0], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im6 = self._fig_6.imshow(
+                    lst_input_im[1], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im7 = self._fig_7.imshow(
+                    lst_input_im[2], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im8 = self._fig_8.imshow(
+                    lst_input_im[3], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+
+            else:
+                self._im1.set_data(input_im)
+                self._im2.set_data(target_im)
+                self._im3.set_data(sanity_pred_im)
+                self._im4.set_data(err)
+                self._im5.set_data(lst_input_im[0])
+                self._im6.set_data(lst_input_im[1])
+                self._im7.set_data(lst_input_im[2])
+                self._im8.set_data(lst_input_im[3])
+            plt.savefig(
+                logger._snapshot_dir + '/dynpred_img_{}_{}.png'.format(itr, count), bbox_inches='tight')
+        except Exception:
+            pass
 
     def train(self):
 
