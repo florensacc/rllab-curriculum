@@ -207,7 +207,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
         ],
-        unn_learning_rate=0.0001,
+        unn_learning_rate=0.0003,
         surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP99PERC,
         update_likelihood_sd=True,
         output_type=ConvBNNVIME.OutputType.REGRESSION,

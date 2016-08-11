@@ -94,8 +94,9 @@ class SimpleReplayPool(object):
         transition_indices = np.zeros(batch_size, dtype='uint64')
         count = 0
         while count < batch_size:
+            # We don't want to hit the bottom when using num_seq_frames in history.
             index = np.random.randint(
-                self._bottom, self._bottom + self._size) % self._max_pool_size
+                self._bottom + self._num_seq_frames - 1, self._bottom + self._size) % self._max_pool_size
             # make sure that the transition is valid: if we are at the end of the pool, we need to discard
             # this sample. Also check whether terminal sample: no next state exists.
             if (index == self._size - 1 and self._size <= self._max_pool_size) or self._terminals[index] == 1:
@@ -110,7 +111,9 @@ class SimpleReplayPool(object):
             for i in xrange(self._num_seq_frames):
                 obs = self._observations[indices - i]
                 insert_empty = np.maximum(self._terminals[indices - i].astype('bool'), insert_empty)
-                obs[insert_empty] = 0
+                if insert_empty.any():
+                    obs_prev = self._observations[indices - i + 1]
+                    obs[insert_empty] = obs_prev[insert_empty]
                 lst_obs[self._num_seq_frames - i - 1] = obs
             arr_obs = np.stack(lst_obs, axis=1).reshape((lst_obs[0].shape[0], -1))
 

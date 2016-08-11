@@ -166,7 +166,7 @@ class BayesianLayer(lasagne.layers.Layer):
             # but this trains much slower.
             self.mu = self.add_param(
                 # lasagne.init.Normal(0.00001, 0),
-                lasagne.init.GlorotUniform(),
+                lasagne.init.GlorotNormal(),
                 self.get_W_shape(), name='mu', bayesian=True)
             if not self.disable_variance:
                 self.rho = self.add_param(
