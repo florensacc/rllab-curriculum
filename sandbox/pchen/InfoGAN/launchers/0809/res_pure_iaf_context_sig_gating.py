@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 1500
+max_epoch = 700
 
 stub(globals())
 
@@ -62,14 +62,15 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4,]
+        # return [4,]
+        return [0]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [20]
+            return [10]
 
     # @variant
     # def nm(self):
@@ -80,7 +81,7 @@ class VG(VariantGenerator):
     # def pr(self):
     #     return [True, False]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def network(self):
         # yield "large_conv"
         # yield "small_conv"
@@ -92,17 +93,17 @@ class VG(VariantGenerator):
         # yield "small_res_small_kern"
         yield "resv1_k3_pixel_bias"
 
-    @variant(hide=True)
+    @variant(hide=False)
     def wnorm(self):
         return [True, ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def ar_wnorm(self):
         return [True, ]
 
     @variant(hide=False)
     def k(self):
-        return [128, ]
+        return [32, ]
 
     @variant(hide=False)
     def i_nar(self):
@@ -114,16 +115,16 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_init_scale(self):
-        return [0.1, 0.01]
+        return [0.1,]
 
     @variant(hide=False)
     def i_context(self):
         # return [True, False]
         return [
-            # [],
+            [],
             ["linear"],
             ["gating"],
-            # ["linear", "gating"]
+            ["linear", "gating"]
         ]
 
 
@@ -192,12 +193,11 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=2500,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0809_res_iaf_ar_hybrid_rerun",
+            exp_prefix="0809_res_pure_iaf_gating_sig",
             seed=v["seed"],
             variant=v,
             # mode="local",

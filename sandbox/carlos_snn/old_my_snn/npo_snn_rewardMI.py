@@ -209,50 +209,6 @@ class NPO_snn(BatchPolopt):
         # plot_all_exp(data_dir)
         self.shutdown_worker()
 
-    @overrides
-    def log_diagnostics(self, paths):
-        BatchPolopt.log_diagnostics(self, paths)
-        if self.policy.latent_dim:
-            if self.latent_regressor:
-                with logger.prefix(
-                        ' Latent regressor logging | '):  # this is mostly useless as log_diagnostics is only tabular
-                    self.latent_regressor.log_diagnostics(paths)
-            # log the MI with other obs and action
-            for i, lat_reg in enumerate(self.other_regressors):
-                with logger.prefix(' Extra latent regressor {} | '.format(i)):  # same as above
-                    lat_reg.fit(paths)
-                    lat_reg.log_diagnostics(paths)
-
-            if self.log_individual_latents and not self.policy.resample:  # this is only valid for finite discrete latents!!
-                all_latent_avg_returns = []
-                clustered_by_latents = {}  # this could be done within the distribution to be more general, but ugly
-                for path in paths:
-                    lat = str(path['agent_infos']['latents'][0])
-                    if lat not in clustered_by_latents:
-                        clustered_by_latents[lat] = [path]
-                    else:
-                        clustered_by_latents[lat].append(path)
-                for latent_code, paths in clustered_by_latents.iteritems():
-                    with logger.tabular_prefix(latent_code), logger.prefix(latent_code):
-                        undiscounted_rewards = [sum(path["true_rewards"]) for path in paths]
-                        all_latent_avg_returns.append(np.mean(undiscounted_rewards))
-                        logger.record_tabular('Avg_TrueReturn', np.mean(undiscounted_rewards))
-                        logger.record_tabular('Std_TrueReturn', np.std(undiscounted_rewards))
-                        logger.record_tabular('Max_TrueReturn', np.max(undiscounted_rewards))
-                        if self.log_deterministic:
-                            with self.policy.set_std_to_0():
-                                path = rollout(self.env, self.policy, self.max_path_length)
-                            logger.record_tabular('Deterministic_TrueReturn', np.sum(path["rewards"]))
-
-                with logger.tabular_prefix('all_lat_'), logger.prefix('all_lat_'):
-                    logger.record_tabular('MaxAvgReturn', np.max(all_latent_avg_returns))
-                    logger.record_tabular('MinAvgReturn', np.min(all_latent_avg_returns))
-                    logger.record_tabular('StdAvgReturn', np.std(all_latent_avg_returns))
-        else:
-            if self.log_deterministic:
-                with self.policy.set_std_to_0():
-                    path = rollout(self.env, self.policy, self.max_path_length)
-                logger.record_tabular('Deterministic_TrueReturn', np.sum(path["rewards"]))
 
     @overrides
     def init_opt(self):
@@ -368,3 +324,49 @@ class NPO_snn(BatchPolopt):
             baseline=self.baseline,
             env=self.env,
         )
+
+    @overrides
+    def log_diagnostics(self, paths):
+        BatchPolopt.log_diagnostics(self, paths)
+        if self.policy.latent_dim:
+            if self.latent_regressor:
+                with logger.prefix(
+                        ' Latent regressor logging | '):  # this is mostly useless as log_diagnostics is only tabular
+                    self.latent_regressor.log_diagnostics(paths)
+            # log the MI with other obs and action
+            for i, lat_reg in enumerate(self.other_regressors):
+                with logger.prefix(' Extra latent regressor {} | '.format(i)):  # same as above
+                    lat_reg.fit(paths)
+                    lat_reg.log_diagnostics(paths)
+
+            if self.log_individual_latents and not self.policy.resample:  # this is only valid for finite discrete latents!!
+                all_latent_avg_returns = []
+                clustered_by_latents = {}  # this could be done within the distribution to be more general, but ugly
+                for path in paths:
+                    lat = str(path['agent_infos']['latents'][0])
+                    if lat not in clustered_by_latents:
+                        clustered_by_latents[lat] = [path]
+                    else:
+                        clustered_by_latents[lat].append(path)
+                for latent_code, paths in clustered_by_latents.iteritems():
+                    with logger.tabular_prefix(latent_code), logger.prefix(latent_code):
+                        undiscounted_rewards = [sum(path["true_rewards"]) for path in paths]
+                        all_latent_avg_returns.append(np.mean(undiscounted_rewards))
+                        logger.record_tabular('Avg_TrueReturn', np.mean(undiscounted_rewards))
+                        logger.record_tabular('Std_TrueReturn', np.std(undiscounted_rewards))
+                        logger.record_tabular('Max_TrueReturn', np.max(undiscounted_rewards))
+                        if self.log_deterministic:
+                            with self.policy.set_std_to_0():
+                                path = rollout(self.env, self.policy, self.max_path_length)
+                            logger.record_tabular('Deterministic_TrueReturn', np.sum(path["rewards"]))
+
+                with logger.tabular_prefix('all_lat_'), logger.prefix('all_lat_'):
+                    logger.record_tabular('MaxAvgReturn', np.max(all_latent_avg_returns))
+                    logger.record_tabular('MinAvgReturn', np.min(all_latent_avg_returns))
+                    logger.record_tabular('StdAvgReturn', np.std(all_latent_avg_returns))
+        else:
+            if self.log_deterministic:
+                with self.policy.set_std_to_0():
+                    path = rollout(self.env, self.policy, self.max_path_length)
+                logger.record_tabular('Deterministic_TrueReturn', np.sum(path["rewards"]))
+

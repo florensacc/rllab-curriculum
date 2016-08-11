@@ -710,10 +710,10 @@ class AR(Distribution):
                         zerodiagonal=di == 0, # only blocking the first layer can stop data flow
                     )
                 if di == 0:
+                    if gating_context:
+                        self._iaf_template *= (gate_con+1).apply(tf.nn.sigmoid)
                     if linear_context:
                         self._iaf_template += lin_con
-                    if gating_context:
-                        self._iaf_template *= gate_con.apply(tf.exp)
             self._iaf_template = \
                 self._iaf_template.\
                     arfc(
