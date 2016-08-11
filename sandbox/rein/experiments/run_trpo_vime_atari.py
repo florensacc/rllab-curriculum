@@ -22,11 +22,14 @@ stub(globals())
 
 # Param ranges
 seeds = range(5)
-etas = [0.01]
+etas = [10.0]
 lst_factor = [2]
 lst_pred_delta = [False]
 kl_ratios = [False]
-mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO)]
+mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
+        GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
+        GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),
+        GymEnv("MontezumaRevenge-v0", record_video=RECORD_VIDEO)]
 
 param_cart_product = itertools.product(
     lst_pred_delta, lst_factor, kl_ratios, mdps, etas, seeds
@@ -61,7 +64,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         num_seq_inputs=num_seq_frames,
         regressor_args=dict(
             mean_network=network,
-            subsample_factor=1.),
+            subsample_factor=0.5),
     )
 
     batch_norm = True
@@ -73,9 +76,9 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=1000,
+        batch_size=10000,
         whole_paths=True,
-        max_path_length=500,
+        max_path_length=5000,
         n_itr=250,
         step_size=0.01,
         optimizer_args=dict(
@@ -207,7 +210,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
         ],
-        unn_learning_rate=0.0003,
+        unn_learning_rate=0.0001,
         surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP99PERC,
         update_likelihood_sd=True,
         output_type=ConvBNNVIME.OutputType.REGRESSION,
@@ -225,11 +228,11 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-l1-b",
+        exp_prefix="trpo-vime-atari-l1-d",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

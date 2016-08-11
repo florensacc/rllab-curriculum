@@ -120,16 +120,15 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
             elif surprise_type == G.dynamics.SurpriseType.L1:
                 assert use_replay_pool
-                surpr = 0.
-                # G.dynamics.save_params()
-                # print('---')
-                # for _ in xrange(n_itr_update):
-                #     rr = G.dynamics.train_update_fn(
-                #         _inputs[start:end], _targets[start:end], 1.0)
-                #     print(rr)
-                # surpr = G.dynamics.fn_l1()
-                # print('>>', surpr)
-                # G.dynamics.load_prev_params()
+                G.dynamics.save_params()
+                print('---')
+                for _ in xrange(n_itr_update):
+                    rr = G.dynamics.train_update_fn(
+                        _inputs[start:end], _targets[start:end], 1.0)
+                    print(rr)
+                surpr = G.dynamics.fn_l1()
+                print('>>', surpr)
+                G.dynamics.load_prev_params()
 
             elif surprise_type == G.dynamics.SurpriseType.COMPR:
                 # FIXME: This doesn't work well.
