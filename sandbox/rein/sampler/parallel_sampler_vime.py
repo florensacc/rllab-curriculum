@@ -1,10 +1,9 @@
-from rllab.sampler.utils import rollout
+from sandbox.rein.sampler.utils import rollout
 from rllab.sampler.stateful_pool import singleton_pool
 from rllab.misc import ext
 from rllab.misc import logger
 from rllab.misc import tensor_utils
 import numpy as np
-import scipy
 
 
 def _worker_init(G, id):
@@ -56,9 +55,10 @@ def _worker_set_dynamics_params(G, params):
 
 def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                              reward_mean, reward_std, kl_batch_size, n_itr_update, use_replay_pool,
-                             obs_mean, obs_std, act_mean, act_std, second_order_update, predict_reward, surprise_type):
+                             obs_mean, obs_std, act_mean, act_std, second_order_update, predict_reward, surprise_type,
+                             num_seq_frames):
     # Path rollout.
-    path = rollout(G.env, G.policy, max_path_length)
+    path = rollout(G.env, G.policy, max_path_length, num_seq_frames=num_seq_frames)
 
     # Save original reward.
     path['rewards_orig'] = np.array(path['rewards'])
@@ -70,10 +70,17 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
         # model on each observation, calculating the KL divergence of the new
         # params to the old ones, and undoing this operation.
         obs = path['observations']
+        single_obs_dim = obs.shape[1] / num_seq_frames
         act = path['actions']
         rew_orig = path['rewards_orig']
         # inputs = (o,a), target = o'
-        obs_nxt = np.vstack([obs[1:]])
+        obs_nxt = np.vstack((obs[1:, -single_obs_dim:]))
+        # Making sure everything aligns for num_seq_framesd
+        # _a = obs[:-1]
+        # _b = np.concatenate((np.zeros((3, obs.shape[1])), _a), axis=0)
+        # _c = np.array([_b[num_seq_frames - i - 1:-i] for i in (np.array(range(num_seq_frames - 1)) + 1)])
+        # _e = np.transpose(np.concatenate((_a[np.newaxis, :, :], _c), axis=0), (1, 0, 2))
+        # _f = _e.reshape((_e.shape[0], -1))
         _inputs = np.hstack([obs[:-1], act[:-1]])
         _targets = obs_nxt
         # FIXME: turned on by default
@@ -112,12 +119,16 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
             elif surprise_type == G.dynamics.SurpriseType.L1:
                 assert use_replay_pool
-                G.dynamics.save_params()
-                for _ in xrange(n_itr_update):
-                    G.dynamics.train_update_fn(
-                        _inputs[start:end], _targets[start:end], 1.0)
-                surpr = G.dynamics.fn_l1() * float(kl_batch_size) / (end - start)
-                G.dynamics.load_prev_params()
+                surpr = 0.
+                # G.dynamics.save_params()
+                # print('---')
+                # for _ in xrange(n_itr_update):
+                #     rr = G.dynamics.train_update_fn(
+                #         _inputs[start:end], _targets[start:end], 1.0)
+                #     print(rr)
+                # surpr = G.dynamics.fn_l1()
+                # print('>>', surpr)
+                # G.dynamics.load_prev_params()
 
             elif surprise_type == G.dynamics.SurpriseType.COMPR:
                 # FIXME: This doesn't work well.
@@ -181,7 +192,8 @@ def sample_paths(
         act_std=None,
         second_order_update=None,
         predict_reward=None,
-        surprise_type=None
+        surprise_type=None,
+        num_seq_frames=1
 ):
     """
     :param policy_params: parameters for the policy. This will be updated on each worker process
@@ -220,7 +232,8 @@ def sample_paths(
               act_std,
               second_order_update,
               predict_reward,
-              surprise_type),
+              surprise_type,
+              num_seq_frames),
         show_prog_bar=True
     )
 

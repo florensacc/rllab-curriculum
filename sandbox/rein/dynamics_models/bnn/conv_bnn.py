@@ -152,7 +152,8 @@ class BayesianLayer(lasagne.layers.Layer):
             # In fact, this should be initialized to np.zeros(self.get_W_shape()),
             # but this trains much slower.
             self.mu = self.add_param(
-                lasagne.init.GlorotUniform(), self.get_W_shape(), name='mu', bayesian=True)
+                lasagne.init.Normal(0.00001, 0),
+                self.get_W_shape(), name='mu', bayesian=True)
             if not self.disable_variance:
                 self.rho = self.add_param(
                     lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho', bayesian=True)
@@ -328,12 +329,14 @@ class BayesianLayer(lasagne.layers.Layer):
         # Split rho's into different R1 matrices.
         lst_psu, lst_psv, lst_qsu, lst_qsv = [], [], [], []
 
+        # import ipdb; ipdb.set_trace()
+
         def extract_uv(std, lst_su, lst_sv):
             for i in xrange(self.mvg_rank):
                 su = std[
                      i * (self.num_inputs + self.num_units) + self.num_inputs:(i + 1) * (
                          self.num_inputs + self.num_units)]
-                sv = std[i * (self.num_inputs + self.num_units): (i + 1) * (
+                sv = std[i * (self.num_inputs + self.num_units): i * (
                     self.num_inputs + self.num_units) + self.num_inputs]
                 lst_su.append(su)
                 lst_sv.append(sv)
@@ -343,7 +346,7 @@ class BayesianLayer(lasagne.layers.Layer):
             extract_uv(q_std, lst_qsu, lst_qsv)
 
         def construct_matrix(lst_s):
-            s = T.eye(lst_s[0].shape[0])
+            s = T.zeros((lst_s[0].shape[0], lst_s[0].shape[0]))
             for i in xrange(self.mvg_rank):
                 _a = T.dot(lst_s[i].dimshuffle(0, 'x'), lst_s[i].dimshuffle('x', 0))
                 s += _a
@@ -352,6 +355,8 @@ class BayesianLayer(lasagne.layers.Layer):
         if not isinstance(q_mean, float):
             qsu = construct_matrix(lst_qsu)
             qsv = construct_matrix(lst_qsv)
+        import ipdb;
+        ipdb.set_trace()
         psu = construct_matrix(lst_psu)
         psv = construct_matrix(lst_psv)
 
@@ -370,12 +375,14 @@ class BayesianLayer(lasagne.layers.Layer):
         if not isinstance(q_mean, float):
             qsu_inv, lst_qsu_inv = sherman_morrison(lst_qsu)
             qsv_inv, lst_qsv_inv = sherman_morrison(lst_qsv)
+        import ipdb;
+        ipdb.set_trace()
         psu_inv, lst_psu_inv = sherman_morrison(lst_psu)
         psv_inv, lst_psv_inv = sherman_morrison(lst_psv)
 
         # Calculate log determinant for rank1 updates.
         def log_determinant(lst_s, lst_s_inv):
-            A_logdet = T.eye(lst_s[0].shape[0])
+            A_logdet = 1.
             for i in xrange(self.mvg_rank):
                 _a = T.dot(lst_s[i].dimshuffle('x', 0), lst_s_inv[i])
                 _b = T.dot(_a, lst_s[i].dimshuffle(0, 'x'))
@@ -386,6 +393,8 @@ class BayesianLayer(lasagne.layers.Layer):
         if not isinstance(q_mean, float):
             qsu_logdet = log_determinant(lst_qsu, lst_qsu_inv)
             qsv_logdet = log_determinant(lst_qsv, lst_qsv_inv)
+        import ipdb;
+        ipdb.set_trace()
         psu_logdet = log_determinant(lst_psu, lst_psu_inv)
         psv_logdet = log_determinant(lst_psv, lst_psv_inv)
 
