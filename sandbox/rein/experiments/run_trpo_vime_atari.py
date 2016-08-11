@@ -22,8 +22,8 @@ stub(globals())
 
 # Param ranges
 seeds = range(5)
-etas = [1.0]
-lst_factor = [5]
+etas = [0.01]
+lst_factor = [2]
 lst_pred_delta = [False]
 kl_ratios = [False]
 mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO)]
@@ -207,7 +207,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
         ],
-        unn_learning_rate=0.001,
+        unn_learning_rate=0.0001,
         surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP99PERC,
         update_likelihood_sd=True,
         output_type=ConvBNNVIME.OutputType.REGRESSION,

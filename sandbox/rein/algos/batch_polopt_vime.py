@@ -112,7 +112,6 @@ class SimpleReplayPool(object):
                 insert_empty = np.maximum(self._terminals[indices - i].astype('bool'), insert_empty)
                 obs[insert_empty] = 0
                 lst_obs[self._num_seq_frames - i - 1] = obs
-
             arr_obs = np.stack(lst_obs, axis=1).reshape((lst_obs[0].shape[0], -1))
 
             count += 1

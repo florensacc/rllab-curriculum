@@ -85,7 +85,20 @@ class BayesianLayer(lasagne.layers.Layer):
 
         self._srng = RandomStreams()
 
-        self.nonlinearity = nonlinearity
+        if nonlinearity == 'rbf':
+            self.c = self.add_param(lasagne.init.GlorotUniform(), self.num_units, name='c')
+            self.s = self.add_param(lasagne.init.GlorotUniform(), self.num_units, name='s')
+
+            def rbf(x):
+                C = self.c[np.newaxis, :, :]
+                X = x[:, np.newaxis, :]
+                difnorm = T.sum((C - X) ** 2, axis=-1)
+                return T.exp(-difnorm * (self.s ** 2))
+
+            self.nonlinearity = rbf
+        else:
+            self.nonlinearity = nonlinearity
+
         self.prior_sd = prior_sd
         self.num_units = num_units
         self.num_inputs = int(np.prod(self.input_shape[1:]))
@@ -152,7 +165,8 @@ class BayesianLayer(lasagne.layers.Layer):
             # In fact, this should be initialized to np.zeros(self.get_W_shape()),
             # but this trains much slower.
             self.mu = self.add_param(
-                lasagne.init.Normal(0.00001, 0),
+                # lasagne.init.Normal(0.00001, 0),
+                lasagne.init.GlorotUniform(),
                 self.get_W_shape(), name='mu', bayesian=True)
             if not self.disable_variance:
                 self.rho = self.add_param(
