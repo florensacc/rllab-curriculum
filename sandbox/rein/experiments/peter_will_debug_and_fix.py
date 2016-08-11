@@ -19,7 +19,7 @@ dropout = False
 n_batches = int(np.ceil(100 / float(batch_size)))
 
 lst_num_train_samples = [1]
-lst_learning_rate = [1e-4]
+lst_learning_rate = [1e-3]
 lst_batch_norm = [True]
 lst_factor = [1]
 
@@ -151,7 +151,8 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
         # ---
         ind_softmax=ind_softmax,
         num_classes=num_bins,
-        disable_act_rew_paths=False
+        disable_act_rew_paths=False,
+        label_smoothing=0.1,
     )
 
     e = Experiment(model=bnn,

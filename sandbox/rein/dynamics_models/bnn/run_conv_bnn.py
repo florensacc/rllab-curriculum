@@ -134,7 +134,7 @@ class Experiment(object):
 
             acc = np.mean(np.sum(np.square(pred_im - Y[:, :-1]), axis=1), axis=0)
 
-            if epoch % 30 == 0:
+            if epoch % 5 == 0:
                 self.plot_pred_imgs(model, X, Y, epoch, 1, ind_softmax, pred_delta)
 
             logger.record_tabular('train loss', train_err / float(train_batches))

@@ -10,6 +10,8 @@ from rllab.core.serializable import Serializable
 from rllab.misc import ext
 from collections import OrderedDict
 import theano
+
+from rllab.misc.special import to_onehot_sym
 from sandbox.rein.dynamics_models.utils import enum
 from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, BayesianDeConvLayer, BayesianDenseLayer, \
     BayesianLayer
@@ -22,12 +24,27 @@ class IndependentSoftmaxLayer(lasagne.layers.Layer):
         self._num_bins = num_bins
         self.W = self.add_param(W, (self.input_shape[1], self._num_bins), name='W')
         self.b = self.add_param(b, (self._num_bins,), name='b')
+        self.pixel_b = self.add_param(
+            b,
+            (self.input_shape[2], self.input_shape[3], self._num_bins,),
+            name='pixel_b'
+        )
 
     def get_output_for(self, input, **kwargs):
-        _a = T.dot(input.dimshuffle(0, 2, 3, 1), self.W) + self.b
-        _b = T.exp(_a - T.max(_a, axis=3, keepdims=True))
-        _c = T.sum(_b, axis=3, keepdims=True)
-        return T.clip(_b / _c, 1e-8, 1 - 1e-8)
+        # _a = T.dot(input.dimshuffle(0, 2, 3, 1), self.W) + self.b
+        # _b = T.exp(_a - T.max(_a, axis=3, keepdims=True))
+        # _c = T.sum(_b, axis=3, keepdims=True)
+        # return T.clip(_b / _c, 1e-8, 1 - 1e-8)
+        fc = input.dimshuffle(0, 2, 3, 1).\
+                 reshape([-1, self.input_shape[1]]).\
+                 dot(self.W) + \
+            self.b[np.newaxis, :]
+        shp = self.get_output_shape_for([-1] + list(self.input_shape[1:]))
+        fc_biased = fc.reshape(shp) + self.pixel_b
+        out = T.nnet.softmax(
+            fc_biased.reshape([-1, self._num_bins])
+        )
+        return out.reshape(shp)
 
     def get_output_shape_for(self, input_shape):
         return input_shape[0], input_shape[2], input_shape[3], self._num_bins
@@ -108,7 +125,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                  debug=False,
                  ind_softmax=False,  # Independent softmax output instead of regression.
                  disable_act_rew_paths=False,  # Disable action and reward modeling, just s -> s' prediction.
-                 num_seq_inputs=1
+                 num_seq_inputs=1,
+                 label_smoothing=0.,
                  ):
 
         Serializable.quick_init(self, locals())
@@ -139,6 +157,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.debug = debug
         self._ind_softmax = ind_softmax
         self._disable_act_rew_paths = disable_act_rew_paths
+        self.label_smoothing = label_smoothing
 
         if self._disable_act_rew_paths:
             print('Warning: action and reward paths disabled, do not use a_net or r_net!')
@@ -318,8 +337,32 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         ll = T.sum(T.log(prediction_selected), axis=1)
         return ll
 
+    def _log_prob_softmax_onehot(self, target, prediction):
+        # Cross-entropy; target vector selecting correct prediction
+        # entries.
+        ll = T.sum((
+            target * T.log(prediction)
+        ), axis=1)
+        return ll
+
     def likelihood_classification(self, target, prediction):
-        return T.sum(self._log_prob_softmax(target, prediction))
+        # return T.sum(self._log_prob_softmax(target, prediction))
+        if self.label_smoothing != 0:
+            target = to_onehot_sym(
+                T.cast(target.flatten(), 'int32'),
+                self.num_classes
+            )
+            target += self.label_smoothing
+            target = target / target.sum(axis=1, keepdims=True)
+            return T.mean(self._log_prob_softmax_onehot(
+                target,
+                prediction.reshape([-1, self.num_classes])
+            ))
+        else:
+            return T.mean(self._log_prob_softmax(
+                target,
+                prediction
+            ))
 
     def likelihood_classification_nonsum(self, target, prediction):
         return self._log_prob_softmax(target, prediction)
