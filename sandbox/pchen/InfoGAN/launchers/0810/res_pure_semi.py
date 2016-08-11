@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 100
+max_epoch = 85
 
 stub(globals())
 
@@ -42,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 1984, ]
+        return [42, ]
         # return [123124234]
 
     @variant
@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [2, 5, 10, 20, 32, 64]#[12, 32]
+        return [2, 10, 32, 64]#[12, 32]
 
     @variant
     def min_kl(self):
