@@ -22,6 +22,8 @@ class SemiVAE(VAE):
                  hidden_units=(30,),
                  dropout_keep_prob=1.,
                  delay_until=0,
+                 vae_off=False,
+                 use_mean=False,
                  **kwargs
     ):
         super(SemiVAE, self).__init__(
@@ -30,6 +32,8 @@ class SemiVAE(VAE):
             batch_size,
             **kwargs
         )
+        self.use_mean = use_mean
+        self.vae_off = vae_off
         self.delay_until = delay_until
         self.stop_grad = stop_grad
         self.sup_coeff = sup_coeff
@@ -65,7 +69,10 @@ class SemiVAE(VAE):
                     [self.eval_batch_size, self.label_dim],
                     "eval_label"
                 )
-            sup_z = vars["z_var"]
+            if self.use_mean:
+                sup_z = vars["z_dist_info"]["mean"]
+            else:
+                sup_z = vars["z_var"]
             sup_label_tensor = tf.reshape(
                 tf.tile(sup_label_tensor, [1, self.k]),
                 [-1, self.label_dim],
@@ -85,7 +92,9 @@ class SemiVAE(VAE):
                     [self.sup_batch_size, self.label_dim],
                     "sup_label"
                 )
-            sup_z, _, _ = self.model.encode(sup_input_tensor, k=1)
+            sup_z, _, z_dist = self.model.encode(sup_input_tensor, k=1)
+            if self.use_mean:
+                sup_z = z_dist["mean"]
             self.sup_train_flag = tf.placeholder(tf.float32, )
 
         if self.stop_grad:
@@ -105,6 +114,8 @@ class SemiVAE(VAE):
                 )
             ))
         ]
+        if self.vae_off:
+            final_losses[:] = []
         final_losses.append(sup_loss * self.sup_coeff * self.sup_train_flag)
         self.cur_train_flag = 0.
 

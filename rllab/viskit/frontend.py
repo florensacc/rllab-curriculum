@@ -214,7 +214,8 @@ def check_nan(exp):
 
 
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
-                         only_show_best=False, only_show_best_final=False, gen_eps=False, clip_plot_value=None, plot_width=None,
+                         only_show_best=False, only_show_best_final=False, gen_eps=False,
+                         only_show_best_sofar=False, clip_plot_value=None, plot_width=None,
                          plot_height=None, filter_nan=False, smooth_curve=False, custom_filter=None,
                          legend_post_processor=None, normalize_error=False, custom_series_splitter=None):
     print(plot_key, split_key, group_key, filters)
@@ -271,7 +272,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
             filtered_data = group_selector.extract()
             if len(filtered_data) > 0:
 
-                if only_show_best or only_show_best_final:
+                if only_show_best or only_show_best_final or only_show_best_sofar:
                     # Group by seed and sort.
                     # -----------------------
                     filtered_params = core.extract_distinct_params(filtered_data, l=0)
@@ -300,6 +301,8 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
 
                             if only_show_best_final:
                                 progresses = np.asarray(progresses)[:, -1]
+                            if only_show_best_sofar:
+                                progresses =np.max(np.asarray(progresses), axis=1)
                             if use_median:
                                 medians = np.nanmedian(progresses, axis=0)
                                 regret = np.mean(medians)
@@ -332,7 +335,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                         max_size = max(sizes)
                         progresses = [
                             np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-                        legend = '{} ({:.1f})'.format(
+                        legend = '{} ({:.3f})'.format(
                             group_legend, best_regret)
                         window_size = np.maximum(
                             int(np.round(max_size / float(1000))), 1)
@@ -464,6 +467,7 @@ def plot_div():
     gen_eps = args.get("eps", "") == 'True'
     only_show_best = args.get("only_show_best", "") == 'True'
     only_show_best_final = args.get("only_show_best_final", "") == 'True'
+    only_show_best_sofar = args.get("only_show_best_sofar", "") == 'True'
     normalize_error = args.get("normalize_error", "") == 'True'
     filter_nan = args.get("filter_nan", "") == 'True'
     smooth_curve = args.get("smooth_curve", "") == 'True'
@@ -488,6 +492,7 @@ def plot_div():
     plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, filter_nan=filter_nan,
                                     group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps,
                                     only_show_best=only_show_best, only_show_best_final=only_show_best_final,
+                                    only_show_best_sofar=only_show_best_sofar,
                                     clip_plot_value=clip_plot_value, plot_width=plot_width, plot_height=plot_height,
                                     smooth_curve=smooth_curve, custom_filter=custom_filter,
                                     legend_post_processor=legend_post_processor, normalize_error=normalize_error,

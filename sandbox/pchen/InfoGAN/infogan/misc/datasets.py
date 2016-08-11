@@ -1248,13 +1248,10 @@ class BinarizedOmniglotDataset(object):
 
 class ResamplingBinarizedOmniglotDataset(object):
     def __init__(self):
-        # train, valid, test = load_mnist_binarized()
-        # train, valid, test = load_omniglot_iwae()
-        train_x, test_x = load_omniglot()
+        train_x, train_t, train_char, test_x, test_t, test_char = load_omniglot_iwae()
         self.train = BinarizedDataset(train_x)
         # self.test = Dataset(valid)
         self.validation = BinarizedDataset(test_x)
-        import ipdb; ipdb.set_trace()
         self._image_dim = 28 * 28
         self._image_shape = (28, 28, 1)
 

@@ -191,7 +191,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0809_omni_res_ar_resam_cap",
+            exp_prefix="0810_omni_res_ar_resam_cap",
             seed=v["seed"],
             # mode="local",
             mode="lab_kube",

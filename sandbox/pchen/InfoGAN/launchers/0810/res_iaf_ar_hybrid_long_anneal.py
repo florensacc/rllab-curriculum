@@ -3,11 +3,12 @@ from __future__ import absolute_import
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
-from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR
+from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
+    IAR
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset, BinarizedOmniglotDataset, ResamplingBinarizedOmniglotDataset
+    ResamplingBinarizedMnistDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -23,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 2000
+max_epoch = 2500
 
 stub(globals())
 
@@ -37,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.004, ] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
@@ -50,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [32, 64]#[12, 32]
+        return [32]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -61,15 +62,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0, 2, 4,]
+        return [4,]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [5, 10, 20, ]
-
+            return [20, 40]
 
     # @variant
     # def nm(self):
@@ -80,7 +80,7 @@ class VG(VariantGenerator):
     # def pr(self):
     #     return [True, False]
 
-    @variant(hide=False)
+    @variant(hide=True)
     def network(self):
         # yield "large_conv"
         # yield "small_conv"
@@ -92,11 +92,11 @@ class VG(VariantGenerator):
         # yield "small_res_small_kern"
         yield "resv1_k3_pixel_bias"
 
-    @variant(hide=False)
+    @variant(hide=True)
     def wnorm(self):
         return [True, ]
 
-    @variant(hide=False)
+    @variant(hide=True)
     def ar_wnorm(self):
         return [True, ]
 
@@ -105,8 +105,30 @@ class VG(VariantGenerator):
         return [128, ]
 
     @variant(hide=False)
+    def i_nar(self):
+        return [4, ]
+
+    @variant(hide=False)
+    def i_nr(self):
+        return [20, 40]
+
+    @variant(hide=False)
+    def i_init_scale(self):
+        return [0.1, ]
+
+    @variant(hide=False)
+    def i_context(self):
+        # return [True, False]
+        return [
+            # [],
+            ["linear"],
+            ["gating"],
+            # ["linear", "gating"]
+        ]
+
+    @variant(hide=False)
     def anneal_after(self):
-        return [1000]
+        return [800, 1000, 1200]
 
 
 vg = VG()
@@ -126,11 +148,7 @@ for v in variants[:]:
 
         print("Exp name: %s" % exp_name)
 
-        # set_seed(v["seed"])
-
-        dataset = ResamplingBinarizedOmniglotDataset()
-        # dataset = BinarizedOmniglotDataset()
-        # dataset = ResamplingBinarizedMnistDataset()
+        dataset = ResamplingBinarizedMnistDataset()
         # dataset = MnistDataset()
 
         dist = Gaussian(zdim)
@@ -138,28 +156,23 @@ for v in variants[:]:
             dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"])
 
         latent_spec = [
-            # (Gaussian(128), False),
-            # (Categorical(10), True),
             (
-                # Mixture(
-                #     [
-                #         (
-                #             Gaussian(
-                #                 zdim,
-                #                 # prior_mean=np.concatenate([[2.*((i>>j)%2) for j in xrange(4)], np.random.normal(scale=v["mix_std"], size=zdim-4)]),
-                #                 prior_mean=np.concatenate([np.random.normal(scale=v["mix_std"], size=zdim)]),
-                #                 init_prior_mean=np.zeros(zdim),
-                #                 prior_trainable=True,
-                #             ),
-                #             1. / nm
-                #         ) for i in xrange(nm)
-                #     ]
-                # )
                 dist
                 ,
                 False
             ),
         ]
+
+        inf_dist = Gaussian(zdim)
+        for _ in xrange(v["i_nar"]):
+            inf_dist = IAR(
+                zdim,
+                inf_dist,
+                neuron_ratio=v["i_nr"],
+                data_init_scale=v["i_init_scale"],
+                linear_context="linear" in v["i_context"],
+                gating_context="gating" in v["i_context"],
+            )
 
         model = RegularizedHelmholtzMachine(
             output_dist=MeanBernoulli(dataset.image_dim),
@@ -167,9 +180,7 @@ for v in variants[:]:
             batch_size=batch_size,
             image_shape=dataset.image_shape,
             network_type=v["network"],
-            inference_dist=Gaussian(
-                zdim,
-            ),
+            inference_dist=inf_dist,
             wnorm=v["wnorm"],
         )
 
@@ -185,17 +196,16 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            anneal_after=v["anneal_after"],
             vali_eval_interval=2500,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0809_omni_res_ar_resam_cap",
+            exp_prefix="0810_res_iaf_ar_hybrid_anneal",
             seed=v["seed"],
+            variant=v,
             # mode="local",
             mode="lab_kube",
-            variant=v,
             n_parallel=0,
             use_gpu=True,
         )
