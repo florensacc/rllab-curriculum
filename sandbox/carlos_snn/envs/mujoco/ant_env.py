@@ -7,6 +7,7 @@ from rllab.misc import logger
 from rllab.misc import autoargs
 
 import matplotlib as mpl
+
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 import os.path as osp
@@ -19,8 +20,12 @@ class AntEnv(MujocoEnv, Serializable):
                   help='cost coefficient for controls')
     def __init__(self,
                  ctrl_cost_coeff=1e-2,
+                 rew_speed=False,  # if True the dot product is taken with the speed instead of the position
+                 rew_dir=None,  # (x,y,z) -> Rew=dot product of the CoM SPEED with this dir. Otherwise, DIST to 0
                  *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
+        self.reward_dir = rew_dir
+        self.rew_speed = rew_speed
         super(AntEnv, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)  # locals()????
 
@@ -35,9 +40,18 @@ class AntEnv(MujocoEnv, Serializable):
 
     def step(self, action):
         self.forward_dynamics(action)
-        # comvel = self.get_body_comvel("torso")
-        com = self.get_body_com("torso")
-        forward_reward = np.linalg.norm(com[0:-1])  # instead of comvel[0] (does this give jumping reward??)
+        if self.rew_speed:
+            direction_com = self.get_body_comvel('torso')
+        else:
+            direction_com = self.get_body_com('torso')
+        if self.reward_dir:
+            direction = np.array(self.reward_dir, dtype=float)/np.linalg.norm(self.reward_dir)
+            print 'my direction of reward:', direction
+            print 'my comvel: ', direction_com
+            forward_reward = np.dot(direction, direction_com)
+            print "the dot prod, ", forward_reward
+        else:
+            forward_reward = np.linalg.norm(direction_com[0:-1])  # instead of comvel[0] (does this give jumping reward??)
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5
         ctrl_cost = 0.5 * self.ctrl_cost_coeff * np.sum(np.square(action / scaling))
