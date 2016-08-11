@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 import os.path as osp
 
 
+from rllab import spaces
+BIG = 1e6
+
 class SwimmerEnv(MujocoEnv, Serializable):
     FILE = 'swimmer.xml'
 
@@ -31,6 +34,19 @@ class SwimmerEnv(MujocoEnv, Serializable):
             self.model.data.qvel.flat,
             self.get_body_com("torso").flat,
         ]).reshape(-1)
+
+## hack that I will have to remove!!!
+    @property
+    def robot_observation_space(self):
+        shp = self.get_current_obs().shape
+        ub = BIG * np.ones(shp)
+        return spaces.Box(ub * -1, ub)
+
+    @property
+    def maze_observation_space(self):
+        ub = BIG * np.array(())
+        return spaces.Box(ub, ub)
+
 
     def step(self, action):
         self.forward_dynamics(action)
@@ -62,7 +78,8 @@ class SwimmerEnv(MujocoEnv, Serializable):
         furthest = np.ceil(np.abs(np.max(np.concatenate([path["observations"][:, -3:-1] for path in paths]))))
         print 'THE FUTHEST IT WENT COMPONENT-WISE IS', furthest
         furthest = max(furthest, 5)
-        c_grid = int(furthest * 10 * 2)
+        mesh_density = 50
+        c_grid = int(furthest * 50 * 2)
 
         if 'agent_infos' in paths[0].keys() and 'latents' in paths[0]['agent_infos'].keys():
             dict_visit = {}
@@ -72,9 +89,9 @@ class SwimmerEnv(MujocoEnv, Serializable):
                 lat = str(path['agent_infos']['latents'][0])
                 if lat not in dict_visit.keys():
                     dict_visit[lat] = np.zeros((c_grid + 1, c_grid + 1))
-                com_x = np.clip(np.ceil(((np.array(path['observations'][:, -3]) + furthest) * 10)).astype(int), 0,
+                com_x = np.clip(np.ceil(((np.array(path['observations'][:, -3]) + furthest) * 50)).astype(int), 0,
                                 c_grid)
-                com_y = np.clip(np.ceil(((np.array(path['observations'][:, -2]) + furthest) * 10)).astype(int), 0,
+                com_y = np.clip(np.ceil(((np.array(path['observations'][:, -2]) + furthest) * 50)).astype(int), 0,
                                 c_grid)
                 coms = zip(com_x, com_y)
                 for com in coms:
@@ -89,8 +106,8 @@ class SwimmerEnv(MujocoEnv, Serializable):
                 overlap += np.sum(np.where(visitation_by_lat > lat_visit))  # add the overlaps of this latent
                 visitation_by_lat = np.where(visitation_by_lat <= i + 1, visitation_by_lat,
                                              num_colors - 1)  # mark overlaps
-            x = np.arange(c_grid + 1) / 10. - furthest
-            y = np.arange(c_grid + 1) / 10. - furthest
+            x = np.arange(c_grid + 1) / 50. - furthest
+            y = np.arange(c_grid + 1) / 50. - furthest
 
             plt.figure()
             map_plot = plt.pcolormesh(x, y, visitation_by_lat, cmap=cmap, vmin=0.1, vmax=num_latents + 1)
@@ -105,18 +122,18 @@ class SwimmerEnv(MujocoEnv, Serializable):
         else:
             visitation = np.zeros((c_grid + 1, c_grid + 1))
             for path in paths:
-                com_x = np.clip(np.ceil(((np.array(path['observations'][:, -3]) + furthest) * 10)).astype(int), 0,
+                com_x = np.clip(np.ceil(((np.array(path['observations'][:, -3]) + furthest) * 50)).astype(int), 0,
                                 c_grid)
-                com_y = np.clip(np.ceil(((np.array(path['observations'][:, -2]) + furthest) * 10)).astype(int), 0,
+                com_y = np.clip(np.ceil(((np.array(path['observations'][:, -2]) + furthest) * 50)).astype(int), 0,
                                 c_grid)
                 coms = zip(com_x, com_y)
                 for com in coms:
                     visitation[com] += 1
-            x = np.arange(c_grid + 1) / 10. - furthest
-            y = np.arange(c_grid + 1) / 10. - furthest
+            x = np.arange(c_grid + 1) / 50. - furthest
+            y = np.arange(c_grid + 1) / 50. - furthest
 
             plt.figure()
-            plt.pcolormesh(x, y, visitation, vmax=10)
+            plt.pcolormesh(x, y, visitation, vmax=50)
             overlap = np.sum(np.where(visitation > 1, visitation, 0))  # sum of all visitations larger than 1
         plt.xlim([x[0], x[-1]])
         plt.ylim([y[0], y[-1]])
