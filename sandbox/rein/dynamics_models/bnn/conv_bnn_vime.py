@@ -107,7 +107,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                  disable_variance=False,  # Disable variances in BNN.
                  debug=False,
                  ind_softmax=False,  # Independent softmax output instead of regression.
-                 disable_act_rew_paths=False  # Disable action and reward modeling, just s -> s' prediction.
+                 disable_act_rew_paths=False,  # Disable action and reward modeling, just s -> s' prediction.
+                 num_seq_inputs=1
                  ):
 
         Serializable.quick_init(self, locals())
@@ -115,6 +116,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.reward_dim = reward_dim
+        self.num_seq_inputs = num_seq_inputs
 
         self.batch_size = batch_size
         self.transf = trans_func
@@ -398,10 +400,11 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # Make sure that we are able to unmerge the s_in and a_in.
 
         # Input to the s_net is always flattened.
-        s_flat_dim = np.prod(self.state_dim)
+        input_dim = (self.num_seq_inputs,) + (self.state_dim[1:])
+        s_flat_dim = np.prod(input_dim)
 
         if not self._disable_act_rew_paths:
-            print('f: {} x {} -> {} x {}'.format(self.state_dim, self.action_dim, self.state_dim, self.reward_dim))
+            print('f: {} x {} -> {} x {}'.format(input_dim, self.action_dim, self.state_dim, self.reward_dim))
             a_flat_dim = np.prod(self.action_dim)
             r_flat_dim = np.prod(self.reward_dim)
             input = lasagne.layers.InputLayer(shape=(None, s_flat_dim + a_flat_dim))
@@ -412,11 +415,11 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             a_net = lasagne.layers.reshape(a_net, ([0],) + self.action_dim)
             print('Slicing into {} and {}'.format(s_net.output_shape, a_net.output_shape))
         else:
-            print('f: {} -> {}'.format(self.state_dim, self.state_dim))
+            print('f: {} -> {}'.format(input_dim, self.state_dim))
             s_net = lasagne.layers.InputLayer(shape=(None, s_flat_dim))
 
         # Reshape according to the input_dim
-        s_net = lasagne.layers.reshape(s_net, ([0],) + self.state_dim)
+        s_net = lasagne.layers.reshape(s_net, ([0],) + input_dim)
         # FIXME: magic number
         dropout_p = 0.5
         for i, layer_disc in enumerate(self.layers_disc):
@@ -607,22 +610,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.pred_fn = ext.compile_function(
             [input_var], self.pred_sym(input_var), log_name='fn_pred')
 
-        if self.update_prior:
-            # When using posterior chaining, prefer SGD as we dont want to build up
-            # momentum between prior-posterior updates.
-            def sgd_clip(loss, params, learning_rate):
-                grads = theano.grad(loss, params)
-                updates = OrderedDict()
-                for param, grad in zip(params, grads):
-                    updates[param] = param - learning_rate * T.clip(grad, -1., 1.)
-                return updates
-
-            # Clipping grads seems necessary to prevent explosion. Learning rate tuned for adam should be decreased.
-            updates = sgd_clip(
-                loss, params, learning_rate=self.learning_rate * 0.1)
-        else:
-            updates = lasagne.updates.adam(
-                loss, params, learning_rate=self.learning_rate)
+        updates = lasagne.updates.adam(
+            loss, params, learning_rate=self.learning_rate)
 
         # We want to resample when actually updating the BNN itself, otherwise
         # you will fit to the specific noise.
@@ -757,20 +746,15 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             loss_l1 = self.loss(
                 input_var, target_var, disable_kl=True, likelihood_sd=self.likelihood_sd)
             # SGD rather than adam, we don't want momentum. Learning rate tuned for adam, needs to be smaller.
-            updates_l1 = lasagne.updates.sgd(
-                loss_l1, params_bayesian, learning_rate=self.learning_rate * 0.00001)
+            updates_l1 = lasagne.updates.adam(
+                loss_l1, params_bayesian, learning_rate=self.learning_rate)
             self.train_update_fn = ext.compile_function(
                 [input_var, target_var, kl_factor], loss_l1, updates=updates_l1,
                 log_name='fn_train_l1',
                 no_default_updates=False)
-            # Need explicit kl calc.
             self.fn_l1 = ext.compile_function(
                 [], self.l1(), log_name='fn_l1'
             )
-            # self.fn_loss = ext.compile_function(
-            #     [input_var, target_var, kl_factor], loss_l1,
-            #     log_name='fn_loss',
-            #     no_default_updates=False)
 
         elif self.surprise_type == ConvBNNVIME.SurpriseType.COMPR:
             # COMPR IMPR (no KL)
