@@ -97,6 +97,9 @@
                 <label><input type="checkbox" name="only_show_best_final" value="">Only show best final</label><br>
             </div>
             <div class="checkbox pull-left" style="margin-left: 10px">
+                <label><input type="checkbox" name="only_show_best_sofar" value="">Only show best so far</label><br>
+            </div>
+            <div class="checkbox pull-left" style="margin-left: 10px">
                 <label><input type="checkbox" name="filter_nan" value="">Filter NaN</label><br>
             </div>
             <div class="checkbox pull-left" style="margin-left: 10px">
@@ -202,6 +205,7 @@
         var useMedian = $controlPanel.find("input[type=checkbox][name=use_median]").is(':checked');
         var onlyShowBest = $controlPanel.find("input[type=checkbox][name=only_show_best]").is(':checked');
         var onlyShowBestFinal = $controlPanel.find("input[type=checkbox][name=only_show_best_final]").is(':checked');
+        var onlyShowBestSofar = $controlPanel.find("input[type=checkbox][name=only_show_best_sofar]").is(':checked');
         var filterNaN = $controlPanel.find("input[type=checkbox][name=filter_nan]").is(':checked');
         var smoothCurve = $controlPanel.find("input[type=checkbox][name=smooth_curve]").is(':checked');
         var normalizeError = $controlPanel.find("input[type=checkbox][name=normalize_error]").is(':checked');
@@ -213,6 +217,9 @@
         }
         if (onlyShowBestFinal === true) {
             onlyShowBestFinal = "True";
+        }
+        if (onlyShowBestSofar === true) {
+            onlyShowBestSofar = "True";
         }
         if (filterNaN === true) {
             filterNaN = "True";
@@ -239,7 +246,7 @@
                     "plot_width": plotWidth, "plot_height": plotHeight, "filter_nan": filterNaN,
                     "smooth_curve": smoothCurve, "custom_filter": customFilter, "legend_post_processor":
                     legendPostProcessor, "only_show_best_final": onlyShowBestFinal, "normalize_error": normalizeError,
-                    "custom_series_splitter": customSeriesSplitter,
+                    "custom_series_splitter": customSeriesSplitter, "only_show_best_sofar": onlyShowBestSofar,
                 }, options),
                 function (data) {
                     $("#plot_wrapper").empty().append(data);

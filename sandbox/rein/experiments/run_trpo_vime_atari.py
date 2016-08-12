@@ -4,7 +4,7 @@ from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
 from sandbox.rein.envs.gym_env_downscaled import GymEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from sandbox.rein.dynamics_models.bnn.bnn import BNN
+from sandbox.rein.dynamics_models.bnn.conv_bnn_vime import ConvBNNVIME
 from rllab.core.network import ConvNetwork
 import lasagne
 
@@ -13,64 +13,47 @@ from rllab.misc.instrument import stub, run_experiment_lite
 import itertools
 from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
 
+RECORD_VIDEO = True
+num_seq_frames = 4
+
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
 # Param ranges
 seeds = range(5)
-etas = [0.001, 0.01, 0.1]
-# seeds = [1]
-# etas = [0.1]
-normalize_rewards = [False]
-kl_ratios = [False]
-RECORD_VIDEO = False
+etas = [0.01]
+lst_factor = [2]
+lst_pred_delta = [False]
+kl_ratios = [True]
 mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
         GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
         GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),
         GymEnv("MontezumaRevenge-v0", record_video=RECORD_VIDEO)]
 
 param_cart_product = itertools.product(
-    kl_ratios, normalize_rewards, mdps, etas, seeds
+    lst_pred_delta, lst_factor, kl_ratios, mdps, etas, seeds
 )
 
-for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
+for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
     network = ConvNetwork(
-        input_shape=mdp.spec.observation_space.shape,
+        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
         output_dim=mdp.spec.action_space.flat_dim,
-        hidden_sizes=(20,),
+        hidden_sizes=(64,),
         conv_filters=(16, 16),
         conv_filter_sizes=(4, 4),
         conv_strides=(2, 2),
         conv_pads=(0, 0),
     )
-    # network = ConvNetwork(
-    #     input_shape=mdp.spec.observation_space.shape,
-    #     output_dim=mdp.spec.action_space.flat_dim,
-    #     hidden_sizes=(32,),
-    #     conv_filters=(16, 16, 16),
-    #     conv_filter_sizes=(6, 6, 6),
-    #     conv_strides=(2, 2, 2),
-    #     conv_pads=(0, 2, 2),
-    # )
     policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
         prob_network=network,
     )
 
-    # network = ConvNetwork(
-    #     input_shape=mdp.spec.observation_space.shape,
-    #     output_dim=1,
-    #     hidden_sizes=(32,),
-    #     conv_filters=(16, 16, 16),
-    #     conv_filter_sizes=(6, 6, 6),
-    #     conv_strides=(2, 2, 2),
-    #     conv_pads=(0, 2, 2),
-    # )
     network = ConvNetwork(
-        input_shape=mdp.spec.observation_space.shape,
+        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
         output_dim=1,
-        hidden_sizes=(20,),
+        hidden_sizes=(64,),
         conv_filters=(16, 16),
         conv_filter_sizes=(4, 4),
         conv_strides=(2, 2),
@@ -78,11 +61,14 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
     )
     baseline = GaussianMLPBaseline(
         mdp.spec,
+        num_seq_inputs=num_seq_frames,
         regressor_args=dict(
             mean_network=network,
-            batchsize=5000),
+            subsample_factor=0.5),
     )
 
+    batch_norm = True
+    dropout = False
     algo = TRPO(
         # TRPO settings
         # -------------
@@ -90,9 +76,9 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=50000,
+        batch_size=1000,
         whole_paths=True,
-        max_path_length=5000,
+        max_path_length=500,
         n_itr=250,
         step_size=0.01,
         optimizer_args=dict(
@@ -103,105 +89,150 @@ for kl_ratio, normalize_reward, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        snn_n_samples=10,
+        snn_n_samples=1,
         num_train_samples=1,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=8,
         num_sample_updates=10,  # Every sample in traj batch will be used in `num_sample_updates' updates.
-        normalize_reward=normalize_reward,
+        normalize_reward=False,
+        replay_kl_schedule=0.98,
+        n_itr_update=1,
         dyn_pool_args=dict(
-            enable=False,
+            enable=True,
             size=100000,
             min_size=10,
             batch_size=32
         ),
-        second_order_update=False,
+        second_order_update=True,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
         reward_dim=(1,),
         layers_disc=[
             dict(name='convolution',
-                 n_filters=16,
-                 filter_size=(6, 6),
-                 stride=(2, 2),
-                 pad=(0, 0)),
-            dict(name='convolution',
-                 n_filters=16,
-                 filter_size=(6, 6),
-                 stride=(2, 2),
-                 pad=(2, 2)),
-            dict(name='convolution',
-                 n_filters=16,
-                 filter_size=(6, 6),
-                 stride=(2, 2),
-                 pad=(2, 2)),
-            dict(name='reshape',
-                 shape=([0], -1)),
-            dict(name='gaussian',
-                 n_units=512,
-                 matrix_variate_gaussian=True),
-            dict(name='gaussian',
-                 n_units=512,
-                 matrix_variate_gaussian=True),
-            dict(name='hadamard',
-                 n_units=512,
-                 matrix_variate_gaussian=True),
-            dict(name='gaussian',
-                 n_units=512,
-                 matrix_variate_gaussian=True),
-            dict(name='split',
-                 n_units=128,
-                 matrix_variate_gaussian=True),
-            dict(name='gaussian',
-                 n_units=1600,
-                 matrix_variate_gaussian=True),
-            dict(name='reshape',
-                 shape=([0], 16, 10, 10)),
-            dict(name='deconvolution',
-                 n_filters=16,
-                 filter_size=(6, 6),
-                 stride=(2, 2),
-                 pad=(2, 2),
-                 nonlinearity=lasagne.nonlinearities.rectify),
-            dict(name='deconvolution',
-                 n_filters=16,
-                 filter_size=(6, 6),
-                 stride=(2, 2),
-                 pad=(2, 2),
-                 nonlinearity=lasagne.nonlinearities.rectify),
-            dict(name='deconvolution',
-                 n_filters=mdp.spec.observation_space.shape[0],
+                 n_filters=16 * factor,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 0),
-                 nonlinearity=lasagne.nonlinearities.linear),
+                 batch_norm=batch_norm,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='convolution',
+                 n_filters=16 * factor,
+                 filter_size=(6, 6),
+                 stride=(1, 1),
+                 pad=(0, 0),
+                 batch_norm=batch_norm,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='convolution',
+                 n_filters=16 * factor,
+                 filter_size=(6, 6),
+                 stride=(2, 2),
+                 pad=(0, 0),
+                 batch_norm=batch_norm,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='reshape',
+                 shape=([0], -1)),
+            dict(name='gaussian',
+                 n_units=64 * factor,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=dropout,
+                 deterministic=False),
+            dict(name='gaussian',
+                 n_units=64 * factor,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=dropout,
+                 deterministic=False),
+            dict(name='hadamard',
+                 n_units=64 * factor,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=dropout,
+                 deterministic=False),
+            dict(name='gaussian',
+                 n_units=64 * factor,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=dropout,
+                 deterministic=False),
+            dict(name='split',
+                 n_units=64,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=dropout,
+                 deterministic=False),
+            dict(name='gaussian',
+                 n_units=400 * factor,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='reshape',
+                 shape=([0], 16 * factor, 5, 5)),
+            dict(name='deconvolution',
+                 n_filters=16 * factor,
+                 filter_size=(6, 6),
+                 stride=(2, 2),
+                 pad=(0, 0),
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='deconvolution',
+                 n_filters=16 * factor,
+                 filter_size=(6, 6),
+                 stride=(1, 1),
+                 pad=(0, 0),
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='deconvolution',
+                 n_filters=16 * factor,
+                 filter_size=(6, 6),
+                 stride=(2, 2),
+                 pad=(0, 0),
+                 nonlinearity=lasagne.nonlinearities.linear,
+                 batch_norm=True,
+                 dropout=False,
+                 deterministic=False),
         ],
-        unn_learning_rate=0.005,
-        surprise_transform=BatchPolopt.SurpriseTransform.CAP99PERC,
+        unn_learning_rate=0.01,
+        surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP99PERC,
         update_likelihood_sd=False,
-        replay_kl_schedule=0.98,
-        output_type=BNN.OutputType.REGRESSION,
-        likelihood_sd_init=0.001,
+        output_type=ConvBNNVIME.OutputType.CLASSIFICATION,
+        likelihood_sd_init=0.1,
         prior_sd=0.05,
-        predict_delta=True,
+        predict_delta=pred_delta,
+        num_seq_frames=num_seq_frames,
         # -------------
         disable_variance=False,
-        group_variance_by=BNN.GroupVarianceBy.WEIGHT,
-        surprise_type=BNN.SurpriseType.COMPR,
+        surprise_type=ConvBNNVIME.SurpriseType.INFGAIN,
         predict_reward=True,
         use_local_reparametrization_trick=True,
-        n_itr_update=1,
         # -------------
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-pxl-g",
+        exp_prefix="trpo-vime-atari-l1-e",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

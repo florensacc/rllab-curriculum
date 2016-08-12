@@ -11,7 +11,7 @@ dependencies:
     - scipy
     - path.py
     - python-dateutil
-    - joblib
+    - joblib==0.9.4
     - mako
     - ipywidgets
     - numba
@@ -41,3 +41,6 @@ dependencies:
         - awscli
         - git+https://github.com/openai/gym.git
         - pyglet
+        - git+https://github.com/neocxi/prettytensor.git
+        - jupyter
+        - progressbar

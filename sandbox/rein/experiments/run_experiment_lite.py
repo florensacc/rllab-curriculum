@@ -20,7 +20,6 @@ import uuid
 import cPickle as pickle
 import base64
 
-
 def run_experiment(argv):
 
     default_log_dir = config.LOG_DIR

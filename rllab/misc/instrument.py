@@ -52,23 +52,22 @@ class StubBase(object):
         return StubMethodCall(self, "__div__", [other], dict())
 
     def __rdiv__(self, other):
-        return StubMethodCall(BinaryOp(), "rdiv", [self, other], dict())#self, "__rdiv__", [other], dict())
+        return StubMethodCall(BinaryOp(), "rdiv", [self, other], dict())  # self, "__rdiv__", [other], dict())
 
     def __rpow__(self, power, modulo=None):
         return StubMethodCall(self, "__rpow__", [power, modulo], dict())
 
 
 class BinaryOp(Serializable):
-
     def __init__(self):
         Serializable.quick_init(self, locals())
 
     def rdiv(self, a, b):
         return b / a
-    # def __init__(self, opname, a, b):
-    #     self.opname = opname
-    #     self.a = a
-    #     self.b = b
+        # def __init__(self, opname, a, b):
+        #     self.opname = opname
+        #     self.a = a
+        #     self.b = b
 
 
 class StubAttr(StubBase):
@@ -148,9 +147,12 @@ class StubObject(StubBase):
         self.proxy_class = dict["proxy_class"]
 
     def __getattr__(self, item):
+        # why doesnt the commented code work?
+        # return StubAttr(self, item)
+        # checks bypassed to allow for accesing instance fileds
         if hasattr(self.proxy_class, item):
             return StubAttr(self, item)
-        raise AttributeError('Cannot get attribute %s from %s'%(item, self.proxy_class))
+        raise AttributeError('Cannot get attribute %s from %s' % (item, self.proxy_class))
 
     def __str__(self):
         return "StubObject(%s, *%s, **%s)" % (str(self.proxy_class), str(self.args), str(self.kwargs))
@@ -365,8 +367,14 @@ def run_experiment_lite(
     assert stub_method_call is not None or batch_tasks is not None, "Must provide at least either stub_method_call or batch_tasks"
     if batch_tasks is None:
         batch_tasks = [
-            dict(kwargs, stub_method_call=stub_method_call, exp_name=exp_name, log_dir=log_dir, env=env,
-                 variant=variant)
+            dict(
+                kwargs,
+                stub_method_call=stub_method_call,
+                exp_name=exp_name,
+                log_dir=log_dir,
+                env=env,
+                variant=variant
+            )
         ]
 
     global exp_count
@@ -536,8 +544,8 @@ def _to_param_val(v):
 
 def to_local_command(params, script=osp.join(config.PROJECT_PATH, 'scripts/run_experiment.py'), use_gpu=False):
     command = "python " + script
-    if use_gpu:
-        command = "THEANO_FLAGS='device=gpu' " + command
+    if use_gpu and not config.USE_TF:
+        command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto' " + command
     for k, v in params.iteritems():
         if isinstance(v, dict):
             for nk, nv in v.iteritems():
@@ -1010,7 +1018,7 @@ def concretize(maybe_stub):
         obj = concretize(maybe_stub.obj)
         attr_name = maybe_stub.attr_name
         attr_val = getattr(obj, attr_name)
-        return attr_val
+        return concretize(attr_val)
     elif isinstance(maybe_stub, StubObject):
         if not hasattr(maybe_stub, "__stub_cache"):
             args = concretize(maybe_stub.args)

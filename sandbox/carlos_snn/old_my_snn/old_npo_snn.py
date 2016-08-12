@@ -45,7 +45,7 @@ class NPO_snn(BatchPolopt):
         super(NPO_snn, self).__init__(**kwargs)
 
     @overrides
-    def process_samples(self, itr, paths):  # commented parts here were Carlos debugging
+    def process_samples(self, itr, paths):
         # n_original = len(paths)
         # for i, path in enumerate(paths[:n_original]):
         #     for _ in range(self.n_samples):

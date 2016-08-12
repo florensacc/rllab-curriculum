@@ -25,7 +25,7 @@ stub(globals())
 
 # Param ranges
 seeds = range(10)
-RECORD_VIDEO = False
+RECORD_VIDEO = True
 mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
         GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
         GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),
@@ -38,39 +38,21 @@ for mdp, seed in param_cart_product:
     network = ConvNetwork(
         input_shape=mdp.spec.observation_space.shape,
         output_dim=mdp.spec.action_space.flat_dim,
-        hidden_sizes=(20,),
+        hidden_sizes=(64,),
         conv_filters=(16, 16),
         conv_filter_sizes=(4, 4),
         conv_strides=(2, 2),
         conv_pads=(0, 0),
     )
-    # network = ConvNetwork(
-    #     input_shape=mdp.spec.observation_space.shape,
-    #     output_dim=mdp.spec.action_space.flat_dim,
-    #     hidden_sizes=(32,),
-    #     conv_filters=(16, 16, 16),
-    #     conv_filter_sizes=(6, 6, 6),
-    #     conv_strides=(2, 2, 2),
-    #     conv_pads=(0, 2, 2),
-    # )
     policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
         prob_network=network,
     )
 
-    # network = ConvNetwork(
-    #     input_shape=mdp.spec.observation_space.shape,
-    #     output_dim=1,
-    #     hidden_sizes=(32,),
-    #     conv_filters=(16, 16, 16),
-    #     conv_filter_sizes=(6, 6, 6),
-    #     conv_strides=(2, 2, 2),
-    #     conv_pads=(0, 2, 2),
-    # )
     network = ConvNetwork(
         input_shape=mdp.spec.observation_space.shape,
         output_dim=1,
-        hidden_sizes=(20,),
+        hidden_sizes=(64,),
         conv_filters=(16, 16),
         conv_filter_sizes=(4, 4),
         conv_strides=(2, 2),
@@ -80,7 +62,7 @@ for mdp, seed in param_cart_product:
         mdp.spec,
         regressor_args=dict(
             mean_network=network,
-            batchsize=20000),
+            subsample_factor=1.),
     )
 
     algo = TRPO(
@@ -88,7 +70,7 @@ for mdp, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=50000,
+        batch_size=10000,
         whole_paths=True,
         max_path_length=5000,
         n_itr=250,
@@ -101,7 +83,7 @@ for mdp, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix="trpo-atari-c",
-        n_parallel=8,
+        n_parallel=4,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

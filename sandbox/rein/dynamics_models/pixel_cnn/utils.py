@@ -43,7 +43,7 @@ def load_dataset_MNIST():
 def load_dataset_Atari():
     import pickle
 
-    path = '/Users/rein/programming/openai/vime'
+    path = 'sandbox/rein/datasets'
     file_handler = open(path + '/dataset.pkl', 'r')
     _dataset = pickle.load(file_handler)
     return _dataset['x'].transpose(0, 3, 1, 2), _dataset['y'].transpose(0, 3, 1, 2)

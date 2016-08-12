@@ -42,3 +42,6 @@ rllab/config_personal.py
 *.sublime-workspace
 *.bin
 *.sh
+MNIST/
+logs/
+*.pkl

@@ -107,6 +107,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
             hidden_sizes=hidden_sizes,
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=output_nonlinearity,
+            name="meanMLP",
         )
 
         l_mean = mean_network.output_layer
@@ -120,6 +121,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
                 hidden_sizes=std_hidden_sizes,
                 hidden_nonlinearity=std_hidden_nonlinearity,
                 output_nonlinearity=None,
+                name="log_stdMLP"
             ).output_layer
         else:
             l_log_std = ParamLayer(
@@ -149,6 +151,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
         )
 
 #  this is currently not used, although it could, in dist_info_sym and in get_actions. Also we could refactor all..
+        # this would actually be WRONG with the current obs_var definition
         latent_var = Box(low=-np.inf, high=np.inf, shape=(1,)).new_tensor_variable('latents', extra_dims=1)
         extended_obs_var = TT.concatenate([obs_var, latent_var,
                                            TT.flatten(obs_var[:, :, np.newaxis] * latent_var[:, np.newaxis, :],

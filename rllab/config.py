@@ -56,7 +56,7 @@ KUBE_DEFAULT_RESOURCES = {
 }
 
 KUBE_DEFAULT_NODE_SELECTOR = {
-    "aws/type": "m4.2xlarge",
+    "aws/type": "m4.xlarge",
 }
 
 MUJOCO_KEY_PATH = osp.expanduser("~/.mujoco")
