@@ -352,7 +352,7 @@ class NeuralAgent(object):
         logger.record_tabular("%sEpsilon"%(phase),self.epsilon)
 
 
-    def start_testing(self):
+    def start_testing(self,epoch):
         self.testing = True
         self.total_reward = 0
         self.episode_counter = 0
