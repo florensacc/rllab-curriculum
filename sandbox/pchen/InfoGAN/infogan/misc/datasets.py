@@ -447,15 +447,14 @@ def load_cifar10(
         test_x = data['data']
         test_y = np.asarray(data['labels'])
 
+    if normalize:
+        train_x = train_x / 256.
+        test_x = test_x / 256.
     train_x = train_x.astype('float32')
     test_x = test_x.astype('float32')
     if dequantify:
         train_x += np.random.uniform(0,1,size=train_x.shape).astype('float32')
         test_x += np.random.uniform(0,1,size=test_x.shape).astype('float32')
-    if normalize:
-        normalizer = train_x.max().astype('float32')
-        train_x = train_x / normalizer
-        test_x = test_x / normalizer
 
     train_x = train_x.reshape((50000, 3, 32, 32)).transpose(0, 2, 3, 1)
     test_x = test_x.reshape((10000, 3, 32, 32)).transpose(0, 2, 3, 1)
@@ -1267,3 +1266,29 @@ class ResamplingBinarizedOmniglotDataset(object):
     @property
     def image_shape(self):
         return self._image_shape
+
+class Cifar10Dataset(object):
+    def __init__(self):
+        # train, valid, test = load_mnist_binarized()
+        # train, valid, test = load_omniglot_iwae()
+        # train_x, train_t, train_char, test_x, test_t, test_char = load_omniglot_iwae()
+        train_x, train_y, test_x, test_y = load_cifar10(normalize=True)
+        self.train = Dataset(train_x)
+        # self.test = Dataset(valid)
+        self.validation = Dataset(test_x)
+        self._image_shape = (32, 32, 3)
+        self._image_dim = np.prod(self._image_shape)
+
+    def transform(self, data):
+        return data
+
+    def inverse_transform(self, data):
+        return data
+
+    @property
+    def image_dim(self):
+        return self._image_dim
+    @property
+    def image_shape(self):
+        return self._image_shape
+
