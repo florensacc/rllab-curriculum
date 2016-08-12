@@ -376,6 +376,69 @@ class Bernoulli(Distribution):
     def prior_dist_info(self, batch_size):
         return dict(p=0.5 * tf.ones([batch_size, self.dim]))
 
+class DiscretizedLogistic(Distribution):
+
+    def __init__(self, dim, bins=256):
+        self._dim = dim
+        self._bins = bins
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def dist_flat_dim(self):
+        return self._dim * 2
+
+    @property
+    def effective_dim(self):
+        return self._dim
+
+    @property
+    def dist_info_keys(self):
+        return ["mu", "scale"]
+
+    def cdf(self, x_var, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        return tf.nn.sigmoid((x_var - mu)/scale)
+
+    def logli(self, x_var, dist_info):
+        # mu = dist_info["mu"]
+        # scale = dist_info["scale"]
+        return tf.reduce_sum(
+            tf.log(
+                self.cdf(x_var + 1./self._bins, dist_info) - self.cdf(x_var, dist_info)
+            ),
+            reduction_indices=[1],
+        )
+
+    def entropy(self, dist_info):
+        # XXX fixme
+        return 0.
+
+    def nonreparam_logli(self, x_var, dist_info):
+        return self.logli(x_var, dist_info)
+
+    def activate_dist(self, flat_dist):
+        return dict(
+            mu=(flat_dist[:, :self.dim]),
+            scale=flat_dist[:, self.dim:],
+        )
+
+    def sample(self, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        p = tf.random_uniform(mu.get_shape())
+        real_logit = mu + scale*(tf.log(p) - tf.log(1-p)) # inverse cdf according to wiki
+        return tf.clip_by_value(real_logit, 0., 1.-1./self._bins)
+
+    def prior_dist_info(self, batch_size):
+        return dict(
+            mu=0.5*np.ones([batch_size, self._dim]),
+            scale=0.5*np.ones([batch_size, self._dim]),
+        )
+
 class MeanBernoulli(Bernoulli):
     """
     Behaves almost the same as the usual Bernoulli distribution, except that when sampling from it, directly

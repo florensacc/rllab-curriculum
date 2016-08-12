@@ -3,12 +3,11 @@ from __future__ import absolute_import
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
-from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
-    IAR
+from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset
+    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset, Cifar10Dataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -24,7 +23,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 500
+max_epoch = 2500
 
 stub(globals())
 
@@ -38,11 +37,11 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002]
+        return [0.004, ] #0.001]
 
     @variant
     def seed(self):
-        return [42, 1984, ]
+        return [42, ]
         # return [123124234]
 
     @variant
@@ -62,14 +61,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [1,]
+        return [4, 6]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [5,]
+            return [20, 40]
 
     # @variant
     # def nm(self):
@@ -86,14 +85,27 @@ class VG(VariantGenerator):
         # yield "small_conv"
         # yield "deep_mlp"
         # yield "mlp"
+        # yield "resv1_k3"
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        yield "resv1_k3_pixel_bias"
+        yield "resv1_k3_pixel_bias_cifar"
 
     @variant(hide=False)
     def wnorm(self):
         return [True, ]
+
+    @variant(hide=False)
+    def ar_wnorm(self):
+        return [True, ]
+
+    @variant(hide=False)
+    def k(self):
+        return [128, ]
+
+    @variant(hide=False)
+    def anneal_after(self):
+        return [800, 1000, 1200]
 
 
 vg = VG()
@@ -115,16 +127,14 @@ for v in variants[:]:
 
         # set_seed(v["seed"])
 
-        dataset = ResamplingBinarizedMnistDataset()
-        # dataset = BinarizedMnistDataset()
+        # dataset = ResamplingBinarizedMnistDataset()
+        # dataset = ResamplingBinarizedOmniglotDataset()
         # dataset = MnistDataset()
+        dataset = Cifar10Dataset()
 
         dist = Gaussian(zdim)
         for _ in xrange(v["nar"]):
-            dist = AR(zdim, dist, neuron_ratio=v["nr"],
-                    data_init_wnorm=True,
-                data_init_scale=0.1,
-                    )
+            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"])
 
         latent_spec = [
             # (Gaussian(128), False),
@@ -150,26 +160,15 @@ for v in variants[:]:
             ),
         ]
 
-        inf_dist = Gaussian(zdim)
-        for _ in xrange(1):
-            inf_dist = IAR(
-                zdim,
-                inf_dist,
-                neuron_ratio=5,
-                data_init_scale=0.05,
-                linear_context=True,
-                gating_context=True,
-            )
         model = RegularizedHelmholtzMachine(
             output_dist=MeanBernoulli(dataset.image_dim),
             latent_spec=latent_spec,
             batch_size=batch_size,
             image_shape=dataset.image_shape,
             network_type=v["network"],
-            # inference_dist=Gaussian(
-            #     zdim,
-            # ),
-            inference_dist=inf_dist,
+            inference_dist=Gaussian(
+                zdim,
+            ),
             wnorm=v["wnorm"],
         )
 
@@ -182,24 +181,22 @@ for v in variants[:]:
             updates_per_epoch=updates_per_epoch,
             optimizer_cls=AdamaxOptimizer,
             optimizer_args=dict(learning_rate=v["lr"]),
-            anneal_after=0,
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
-            k=1,
-            # cond_px_ent=1.0,
-            # vali_eval_interval=100,
+            k=v["k"],
+            anneal_after=v["anneal_after"],
+            vali_eval_interval=1500,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="archdebug",
+            exp_prefix="0811_omni_res_ar_anneal_longer",
             seed=v["seed"],
             mode="local",
             # mode="lab_kube",
-            variant=v,
-            n_parallel=0,
-            # use_gpu=True
+            # variant=v,
+            # n_parallel=0,
+            # use_gpu=True,
         )
-
 
 
