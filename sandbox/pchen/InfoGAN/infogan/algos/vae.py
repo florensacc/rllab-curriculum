@@ -20,7 +20,7 @@ class VAE(object):
                  # log_dir="logs",
                  # checkpoint_dir="ckt",
                  max_epoch=100,
-                 updates_per_epoch=100,
+                 updates_per_epoch=None,
                  snapshot_interval=10000,
                  vali_eval_interval=400,
                  # learning_rate=1e-3,
@@ -60,7 +60,9 @@ class VAE(object):
         self.log_dir = logger.get_snapshot_dir()
         self.checkpoint_dir = logger.get_snapshot_dir()
         self.snapshot_interval = snapshot_interval
-        self.updates_per_epoch = updates_per_epoch
+        if updates_per_epoch:
+            print "should not set updates_per_epoch"
+        self.updates_per_epoch = dataset.train.images.shape[0] / batch_size
         self.summary_interval = summary_interval
         # self.learning_rate = learning_rate
         self.trainer = None
@@ -235,6 +237,7 @@ class VAE(object):
         self.log_vars = log_vars
 
         with pt.defaults_scope(phase=pt.Phase.test):
+                rows = int(np.sqrt(self.true_batch_size))# 10  # int(np.sqrt(FLAGS.batch_size))
                 with tf.variable_scope("model", reuse=True) as scope:
                     # z_var, _ = self.model.encode(input_tensor)
                     # _, x_dist_info = self.model.decode(z_var)
@@ -245,8 +248,9 @@ class VAE(object):
                     elif isinstance(self.model.output_dist, Gaussian):
                         img_var = x_dist_info["mean"]
                     else:
-                        raise NotImplementedError
-                    rows = 10  # int(np.sqrt(FLAGS.batch_size))
+                        img_var = x_var
+                        # raise NotImplementedError
+                    # rows = 10  # int(np.sqrt(FLAGS.batch_size))
                     img_var = tf.concat(1, [input_tensor, img_var])
                     img_var = tf.reshape(img_var, [self.batch_size*2] + list(self.dataset.image_shape))
                     img_var = img_var[:rows * rows, :, :, :]
@@ -280,7 +284,7 @@ class VAE(object):
                                 raise NotImplementedError
                             self.sample_imgs.append(img_var)
 
-                            rows = 10  # int(np.sqrt(FLAGS.batch_size))
+                            # rows = 10  # int(np.sqrt(FLAGS.batch_size))
                             img_var = tf.reshape(img_var, [self.batch_size] + list(self.dataset.image_shape))
                             img_var = img_var[:rows * rows, :, :, :]
                             imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))
@@ -296,7 +300,7 @@ class VAE(object):
                 else:
                     with tf.variable_scope("model", reuse=True) as scope:
                         z_var = self.model.latent_dist.sample_prior(self.batch_size)
-                        _, x_dist_info = self.model.decode(z_var)
+                        x_var, x_dist_info = self.model.decode(z_var)
 
                         # just take the mean image
                         if isinstance(self.model.output_dist, Bernoulli):
@@ -304,8 +308,8 @@ class VAE(object):
                         elif isinstance(self.model.output_dist, Gaussian):
                             img_var = x_dist_info["mean"]
                         else:
-                            raise NotImplementedError
-                        rows = 10  # int(np.sqrt(FLAGS.batch_size))
+                            img_var = x_var
+                        # rows = int(np.sqrt(self.true_batch_size))# 10  # int(np.sqrt(FLAGS.batch_size))
                         img_var = tf.reshape(img_var, [self.batch_size] + list(self.dataset.image_shape))
                         img_var = img_var[:rows * rows, :, :, :]
                         imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))

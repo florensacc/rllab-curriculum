@@ -1269,9 +1269,6 @@ class ResamplingBinarizedOmniglotDataset(object):
 
 class Cifar10Dataset(object):
     def __init__(self):
-        # train, valid, test = load_mnist_binarized()
-        # train, valid, test = load_omniglot_iwae()
-        # train_x, train_t, train_char, test_x, test_t, test_char = load_omniglot_iwae()
         train_x, train_y, test_x, test_y = load_cifar10(normalize=True)
         self.train = Dataset(train_x)
         # self.test = Dataset(valid)

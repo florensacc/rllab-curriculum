@@ -4,6 +4,7 @@ import tensorflow as tf
 # from deconv import deconv2d
 import sandbox.pchen.InfoGAN.infogan.misc.custom_ops
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import leaky_rectify
+import numpy as np
 
 
 class RegularizedHelmholtzMachine(object):
@@ -382,10 +383,142 @@ class RegularizedHelmholtzMachine(object):
                     decoder = resdeconv_v1(decoder, 3, 32, out_wh=[16,16])
                     decoder = resconv_v1(decoder, 3, 32, stride=1)
                     decoder = resdeconv_v1(decoder, 3, 16, out_wh=[32,32])
+                    scale_var = tf.Variable(
+                        initial_value=np.zeros([1,1,1,3], dtype='float32'),
+                        name="channel_scale"
+                    )
                     self.decoder_template = (
                         decoder.
-                            conv2d_mod(3, 3, activation_fn=None).
+                        conv2d_mod(
+                            3,
+                            3,
+                            activation_fn=None
+                        ).
+                        apply(
+                            lambda conv:
+                                tf.concat(3, [conv, conv*0. + scale_var])
+                        ).
+                        flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "resv1_k3_pixel_bias_cifar_spatial_scale":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        data_init=UnboundVariable('data_init'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                ):
+                    encoder = \
+                        (pt.template('input', self.book).
+                         reshape([-1] + list(image_shape))
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+                    encoder = resconv_v1(encoder, 3, 16, stride=2) #16
+                    encoder = resconv_v1(encoder, 3, 16, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #8
+                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #4
+                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    self.encoder_template = \
+                        (encoder.
+                         flatten().
+                         wnorm_fc(450, ).
+                         wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
+                         )
+                    decoder = (pt.template('input', self.book).
+                               wnorm_fc(450, ).
+                               wnorm_fc(512, ).
+                               reshape([-1, 4, 4, 32])
+                               )
+                    decoder = resconv_v1(decoder, 3, 32, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, 32, out_wh=[8,8])
+                    decoder = resconv_v1(decoder, 3, 32, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, 32, out_wh=[16,16])
+                    decoder = resconv_v1(decoder, 3, 32, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, 16, out_wh=[32,32])
+                    scale_var = tf.Variable(
+                        initial_value=np.zeros([1,32,32,1], dtype='float32'),
+                        name="spatial_scale"
+                    )
+                    self.decoder_template = (
+                        decoder.
+                            conv2d_mod(
+                            3,
+                            3,
+                            activation_fn=None
+                        ).
+                            apply(
+                            lambda conv:
+                            tf.concat(3, [conv, conv*0. + scale_var])
+                        ).
                             flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "resv1_k3_pixel_bias_cifar_pred_scale":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        data_init=UnboundVariable('data_init'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                ):
+                    encoder = \
+                        (pt.template('input', self.book).
+                         reshape([-1] + list(image_shape))
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+                    encoder = resconv_v1(encoder, 3, 16, stride=2) #16
+                    encoder = resconv_v1(encoder, 3, 16, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #8
+                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #4
+                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    self.encoder_template = \
+                        (encoder.
+                         flatten().
+                         wnorm_fc(450, ).
+                         wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
+                         )
+                    decoder = (pt.template('input', self.book).
+                               wnorm_fc(450, ).
+                               wnorm_fc(512, ).
+                               reshape([-1, 4, 4, 32])
+                               )
+                    decoder = resconv_v1(decoder, 3, 32, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, 32, out_wh=[8,8])
+                    decoder = resconv_v1(decoder, 3, 32, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, 32, out_wh=[16,16])
+                    decoder = resconv_v1(decoder, 3, 32, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, 16, out_wh=[32,32])
+                    # scale_var = tf.Variable(
+                    #     initial_value=np.zeros([1,32,32,1], dtype='float32'),
+                    #     name="spatial_scale"
+                    # )
+                    self.decoder_template = (
+                        decoder.
+                            conv2d_mod(
+                            3,
+                            3*2,
+                            activation_fn=None
+                        ).
+                        flatten()
                     )
                     self.reg_encoder_template = \
                         (pt.template('input').
