@@ -96,7 +96,7 @@ class SimpleReplayPool(object):
         while count < batch_size:
             # We don't want to hit the bottom when using num_seq_frames in history.
             index = np.random.randint(
-                self._bottom + self._num_seq_frames - 1, self._bottom + self._size) % self._max_pool_size
+                self._bottom + self._num_seq_frames, self._bottom + self._size) % self._max_pool_size
             # make sure that the transition is valid: if we are at the end of the pool, we need to discard
             # this sample. Also check whether terminal sample: no next state exists.
             if (index == self._size - 1 and self._size <= self._max_pool_size) or self._terminals[index] == 1:
@@ -265,7 +265,6 @@ class BatchPolopt(RLAlgorithm):
         self.kl_batch_size = kl_batch_size
         self.use_kl_ratio_q = use_kl_ratio_q
         self.state_dim = state_dim
-        print(self.state_dim)
         self.action_dim = action_dim
         self.reward_dim = reward_dim
         self.layers_disc = layers_disc
@@ -283,6 +282,7 @@ class BatchPolopt(RLAlgorithm):
         self._predict_delta = predict_delta
         self._dyn_pool_args = dyn_pool_args
         self._num_seq_frames = num_seq_frames
+        self.num_bins = 15
         # ----------------------
 
         if self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
@@ -327,9 +327,9 @@ class BatchPolopt(RLAlgorithm):
             if self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
                 _o_s = _o[:, :-1]
                 _o_r = _o[:, -1]
-                _o_s = _o_s.reshape((-1, np.prod(self.state_dim), 256))
+                _o_s = _o_s.reshape((-1, np.prod(self.state_dim), self.num_bins))
                 _o_s = np.argmax(_o_s, axis=2)
-                acc += np.sum(np.square(_o_s - _t[:, :-1])) + np.sum(np.square(_o_r - _t[:, -1]))
+                acc += np.sum(np.abs(_o_s - _t[:, :-1])) + np.sum(np.abs(_o_r - _t[:, -1]))
             else:
                 acc += np.sum(np.square(_o - _t))
         return acc / _inputs.shape[0]
@@ -376,92 +376,103 @@ class BatchPolopt(RLAlgorithm):
         tmp = pickle.load(open(path + '/dataset.pkl', 'r'))
 
     def plot_pred_imgs(self, inputs, targets, itr, count):
-        try:
-            # This is specific to Atari.
-            import matplotlib.pyplot as plt
-            if not hasattr(self, '_fig'):
-                self._fig = plt.figure()
-                self._fig_1 = self._fig.add_subplot(241)
-                plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                                labelbottom='off', right='off', left='off', labelleft='off')
-                self._fig_2 = self._fig.add_subplot(242)
-                plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                                labelbottom='off', right='off', left='off', labelleft='off')
-                self._fig_3 = self._fig.add_subplot(243)
-                plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                                labelbottom='off', right='off', left='off', labelleft='off')
-                self._fig_4 = self._fig.add_subplot(244)
-                plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                                labelbottom='off', right='off', left='off', labelleft='off')
-                self._fig_5 = self._fig.add_subplot(245)
-                plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                                labelbottom='off', right='off', left='off', labelleft='off')
-                self._fig_6 = self._fig.add_subplot(246)
-                plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                                labelbottom='off', right='off', left='off', labelleft='off')
-                self._fig_7 = self._fig.add_subplot(247)
-                plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                                labelbottom='off', right='off', left='off', labelleft='off')
-                self._fig_8 = self._fig.add_subplot(248)
-                plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                                labelbottom='off', right='off', left='off', labelleft='off')
-                self._im1, self._im2, self._im3, self._im4 = None, None, None, None
-                self._im5, self._im6, self._im7, self._im8 = None, None, None, None
+        # try:
+        # This is specific to Atari.
+        import matplotlib.pyplot as plt
+        if not hasattr(self, '_fig'):
+            self._fig = plt.figure()
+            self._fig_1 = self._fig.add_subplot(241)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._fig_2 = self._fig.add_subplot(242)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._fig_3 = self._fig.add_subplot(243)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._fig_4 = self._fig.add_subplot(244)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._fig_5 = self._fig.add_subplot(245)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._fig_6 = self._fig.add_subplot(246)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._fig_7 = self._fig.add_subplot(247)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._fig_8 = self._fig.add_subplot(248)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._im1, self._im2, self._im3, self._im4 = None, None, None, None
+            self._im5, self._im6, self._im7, self._im8 = None, None, None, None
 
-            idx = np.random.randint(0, inputs.shape[0], 1)
-            sanity_pred = self.bnn.pred_fn(inputs)
-            input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
-            lst_input_im = [input_im[idx, i * np.prod(self.state_dim):(i + 1) * np.prod(self.state_dim)].reshape(
-                self.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
-                            xrange(self._num_seq_frames)]
-            input_im = input_im[:, -np.prod(self.state_dim):]
-            input_im = input_im[idx, :].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-            sanity_pred_im = sanity_pred[idx, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
-            target_im = targets[idx, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+        idx = np.random.randint(0, inputs.shape[0], 1)
+        sanity_pred = self.bnn.pred_fn(inputs)
+        input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
+        lst_input_im = [input_im[idx, i * np.prod(self.state_dim):(i + 1) * np.prod(self.state_dim)].reshape(
+            self.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
+                        xrange(self._num_seq_frames)]
+        input_im = input_im[:, -np.prod(self.state_dim):]
+        input_im = input_im[idx, :].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+        sanity_pred_im = sanity_pred[idx, :-1]
+        if self.output_type == self.bnn.OutputType.CLASSIFICATION:
+            sanity_pred_im = sanity_pred_im.reshape((-1, self.num_bins))
+            sanity_pred_im = np.argmax(sanity_pred_im, axis=1)
+        sanity_pred_im = sanity_pred_im.reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
+        target_im = targets[idx, :-1].reshape(self.state_dim).transpose(1, 2, 0)[:, :, 0]
 
-            if self._predict_delta:
-                sanity_pred_im += input_im
-                target_im += input_im
+        if self._predict_delta:
+            sanity_pred_im += input_im
+            target_im += input_im
 
-            sanity_pred_im *= 256.
-            sanity_pred_im = np.around(sanity_pred_im).astype(int)
-            target_im *= 256.
-            target_im = np.around(target_im).astype(int)
-            err = (256 - np.abs(target_im - sanity_pred_im) * 100.)
-            input_im *= 256.
-            input_im = np.around(input_im).astype(int)
+        if self.output_type == self.bnn.OutputType.CLASSIFICATION:
+            sanity_pred_im = sanity_pred_im.astype(float) / float(self.num_bins)
+            target_im = target_im.astype(float) / float(self.num_bins)
+            input_im = input_im.astype(float) / float(self.num_bins)
+            for i in xrange(len(lst_input_im)):
+                lst_input_im[i] = lst_input_im[i].astype(float) / float(self.num_bins)
 
-            if self._im1 is None or self._im2 is None:
-                self._im1 = self._fig_1.imshow(
-                    input_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-                self._im2 = self._fig_2.imshow(
-                    target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-                self._im3 = self._fig_3.imshow(
-                    sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-                self._im4 = self._fig_4.imshow(
-                    err, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-                self._im5 = self._fig_5.imshow(
-                    lst_input_im[0], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-                self._im6 = self._fig_6.imshow(
-                    lst_input_im[1], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-                self._im7 = self._fig_7.imshow(
-                    lst_input_im[2], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-                self._im8 = self._fig_8.imshow(
-                    lst_input_im[3], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+        sanity_pred_im *= 256.
+        sanity_pred_im = np.around(sanity_pred_im).astype(int)
+        target_im *= 256.
+        target_im = np.around(target_im).astype(int)
+        err = (256 - np.abs(target_im - sanity_pred_im) * 100.)
+        input_im *= 256.
+        input_im = np.around(input_im).astype(int)
 
-            else:
-                self._im1.set_data(input_im)
-                self._im2.set_data(target_im)
-                self._im3.set_data(sanity_pred_im)
-                self._im4.set_data(err)
-                self._im5.set_data(lst_input_im[0])
-                self._im6.set_data(lst_input_im[1])
-                self._im7.set_data(lst_input_im[2])
-                self._im8.set_data(lst_input_im[3])
-            plt.savefig(
-                logger._snapshot_dir + '/dynpred_img_{}_{}.png'.format(itr, count), bbox_inches='tight')
-        except Exception:
-            pass
+        if self._im1 is None or self._im2 is None:
+            self._im1 = self._fig_1.imshow(
+                input_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+            self._im2 = self._fig_2.imshow(
+                target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+            self._im3 = self._fig_3.imshow(
+                sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+            self._im4 = self._fig_4.imshow(
+                err, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+            self._im5 = self._fig_5.imshow(
+                lst_input_im[0], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+            self._im6 = self._fig_6.imshow(
+                lst_input_im[1], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+            self._im7 = self._fig_7.imshow(
+                lst_input_im[2], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+            self._im8 = self._fig_8.imshow(
+                lst_input_im[3], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+
+        else:
+            self._im1.set_data(input_im)
+            self._im2.set_data(target_im)
+            self._im3.set_data(sanity_pred_im)
+            self._im4.set_data(err)
+            self._im5.set_data(lst_input_im[0])
+            self._im6.set_data(lst_input_im[1])
+            self._im7.set_data(lst_input_im[2])
+            self._im8.set_data(lst_input_im[3])
+        plt.savefig(
+            logger._snapshot_dir + '/dynpred_img_{}_{}.png'.format(itr, count), bbox_inches='tight')
+        # except Exception:
+        #     pass
 
     def train(self):
 
@@ -499,12 +510,13 @@ class BatchPolopt(RLAlgorithm):
             update_prior=(not self._dyn_pool_args['enable']),
             update_likelihood_sd=self.update_likelihood_sd,
             output_type=conv_bnn_vime.ConvBNNVIME.OutputType.REGRESSION,
-            num_classes=256,
+            num_classes=self.num_bins,
             use_local_reparametrization_trick=self.use_local_reparametrization_trick,
             likelihood_sd_init=self.likelihood_sd_init,
             disable_variance=self.disable_variance,
             ind_softmax=(self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION),
-            num_seq_inputs=self._num_seq_frames
+            num_seq_inputs=self._num_seq_frames,
+            label_smoothing=0.003
         )
 
         # Number of weights in BNN, excluding biases.
@@ -549,7 +561,7 @@ class BatchPolopt(RLAlgorithm):
                 for path in paths:
                     path_len = len(path['rewards'])
                     for i in xrange(path_len):
-                        obs = path['observations'][i]
+                        obs = (path['observations'][i] * self.num_bins).astype(int)
                         act = path['actions'][i]
                         rew_orig = path['rewards_orig'][i]
                         term = (i == path_len - 1)
@@ -580,9 +592,9 @@ class BatchPolopt(RLAlgorithm):
                         else:
                             _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
 
-                        _tl = self.bnn.train_fn(_x, _y, kl_factor)
+                        _tl = self.bnn.train_fn(_x, _y, 0.1 * kl_factor)
                         train_loss += _tl
-                        if i % int(np.ceil(itr_tot / 20.)) == 0:
+                        if i % int(np.ceil(itr_tot / 10.)) == 0:
                             self.plot_pred_imgs(_x, _y, itr, i)
 
                     for _ in xrange(20):
@@ -612,7 +624,7 @@ class BatchPolopt(RLAlgorithm):
                             lst_obs_nxt.append(obs_nxt)
                             lst_act.append(act)
                             lst_rew.append(rew)
-                        obs.append(path['observations'][i])
+                        obs.append((path['observations'][i] * self.num_bins).astype(int))
                         act.append(path['actions'][i])
                         rew.append(path['rewards_orig'][i])
                         if self._predict_delta:

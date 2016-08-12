@@ -114,10 +114,10 @@ class Experiment(object):
                 # Train current minibatch.
                 inputs, targets, _ = batch
 
-                _train_err = model.train_fn(inputs, targets, 1.0)
+                _train_err = model.train_fn(inputs, targets, 0.0)
                 # if model.surprise_type == model.SurpriseType.VAR and train_batches % 30 == 0:
                 #     print(model.train_update_fn(inputs))
-                print(model.fn_l1())
+                # print(model.fn_l1())
 
                 train_err += _train_err
                 train_batches += 1
@@ -130,11 +130,12 @@ class Experiment(object):
             pred_im = pred[:, :-1]
             if ind_softmax:
                 pred_im = pred_im.reshape((-1, im_size * im_size, model.num_classes))
+                print(np.sum(pred_im,axis=2))
                 pred_im = np.argmax(pred_im, axis=2)
 
             acc = np.mean(np.sum(np.square(pred_im - Y[:, :-1]), axis=1), axis=0)
 
-            if epoch % 5 == 0:
+            if epoch % 30 == 0:
                 self.plot_pred_imgs(model, X, Y, epoch, 1, ind_softmax, pred_delta)
 
             logger.record_tabular('train loss', train_err / float(train_batches))
@@ -162,12 +163,12 @@ class Experiment(object):
             self.bin_img(T_train, self.num_bins)
             X_train = X_train.astype(int)
             T_train = T_train.astype(int)
-            X_train0 = np.tile(X_train[0], reps=[50, 1])
-            T_train0 = np.tile(T_train[0], reps=[50, 1])
-            X_train1 = np.tile(X_train[1], reps=[50, 1])
-            T_train1 = np.tile(T_train[1], reps=[50, 1])
-            X_train = np.vstack((X_train0, X_train1))
-            T_train = np.vstack((T_train0, T_train1))
+            # X_train0 = np.tile(X_train[0], reps=[50, 1])
+            # T_train0 = np.tile(T_train[0], reps=[50, 1])
+            # X_train1 = np.tile(X_train[1], reps=[50, 1])
+            # T_train1 = np.tile(T_train[1], reps=[50, 1])
+            # X_train = np.vstack((X_train0, X_train1))
+            # T_train = np.vstack((T_train0, T_train1))
 
         elif self.pred_delta:
             T_train = X_train - T_train

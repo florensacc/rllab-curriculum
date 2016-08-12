@@ -20,7 +20,6 @@ import matplotlib
 
 def rgb2gray(rgb):
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
-    # gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
     gray = 0.2126 * r + 0.7152 * g + 0.0722 * b
     return gray
 
@@ -104,9 +103,9 @@ class GymEnv(Env, Serializable):
         next_obs = self.env.reset()
         next_obs = scipy.misc.imresize(
             next_obs, (42, 42, 3), interp='bilinear', mode=None)
-        next_obs = matplotlib.colors.rgb_to_hsv(next_obs)[:, :, 2]
+        # next_obs = matplotlib.colors.rgb_to_hsv(next_obs)[:, :, 2]
+        next_obs = rgb2gray(next_obs)
         next_obs = next_obs / 256.
-        # next_obs = rgb2gray(next_obs)
         next_obs = next_obs[np.newaxis, :, :]
         return next_obs
 
@@ -114,9 +113,9 @@ class GymEnv(Env, Serializable):
         next_obs, reward, done, info = self.env.step(action)
         next_obs = scipy.misc.imresize(
             next_obs, (42, 42, 3), interp='bilinear', mode=None)
-        next_obs = matplotlib.colors.rgb_to_hsv(next_obs)[:, :, 2]
+        # next_obs = matplotlib.colors.rgb_to_hsv(next_obs)[:, :, 2]
+        next_obs = rgb2gray(next_obs)
         next_obs = next_obs / 256.
-        # next_obs = rgb2gray(next_obs)
         next_obs = next_obs[np.newaxis, :, :]
         return Step(next_obs, reward, done, **info)
 
