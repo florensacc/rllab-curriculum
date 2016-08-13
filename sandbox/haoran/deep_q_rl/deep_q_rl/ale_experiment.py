@@ -74,7 +74,7 @@ class ALEExperiment(object):
             self.agent.finish_epoch(epoch,phase="Train")
 
             if self.test_length > 0:
-                self.agent.start_testing()
+                self.agent.start_testing(epoch)
                 self.agent.start_epoch(epoch,phase="Test")
                 self.run_epoch(epoch, self.test_length, True)
                 self.agent.finish_epoch(epoch,phase="Test")

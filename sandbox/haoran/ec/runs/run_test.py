@@ -11,11 +11,11 @@ from rllab import config
 os.path.join(config.PROJECT_PATH)
 from rllab.misc.instrument import stub, run_experiment_lite
 
-from sandbox.haoran.deep_q_rl.deep_q_rl.ale_agent import NeuralAgent
+# from sandbox.haoran.deep_q_rl.deep_q_rl.ale_agent import NeuralAgent
+# from sandbox.haoran.deep_q_rl.deep_q_rl.q_network import DeepQLearner
+from sandbox.haoran.ec.ale_ec_agent import ALEECAgent
 from sandbox.haoran.deep_q_rl.deep_q_rl.ale_experiment import ALEExperiment
-from sandbox.haoran.deep_q_rl.deep_q_rl.q_network import DeepQLearner
-from sandbox.haoran.hashing.hash.sim_hash import SimHash
-from sandbox.haoran.hashing.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
+from sandbox.haoran.ec.hash.sim_hash import SimHash
 from sandbox.haoran.hashing.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
 
 stub(globals())
@@ -35,7 +35,7 @@ exp_prefix = os.path.basename(__file__).split('.')[0] # exp_xxx
 mode = "local_test"
 snapshot_mode = "all"
 plot = False
-use_gpu = True # should change conv_type and ~/.theanorc
+use_gpu = False # should change conv_type and ~/.theanorc
 
 # config.DOCKER_IMAGE = 'tsukuyomi2044/rllab'
 if "ec2_cpu" in mode:
@@ -53,15 +53,15 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [1,101]
+        return [1]
 
     @variant
-    def bonus_coeff(self):
-        return [0., 1.]
+    def ucb_coeff(self):
+        return [0.]
 
     @variant
     def dim_key(self):
-        return [64, 128]
+        return [128]
 
     @variant
     def game(self):
@@ -103,38 +103,24 @@ for v in variants:
     # ----------------------
     update_rule = 'rmsprop'
     batch_accumulator = 'mean'
-    learning_rate = .0002
     discount = .95
-    rms_decay = .99 # (rho)
-    rms_epsilon = 1e-6
-    momentum = 0
-    clip_delta = 0
     epsilon_start = 1.0
-    epsilon_min = .1
-    epsilon_decay = 1000000
+    epsilon_min = 0.01
+    epsilon_decay_interval = 1000000
     phi_length = 4
-    update_frequency = 1
-    replay_memory_size = 1000000
-    batch_size = 32
-    network_type = "nips"
-    conv_type = "cudnn"
-    freeze_interval = 1
-    replay_start_size = 100
     resize_method = 'crop'
     resized_width = 84
     resized_height = 84
-    death_ends_episode = False
+    death_ends_episode = True
     max_start_nullops = 0
     cudnn_deterministic = False # setting True can result in error
-    use_double = False
     clip_reward = True
     agent_unpicklable_list = ["data_set","test_data_set"]
     seed = v["seed"]
-    recording = False
+    testing = False
 
     if cudnn_deterministic:
         theano.config.dnn.conv.algo_bwd = 'deterministic'
-    freeze_interval = freeze_interval // update_frequency # see launcher.py for a reason
 
     # setup ALE (not stubbed) --------------------------------------------
     full_rom_path = os.path.join(base_rom_path, rom)
@@ -162,52 +148,22 @@ for v in variants:
             item_dim=img_preprocessor.get_output_dim(), # get around stub
             dim_key=v["dim_key"],
             bucket_sizes=None,
+            num_attributes=2,
         )
+        for i in range(min_action_set_length)
     ]
-    bonus_evaluator = ALEHashingBonusEvaluator(
-        state_dim=img_preprocessor.get_output_dim(),
-        img_preprocessor=img_preprocessor,
-        num_actions=min_action_set_length,
-        hash_list=hash_list,
-        count_mode="s",
-        bonus_mode="s_next",
-        bonus_coeff=v["bonus_coeff"],
-        state_bonus_mode="1/n_s",
-        state_action_bonus_mode="log(n_s)/n_sa",
-    )
-    q_network = DeepQLearner(
-        input_width=resized_width,
-        input_height=resized_height,
-        num_actions=min_action_set_length,
-        num_frames=phi_length,
-        discount=discount,
-        learning_rate=learning_rate,
-        rho=rms_decay,
-        rms_epsilon=rms_epsilon,
-        momentum=momentum,
-        clip_delta=clip_delta,
-        freeze_interval=freeze_interval,
-        use_double=use_double,
-        batch_size=batch_size,
-        network_type=network_type,
-        conv_type=conv_type,
-        update_rule=update_rule,
-        batch_accumulator=batch_accumulator,
-        input_scale=255.0,
-        )
 
-    agent = NeuralAgent(
-        q_network=q_network,
-        bonus_evaluator=bonus_evaluator,
+    agent = ALEECAgent(
+        hash_list=hash_list,
+        preprocessor=img_preprocessor,
         epsilon_start=epsilon_start,
         epsilon_min=epsilon_min,
-        epsilon_decay=epsilon_decay,
-        replay_memory_size=replay_memory_size,
-        experiment_directory=None,
-        replay_start_size=replay_start_size,
-        update_frequency=update_frequency,
+        epsilon_decay_interval=epsilon_decay_interval,
+        ucb_coeff=v["ucb_coeff"],
+        discount=discount,
         clip_reward=clip_reward,
-        recording=recording,
+        phi_length=phi_length,
+        testing=testing,
         unpicklable_list=agent_unpicklable_list,
     )
     experiment = ALEExperiment(
