@@ -23,7 +23,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 2000
+max_epoch = 1500
 
 stub(globals())
 
@@ -50,7 +50,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [32, 64]#[12, 32]
+        return [64]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -61,14 +61,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0, 2, 4,]
+        return [2, 4, 6]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [5, 10, 20, ]
+            return [2, 5, 10, 20, ]
 
 
     # @variant
@@ -90,7 +90,7 @@ class VG(VariantGenerator):
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        # yield "resv1_k3_pixel_bias"
+        yield "resv1_k3_pixel_bias"
         yield "resv1_k3_pixel_bias_half_filters"
 
     @variant(hide=True)
@@ -192,13 +192,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0810_omni_res_ar_resam_cap",
+            exp_prefix="0812_omni_res_ar_small_test",
             seed=v["seed"],
-            mode="local",
-            # mode="lab_kube",
-            # variant=v,
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            variant=v,
+            n_parallel=0,
+            use_gpu=True,
         )
 
 

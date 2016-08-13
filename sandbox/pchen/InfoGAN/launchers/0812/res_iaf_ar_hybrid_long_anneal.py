@@ -122,13 +122,13 @@ class VG(VariantGenerator):
         return [
             # [],
             ["linear"],
-            ["gating"],
+            # ["gating"],
             # ["linear", "gating"]
         ]
 
     @variant(hide=False)
     def anneal_after(self):
-        return [800, 1000, 1200]
+        return [800, 1200]
 
     @variant(hide=False)
     def exp_avg(self):
@@ -200,7 +200,7 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=2500,
+            vali_eval_interval=1500,
             exp_avg=v["exp_avg"]
         )
 
