@@ -9,7 +9,7 @@ import numpy as np
 def _worker_init(G, id):
     if singleton_pool.n_parallel > 1:
         import os
-        os.environ['THEANO_FLAGS'] = 'device=cpu'
+        os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float32'
     G.worker_id = id
 
 
@@ -98,11 +98,10 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
             if surprise_type == G.dynamics.SurpriseType.INFGAIN:
                 if second_order_update:
-                #     G.dynamics.save_params()
-                #     step_size = 1.0
-                #     surpr = G.dynamics.train_update_fn(
-                #         _inputs[start:end], _targets[start:end], step_size)
-                    surpr = 1.
+                    G.dynamics.save_params()
+                    step_size = 1.0
+                    surpr = G.dynamics.train_update_fn(
+                        _inputs[start:end], _targets[start:end], step_size)
                 elif use_replay_pool:
                     G.dynamics.save_params()
                     for _ in xrange(n_itr_update):
