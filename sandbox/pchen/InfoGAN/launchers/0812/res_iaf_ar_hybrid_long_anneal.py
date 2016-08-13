@@ -206,7 +206,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0812_res_iaf_ar_hybrid_anneal_exp_avg",
+            exp_prefix="0812_ar_hybrid_exp_avg",
             seed=v["seed"],
             variant=v,
             # mode="local",
