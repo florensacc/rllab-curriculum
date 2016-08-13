@@ -34,6 +34,7 @@ class VAE(object):
                  k=1, # importance sampling ratio
                  cond_px_ent=None,
                  anneal_after=None,
+                 exp_avg=None,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -43,6 +44,7 @@ class VAE(object):
         :type recog_reg_coeff: float
         :type learning_rate: float
         """
+        self.exp_avg = exp_avg
         self.optimizer_cls = optimizer_cls
         self.optimizer_args = optimizer_args
         self.anneal_after = anneal_after
@@ -223,6 +225,10 @@ class VAE(object):
                         self.optimizer_args["learning_rate"] = self.lr_var
                     optimizer = self.optimizer_cls(**self.optimizer_args)
                     self.trainer = pt.apply_optimizer(optimizer, losses=final_losses)
+                    if self.exp_avg is not None:
+                        ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
+                        self.trainer = tf.group(*[self.trainer, ema.apply(tf.trainable_variables())])
+                        avg_dict = ema.variables_to_restore()
 
         if init:
             # destroy all summaries

@@ -1221,7 +1221,7 @@ class ResamplingBinarizedMnistDataset(object):
     def image_shape(self):
         return self._image_shape
 
-class BinarizedOmniglotDataset(object):
+class OmniglotDataset(object):
     def __init__(self):
         # train, valid, test = load_mnist_binarized()
         # train, valid, test = load_omniglot_iwae()
