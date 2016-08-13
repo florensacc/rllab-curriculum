@@ -9,7 +9,7 @@ import numpy as np
 def _worker_init(G, id):
     if singleton_pool.n_parallel > 1:
         import os
-        os.environ['THEANO_FLAGS'] = 'device=cpu'
+        os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float32'
     G.worker_id = id
 
 
@@ -69,7 +69,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
         # Iterate over all paths and compute intrinsic reward by updating the
         # model on each observation, calculating the KL divergence of the new
         # params to the old ones, and undoing this operation.
-        obs = path['observations']
+        obs = (path['observations'] * G.dynamics.num_classes).astype(int)
         single_obs_dim = obs.shape[1] / num_seq_frames
         act = path['actions']
         rew_orig = path['rewards_orig']
@@ -99,11 +99,9 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
             if surprise_type == G.dynamics.SurpriseType.INFGAIN:
                 if second_order_update:
                     G.dynamics.save_params()
-                    step_size = 0.1
+                    step_size = 1.0
                     surpr = G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], step_size)
-
-
                 elif use_replay_pool:
                     G.dynamics.save_params()
                     for _ in xrange(n_itr_update):
@@ -111,6 +109,8 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                             _inputs[start:end], _targets[start:end], 1.0)
                     surpr = G.dynamics.fn_kl()
                     G.dynamics.load_prev_params()
+                else:
+                    surpr = np.nan
 
             elif surprise_type == G.dynamics.SurpriseType.BALD:
                 surpr = G.dynamics.train_update_fn(_inputs[start:end])
@@ -120,16 +120,12 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
 
             elif surprise_type == G.dynamics.SurpriseType.L1:
                 assert use_replay_pool
-                surpr = 0.
-                # G.dynamics.save_params()
-                # print('---')
-                # for _ in xrange(n_itr_update):
-                #     rr = G.dynamics.train_update_fn(
-                #         _inputs[start:end], _targets[start:end], 1.0)
-                #     print(rr)
-                # surpr = G.dynamics.fn_l1()
-                # print('>>', surpr)
-                # G.dynamics.load_prev_params()
+                G.dynamics.save_params()
+                for _ in xrange(n_itr_update):
+                    G.dynamics.train_update_fn(
+                        _inputs[start:end], _targets[start:end], 1.0)
+                surpr = G.dynamics.fn_l1()
+                G.dynamics.load_prev_params()
 
             elif surprise_type == G.dynamics.SurpriseType.COMPR:
                 # FIXME: This doesn't work well.

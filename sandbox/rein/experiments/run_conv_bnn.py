@@ -13,13 +13,13 @@ stub(globals())
 num_epochs = 5000
 batch_size = 8
 ind_softmax = True
-num_bins = 10
+num_bins = 15
 pred_delta = False
 dropout = False
 n_batches = int(np.ceil(100 / float(batch_size)))
 
 lst_num_train_samples = [1]
-lst_learning_rate = [1e-4]
+lst_learning_rate = [1e-2]
 lst_batch_norm = [True]
 lst_factor = [1]
 
@@ -41,7 +41,7 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
-                 deterministic=True),
+                 deterministic=False),
             dict(name='convolution',
                  n_filters=16 * factor,
                  filter_size=(6, 6),
@@ -50,7 +50,7 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
-                 deterministic=True),
+                 deterministic=False),
             dict(name='convolution',
                  n_filters=16 * factor,
                  filter_size=(6, 6),
@@ -59,7 +59,7 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
-                 deterministic=True),
+                 deterministic=False),
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
@@ -68,26 +68,26 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=dropout,
-                 deterministic=True),
+                 deterministic=False),
             dict(name='gaussian',
                  n_units=64 * factor,
                  matrix_variate_gaussian=False,
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=dropout,
-                 deterministic=True),
+                 deterministic=False),
             dict(name='hadamard',
                  n_units=64 * factor,
                  matrix_variate_gaussian=False,
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=dropout,
-                 deterministic=True),
+                 deterministic=False),
             dict(name='gaussian',
                  n_units=64 * factor,
-                 matrix_variate_gaussian=True,
+                 matrix_variate_gaussian=False,
                  batch_norm=batch_norm,
-                 nonlinearity=lasagne.nonlinearities.rectify,
+                 nonlinearity='sin',#lasagne.nonlinearities.rectify,
                  dropout=dropout,
                  deterministic=False),
             dict(name='split',
@@ -96,14 +96,14 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=dropout,
-                 deterministic=True),
+                 deterministic=False),
             dict(name='gaussian',
                  n_units=400 * factor,
                  matrix_variate_gaussian=False,
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
-                 deterministic=True),
+                 deterministic=False),
             dict(name='reshape',
                  shape=([0], 16 * factor, 5, 5)),
             dict(name='deconvolution',
@@ -114,7 +114,7 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
-                 deterministic=True),
+                 deterministic=False),
             dict(name='deconvolution',
                  n_filters=16 * factor,
                  filter_size=(6, 6),
@@ -123,7 +123,7 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
-                 deterministic=True),
+                 deterministic=False),
             dict(name='deconvolution',
                  n_filters=16 * factor,
                  filter_size=(6, 6),
@@ -132,26 +132,29 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
                  nonlinearity=lasagne.nonlinearities.linear,
                  batch_norm=batch_norm,
                  dropout=False,
-                 deterministic=True),
+                 deterministic=False),
         ],
         n_batches=n_batches,
         batch_size=batch_size,
         n_samples=10,
         num_train_samples=num_train_samples,
         prior_sd=0.05,
-        update_likelihood_sd=True,
+        update_likelihood_sd=False,
         learning_rate=learning_rate,
         use_local_reparametrization_trick=True,
         likelihood_sd_init=0.1,
         output_type=ConvBNNVIME.OutputType.REGRESSION,
         surprise_type=ConvBNNVIME.SurpriseType.L1,
-        disable_variance=False,
+        disable_variance=True,
         second_order_update=False,
         debug=True,
         # ---
-        ind_softmax=ind_softmax,
+        ind_softmax=True,
         num_classes=num_bins,
-        disable_act_rew_paths=False
+        disable_act_rew_paths=False,
+        label_smoothing=0.003,
+        logit_weights=False,
+        logit_output=False
     )
 
     e = Experiment(model=bnn,

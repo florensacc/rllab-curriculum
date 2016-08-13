@@ -68,7 +68,6 @@ def conv_input_length(output_length, filter_size, stride, pad=0):
         raise ValueError('Invalid pad: {0}'.format(pad))
     return (output_length - 1) * stride - 2 * pad + filter_size
 
-
 class BayesianLayer(lasagne.layers.Layer):
     """Generic Bayesian layer"""
 
@@ -80,6 +79,7 @@ class BayesianLayer(lasagne.layers.Layer):
                  disable_variance=False,
                  matrix_variate_gaussian=False,
                  mvg_rank=1,
+                 logit_weights=False,
                  **kwargs):
         super(BayesianLayer, self).__init__(incoming, **kwargs)
 
@@ -107,6 +107,9 @@ class BayesianLayer(lasagne.layers.Layer):
         self.disable_variance = disable_variance
         self._matrix_variate_gaussian = matrix_variate_gaussian
         self.mvg_rank = mvg_rank
+        self._logit_weights = logit_weights
+        if self._logit_weights:
+            assert not self._matrix_variate_gaussian
 
         self.mu_tmp, self.b_mu_tmp, self.rho_tmp, self.b_rho_tmp = None, None, None, None
         self.mu, self.rho, self.b_mu, self.b_rho = None, None, None, None
@@ -165,9 +168,9 @@ class BayesianLayer(lasagne.layers.Layer):
             # In fact, this should be initialized to np.zeros(self.get_W_shape()),
             # but this trains much slower.
             self.mu = self.add_param(
-                # lasagne.init.Normal(0.00001, 0),
+                # lasagne.init.Normal(0.01, 0),
                 lasagne.init.GlorotNormal(),
-                self.get_W_shape(), name='mu', bayesian=True)
+                self.get_W_shape(), name='mu', bayesian=(not self.disable_variance))
             if not self.disable_variance:
                 self.rho = self.add_param(
                     lasagne.init.Constant(self.prior_rho), self.get_W_shape(), name='rho', bayesian=True)
@@ -175,7 +178,8 @@ class BayesianLayer(lasagne.layers.Layer):
             # TODO: Perhaps biases should have a postive value, to avoid zeroing the
             # relus.
             self.b_mu = self.add_param(
-                lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False, bayesian=True)
+                lasagne.init.Constant(0), self.get_b_shape(), name="b_mu", regularizable=False,
+                bayesian=(not self.disable_variance))
             if not self.disable_variance:
                 self.b_rho = self.add_param(
                     lasagne.init.Constant(self.prior_rho), self.get_b_shape(), name="b_rho", regularizable=False,

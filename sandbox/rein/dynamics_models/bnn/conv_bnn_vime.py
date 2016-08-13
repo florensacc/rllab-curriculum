@@ -31,20 +31,45 @@ class IndependentSoftmaxLayer(lasagne.layers.Layer):
         )
 
     def get_output_for(self, input, **kwargs):
-        # _a = T.dot(input.dimshuffle(0, 2, 3, 1), self.W) + self.b
-        # _b = T.exp(_a - T.max(_a, axis=3, keepdims=True))
-        # _c = T.sum(_b, axis=3, keepdims=True)
-        # return T.clip(_b / _c, 1e-8, 1 - 1e-8)
-        fc = input.dimshuffle(0, 2, 3, 1).\
-                 reshape([-1, self.input_shape[1]]).\
+        fc = input.dimshuffle(0, 2, 3, 1). \
+                 reshape([-1, self.input_shape[1]]). \
                  dot(self.W) + \
-            self.b[np.newaxis, :]
+             self.b[np.newaxis, :]
         shp = self.get_output_shape_for([-1] + list(self.input_shape[1:]))
         fc_biased = fc.reshape(shp) + self.pixel_b
         out = T.nnet.softmax(
             fc_biased.reshape([-1, self._num_bins])
         )
         return out.reshape(shp)
+
+    def get_output_shape_for(self, input_shape):
+        return input_shape[0], input_shape[2], input_shape[3], self._num_bins
+
+
+class LogitLayer(lasagne.layers.Layer):
+    def __init__(self, incoming, num_bins, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0), s=None,
+                 **kwargs):
+        super(LogitLayer, self).__init__(incoming, **kwargs)
+
+        self._num_bins = num_bins
+        self.W = self.add_param(W, (self.input_shape[1], 1), name='W')
+        self.pixel_b = self.add_param(
+            b,
+            (self.input_shape[2], self.input_shape[3], 1),
+            name='pixel_b'
+        )
+        self.s = s
+
+    def get_output_for(self, input, **kwargs):
+        def cdf(x, m, s):
+            return 1. / (1. + T.exp(- (x - m) / s))
+
+        fc = T.dot(input.dimshuffle(0, 2, 3, 1), self.W) + self.pixel_b
+        fc_tiled = T.tile(fc, reps=(1, 1, 1, self._num_bins), ndim=4)
+        uniform_bin = (T.arange(self._num_bins) / float(self._num_bins - 1)).dimshuffle('x', 'x', 'x', 0)
+        out_a = cdf(uniform_bin + 1 / float(self._num_bins), fc_tiled, self.s)
+        out_b = cdf(uniform_bin, fc_tiled, self.s)
+        return out_a - out_b + 1e-8
 
     def get_output_shape_for(self, input_shape):
         return input_shape[0], input_shape[2], input_shape[3], self._num_bins
@@ -126,7 +151,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                  ind_softmax=False,  # Independent softmax output instead of regression.
                  disable_act_rew_paths=False,  # Disable action and reward modeling, just s -> s' prediction.
                  num_seq_inputs=1,
-                 label_smoothing=0.,
+                 label_smoothing=0,
+                 logit_weights=False,
+                 logit_output=False
                  ):
 
         Serializable.quick_init(self, locals())
@@ -158,6 +185,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self._ind_softmax = ind_softmax
         self._disable_act_rew_paths = disable_act_rew_paths
         self.label_smoothing = label_smoothing
+        self._logit_weights = logit_weights
+        self._logit_output = logit_output
+
+        assert not (self._logit_output and self._ind_softmax)
 
         if self._disable_act_rew_paths:
             print('Warning: action and reward paths disabled, do not use a_net or r_net!')
@@ -260,16 +291,20 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def variance(self, input, **kwargs):
         """ Entropy approximation of a batch of input/output samples. """
-        from scipy.stats import norm
 
         # MC samples.
         lst_pred = []
         for _ in xrange(self.n_samples):
             # Make prediction.
-            lst_pred.append(self.pred_fn(input))
+            pred = self.pred_fn(input)
+            if self._ind_softmax:
+                pred_rshp = pred[:, :-1].reshape(
+                    (pred.shape[0],) + (self.state_dim[1], self.state_dim[2]) + (self.num_classes,))
+                pred = np.argmax(pred_rshp, axis=3)
+            lst_pred.append(pred)
         arr_pred = np.asarray(lst_pred)
 
-        return np.var(arr_pred, axis=(0, 2))
+        return np.mean(np.var(arr_pred, axis=0), axis=(1, 2))
 
     def surprise(self, **kwargs):
 
@@ -299,9 +334,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         """KL divergence KL[q_\phi(w)||p(w)]"""
         layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
                         lasagne.layers.get_all_layers(self.network))
-        print(layers)
-        for l in layers:
-            print(l.kl_div_new_prior().eval())
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
@@ -347,45 +379,44 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def likelihood_classification(self, target, prediction):
         # return T.sum(self._log_prob_softmax(target, prediction))
-        if self.label_smoothing != 0:
-            target = to_onehot_sym(
-                T.cast(target.flatten(), 'int32'),
-                self.num_classes
-            )
-            target += self.label_smoothing
-            target = target / target.sum(axis=1, keepdims=True)
-            return T.mean(self._log_prob_softmax_onehot(
-                target,
-                prediction.reshape([-1, self.num_classes])
-            ))
-        else:
-            return T.mean(self._log_prob_softmax(
-                target,
-                prediction
-            ))
+        target = to_onehot_sym(
+            T.cast(target.flatten(), 'int32'),
+            self.num_classes
+        )
+        target += self.label_smoothing
+        target = target / target.sum(axis=1, keepdims=True)
+        return T.sum(self._log_prob_softmax_onehot(
+            target,
+            prediction.reshape([-1, self.num_classes])
+        ))
 
     def likelihood_classification_nonsum(self, target, prediction):
-        return self._log_prob_softmax(target, prediction)
+        target = to_onehot_sym(
+            T.cast(target.flatten(), 'int32'),
+            self.num_classes
+        )
+        return T.sum(self._log_prob_softmax_onehot(
+            target,
+            prediction.reshape([-1, self.num_classes])
+        ).reshape((prediction.shape[0], -1)), axis=1)
+
+    # def likelihood_classification_nonsum(self, target, prediction):
+    #     return self._log_prob_softmax(target, prediction)
 
     def logp(self, input, target, **kwargs):
-        if not self._ind_softmax:
-            log_p_D_given_w = 0.
-            for _ in xrange(self.n_samples):
+        log_p_D_given_w = 0.
+        for _ in xrange(self.n_samples):
+            if self._ind_softmax or self._logit_output:
                 prediction = self.pred_sym(input)
-                lh = self.likelihood_regression_nonsum(target, prediction, **kwargs)
-                log_p_D_given_w += lh
-            return log_p_D_given_w / self.n_samples
-        else:
-            log_p_D_given_w = 0.
-            for _ in xrange(self.n_samples):
-                pred = self.pred_sym(input)
                 if not self._disable_act_rew_paths:
-                    lh = self.likelihood_regression(target[:, -1], pred[:, -1], **kwargs) + \
-                         self.likelihood_classification_nonsum(target[:, :-1], pred[:, :-1])
+                    lh = self.likelihood_regression_nonsum(target[:, -1:], prediction[:, -1:], **kwargs) + \
+                         self.likelihood_classification_nonsum(target[:, :-1], prediction[:, :-1])
                 else:
-                    lh = self.likelihood_classification_nonsum(target, pred)
-                log_p_D_given_w += lh
-            return log_p_D_given_w / self.n_samples
+                    lh = self.likelihood_classification_nonsum(target, prediction)
+            else:
+                lh = self.likelihood_regression_nonsum(target, prediction, **kwargs)
+            log_p_D_given_w += lh
+        return log_p_D_given_w / self.n_samples / np.prod(self.state_dim)
 
     def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
         if self.disable_variance:
@@ -396,7 +427,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         for _ in xrange(self.num_train_samples):
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
-            if self._ind_softmax:
+            if self._ind_softmax or self._logit_output:
                 if not self._disable_act_rew_paths:
                     lh = self.likelihood_regression(target[:, -1:], prediction[:, -1:], **kwargs) + \
                          self.likelihood_classification(target[:, :-1], prediction[:, :-1])
@@ -407,13 +438,14 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             log_p_D_given_w += lh
 
         if disable_kl:
-            return - log_p_D_given_w / self.num_train_samples
+            return (- log_p_D_given_w / self.num_train_samples) / np.prod(self.state_dim)
         else:
             if self.update_prior:
                 kl = self.kl_div()
             else:
                 kl = self.log_p_w_q_w_kl()
-            return kl / self.n_batches * kl_factor - log_p_D_given_w / self.num_train_samples
+            return (kl / self.n_batches * kl_factor - log_p_D_given_w / self.num_train_samples) / np.prod(
+                self.state_dim)
 
     def loss_last_sample(self, input, target, **kwargs):
         """The difference with the original loss is that we only update based on the latest sample.
@@ -436,7 +468,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 lh = self.likelihood_regression(target, prediction, **kwargs)
             log_p_D_given_w += lh
 
-        return self.kl_div() - log_p_D_given_w / self.n_samples
+        return (self.kl_div() - log_p_D_given_w / self.n_samples) / np.prod(self.state_dim)
 
     def build_network(self):
 
@@ -445,6 +477,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # Input to the s_net is always flattened.
         input_dim = (self.num_seq_inputs,) + (self.state_dim[1:])
         s_flat_dim = np.prod(input_dim)
+
+        if self._logit_output:
+            self._logit_s = theano.shared(0.1, name='logit_s')
 
         if not self._disable_act_rew_paths:
             print('f: {} x {} -> {} x {}'.format(input_dim, self.action_dim, self.state_dim, self.reward_dim))
@@ -468,7 +503,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         for i, layer_disc in enumerate(self.layers_disc):
 
             if 'nonlinearity' in layer_disc.keys() and layer_disc['nonlinearity'] == 'sin':
-                layer_disc['nonlinearity'] = np.sin
+                def sinsq(x):
+                    return np.sin(np.square(x))
+
+                layer_disc['nonlinearity'] = sinsq
 
             if layer_disc['name'] == 'convolution':
                 s_net = BayesianConvLayer(
@@ -479,7 +517,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     prior_sd=self.prior_sd,
                     pad=layer_disc['pad'],
                     stride=layer_disc['stride'],
-                    disable_variance=layer_disc['deterministic'])
+                    disable_variance=layer_disc['deterministic'],
+                    logit_weights=self._logit_weights)
                 if layer_disc['dropout'] is True:
                     s_net = dropout(s_net, p=dropout_p)
                 if layer_disc['batch_norm'] is True:
@@ -493,7 +532,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     prior_sd=self.prior_sd,
                     use_local_reparametrization_trick=self.use_local_reparametrization_trick,
                     disable_variance=layer_disc['deterministic'],
-                    matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'])
+                    matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'],
+                    logit_weights=self._logit_weights)
                 if layer_disc['dropout'] is True:
                     s_net = dropout(s_net, p=dropout_p)
                 if layer_disc['batch_norm'] is True:
@@ -513,7 +553,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     stride=layer_disc['stride'],
                     crop=layer_disc['pad'],
                     disable_variance=layer_disc['deterministic'],
-                    nonlinearity=layer_disc['nonlinearity'])
+                    nonlinearity=layer_disc['nonlinearity'],
+                    logit_weights=self._logit_weights)
                 if layer_disc['dropout'] is True:
                     s_net = dropout(s_net, p=dropout_p)
                 if layer_disc['batch_norm'] is True:
@@ -580,6 +621,13 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             )
             print('layer ind softmax:\n\toutsize: {}'.format(s_net.output_shape))
             s_net = lasagne.layers.reshape(s_net, ([0], -1))
+        elif self._logit_output:
+            s_net = LogitLayer(
+                s_net,
+                num_bins=self.num_classes,
+                s=self._logit_s
+            )
+            s_net = lasagne.layers.reshape(s_net, ([0], -1))
         else:
             s_net = lasagne.layers.reshape(s_net, ([0], -1))
 
@@ -607,39 +655,24 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         input_var = T.matrix('inputs',
                              dtype=theano.config.floatX)
 
-        if self.output_type == ConvBNNVIME.OutputType.REGRESSION:
-            target_var = T.matrix('targets',
-                                  dtype=theano.config.floatX)
+        target_var = T.matrix('targets',
+                              dtype=theano.config.floatX)
 
-            # Make the likelihood standard deviation a trainable parameter.
-            self.likelihood_sd = theano.shared(
-                value=self.likelihood_sd_init,  # self.likelihood_sd_init,
-                name='likelihood_sd'
-            )
-            self.old_likelihood_sd = theano.shared(
-                value=self.likelihood_sd_init,  # self.likelihood_sd_init,
-                name='old_likelihood_sd'
-            )
+        # Make the likelihood standard deviation a trainable parameter.
+        self.likelihood_sd = theano.shared(
+            value=self.likelihood_sd_init,  # self.likelihood_sd_init,
+            name='likelihood_sd'
+        )
+        self.old_likelihood_sd = theano.shared(
+            value=self.likelihood_sd_init,  # self.likelihood_sd_init,
+            name='old_likelihood_sd'
+        )
 
-            # Loss function.
-            loss = self.loss(
-                input_var, target_var, kl_factor, likelihood_sd=self.likelihood_sd)
-            loss_only_last_sample = self.loss_last_sample(
-                input_var, target_var, likelihood_sd=self.likelihood_sd)
-
-        elif self.output_type == ConvBNNVIME.OutputType.CLASSIFICATION:
-
-            target_var = T.matrix('targets', dtype=theano.config.floatX)
-
-            # Loss function.
-            loss = self.loss(
-                input_var, target_var, kl_factor, disable_kl=self.disable_variance)
-            loss_only_last_sample = self.loss_last_sample(
-                input_var, target_var)
-
-        else:
-            raise Exception(
-                'Unknown self.output_type {}'.format(self.output_type))
+        # Loss function.
+        loss = self.loss(
+            input_var, target_var, kl_factor, likelihood_sd=self.likelihood_sd)
+        loss_only_last_sample = self.loss_last_sample(
+            input_var, target_var, likelihood_sd=self.likelihood_sd)
 
         # Create update methods.
         params_kl = lasagne.layers.get_all_params(self.network, trainable=True)
@@ -648,6 +681,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         if self.output_type == 'regression' and self.update_likelihood_sd:
             # No likelihood sd for classification tasks.
             params.append(self.likelihood_sd)
+        if self._logit_output:
+            params.append(self._logit_s)
 
         # Train/val fn.
         self.pred_fn = ext.compile_function(
@@ -718,7 +753,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                             oldparam_rho = params[i + 1]
                             invH = T.square(T.log(1 + T.exp(oldparam_rho)))
                         elif param.name == 'rho' or param.name == 'b_rho':
-                            oldparam_rho = params[i]
                             p = param
                             H = 2. * (T.exp(2 * p)) / (1 + T.exp(p)) ** 2 / (T.log(1 + T.exp(p)) ** 2)
                             invH = 1. / H
@@ -784,6 +818,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             # Use SGD to update the model for a single sample, in order to
             # calculate the surprise. We only update the bayesian params, no batchnorm params.
             params_bayesian = []
+            # FIXME
+            print('BAYESIAN=TRUE flag wont work for deterministic NN')
+            print('BAYESIAN=TRUE flag wont work for deterministic NN')
+            print('BAYESIAN=TRUE flag wont work for deterministic NN')
             params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
             # Use the loss with KL[post'||post'].
             loss_l1 = self.loss(
