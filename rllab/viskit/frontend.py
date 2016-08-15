@@ -1,4 +1,6 @@
 from __future__ import print_function
+import sys
+sys.path.append('.')
 import matplotlib
 
 matplotlib.use('Agg')
@@ -529,12 +531,11 @@ def index():
                               for k, v in distinct_params]),
     )
 
-
 def reload_data():
     global exps_data
     global plottable_keys
     global distinct_params
-    exps_data = core.load_exps_data(args.data_path)
+    exps_data = core.load_exps_data(args.data_paths)
     plottable_keys = sorted(list(
         set(flatten(exp.progress.keys() for exp in exps_data))))
     distinct_params = sorted(core.extract_distinct_params(exps_data))
@@ -542,11 +543,22 @@ def reload_data():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("data_path", type=str)
+    parser.add_argument("data_paths", type=str, nargs='*')
+    parser.add_argument("--prefix",type=str,nargs='?',default="???")
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--port", type=int, default=5000)
     args = parser.parse_args(sys.argv[1:])
-    print("Importing data from {path}...".format(path=args.data_path))
+
+    # load all folders following a prefix
+    if args.prefix != "???":
+        args.data_paths = []
+        dirname = os.path.dirname(args.prefix)
+        subdirprefix = os.path.basename(args.prefix)
+        for subdirname in os.listdir(dirname):
+            path = os.path.join(dirname,subdirname)
+            if os.path.isdir(path) and (subdirprefix in subdirname):
+                args.data_paths.append(path)
+    print("Importing data from {path}...".format(path=args.data_paths))
     reload_data()
     # port = 5000
     # url = "http://0.0.0.0:{0}".format(port)

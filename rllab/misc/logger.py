@@ -301,8 +301,8 @@ def log_variant(log_file, variant_data):
         json.dump(variant_json, f, indent=2, sort_keys=True)
 
 def record_tabular_misc_stat(key,values):
-    record_tabular("Average"+key, np.average(values))
-    record_tabular("Std"+key, np.std(values))
-    record_tabular("Median"+key, np.median(values))
-    record_tabular("Min"+key, np.amin(values))
-    record_tabular("Max"+key, np.amax(values))
+    record_tabular(key + "Average", np.average(values))
+    record_tabular(key + "Std", np.std(values))
+    record_tabular(key + "Median", np.median(values))
+    record_tabular(key + "Min", np.amin(values))
+    record_tabular(key + "Max", np.amax(values))

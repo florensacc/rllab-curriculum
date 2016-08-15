@@ -8,7 +8,7 @@ from rllab.misc import logger
 import numpy as np
 import cv2
 import time
-import sys
+import sys, os
 from ale_python_interface.ale_python_interface import ALEInterface
 
 # Number of rows to crop off the bottom of the (downsampled) screen.
@@ -35,7 +35,11 @@ class ALEExperiment(object):
         ale.setBool('display_screen', ale_args["plot"])
         ale.setFloat('repeat_action_probability',
                      ale_args["repeat_action_probability"])
-        ale.loadROM(ale_args["rom_path"])
+        rom = ale_args["rom_path"]
+        if not os.path.exists(rom):
+            print "Rom file %s does not exist."%(rom)
+            sys.exit(1)
+        ale.loadROM(rom)
         self.ale = ale
 
         self.agent = agent

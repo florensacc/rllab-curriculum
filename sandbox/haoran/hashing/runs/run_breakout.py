@@ -18,7 +18,7 @@ from sandbox.haoran.hashing.hash.sim_hash import SimHash
 from sandbox.haoran.hashing.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
 
-stub(globals())
+tub(globals())
 
 # check for uncommitted changes ------------------------------
 # import git
@@ -31,7 +31,7 @@ stub(globals())
 #         sys.exit(1)
 
 # define running mode specific params -----------------------------------
-exp_prefix = os.path.basename(__file__).split('.')[0] # exp_xxx
+exp_prefix = "hashing/" + os.path.basename(__file__).split('.')[0] # exp_xxx
 mode = "local_test"
 snapshot_mode = "all"
 plot = False
@@ -53,11 +53,11 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [1,101]
+        return [1,101,201,301,401]
 
     @variant
     def bonus_coeff(self):
-        return [0., 1.]
+        return [0.01, 0.1, 1,10, 0]
 
     @variant
     def dim_key(self):
@@ -86,14 +86,14 @@ for v in variants:
     # parameters -----------------------------------------------
     # Experiment Parameters
     # ----------------------
-    steps_per_epoch = 300
-    epochs = 2
-    steps_per_test = 300
+    steps_per_epoch = 50000
+    epochs = 500
+    steps_per_test = 10000
 
     # ----------------------
     # ale parameters
     # ----------------------
-    base_rom_path = "sandbox/haoran/deep_q_rl/roms/"
+    base_rom_path = "sandbox/haoran/deep_q_rl/roms"
     rom = '%s.bin'%(v["game"])
     frame_skip = 4
     repeat_action_probability = 0
@@ -118,7 +118,7 @@ for v in variants:
     batch_size = 32
     network_type = "nips"
     conv_type = "cudnn"
-    freeze_interval = 1
+    freeze_interval = -1
     replay_start_size = 100
     resize_method = 'crop'
     resized_width = 84
@@ -138,6 +138,8 @@ for v in variants:
 
     # setup ALE (not stubbed) --------------------------------------------
     full_rom_path = os.path.join(base_rom_path, rom)
+    if 'docker' in mode or 'ec2' in mode:
+        full_rom_path = os.path.join(config.DOCKER_CODE_DIR, full_rom_path)
     ale_args = dict(
         seed=seed,
         plot=plot,
@@ -254,16 +256,16 @@ for v in variants:
 # logging -------------------------------------------------------------
 # record the experiment names to a file
 # also record the branch name and commit number
-logs = []
-logs += ["branch: %s" %(repo.active_branch.name)]
-logs += ["commit SHA: %s"%(repo.head.object.hexsha)]
-logs += exp_names
-
-cur_script_name = __file__
-log_file_name = cur_script_name.split('.py')[0] + '.log'
-with open(log_file_name,'w') as f:
-    for message in logs:
-        f.write(message + "\n")
+# logs = []
+# logs += ["branch: %s" %(repo.active_branch.name)]
+# logs += ["commit SHA: %s"%(repo.head.object.hexsha)]
+# logs += exp_names
+#
+# cur_script_name = __file__
+# log_file_name = cur_script_name.split('.py')[0] + '.log'
+# with open(log_file_name,'w') as f:
+#     for message in logs:
+#         f.write(message + "\n")
 
 # make the current script read-only to avoid accidental changes after ec2 runs
 if "local" not in mode:
