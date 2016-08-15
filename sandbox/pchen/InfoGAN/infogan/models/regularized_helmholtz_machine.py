@@ -9,13 +9,14 @@ import numpy as np
 
 class RegularizedHelmholtzMachine(object):
     def __init__(self, output_dist, latent_spec, batch_size,
-            image_shape, network_type, inference_dist=None, wnorm=False):
+            image_shape, network_type, network_args=None, inference_dist=None, wnorm=False):
         """
         :type output_dist: Distribution
         :type latent_spec: list[(Distribution, bool)]
         :type batch_size: int
         :type network_type: string
         """
+        self.network_args = network_args
         self.output_dist = output_dist
         self.latent_spec = latent_spec
         if len(latent_spec) == 1:
@@ -113,7 +114,7 @@ class RegularizedHelmholtzMachine(object):
                 with pt.defaults_scope(activation_fn=tf.nn.elu, data_init=UnboundVariable('data_init'), wnorm=self.wnorm):
                     self.encoder_template = \
                         (pt.template('input', self.book).
-                         reshape([self.batch_size] + list(image_shape)).
+                         reshape([-1] + list(image_shape)).
                          conv2d_mod(5, 16, ).
                          conv2d_mod(5, 16, residual=False).
                          conv2d_mod(5, 16, residual=False).
@@ -133,7 +134,7 @@ class RegularizedHelmholtzMachine(object):
                          wnorm_fc(1568, ).
                          # fully_connected(450, ).
                          # fully_connected(1568, ).
-                         reshape([self.batch_size, 7, 7, 32]).
+                         reshape([-1, 7, 7, 32]).
                          # reshape([self.batch_size, 1, 1, 450]).
                          # custom_deconv2d([0] + [7,7,32], k_h=1, k_w=1).
                          conv2d_mod(5, 32, residual=False).
@@ -161,7 +162,7 @@ class RegularizedHelmholtzMachine(object):
                 with pt.defaults_scope(activation_fn=tf.nn.elu, data_init=UnboundVariable('data_init'), wnorm=self.wnorm):
                     self.encoder_template = \
                         (pt.template('input', self.book).
-                         reshape([self.batch_size] + list(image_shape)).
+                         reshape([-1] + list(image_shape)).
                          conv2d_mod(5, 16, ).
                          conv2d_mod(5, 16, residual=True).
                          conv2d_mod(5, 16, residual=True).
@@ -181,7 +182,7 @@ class RegularizedHelmholtzMachine(object):
                          wnorm_fc(1568, ).
                          # fully_connected(450, ).
                          # fully_connected(1568, ).
-                         reshape([self.batch_size, 7, 7, 32]).
+                         reshape([-1, 7, 7, 32]).
                          # reshape([self.batch_size, 1, 1, 450]).
                          # custom_deconv2d([0] + [7,7,32], k_h=1, k_w=1).
                          conv2d_mod(5, 32, residual=True).
@@ -209,7 +210,7 @@ class RegularizedHelmholtzMachine(object):
                 with pt.defaults_scope(activation_fn=tf.nn.elu, data_init=UnboundVariable('data_init'), wnorm=self.wnorm):
                     self.encoder_template = \
                         (pt.template('input', self.book).
-                         reshape([self.batch_size] + list(image_shape)).
+                         reshape([-1] + list(image_shape)).
                          conv2d_mod(3, 16, ).
                          conv2d_mod(3, 16, residual=True).
                          conv2d_mod(3, 16, residual=True).
@@ -229,7 +230,7 @@ class RegularizedHelmholtzMachine(object):
                          wnorm_fc(1568, ).
                          # fully_connected(450, ).
                          # fully_connected(1568, ).
-                         reshape([self.batch_size, 7, 7, 32]).
+                         reshape([-1, 7, 7, 32]).
                          # reshape([self.batch_size, 1, 1, 450]).
                          # custom_deconv2d([0] + [7,7,32], k_h=1, k_w=1).
                          conv2d_mod(3, 32, residual=True).
@@ -383,6 +384,58 @@ class RegularizedHelmholtzMachine(object):
                     decoder = resdeconv_v1(decoder, 3, 16, out_wh=[14,14])
                     decoder = resconv_v1(decoder, 3, 16, stride=1)
                     decoder = resdeconv_v1(decoder, 3, 8, out_wh=[28,28])
+                    self.decoder_template = (
+                        decoder.
+                            conv2d_mod(3, 1, activation_fn=None).
+                            flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "resv1_k3_pixel_bias_filters_ratio":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        data_init=UnboundVariable('data_init'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                ):
+                    encoder = \
+                        (pt.template('input', self.book).
+                         reshape([-1] + list(image_shape))
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+                    base_filters = network_args["base_filters"]
+                    fc_size = network_args["fc_size"]
+                    encoder = resconv_v1(encoder, 3, base_filters, stride=2) #14
+                    encoder = resconv_v1(encoder, 3, base_filters, stride=1)
+                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=2) #7
+                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=1)
+                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=2) #4
+                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=1)
+                    self.encoder_template = \
+                        (encoder.
+                         flatten().
+                         wnorm_fc(fc_size, ).
+                         wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
+                         )
+                    decoder = (pt.template('input', self.book).
+                               wnorm_fc(fc_size, ).
+                               wnorm_fc(4*4*(base_filters*2), ).
+                               reshape([-1, 4, 4, base_filters*2])
+                               )
+                    decoder = resconv_v1(decoder, 3, base_filters*2, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, base_filters*2, out_wh=[7,7])
+                    decoder = resconv_v1(decoder, 3, base_filters*2, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, base_filters*2, out_wh=[14,14])
+                    decoder = resconv_v1(decoder, 3, base_filters*2, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[28,28])
                     self.decoder_template = (
                         decoder.
                             conv2d_mod(3, 1, activation_fn=None).
@@ -582,7 +635,7 @@ class RegularizedHelmholtzMachine(object):
             elif self.network_type == "small_conv":
                 self.encoder_template = \
                     (pt.template('input').
-                     reshape([self.batch_size] + list(image_shape)).
+                     reshape([-1] + list(image_shape)).
                      custom_conv2d(5, 32, ).
                      custom_conv2d(5, 64, ).
                      custom_conv2d(5, 128, edges='VALID').
@@ -591,7 +644,7 @@ class RegularizedHelmholtzMachine(object):
                      fully_connected(self.latent_dist.dist_flat_dim, activation_fn=None))
                 self.reg_encoder_template = \
                     (pt.template('input').
-                     reshape([self.batch_size] + list(image_shape)).
+                     reshape([-1] + list(image_shape)).
                      custom_conv2d(5, 32, ).
                      custom_conv2d(5, 64, ).
                      custom_conv2d(5, 128, edges='VALID').
@@ -600,7 +653,7 @@ class RegularizedHelmholtzMachine(object):
                      fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
                 self.decoder_template = \
                     (pt.template('input').
-                     reshape([self.batch_size, 1, 1, self.latent_dist.dim]).
+                     reshape([-1, 1, 1, self.latent_dist.dim]).
                      custom_deconv2d(3, 128, d_h=1, d_w=1, padding='VALID').
                      custom_deconv2d(5, 64, d_h=1, d_w=1, padding='VALID').
                      custom_deconv2d(5, 32, ).
