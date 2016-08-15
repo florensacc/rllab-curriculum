@@ -21,7 +21,7 @@ n_batches = int(np.ceil(100 / float(batch_size)))
 lst_num_train_samples = [1]
 lst_learning_rate = [1e-2]
 lst_batch_norm = [True]
-lst_factor = [3]
+lst_factor = [1]
 
 param_cart_product = itertools.product(
     lst_num_train_samples, lst_learning_rate, lst_batch_norm, lst_factor
@@ -87,7 +87,7 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
                  n_units=64 * factor,
                  matrix_variate_gaussian=False,
                  batch_norm=batch_norm,
-                 nonlinearity=lasagne.nonlinearities.rectify,
+                 nonlinearity='sin',#lasagne.nonlinearities.rectify,
                  dropout=dropout,
                  deterministic=False),
             dict(name='split',
@@ -145,16 +145,16 @@ for num_train_samples, learning_rate, batch_norm, factor in param_cart_product:
         likelihood_sd_init=0.1,
         output_type=ConvBNNVIME.OutputType.REGRESSION,
         surprise_type=ConvBNNVIME.SurpriseType.L1,
-        disable_variance=False,
+        disable_variance=True,
         second_order_update=False,
         debug=True,
         # ---
-        ind_softmax=False,
+        ind_softmax=True,
         num_classes=num_bins,
         disable_act_rew_paths=False,
         label_smoothing=0.003,
         logit_weights=False,
-        logit_output=True
+        logit_output=False
     )
 
     e = Experiment(model=bnn,

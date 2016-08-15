@@ -592,8 +592,9 @@ class BatchPolopt(RLAlgorithm):
                         else:
                             _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
 
-                        _tl = self.bnn.train_fn(_x, _y, 0.1 * kl_factor)
+                        _tl = self.bnn.train_fn(_x, _y, 0 * kl_factor)
                         train_loss += _tl
+                        print(_tl)
                         if i % int(np.ceil(itr_tot / 10.)) == 0:
                             self.plot_pred_imgs(_x, _y, itr, i)
 
@@ -627,11 +628,20 @@ class BatchPolopt(RLAlgorithm):
                         obs.append((path['observations'][i] * self.num_bins).astype(int))
                         act.append(path['actions'][i])
                         rew.append(path['rewards_orig'][i])
-                        if self._predict_delta:
-                            # Predict \Delta(s',s)
-                            obs_nxt.append(path['observations'][i + 1] - path['observations'][i])
+                        if self.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
+                            if self._predict_delta:
+                                # Predict \Delta(s',s)
+                                obs_nxt.append(
+                                    path['observations'][i + 1][-np.prod(self.state_dim):] - path['observations'][i][
+                                                                                             -np.prod(self.state_dim):])
+                            else:
+                                obs_nxt.append(path['observations'][i + 1][-np.prod(self.state_dim):])
                         else:
-                            obs_nxt.append(path['observations'][i + 1])
+                            if self._predict_delta:
+                                # Predict \Delta(s',s)
+                                obs_nxt.append(path['observations'][i + 1] - path['observations'][i])
+                            else:
+                                obs_nxt.append(path['observations'][i + 1])
 
                 # Stack into input and target set.
                 X_train = [np.hstack((obs, act)) for obs, act in zip(lst_obs, lst_act)]
@@ -665,7 +675,6 @@ class BatchPolopt(RLAlgorithm):
                         assert not np.isinf(train_loss)
                         if count % int(np.ceil(self.num_sample_updates * len(lst_idx) / 20.)) == 0:
                             self.plot_pred_imgs(X_train[idx], T_train[idx], itr, count)
-                            print(self.bnn.likelihood_sd.eval())
                         count += 1
 
                     if itr > 0 and self.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.second_order_update:

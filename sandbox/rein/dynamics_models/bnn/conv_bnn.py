@@ -68,7 +68,6 @@ def conv_input_length(output_length, filter_size, stride, pad=0):
         raise ValueError('Invalid pad: {0}'.format(pad))
     return (output_length - 1) * stride - 2 * pad + filter_size
 
-
 class BayesianLayer(lasagne.layers.Layer):
     """Generic Bayesian layer"""
 
@@ -169,7 +168,7 @@ class BayesianLayer(lasagne.layers.Layer):
             # In fact, this should be initialized to np.zeros(self.get_W_shape()),
             # but this trains much slower.
             self.mu = self.add_param(
-                # lasagne.init.Normal(0.00001, 0),
+                # lasagne.init.Normal(0.01, 0),
                 lasagne.init.GlorotNormal(),
                 self.get_W_shape(), name='mu', bayesian=(not self.disable_variance))
             if not self.disable_variance:

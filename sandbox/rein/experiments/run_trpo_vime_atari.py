@@ -16,16 +16,16 @@ from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
 RECORD_VIDEO = True
 num_seq_frames = 4
 
-os.environ["THEANO_FLAGS"] = "device=gpu"
+os.environ["THEANO_FLAGS"] = "device=gpu,floatX=float32'"
 
 stub(globals())
 
 # Param ranges
 seeds = range(5)
-etas = [0.01]
-lst_factor = [2]
+etas = [1.0]
+lst_factor = [3]
 lst_pred_delta = [False]
-kl_ratios = [True]
+kl_ratios = [False]
 mdps = [GymEnv("Freeway-v0", record_video=RECORD_VIDEO),
         GymEnv("Breakout-v0", record_video=RECORD_VIDEO),
         GymEnv("Frostbite-v0", record_video=RECORD_VIDEO),
@@ -93,18 +93,18 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         num_train_samples=1,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=8,
-        num_sample_updates=10,  # Every sample in traj batch will be used in `num_sample_updates' updates.
+        kl_batch_size=32,
+        num_sample_updates=1,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=False,
         replay_kl_schedule=0.98,
         n_itr_update=1,
         dyn_pool_args=dict(
-            enable=True,
+            enable=False,
             size=100000,
             min_size=10,
             batch_size=32
         ),
-        second_order_update=True,
+        second_order_update=False,
         state_dim=mdp.spec.observation_space.shape,
         action_dim=(mdp.spec.action_space.flat_dim,),
         reward_dim=(1,),
@@ -210,8 +210,8 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=False),
         ],
-        unn_learning_rate=0.01,
-        surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP99PERC,
+        unn_learning_rate=0.003,
+        surprise_transform=BatchPolopt.SurpriseTransform.CAP99PERC,
         update_likelihood_sd=False,
         output_type=ConvBNNVIME.OutputType.CLASSIFICATION,
         likelihood_sd_init=0.1,
@@ -220,7 +220,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         num_seq_frames=num_seq_frames,
         # -------------
         disable_variance=False,
-        surprise_type=ConvBNNVIME.SurpriseType.INFGAIN,
+        surprise_type=ConvBNNVIME.SurpriseType.COMPR,
         predict_reward=True,
         use_local_reparametrization_trick=True,
         # -------------
@@ -228,7 +228,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-l1-e",
+        exp_prefix="trpo-vime-atari-l1-i",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

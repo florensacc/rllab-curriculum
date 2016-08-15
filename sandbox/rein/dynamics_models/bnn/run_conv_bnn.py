@@ -130,7 +130,6 @@ class Experiment(object):
             pred_im = pred[:, :-1]
             if ind_softmax:
                 pred_im = pred_im.reshape((-1, im_size * im_size, model.num_classes))
-                print(np.sum(pred_im,axis=2))
                 pred_im = np.argmax(pred_im, axis=2)
 
             acc = np.mean(np.sum(np.square(pred_im - Y[:, :-1]), axis=1), axis=0)

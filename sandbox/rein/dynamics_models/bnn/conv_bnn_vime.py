@@ -52,32 +52,24 @@ class LogitLayer(lasagne.layers.Layer):
         super(LogitLayer, self).__init__(incoming, **kwargs)
 
         self._num_bins = num_bins
-        self.W = self.add_param(W, (self.input_shape[1], self._num_bins), name='W')
-        self.b = self.add_param(b, (self._num_bins,), name='b')
+        self.W = self.add_param(W, (self.input_shape[1], 1), name='W')
         self.pixel_b = self.add_param(
             b,
-            (self.input_shape[2], self.input_shape[3], self._num_bins,),
+            (self.input_shape[2], self.input_shape[3], 1),
             name='pixel_b'
         )
         self.s = s
 
     def get_output_for(self, input, **kwargs):
         def cdf(x, m, s):
-            return 0.5 * (1 + T.tanh((x - m) / (2 * s)))
+            return 1. / (1. + T.exp(- (x - m) / s))
 
-        fc = input.dimshuffle(0, 2, 3, 1). \
-                 reshape([-1, self.input_shape[1]]). \
-                 dot(self.W) + \
-             self.b[np.newaxis, :]
-        shp = self.get_output_shape_for([-1] + list(self.input_shape[1:]))
-        fc_biased = fc.reshape(shp) + self.pixel_b
-        uniform_bin = (T.arange(self._num_bins) / self._num_bins).dimshuffle('x', 0)
-        out_a = cdf(uniform_bin + 1 / float(self._num_bins), fc_biased.reshape([-1, self._num_bins]),
-                    self.s.dimshuffle('x', 0))
-        out_b = cdf(uniform_bin, fc_biased.reshape([-1, self._num_bins]),
-                    self.s.dimshuffle('x', 0))
-        out = out_a - out_b
-        return out.reshape(shp)
+        fc = T.dot(input.dimshuffle(0, 2, 3, 1), self.W) + self.pixel_b
+        fc_tiled = T.tile(fc, reps=(1, 1, 1, self._num_bins), ndim=4)
+        uniform_bin = (T.arange(self._num_bins) / float(self._num_bins - 1)).dimshuffle('x', 'x', 'x', 0)
+        out_a = cdf(uniform_bin + 1 / float(self._num_bins), fc_tiled, self.s)
+        out_b = cdf(uniform_bin, fc_tiled, self.s)
+        return out_a - out_b + 1e-8
 
     def get_output_shape_for(self, input_shape):
         return input_shape[0], input_shape[2], input_shape[3], self._num_bins
@@ -299,16 +291,20 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def variance(self, input, **kwargs):
         """ Entropy approximation of a batch of input/output samples. """
-        from scipy.stats import norm
 
         # MC samples.
         lst_pred = []
         for _ in xrange(self.n_samples):
             # Make prediction.
-            lst_pred.append(self.pred_fn(input))
+            pred = self.pred_fn(input)
+            if self._ind_softmax:
+                pred_rshp = pred[:, :-1].reshape(
+                    (pred.shape[0],) + (self.state_dim[1], self.state_dim[2]) + (self.num_classes,))
+                pred = np.argmax(pred_rshp, axis=3)
+            lst_pred.append(pred)
         arr_pred = np.asarray(lst_pred)
 
-        return np.var(arr_pred, axis=(0, 2))
+        return np.mean(np.var(arr_pred, axis=0), axis=(1, 2))
 
     def surprise(self, **kwargs):
 
@@ -383,25 +379,44 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def likelihood_classification(self, target, prediction):
         # return T.sum(self._log_prob_softmax(target, prediction))
-        if self.label_smoothing != 0:
-            target = to_onehot_sym(
-                T.cast(target.flatten(), 'int32'),
-                self.num_classes
-            )
-            target += self.label_smoothing
-            target = target / target.sum(axis=1, keepdims=True)
-            return T.sum(self._log_prob_softmax_onehot(
-                target,
-                prediction.reshape([-1, self.num_classes])
-            ))
-        else:
-            return T.mean(self._log_prob_softmax(
-                target,
-                prediction
-            ))
+        target = to_onehot_sym(
+            T.cast(target.flatten(), 'int32'),
+            self.num_classes
+        )
+        target += self.label_smoothing
+        target = target / target.sum(axis=1, keepdims=True)
+        return T.sum(self._log_prob_softmax_onehot(
+            target,
+            prediction.reshape([-1, self.num_classes])
+        ))
 
     def likelihood_classification_nonsum(self, target, prediction):
-        return self._log_prob_softmax(target, prediction)
+        target = to_onehot_sym(
+            T.cast(target.flatten(), 'int32'),
+            self.num_classes
+        )
+        return T.sum(self._log_prob_softmax_onehot(
+            target,
+            prediction.reshape([-1, self.num_classes])
+        ).reshape((prediction.shape[0], -1)), axis=1)
+
+    # def likelihood_classification_nonsum(self, target, prediction):
+    #     return self._log_prob_softmax(target, prediction)
+
+    def logp(self, input, target, **kwargs):
+        log_p_D_given_w = 0.
+        for _ in xrange(self.n_samples):
+            if self._ind_softmax or self._logit_output:
+                prediction = self.pred_sym(input)
+                if not self._disable_act_rew_paths:
+                    lh = self.likelihood_regression_nonsum(target[:, -1:], prediction[:, -1:], **kwargs) + \
+                         self.likelihood_classification_nonsum(target[:, :-1], prediction[:, :-1])
+                else:
+                    lh = self.likelihood_classification_nonsum(target, prediction)
+            else:
+                lh = self.likelihood_regression_nonsum(target, prediction, **kwargs)
+            log_p_D_given_w += lh
+        return log_p_D_given_w / self.n_samples / np.prod(self.state_dim)
 
     def loss(self, input, target, kl_factor=1.0, disable_kl=False, **kwargs):
         if self.disable_variance:
@@ -464,9 +479,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         s_flat_dim = np.prod(input_dim)
 
         if self._logit_output:
-            s = np.zeros(self.num_classes, )
-            s.fill(1.)
-            self._logit_s = theano.shared(s, name='logit_s')
+            self._logit_s = theano.shared(0.1, name='logit_s')
 
         if not self._disable_act_rew_paths:
             print('f: {} x {} -> {} x {}'.format(input_dim, self.action_dim, self.state_dim, self.reward_dim))
@@ -490,7 +503,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         for i, layer_disc in enumerate(self.layers_disc):
 
             if 'nonlinearity' in layer_disc.keys() and layer_disc['nonlinearity'] == 'sin':
-                layer_disc['nonlinearity'] = np.sin
+                def sinsq(x):
+                    return np.sin(np.square(x))
+
+                layer_disc['nonlinearity'] = sinsq
 
             if layer_disc['name'] == 'convolution':
                 s_net = BayesianConvLayer(

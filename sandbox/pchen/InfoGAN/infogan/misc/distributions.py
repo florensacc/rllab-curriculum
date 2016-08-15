@@ -408,7 +408,9 @@ class DiscretizedLogistic(Distribution):
         # scale = dist_info["scale"]
         return tf.reduce_sum(
             tf.log(
-                self.cdf(x_var + 1./self._bins, dist_info) - self.cdf(x_var, dist_info)
+                self.cdf(x_var + 1./self._bins, dist_info) -
+                    self.cdf(x_var, dist_info) +
+                    TINY
             ),
             reduction_indices=[1],
         )
@@ -422,16 +424,23 @@ class DiscretizedLogistic(Distribution):
 
     def activate_dist(self, flat_dist):
         return dict(
-            mu=(flat_dist[:, :self.dim]),
-            scale=flat_dist[:, self.dim:],
+            mu=(flat_dist[:, :self.dim]) + 0.5,
+            scale=tf.exp(flat_dist[:, self.dim:]) * 0.5,
         )
 
-    def sample(self, dist_info):
+    def sample_logli(self, dist_info):
         mu = dist_info["mu"]
         scale = dist_info["scale"]
-        p = tf.random_uniform(mu.get_shape())
+        # import ipdb; ipdb.set_trace()
+        p = tf.random_uniform(shape=mu.get_shape())
         real_logit = mu + scale*(tf.log(p) - tf.log(1-p)) # inverse cdf according to wiki
-        return tf.clip_by_value(real_logit, 0., 1.-1./self._bins)
+        clipped = tf.clip_by_value(real_logit, 0., 1.-1./self._bins)
+        return clipped, tf.reduce_sum(
+            tf.log(
+                self.cdf(p + 1./self._bins, dist_info) - self.cdf(p, dist_info)
+            ),
+            reduction_indices=[1],
+        )
 
     def prior_dist_info(self, batch_size):
         return dict(
