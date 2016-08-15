@@ -1172,23 +1172,34 @@ class BinarizedMnistDataset(object):
         return self._image_shape
 
 class ResamplingBinarizedMnistDataset(object):
-    def __init__(self, labels_per_class=10):
+    def __init__(self, labels_per_class=10, disable_vali=False):
+        self.disable_vali = disable_vali
         data_directory = "MNIST"
         if not os.path.exists(data_directory):
             os.makedirs(data_directory)
         dataset = mnist.input_data.read_data_sets(data_directory, one_hot=False)
-        self.train = BinarizedDataset(
-            dataset.train.images,
-            dataset.train.labels,
-        )
-        self.validation = BinarizedDataset(
-            dataset.validation.images,
-            dataset.validation.labels,
-        )
-        self.test = BinarizedDataset(
-            dataset.test.images,
-            dataset.test.labels,
-        )
+        if disable_vali:
+            self.train = BinarizedDataset(
+                np.concatenate([dataset.train.images, dataset.validation.images]),
+                np.concatenate([dataset.train.labels, dataset.validation.labels]),
+            )
+            self.validation = BinarizedDataset(
+                dataset.test.images,
+                dataset.test.labels,
+            )
+        else:
+            self.train = BinarizedDataset(
+                dataset.train.images,
+                dataset.train.labels,
+            )
+            self.validation = BinarizedDataset(
+                dataset.validation.images,
+                dataset.validation.labels,
+            )
+            self.test = BinarizedDataset(
+                dataset.test.images,
+                dataset.test.labels,
+            )
         # make sure that each type of digits have exactly 10 samples
         sup_images = []
         sup_labels = []

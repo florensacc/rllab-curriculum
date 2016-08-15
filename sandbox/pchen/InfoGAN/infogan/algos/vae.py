@@ -210,6 +210,11 @@ class VAE(object):
                 ))
             self.init_hook(locals())
 
+            if init and self.exp_avg is not None:
+                self.ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
+                self.ema_applied = self.ema.apply(tf.trainable_variables())
+                self.avg_dict = self.ema.variables_to_restore()
+
             if (not init) and (not eval):
                 for name, var in self.log_vars:
                     tf.scalar_summary(name, var)
@@ -226,9 +231,8 @@ class VAE(object):
                     optimizer = self.optimizer_cls(**self.optimizer_args)
                     self.trainer = pt.apply_optimizer(optimizer, losses=final_losses)
                     if self.exp_avg is not None:
-                        ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
-                        self.trainer = tf.group(*[self.trainer, ema.apply(tf.trainable_variables())])
-                        avg_dict = ema.variables_to_restore()
+                        with tf.name_scope(None):
+                            self.trainer = tf.group(*[self.trainer, self.ema_applied])
 
         if init:
             # destroy all summaries
@@ -395,7 +399,8 @@ class VAE(object):
                         self.init_opt(init=False, eval=False)
                         vs = tf.all_variables()
                         sess.run(tf.initialize_variables([
-                            v for v in vs if "optim" in v.name or "global_step" in v.name
+                            v for v in vs if
+                                "optim" in v.name or "global_step" in v.name
                         ]))
                         print("vars initd")
 
