@@ -115,6 +115,9 @@ class ALEECAgent(object):
 
 
     def _choose_action(self, observation, epsilon, ucb_coeff):
+        """
+        Beware that some actions do not trigger the game start. So random actions are needed at the beginning.
+        """
         # if not enough past observations in the current path, return a random action
         if len(self.cur_path["observations"]) < self.phi_length - 1:
             action = np.random.randint(0, self.num_actions)
@@ -127,22 +130,28 @@ class ALEECAgent(object):
             state = np.array(prev_obs + [observation])
                 # dimensions: frame, width, height
             q_values, sa_counts = self._query_state(state)
-
             # use epsilon-greedy for exploration
             if ucb_coeff < 1e-8:
                 if np.random.uniform() < epsilon:
                     action = np.random.randint(0,self.num_actions)
                 else:
-                    action = np.argmax(q_values)
+                    max_actions = np.argwhere(q_values == np.amax(q_values)).ravel()
+                    action = np.random.choice(max_actions)
 
             # use upper-confidence bound for exploration
             else:
-                s_count = np.sum(sa_counts)
-                bonus_values = self.ucb_coeff * np.sqrt(
-                    np.log(1. + s_count) / (1. + sa_counts)
-                )
-                modified_q_values = q_values + bonus_values
-                action = np.argmax(modified_q_values)
+                unexplored_actions = np.argwhere(np.isinf(q_values)).ravel()
+                if len(unexplored_actions) > 0:
+                    action = np.random.choice(unexplored_actions)
+                else:
+                    s_count = np.sum(sa_counts)
+                    bonus_values = self.ucb_coeff * np.sqrt(
+                        np.log(s_count) / (np.asarray(sa_counts))
+                    )
+                    modified_q_values = q_values + bonus_values
+                    max_actions = np.argwhere(modified_q_values == np.amax(modified_q_values)).ravel()
+                    action = np.random.choice(max_actions)
+            print q_values, action
 
         return action
 
@@ -207,21 +216,26 @@ class ALEECAgent(object):
                 else:
                     new_q_value_list[t] = old_q_value
 
-            # if this (s,a) pair is new, directly set the q-value
-            if count_list[t] == 0:
-                hash.set_keys(
-                    state_key_list[t],
-                    [new_q_value_list[t]],
-                    0,
-                )
-            # otherwise, increment the q-values (more stable due to redundant buckets)
-            else:
-                q_value_inc = new_q_value_list[t] - q_value_list[t]
-                hash.inc_keys(
-                    state_key_list[t],
-                    [q_value_inc],
-                    0,
-                )
+            hash.set_keys(
+                state_key_list[t],
+                [new_q_value_list[t]],
+                0,
+            )
+            # # if this (s,a) pair is new, directly set the q-value
+            # if count_list[t] == 0:
+            #     hash.set_keys(
+            #         state_key_list[t],
+            #         [new_q_value_list[t]],
+            #         0,
+            #     )
+            # # otherwise, increment the q-values (more stable due to redundant buckets)
+            # else:
+            #     q_value_inc = new_q_value_list[t] - q_value_list[t]
+            #     hash.inc_keys(
+            #         state_key_list[t],
+            #         [q_value_inc],
+            #         0,
+            #         )
 
             # update the (s,a) counts
             hash.inc_keys(
@@ -289,6 +303,10 @@ class ALEECAgent(object):
             logger.record_tabular(
                 "QUpdate",
                 self.epoch_q_update_count
+            )
+            logger.record_tabular(
+                "Epsilon",
+                self.epsilon,
             )
 
 

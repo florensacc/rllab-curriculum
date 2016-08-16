@@ -1,3 +1,5 @@
+import sys
+sys.path.append('.')
 from rllab import config
 import os
 import argparse
