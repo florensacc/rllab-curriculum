@@ -202,8 +202,8 @@ for v in variants[:]:
             network_args=dict(
                 # base_filters=v["base_filters"],
                 # fc_size=v["fc_size"],
-                dec_fc_keepprob=v["dec_fc_keepprob"],
-                dec_res_keepprob=v["dec_res_keepprob"],
+                dec_fc_keep_prob=v["dec_fc_keepprob"],
+                dec_res_keep_prob=v["dec_res_keepprob"],
             ),
         )
 

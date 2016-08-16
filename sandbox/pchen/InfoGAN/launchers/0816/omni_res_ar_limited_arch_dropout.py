@@ -217,13 +217,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0816_omni_res_ar_arch_dropout_fixed",
+            exp_prefix="0816_omni_res_ar_dropout_f",
             seed=v["seed"],
-            mode="local",
-            # mode="lab_kube",
-            # variant=v,
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            variant=v,
+            n_parallel=0,
+            use_gpu=True,
         )
 
 
