@@ -84,11 +84,13 @@ class custom_deconv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_shape,
                  k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
                  name="deconv2d", activation_fn=None, data_init=False, init_scale=0.1,
-                 wnorm=False, pixel_bias=False,
+                 wnorm=False, pixel_bias=False, var_scope=None,
                  ):
         # print "data init: ", data_init
         output_shape[0] = input_layer.shape[0]
         books = input_layer.bookkeeper
+        if var_scope:
+            self.vars = books.var_mapping[var_scope]
         ts_output_shape = tf.pack(output_shape)
         with tf.variable_scope(name):
             # filter : [height, width, output_channels, in_channels]
@@ -539,6 +541,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
                wnorm=False,
                pixel_bias=False,
                scale_init=0.1,
+               var_scope=None,
                name=PROVIDED
                ):
     """Adds a convolution to the stack of operations.
@@ -585,6 +588,9 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     size = [kernel[0], kernel[1], input_layer.shape[3], depth]
 
     books = input_layer.bookkeeper
+
+    if var_scope:
+        self.vars = books.var_mapping[var_scope]
     assert init is None
     init = tf.random_normal_initializer(stddev=0.02)
     dtype = input_layer.tensor.dtype
@@ -954,7 +960,7 @@ class AdamaxOptimizer(optimizer.Optimizer):
         raise NotImplementedError("Sparse gradient updates are not supported.")
 
 
-def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1):
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, ):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         blk.conv2d_mod(kernel, nch, stride=stride)
@@ -967,7 +973,7 @@ def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1):
 def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
-        blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel)
+        blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, )
         blk.conv2d_mod(kernel, nch, activation_fn=None)
         blk.apply(lambda x: x*add_coeff)
         origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None)
@@ -977,3 +983,11 @@ def logsumexp(x):
     x_max = tf.reduce_max(x, [1], keep_dims=True)
     return tf.reshape(x_max, [-1]) + tf.log(tf.reduce_sum(tf.exp(x - x_max), [1]))
 
+from prettytensor.bookkeeper import Bookkeeper
+from collections import defaultdict
+class CustomBookkeeper(Bookkeeper):
+    def __init__(self, **kw):
+        super(CustomBookkeeper, self).__init__(**kw)
+        self.var_mapping = defaultdict(dict)
+
+prettytensor.bookkeeper.BOOKKEEPER_FACTORY = CustomBookkeeper

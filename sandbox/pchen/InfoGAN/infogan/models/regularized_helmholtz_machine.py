@@ -411,8 +411,11 @@ class RegularizedHelmholtzMachine(object):
                          reshape([-1] + list(image_shape))
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
-                    base_filters = network_args["base_filters"]
-                    fc_size = network_args["fc_size"]
+                    gen_base_filters = network_args.get("base_filters", 16)
+                    gen_fc_size = network_args.get("fc_size", 450)
+
+                    base_filters = network_args.get("enc_base_filters", gen_base_filters)
+                    fc_size = network_args.get("enc_fc_size", gen_fc_size)
                     encoder = resconv_v1(encoder, 3, base_filters, stride=2) #14
                     encoder = resconv_v1(encoder, 3, base_filters, stride=1)
                     encoder = resconv_v1(encoder, 3, base_filters*2, stride=2) #7
@@ -425,6 +428,8 @@ class RegularizedHelmholtzMachine(object):
                          wnorm_fc(fc_size, ).
                          wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
                          )
+                    base_filters = network_args.get("dec_base_filters", gen_base_filters)
+                    fc_size = network_args.get("dec_fc_size", gen_fc_size)
                     decoder = (pt.template('input', self.book).
                                wnorm_fc(fc_size, ).
                                wnorm_fc(4*4*(base_filters*2), ).
