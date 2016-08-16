@@ -960,20 +960,24 @@ class AdamaxOptimizer(optimizer.Optimizer):
         raise NotImplementedError("Sparse gradient updates are not supported.")
 
 
-def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, ):
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1.):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         blk.conv2d_mod(kernel, nch, stride=stride)
+        if keep_prob != 1.:
+            blk.dropout(keep_prob)
         blk.conv2d_mod(kernel, nch, activation_fn=None)
         blk.apply(lambda x: x*add_coeff)
         if stride != 1:
             origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
     return seq.as_layer().nl()
 
-def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1):
+def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1.):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, )
+        if keep_prob != 1.:
+            blk.dropout(keep_prob)
         blk.conv2d_mod(kernel, nch, activation_fn=None)
         blk.apply(lambda x: x*add_coeff)
         origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None)

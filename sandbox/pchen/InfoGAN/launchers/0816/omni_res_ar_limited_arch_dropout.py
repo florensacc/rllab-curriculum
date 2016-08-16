@@ -61,7 +61,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [2, ]
+        return [2, 4]
 
     @variant
     def nr(self, nar):
@@ -98,46 +98,19 @@ class VG(VariantGenerator):
         # yield "conv1_k5"
         # yield "small_conv"
 
-    # @variant()
-    # def base_filters(self, network):
-    #     if network == "resv1_k3_pixel_bias_filters_ratio":
-    #         return [2,3,4]
-    #     else:
-    #         return [0]
-    #
-    # @variant()
-    # def fc_size(self, network):
-    #     if network == "resv1_k3_pixel_bias_filters_ratio":
-    #         return [450, 250, 150]
-    #     else:
-    #         return [0]
+    @variant()
+    def dec_fc_keepprob(self, network):
+        if network == "resv1_k3_pixel_bias_filters_ratio":
+            return [1., 0.8, 0.5]
+        else:
+            return [0]
 
     @variant()
-    def network_args(self):
-        yield dict(
-            dec_base_filters=2,
-            dec_fc_size=128,
-        )
-        yield dict(
-            dec_base_filters=4,
-            dec_fc_size=128,
-        )
-        yield dict(
-            dec_base_filters=8,
-            dec_fc_size=128,
-        )
-        yield dict(
-            dec_base_filters=16,
-            dec_fc_size=128,
-        )
-        yield dict(
-            dec_base_filters=8,
-            dec_fc_size=256,
-        )
-        yield dict(
-            dec_base_filters=8,
-            dec_fc_size=450,
-        )
+    def dec_res_keepprob(self, network):
+        if network == "resv1_k3_pixel_bias_filters_ratio":
+            return [1., 0.8, 0.5]
+        else:
+            return [0]
 
     @variant(hide=True)
     def wnorm(self):
@@ -158,7 +131,7 @@ class VG(VariantGenerator):
 
 vg = VG()
 
-variants = vg.variants(randomized=True)
+variants = vg.variants(randomized=False)
 
 print(len(variants))
 
@@ -193,7 +166,7 @@ for v in variants[:]:
                 #         (
                 #             Gaussian(
                 #                 zdim,
-                #         e       # prior_mean=np.concatenate([[2.*((i>>j)%2) for j in xrange(4)], np.random.normal(scale=v["mix_std"], size=zdim-4)]),
+                #                 # prior_mean=np.concatenate([[2.*((i>>j)%2) for j in xrange(4)], np.random.normal(scale=v["mix_std"], size=zdim-4)]),
                 #                 prior_mean=np.concatenate([np.random.normal(scale=v["mix_std"], size=zdim)]),
                 #                 init_prior_mean=np.zeros(zdim),
                 #                 prior_trainable=True,
@@ -214,11 +187,12 @@ for v in variants[:]:
             batch_size=batch_size,
             image_shape=dataset.image_shape,
             network_type=v["network"],
-            # network_args=dict(
-            #     base_filters=v["base_filters"],
-            #     fc_size=v["fc_size"],
-            # ),
-            network_args=v["network_args"],
+            network_args=dict(
+                # base_filters=v["base_filters"],
+                # fc_size=v["fc_size"],
+                dec_fc_keepprob=v["dec_fc_keepprob"],
+                dec_res_keepprob=v["dec_res_keepprob"],
+            ),
             inference_dist=Gaussian(
                 zdim,
             ),
@@ -238,12 +212,12 @@ for v in variants[:]:
             min_kl=v["min_kl"],
             k=v["k"],
             anneal_after=v["anneal_after"],
-            vali_eval_interval=2500,
+            vali_eval_interval=2200,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0815_omni_res_ar_arch_test_more",
+            exp_prefix="0816_omni_res_ar_arch_dropout",
             seed=v["seed"],
             # mode="local",
             mode="lab_kube",
