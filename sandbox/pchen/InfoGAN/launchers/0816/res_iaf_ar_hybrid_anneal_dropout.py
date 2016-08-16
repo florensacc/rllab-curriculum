@@ -225,7 +225,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0816_ar_hybrid_dropout",
+            exp_prefix="0816_ar_hybrid_dropout_f",
             seed=v["seed"],
             variant=v,
             # mode="local",

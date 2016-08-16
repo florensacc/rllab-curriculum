@@ -419,15 +419,15 @@ class RegularizedHelmholtzMachine(object):
                     fc_keep_prob = network_args.get("enc_fc_keep_prob", 1.)
                     res_keep_prob = network_args.get("enc_res_keep_prob", 1.)
                     encoder = resconv_v1(encoder, 3, base_filters, stride=2, keep_prob=res_keep_prob) #14
-                    encoder = resconv_v1(encoder, 3, base_filters, stride=1)
-                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=2) #7
-                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=1)
-                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=2) #4
-                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=1)
+                    encoder = resconv_v1(encoder, 3, base_filters, stride=1, keep_prob=res_keep_prob)
+                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=2, keep_prob=res_keep_prob) #7
+                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
+                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=2, keep_prob=res_keep_prob) #4
+                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
                     self.encoder_template = \
                         (encoder.
                          flatten().
-                         wnorm_fc(fc_size, ).
+                         wnorm_fc(fc_size, ).dropout(fc_keep_prob).
                          wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
                          )
                     base_filters = network_args.get("dec_base_filters", gen_base_filters)

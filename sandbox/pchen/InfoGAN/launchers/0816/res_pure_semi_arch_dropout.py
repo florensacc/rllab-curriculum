@@ -91,21 +91,30 @@ class VG(VariantGenerator):
         # yield "small_res"
         # yield "small_res_small_kern"
         # yield "resv1_k3_pixel_bias"
+        # yield "resv1_k3_pixel_bias_filters_ratio"
         yield "resv1_k3_pixel_bias_filters_ratio"
 
     @variant()
-    def base_filters(self, network):
-        if network == "resv1_k3_pixel_bias_filters_ratio":
-            return [2,4]
-        else:
-            return [0]
+    def enc_fc_keepprob(self, network):
+            return [1., 0.9, 0.7, 0.5]
 
     @variant()
-    def fc_size(self, network):
-        if network == "resv1_k3_pixel_bias_filters_ratio":
-            return [450, 250, 150]
-        else:
-            return [0]
+    def enc_res_keepprob(self, network):
+            return [1., 0.9, 0.7, 0.5]
+
+    # @variant()
+    # def base_filters(self, network):
+    #     if network == "resv1_k3_pixel_bias_filters_ratio":
+    #         return [2,4]
+    #     else:
+    #         return [0]
+    #
+    # @variant()
+    # def fc_size(self, network):
+    #     if network == "resv1_k3_pixel_bias_filters_ratio":
+    #         return [450, 250, 150]
+    #     else:
+    #         return [0]
 
     @variant(hide=True)
     def wnorm(self):
@@ -141,7 +150,7 @@ class VG(VariantGenerator):
     def semi_arch(self, ):
         return [
             [60],
-            [60, 30,],
+            # [60, 30,],
         ]
 
     # @variant(hide=False)
@@ -223,8 +232,8 @@ for v in variants[:]:
             image_shape=dataset.image_shape,
             network_type=v["network"],
             network_args=dict(
-                base_filters=v["base_filters"],
-                fc_size=v["fc_size"],
+                enc_fc_keep_prob=v["enc_fc_keepprob"],
+                enc_res_keep_prob=v["enc_res_keepprob"],
             ),
             inference_dist=Gaussian(
                 zdim,
@@ -251,7 +260,7 @@ for v in variants[:]:
             hidden_units=v["semi_arch"],
             delay_until=v["delay_until"],
             vali_eval_interval=500,
-            # dropout_keep_prob=v["dropout_keep_prob"]
+            dropout_keep_prob=v["enc_fc_keepprob"],
             vae_off=True,
             use_mean=v["use_mean"],
         )
@@ -261,10 +270,10 @@ for v in variants[:]:
             exp_prefix="0816_pure_semi_arch_dropout",
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 
