@@ -416,7 +416,9 @@ class RegularizedHelmholtzMachine(object):
 
                     base_filters = network_args.get("enc_base_filters", gen_base_filters)
                     fc_size = network_args.get("enc_fc_size", gen_fc_size)
-                    encoder = resconv_v1(encoder, 3, base_filters, stride=2) #14
+                    fc_keep_prob = network_args.get("enc_fc_keep_prob", 1.)
+                    res_keep_prob = network_args.get("enc_res_keep_prob", 1.)
+                    encoder = resconv_v1(encoder, 3, base_filters, stride=2, keep_prob=res_keep_prob) #14
                     encoder = resconv_v1(encoder, 3, base_filters, stride=1)
                     encoder = resconv_v1(encoder, 3, base_filters*2, stride=2) #7
                     encoder = resconv_v1(encoder, 3, base_filters*2, stride=1)
@@ -431,12 +433,12 @@ class RegularizedHelmholtzMachine(object):
                     base_filters = network_args.get("dec_base_filters", gen_base_filters)
                     fc_size = network_args.get("dec_fc_size", gen_fc_size)
                     fc_keep_prob = network_args.get("dec_fc_keep_prob", 1.)
+                    res_keep_prob = network_args.get("dec_res_keep_prob", 1.)
                     decoder = (pt.template('input', self.book).
                                wnorm_fc(fc_size, ).dropout(fc_keep_prob).
                                wnorm_fc(4*4*(base_filters*2), ).dropout(fc_keep_prob).
                                reshape([-1, 4, 4, base_filters*2])
                                )
-                    res_keep_prob = network_args.get("dec_res_keep_prob", 1.)
                     decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
                     decoder = resdeconv_v1(decoder, 3, base_filters*2, out_wh=[7,7], keep_prob=res_keep_prob)
                     decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
