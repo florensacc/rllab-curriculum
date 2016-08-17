@@ -60,11 +60,13 @@ def leaky_rectify(x, leakiness=0.01):
     return ret
 
 
-@pt.Register
+@pt.Register(
+    assign_defaults=('activation_fn', 'data_init', ))
 class custom_conv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_dim,
-                 k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02, in_dim=None, padding='SAME',
-                 name="conv2d", residual=False):
+                 k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02, in_dim=None, padding='SAME', activation_fn=None,
+                 name="conv2d", residual=False, data_init=None):
+        print("ignoring data init : %s" % data_init)
         with tf.variable_scope(name):
             w = self.variable('w', [k_h, k_w, in_dim or input_layer.shape[-1], output_dim],
                               init=tf.truncated_normal_initializer(stddev=stddev))
@@ -75,6 +77,14 @@ class custom_conv2d(pt.VarStoreMethod):
             out = tf.nn.bias_add(conv, biases)
             if residual:
                 out += input_layer.tensor
+            if activation_fn:
+                books = input_layer.bookkeeper
+                out = layers.apply_activation(
+                    books,
+                    out,
+                    activation_fn,
+
+                )
             return input_layer.with_tensor(out, parameters=self.vars)
 
 

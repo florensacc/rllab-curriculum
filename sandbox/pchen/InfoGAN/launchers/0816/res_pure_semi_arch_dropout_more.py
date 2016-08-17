@@ -62,7 +62,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [2,]
+        return [0,]
 
     @variant
     def nr(self, nar):
@@ -92,14 +92,11 @@ class VG(VariantGenerator):
         # yield "small_res_small_kern"
         # yield "resv1_k3_pixel_bias"
         # yield "resv1_k3_pixel_bias_filters_ratio"
-        yield "resv1_k3_pixel_bias_filters_ratio"
+        # yield "resv1_k3_pixel_bias_filters_ratio"
+        yield "small_conv"
 
     @variant()
-    def enc_fc_keepprob(self, network):
-            return [1., 0.9, 0.7, 0.5]
-
-    @variant()
-    def enc_res_keepprob(self, network):
+    def keep_prob(self, network):
             return [1., 0.9, 0.7, 0.5]
 
     # @variant()
@@ -232,8 +229,9 @@ for v in variants[:]:
             image_shape=dataset.image_shape,
             network_type=v["network"],
             network_args=dict(
-                enc_fc_keep_prob=v["enc_fc_keepprob"],
-                enc_res_keep_prob=v["enc_res_keepprob"],
+                # enc_fc_keep_prob=v["enc_fc_keepprob"],
+                # enc_res_keep_prob=v["enc_res_keepprob"],
+                keep_prob=v["keep_prob"],
             ),
             inference_dist=Gaussian(
                 zdim,
@@ -260,14 +258,14 @@ for v in variants[:]:
             hidden_units=v["semi_arch"],
             delay_until=v["delay_until"],
             vali_eval_interval=500,
-            dropout_keep_prob=v["enc_fc_keepprob"],
+            dropout_keep_prob=v["keep_prob"],
             vae_off=True,
             use_mean=v["use_mean"],
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0816_pure_semi_arch_dropout",
+            exp_prefix="0816_pure_semi_arch_dropout_m",
             seed=v["seed"],
             variant=v,
             # mode="local",

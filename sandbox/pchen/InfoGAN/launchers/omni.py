@@ -2,13 +2,12 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 from rllab.misc.instrument import run_experiment_lite, stub
-from sandbox.pchen.InfoGAN.infogan.algos.semi_vae import SemiVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset
+    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -24,7 +23,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 85
+max_epoch = 1200
 
 stub(globals())
 
@@ -38,22 +37,22 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, 0.0001] #0.001]
+        return [0.004, ] #0.001]
 
     @variant
     def seed(self):
         return [42, ]
         # return [123124234]
 
-    @variant(hide=True)
+    @variant
     def monte_carlo_kl(self):
         return [True, ]
 
     @variant
     def zdim(self):
-        return [32, ]#[12, 32]
+        return [64]#[12, 32]
 
-    @variant(hide=True)
+    @variant
     def min_kl(self):
         return [0.01, ] #0.05, 0.1]
     #
@@ -62,14 +61,15 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [2,]
+        return [2, 4]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [10, ]
+            return [2, 10]
+
 
     # @variant
     # def nm(self):
@@ -80,7 +80,7 @@ class VG(VariantGenerator):
     # def pr(self):
     #     return [True, False]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def network(self):
         # yield "large_conv"
         # yield "small_conv"
@@ -91,30 +91,28 @@ class VG(VariantGenerator):
         # yield "small_res"
         # yield "small_res_small_kern"
         # yield "resv1_k3_pixel_bias"
-        # yield "resv1_k3_pixel_bias_filters_ratio"
+        # yield "resv1_k3_pixel_bias_half_filters"
         yield "resv1_k3_pixel_bias_filters_ratio"
+        # yield "small_res_small_kern"
+        # yield "small_res"
+        # yield "conv1_k5"
+        # yield "small_conv"
 
     @variant()
-    def enc_fc_keepprob(self, network):
-            return [1., 0.9, 0.7, 0.5]
+    def dec_fc_keepprob(self, network):
+        return [1.]
+        if network == "resv1_k3_pixel_bias_filters_ratio":
+            return [1., 0.8, 0.5]
+        else:
+            return [0]
 
     @variant()
-    def enc_res_keepprob(self, network):
-            return [1., 0.9, 0.7, 0.5]
-
-    # @variant()
-    # def base_filters(self, network):
-    #     if network == "resv1_k3_pixel_bias_filters_ratio":
-    #         return [2,4]
-    #     else:
-    #         return [0]
-    #
-    # @variant()
-    # def fc_size(self, network):
-    #     if network == "resv1_k3_pixel_bias_filters_ratio":
-    #         return [450, 250, 150]
-    #     else:
-    #         return [0]
+    def dec_res_keepprob(self, network):
+        return [.9]
+        if network == "resv1_k3_pixel_bias_filters_ratio":
+            return [1., 0.8, 0.5]
+        else:
+            return [0]
 
     @variant(hide=True)
     def wnorm(self):
@@ -124,60 +122,18 @@ class VG(VariantGenerator):
     def ar_wnorm(self):
         return [True, ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def k(self):
-        return [8, ]
+        return [128, ]
 
     @variant(hide=False)
-    def npl(self):
-        return [5000]
-        # return [5, 10, 100, 1000]
+    def anneal_after(self):
+        return [1000]
 
-    @variant(hide=False)
-    def sup_bs(self, npl):
-        return [100]
-        # return [
-        #     bs for bs in [10, 100] if bs <= npl
-        # ]
-
-    @variant(hide=False)
-    def sup_coeff(self, npl):
-        return [
-            1.,
-            ]
-
-    @variant(hide=False)
-    def semi_arch(self, ):
-        return [
-            [60],
-            # [60, 30,],
-        ]
-
-    # @variant(hide=False)
-    # def dropout_keep_prob(self, ):
-    #     return [
-    #         1.,
-    #         0.5,
-    #         # 0.3,
-    #     ]
-
-    @variant(hide=False)
-    def delay_until(self, ):
-        return [
-            0,
-            # 100,
-            # 200,
-        ]
-
-    @variant(hide=False)
-    def use_mean(self, ):
-        return [
-            True, # False,
-        ]
 
 vg = VG()
 
-variants = vg.variants(randomized=True)
+variants = vg.variants(randomized=False)
 
 print(len(variants))
 
@@ -194,7 +150,9 @@ for v in variants[:]:
 
         # set_seed(v["seed"])
 
-        dataset = ResamplingBinarizedMnistDataset(labels_per_class=v["npl"])
+        dataset = ResamplingBinarizedOmniglotDataset()
+        # dataset = BinarizedOmniglotDataset()
+        # dataset = ResamplingBinarizedMnistDataset()
         # dataset = MnistDataset()
 
         dist = Gaussian(zdim)
@@ -232,8 +190,10 @@ for v in variants[:]:
             image_shape=dataset.image_shape,
             network_type=v["network"],
             network_args=dict(
-                enc_fc_keep_prob=v["enc_fc_keepprob"],
-                enc_res_keep_prob=v["enc_res_keepprob"],
+                # base_filters=v["base_filters"],
+                # fc_size=v["fc_size"],
+                dec_fc_keep_prob=v["dec_fc_keepprob"],
+                dec_res_keep_prob=v["dec_res_keepprob"],
             ),
             inference_dist=Gaussian(
                 zdim,
@@ -241,39 +201,31 @@ for v in variants[:]:
             wnorm=v["wnorm"],
         )
 
-        algo = SemiVAE(
+        algo = VAE(
             model=model,
             dataset=dataset,
             batch_size=batch_size,
-            sup_batch_size=v["sup_bs"],
-            sup_coeff=v["sup_coeff"],
             exp_name=exp_name,
             max_epoch=max_epoch,
             updates_per_epoch=updates_per_epoch,
             optimizer_cls=AdamaxOptimizer,
-            optimizer_args=dict(
-                learning_rate=v["lr"]
-            ),
+            optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            hidden_units=v["semi_arch"],
-            delay_until=v["delay_until"],
-            vali_eval_interval=500,
-            dropout_keep_prob=v["enc_fc_keepprob"],
-            vae_off=True,
-            use_mean=v["use_mean"],
+            anneal_after=v["anneal_after"],
+            vali_eval_interval=2200,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0816_pure_semi_arch_dropout",
+            exp_prefix="0816_omni_res_ar_dropout_f",
             seed=v["seed"],
-            variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # variant=v,
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 

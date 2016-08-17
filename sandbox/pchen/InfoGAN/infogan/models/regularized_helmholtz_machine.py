@@ -584,7 +584,6 @@ class RegularizedHelmholtzMachine(object):
                          flatten().
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "resv1_k3_pixel_bias_cifar_pred_scale":
-                from prettytensor import UnboundVariable
                 with pt.defaults_scope(
                         activation_fn=tf.nn.elu,
                         data_init=UnboundVariable('data_init'),
@@ -642,32 +641,35 @@ class RegularizedHelmholtzMachine(object):
                          flatten().
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "small_conv":
-                self.encoder_template = \
-                    (pt.template('input').
-                     reshape([-1] + list(image_shape)).
-                     custom_conv2d(5, 32, ).
-                     custom_conv2d(5, 64, ).
-                     custom_conv2d(5, 128, edges='VALID').
-                     # dropout(0.9).
-                     flatten().
-                     fully_connected(self.latent_dist.dist_flat_dim, activation_fn=None))
-                self.reg_encoder_template = \
-                    (pt.template('input').
-                     reshape([-1] + list(image_shape)).
-                     custom_conv2d(5, 32, ).
-                     custom_conv2d(5, 64, ).
-                     custom_conv2d(5, 128, edges='VALID').
-                     # dropout(0.9).
-                     flatten().
-                     fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
-                self.decoder_template = \
-                    (pt.template('input').
-                     reshape([-1, 1, 1, self.latent_dist.dim]).
-                     custom_deconv2d(3, 128, d_h=1, d_w=1, padding='VALID').
-                     custom_deconv2d(5, 64, d_h=1, d_w=1, padding='VALID').
-                     custom_deconv2d(5, 32, ).
-                     custom_deconv2d(5, 1, activation_fn=None).
-                     flatten())
+                from prettytensor import UnboundVariable
+                keep_prob = network_args["keep_prob"]
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        data_init=UnboundVariable('data_init'),
+                ):
+                    self.encoder_template = \
+                        (pt.template('input').
+                         reshape([-1] + list(image_shape)).
+                         conv2d_mod(5, 32, stride=2).dropout(keep_prob).
+                         conv2d_mod(5, 64, stride=2).dropout(keep_prob).
+                         conv2d_mod(5, 64, stride=2).dropout(keep_prob).
+                         flatten().
+                         fully_connected(self.latent_dist.dist_flat_dim, activation_fn=None))
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([-1] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+                    self.decoder_template = \
+                        (pt.template('input').
+                         fully_connected(7*7*2).reshape([-1, 7, 7, 2]).
+                         custom_deconv2d([0, 14, 14, 16], ).dropout(keep_prob).
+                         custom_deconv2d([0, 28, 28, 1], activation_fn=None).
+                         flatten())
             else:
                 raise NotImplementedError
 
