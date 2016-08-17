@@ -147,3 +147,4 @@ class SwimmerEnv(MujocoEnv, Serializable):
         total_visitation = np.count_nonzero(visitation)
         logger.record_tabular('VisitationTotal', total_visitation)
         logger.record_tabular('VisitationOverlap', overlap)
+        # gc.collect()

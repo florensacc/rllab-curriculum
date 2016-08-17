@@ -23,6 +23,9 @@ import rllab.plotter as plotter
 from rllab.sampler.utils import rollout
 import itertools
 
+# from pympler import tracker
+import gc
+import pdb
 
 class NPO_snn(BatchPolopt):
     """
@@ -180,12 +183,17 @@ class NPO_snn(BatchPolopt):
 
     @overrides
     def train(self):
+        # tr = tracker.SummaryTracker()
+        # print "my first print_diff:"
+        # tr.print_diff()
         self.start_worker()
         self.init_opt()
         episode_rewards = []
         episode_lengths = []
         for itr in xrange(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
+                # print "print_diff entering the itr loop: "
+                # tr.print_diff()
                 paths = self.sampler.obtain_samples(itr)
                 samples_data = self.process_samples(itr, paths)
                 self.log_diagnostics(paths)
@@ -204,6 +212,12 @@ class NPO_snn(BatchPolopt):
                     if self.pause_for_plot:
                         raw_input("Plotting evaluation run: Press Enter to "
                                   "continue...")
+                # print "print_diff exiting the itr loop:"
+                # tr.print_diff()
+                print "collecting Garbage: "
+                gc.collect()
+                # gc.collect()
+                # pdb.set_trace()
         # # if working locally: we can plot at the same time
         # data_dir = logger.get_snapshot_dir()
         # plot_all_exp(data_dir)
