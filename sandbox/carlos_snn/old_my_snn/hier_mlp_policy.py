@@ -49,7 +49,8 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             self,
             env_spec,
             env,
-            path_to_pkl=None,
+            pkl_path=None,
+            trainable_snn=True,
             ##CF - latents units at the input
             latent_dim=2,  # we keep all these as the dim of the output of the other MLP and others that we will need!
             latent_name='categorical',
@@ -78,6 +79,9 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         self.pre_fix_latent = np.array([])  # if this is not empty when using reset() it will use this latent
         self.latent_fix = np.array([])  # this will hold the latents variable sampled in reset()
         self._set_std_to_0 = False
+
+        self.trainable_snn = trainable_snn
+        self.pkl_path = pkl_path
 
         if latent_name == 'normal':
             self.latent_dist = DiagonalGaussian(self.latent_dim)
@@ -146,6 +150,10 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             output_nonlinearity=output_nonlinearity,
             name="meanMLP",
         )
+        if not self.trainable_snn:
+            for layer in mean_network.layers:
+                for param, tags in layer.params.iteritems():  # params of layer are OrDict: key=the shared var, val=tags
+                    tags.remove("trainable")
 
         self._layers_mean = mean_network.layers
         l_mean = mean_network.output_layer
@@ -173,8 +181,8 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
 
         self._layers_snn = self._layers_mean + self._layers_log_std  # this returns a list with the "snn" layers
 
-        if path_to_pkl:
-            data = joblib.load(path_to_pkl)
+        if self.pkl_path:
+            data = joblib.load(self.pkl_path)
             warm_params = data['policy'].get_params_internal()
             self.set_params_snn(warm_params)
 

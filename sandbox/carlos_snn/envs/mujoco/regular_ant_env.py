@@ -70,20 +70,20 @@ class RegularAntEnv(MujocoEnv, Serializable):
         print 'THE FUTHEST IT WENT COMPONENT-WISE IS', furthest
         furthest = max(furthest, 10)
 
-        c_grid = furthest * 10 * 2
-        visitation = np.zeros((c_grid, c_grid))  # we assume the furthest it can go is 100, Check it!!
-        for path in paths:
-            com_x = np.clip(((np.array(path['observations'][:, -3]) + furthest) * 10).astype(int), 0, c_grid - 1)
-            com_y = np.clip(((np.array(path['observations'][:, -2]) + furthest) * 10).astype(int), 0, c_grid - 1)
-            coms = zip(com_x, com_y)
-            for com in coms:
-                visitation[com] += 1
-
-        # if you want to have a heatmap of the visitations
-        plt.figure()
-        plt.pcolor(visitation)
-        t = str(int(time.time()))
-        plt.savefig('data/local/visitation_regular_ant_trpo/visitation_map_' + t)
-
-        total_visitation = np.count_nonzero(visitation)
-        logger.record_tabular('VisitationTotal', total_visitation)
+        # c_grid = furthest * 10 * 2
+        # visitation = np.zeros((c_grid, c_grid))  # we assume the furthest it can go is 100, Check it!!
+        # for path in paths:
+        #     com_x = np.clip(((np.array(path['observations'][:, -3]) + furthest) * 10).astype(int), 0, c_grid - 1)
+        #     com_y = np.clip(((np.array(path['observations'][:, -2]) + furthest) * 10).astype(int), 0, c_grid - 1)
+        #     coms = zip(com_x, com_y)
+        #     for com in coms:
+        #         visitation[com] += 1
+        #
+        # # if you want to have a heatmap of the visitations
+        # plt.figure()
+        # plt.pcolor(visitation)
+        # t = str(int(time.time()))
+        # plt.savefig('data/local/visitation_regular_ant_trpo/visitation_map_' + t)
+        #
+        # total_visitation = np.count_nonzero(visitation)
+        # logger.record_tabular('VisitationTotal', total_visitation)

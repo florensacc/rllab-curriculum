@@ -7,11 +7,14 @@ from rllab.misc import logger
 from rllab.misc import autoargs
 
 import matplotlib as mpl
+# from matplotlib.figure import Figure
+# from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 import os.path as osp
 
+import gc
 
 class AntEnv(MujocoEnv, Serializable):
     FILE = 'ant.xml'
@@ -26,6 +29,7 @@ class AntEnv(MujocoEnv, Serializable):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         self.reward_dir = rew_dir
         self.rew_speed = rew_speed
+
         super(AntEnv, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)  # locals()????
 
@@ -68,6 +72,9 @@ class AntEnv(MujocoEnv, Serializable):
 
     @overrides
     def log_diagnostics(self, paths):
+        # plt.close('all')
+        # print "printing tracker diff ENTER log_diag of env:"
+        # self.tr.print_diff()
         progs = [
             np.linalg.norm(path["observations"][-1][-3:-1] - path["observations"][0][-3:-1])
             for path in paths
@@ -111,11 +118,15 @@ class AntEnv(MujocoEnv, Serializable):
             x = np.arange(c_grid + 1) / 10. - furthest
             y = np.arange(c_grid + 1) / 10. - furthest
 
-            plt.figure()
-            map_plot = plt.pcolormesh(x, y, visitation_by_lat, cmap=cmap, vmin=0.1, vmax=num_latents + 1)
+            fig = plt.figure(0)
+            # fig = Figure()
+            # canvas = FigureCanvas(fig)
+            # fig.clf()
+            ax = fig.add_subplot(111)
+            map_plot = ax.pcolormesh(x, y, visitation_by_lat, cmap=cmap, vmin=0.1, vmax=num_latents + 1)
             color_len = (num_colors - 1.) / num_colors
             ticks = np.arange(color_len / 2., num_colors - 1, color_len)
-            cbar = plt.colorbar(map_plot, ticks=ticks)
+            cbar = fig.colorbar(map_plot, ticks=ticks)
             latent_tick_labels = ['latent: ' + l for l in dict_visit.keys()]
             cbar.ax.set_yticklabels(['No visitation'] + latent_tick_labels + ['Repetitions'])  # horizontal colorbar
 
@@ -134,18 +145,30 @@ class AntEnv(MujocoEnv, Serializable):
             x = np.arange(c_grid + 1) / 10. - furthest
             y = np.arange(c_grid + 1) / 10. - furthest
 
-            plt.figure()
-            plt.pcolormesh(x, y, visitation, vmax=10)
+            fig = plt.figure(0)
+            ax = fig.add_subplot(111)
+            map_plot = ax.pcolormesh(x, y, visitation, vmax=10)
+
             overlap = np.sum(np.where(visitation > 1, visitation, 0))  # sum of all visitations larger than 1
-        plt.xlim([x[0], x[-1]])
-        plt.ylim([y[0], y[-1]])
-
-        log_dir = logger.get_snapshot_dir()
-        exp_name = log_dir.split('/')[-1]
-        plt.title('visitation: ' + exp_name)
-
-        plt.savefig(osp.join(log_dir, 'visitation.png'))
+        ax.set_xlim([x[0], x[-1]])
+        ax.set_ylim([y[0], y[-1]])
 
         total_visitation = np.count_nonzero(visitation)
         logger.record_tabular('VisitationTotal', total_visitation)
         logger.record_tabular('VisitationOverlap', overlap)
+
+        log_dir = logger.get_snapshot_dir()
+        exp_name = log_dir.split('/')[-1]
+        plt.title(exp_name)
+
+        plt.savefig(osp.join(log_dir, 'visitation.png'))
+
+        plt.cla()
+        plt.clf()
+        plt.close('all')
+        del fig, ax, cmap, cbar, map_plot
+        gc.collect()
+
+        # print "printing the tracker after log_diagnostics:"
+        # self.tr.print_diff()
+
