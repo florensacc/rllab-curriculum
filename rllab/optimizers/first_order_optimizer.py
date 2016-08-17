@@ -135,4 +135,3 @@ class FirstOrderOptimizer(Serializable):
     def optimize(self, inputs, **kwargs):
         for _ in self.optimize_gen(inputs, **kwargs):
             pass
-

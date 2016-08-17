@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 
 
 class PointEnv(Env):
+    def __init__(self):
+        self.init_state = np.array([1,1])
+
     @property
     def observation_space(self):
         return Box(low=-np.inf, high=np.inf, shape=(2,))
@@ -14,11 +17,17 @@ class PointEnv(Env):
     def action_space(self):
         return Box(low=-0.1, high=0.1, shape=(2,))
 
-    def reset(self):
-        # self._state = np.random.uniform(-1, 1, size=(2,))
-        self._state = np.array([1,1])
+    def reset(self,state=None):
+        if state is None:
+            self._state = np.array([1,1])
+        else:
+            self._state = state
         observation = np.copy(self._state)
         return observation
+
+    @property
+    def _full_state(self):
+        return self._state
 
     def step(self, action):
         s = self._state
@@ -33,7 +42,7 @@ class PointEnv(Env):
         print 'current state:', self._state
 
     def r(self,s,a):
-        return np.sum((s+a)** 2.)
+        return -np.sum((s+a)** 2.)
     def r_s(self,s,a):
         return -(s+a)
     def r_a(self,s,a):

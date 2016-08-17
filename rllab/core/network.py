@@ -37,7 +37,7 @@ class MLP(LasagnePowered, Serializable):
     def __init__(self, output_dim, hidden_sizes, hidden_nonlinearity,
                  output_nonlinearity, hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
                  output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
-                 name=None, input_var=None, input_layer=None, input_shape=None):
+                 name=None, input_var=None, input_layer=None, input_shape=None, batch_norm=False):
 
         Serializable.quick_init(self, locals())
 
@@ -61,7 +61,10 @@ class MLP(LasagnePowered, Serializable):
                 W=hidden_W_init,
                 b=hidden_b_init,
             )
+            if batch_norm:
+                l_hid = L.batch_norm(l_hid)
             self._layers.append(l_hid)
+
         l_out = L.DenseLayer(
             l_hid,
             num_units=output_dim,

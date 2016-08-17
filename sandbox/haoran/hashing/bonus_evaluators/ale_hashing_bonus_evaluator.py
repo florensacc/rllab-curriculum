@@ -13,7 +13,7 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
             self,
             state_dim,
             num_actions,
-            img_preprocessor=None,
+            state_preprocessor=None,
             hash_list=[],
             count_mode="s",
             bonus_mode="s_next",
@@ -22,11 +22,11 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
             state_action_bonus_mode="log(n_s)/n_sa",
         ):
         self.state_dim = state_dim
-        if img_preprocessor is not None:
-            assert img_preprocessor.get_output_dim() == state_dim
-            self.img_preprocessor = img_preprocessor
+        if state_preprocessor is not None:
+            assert state_preprocessor.get_output_dim() == state_dim
+            self.state_preprocessor = state_preprocessor
         else:
-            self.img_preprocessor = None
+            self.state_preprocessor = None
         for hash in hash_list:
             assert hash.item_dim == state_dim
         self.num_actions = num_actions
@@ -59,12 +59,12 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         self.state_action_bonus_mode = state_action_bonus_mode
         self.epoch_hash_count_list = [] # record the hash counts of all state (state-action) they are *updated* (not evaluated) in this epoch
         self.epoch_bonus_list = [] # record the bonus given throughout the epoch
-        self.new_state_count = 0
+        self.new_state_count = 0 # the number of new states used during q-value updates
         self.new_state_action_count = 0
 
     def preprocess(self,states):
-        if self.img_preprocessor is not None:
-            states = self.img_preprocessor.process(states)
+        if self.state_preprocessor is not None:
+            states = self.state_preprocessor.process(states)
         return states
 
     def update(self, states, actions):
