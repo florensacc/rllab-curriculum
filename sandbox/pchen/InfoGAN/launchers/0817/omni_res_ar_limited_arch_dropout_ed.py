@@ -61,7 +61,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [2, 4]
+        return [2, ]
 
     @variant
     def nr(self, nar):
@@ -107,7 +107,6 @@ class VG(VariantGenerator):
 
     @variant()
     def enc_res_keepprob(self, network):
-        return [0.5]
         if network == "resv1_k3_pixel_bias_filters_ratio":
             return [1., 0.9, 0.8, 0.5]
         else:
