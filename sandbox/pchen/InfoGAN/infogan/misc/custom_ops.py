@@ -969,8 +969,13 @@ class AdamaxOptimizer(optimizer.Optimizer):
     def _apply_sparse(self, grad, var):
         raise NotImplementedError("Sparse gradient updates are not supported.")
 
+def resize_nearest_neighbor(x, scale):
+    input_shape = map(int, x.get_shape().as_list())
+    size = [int(input_shape[1] * scale), int(input_shape[2] * scale)]
+    x = tf.image.resize_nearest_neighbor(x, size)
+    return x
 
-def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1.):
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         blk.conv2d_mod(kernel, nch, stride=stride)
@@ -979,10 +984,14 @@ def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1.):
         blk.conv2d_mod(kernel, nch, activation_fn=None)
         blk.apply(lambda x: x*add_coeff)
         if stride != 1:
-            origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
+            if nn:
+                origin.apply(resize_nearest_neighbor, 1./stride)
+                origin.apply(lambda o: tf.tile(o, [1,1,1,nch/int(o.get_shape()[3])]))
+            else:
+                origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
     return seq.as_layer().nl()
 
-def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1.):
+def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, )
@@ -990,7 +999,13 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1.):
             blk.dropout(keep_prob)
         blk.conv2d_mod(kernel, nch, activation_fn=None)
         blk.apply(lambda x: x*add_coeff)
-        origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None)
+        if nn:
+            origin.apply(tf.image.resize_nearest_neighbor, out_wh)
+            origin.apply(lambda o: tf.reshape(o, [tf.shape(o)[0]]+out_wh+[nch, -1]))
+            # origin.reshape([-1,]+out_wh+[nch, 2])
+            origin.apply(tf.reduce_mean, [4],)
+        else:
+            origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None)
     return seq.as_layer().nl()
 
 def logsumexp(x):
