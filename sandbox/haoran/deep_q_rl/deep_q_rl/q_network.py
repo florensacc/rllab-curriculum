@@ -30,7 +30,7 @@ class DeepQLearner(Serializable):
                  num_frames, discount, learning_rate, rho,
                  rms_epsilon, momentum, clip_delta, freeze_interval,
                  use_double, batch_size, network_type, conv_type, update_rule,
-                 batch_accumulator, input_scale=255.0):
+                 batch_accumulator, input_scale=255.0, network_args=dict()):
         Serializable.quick_init(self,locals())
 
         self.input_width = input_width
@@ -57,13 +57,15 @@ class DeepQLearner(Serializable):
         self.l_out = self.build_network(
             network_type, conv_type,
             input_width, input_height,
-            num_actions, num_frames, batch_size
+            num_actions, num_frames, batch_size,
+            network_args,
         )
         if self.freeze_interval > 0:
             self.next_l_out = self.build_network(
                 network_type, conv_type,
                 input_width, input_height,
-                num_actions, num_frames, batch_size
+                num_actions, num_frames, batch_size,
+                network_args,
             )
             self.reset_q_hat()
 
@@ -139,7 +141,10 @@ class DeepQLearner(Serializable):
         else:
             raise ValueError("Bad accumulator: {}".format(batch_accumulator))
 
-        params = lasagne.layers.helper.get_all_params(self.l_out)
+        params = lasagne.layers.helper.get_all_params(
+            self.l_out,
+            trainable=True,
+        )
         givens = {
             states: self.states_shared,
             next_states: self.next_states_shared,
@@ -168,7 +173,7 @@ class DeepQLearner(Serializable):
                                        givens={states: self.states_shared})
 
     def build_network(self, network_type, conv_type, input_width, input_height,
-                      output_dim, num_frames, batch_size):
+                      output_dim, num_frames, batch_size, extra_args=dict()):
         if conv_type == "cuda":
             from lasagne.layers.cuda_convnet import Conv2DCCLayer as conv_layer
             logger.log("Using lasagne.layers.cuda_convnet.Conv2DCCLayer to build conv layers.")
@@ -181,17 +186,23 @@ class DeepQLearner(Serializable):
 
         if network_type == "nature":
             network_builder = self.build_nature_network
+
         elif network_type == "nips":
             network_builder = self.build_nips_network
+
         elif network_type == "linear":
             network_builder = self.build_linear_network
+
+        elif network_type == "mlp":
+            network_builder = self.build_mlp_network
+
         else:
             raise ValueError("Unrecognized network: {}".format(network_type))
 
         return network_builder(
                 input_width, input_height,
                 output_dim, num_frames,
-                batch_size, conv_layer)
+                batch_size, conv_layer,**extra_args)
 
 
     def train(self, states, actions, rewards, next_states, terminals):
@@ -380,6 +391,23 @@ class DeepQLearner(Serializable):
         )
 
         return l_out
+
+    def build_mlp_network(self, input_width, input_height, output_dim,
+                             num_frames, batch_size, conv_layer, hidden_sizes, batch_norm):
+        l_in = lasagne.layers.InputLayer(
+            shape=(batch_size, num_frames, input_width, input_height)
+        )
+
+        from rllab.core.network import MLP
+        network = MLP(
+            output_dim=output_dim,
+            hidden_sizes=hidden_sizes,
+            hidden_nonlinearity=lasagne.nonlinearities.tanh,
+            output_nonlinearity=None,
+            input_layer=l_in,
+            batch_norm=batch_norm,
+        )
+        return network.output_layer
 
     def get_param_values(self):
         params = lasagne.layers.get_all_param_values(self.l_out)

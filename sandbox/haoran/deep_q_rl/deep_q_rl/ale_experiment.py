@@ -21,7 +21,8 @@ class ALEExperiment(object):
     def __init__(self, ale_args, agent, resized_width, resized_height,
                  resize_method, num_epochs, epoch_length, test_length,
                  frame_skip, death_ends_episode, max_start_nullops,
-                 length_in_episodes=False):
+                 length_in_episodes=False, max_episode_length=np.inf, observation_type="image", record_image=True, record_ram=False,
+                 ):
         self.ale_args = ale_args
         ale = ALEInterface()
         ale.setInt('random_seed', ale_args["seed"])
@@ -66,6 +67,19 @@ class ALEExperiment(object):
         # Whether the lengths (test_length and epoch_length) are specified in
         # episodes. This is mainly for testing
         self.length_in_episodes = length_in_episodes
+        self.max_episode_length = max_episode_length
+
+        # allows using RAM state for state counting or even q-learning
+        assert observation_type in ["image","ram"]
+        if observation_type == "image":
+            assert record_image
+        elif observation_type == "ram":
+            assert record_ram
+        self.observation_type = observation_type
+        self.record_image = record_image
+        self.record_ram = record_ram
+        if record_ram:
+            self.ram_state = np.zeros(ale.getRAMSize(), dtype=np.uint8)
 
     def run(self):
         """
@@ -105,7 +119,8 @@ class ALEExperiment(object):
         episode_reward_list = []
         episode_length_list = []
         while steps_left > 0:
-            _, episode_length, episode_reward = self.run_episode(steps_left, testing)
+            max_steps = np.amin([steps_left, self.max_episode_length])
+            _, episode_length, episode_reward = self.run_episode(max_steps, testing)
             episode_reward_list.append(episode_reward)
             episode_length_list.append(episode_length)
             total_time = time.clock() - start_time
@@ -176,9 +191,13 @@ class ALEExperiment(object):
         """
         reward = self.ale.act(action)
 
-        # replace the current buffer image by the current screen
-        index = self.buffer_count % self.buffer_length
-        self.ale.getScreenGrayscale(self.screen_buffer[index, ...])
+        if self.record_image:
+            # replace the current buffer image by the current screen
+            index = self.buffer_count % self.buffer_length
+            self.ale.getScreenGrayscale(self.screen_buffer[index, ...])
+
+        if self.record_ram:
+            self.ale.getRAM(self.ram_state)
 
         # count the total number of images seen
         self.buffer_count += 1
@@ -236,11 +255,19 @@ class ALEExperiment(object):
     def get_observation(self):
         """ Resize and merge the previous two screen images """
 
-        assert self.buffer_count >= 2
-        index = self.buffer_count % self.buffer_length - 1
-        max_image = np.maximum(self.screen_buffer[index, ...],
-                               self.screen_buffer[index - 1, ...])
-        return self.resize_image(max_image)
+        if self.observation_type == "image":
+            assert self.record_image
+            assert self.buffer_count >= 2
+            index = self.buffer_count % self.buffer_length - 1
+            max_image = np.maximum(self.screen_buffer[index, ...],
+                                   self.screen_buffer[index - 1, ...])
+            return self.resize_image(max_image)
+        else:
+            assert self.record_ram
+            ram_size = len(self.ram_state)
+            # reshape the ram state to make it like a (width x height) image
+            ram = np.reshape(self.ram_state, (1,ram_size))
+            return ram
 
     def resize_image(self, image):
         """ Appropriately resize a single image """

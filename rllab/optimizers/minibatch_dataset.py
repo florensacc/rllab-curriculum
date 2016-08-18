@@ -7,12 +7,13 @@ class BatchDataset(object):
         self._inputs = [
             i for i in inputs
         ]
-        self._batch_size = batch_size
         if extra_inputs is None:
             extra_inputs = []
         self._extra_inputs = extra_inputs
-        self._ids = np.arange(self._inputs[0].shape[0])
-        self.update()
+        self._batch_size = batch_size
+        if batch_size is not None:
+            self._ids = np.arange(self._inputs[0].shape[0])
+            self.update()
 
     @property
     def number_batches(self):

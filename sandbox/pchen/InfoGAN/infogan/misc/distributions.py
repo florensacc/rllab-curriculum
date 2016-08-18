@@ -948,4 +948,3 @@ class IAR(AR):
             return out
         else:
             return self._base_dist.activate_dist(flat)
-
