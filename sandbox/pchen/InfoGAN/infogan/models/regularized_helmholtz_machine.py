@@ -419,13 +419,17 @@ class RegularizedHelmholtzMachine(object):
                     fc_keep_prob = network_args.get("enc_fc_keep_prob", 1.)
                     res_keep_prob = network_args.get("enc_res_keep_prob", 1.)
                     nn = network_args.get("enc_nn", False)
+                    rep = network_args.get("enc_rep", 1)
                     print("encoder nn %s" % nn)
                     encoder = resconv_v1(encoder, 3, base_filters, stride=2, keep_prob=res_keep_prob, nn=nn) #14
-                    encoder = resconv_v1(encoder, 3, base_filters, stride=1, keep_prob=res_keep_prob)
+                    for _ in xrange(rep):
+                        encoder = resconv_v1(encoder, 3, base_filters, stride=1, keep_prob=res_keep_prob)
                     encoder = resconv_v1(encoder, 3, base_filters*2, stride=2, keep_prob=res_keep_prob) #7
-                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
+                    for _ in xrange(rep):
+                        encoder = resconv_v1(encoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
                     encoder = resconv_v1(encoder, 3, base_filters*2, stride=2, keep_prob=res_keep_prob) #4
-                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
+                    for _ in xrange(rep):
+                        encoder = resconv_v1(encoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
                     self.encoder_template = \
                         (encoder.
                          flatten().
@@ -437,18 +441,24 @@ class RegularizedHelmholtzMachine(object):
                     fc_keep_prob = network_args.get("dec_fc_keep_prob", 1.)
                     res_keep_prob = network_args.get("dec_res_keep_prob", 1.)
                     nn = network_args.get("dec_nn", False)
+                    rep = network_args.get("dec_rep", 1)
                     print("decoder nn %s" % nn)
                     decoder = (pt.template('input', self.book).
                                wnorm_fc(fc_size, ).dropout(fc_keep_prob).
                                wnorm_fc(4*4*(base_filters*2), ).dropout(fc_keep_prob).
                                reshape([-1, 4, 4, base_filters*2])
                                )
-                    decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
+                    for _ in xrange(rep):
+                        decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
                     decoder = resdeconv_v1(decoder, 3, base_filters*2, out_wh=[7,7], keep_prob=res_keep_prob, nn=nn)
-                    decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
+                    for _ in xrange(rep):
+                        decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
                     decoder = resdeconv_v1(decoder, 3, base_filters*2, out_wh=[14,14], keep_prob=res_keep_prob, nn=nn)
-                    decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
+                    for _ in xrange(rep):
+                        decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob)
                     decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[28,28], keep_prob=res_keep_prob, nn=nn)
+                    for _ in xrange(rep-1):
+                        decoder = resconv_v1(decoder, 3, base_filters, stride=1, keep_prob=res_keep_prob)
                     self.decoder_template = (
                         decoder.
                             conv2d_mod(3, 1, activation_fn=None).

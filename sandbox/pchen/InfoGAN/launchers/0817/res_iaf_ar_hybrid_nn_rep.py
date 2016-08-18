@@ -93,15 +93,23 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias"
         yield "resv1_k3_pixel_bias_filters_ratio"
 
-    @variant()
+    @variant(hide=True)
     def dec_nn(self, network):
-        return [True, False]
+        return [True, ]
 
-    @variant()
+    @variant(hide=True)
     def enc_nn(self, network):
-        return [True, False]
+        return [True, ]
 
     @variant()
+    def enc_rep(self, network):
+        return [1,2,0]
+
+    @variant()
+    def dec_rep(self, network):
+        return [1,2,0]
+
+    @variant(hide=True)
     def dec_fc_keepprob(self, network):
         return [1.,]
 
@@ -230,6 +238,8 @@ for v in variants[:]:
                 # enc_res_keep_prob=v["enc_res_keepprob"],
                 enc_nn=v["enc_nn"],
                 dec_nn=v["dec_nn"],
+                enc_rep=v["enc_rep"],
+                dec_rep=v["dec_rep"],
             ),
         )
 
@@ -251,7 +261,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0817_ar_hybrid_nn",
+            exp_prefix="0817_ar_hybrid_nn_rep",
             seed=v["seed"],
             variant=v,
             # mode="local",
