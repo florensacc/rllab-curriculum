@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, ] #0.001]
+        return [0.004, ] #0.001]
 
     @variant
     def seed(self):
@@ -62,14 +62,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4,]
+        return [6]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [10, ]
+            return [10, 20, ]
 
     # @variant
     # def nm(self):
@@ -90,23 +90,7 @@ class VG(VariantGenerator):
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        # yield "resv1_k3_pixel_bias"
-        yield "resv1_k3_pixel_bias_filters_ratio"
-
-    @variant()
-    def dec_fc_keepprob(self, network):
-        return [1.,]
-
-    @variant()
-    def enc_res_keepprob(self, network):
-        if network == "resv1_k3_pixel_bias_filters_ratio":
-            return [1., 0.9, 0.8]
-        else:
-            return [0]
-
-    @variant()
-    def dec_res_keepprob(self, network):
-        return [1., 0.9, 0.8, ]
+        yield "resv1_k3_pixel_bias"
 
     @variant(hide=True)
     def wnorm(self):
@@ -132,7 +116,7 @@ class VG(VariantGenerator):
     def i_init_scale(self):
         return [0.1, ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def i_context(self):
         # return [True, False]
         return [
@@ -144,7 +128,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def anneal_after(self):
-        return [800, ]
+        return [150, 250, 400]
 
     @variant(hide=False)
     def exp_avg(self):
@@ -206,13 +190,6 @@ for v in variants[:]:
             network_type=v["network"],
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
-            network_args=dict(
-                # base_filters=v["base_filters"],
-                # fc_size=v["fc_size"],
-                dec_fc_keep_prob=v["dec_fc_keepprob"],
-                dec_res_keep_prob=v["dec_res_keepprob"],
-                enc_res_keep_prob=v["enc_res_keepprob"],
-            ),
         )
 
         algo = VAE(
@@ -221,20 +198,18 @@ for v in variants[:]:
             batch_size=batch_size,
             exp_name=exp_name,
             max_epoch=max_epoch,
-            updates_per_epoch=updates_per_epoch,
             optimizer_cls=AdamaxOptimizer,
             optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*4,
+            vali_eval_interval=1500*3,
             exp_avg=v["exp_avg"]
         )
 
-        # exp names too long -> fail
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0817_ar_hybrid_dropout_ed",
+            exp_prefix="0818_ar_hybrid_anneal",
             seed=v["seed"],
             variant=v,
             # mode="local",
