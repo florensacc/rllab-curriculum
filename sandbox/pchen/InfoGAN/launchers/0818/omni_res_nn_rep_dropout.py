@@ -22,9 +22,9 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
-# batch_size = 128
+batch_size = 128
 updates_per_epoch = 100
-max_epoch = 400
+max_epoch = 1500
 
 stub(globals())
 
@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, 0.0002] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
@@ -102,27 +102,25 @@ class VG(VariantGenerator):
         return [True, ]
 
     @variant()
-    def enc_rep(self, network):
-        return [1,]
+    def enc_rep(self, ):
+        return [1,2,]
 
     @variant()
-    def dec_rep(self, network):
-        return [1,]
+    def dec_rep(self, enc_rep):
+        return [enc_rep]
+        # return [1,2,]
 
     @variant(hide=True)
     def dec_fc_keepprob(self, network):
         return [1.,]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def enc_res_keepprob(self, network):
-        if network == "resv1_k3_pixel_bias_filters_ratio":
-            return [1.,]
-        else:
-            return [0]
+        return [0.9, 0.8]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def dec_res_keepprob(self, network):
-        return [1., ]
+        return [1.,0.9,0.8]
 
     @variant(hide=True)
     def wnorm(self):
@@ -132,9 +130,9 @@ class VG(VariantGenerator):
     def ar_wnorm(self):
         return [True, ]
 
-    @variant(hide=False)
+    @variant(hide=True)
     def k(self):
-        return [16, 32, 64, 128, ]
+        return [128, ]
 
     @variant(hide=True)
     def i_nar(self):
@@ -177,7 +175,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def ac(self):
-        return [0.1, ]
+        return [0.5, ]
 
 
 vg = VG()
@@ -229,7 +227,7 @@ for v in variants[:]:
         model = RegularizedHelmholtzMachine(
             output_dist=MeanBernoulli(dataset.image_dim),
             latent_spec=latent_spec,
-            batch_size=v["k"],
+            batch_size=batch_size,
             image_shape=dataset.image_shape,
             network_type=v["network"],
             inference_dist=inf_dist,
@@ -237,9 +235,9 @@ for v in variants[:]:
             network_args=dict(
                 # base_filters=v["base_filters"],
                 # fc_size=v["fc_size"],
-                # dec_fc_keep_prob=v["dec_fc_keepprob"],
-                # dec_res_keep_prob=v["dec_res_keepprob"],
-                # enc_res_keep_prob=v["enc_res_keepprob"],
+                dec_fc_keep_prob=v["dec_fc_keepprob"],
+                dec_res_keep_prob=v["dec_res_keepprob"],
+                enc_res_keep_prob=v["enc_res_keepprob"],
                 enc_nn=v["enc_nn"],
                 dec_nn=v["dec_nn"],
                 enc_rep=v["enc_rep"],
@@ -251,7 +249,7 @@ for v in variants[:]:
         algo = VAE(
             model=model,
             dataset=dataset,
-            batch_size=v["k"],
+            batch_size=batch_size,
             exp_name=exp_name[:20],
             max_epoch=max_epoch,
             updates_per_epoch=updates_per_epoch,
@@ -266,13 +264,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0818_hy_nn_rep_ac_omni_bs",
+            exp_prefix="0818_hy_nn_rep_omni_drop",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 
