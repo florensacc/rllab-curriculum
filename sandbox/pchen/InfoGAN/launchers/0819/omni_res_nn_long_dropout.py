@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 500
+max_epoch = 1500
 
 stub(globals())
 
@@ -102,24 +102,25 @@ class VG(VariantGenerator):
         return [True, ]
 
     @variant()
-    def enc_rep(self, network):
-        return [4,5]
+    def enc_rep(self, ):
+        return [1,2,]
 
     @variant()
     def dec_rep(self, enc_rep):
         return [enc_rep]
+        # return [1,2,]
 
     @variant(hide=True)
     def dec_fc_keepprob(self, network):
         return [1.,]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def enc_res_keepprob(self, network):
-        return [0.9,]
+        return [0.9, 0.8]
 
-    @variant(hide=True)
-    def dec_res_keepprob(self, enc_res_keepprob):
-        return [enc_res_keepprob]
+    @variant(hide=False)
+    def dec_res_keepprob(self, network):
+        return [1.,0.9,0.8]
 
     @variant(hide=True)
     def wnorm(self):
@@ -161,8 +162,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def exp_avg(self):
-        return [None]
-        # return [0.999, ]
+        return [0.999, ]
         # return [0.999, 0.99]
         # return [None]
 
@@ -175,7 +175,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def ac(self):
-        return [0.1, ]
+        return [0.5, ]
 
 
 vg = VG()
@@ -235,7 +235,7 @@ for v in variants[:]:
             network_args=dict(
                 # base_filters=v["base_filters"],
                 # fc_size=v["fc_size"],
-                # dec_fc_keep_prob=v["dec_fc_keepprob"],
+                dec_fc_keep_prob=v["dec_fc_keepprob"],
                 dec_res_keep_prob=v["dec_res_keepprob"],
                 enc_res_keep_prob=v["enc_res_keepprob"],
                 enc_nn=v["enc_nn"],
@@ -264,16 +264,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0819_hybrid_nn_longdrop",
+            exp_prefix="0818_hy_nn_rep_omni_drop",
             seed=v["seed"],
             variant=v,
             # mode="local",
             mode="lab_kube",
             n_parallel=0,
             use_gpu=True,
-            node_selector={
-                'openai.org/machine-class': 'cirrascale',
-            }
         )
 
 

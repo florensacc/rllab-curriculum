@@ -422,13 +422,35 @@ class RegularizedHelmholtzMachine(object):
                     nn = network_args.get("enc_nn", False)
                     rep = network_args.get("enc_rep", 1)
                     print("encoder nn %s" % nn)
-                    encoder = resconv_v1(encoder, 3, base_filters, stride=2, keep_prob=res_keep_prob, nn=nn, add_coeff=ac) #14
+                    encoder = resconv_v1(
+                        encoder,
+                        3,
+                        base_filters,
+                        stride=2,
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac
+                    ) #14
                     for _ in xrange(rep):
-                        encoder = resconv_v1(encoder, 3, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
-                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=2, keep_prob=res_keep_prob, add_coeff=ac) #7
+                       encoder = resconv_v1(encoder, 3, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
+                    encoder = resconv_v1(
+                        encoder,
+                        3,
+                        base_filters*2,
+                        stride=2,
+                        keep_prob=res_keep_prob,
+                        add_coeff=ac
+                    ) #7
                     for _ in xrange(rep):
                         encoder = resconv_v1(encoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
-                    encoder = resconv_v1(encoder, 3, base_filters*2, stride=2, keep_prob=res_keep_prob, add_coeff=ac) #4
+                    encoder = resconv_v1(
+                        encoder,
+                        3,
+                        base_filters*2,
+                        stride=2,
+                        keep_prob=res_keep_prob,
+                        add_coeff=ac
+                    ) #4
                     for _ in xrange(rep):
                         encoder = resconv_v1(encoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     self.encoder_template = \
@@ -451,13 +473,37 @@ class RegularizedHelmholtzMachine(object):
                                )
                     for _ in xrange(rep):
                         decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
-                    decoder = resdeconv_v1(decoder, 3, base_filters*2, out_wh=[7,7], keep_prob=res_keep_prob, nn=nn, add_coeff=ac)
+                    decoder = resdeconv_v1(
+                        decoder,
+                        3,
+                        base_filters*2,
+                        out_wh=[7,7],
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac
+                    )
                     for _ in xrange(rep):
                         decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
-                    decoder = resdeconv_v1(decoder, 3, base_filters*2, out_wh=[14,14], keep_prob=res_keep_prob, nn=nn, add_coeff=ac)
+                    decoder = resdeconv_v1(
+                        decoder,
+                        3,
+                        base_filters*2,
+                        out_wh=[14,14],
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac
+                    )
                     for _ in xrange(rep):
                         decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
-                    decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[28,28], keep_prob=res_keep_prob, nn=nn, add_coeff=ac)
+                    decoder = resdeconv_v1(
+                        decoder,
+                        3,
+                        base_filters,
+                        out_wh=[28,28],
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac
+                    )
                     for _ in xrange(rep-1):
                         decoder = resconv_v1(decoder, 3, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     self.decoder_template = (
