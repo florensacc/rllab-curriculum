@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 1500
+max_epoch = 500
 
 stub(globals())
 
@@ -103,7 +103,7 @@ class VG(VariantGenerator):
 
     @variant()
     def enc_rep(self, ):
-        return [1,2,]
+        return [2,3]
 
     @variant()
     def dec_rep(self, enc_rep):
@@ -158,7 +158,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def anneal_after(self):
-        return [800, ]
+        return [400, ]
 
     @variant(hide=True)
     def exp_avg(self):
@@ -168,10 +168,10 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def dataset(self):
-        # yield ResamplingBinarizedMnistDataset(
-        #     disable_vali=False,
-        # )
-        yield ResamplingBinarizedOmniglotDataset()
+        yield ResamplingBinarizedMnistDataset(
+            disable_vali=False,
+        )
+        # yield ResamplingBinarizedOmniglotDataset()
 
     @variant(hide=True)
     def ac(self):
@@ -258,13 +258,13 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*2,
+            vali_eval_interval=1500*3,
             exp_avg=v["exp_avg"]
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0818_hy_nn_rep_omni_drop",
+            exp_prefix="0818_hy_nn_rep_mnist_drop",
             seed=v["seed"],
             variant=v,
             # mode="local",
