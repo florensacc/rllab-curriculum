@@ -42,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, ]
+        return [42, 12333, 3434, 5555]
         # return [123124234]
 
     @variant
@@ -103,7 +103,7 @@ class VG(VariantGenerator):
 
     @variant()
     def enc_rep(self, network):
-        return [4,5]
+        return [4,]
 
     @variant()
     def dec_rep(self, enc_rep):
@@ -264,13 +264,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0819_hybrid_nn_longdrop_k",
+            exp_prefix="0819_hybrid_nn_longdrop",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
             # node_selector={
             #     'openai.org/machine-class': 'cirrascale',
             # }
