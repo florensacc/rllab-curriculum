@@ -414,6 +414,7 @@ class RegularizedHelmholtzMachine(object):
                     gen_base_filters = network_args.get("base_filters", 16)
                     gen_fc_size = network_args.get("fc_size", 450)
                     ac = network_args.get("ac", 0.1)
+                    fs = network_args.get("filter_size", 3)
 
                     base_filters = network_args.get("enc_base_filters", gen_base_filters)
                     fc_size = network_args.get("enc_fc_size", gen_fc_size)
@@ -422,9 +423,10 @@ class RegularizedHelmholtzMachine(object):
                     nn = network_args.get("enc_nn", False)
                     rep = network_args.get("enc_rep", 1)
                     print("encoder nn %s" % nn)
+                    print("encoder fs %s" % fs)
                     encoder = resconv_v1(
                         encoder,
-                        3,
+                        fs,
                         base_filters,
                         stride=2,
                         keep_prob=res_keep_prob,
@@ -432,27 +434,27 @@ class RegularizedHelmholtzMachine(object):
                         add_coeff=ac
                     ) #14
                     for _ in xrange(rep):
-                       encoder = resconv_v1(encoder, 3, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
+                       encoder = resconv_v1(encoder, fs, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     encoder = resconv_v1(
                         encoder,
-                        3,
+                        fs,
                         base_filters*2,
                         stride=2,
                         keep_prob=res_keep_prob,
                         add_coeff=ac
                     ) #7
                     for _ in xrange(rep):
-                        encoder = resconv_v1(encoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
+                        encoder = resconv_v1(encoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     encoder = resconv_v1(
                         encoder,
-                        3,
+                        fs,
                         base_filters*2,
                         stride=2,
                         keep_prob=res_keep_prob,
                         add_coeff=ac
                     ) #4
                     for _ in xrange(rep):
-                        encoder = resconv_v1(encoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
+                        encoder = resconv_v1(encoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     self.encoder_template = \
                         (encoder.
                          flatten().
@@ -472,10 +474,10 @@ class RegularizedHelmholtzMachine(object):
                                reshape([-1, 4, 4, base_filters*2])
                                )
                     for _ in xrange(rep):
-                        decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
+                        decoder = resconv_v1(decoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     decoder = resdeconv_v1(
                         decoder,
-                        3,
+                        fs,
                         base_filters*2,
                         out_wh=[7,7],
                         keep_prob=res_keep_prob,
@@ -483,10 +485,10 @@ class RegularizedHelmholtzMachine(object):
                         add_coeff=ac
                     )
                     for _ in xrange(rep):
-                        decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
+                        decoder = resconv_v1(decoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     decoder = resdeconv_v1(
                         decoder,
-                        3,
+                        fs,
                         base_filters*2,
                         out_wh=[14,14],
                         keep_prob=res_keep_prob,
@@ -494,10 +496,10 @@ class RegularizedHelmholtzMachine(object):
                         add_coeff=ac
                     )
                     for _ in xrange(rep):
-                        decoder = resconv_v1(decoder, 3, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
+                        decoder = resconv_v1(decoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     decoder = resdeconv_v1(
                         decoder,
-                        3,
+                        fs,
                         base_filters,
                         out_wh=[28,28],
                         keep_prob=res_keep_prob,
@@ -505,10 +507,10 @@ class RegularizedHelmholtzMachine(object):
                         add_coeff=ac
                     )
                     for _ in xrange(rep-1):
-                        decoder = resconv_v1(decoder, 3, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
+                        decoder = resconv_v1(decoder, fs, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     self.decoder_template = (
                         decoder.
-                            conv2d_mod(3, 1, activation_fn=None).
+                            conv2d_mod(fs, 1, activation_fn=None).
                             flatten()
                     )
                     self.reg_encoder_template = \
