@@ -35,6 +35,7 @@ class VAE(object):
                  cond_px_ent=None,
                  anneal_after=None,
                  exp_avg=None,
+                 l2_reg=None,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -44,6 +45,7 @@ class VAE(object):
         :type recog_reg_coeff: float
         :type learning_rate: float
         """
+        self.l2_reg = l2_reg
         self.exp_avg = exp_avg
         self.optimizer_cls = optimizer_cls
         self.optimizer_args = optimizer_args
@@ -208,7 +210,17 @@ class VAE(object):
                     "prior_ent_x_given_z",
                     prior_ent
                 ))
+            if self.l2_reg is not None:
+                final_losses += [
+                    self.l2_reg * tf.nn.l2_loss(var) for var in tf.trainable_variables() \
+                        if "scale" not in var.name
+                ]
             self.init_hook(locals())
+
+            log_vars.append((
+                "final_loss",
+                tf.reduce_sum(final_losses)
+            ))
 
             if init and self.exp_avg is not None:
                 self.ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
@@ -418,6 +430,7 @@ class VAE(object):
                         log_vals = sess.run([] + log_vars, feed)[:]
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
                         print("Initial: " + log_line)
+                        # import ipdb; ipdb.set_trace()
 
                     log_vals = sess.run(
                         [self.trainer] + log_vars,

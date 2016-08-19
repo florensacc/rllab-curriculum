@@ -69,7 +69,7 @@ class VG(VariantGenerator):
         if nar == 0:
             return [1]
         else:
-            return [10, 20, ]
+            return [20, ]
 
     # @variant
     # def nm(self):
@@ -128,13 +128,21 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def anneal_after(self):
-        return [150, 250, 320, 400]
+        return [400]
 
     @variant(hide=False)
     def exp_avg(self):
-        return [None, 0.999, ]
+        return [0.999, 0.99]
         # return [0.999, 0.99]
         # return [None]
+
+    @variant(hide=False)
+    def l2_reg(self):
+        return [
+            0.00001,
+            0.000001,
+            None,
+        ]
 
 
 vg = VG()
@@ -204,12 +212,13 @@ for v in variants[:]:
             min_kl=v["min_kl"],
             k=v["k"],
             vali_eval_interval=1500*3,
-            exp_avg=v["exp_avg"]
+            exp_avg=v["exp_avg"],
+            l2_reg=v["l2_reg"],
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0818_ar_hybrid_anneal",
+            exp_prefix="0818_ar_hybrid_anneal_l2",
             seed=v["seed"],
             variant=v,
             # mode="local",
