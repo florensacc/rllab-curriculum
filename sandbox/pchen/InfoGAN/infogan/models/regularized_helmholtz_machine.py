@@ -522,6 +522,175 @@ class RegularizedHelmholtzMachine(object):
                          # dropout(0.9).
                          flatten().
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "res_nofc":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        data_init=UnboundVariable('data_init'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                ):
+                    encoder = \
+                        (pt.template('input', self.book).
+                         reshape([-1] + list(image_shape))
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+                    gen_base_filters = network_args.get("base_filters", None)
+                    ac = network_args.get("ac", None)
+                    fs = network_args.get("filter_size", None)
+
+                    base_filters = network_args.get("enc_base_filters", gen_base_filters)
+                    fc_keep_prob = network_args.get("enc_fc_keep_prob", None)
+                    res_keep_prob = network_args.get("enc_res_keep_prob", None)
+                    nn = network_args.get("enc_nn", None)
+                    rep = network_args.get("enc_rep", None)
+                    print("encoder nn %s" % nn)
+                    print("encoder fs %s" % fs)
+                    encoder = resconv_v1(
+                        encoder,
+                        fs,
+                        base_filters,
+                        stride=2,
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac
+                    ) #14
+                    for _ in xrange(rep):
+                        encoder = resconv_v1(
+                            encoder,
+                            fs,
+                            base_filters,
+                            stride=1,
+                            keep_prob=res_keep_prob,
+                            add_coeff=ac
+                        )
+                    encoder = resconv_v1(
+                        encoder,
+                        fs,
+                        base_filters*2,
+                        stride=2,
+                        keep_prob=res_keep_prob,
+                        add_coeff=ac
+                    ) #7
+                    for _ in xrange(rep):
+                        encoder = resconv_v1(
+                            encoder,
+                            fs,
+                            base_filters*2,
+                            stride=1,
+                            keep_prob=res_keep_prob,
+                            add_coeff=ac
+                        )
+                    encoder = resconv_v1(
+                        encoder,
+                        fs,
+                        base_filters*2,
+                        stride=2,
+                        keep_prob=res_keep_prob,
+                        add_coeff=ac
+                    ) #4
+                    for _ in xrange(rep):
+                        encoder = resconv_v1(
+                            encoder,
+                            fs,
+                            base_filters*2,
+                            stride=1,
+                            keep_prob=res_keep_prob,
+                            add_coeff=ac
+                        )
+                    z_dim = self.inference_dist.dist_flat_dim
+                    self.encoder_template = \
+                        (encoder.
+                         conv2d_mod(fs, z_dim, activation_fn=None).
+                         apply(tf.reduce_mean, [1,2])
+                         )
+                    base_filters = network_args.get("dec_base_filters", gen_base_filters)
+                    res_keep_prob = network_args.get("dec_res_keep_prob", None)
+                    nn = network_args.get("dec_nn", None)
+                    rep = network_args.get("dec_rep", None)
+                    print("decoder nn %s" % nn)
+                    decoder = (pt.template('input', self.book).
+                               reshape([-1, 1, 1, z_dim]).
+                               apply(tf.tile, [1,4,4,1]).
+                               conv2d_mod(fs, base_filters*2)
+                               )
+                    for _ in xrange(rep):
+                        decoder = resconv_v1(
+                            decoder,
+                            fs,
+                            base_filters*2,
+                            stride=1,
+                            keep_prob=res_keep_prob,
+                            add_coeff=ac
+                        )
+                    decoder = resdeconv_v1(
+                        decoder,
+                        fs,
+                        base_filters*2,
+                        out_wh=[7,7],
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac
+                    )
+                    for _ in xrange(rep):
+                        decoder = resconv_v1(
+                            decoder,
+                            fs,
+                            base_filters*2,
+                            stride=1,
+                            keep_prob=res_keep_prob,
+                            add_coeff=ac
+                        )
+                    decoder = resdeconv_v1(
+                        decoder,
+                        fs,
+                        base_filters*2,
+                        out_wh=[14,14],
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac
+                    )
+                    for _ in xrange(rep):
+                        decoder = resconv_v1(
+                            decoder,
+                            fs,
+                            base_filters*2,
+                            stride=1,
+                            keep_prob=res_keep_prob,
+                            add_coeff=ac
+                        )
+                    decoder = resdeconv_v1(
+                        decoder,
+                        fs,
+                        base_filters,
+                        out_wh=[28,28],
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac
+                    )
+                    for _ in xrange(rep-1):
+                        decoder = resconv_v1(
+                            decoder,
+                            fs,
+                            base_filters,
+                            stride=1,
+                            keep_prob=res_keep_prob,
+                            add_coeff=ac
+                        )
+                    self.decoder_template = (
+                        decoder.
+                            conv2d_mod(fs, 1, activation_fn=None).
+                            flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "resv1_k3_pixel_bias_cifar":
                 from prettytensor import UnboundVariable
                 with pt.defaults_scope(

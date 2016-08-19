@@ -42,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [12, 42, 999]
+        return [12, 42,]
         # return [123124234]
 
     @variant
@@ -111,7 +111,11 @@ class VG(VariantGenerator):
 
     @variant()
     def fs(self, network):
-        return [2,3,4,]
+        return [3,]
+
+    @variant()
+    def smooth(self, network):
+        return [0.995, 0.9, None]
 
     @variant(hide=True)
     def dec_fc_keepprob(self, network):
@@ -231,7 +235,10 @@ for v in variants[:]:
             )
 
         model = RegularizedHelmholtzMachine(
-            output_dist=MeanBernoulli(dataset.image_dim),
+            output_dist=MeanBernoulli(
+                dataset.image_dim,
+                smooth=v["smooth"],
+            ),
             latent_spec=latent_spec,
             batch_size=batch_size,
             image_shape=dataset.image_shape,
@@ -271,7 +278,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0819_nn_omni_fs",
+            exp_prefix="0819_nn_omni_fs_smooth",
             seed=v["seed"],
             variant=v,
             # mode="local",

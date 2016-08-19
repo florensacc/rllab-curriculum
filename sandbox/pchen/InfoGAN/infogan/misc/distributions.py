@@ -331,8 +331,10 @@ class Uniform(Gaussian):
 
 
 class Bernoulli(Distribution):
-    def __init__(self, dim):
+    def __init__(self, dim, smooth=None):
+        self._smooth = smooth
         self._dim = dim
+        print("Bernoulli(dim=%s, smooth=%s)" % (dim, smooth))
 
     @property
     def dim(self):
@@ -352,6 +354,8 @@ class Bernoulli(Distribution):
 
     def logli(self, x_var, dist_info):
         p = dist_info["p"]
+        if self._smooth is not None:
+            x_var = x_var * self._smooth
         return tf.reduce_sum(
             x_var * tf.log(p + TINY) + (1.0 - x_var) * tf.log(1.0 - p + TINY),
             reduction_indices=1
