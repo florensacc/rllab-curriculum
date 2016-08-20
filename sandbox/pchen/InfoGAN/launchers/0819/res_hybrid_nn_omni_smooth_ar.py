@@ -146,7 +146,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def i_nar(self):
-        return [4, ]
+        return [0, ]
 
     @variant(hide=True)
     def i_nr(self):
@@ -279,7 +279,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0819_nn_omni_fs_smooth",
+            exp_prefix="0819_nn_omni_fs_smooth_ar",
             seed=v["seed"],
             variant=v,
             # mode="local",

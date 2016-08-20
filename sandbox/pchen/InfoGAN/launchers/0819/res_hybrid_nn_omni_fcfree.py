@@ -62,7 +62,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4,]
+        return [0,]
 
     @variant
     def nr(self, nar):
@@ -91,15 +91,19 @@ class VG(VariantGenerator):
         # yield "small_res"
         # yield "small_res_small_kern"
         # yield "resv1_k3_pixel_bias"
-        yield "resv1_k3_pixel_bias_filters_ratio"
+        yield "res_nofc"
 
-    @variant(hide=True)
+    @variant(hide=False)
     def dec_nn(self, network):
         return [True, ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def enc_nn(self, network):
         return [True, ]
+
+    @variant()
+    def base_filters(self, ):
+        return [16]
 
     @variant()
     def enc_rep(self, network):
@@ -115,7 +119,7 @@ class VG(VariantGenerator):
 
     @variant()
     def smooth(self, network):
-        return [0.995, 0.9, None]
+        return [None]
 
     @variant(hide=True)
     def dec_fc_keepprob(self, network):
@@ -146,7 +150,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def i_nar(self):
-        return [4, ]
+        return [0, ]
 
     @variant(hide=True)
     def i_nr(self):
@@ -246,9 +250,7 @@ for v in variants[:]:
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
             network_args=dict(
-                # base_filters=v["base_filters"],
-                # fc_size=v["fc_size"],
-                # dec_fc_keep_prob=v["dec_fc_keepprob"],
+                base_filters=v["base_filters"],
                 dec_res_keep_prob=v["dec_res_keepprob"],
                 enc_res_keep_prob=v["enc_res_keepprob"],
                 enc_nn=v["enc_nn"],
@@ -279,13 +281,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0819_nn_omni_fs_smooth",
+            exp_prefix="0819_nn_omni_fs_fcfree",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 

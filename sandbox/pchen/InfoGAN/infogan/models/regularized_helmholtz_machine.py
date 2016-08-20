@@ -540,7 +540,6 @@ class RegularizedHelmholtzMachine(object):
                     fs = network_args.get("filter_size", None)
 
                     base_filters = network_args.get("enc_base_filters", gen_base_filters)
-                    fc_keep_prob = network_args.get("enc_fc_keep_prob", None)
                     res_keep_prob = network_args.get("enc_res_keep_prob", None)
                     nn = network_args.get("enc_nn", None)
                     rep = network_args.get("enc_rep", None)
@@ -598,10 +597,11 @@ class RegularizedHelmholtzMachine(object):
                             keep_prob=res_keep_prob,
                             add_coeff=ac
                         )
-                    z_dim = self.inference_dist.dist_flat_dim
+                    qz_dim = self.inference_dist.dist_flat_dim
+                    pz_dim = self.latent_dist.dim
                     self.encoder_template = \
                         (encoder.
-                         conv2d_mod(fs, z_dim, activation_fn=None).
+                         conv2d_mod(fs, qz_dim, activation_fn=None).
                          apply(tf.reduce_mean, [1,2])
                          )
                     base_filters = network_args.get("dec_base_filters", gen_base_filters)
@@ -610,7 +610,7 @@ class RegularizedHelmholtzMachine(object):
                     rep = network_args.get("dec_rep", None)
                     print("decoder nn %s" % nn)
                     decoder = (pt.template('input', self.book).
-                               reshape([-1, 1, 1, z_dim]).
+                               reshape([-1, 1, 1, pz_dim]).
                                apply(tf.tile, [1,4,4,1]).
                                conv2d_mod(fs, base_filters*2)
                                )

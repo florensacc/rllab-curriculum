@@ -36,6 +36,7 @@ class VAE(object):
                  anneal_after=None,
                  exp_avg=None,
                  l2_reg=None,
+                 img_on=True,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -45,6 +46,7 @@ class VAE(object):
         :type recog_reg_coeff: float
         :type learning_rate: float
         """
+        self.img_on = img_on
         self.l2_reg = l2_reg
         self.exp_avg = exp_avg
         self.optimizer_cls = optimizer_cls
@@ -258,6 +260,8 @@ class VAE(object):
 
         self.log_vars = log_vars
 
+        if not self.img_on:
+            return
         with pt.defaults_scope(phase=pt.Phase.test):
                 rows = int(np.sqrt(self.true_batch_size))# 10  # int(np.sqrt(FLAGS.batch_size))
                 with tf.variable_scope("model", reuse=True) as scope:
