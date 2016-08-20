@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 1500
+max_epoch = 500
 
 stub(globals())
 
@@ -92,7 +92,7 @@ class VG(VariantGenerator):
         # yield "small_res_small_kern"
         # yield "resv1_k3_pixel_bias"
         yield "resv1_k3_pixel_bias_filters_ratio"
-
+        
 
     @variant(hide=True)
     def dec_nn(self, network):
@@ -121,7 +121,7 @@ class VG(VariantGenerator):
     @variant(hide=True)
     def enc_res_keepprob(self, network):
         if network == "resv1_k3_pixel_bias_filters_ratio":
-            return [0.9, 0.8, 0.5]
+            return [1.0, ]
         else:
             return [0]
 
@@ -165,7 +165,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def anneal_after(self):
-        return [800, ]
+        return [300, ]
 
     @variant(hide=True)
     def exp_avg(self):
@@ -175,10 +175,10 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def dataset(self):
-        # yield ResamplingBinarizedMnistDataset(
-        #     disable_vali=False,
-        # )
-        yield ResamplingBinarizedOmniglotDataset()
+        yield ResamplingBinarizedMnistDataset(
+            disable_vali=False,
+        )
+        # yield ResamplingBinarizedOmniglotDataset()
 
     @variant(hide=True)
     def ac(self):
@@ -266,7 +266,7 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*2,
+            vali_eval_interval=1500*3,
             anneal_after=v["anneal_after"],
             img_on=False,
             exp_avg=v["exp_avg"]
@@ -274,7 +274,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0820_nn_omni_fs_drop",
+            exp_prefix="0820_nn_mnist_fs_drop",
             seed=v["seed"],
             variant=v,
             # mode="local",
