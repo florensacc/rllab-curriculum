@@ -126,9 +126,9 @@ class VG(VariantGenerator):
             # ["linear", "gating"]
         ]
 
-    @variant(hide=False)
-    def anneal_after(self):
-        return [200, 400]
+    # @variant(hide=False)
+    # def anneal_after(self):
+    #     return [200, 400]
 
     @variant(hide=False)
     def exp_avg(self):

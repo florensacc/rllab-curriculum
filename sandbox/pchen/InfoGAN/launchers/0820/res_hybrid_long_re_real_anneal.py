@@ -8,7 +8,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorica
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset
+    ResamplingBinarizedMnistDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -23,8 +23,8 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
-updates_per_epoch = 100
-max_epoch = 500
+# updates_per_epoch = 100
+max_epoch = 625
 
 stub(globals())
 
@@ -42,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [12, 42, 999]
+        return [42, 998, ]
         # return [123124234]
 
     @variant
@@ -62,14 +62,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4,]
+        return [4,5]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [10, ]
+            return [3, 5, ]
 
     # @variant
     # def nm(self):
@@ -90,44 +90,7 @@ class VG(VariantGenerator):
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        # yield "resv1_k3_pixel_bias"
-        yield "resv1_k3_pixel_bias_filters_ratio"
-        
-
-    @variant(hide=True)
-    def dec_nn(self, network):
-        return [True, ]
-
-    @variant(hide=True)
-    def enc_nn(self, network):
-        return [True, ]
-
-    @variant()
-    def enc_rep(self, network):
-        return [2,]
-
-    @variant()
-    def dec_rep(self, network):
-        return [2,]
-
-    @variant()
-    def fs(self, network):
-        return [3,4,]
-
-    @variant(hide=True)
-    def dec_fc_keepprob(self, network):
-        return [1.,]
-
-    @variant(hide=True)
-    def enc_res_keepprob(self, network):
-        if network == "resv1_k3_pixel_bias_filters_ratio":
-            return [1.0, 0.9]
-        else:
-            return [0]
-
-    @variant(hide=True)
-    def dec_res_keepprob(self, enc_res_keepprob):
-        return [enc_res_keepprob ]
+        yield "resv1_k3_pixel_bias"
 
     @variant(hide=True)
     def wnorm(self):
@@ -137,23 +100,23 @@ class VG(VariantGenerator):
     def ar_wnorm(self):
         return [True, ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def k(self):
         return [128, ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def i_nar(self):
         return [4, ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def i_nr(self):
-        return [20, ]
+        return [2, 20, ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def i_init_scale(self):
         return [0.1, ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def i_context(self):
         # return [True, False]
         return [
@@ -163,31 +126,18 @@ class VG(VariantGenerator):
             # ["linear", "gating"]
         ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def anneal_after(self):
-        return [300, ]
+        return [300, 400]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def exp_avg(self):
         return [0.999, ]
-        # return [0.999, 0.99]
-        # return [None]
-
-    @variant(hide=True)
-    def dataset(self):
-        yield ResamplingBinarizedMnistDataset(
-            disable_vali=False,
-        )
-        # yield ResamplingBinarizedOmniglotDataset()
-
-    @variant(hide=True)
-    def ac(self):
-        return [0.1, ]
 
 
 vg = VG()
 
-variants = vg.variants(randomized=False)
+variants = vg.variants(randomized=True)
 
 print(len(variants))
 
@@ -202,10 +152,7 @@ for v in variants[:]:
 
         print("Exp name: %s" % exp_name)
 
-        dataset = v["dataset"]
-        # dataset = ResamplingBinarizedMnistDataset(
-        #     disable_vali=True,
-        # )
+        dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
         # dataset = MnistDataset()
 
         dist = Gaussian(zdim)
@@ -239,42 +186,27 @@ for v in variants[:]:
             network_type=v["network"],
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
-            network_args=dict(
-                # base_filters=v["base_filters"],
-                # fc_size=v["fc_size"],
-                # dec_fc_keep_prob=v["dec_fc_keepprob"],
-                dec_res_keep_prob=v["dec_res_keepprob"],
-                enc_res_keep_prob=v["enc_res_keepprob"],
-                enc_nn=v["enc_nn"],
-                dec_nn=v["dec_nn"],
-                enc_rep=v["enc_rep"],
-                dec_rep=v["dec_rep"],
-                ac=v["ac"],
-                filter_size=v["fs"],
-            ),
         )
 
         algo = VAE(
             model=model,
             dataset=dataset,
             batch_size=batch_size,
-            exp_name=exp_name[:20],
+            exp_name=exp_name,
             max_epoch=max_epoch,
-            updates_per_epoch=updates_per_epoch,
             optimizer_cls=AdamaxOptimizer,
             optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*3,
-            anneal_after=v["anneal_after"],
-            img_on=False,
-            exp_avg=v["exp_avg"]
+            vali_eval_interval=1500*5,
+            exp_avg=v["exp_avg"],
+            anneal_after=v["anneal_after"]
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0820_nn_mnist_fs_drop",
+            exp_prefix="0820_hybrid_real_anneal",
             seed=v["seed"],
             variant=v,
             # mode="local",
