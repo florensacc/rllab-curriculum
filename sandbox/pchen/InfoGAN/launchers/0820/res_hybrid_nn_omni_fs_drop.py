@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 500
+max_epoch = 1500
 
 stub(globals())
 
@@ -111,7 +111,7 @@ class VG(VariantGenerator):
 
     @variant()
     def fs(self, network):
-        return [2,3,4,]
+        return [4,]
 
     @variant(hide=True)
     def dec_fc_keepprob(self, network):
@@ -120,13 +120,13 @@ class VG(VariantGenerator):
     @variant(hide=True)
     def enc_res_keepprob(self, network):
         if network == "resv1_k3_pixel_bias_filters_ratio":
-            return [1.,]
+            return [0.9, 0.8, 0.5]
         else:
             return [0]
 
     @variant(hide=True)
-    def dec_res_keepprob(self, network):
-        return [1., ]
+    def dec_res_keepprob(self, enc_res_keepprob):
+        return [enc_res_keepprob ]
 
     @variant(hide=True)
     def wnorm(self):
@@ -266,12 +266,14 @@ for v in variants[:]:
             min_kl=v["min_kl"],
             k=v["k"],
             vali_eval_interval=1500*2,
+            anneal_after=v["anneal_after"],
+            img_on=False,
             exp_avg=v["exp_avg"]
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0819_nn_omni_fs",
+            exp_prefix="0820_nn_omni_fs_drop",
             seed=v["seed"],
             variant=v,
             # mode="local",
