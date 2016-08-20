@@ -62,7 +62,7 @@ class VAE(object):
         self.batch_size = batch_size * weight_redundancy
         self.weight_redundancy = weight_redundancy
         self.max_epoch = max_epoch
-        self.exp_name = exp_name
+        self.exp_name = exp_name[:20] # tf doesnt like filenames that are too long
         self.log_dir = logger.get_snapshot_dir()
         self.checkpoint_dir = logger.get_snapshot_dir()
         self.snapshot_interval = snapshot_interval
