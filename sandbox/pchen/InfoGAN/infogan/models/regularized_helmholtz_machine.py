@@ -538,14 +538,13 @@ class RegularizedHelmholtzMachine(object):
                          reshape([-1] + list(image_shape))
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
-                    gen_base_filters = network_args.get("base_filters", None)
-                    ac = network_args.get("ac", None)
-                    fs = network_args.get("filter_size", None)
+                    base_filters = network_args["base_filters"]# , None)
+                    ac = network_args["ac"]#, None)
+                    fs = network_args["filter_size"]#, None)
 
-                    base_filters = network_args.get("enc_base_filters", gen_base_filters)
-                    res_keep_prob = network_args.get("enc_res_keep_prob", None)
-                    nn = network_args.get("enc_nn", None)
-                    rep = network_args.get("enc_rep", None)
+                    res_keep_prob = network_args["enc_res_keep_prob"]#, None)
+                    nn = network_args["enc_nn"]#, None)
+                    rep = network_args["enc_rep"]#, None)
                     print("encoder nn %s" % nn)
                     print("encoder fs %s" % fs)
                     encoder = resconv_v1(
@@ -604,13 +603,13 @@ class RegularizedHelmholtzMachine(object):
                     pz_dim = self.latent_dist.dim
                     self.encoder_template = \
                         (encoder.
+
                          conv2d_mod(fs, qz_dim, activation_fn=None).
                          apply(tf.reduce_mean, [1,2])
                          )
-                    base_filters = network_args.get("dec_base_filters", gen_base_filters)
-                    res_keep_prob = network_args.get("dec_res_keep_prob", None)
-                    nn = network_args.get("dec_nn", None)
-                    rep = network_args.get("dec_rep", None)
+                    res_keep_prob = network_args["dec_res_keep_prob"]#, None)
+                    nn = network_args["dec_nn"]#, None)
+                    rep = network_args["dec_rep"]#, None)
                     print("decoder nn %s" % nn)
                     decoder = (pt.template('input', self.book).
                                reshape([-1, 1, 1, pz_dim]).

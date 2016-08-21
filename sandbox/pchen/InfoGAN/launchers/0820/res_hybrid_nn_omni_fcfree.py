@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 updates_per_epoch = 100
-max_epoch = 500
+max_epoch = 1500
 
 stub(globals())
 
@@ -91,6 +91,7 @@ class VG(VariantGenerator):
         # yield "small_res"
         # yield "small_res_small_kern"
         # yield "resv1_k3_pixel_bias"
+        yield "resv1_k3_pixel_bias_filters_ratio"
         yield "res_nofc"
 
     @variant(hide=False)
@@ -103,19 +104,22 @@ class VG(VariantGenerator):
 
     @variant()
     def base_filters(self, ):
-        return [16]
+        return [16, 32]
 
     @variant()
     def enc_rep(self, network):
-        return [2,]
+        if network == "res_nofc":
+            return [2,3]
+        else:
+            return [1,2]
 
     @variant()
-    def dec_rep(self, network):
-        return [2,]
+    def dec_rep(self, enc_rep):
+        return [enc_rep]
 
     @variant()
     def fs(self, network):
-        return [3,]
+        return [3,4]
 
     @variant()
     def smooth(self, network):
@@ -127,10 +131,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def enc_res_keepprob(self, network):
-        if network == "resv1_k3_pixel_bias_filters_ratio":
-            return [1.,]
-        else:
-            return [0]
+        return [1.,]
 
     @variant(hide=True)
     def dec_res_keepprob(self, network):
@@ -281,13 +282,14 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0819_nn_omni_fs_fcfree",
+            exp_prefix="0820_nn_omni_fs_fcfree",
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
+
 
 
