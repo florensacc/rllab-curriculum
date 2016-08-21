@@ -34,6 +34,8 @@ class VAE(object):
                  k=1, # importance sampling ratio
                  cond_px_ent=None,
                  anneal_after=None,
+                 anneal_every=100,
+                 anneal_factor=0.75,
                  exp_avg=None,
                  l2_reg=None,
                  img_on=True,
@@ -46,6 +48,8 @@ class VAE(object):
         :type recog_reg_coeff: float
         :type learning_rate: float
         """
+        self.anneal_factor = anneal_factor
+        self.anneal_every = anneal_every
         self.img_on = img_on
         self.l2_reg = l2_reg
         self.exp_avg = exp_avg
@@ -492,10 +496,10 @@ class VAE(object):
                 logger.dump_tabular(with_prefix=False)
 
                 if self.anneal_after is not None and epoch >= self.anneal_after:
-                    if (epoch % 100) == 0:
+                    if (epoch % self.anneal_every) == 0:
                         lr_val = sess.run([
                             self.lr_var.assign(
-                                self.lr_var * 0.75
+                                self.lr_var * self.anneal_factor
                             )
                         ])
                         logger.log("Learning rate annealed to %s" % lr_val)
