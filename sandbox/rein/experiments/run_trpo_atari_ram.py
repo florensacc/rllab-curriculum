@@ -16,9 +16,9 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import NormalizedEnv
 
 from sandbox.rein.algos.trpo import TRPO
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 # from sandbox.john.instrument import stub, run_experiment_lite
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rein.envs.atari import AtariEnvX
 
 import itertools
 
@@ -30,47 +30,17 @@ stub(globals())
 # Param ranges
 seeds = range(10)
 
-mdps = [AtariEnvX(game='freeway', obs_type="image"),
-        AtariEnvX(game='breakout', obs_type="image"),
-        AtariEnvX(game='frostbite', obs_type="image"),
-        AtariEnvX(game='montezuma_revenge', obs_type="image")]
+mdps = [GymEnv("Freeway-ram-v0", record_video=RECORD_VIDEO),
+        GymEnv("Breakout-ram-v0", record_video=RECORD_VIDEO),
+        GymEnv("Frostbite-ram-v0", record_video=RECORD_VIDEO),
+        GymEnv("MontezumaRevenge-ram-v0", record_video=RECORD_VIDEO)]
 param_cart_product = itertools.product(
     mdps, seeds
 )
 
 for mdp, seed in param_cart_product:
-    network = ConvNetwork(
-        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
-        output_dim=mdp.spec.action_space.flat_dim,
-        hidden_sizes=(64,),
-        conv_filters=(16, 16, 16),
-        conv_filter_sizes=(6, 6, 6),
-        conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
-    )
-    policy = CategoricalMLPPolicy(
-        env_spec=mdp.spec,
-        num_seq_inputs=num_seq_frames,
-        prob_network=network,
-    )
-
-    network = ConvNetwork(
-        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
-        output_dim=1,
-        hidden_sizes=(64,),
-        conv_filters=(16, 16, 16),
-        conv_filter_sizes=(6, 6, 6),
-        conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
-    )
-    baseline = GaussianMLPBaseline(
-        mdp.spec,
-        num_seq_inputs=num_seq_frames,
-        regressor_args=dict(
-            mean_network=network,
-            batchsize=30000,
-            subsample_factor=0.1),
-    )
+    policy = CategoricalMLPPolicy(env_spec=mdp.spec, hidden_sizes=(32, 32))
+    baseline = LinearFeatureBaseline(env_spec=mdp.spec)
 
     algo = TRPO(
         discount=0.995,
@@ -90,7 +60,7 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-atari-84x84-b",
+        exp_prefix="trpo-atari-ram-f",
         n_parallel=4,
         snapshot_mode="last",
         seed=seed,

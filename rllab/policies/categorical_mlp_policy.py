@@ -17,6 +17,7 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             env_spec,
             hidden_sizes=(32, 32),
             hidden_nonlinearity=NL.tanh,
+            num_seq_inputs=1,
             prob_network=None,
     ):
         """
@@ -33,7 +34,7 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         if prob_network is None:
             prob_network = MLP(
-                input_shape=(env_spec.observation_space.flat_dim,),
+                input_shape=(env_spec.observation_space.flat_dim * num_seq_inputs,),
                 output_dim=env_spec.action_space.n,
                 hidden_sizes=hidden_sizes,
                 hidden_nonlinearity=hidden_nonlinearity,

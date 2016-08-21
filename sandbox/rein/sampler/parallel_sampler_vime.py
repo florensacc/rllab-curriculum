@@ -128,28 +128,25 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 G.dynamics.load_prev_params()
 
             elif surprise_type == G.dynamics.SurpriseType.COMPR:
-                # FIXME: This doesn't work well.
-                # TODO: Essentially, for using compression gain, we require Bayesian
-                # update rather than replay pool (otherwise we are doing double
-                # work). So require use_replay_pool=False.
                 if second_order_update:
-                    G.dynamics.save_params()
-
-                    logp_before = G.dynamics.fn_logp(
+                    # G.dynamics.save_params()
+                    #
+                    # logp_before = G.dynamics.fn_logp(
+                    #     _inputs[start:end], _targets[start:end])
+                    # # conservative step (actual step should be 1.0)
+                    # step_size = 1.0
+                    # G.dynamics.train_update_fn(
+                    #     _inputs[start:end], _targets[start:end], step_size)
+                    # # Calculate current minibatch surprise.
+                    # logp_after = G.dynamics.fn_logp(
+                    #     _inputs[start:end], _targets[start:end])
+                    # G.dynamics.load_prev_params()
+                    #
+                    # surpr = logp_after - logp_before
+                    surpr = - G.dynamics.fn_logp(
                         _inputs[start:end], _targets[start:end])
-                    # conservative step (actual step should be 1.0)
-                    step_size = 0.1
-                    G.dynamics.train_update_fn(
-                        _inputs[start:end], _targets[start:end], step_size)
-
-                    # Calculate current minibatch surprise.
-                    logp_after = G.dynamics.fn_logp(
-                        _inputs[start:end], _targets[start:end])
-                    surpr = logp_after - logp_before
                     surpr[surpr < 0] = 0.
 
-                    # Reset to old params after each surprise calc.
-                    G.dynamics.load_prev_params()
                 else:
                     surpr = np.nan
 
