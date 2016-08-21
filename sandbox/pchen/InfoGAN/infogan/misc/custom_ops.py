@@ -1,9 +1,19 @@
 from contextlib import contextmanager
 
+import enum
 import prettytensor as pt
 import tensorflow as tf
 from prettytensor.pretty_tensor_class import Phase, join_pretty_tensors, PrettyTensor
 import numpy as np
+
+class CustomPhase(enum.Enum):
+    """Some nodes are different depending on the phase of the graph construction.
+
+    The standard phases are train, test and infer.
+    """
+    train = 1999
+    test = 2999
+    init = 3999
 
 
 class conv_batch_norm(pt.VarStoreMethod):
@@ -61,12 +71,12 @@ def leaky_rectify(x, leakiness=0.01):
 
 
 @pt.Register(
-    assign_defaults=('activation_fn', 'data_init', ))
+    assign_defaults=('activation_fn', 'custom_phase', ))
 class custom_conv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_dim,
                  k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02, in_dim=None, padding='SAME', activation_fn=None,
-                 name="conv2d", residual=False, data_init=None):
-        print("ignoring data init : %s" % data_init)
+                 name="conv2d", residual=False, custom_phase=CustomPhase.train):
+        print("ignoring data init : %s" % custom_phase)
         with tf.variable_scope(name):
             w = self.variable('w', [k_h, k_w, in_dim or input_layer.shape[-1], output_dim],
                               init=tf.truncated_normal_initializer(stddev=stddev))
@@ -89,14 +99,14 @@ class custom_conv2d(pt.VarStoreMethod):
 
 
 @pt.Register(
-    assign_defaults=('activation_fn', 'data_init', 'wnorm', 'pixel_bias'))
+    assign_defaults=('activation_fn', 'custom_phase', 'wnorm', 'pixel_bias'))
 class custom_deconv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_shape,
                  k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
-                 name="deconv2d", activation_fn=None, data_init=False, init_scale=0.1,
+                 name="deconv2d", activation_fn=None, custom_phase=CustomPhase.train, init_scale=0.1,
                  wnorm=False, pixel_bias=False, var_scope=None,
                  ):
-        # print "data init: ", data_init
+        # print "data init: ", custom_phase
         output_shape[0] = input_layer.shape[0]
         books = input_layer.bookkeeper
         if var_scope:
@@ -106,7 +116,7 @@ class custom_deconv2d(pt.VarStoreMethod):
             # filter : [height, width, output_channels, in_channels]
             w = self.variable('w', [k_h, k_w, output_shape[-1], input_layer.shape[-1]],
                               init=tf.random_normal_initializer(stddev=stddev))
-            if data_init:
+            if custom_phase == CustomPhase.init:
                 w = w.initialized_value()
 
             if wnorm:
@@ -131,7 +141,7 @@ class custom_deconv2d(pt.VarStoreMethod):
                     bias_shp, #[1,1,1,output_shape[-1]],
                     init=lambda *_,**__: tf.ones(bias_shp)*-m_init*p_s_init
                 )
-                if data_init:
+                if custom_phase == CustomPhase.init:
                     biases = biases.initialized_value()
                     w_scale = w_scale.initialized_value()
                 y = deconv*w_scale + biases
@@ -141,7 +151,7 @@ class custom_deconv2d(pt.VarStoreMethod):
                     bias_shp,
                     init=tf.constant_initializer(0.)
                 )
-                if data_init:
+                if custom_phase == CustomPhase.init:
                     biases = biases.initialized_value()
                 y = deconv + biases
             if activation_fn:
@@ -375,7 +385,7 @@ def get_linear_ar_mask_by_groups(n_in, n_out, ngroups, zerodiagonal=True):
 @prettytensor.Register(
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'ngroups',
-            'wnorm', 'data_init', 'init_scale',
+            'wnorm', 'custom_phase', 'init_scale',
     ))
 class arfc(prettytensor.VarStoreMethod):
     def __call__(self,
@@ -391,7 +401,7 @@ class arfc(prettytensor.VarStoreMethod):
                  ngroups=None,
                  zerodiagonal=False,
                  wnorm=False,
-                 data_init=False,
+                 custom_phase=CustomPhase.train,
                  init_scale=0.1,
                  name=PROVIDED):
         """Adds the parameters for a fully connected layer and returns a tensor.
@@ -419,7 +429,7 @@ class arfc(prettytensor.VarStoreMethod):
           ValueError: if the head_shape is not rank 2  or the number of input nodes
           (second dim) is not known.
         """
-        # print "arfc data init", data_init
+        # print "arfc data init", custom_phase
         # TODO(eiderman): bias_init shouldn't take a constant and stddev shouldn't
         # exist.
         if input_layer.get_shape().ndims != 2:
@@ -496,7 +506,7 @@ class arfc(prettytensor.VarStoreMethod):
             )
 
         # real stuff
-        if data_init:
+        if custom_phase == CustomPhase.init:
             params = params.initialized_value()
             bias = bias.initialized_value()
             if wnorm:
@@ -528,7 +538,7 @@ from prettytensor.pretty_tensor_image_methods import *
 @prettytensor.Register(
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'batch_normalize',
-            'data_init', 'wnorm', 'pixel_bias',
+            'custom_phase', 'wnorm', 'pixel_bias',
     )
 )
 class conv2d_mod(prettytensor.VarStoreMethod):
@@ -547,7 +557,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
                edges=PAD_SAME,
                batch_normalize=False,
                residual=False,
-               data_init=False,
+               custom_phase=CustomPhase.train,
                wnorm=False,
                pixel_bias=False,
                scale_init=0.1,
@@ -585,7 +595,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
       ValueError: If head is not a rank 4 tensor or the  depth of the input
         (4th dim) is not known.
     """
-    # print "data init: ", data_init
+    # print "data init: ", custom_phase
     if input_layer.get_shape().ndims != 4:
       raise ValueError('conv2d requires a rank 4 Tensor with a known depth %s' %
                        input_layer.get_shape())
@@ -605,7 +615,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     init = tf.random_normal_initializer(stddev=0.02)
     dtype = input_layer.tensor.dtype
     params = self.variable('weights', size, init, dt=dtype)
-    if data_init:
+    if custom_phase == CustomPhase.init:
         params = params.initialized_value()
     params_norm = tf.nn.l2_normalize(params, [0,1,2]) if wnorm else params
     y = tf.nn.conv2d(input_layer, params_norm, stride, edges)
@@ -629,7 +639,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
             lambda *_,**__: tf.ones(bias_shp)*-m_init*p_s_init,
             dt=dtype
         )
-        if data_init:
+        if custom_phase == CustomPhase.init:
             b = b.initialized_value()
             params_scale = params_scale.initialized_value()
         y *= params_scale
@@ -641,7 +651,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
             tf.constant_initializer(0.),
             dt=dtype
         )
-        if data_init:
+        if custom_phase == CustomPhase.init:
             b = b.initialized_value()
         y += b
 
@@ -766,7 +776,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
 #         books.add_histogram_summary(y, '%s/activations' % y.op.name)
 #         return input_layer.with_tensor(y, parameters=self.vars)
 
-@prettytensor.Register(assign_defaults=('activation_fn', 'l2loss', 'stddev', 'ngroups', 'data_init',
+@prettytensor.Register(assign_defaults=('activation_fn', 'l2loss', 'stddev', 'ngroups', 'custom_phase',
     "wnorm"))
 class wnorm_fc(prettytensor.VarStoreMethod):
     def __call__(self,
@@ -780,7 +790,7 @@ class wnorm_fc(prettytensor.VarStoreMethod):
                  # bias_init=tf.zeros_initializer,
                  # transpose_weights=False,
                  init_scale=1.0,
-                 data_init=False,
+                 custom_phase=CustomPhase.train,
                  wnorm=False,
                  name=PROVIDED,
                  ):
@@ -811,7 +821,7 @@ class wnorm_fc(prettytensor.VarStoreMethod):
         """
         # TODO(eiderman): bias_init shouldn't take a constant and stddev shouldn't
         # exist.
-        # print "data init: ", data_init
+        # print "data init: ", custom_phase
         if input_layer.get_shape().ndims != 2:
             raise ValueError(
                 'fully_connected requires a rank 2 Tensor with known second '
@@ -862,7 +872,7 @@ class wnorm_fc(prettytensor.VarStoreMethod):
             )
 
         # real stuff
-        if data_init:
+        if custom_phase == CustomPhase.init:
             params = params.initialized_value()
             bias = bias.initialized_value()
             if wnorm:
@@ -890,12 +900,14 @@ class wnorm_fc(prettytensor.VarStoreMethod):
         # books.add_histogram_summary(y, '%s/activations' % y.op.name)
         return input_layer.with_tensor(y, parameters=self.vars)
 
-@prettytensor.Register(assign_defaults=('activation_fn'))
+@prettytensor.Register(assign_defaults=('activation_fn', 'custom_phase'))
 class nl(prettytensor.VarStoreMethod):
     def __call__(self,
                  input_layer,
                  activation_fn=None,
+                 custom_phase=None,
                  ):
+        # print("nl using phase %s " % custom_phase)
         books = input_layer.bookkeeper
         y = input_layer.tensor
         if activation_fn is not None:
@@ -979,8 +991,7 @@ def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=Fals
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         blk.conv2d_mod(kernel, nch, stride=stride)
-        if keep_prob != 1.:
-            blk.dropout(keep_prob)
+        blk.custom_dropout(keep_prob)
         blk.conv2d_mod(kernel, nch, activation_fn=None)
         blk.apply(lambda x: x*add_coeff)
         if stride != 1:
@@ -995,8 +1006,7 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=Fals
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, )
-        if keep_prob != 1.:
-            blk.dropout(keep_prob)
+        blk.custom_dropout(keep_prob)
         blk.conv2d_mod(kernel, nch, activation_fn=None)
         blk.apply(lambda x: x*add_coeff)
         if nn:
@@ -1020,3 +1030,22 @@ class CustomBookkeeper(Bookkeeper):
         self.var_mapping = defaultdict(dict)
 
 prettytensor.bookkeeper.BOOKKEEPER_FACTORY = CustomBookkeeper
+
+@prettytensor.Register(assign_defaults=['custom_phase','model_avg'],)
+def custom_dropout(
+        input_layer,
+        keep_prob,
+        custom_phase=CustomPhase.train,
+        model_avg=False,
+        name=PROVIDED
+):
+    """Aplies dropout if this is in the train phase."""
+    if keep_prob == 1.:
+        return input_layer
+    # print("dropout called with phase: %s" % custom_phase)
+    if custom_phase == CustomPhase.test and model_avg:
+        print("Using model averaging %s" % keep_prob)
+        return input_layer * keep_prob
+    else:
+        return tf.nn.dropout(input_layer, keep_prob, name=name)
+

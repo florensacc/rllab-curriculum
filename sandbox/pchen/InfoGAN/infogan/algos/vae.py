@@ -93,7 +93,7 @@ class VAE(object):
         if init:
             self.model.init_mode()
         else:
-            self.model.train_mode()
+            self.model.train_mode(eval=eval)
 
         log_vars = []
         if eval:
@@ -111,142 +111,143 @@ class VAE(object):
                 "train_input_init_%s" % init
             )
 
-        with pt.defaults_scope(phase=pt.Phase.train):
-            z_var, log_p_z_given_x, z_dist_info = \
-                self.model.encode(input_tensor, k=self.k if eval else 1)
-            x_var, x_dist_info = self.model.decode(z_var)
+        # can only be set during template building!!
+        # with pt.defaults_scope(phase=phase):
+        z_var, log_p_z_given_x, z_dist_info = \
+            self.model.encode(input_tensor, k=self.k if eval else 1)
+        x_var, x_dist_info = self.model.decode(z_var)
 
-            log_p_x_given_z = self.model.output_dist.logli(
-                tf.reshape(
-                    tf.tile(input_tensor, [1, self.k]),
-                    [-1, self.dataset.image_dim],
-                ) if eval else input_tensor,
-                x_dist_info
-            )
+        log_p_x_given_z = self.model.output_dist.logli(
+            tf.reshape(
+                tf.tile(input_tensor, [1, self.k]),
+                [-1, self.dataset.image_dim],
+            ) if eval else input_tensor,
+            x_dist_info
+        )
 
-            ndim = self.model.output_dist.effective_dim
-            if eval:
-                assert self.monte_carlo_kl
-                kls = (
-                        - self.model.latent_dist.logli_prior(z_var) \
-                        + log_p_z_given_x
-                    )
-                kl = tf.reduce_mean(kls)
+        ndim = self.model.output_dist.effective_dim
+        if eval:
+            assert self.monte_carlo_kl
+            kls = (
+                    - self.model.latent_dist.logli_prior(z_var) \
+                    + log_p_z_given_x
+                )
+            kl = tf.reduce_mean(kls)
 
 
-                true_vlb = tf.reduce_mean(
-                    logsumexp(tf.reshape(log_p_x_given_z - kls, [-1, self.k])),
-                ) - np.log(self.k)
-                # this is shaky but ok since we are just in eval mode
-                vlb = tf.reduce_mean(log_p_x_given_z) - \
-                      tf.maximum(kl, self.min_kl * ndim)
-                log_vars.append((
-                    "true_vlb_sum_k0",
-                    tf.reduce_mean(log_p_x_given_z - kls)
-                ))
+            true_vlb = tf.reduce_mean(
+                logsumexp(tf.reshape(log_p_x_given_z - kls, [-1, self.k])),
+            ) - np.log(self.k)
+            # this is shaky but ok since we are just in eval mode
+            vlb = tf.reduce_mean(log_p_x_given_z) - \
+                  tf.maximum(kl, self.min_kl * ndim)
+            log_vars.append((
+                "true_vlb_sum_k0",
+                tf.reduce_mean(log_p_x_given_z - kls)
+            ))
+        else:
+            if self.monte_carlo_kl:
+                # Construct the variational lower bound
+                kl = tf.reduce_mean(
+                    - self.model.latent_dist.logli_prior(z_var)  \
+                    + log_p_z_given_x
+                )
             else:
-                if self.monte_carlo_kl:
-                    # Construct the variational lower bound
-                    kl = tf.reduce_mean(
-                        - self.model.latent_dist.logli_prior(z_var)  \
-                        + log_p_z_given_x
+                # Construct the variational lower bound
+                kl = tf.reduce_mean(self.model.latent_dist.kl_prior(z_dist_info))
+
+            true_vlb = tf.reduce_mean(log_p_x_given_z) - kl
+            vlb = tf.reduce_mean(log_p_x_given_z) - tf.maximum(kl, self.min_kl * ndim)
+
+        # ld = self.model.latent_dist
+        # prior_z_var = ld.sample_prior(self.batch_size)
+        # prior_reg = tf.reduce_mean(
+        #     ld.logli_prior(prior_z_var) - \
+        #         ld.logli_init_prior(prior_z_var)
+        # )
+        # emp_prior_reg = tf.reduce_mean(
+        #     ld.logli_prior(z_var) - \
+        #     ld.logli_init_prior(z_var)
+        # )
+        # self.log_vars.append(("prior_reg", prior_reg))
+        # self.log_vars.append(("emp_prior_reg", emp_prior_reg))
+        # if self.use_prior_reg:
+        #     vlb -= prior_reg
+
+
+        # surr_vlb = vlb + tf.reduce_mean(
+        #         tf.stop_gradient(log_p_x_given_z) * self.model.latent_dist.nonreparam_logli(z_var, z_dist_info)
+        #     )
+        # surr_vlb
+        # Normalize by the dimensionality of the data distribution
+        log_vars.append(("vlb_sum", vlb))
+        log_vars.append(("kl_sum", kl))
+        log_vars.append(("true_vlb_sum", true_vlb))
+
+        true_vlb /= ndim
+        vlb /= ndim
+        # surr_vlb /= ndim
+        kl /= ndim
+
+        # loss = - vlb
+        # surr_loss = - surr_vlb
+
+        log_vars.append((
+            "ent_x_given_z",
+            tf.reduce_mean(self.model.output_dist.entropy(x_dist_info)) / ndim
+        ))
+        log_vars.append(("vlb", vlb))
+        log_vars.append(("kl", kl))
+        log_vars.append(("true_vlb", true_vlb))
+        final_losses = [-vlb]
+
+        if self.cond_px_ent:
+            ld = self.model.latent_dist
+            prior_z_var = ld.sample_prior(self.batch_size)
+            _, prior_x_dist_info = self.model.decode(prior_z_var)
+            prior_ent = tf.reduce_mean(self.model.output_dist.entropy(prior_x_dist_info)) \
+                        / ndim
+            # loss += self.cond_px_ent * prior_ent
+            final_losses.append(self.cond_px_ent * prior_ent)
+            log_vars.append((
+                "prior_ent_x_given_z",
+                prior_ent
+            ))
+        if self.l2_reg is not None:
+            final_losses += [
+                self.l2_reg * tf.nn.l2_loss(var) for var in tf.trainable_variables() \
+                    if "scale" not in var.name
+            ]
+        self.init_hook(locals())
+
+        log_vars.append((
+            "final_loss",
+            tf.reduce_sum(final_losses)
+        ))
+
+        if init and self.exp_avg is not None:
+            self.ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
+            self.ema_applied = self.ema.apply(tf.trainable_variables())
+            self.avg_dict = self.ema.variables_to_restore()
+
+        if (not init) and (not eval):
+            for name, var in self.log_vars:
+                tf.scalar_summary(name, var)
+            with tf.variable_scope("optim"):
+                # optimizer = tf.train.AdamOptimizer(self.learning_rate)
+                optimizer = self.optimizer_cls # AdamaxOptimizer(self.learning_rate)
+                if self.anneal_after is not None:
+                    self.lr_var = tf.Variable(
+                        # assume lr is always set
+                        initial_value=self.optimizer_args["learning_rate"],
+                        name="opt_lr",
                     )
-                else:
-                    # Construct the variational lower bound
-                    kl = tf.reduce_mean(self.model.latent_dist.kl_prior(z_dist_info))
-
-                true_vlb = tf.reduce_mean(log_p_x_given_z) - kl
-                vlb = tf.reduce_mean(log_p_x_given_z) - tf.maximum(kl, self.min_kl * ndim)
-
-            # ld = self.model.latent_dist
-            # prior_z_var = ld.sample_prior(self.batch_size)
-            # prior_reg = tf.reduce_mean(
-            #     ld.logli_prior(prior_z_var) - \
-            #         ld.logli_init_prior(prior_z_var)
-            # )
-            # emp_prior_reg = tf.reduce_mean(
-            #     ld.logli_prior(z_var) - \
-            #     ld.logli_init_prior(z_var)
-            # )
-            # self.log_vars.append(("prior_reg", prior_reg))
-            # self.log_vars.append(("emp_prior_reg", emp_prior_reg))
-            # if self.use_prior_reg:
-            #     vlb -= prior_reg
-
-
-            # surr_vlb = vlb + tf.reduce_mean(
-            #         tf.stop_gradient(log_p_x_given_z) * self.model.latent_dist.nonreparam_logli(z_var, z_dist_info)
-            #     )
-            # surr_vlb
-            # Normalize by the dimensionality of the data distribution
-            log_vars.append(("vlb_sum", vlb))
-            log_vars.append(("kl_sum", kl))
-            log_vars.append(("true_vlb_sum", true_vlb))
-
-            true_vlb /= ndim
-            vlb /= ndim
-            # surr_vlb /= ndim
-            kl /= ndim
-
-            # loss = - vlb
-            # surr_loss = - surr_vlb
-
-            log_vars.append((
-                "ent_x_given_z",
-                tf.reduce_mean(self.model.output_dist.entropy(x_dist_info)) / ndim
-            ))
-            log_vars.append(("vlb", vlb))
-            log_vars.append(("kl", kl))
-            log_vars.append(("true_vlb", true_vlb))
-            final_losses = [-vlb]
-
-            if self.cond_px_ent:
-                ld = self.model.latent_dist
-                prior_z_var = ld.sample_prior(self.batch_size)
-                _, prior_x_dist_info = self.model.decode(prior_z_var)
-                prior_ent = tf.reduce_mean(self.model.output_dist.entropy(prior_x_dist_info)) \
-                            / ndim
-                # loss += self.cond_px_ent * prior_ent
-                final_losses.append(self.cond_px_ent * prior_ent)
-                log_vars.append((
-                    "prior_ent_x_given_z",
-                    prior_ent
-                ))
-            if self.l2_reg is not None:
-                final_losses += [
-                    self.l2_reg * tf.nn.l2_loss(var) for var in tf.trainable_variables() \
-                        if "scale" not in var.name
-                ]
-            self.init_hook(locals())
-
-            log_vars.append((
-                "final_loss",
-                tf.reduce_sum(final_losses)
-            ))
-
-            if init and self.exp_avg is not None:
-                self.ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
-                self.ema_applied = self.ema.apply(tf.trainable_variables())
-                self.avg_dict = self.ema.variables_to_restore()
-
-            if (not init) and (not eval):
-                for name, var in self.log_vars:
-                    tf.scalar_summary(name, var)
-                with tf.variable_scope("optim"):
-                    # optimizer = tf.train.AdamOptimizer(self.learning_rate)
-                    optimizer = self.optimizer_cls # AdamaxOptimizer(self.learning_rate)
-                    if self.anneal_after is not None:
-                        self.lr_var = tf.Variable(
-                            # assume lr is always set
-                            initial_value=self.optimizer_args["learning_rate"],
-                            name="opt_lr",
-                        )
-                        self.optimizer_args["learning_rate"] = self.lr_var
-                    optimizer = self.optimizer_cls(**self.optimizer_args)
-                    self.trainer = pt.apply_optimizer(optimizer, losses=final_losses)
-                    if self.exp_avg is not None:
-                        with tf.name_scope(None):
-                            self.trainer = tf.group(*[self.trainer, self.ema_applied])
+                    self.optimizer_args["learning_rate"] = self.lr_var
+                optimizer = self.optimizer_cls(**self.optimizer_args)
+                self.trainer = pt.apply_optimizer(optimizer, losses=final_losses)
+                if self.exp_avg is not None:
+                    with tf.name_scope(None):
+                        self.trainer = tf.group(*[self.trainer, self.ema_applied])
 
         if init:
             # destroy all summaries

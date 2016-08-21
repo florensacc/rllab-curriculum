@@ -4,6 +4,7 @@ import tensorflow as tf
 # from deconv import deconv2d
 import sandbox.pchen.InfoGAN.infogan.misc.custom_ops
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import leaky_rectify
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase
 import numpy as np
 
 
@@ -111,7 +112,7 @@ class RegularizedHelmholtzMachine(object):
                      fully_connected(self.output_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "conv1_k5":
                 from prettytensor import UnboundVariable
-                with pt.defaults_scope(activation_fn=tf.nn.elu, data_init=UnboundVariable('data_init'), wnorm=self.wnorm):
+                with pt.defaults_scope(activation_fn=tf.nn.elu, custom_phase=UnboundVariable('custom_phase'), wnorm=self.wnorm):
                     self.encoder_template = \
                         (pt.template('input', self.book).
                          reshape([-1] + list(image_shape)).
@@ -159,7 +160,7 @@ class RegularizedHelmholtzMachine(object):
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "small_res":
                 from prettytensor import UnboundVariable
-                with pt.defaults_scope(activation_fn=tf.nn.elu, data_init=UnboundVariable('data_init'), wnorm=self.wnorm):
+                with pt.defaults_scope(activation_fn=tf.nn.elu, custom_phase=UnboundVariable('custom_phase'), wnorm=self.wnorm):
                     self.encoder_template = \
                         (pt.template('input', self.book).
                          reshape([-1] + list(image_shape)).
@@ -207,7 +208,7 @@ class RegularizedHelmholtzMachine(object):
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "small_res_small_kern":
                 from prettytensor import UnboundVariable
-                with pt.defaults_scope(activation_fn=tf.nn.elu, data_init=UnboundVariable('data_init'), wnorm=self.wnorm):
+                with pt.defaults_scope(activation_fn=tf.nn.elu, custom_phase=UnboundVariable('custom_phase'), wnorm=self.wnorm):
                     self.encoder_template = \
                         (pt.template('input', self.book).
                          reshape([-1] + list(image_shape)).
@@ -255,7 +256,7 @@ class RegularizedHelmholtzMachine(object):
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "resv1_k3":
                 from prettytensor import UnboundVariable
-                with pt.defaults_scope(activation_fn=tf.nn.elu, data_init=UnboundVariable('data_init'), wnorm=self.wnorm):
+                with pt.defaults_scope(activation_fn=tf.nn.elu, custom_phase=UnboundVariable('custom_phase'), wnorm=self.wnorm):
                     encoder = \
                         (pt.template('input', self.book).
                          reshape([self.batch_size] + list(image_shape))
@@ -302,7 +303,7 @@ class RegularizedHelmholtzMachine(object):
                 from prettytensor import UnboundVariable
                 with pt.defaults_scope(
                         activation_fn=tf.nn.elu,
-                        data_init=UnboundVariable('data_init'),
+                        custom_phase=UnboundVariable('custom_phase'),
                         wnorm=self.wnorm,
                         pixel_bias=True,
                 ):
@@ -352,7 +353,7 @@ class RegularizedHelmholtzMachine(object):
                 from prettytensor import UnboundVariable
                 with pt.defaults_scope(
                         activation_fn=tf.nn.elu,
-                        data_init=UnboundVariable('data_init'),
+                        custom_phase=UnboundVariable('custom_phase'),
                         wnorm=self.wnorm,
                         pixel_bias=True,
                 ):
@@ -400,11 +401,13 @@ class RegularizedHelmholtzMachine(object):
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "resv1_k3_pixel_bias_filters_ratio":
                 from prettytensor import UnboundVariable
+                model_avg = network_args.get("model_avg", False)
                 with pt.defaults_scope(
                         activation_fn=tf.nn.elu,
-                        data_init=UnboundVariable('data_init'),
+                        custom_phase=UnboundVariable('custom_phase'),
                         wnorm=self.wnorm,
                         pixel_bias=True,
+                        model_avg=model_avg,
                 ):
                     encoder = \
                         (pt.template('input', self.book).
@@ -526,7 +529,7 @@ class RegularizedHelmholtzMachine(object):
                 from prettytensor import UnboundVariable
                 with pt.defaults_scope(
                         activation_fn=tf.nn.elu,
-                        data_init=UnboundVariable('data_init'),
+                        custom_phase=UnboundVariable('custom_phase'),
                         wnorm=self.wnorm,
                         pixel_bias=True,
                 ):
@@ -695,7 +698,7 @@ class RegularizedHelmholtzMachine(object):
                 from prettytensor import UnboundVariable
                 with pt.defaults_scope(
                         activation_fn=tf.nn.elu,
-                        data_init=UnboundVariable('data_init'),
+                        custom_phase=UnboundVariable('custom_phase'),
                         wnorm=self.wnorm,
                         pixel_bias=True,
                 ):
@@ -757,7 +760,7 @@ class RegularizedHelmholtzMachine(object):
                 from prettytensor import UnboundVariable
                 with pt.defaults_scope(
                         activation_fn=tf.nn.elu,
-                        data_init=UnboundVariable('data_init'),
+                        custom_phase=UnboundVariable('custom_phase'),
                         wnorm=self.wnorm,
                         pixel_bias=True,
                 ):
@@ -818,7 +821,7 @@ class RegularizedHelmholtzMachine(object):
             elif self.network_type == "resv1_k3_pixel_bias_cifar_pred_scale":
                 with pt.defaults_scope(
                         activation_fn=tf.nn.elu,
-                        data_init=UnboundVariable('data_init'),
+                        custom_phase=UnboundVariable('custom_phase'),
                         wnorm=self.wnorm,
                         pixel_bias=True,
                 ):
@@ -877,14 +880,14 @@ class RegularizedHelmholtzMachine(object):
                 keep_prob = network_args["keep_prob"]
                 with pt.defaults_scope(
                         activation_fn=tf.nn.elu,
-                        data_init=UnboundVariable('data_init'),
+                        custom_phase=UnboundVariable('custom_phase'),
                 ):
                     self.encoder_template = \
                         (pt.template('input').
                          reshape([-1] + list(image_shape)).
-                         conv2d_mod(5, 32, stride=2).dropout(keep_prob).
-                         conv2d_mod(5, 64, stride=2).dropout(keep_prob).
-                         conv2d_mod(5, 64, stride=2).dropout(keep_prob).
+                         conv2d_mod(5, 32, stride=2).custom_dropout(keep_prob).
+                         conv2d_mod(5, 64, stride=2).custom_dropout(keep_prob).
+                         conv2d_mod(5, 64, stride=2).custom_dropout(keep_prob).
                          flatten().
                          fully_connected(self.latent_dist.dist_flat_dim, activation_fn=None))
                     self.reg_encoder_template = \
@@ -911,22 +914,25 @@ class RegularizedHelmholtzMachine(object):
         self.inference_dist.init_mode()
         self.reg_latent_dist.init_mode()
         self.nonreg_latent_dist.init_mode()
-        self.data_init = True
+        self.custom_phase = CustomPhase.init
         if self.book.summary_collections:
             self.book_summary_collections = self.book.summary_collections
             self.book.summary_collections = None
 
-    def train_mode(self):
+    def train_mode(self, eval=False):
         self.output_dist.train_mode()
         self.latent_dist.train_mode()
         self.inference_dist.train_mode()
         self.reg_latent_dist.train_mode()
         self.nonreg_latent_dist.train_mode()
-        self.data_init = False
+        if eval:
+            self.custom_phase = CustomPhase.test
+        else:
+            self.custom_phase = CustomPhase.train
         self.book.summary_collections = self.book_summary_collections
 
     def encode(self, x_var, k=1):
-        z_dist_flat = self.encoder_template.construct(input=x_var, data_init=self.data_init).tensor
+        z_dist_flat = self.encoder_template.construct(input=x_var, custom_phase=self.custom_phase).tensor
         if k != 1:
             z_dist_flat = tf.reshape(
                 tf.tile(z_dist_flat, [1, k]),
@@ -942,7 +948,7 @@ class RegularizedHelmholtzMachine(object):
         return self.reg_latent_dist.sample(reg_z_dist_info), reg_z_dist_info
 
     def decode(self, z_var):
-        x_dist_flat = self.decoder_template.construct(input=z_var, data_init=self.data_init).tensor
+        x_dist_flat = self.decoder_template.construct(input=z_var, custom_phase=self.custom_phase).tensor
         x_dist_info = self.output_dist.activate_dist(x_dist_flat)
         return self.output_dist.sample(x_dist_info), x_dist_info
 

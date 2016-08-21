@@ -6,6 +6,7 @@ import numpy as np
 import prettytensor as pt
 
 from rllab.misc.overrides import overrides
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase
 
 TINY = 1e-8
 
@@ -775,7 +776,7 @@ class AR(Distribution):
         with pt.defaults_scope(
                 activation_fn=nl,
                 wnorm=data_init_wnorm,
-                data_init=UnboundVariable('data_init'),
+                custom_phase=UnboundVariable('custom_phase'),
                 init_scale=self._data_init_scale,
         ):
             for di in xrange(depth):
@@ -804,13 +805,13 @@ class AR(Distribution):
     @overrides
     def init_mode(self):
         if self._wnorm:
-            self._data_init = True
+            self._custom_phase = CustomPhase.init
             self._base_dist.init_mode()
 
     @overrides
     def train_mode(self):
         if self._wnorm:
-            self._data_init = False
+            self._custom_phase = CustomPhase.train
             self._base_dist.train_mode()
 
     @property
@@ -824,7 +825,7 @@ class AR(Distribution):
     def infer(self, x_var, lin_con=None, gating_con=None):
         in_dict = dict(
             y=x_var,
-            data_init=self._data_init,
+            custom_phase=self._custom_phase,
         )
         if self._linear_context:
             assert lin_con is not None
