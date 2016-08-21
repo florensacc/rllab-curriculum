@@ -91,7 +91,7 @@ class VG(VariantGenerator):
         # yield "small_res"
         # yield "small_res_small_kern"
         # yield "resv1_k3_pixel_bias"
-        yield "resv1_k3_pixel_bias_filters_ratio"
+        # yield "resv1_k3_pixel_bias_filters_ratio"
         yield "res_nofc"
 
     @variant(hide=False)
@@ -151,7 +151,6 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def i_nar(self):
-        # return [0]
         return [2, ]
 
     @variant(hide=True)
@@ -286,10 +285,10 @@ for v in variants[:]:
             exp_prefix="0820_nn_omni_fs_fcfree",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 
