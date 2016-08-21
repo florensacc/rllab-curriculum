@@ -42,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [12, 42,]
+        return [12, ]
         # return [123124234]
 
     @variant
@@ -149,10 +149,10 @@ class VG(VariantGenerator):
     def k(self):
         return [128, ]
 
-    @variant(hide=True)
+    @variant(hide=False)
     def i_nar(self):
-        # return [0]
-        return [2, ]
+        return [0, 2]
+        # return [2, ]
 
     @variant(hide=True)
     def i_nr(self):
@@ -283,7 +283,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0820_nn_omni_fs_fcfree_fixed",
+            exp_prefix="0821_nn_omni_fs_fcfree_fixed",
             seed=v["seed"],
             variant=v,
             # mode="local",
