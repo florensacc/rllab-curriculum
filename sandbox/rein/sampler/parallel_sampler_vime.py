@@ -63,107 +63,104 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     # Save original reward.
     path['rewards_orig'] = np.array(path['rewards'])
 
-    # We skip first iteration as it is often difficult to normalize the KL
-    # divergence terms.
-    if itr > -1:
-        # Iterate over all paths and compute intrinsic reward by updating the
-        # model on each observation, calculating the KL divergence of the new
-        # params to the old ones, and undoing this operation.
-        obs = (path['observations'] * G.dynamics.num_classes).astype(int)
-        single_obs_dim = obs.shape[1] / num_seq_frames
-        act = path['actions']
-        rew_orig = path['rewards_orig']
-        # inputs = (o,a), target = o'
-        obs_nxt = np.vstack((obs[1:, -single_obs_dim:]))
-        # Making sure everything aligns for num_seq_framesd
-        # _a = obs[:-1]
-        # _b = np.concatenate((np.zeros((3, obs.shape[1])), _a), axis=0)
-        # _c = np.array([_b[num_seq_frames - i - 1:-i] for i in (np.array(range(num_seq_frames - 1)) + 1)])
-        # _e = np.transpose(np.concatenate((_a[np.newaxis, :, :], _c), axis=0), (1, 0, 2))
-        # _f = _e.reshape((_e.shape[0], -1))
-        _inputs = np.hstack([obs[:-1], act[:-1]])
-        _targets = obs_nxt
-        # FIXME: turned on by default
-        predict_reward = True
-        if predict_reward:
-            _targets = np.hstack((_targets, rew_orig[:-1, None]))
+    # Iterate over all paths and compute intrinsic reward by updating the
+    # model on each observation, calculating the KL divergence of the new
+    # params to the old ones, and undoing this operation.
+    obs = (path['observations'] * G.dynamics.num_classes).astype(int)
+    single_obs_dim = obs.shape[1] / num_seq_frames
+    act = path['actions']
+    rew_orig = path['rewards_orig']
+    # inputs = (o,a), target = o'
+    obs_nxt = np.vstack((obs[1:, -single_obs_dim:]))
+    # Making sure everything aligns for num_seq_framesd
+    # _a = obs[:-1]
+    # _b = np.concatenate((np.zeros((3, obs.shape[1])), _a), axis=0)
+    # _c = np.array([_b[num_seq_frames - i - 1:-i] for i in (np.array(range(num_seq_frames - 1)) + 1)])
+    # _e = np.transpose(np.concatenate((_a[np.newaxis, :, :], _c), axis=0), (1, 0, 2))
+    # _f = _e.reshape((_e.shape[0], -1))
+    _inputs = np.hstack([obs[:-1], act[:-1]])
+    _targets = obs_nxt
+    # FIXME: turned on by default
+    predict_reward = True
+    if predict_reward:
+        _targets = np.hstack((_targets, rew_orig[:-1, None]))
 
-        # KL vector assumes same shape as reward.
-        kl = np.zeros(rew_orig.shape)
+    # KL vector assumes same shape as reward.
+    kl = np.zeros(rew_orig.shape)
 
-        for j in xrange(int(np.ceil((obs.shape[0] - 1) / float(kl_batch_size)))):
+    for j in xrange(int(np.ceil((obs.shape[0] - 1) / float(kl_batch_size)))):
 
-            start = j * kl_batch_size
-            end = np.minimum((j + 1) * kl_batch_size, _inputs.shape[0])
+        start = j * kl_batch_size
+        end = np.minimum((j + 1) * kl_batch_size, _inputs.shape[0])
 
-            if surprise_type == G.dynamics.SurpriseType.INFGAIN:
-                if second_order_update:
-                    G.dynamics.save_params()
-                    step_size = 1.0
-                    surpr = G.dynamics.train_update_fn(
-                        _inputs[start:end], _targets[start:end], step_size)
-                elif use_replay_pool:
-                    G.dynamics.save_params()
-                    for _ in xrange(n_itr_update):
-                        G.dynamics.train_update_fn(
-                            _inputs[start:end], _targets[start:end], 1.0)
-                    surpr = G.dynamics.fn_kl()
-                    G.dynamics.load_prev_params()
-                else:
-                    surpr = np.nan
-
-            elif surprise_type == G.dynamics.SurpriseType.BALD:
-                surpr = G.dynamics.train_update_fn(_inputs[start:end])
-
-            elif surprise_type == G.dynamics.SurpriseType.VAR:
-                surpr = G.dynamics.train_update_fn(_inputs[start:end])
-
-            elif surprise_type == G.dynamics.SurpriseType.L1:
-                assert use_replay_pool
+        if surprise_type == G.dynamics.SurpriseType.INFGAIN:
+            if second_order_update:
+                G.dynamics.save_params()
+                step_size = 1.0
+                surpr = G.dynamics.train_update_fn(
+                    _inputs[start:end], _targets[start:end], step_size)
+            elif use_replay_pool:
                 G.dynamics.save_params()
                 for _ in xrange(n_itr_update):
                     G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], 1.0)
-                surpr = G.dynamics.fn_l1()
+                surpr = G.dynamics.fn_kl()
                 G.dynamics.load_prev_params()
+            else:
+                surpr = np.nan
 
-            elif surprise_type == G.dynamics.SurpriseType.COMPR:
-                if second_order_update:
-                    # G.dynamics.save_params()
-                    #
-                    # logp_before = G.dynamics.fn_logp(
-                    #     _inputs[start:end], _targets[start:end])
-                    # # conservative step (actual step should be 1.0)
-                    # step_size = 1.0
-                    # G.dynamics.train_update_fn(
-                    #     _inputs[start:end], _targets[start:end], step_size)
-                    # # Calculate current minibatch surprise.
-                    # logp_after = G.dynamics.fn_logp(
-                    #     _inputs[start:end], _targets[start:end])
-                    # G.dynamics.load_prev_params()
-                    #
-                    # surpr = logp_after - logp_before
-                    surpr = - G.dynamics.fn_logp(
-                        _inputs[start:end], _targets[start:end])
-                    surpr[surpr < 0] = 0.
+        elif surprise_type == G.dynamics.SurpriseType.BALD:
+            surpr = G.dynamics.train_update_fn(_inputs[start:end])
 
-                else:
-                    surpr = np.nan
+        elif surprise_type == G.dynamics.SurpriseType.VAR:
+            surpr = G.dynamics.train_update_fn(_inputs[start:end])
 
-            # Load suprise into np.array.
-            for k in xrange(start, end):
-                if isinstance(surpr, float) or len(surpr.shape) == 0:
-                    kl[k] = surpr
-                else:
-                    kl[k] = surpr[k - start]
+        elif surprise_type == G.dynamics.SurpriseType.L1:
+            assert use_replay_pool
+            G.dynamics.save_params()
+            for _ in xrange(n_itr_update):
+                G.dynamics.train_update_fn(
+                    _inputs[start:end], _targets[start:end], 1.0)
+            surpr = G.dynamics.fn_l1()
+            G.dynamics.load_prev_params()
 
-        # Last element in KL vector needs to be replaced by second last one
-        # because the actual last observation has no next observation.
-        if len(path['rewards']) > 1:
-            kl[-1] = kl[-2]
+        elif surprise_type == G.dynamics.SurpriseType.COMPR:
+            if second_order_update:
+                # G.dynamics.save_params()
+                #
+                # logp_before = G.dynamics.fn_logp(
+                #     _inputs[start:end], _targets[start:end])
+                # # conservative step (actual step should be 1.0)
+                # step_size = 1.0
+                # G.dynamics.train_update_fn(
+                #     _inputs[start:end], _targets[start:end], step_size)
+                # # Calculate current minibatch surprise.
+                # logp_after = G.dynamics.fn_logp(
+                #     _inputs[start:end], _targets[start:end])
+                # G.dynamics.load_prev_params()
+                #
+                # surpr = logp_after - logp_before
+                surpr = - G.dynamics.fn_logp(
+                    _inputs[start:end], _targets[start:end])
+                surpr[surpr < 0] = 0.
 
-        # Stuff it in path
-        path['KL'] = kl
+            else:
+                surpr = np.nan
+
+        # Load suprise into np.array.
+        for k in xrange(start, end):
+            if isinstance(surpr, float) or len(surpr.shape) == 0:
+                kl[k] = surpr
+            else:
+                kl[k] = surpr[k - start]
+
+    # Last element in KL vector needs to be replaced by second last one
+    # because the actual last observation has no next observation.
+    if len(path['rewards']) > 1:
+        kl[-1] = kl[-2]
+
+    # Stuff it in path
+    path['KL'] = kl
 
     return path, len(path["rewards"])
 

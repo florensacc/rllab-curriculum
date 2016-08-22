@@ -768,6 +768,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     return sum(kl_component)
 
                 params_bayesian = []
+                # sel_layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+                #                     lasagne.layers.get_all_layers(self.network))
+                # params_bayesian.extend(sel_layers[-1].get_params(trainable=True, bayesian=True))
                 params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
                 if self.output_type == 'regression' and self.update_likelihood_sd:
                     params_bayesian.append(self.likelihood_sd)
