@@ -726,10 +726,10 @@ class RegularizedHelmholtzMachine(object):
                          reshape([-1] + list(image_shape))
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
-                    encoder = resconv_v1(encoder, 3, 16, stride=2) #16
-                    encoder = resconv_v1(encoder, 3, 16, stride=1)
-                    encoder = resconv_v1(encoder, 3, 32, stride=2) #8
-                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    encoder = resconv_v1(encoder, 5, 16, stride=2) #16
+                    encoder = resconv_v1(encoder, 5, 16, stride=1)
+                    encoder = resconv_v1(encoder, 5, 32, stride=2) #8
+                    encoder = resconv_v1(encoder, 5, 32, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #4
                     encoder = resconv_v1(encoder, 3, 32, stride=1)
                     self.encoder_template = \
@@ -745,10 +745,10 @@ class RegularizedHelmholtzMachine(object):
                                )
                     decoder = resconv_v1(decoder, 3, 32, stride=1)
                     decoder = resdeconv_v1(decoder, 3, 32, out_wh=[8,8])
-                    decoder = resconv_v1(decoder, 3, 32, stride=1)
-                    decoder = resdeconv_v1(decoder, 3, 32, out_wh=[16,16])
-                    decoder = resconv_v1(decoder, 3, 32, stride=1)
-                    decoder = resdeconv_v1(decoder, 3, 16, out_wh=[32,32])
+                    decoder = resconv_v1(decoder, 5, 32, stride=1)
+                    decoder = resdeconv_v1(decoder, 5, 32, out_wh=[16,16])
+                    decoder = resconv_v1(decoder, 5, 32, stride=1)
+                    decoder = resdeconv_v1(decoder, 5, 16, out_wh=[32,32])
                     scale_var = tf.Variable(
                         initial_value=np.zeros([1,1,1,3], dtype='float32'),
                         name="channel_scale"
@@ -762,7 +762,16 @@ class RegularizedHelmholtzMachine(object):
                         ).
                         apply(
                             lambda conv:
-                                tf.concat(3, [conv, conv*0. + scale_var])
+                                tf.transpose(
+                                    tf.concat(
+                                        3,
+                                        [
+                                            tf.clip_by_value(conv,  -0.5 + 1 / 512., 0.5 - 1 / 512.),
+                                            conv*0. + scale_var
+                                        ]
+                                    ),
+                                    perm=[0, 3, 1, 2]
+                                )
                         ).
                         flatten()
                     )
@@ -838,6 +847,7 @@ class RegularizedHelmholtzMachine(object):
                          flatten().
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "resv1_k3_pixel_bias_cifar_pred_scale":
+                from prettytensor import UnboundVariable
                 with pt.defaults_scope(
                         activation_fn=tf.nn.elu,
                         custom_phase=UnboundVariable('custom_phase'),
@@ -849,10 +859,10 @@ class RegularizedHelmholtzMachine(object):
                          reshape([-1] + list(image_shape))
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
-                    encoder = resconv_v1(encoder, 3, 16, stride=2) #16
-                    encoder = resconv_v1(encoder, 3, 16, stride=1)
-                    encoder = resconv_v1(encoder, 3, 32, stride=2) #8
-                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    encoder = resconv_v1(encoder, 5, 16, stride=2) #16
+                    encoder = resconv_v1(encoder, 5, 16, stride=1)
+                    encoder = resconv_v1(encoder, 5, 32, stride=2) #8
+                    encoder = resconv_v1(encoder, 5, 32, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #4
                     encoder = resconv_v1(encoder, 3, 32, stride=1)
                     self.encoder_template = \
@@ -868,10 +878,10 @@ class RegularizedHelmholtzMachine(object):
                                )
                     decoder = resconv_v1(decoder, 3, 32, stride=1)
                     decoder = resdeconv_v1(decoder, 3, 32, out_wh=[8,8])
-                    decoder = resconv_v1(decoder, 3, 32, stride=1)
-                    decoder = resdeconv_v1(decoder, 3, 32, out_wh=[16,16])
-                    decoder = resconv_v1(decoder, 3, 32, stride=1)
-                    decoder = resdeconv_v1(decoder, 3, 16, out_wh=[32,32])
+                    decoder = resconv_v1(decoder, 5, 32, stride=1)
+                    decoder = resdeconv_v1(decoder, 5, 32, out_wh=[16,16])
+                    decoder = resconv_v1(decoder, 5, 32, stride=1)
+                    decoder = resdeconv_v1(decoder, 5, 16, out_wh=[32,32])
                     # scale_var = tf.Variable(
                     #     initial_value=np.zeros([1,32,32,1], dtype='float32'),
                     #     name="spatial_scale"

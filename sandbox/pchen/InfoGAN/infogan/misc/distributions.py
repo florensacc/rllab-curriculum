@@ -383,6 +383,7 @@ class Bernoulli(Distribution):
 
 class DiscretizedLogistic(Distribution):
 
+    # assume to be -0.5 ~ 0.5
     def __init__(self, dim, bins=256):
         self._dim = dim
         self._bins = bins
@@ -411,10 +412,11 @@ class DiscretizedLogistic(Distribution):
     def logli(self, x_var, dist_info):
         # mu = dist_info["mu"]
         # scale = dist_info["scale"]
+        floored = tf.floor(x_var*self._bins) / self._bins
         return tf.reduce_sum(
             tf.log(
-                self.cdf(x_var + 1./self._bins, dist_info) -
-                    self.cdf(x_var, dist_info) +
+                self.cdf(floored + 1./self._bins, dist_info) -
+                    self.cdf(floored, dist_info) +
                     TINY
             ),
             reduction_indices=[1],
@@ -429,7 +431,7 @@ class DiscretizedLogistic(Distribution):
 
     def activate_dist(self, flat_dist):
         return dict(
-            mu=(flat_dist[:, :self.dim]) + 0.5,
+            mu=(flat_dist[:, :self.dim]),
             scale=tf.exp(flat_dist[:, self.dim:]) * 0.5,
         )
 

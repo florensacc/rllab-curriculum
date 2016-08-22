@@ -411,11 +411,11 @@ def _download_cifar10(dataset):
 def load_cifar10(
         dataset=_get_datafolder_path()+'/cifar10/cifar-10-python.tar.gz',
         normalize=True,
-        dequantify=True):
+        dequantify=False):
     '''
     Loads the cifar10 dataset
     :param dataset: path to dataset file
-    :param normalize: normalize the x data to the range [0,1]
+    :param normalize: normalize the x data to the range [-0.5,0.5]
     :param dequantify: Add uniform noise to dequantify the data following
         Uria et. al 2013
         "RNADE: The real-valued neural autoregressive density-estimator"
@@ -448,8 +448,8 @@ def load_cifar10(
         test_y = np.asarray(data['labels'])
 
     if normalize:
-        train_x = train_x / 256.
-        test_x = test_x / 256.
+        train_x = train_x / 256. - 0.5
+        test_x = test_x / 256. - 0.5
     train_x = train_x.astype('float32')
     test_x = test_x.astype('float32')
     if dequantify:
