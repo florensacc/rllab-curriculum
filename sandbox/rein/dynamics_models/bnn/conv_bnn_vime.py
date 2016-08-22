@@ -298,9 +298,13 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             # Make prediction.
             pred = self.pred_fn(input)
             if self._ind_softmax:
-                pred_rshp = pred[:, :-1].reshape(
-                    (pred.shape[0],) + (self.state_dim[1], self.state_dim[2]) + (self.num_classes,))
-                pred = np.argmax(pred_rshp, axis=3)
+                pred_rshp = pred[:, :-1].reshape((-1, self.num_classes))
+                rnd = np.random.rand(pred_rshp.shape[0])
+                pred_cumsum = np.cumsum(pred_rshp, axis=1)
+                pred_fill = np.zeros((pred_rshp.shape[0],), dtype=int)
+                for c in xrange(self.num_classes - 1):
+                    pred_fill[pred_cumsum[:, c] < rnd] = c + 1
+                pred = pred_fill.reshape((pred.shape[0], self.state_dim[1], self.state_dim[2]))
             lst_pred.append(pred)
         arr_pred = np.asarray(lst_pred)
 
@@ -728,7 +732,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     invH = 1. / H
                 elif param.name == 'likelihood_sd':
                     invH = 0.
-                updates[param] = param - step_size * invH * grad
+                updates[param] = param - T.cast(step_size * invH * grad, 'float32')
 
             return updates
 
@@ -764,6 +768,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     return sum(kl_component)
 
                 params_bayesian = []
+                # sel_layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
+                #                     lasagne.layers.get_all_layers(self.network))
+                # params_bayesian.extend(sel_layers[-1].get_params(trainable=True, bayesian=True))
                 params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
                 if self.output_type == 'regression' and self.update_likelihood_sd:
                     params_bayesian.append(self.likelihood_sd)
@@ -786,16 +793,16 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             else:
                 # Use SGD to update the model for a single sample, in order to
                 # calculate the surprise. We only update the bayesian params, no batchnorm params.
-                params_bayesian = []
-                params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
-                if self.output_type == 'regression' and self.update_likelihood_sd:
-                    params_bayesian.append(self.likelihood_sd)
+                # params_bayesian = []
+                # params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
+                # if self.output_type == 'regression' and self.update_likelihood_sd:
+                #     params_bayesian.append(self.likelihood_sd)
                 # Use the loss with KL[post'||post'].
                 loss_infgain = self.loss_last_sample(
                     input_var, target_var, likelihood_sd=self.likelihood_sd)
                 # SGD rather than adam, we don't want momentum. Learning rate tuned for adam, needs to be smaller.
                 updates_infgain = lasagne.updates.adam(
-                    loss_infgain, params_bayesian, learning_rate=self.learning_rate)
+                    loss_infgain, params, learning_rate=self.learning_rate)
                 self.train_update_fn = ext.compile_function(
                     [input_var, target_var, kl_factor], loss_infgain, updates=updates_infgain,
                     log_name='fn_train_infgain_1storder',
@@ -848,11 +855,14 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     self.network, oldparam=True)
                 step_size = T.scalar('step_size',
                                      dtype=theano.config.floatX)
-                updates_kl = second_order_update(
-                    loss_only_last_sample, params, oldparams, step_size)
+                params_bayesian = []
+                params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
+
+                updates_bayesian = second_order_update(
+                    loss_only_last_sample, params_bayesian, oldparams, step_size)
 
                 self.train_update_fn = ext.compile_function(
-                    [input_var, target_var, step_size], loss_only_last_sample, updates=updates_kl,
+                    [input_var, target_var, step_size], loss_only_last_sample, updates=updates_bayesian,
                     log_name='fn_surprise_2nd', no_default_updates=False)
 
 

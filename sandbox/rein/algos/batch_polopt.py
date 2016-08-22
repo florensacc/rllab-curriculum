@@ -1,6 +1,6 @@
 from rllab.algos.base import RLAlgorithm
 from sandbox.rein.sampler import parallel_sampler
-from rllab.sampler.base import BaseSampler
+from sandbox.rein.sampler.base import BaseSampler
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 from rllab.policies.base import Policy
