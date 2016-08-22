@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 32
 updates_per_epoch = 100
-max_epoch = 2000
+max_epoch = 65
 
 stub(globals())
 
@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.0001] #0.001]
+        return [0.001] #0.001]
 
     @variant
     def seed(self):
@@ -51,11 +51,11 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [64]#[12, 32]
+        return [64, 128]#[12, 32]
 
     @variant
     def min_kl(self):
-        return [0.1, ] #0.05, 0.1]
+        return [0.1, 0.05, 0.02, 0.01] #0.05, 0.1]
     #
     @variant
     def nar(self):
@@ -108,11 +108,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [6, ]
+        return [2, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [10, ]
+        return [5, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -212,19 +212,20 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
+            img_on=False,
             # anneal_after=v["anneal_after"],
-            vali_eval_interval=60000/batch_size*3,
+            vali_eval_interval=10000000000000000,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0821_cifar_initial",
+            exp_prefix="0822_cifar_kl_sweep",
             seed=v["seed"],
-            mode="local",
-            # mode="lab_kube",
-            # variant=v,
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            variant=v,
+            n_parallel=0,
+            use_gpu=True,
         )
 
 

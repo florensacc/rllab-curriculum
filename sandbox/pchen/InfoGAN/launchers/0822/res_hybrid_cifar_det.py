@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.0001] #0.001]
+        return [0.002] #0.001]
 
     @variant
     def seed(self):
@@ -55,7 +55,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.1, ] #0.05, 0.1]
+        return [5, ] #0.05, 0.1]
     #
     @variant
     def nar(self):
@@ -218,7 +218,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0821_cifar_initial",
+            exp_prefix="0822_cifar_det",
             seed=v["seed"],
             mode="local",
             # mode="lab_kube",
