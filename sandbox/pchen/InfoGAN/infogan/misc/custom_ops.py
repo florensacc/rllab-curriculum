@@ -99,7 +99,10 @@ class custom_conv2d(pt.VarStoreMethod):
 
 
 @pt.Register(
-    assign_defaults=('activation_fn', 'custom_phase', 'wnorm', 'pixel_bias'))
+    assign_defaults=('activation_fn', 'custom_phase', 'wnorm', 'pixel_bias',
+                     'var_scope',
+    )
+)
 class custom_deconv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_shape,
                  k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
@@ -538,7 +541,7 @@ from prettytensor.pretty_tensor_image_methods import *
 @prettytensor.Register(
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'batch_normalize',
-            'custom_phase', 'wnorm', 'pixel_bias',
+            'custom_phase', 'wnorm', 'pixel_bias', 'var_scope',
     )
 )
 class conv2d_mod(prettytensor.VarStoreMethod):
@@ -562,6 +565,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
                pixel_bias=False,
                scale_init=0.1,
                var_scope=None,
+               prefix="",
                name=PROVIDED
                ):
     """Adds a convolution to the stack of operations.
@@ -610,11 +614,14 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     books = input_layer.bookkeeper
 
     if var_scope:
-        self.vars = books.var_mapping[var_scope]
+        old_vars = self.vars
+        new_vars = books.var_mapping[var_scope]
+        self.vars = new_vars
+        # import ipdb; ipdb.set_trace()
     assert init is None
     init = tf.random_normal_initializer(stddev=0.02)
     dtype = input_layer.tensor.dtype
-    params = self.variable('weights', size, init, dt=dtype)
+    params = self.variable(prefix + 'weights', size, init, dt=dtype)
     if custom_phase == CustomPhase.init:
         params = params.initialized_value()
     params_norm = tf.nn.l2_normalize(params, [0,1,2]) if wnorm else params
@@ -627,6 +634,8 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     if wnorm:
         m_init, v_init = tf.nn.moments(y, [0, 1, 2], keep_dims=True)
         p_s_init = scale_init / tf.sqrt(v_init + 1e-9)
+        if var_scope:
+            self.vars = old_vars
         params_scale = self.variable(
             'weights_scale',
             [1, 1, 1, depth],
@@ -639,6 +648,8 @@ class conv2d_mod(prettytensor.VarStoreMethod):
             lambda *_,**__: tf.ones(bias_shp)*-m_init*p_s_init,
             dt=dtype
         )
+        if var_scope:
+            self.vars = new_vars
         if custom_phase == CustomPhase.init:
             b = b.initialized_value()
             params_scale = params_scale.initialized_value()
@@ -990,9 +1001,9 @@ def resize_nearest_neighbor(x, scale):
 def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
-        blk.conv2d_mod(kernel, nch, stride=stride)
+        blk.conv2d_mod(kernel, nch, stride=stride, prefix="pre")
         blk.custom_dropout(keep_prob)
-        blk.conv2d_mod(kernel, nch, activation_fn=None)
+        blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
         blk.apply(lambda x: x*add_coeff)
         if stride != 1:
             if nn:

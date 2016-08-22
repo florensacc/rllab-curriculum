@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, ] #0.001]
+        return [0.004, ] #0.001]
 
     @variant
     def seed(self):
@@ -62,14 +62,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0,]
+        return [6,]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [10, ]
+            return [5, ]
 
     # @variant
     # def nm(self):
@@ -104,12 +104,12 @@ class VG(VariantGenerator):
 
     @variant()
     def base_filters(self, ):
-        return [16, 32]
+        return [16]
 
     @variant()
     def enc_rep(self, network):
         if network == "res_nofc":
-            return [2,3]
+            return [4]
         else:
             return [1,2]
 
@@ -119,11 +119,15 @@ class VG(VariantGenerator):
 
     @variant()
     def fs(self, network):
-        return [3,4]
+        return [3]
 
     @variant()
     def smooth(self, network):
         return [None]
+
+    @variant()
+    def tie_weights(self, network):
+        return [True, False]
 
     @variant(hide=True)
     def dec_fc_keepprob(self, network):
@@ -151,11 +155,11 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def i_nar(self):
-        return [2, ]
+        return [4, ]
 
     @variant(hide=True)
     def i_nr(self):
-        return [10, ]
+        return [2, ]
 
     @variant(hide=True)
     def i_init_scale(self):
@@ -173,7 +177,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def anneal_after(self):
-        return [800, ]
+        return [200, ]
 
     @variant(hide=True)
     def exp_avg(self):
@@ -260,6 +264,7 @@ for v in variants[:]:
                 dec_rep=v["dec_rep"],
                 ac=v["ac"],
                 filter_size=v["fs"],
+                tie_weights=v["tie_weights"],
             ),
         )
 
