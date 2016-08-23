@@ -4,11 +4,11 @@ from __future__ import absolute_import
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
-    DiscretizedLogistic, IAR
+    IAR
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset, Cifar10Dataset
+    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -22,9 +22,9 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
-batch_size = 32
-updates_per_epoch = 100
-max_epoch = 2000
+batch_size = 128
+# updates_per_epoch = 100
+max_epoch = 1200
 
 stub(globals())
 
@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.0002] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
@@ -51,25 +51,26 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [1024]#[12, 32]
+        return [32, 64]#[12, 32]
 
     @variant
     def min_kl(self):
-        return [0.05, ] #0.05, 0.1]
+        return [0.01, ] #0.05, 0.1]
     #
     @variant
     def nar(self):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0, ]
+        return [4,]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [5, ]
+            # return [1, 5, ]
+            return [3]
 
     # @variant
     # def nm(self):
@@ -80,7 +81,7 @@ class VG(VariantGenerator):
     # def pr(self):
     #     return [True, False]
 
-    @variant(hide=False)
+    @variant(hide=True)
     def network(self):
         # yield "large_conv"
         # yield "small_conv"
@@ -90,29 +91,42 @@ class VG(VariantGenerator):
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        # yield "resv1_k3_pixel_bias_cifar"
-        # yield "resv1_k3_pixel_bias_cifar_spatial_scale"
-        yield "resv1_k3_pixel_bias_cifar"
+        # res_hybrid_long_re_real_anneal.pyyield "resv1_k3_pixel_bias"
+        # yield "resv1_k3_pixel_bias"
+        yield "resv1_k3_pixel_bias_widegen"
+        # yield "resv1_k3_pixel_bias_filters_ratio"
 
     @variant(hide=False)
+    def steps(self, ):
+        return [1,3,6,9,13,15]
+    #
+    @variant(hide=False)
+    def base_filters(self, ):
+        return [8, 16, 32, 64]
+
+    # @variant(hide=False)
+    # def enc_nn(self, dec_nn):
+    #     return [dec_nn]
+
+    @variant(hide=True)
     def wnorm(self):
         return [True, ]
 
-    @variant(hide=False)
+    @variant(hide=True)
     def ar_wnorm(self):
         return [True, ]
 
     @variant(hide=False)
     def k(self):
-        return [1, ]
+        return [128, ]
 
     @variant(hide=False)
     def i_nar(self):
-        return [0, ]
+        return [4, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [10, ]
+        return [5, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -120,12 +134,22 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_context(self):
+        # return [True, False]
         return [
             # [],
             ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
+
+    @variant(hide=False)
+    def anneal_after(self):
+        return [400, ]
+
+    @variant(hide=False)
+    def exp_avg(self):
+        return [0.999, ]
+
 
 vg = VG()
 
@@ -144,40 +168,22 @@ for v in variants[:]:
 
         print("Exp name: %s" % exp_name)
 
-        # set_seed(v["seed"])
 
-        # dataset = ResamplingBinarizedMnistDataset()
-        # dataset = ResamplingBinarizedOmniglotDataset()
+        dataset = ResamplingBinarizedOmniglotDataset()
         # dataset = MnistDataset()
-        dataset = Cifar10Dataset()
 
         dist = Gaussian(zdim)
         for _ in xrange(v["nar"]):
             dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"])
 
         latent_spec = [
-            # (Gaussian(128), False),
-            # (Categorical(10), True),
             (
-                # Mixture(
-                #     [
-                #         (
-                #             Gaussian(
-                #                 zdim,
-                #                 # prior_mean=np.concatenate([[2.*((i>>j)%2) for j in xrange(4)], np.random.normal(scale=v["mix_std"], size=zdim-4)]),
-                #                 prior_mean=np.concatenate([np.random.normal(scale=v["mix_std"], size=zdim)]),
-                #                 init_prior_mean=np.zeros(zdim),
-                #                 prior_trainable=True,
-                #             ),
-                #             1. / nm
-                #         ) for i in xrange(nm)
-                #     ]
-                # )
                 dist
                 ,
                 False
             ),
         ]
+
         inf_dist = Gaussian(zdim)
         for _ in xrange(v["i_nar"]):
             inf_dist = IAR(
@@ -189,27 +195,20 @@ for v in variants[:]:
                 gating_context="gating" in v["i_context"],
             )
 
-        mol = 3
-        out_dist = Mixture(
-            [
-                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
-                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
-                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
-                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
-                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
-            ]
-        )
-
         model = RegularizedHelmholtzMachine(
-            # output_dist=MeanBernoulli(dataset.image_dim),
-            # output_dist=DiscretizedLogistic(dataset.image_dim),
-            output_dist=out_dist,
+            output_dist=MeanBernoulli(dataset.image_dim),
             latent_spec=latent_spec,
             batch_size=batch_size,
             image_shape=dataset.image_shape,
             network_type=v["network"],
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
+            network_args=dict(
+                steps=v["steps"],
+                base_filters=v["base_filters"]
+                # enc_nn=v["enc_nn"],
+                # dec_nn=v["dec_nn"],
+            ),
         )
 
         algo = VAE(
@@ -218,26 +217,25 @@ for v in variants[:]:
             batch_size=batch_size,
             exp_name=exp_name,
             max_epoch=max_epoch,
-            updates_per_epoch=updates_per_epoch,
             optimizer_cls=AdamaxOptimizer,
             optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            # anneal_after=v["anneal_after"],
-            vali_eval_interval=60000/batch_size*3,
-            kl_coeff=0.,
+            vali_eval_interval=1500*3,
+            exp_avg=v["exp_avg"],
+            anneal_after=v["anneal_after"]
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0822_cifar_det",
+            exp_prefix="0822_omni_widegen",
             seed=v["seed"],
-            mode="local",
-            # mode="lab_kube",
-            # variant=v,
-            # n_parallel=0,
-            # use_gpu=True,
+            variant=v,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 

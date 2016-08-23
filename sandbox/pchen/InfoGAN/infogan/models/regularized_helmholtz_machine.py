@@ -349,6 +349,64 @@ class RegularizedHelmholtzMachine(object):
                          # dropout(0.9).
                          flatten().
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "resv1_k3_pixel_bias_widegen":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        custom_phase=UnboundVariable('custom_phase'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                ):
+                    steps = network_args["steps"]
+                    base_filters = network_args["base_filters"]
+                    encoder = \
+                        (pt.template('input', self.book).
+                         reshape([-1] + list(image_shape))
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+                    encoder = resconv_v1(encoder, 3, 16, stride=2) #14
+                    encoder = resconv_v1(encoder, 3, 16, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #7
+                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #4
+                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    self.encoder_template = \
+                        (encoder.
+                         flatten().
+                         wnorm_fc(450, ).
+                         wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
+                         )
+                    decoder = (pt.template('input', self.book).
+                               wnorm_fc(128, ).
+                               reshape([-1, 4, 4, 8])
+                               )
+                    decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[7,7], nn=False)
+                    decoder = resdeconv_v1(decoder, 5, base_filters, out_wh=[14,14], nn=True)
+                    decoder = resdeconv_v1(decoder, 5, base_filters, out_wh=[28,28], nn=True)
+                    for _ in xrange(steps):
+                        with pt.defaults_scope(
+                                var_scope="wide_gen"
+                        ):
+                            decoder = resconv_v1(
+                                decoder,
+                                5,
+                                base_filters,
+                                stride=1,
+                            )
+                    self.decoder_template = (
+                        decoder.
+                            conv2d_mod(3, 1, activation_fn=None).
+                            flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "resv1_k3_pixel_bias_half_filters":
                 from prettytensor import UnboundVariable
                 with pt.defaults_scope(
