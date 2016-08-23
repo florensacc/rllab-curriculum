@@ -3,7 +3,7 @@ import prettytensor as pt
 import tensorflow as tf
 import numpy as np
 from progressbar import ETA, Bar, Percentage, ProgressBar
-from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture
+from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture, DiscretizedLogistic
 import rllab.misc.logger as logger
 import sys
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp
@@ -39,6 +39,7 @@ class VAE(object):
                  exp_avg=None,
                  l2_reg=None,
                  img_on=True,
+                 kl_coeff=1.,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -48,6 +49,7 @@ class VAE(object):
         :type recog_reg_coeff: float
         :type learning_rate: float
         """
+        self.kl_coeff = kl_coeff
         self.anneal_factor = anneal_factor
         self.anneal_every = anneal_every
         self.img_on = img_on
@@ -144,7 +146,7 @@ class VAE(object):
             ) - np.log(self.k)
             # this is shaky but ok since we are just in eval mode
             vlb = tf.reduce_mean(log_p_x_given_z) - \
-                  tf.maximum(kl, self.min_kl * ndim)
+                  tf.maximum(kl, self.min_kl * ndim) * self.kl_coeff
             log_vars.append((
                 "true_vlb_sum_k0",
                 tf.reduce_mean(log_p_x_given_z - kls)
@@ -161,7 +163,7 @@ class VAE(object):
                 kl = tf.reduce_mean(self.model.latent_dist.kl_prior(z_dist_info))
 
             true_vlb = tf.reduce_mean(log_p_x_given_z) - kl
-            vlb = tf.reduce_mean(log_p_x_given_z) - tf.maximum(kl, self.min_kl * ndim)
+            vlb = tf.reduce_mean(log_p_x_given_z) - tf.maximum(kl, self.min_kl * ndim) * self.kl_coeff
 
         # ld = self.model.latent_dist
         # prior_z_var = ld.sample_prior(self.batch_size)
@@ -228,6 +230,11 @@ class VAE(object):
             "final_loss",
             tf.reduce_sum(final_losses)
         ))
+        if isinstance(self.model.output_dist, DiscretizedLogistic):
+            log_vars.append((
+                "logistic_scale",
+                tf.reduce_mean(x_dist_info["scale"])
+            ))
 
         if init and self.exp_avg is not None:
             self.ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
@@ -278,6 +285,8 @@ class VAE(object):
                         img_var = x_dist_info["p"]
                     elif isinstance(self.model.output_dist, Gaussian):
                         img_var = x_dist_info["mean"]
+                    elif isinstance(self.model.output_dist, DiscretizedLogistic):
+                        img_var = x_dist_info["mu"]
                     else:
                         img_var = x_var
                         # raise NotImplementedError

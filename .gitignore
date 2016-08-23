@@ -45,3 +45,4 @@ rllab/config_personal.py
 MNIST/
 logs/
 *.pkl
+*.ipynb

@@ -749,6 +749,7 @@ class RegularizedHelmholtzMachine(object):
                     decoder = resdeconv_v1(decoder, 5, 32, out_wh=[16,16])
                     decoder = resconv_v1(decoder, 5, 32, stride=1)
                     decoder = resdeconv_v1(decoder, 5, 16, out_wh=[32,32])
+                    decoder = resconv_v1(decoder, 5, 16, stride=1)
                     scale_var = tf.Variable(
                         initial_value=np.zeros([1,1,1,3], dtype='float32'),
                         name="channel_scale"
@@ -756,7 +757,7 @@ class RegularizedHelmholtzMachine(object):
                     self.decoder_template = (
                         decoder.
                         conv2d_mod(
-                            3,
+                            5,
                             3,
                             activation_fn=None
                         ).

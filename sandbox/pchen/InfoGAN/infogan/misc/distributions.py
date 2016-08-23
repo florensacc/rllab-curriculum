@@ -384,7 +384,7 @@ class Bernoulli(Distribution):
 class DiscretizedLogistic(Distribution):
 
     # assume to be -0.5 ~ 0.5
-    def __init__(self, dim, bins=256):
+    def __init__(self, dim, bins=256.):
         self._dim = dim
         self._bins = bins
 
@@ -432,7 +432,7 @@ class DiscretizedLogistic(Distribution):
     def activate_dist(self, flat_dist):
         return dict(
             mu=(flat_dist[:, :self.dim]),
-            scale=tf.exp(flat_dist[:, self.dim:]) * 0.5,
+            scale=tf.exp(flat_dist[:, self.dim:]) * 0.1,
         )
 
     def sample_logli(self, dist_info):
@@ -441,7 +441,7 @@ class DiscretizedLogistic(Distribution):
         # import ipdb; ipdb.set_trace()
         p = tf.random_uniform(shape=mu.get_shape())
         real_logit = mu + scale*(tf.log(p) - tf.log(1-p)) # inverse cdf according to wiki
-        clipped = tf.clip_by_value(real_logit, 0., 1.-1./self._bins)
+        clipped = tf.clip_by_value(real_logit, -0.5, 0.5-1./self._bins)
         return clipped, tf.reduce_sum(
             tf.log(
                 self.cdf(p + 1./self._bins, dist_info) - self.cdf(p, dist_info)
@@ -451,8 +451,8 @@ class DiscretizedLogistic(Distribution):
 
     def prior_dist_info(self, batch_size):
         return dict(
-            mu=0.5*np.ones([batch_size, self._dim]),
-            scale=0.5*np.ones([batch_size, self._dim]),
+            mu=0.0*np.ones([batch_size, self._dim]),
+            scale=np.ones([batch_size, self._dim]),
         )
 
 class MeanBernoulli(Bernoulli):
