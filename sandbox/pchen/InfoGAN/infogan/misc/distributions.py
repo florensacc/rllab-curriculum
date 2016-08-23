@@ -384,9 +384,10 @@ class Bernoulli(Distribution):
 class DiscretizedLogistic(Distribution):
 
     # assume to be -0.5 ~ 0.5
-    def __init__(self, dim, bins=256.):
+    def __init__(self, dim, bins=256., init_scale=0.1):
         self._dim = dim
         self._bins = bins
+        self._init_scale = init_scale
 
     @property
     def dim(self):
@@ -432,7 +433,7 @@ class DiscretizedLogistic(Distribution):
     def activate_dist(self, flat_dist):
         return dict(
             mu=(flat_dist[:, :self.dim]),
-            scale=tf.exp(flat_dist[:, self.dim:]) * 0.1,
+            scale=tf.exp(flat_dist[:, self.dim:]) * self._init_scale,
         )
 
     def sample_logli(self, dist_info):
@@ -647,7 +648,13 @@ class Mixture(Distribution):
 
     @property
     def dist_flat_dim(self):
-        return self._dim
+        return sum([
+            d.dist_flat_dim for d,p in self._pairs
+        ])
+
+    @property
+    def modes(self):
+        return len(self._pairs)
 
     @property
     def effective_dim(self):
@@ -657,9 +664,10 @@ class Mixture(Distribution):
         infos = dist_info["infos"]
         # li = 0.
         loglips = []
-        for pair, idist_info in zip(self._pairs, infos):
+        for pair, idist_info_flat in zip(self._pairs, infos):
             dist, p = pair
             # li += tf.exp(dist.logli(x, idist_info)) * p
+            idist_info = dist.activate_dist(idist_info_flat)
             loglips.append(dist.logli(x, idist_info) + tf.log(p))
         variate = tf.reduce_max(loglips, reduction_indices=0, keep_dims=True)
         return tf.log(tf.reduce_sum(tf.exp(loglips - variate), reduction_indices=0, keep_dims=True) + TINY) + variate
@@ -696,10 +704,17 @@ class Mixture(Distribution):
     def kl(self, p, q):
         raise NotImplemented
 
+    def entropy(self, dist_info):
+        # XXX
+        return 0.
+
     def sample(self, dist_info):
         infos = dist_info["infos"]
         samples = [
-                pair[0].sample(idist) for pair, idist in zip(self._pairs, infos)
+           pair[0].sample(
+               pair[0].activate_dist(iflat)
+           )
+           for pair, iflat in zip(self._pairs, infos)
         ]
         bs = int(samples[0].get_shape()[0])
         prob = np.asarray([[p for _, p in self._pairs]]*bs)

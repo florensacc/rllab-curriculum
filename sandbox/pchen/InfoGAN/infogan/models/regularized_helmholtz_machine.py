@@ -1,4 +1,4 @@
-from sandbox.pchen.InfoGAN.infogan.misc.distributions import Product, Distribution
+from sandbox.pchen.InfoGAN.infogan.misc.distributions import Product, Distribution, Mixture
 import prettytensor as pt
 import tensorflow as tf
 # from deconv import deconv2d
@@ -750,29 +750,36 @@ class RegularizedHelmholtzMachine(object):
                     decoder = resconv_v1(decoder, 5, 32, stride=1)
                     decoder = resdeconv_v1(decoder, 5, 16, out_wh=[32,32])
                     decoder = resconv_v1(decoder, 5, 16, stride=1)
+                    if isinstance(self.output_dist, Mixture):
+                        modes = self.output_dist.modes
+                    else:
+                        modes = 1
+                    # modes have diff scale params
                     scale_var = tf.Variable(
-                        initial_value=np.zeros([1,1,1,3], dtype='float32'),
+                        initial_value=np.zeros([1,modes * 3,1,1], dtype='float32'),
                         name="channel_scale"
                     )
                     self.decoder_template = (
                         decoder.
-                        conv2d_mod(
+                            conv2d_mod(
                             5,
-                            3,
+                            3*modes,
                             activation_fn=None
                         ).
-                        apply(
-                            lambda conv:
-                                tf.transpose(
-                                    tf.concat(
-                                        3,
-                                        [
-                                            tf.clip_by_value(conv,  -0.5 + 1 / 512., 0.5 - 1 / 512.),
-                                            conv*0. + scale_var
-                                        ]
-                                    ),
-                                    perm=[0, 3, 1, 2]
-                                )
+                        apply(tf.transpose, [0, 3, 1, 2]).
+                        reshape([-1, modes*3, 32, 32]).
+                        apply(lambda conv:
+                                tf.concat(
+                                    1,
+                                    [
+                                        tf.clip_by_value(
+                                            conv,
+                                            -0.5 + 1 / 512.,
+                                            0.5 - 1 / 512.
+                                        ),
+                                        conv*0. + scale_var
+                                    ]
+                                ),
                         ).
                         flatten()
                     )

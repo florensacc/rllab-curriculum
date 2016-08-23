@@ -189,9 +189,19 @@ for v in variants[:]:
                 gating_context="gating" in v["i_context"],
             )
 
+        mol = 3
+        out_dist = Mixture(
+            [
+                (DiscretizedLogistic(dataset.image_dim, init_scale=0.1), 1./mol),
+                (DiscretizedLogistic(dataset.image_dim, init_scale=0.05), 1./mol),
+                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
+            ]
+        )
+
         model = RegularizedHelmholtzMachine(
             # output_dist=MeanBernoulli(dataset.image_dim),
-            output_dist=DiscretizedLogistic(dataset.image_dim),
+            # output_dist=DiscretizedLogistic(dataset.image_dim),
+            output_dist=out_dist,
             latent_spec=latent_spec,
             batch_size=batch_size,
             image_shape=dataset.image_shape,
