@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [32, 64]#[12, 32]
+        return [64, 128]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -98,11 +98,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def steps(self, ):
-        return [1,3,6,9,13,15]
+        return [1,3,]
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [8, 16, 32, ]
+        return [32, 48, 64]
 
     # @variant(hide=False)
     # def enc_nn(self, dec_nn):
@@ -229,7 +229,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0822_omni_widegen",
+            exp_prefix="0823_omni_wider",
             seed=v["seed"],
             variant=v,
             # mode="local",
