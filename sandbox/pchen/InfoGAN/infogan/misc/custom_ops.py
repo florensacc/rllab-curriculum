@@ -107,7 +107,7 @@ class custom_deconv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_shape,
                  k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
                  name="deconv2d", activation_fn=None, custom_phase=CustomPhase.train, init_scale=0.1,
-                 wnorm=False, pixel_bias=False, var_scope=None,
+                 wnorm=False, pixel_bias=False, var_scope=None, prefix="",
                  ):
         # print "data init: ", custom_phase
         output_shape[0] = input_layer.shape[0]
@@ -117,7 +117,7 @@ class custom_deconv2d(pt.VarStoreMethod):
         ts_output_shape = tf.pack(output_shape)
         with tf.variable_scope(name):
             # filter : [height, width, output_channels, in_channels]
-            w = self.variable('w', [k_h, k_w, output_shape[-1], input_layer.shape[-1]],
+            w = self.variable(prefix + 'w', [k_h, k_w, output_shape[-1], input_layer.shape[-1]],
                               init=tf.random_normal_initializer(stddev=stddev))
             if custom_phase == CustomPhase.init:
                 w = w.initialized_value()
@@ -1005,20 +1005,20 @@ def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=Fals
         blk.custom_dropout(keep_prob)
         blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
         blk.apply(lambda x: x*add_coeff)
-        if stride != 1:
-            if nn:
-                origin.apply(resize_nearest_neighbor, 1./stride)
-                origin.apply(lambda o: tf.tile(o, [1,1,1,nch/int(o.get_shape()[3])]))
-            else:
+        if nn:
+            origin.apply(resize_nearest_neighbor, 1./stride)
+            origin.apply(lambda o: tf.tile(o, [1,1,1,nch/int(o.get_shape()[3])]))
+        else:
+            if stride != 1:
                 origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
     return seq.as_layer().nl()
 
 def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
-        blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, )
+        blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")
         blk.custom_dropout(keep_prob)
-        blk.conv2d_mod(kernel, nch, activation_fn=None)
+        blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
         blk.apply(lambda x: x*add_coeff)
         if nn:
             origin.apply(tf.image.resize_nearest_neighbor, out_wh)
@@ -1026,7 +1026,7 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=Fals
             # origin.reshape([-1,]+out_wh+[nch, 2])
             origin.apply(tf.reduce_mean, [4],)
         else:
-            origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None)
+            origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None, prefix="de_pre")
     return seq.as_layer().nl()
 
 def logsumexp(x):
