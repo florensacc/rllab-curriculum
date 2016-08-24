@@ -22,7 +22,7 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
-batch_size = 128
+batch_size = 64
 # updates_per_epoch = 100
 max_epoch = 1200
 
@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.004, ] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
@@ -70,7 +70,7 @@ class VG(VariantGenerator):
             return [1]
         else:
             # return [1, 5, ]
-            return [2]
+            return [1]
 
     # @variant
     # def nm(self):
@@ -126,7 +126,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self):
-        return [128, ]
+        return [1, ]
 
     @variant(hide=False)
     def i_nar(self):
@@ -134,7 +134,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nr(self):
-        return [5, ]
+        return [1, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -201,6 +201,7 @@ for v in variants[:]:
                 data_init_scale=v["i_init_scale"],
                 linear_context="linear" in v["i_context"],
                 gating_context="gating" in v["i_context"],
+                share_context=True,
             )
 
         model = RegularizedHelmholtzMachine(

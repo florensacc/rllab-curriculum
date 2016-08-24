@@ -763,6 +763,7 @@ class AR(Distribution):
             data_init_scale=0.1,
             linear_context=False,
             gating_context=False,
+            share_context=False,
     ):
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
@@ -779,6 +780,7 @@ class AR(Distribution):
         self._linear_context = linear_context
         self._gating_context = gating_context
         self._context_dim = 0
+        self._share_context = share_context
         if linear_context:
             lin_con = pt.template("linear_context")
             self._linear_context_dim = 2*dim*neuron_ratio
@@ -933,6 +935,10 @@ class IAR(AR):
         return logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
 
     def inserting_context(self):
+        if self._share_context:
+            if (isinstance(self._base_dist, AR)):
+                assert self._base_dist._share_context
+                return False
         return self._linear_context or self._gating_context
         # this is for sharing context version
         # keys = self._base_dist.dist_info_keys
