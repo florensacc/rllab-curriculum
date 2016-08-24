@@ -359,37 +359,46 @@ class RegularizedHelmholtzMachine(object):
                 ):
                     steps = network_args["steps"]
                     base_filters = network_args["base_filters"]
+                    enc_fc = network_args.get("enc_fc", True)
+                    enc_rep = network_args.get("enc_rep", 1)
+                    dec_fs = network_args.get("dec_fs", 5)
+                    print network_args
                     encoder = \
                         (pt.template('input', self.book).
                          reshape([-1] + list(image_shape))
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2) #14
-                    encoder = resconv_v1(encoder, 3, 16, stride=1)
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 16, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #7
-                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #4
-                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1)
                     self.encoder_template = \
                         (encoder.
-                         flatten().
-                         wnorm_fc(450, ).
-                         wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
-                         )
+                         flatten())
+                    if enc_fc:
+                        self.encoder_template = self.encoder_template. \
+                            wnorm_fc(450, )
+                    self.encoder_template = self.encoder_template. \
+                        wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
                     decoder = (pt.template('input', self.book).
                                wnorm_fc(128, ).
                                reshape([-1, 4, 4, 8])
                                )
                     decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[7,7], nn=False)
-                    decoder = resdeconv_v1(decoder, 5, base_filters, out_wh=[14,14], nn=True)
-                    decoder = resdeconv_v1(decoder, 5, base_filters, out_wh=[28,28], nn=True)
+                    decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[14,14], nn=True)
+                    decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[28,28], nn=True)
                     for _ in xrange(steps):
                         with pt.defaults_scope(
                                 var_scope="wide_gen"
                         ):
                             decoder = resconv_v1(
                                 decoder,
-                                5,
+                                dec_fs,
                                 base_filters,
                                 stride=1,
                             )
@@ -417,23 +426,31 @@ class RegularizedHelmholtzMachine(object):
                 ):
                     steps = network_args["steps"]
                     base_filters = network_args["base_filters"]
+                    enc_fc = network_args.get("enc_fc", True)
+                    enc_rep = network_args.get("enc_rep", 1)
+                    dec_fs = network_args.get("dec_fs", 5)
                     encoder = \
                         (pt.template('input', self.book).
                          reshape([-1] + list(image_shape))
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2) #14
-                    encoder = resconv_v1(encoder, 3, 16, stride=1)
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 16, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #7
-                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #4
-                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1)
                     self.encoder_template = \
                         (encoder.
-                         flatten().
-                         wnorm_fc(450, ).
+                         flatten())
+                    if enc_fc:
+                        self.encoder_template = self.encoder_template.\
+                         wnorm_fc(450, )
+                    self.encoder_template = self.encoder_template.\
                          wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
-                         )
                     decoder = (pt.template('input', self.book).
                                wnorm_fc(128, ).
                                reshape([-1, 4, 4, 8])
