@@ -814,7 +814,7 @@ class RegularizedHelmholtzMachine(object):
                         modes = 1
                     # modes have diff scale params
                     scale_var = tf.Variable(
-                        initial_value=np.zeros([1,modes * 3,1,1], dtype='float32'),
+                        initial_value=np.zeros([1,modes,3,1,1], dtype='float32'),
                         name="channel_scale"
                     )
                     self.decoder_template = (
@@ -825,10 +825,10 @@ class RegularizedHelmholtzMachine(object):
                             activation_fn=None
                         ).
                         apply(tf.transpose, [0, 3, 1, 2]).
-                        reshape([-1, modes*3, 32, 32]).
+                        reshape([-1, modes, 3, 32, 32]).
                         apply(lambda conv:
                                 tf.concat(
-                                    1,
+                                    2,
                                     [
                                         tf.clip_by_value(
                                             conv,
@@ -837,8 +837,10 @@ class RegularizedHelmholtzMachine(object):
                                         ),
                                         conv*0. + scale_var
                                     ]
-                                ),
+                                )
                         ).
+                        reshape([-1, modes, 2, 3, 32, 32]).
+                        apply(tf.transpose, [0, 1, 2, 4, 5, 3]).
                         flatten()
                     )
                     self.reg_encoder_template = \
@@ -1000,6 +1002,73 @@ class RegularizedHelmholtzMachine(object):
                          custom_deconv2d([0, 14, 14, 16], ).dropout(keep_prob).
                          custom_deconv2d([0, 28, 28, 1], activation_fn=None).
                          flatten())
+            elif self.network_type == "cifar_id":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(
+                ):
+                    encoder = \
+                        (pt.template('input', self.book)
+                         )
+                    self.encoder_template = \
+                        (encoder.
+                         apply(lambda x: tf.concat(
+                            1,
+                            [x, x*0 - 100000.]
+                        ))
+                    )
+                    decoder = (pt.template('input', self.book).
+                               reshape([-1, 32, 32, 3])
+                               )
+                    if isinstance(self.output_dist, Mixture):
+                        modes = self.output_dist.modes
+                        assert False
+                    else:
+                        modes = 1
+                    # modes have diff scale params
+                    scale_var = tf.Variable(
+                        initial_value=np.zeros([1,modes * 3,1,1], dtype='float32'),
+                        name="channel_scale"
+                    )
+                    global count
+                    count = 0
+                    def hehe(x):
+                        global count
+                        count += 1
+                        tf.image_summary("hehe%s"%count, x)
+                        return x
+
+
+                    self.decoder_template = (
+                        decoder.
+                            apply(hehe).
+                            apply(tf.transpose, [0, 3, 1, 2]).
+                            reshape([-1, modes*3, 32, 32]).
+                            apply(lambda conv:
+                                  tf.concat(
+                                      1,
+                                      [
+                                          tf.clip_by_value(
+                                              conv + 1./512,
+                                              -0.5 + 1 / 512.,
+                                              0.5 - 1 / 512.
+                                          ),
+                                          conv*0. + scale_var,
+                                      ]
+                                  ),
+                                  ).
+                            reshape([-1, 2, 3, 32, 32]).
+                            apply(tf.transpose, [0, 1,3,4,2]).
+                            flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             else:
                 raise NotImplementedError
 
@@ -1027,7 +1096,17 @@ class RegularizedHelmholtzMachine(object):
         self.book.summary_collections = self.book_summary_collections
 
     def encode(self, x_var, k=1):
-        z_dist_flat = self.encoder_template.construct(input=x_var, custom_phase=self.custom_phase).tensor
+        args = dict(
+            input=x_var, custom_phase=self.custom_phase
+        )
+        try:
+            z_dist_flat = self.encoder_template.construct(**args).tensor
+        except ValueError as e:
+            print e
+            args = dict(
+                input=x_var,
+            )
+            z_dist_flat = self.encoder_template.construct(**args).tensor
         if k != 1:
             z_dist_flat = tf.reshape(
                 tf.tile(z_dist_flat, [1, k]),
@@ -1043,7 +1122,18 @@ class RegularizedHelmholtzMachine(object):
         return self.reg_latent_dist.sample(reg_z_dist_info), reg_z_dist_info
 
     def decode(self, z_var):
-        x_dist_flat = self.decoder_template.construct(input=z_var, custom_phase=self.custom_phase).tensor
+        args = dict(
+            input=z_var, custom_phase=self.custom_phase
+        )
+        try:
+            x_dist_flat = self.decoder_template.construct(**args).tensor
+        except ValueError as e:
+            print e
+            args = dict(
+                input=z_var,
+            )
+            x_dist_flat = self.decoder_template.construct(**args).tensor
+        # x_dist_flat = self.decoder_template.construct(input=z_var, custom_phase=self.custom_phase).tensor
         x_dist_info = self.output_dist.activate_dist(x_dist_flat)
         return self.output_dist.sample(x_dist_info), x_dist_info
 
