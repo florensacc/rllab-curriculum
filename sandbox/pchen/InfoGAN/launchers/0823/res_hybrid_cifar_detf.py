@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [128]#[12, 32]
+        return [512]#[12, 32]
 
     @variant
     def min_kl(self):
