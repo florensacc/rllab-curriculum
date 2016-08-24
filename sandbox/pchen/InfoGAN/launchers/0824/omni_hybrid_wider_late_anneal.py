@@ -126,7 +126,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nr(self):
-        return [5, ]
+        return [2,5, ]
 
     @variant(hide=False)
     def i_init_scale(self):

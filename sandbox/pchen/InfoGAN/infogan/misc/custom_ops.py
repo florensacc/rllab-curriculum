@@ -622,6 +622,9 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     init = tf.random_normal_initializer(stddev=0.02)
     dtype = input_layer.tensor.dtype
     params = self.variable(prefix + 'weights', size, init, dt=dtype)
+    # only the linear operator is shared
+    if var_scope:
+        self.vars = old_vars
     if custom_phase == CustomPhase.init:
         params = params.initialized_value()
     params_norm = tf.nn.l2_normalize(params, [0,1,2]) if wnorm else params
@@ -634,9 +637,6 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     if wnorm:
         m_init, v_init = tf.nn.moments(y, [0, 1, 2], keep_dims=True)
         p_s_init = scale_init / tf.sqrt(v_init + 1e-9)
-        if var_scope:
-            self.vars = old_vars
-            # import ipdb; ipdb.set_trace()
         params_scale = self.variable(
             'weights_scale',
             [1, 1, 1, depth],
@@ -649,8 +649,6 @@ class conv2d_mod(prettytensor.VarStoreMethod):
             lambda *_,**__: tf.ones(bias_shp)*-m_init*p_s_init,
             dt=dtype
         )
-        if var_scope:
-            self.vars = new_vars
         if custom_phase == CustomPhase.init:
             b = b.initialized_value()
             params_scale = params_scale.initialized_value()

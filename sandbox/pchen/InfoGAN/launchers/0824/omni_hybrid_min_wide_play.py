@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [128, 64]#[12, 32]
+        return [128, ]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -98,19 +98,19 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def steps(self, ):
-        return [1,2,]
+        return [3,]
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [32, ]
+        return [64, ]
 
     @variant(hide=False)
     def enc_nn(self, ):
-        return [True, False]
+        return [True, ]
     #
     @variant(hide=False)
     def enc_keep(self, ):
-        return [0.9, 1. ]
+        return [0.9, ]
 
     # @variant(hide=False)
     # def enc_nn(self, dec_nn):
@@ -240,13 +240,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0824_omni_min",
+            exp_prefix="0824_omni_min_play",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 
