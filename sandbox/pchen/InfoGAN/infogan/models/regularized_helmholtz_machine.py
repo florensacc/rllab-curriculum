@@ -1,3 +1,4 @@
+from __future__ import print_function
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Product, Distribution, Mixture
 import prettytensor as pt
 import tensorflow as tf
@@ -362,7 +363,7 @@ class RegularizedHelmholtzMachine(object):
                     enc_fc = network_args.get("enc_fc", True)
                     enc_rep = network_args.get("enc_rep", 1)
                     dec_fs = network_args.get("dec_fs", 5)
-                    print network_args
+                    print(network_args)
                     encoder = \
                         (pt.template('input', self.book).
                          reshape([-1] + list(image_shape))
@@ -428,7 +429,6 @@ class RegularizedHelmholtzMachine(object):
                     base_filters = network_args["base_filters"]
                     enc_fc = network_args.get("enc_fc", True)
                     enc_rep = network_args.get("enc_rep", 1)
-                    dec_fs = network_args.get("dec_fs", 5)
                     encoder = \
                         (pt.template('input', self.book).
                          reshape([-1] + list(image_shape))
@@ -465,6 +465,97 @@ class RegularizedHelmholtzMachine(object):
                             decoder = resconv_v1(
                                 decoder,
                                 3,
+                                base_filters,
+                                stride=1,
+                            )
+                    self.decoder_template = (
+                        decoder.
+                            conv2d_mod(3, 1, activation_fn=None).
+                            flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "resv1_k3_pixel_bias_widegen_min":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        custom_phase=UnboundVariable('custom_phase'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                ):
+                    steps = network_args["steps"]
+                    base_filters = network_args["base_filters"]
+                    enc_fc = network_args.get("enc_fc", False)
+                    enc_rep = network_args.get("enc_rep", 0)
+                    enc_keep = network_args.get("enc_keep", 1.)
+                    enc_nn = network_args.get("enc_nn", True)
+                    print(network_args)
+                    encoder = \
+                        (pt.template('input', self.book).
+                         reshape([-1] + list(image_shape))
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+                    encoder = resconv_v1(encoder, 3, 16, stride=2, nn=enc_nn, keep_prob=enc_keep) #14
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 16, stride=1, keep_prob=enc_keep)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2, nn=enc_nn, keep_prob=enc_keep) #7
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1, keep_prob=enc_keep)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2, nn=enc_nn, keep_prob=enc_keep) #4
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1, keep_prob=enc_keep)
+                    self.encoder_template = \
+                        (encoder.
+                         flatten())
+                    if enc_fc:
+                        self.encoder_template = self.encoder_template. \
+                            wnorm_fc(450, )
+                    self.encoder_template = self.encoder_template. \
+                        wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
+                    decoder = (pt.template('input', self.book).
+                               reshape([-1, 2, 2, self.latent_dist.dim / 4])
+                               )
+                    decoder = resconv_v1(decoder, 2, base_filters, stride=1, nn=True)
+                    decoder = decoder. \
+                        apply(tf.image.resize_nearest_neighbor, [7, 7])
+                    for _ in xrange(steps):
+                        with pt.defaults_scope(
+                                var_scope="wide_gen"
+                        ):
+                            decoder = resconv_v1(
+                                decoder,
+                                5,
+                                base_filters,
+                                stride=1,
+                            )
+                    decoder = decoder. \
+                        apply(tf.image.resize_nearest_neighbor, [14, 14])
+                    for _ in xrange(steps):
+                        with pt.defaults_scope(
+                                var_scope="wide_gen"
+                        ):
+                            decoder = resconv_v1(
+                                decoder,
+                                5,
+                                base_filters,
+                                stride=1,
+                            )
+                    decoder = decoder. \
+                        apply(tf.image.resize_nearest_neighbor, [28, 28])
+                    for _ in xrange(steps):
+                        with pt.defaults_scope(
+                                var_scope="wide_gen"
+                        ):
+                            decoder = resconv_v1(
+                                decoder,
+                                5,
                                 base_filters,
                                 stride=1,
                             )
@@ -1177,7 +1268,8 @@ class RegularizedHelmholtzMachine(object):
         try:
             z_dist_flat = self.encoder_template.construct(**args).tensor
         except ValueError as e:
-            print e
+            if "custom_phase" not in e.message:
+                raise e
             args = dict(
                 input=x_var,
             )
@@ -1203,7 +1295,7 @@ class RegularizedHelmholtzMachine(object):
         try:
             x_dist_flat = self.decoder_template.construct(**args).tensor
         except ValueError as e:
-            print e
+            print(e)
             args = dict(
                 input=z_var,
             )

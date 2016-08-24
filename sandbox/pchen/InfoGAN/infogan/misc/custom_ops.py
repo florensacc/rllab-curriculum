@@ -636,6 +636,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
         p_s_init = scale_init / tf.sqrt(v_init + 1e-9)
         if var_scope:
             self.vars = old_vars
+            # import ipdb; ipdb.set_trace()
         params_scale = self.variable(
             'weights_scale',
             [1, 1, 1, depth],
@@ -994,7 +995,8 @@ class AdamaxOptimizer(optimizer.Optimizer):
 
 def resize_nearest_neighbor(x, scale):
     input_shape = map(int, x.get_shape().as_list())
-    size = [int(input_shape[1] * scale), int(input_shape[2] * scale)]
+    import math
+    size = [int(math.ceil(input_shape[1] * scale)), int(math.ceil(input_shape[2] * scale))]
     x = tf.image.resize_nearest_neighbor(x, size)
     return x
 
