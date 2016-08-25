@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [128, 32, 64, 96, ]#[12, 32]
+        return [64, ]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -62,7 +62,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4,]
+        return [2,4,5,6,7,10]
 
     @variant
     def nr(self, nar):
@@ -70,7 +70,7 @@ class VG(VariantGenerator):
             return [1]
         else:
             # return [1, 5, ]
-            return [1,3]
+            return [3]
 
     # @variant
     # def nm(self):
@@ -152,8 +152,8 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def tiear(self):
-        return [False]
-        # return [True, False]
+        # return [False]
+        return [True, ]
 
 
 vg = VG()

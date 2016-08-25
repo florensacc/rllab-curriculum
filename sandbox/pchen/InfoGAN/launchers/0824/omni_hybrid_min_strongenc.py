@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, ] #0.001]
+        return [0.004, ] #0.001]
 
     @variant
     def seed(self):
@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [128, 32, 64, 96, ]#[12, 32]
+        return [128, 64]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -70,7 +70,7 @@ class VG(VariantGenerator):
             return [1]
         else:
             # return [1, 5, ]
-            return [1,3]
+            return [2]
 
     # @variant
     # def nm(self):
@@ -93,16 +93,24 @@ class VG(VariantGenerator):
         # yield "small_res_small_kern"
         # res_hybrid_long_re_real_anneal.pyyield "resv1_k3_pixel_bias"
         # yield "resv1_k3_pixel_bias"
-        yield "resv1_k3_pixel_bias_widegen"
+        yield "resv1_k3_pixel_bias_widegen_min"
         # yield "resv1_k3_pixel_bias_filters_ratio"
 
     @variant(hide=False)
     def steps(self, ):
-        return [3]
+        return [2,]
     #
     @variant(hide=False)
     def base_filters(self, ):
         return [32, ]
+
+    @variant(hide=False)
+    def enc_nn(self, ):
+        return [False]
+    #
+    @variant(hide=False)
+    def enc_keep(self, ):
+        return [1. ]
 
     # @variant(hide=False)
     # def enc_nn(self, dec_nn):
@@ -126,7 +134,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nr(self):
-        return [10, ]
+        return [5, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -149,11 +157,6 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def exp_avg(self):
         return [0.999, ]
-
-    @variant(hide=False)
-    def tiear(self):
-        return [False]
-        # return [True, False]
 
 
 vg = VG()
@@ -179,13 +182,7 @@ for v in variants[:]:
 
         dist = Gaussian(zdim)
         for _ in xrange(v["nar"]):
-            dist = AR(
-                zdim,
-                dist,
-                neuron_ratio=v["nr"],
-                data_init_wnorm=v["ar_wnorm"],
-                var_scope="AR_scope" if v["tiear"] else None,
-            )
+            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"])
 
         latent_spec = [
             (
@@ -204,8 +201,6 @@ for v in variants[:]:
                 data_init_scale=v["i_init_scale"],
                 linear_context="linear" in v["i_context"],
                 gating_context="gating" in v["i_context"],
-                share_context=True,
-                var_scope="IAR_scope" if v["tiear"] else None,
             )
 
         model = RegularizedHelmholtzMachine(
@@ -218,8 +213,10 @@ for v in variants[:]:
             wnorm=v["wnorm"],
             network_args=dict(
                 steps=v["steps"],
-                base_filters=v["base_filters"]
-                # enc_nn=v["enc_nn"],
+                base_filters=v["base_filters"],
+                enc_nn=v["enc_nn"],
+                enc_keep=v["enc_keep"],
+                enc_rep=1,
                 # dec_nn=v["dec_nn"],
             ),
         )
@@ -235,15 +232,16 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*3,
+            vali_eval_interval=1500*4,
             exp_avg=v["exp_avg"],
-            anneal_after=v["anneal_after"],
             img_on=False,
+            anneal_after=v["anneal_after"]
+
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0824_omni_wider_tiear",
+            exp_prefix="0824_omni_min_strongenc",
             seed=v["seed"],
             variant=v,
             # mode="local",
