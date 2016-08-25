@@ -353,7 +353,7 @@ class RegularizedHelmholtzMachine(object):
             elif self.network_type == "resv1_k3_pixel_bias_gradguide":
                 from prettytensor import UnboundVariable
                 with pt.defaults_scope(
-                        activation_fn=tf.nn.elu,
+                        activation_fn=tf.nn.relu,
                         custom_phase=UnboundVariable('custom_phase'),
                         wnorm=self.wnorm,
                         pixel_bias=True,
@@ -379,7 +379,7 @@ class RegularizedHelmholtzMachine(object):
                         (pt.template("grad").
                          wnorm_fc(150, ).
                          wnorm_fc(
-                            self.inference_dist.dist_flat_dim,
+                            self.inference_dist.dist_flat_dim-self.latent_dist.dist_flat_dim,
                             activation_fn=None
                         )
                     )
@@ -1357,14 +1357,23 @@ class RegularizedHelmholtzMachine(object):
                 input=x_var,
             )
             z_dist_flat = self.encoder_template.construct(**args).tensor
-        qz_mean = z_dist_flat[self.latent_dist.dim:]
-        log_p_x_given_z = self.model.output_dist.logli(
+        zdim = self.latent_dist.dim
+        qz_mean = z_dist_flat[:, zdim:]
+        log_p_x_given_z = self.output_dist.logli(
             x_var,
             self.decode(qz_mean)[1]
         )
-        grad_z_mean = tf.gradients(log_p_x_given_z, qz_mean)
-        context = self.context_template.construct(grad=grad_z_mean).tensor
-        z_dist_flat_aug = tf.concat(1, [z_dist_flat, context])
+        grad_z_mean = tf.reshape(tf.gradients(log_p_x_given_z, qz_mean), [-1, zdim])
+        grad_z_mean = tf.stop_gradient(grad_z_mean)
+        grad_z_mean = tf.nn.sigmoid(grad_z_mean) # seems important for stability reason
+        context = self.context_template.construct(grad=grad_z_mean, custom_phase=self.custom_phase).tensor
+        # context = tf.stop_gradient(context)
+        z_dist_flat_aug = tf.concat(
+            1,
+            [
+                context,
+                z_dist_flat,
+            ])
         z_dist_info = self.inference_dist.activate_dist(z_dist_flat_aug)
         return self.inference_dist.sample_logli(z_dist_info) \
                + (z_dist_info,)

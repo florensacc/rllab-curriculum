@@ -42,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 998, ]
+        return [42, ]
         # return [123124234]
 
     @variant
@@ -90,7 +90,7 @@ class VG(VariantGenerator):
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        # yield "resv1_k3_pixel_bias"
+        yield "resv1_k3_pixel_bias"
         yield "resv1_k3_pixel_bias_gradguide"
 
     @variant(hide=True)
@@ -103,7 +103,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self):
-        return [128, ]
+        return [1, ]
 
     @variant(hide=False)
     def i_nar(self):
@@ -111,15 +111,18 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nr(self):
-        return [20, ]
+        return [1, 5, 10]
 
     @variant(hide=False)
     def i_init_scale(self):
         return [0.1, ]
 
     @variant(hide=False)
-    def i_context(self):
-        # return [True, False]
+    def i_context(self, network):
+        if "grad" not in network:
+            return [
+                []
+            ]
         return [
             # [],
             ["linear"],
@@ -145,7 +148,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def share_context(self):
-        return [True, False]
+        return [True, ]
 
 
 vg = VG()
@@ -225,13 +228,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0824_hybrid_sharecon",
+            exp_prefix="0824_hybrid_gradguide",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 
