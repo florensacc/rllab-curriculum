@@ -35,7 +35,7 @@ class RegularizedHelmholtzMachine(object):
         self.image_shape = image_shape
         self.wnorm = wnorm
         self.book = pt.bookkeeper_for_default_graph()
-        self.init_mode()
+
 
         image_size = image_shape[0]
 

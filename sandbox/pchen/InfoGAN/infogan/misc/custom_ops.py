@@ -388,7 +388,7 @@ def get_linear_ar_mask_by_groups(n_in, n_out, ngroups, zerodiagonal=True):
 @prettytensor.Register(
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'ngroups',
-            'wnorm', 'custom_phase', 'init_scale',
+            'wnorm', 'custom_phase', 'init_scale', 'var_scope',
     ))
 class arfc(prettytensor.VarStoreMethod):
     def __call__(self,
@@ -406,6 +406,8 @@ class arfc(prettytensor.VarStoreMethod):
                  wnorm=False,
                  custom_phase=CustomPhase.train,
                  init_scale=0.1,
+                 var_scope=None,
+                 prefix="",
                  name=PROVIDED):
         """Adds the parameters for a fully connected layer and returns a tensor.
         The current head must be a rank 2 Tensor.
@@ -462,11 +464,17 @@ class arfc(prettytensor.VarStoreMethod):
         dtype = input_layer.tensor.dtype
         weight_shape = [size, in_size] if transpose_weights else [in_size, size]
 
+        if var_scope:
+            old_vars = self.vars
+            new_vars = books.var_mapping[var_scope]
+            self.vars = new_vars
         params = self.variable(
-            'weights',
+            prefix + 'weights',
             weight_shape,
             init,
             dt=dtype)
+        if var_scope:
+            self.vars = old_vars
         if ngroups:
             mask = get_linear_ar_mask_by_groups(in_size, size, ngroups, zerodiagonal=zerodiagonal)
         else:
