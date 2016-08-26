@@ -1,3 +1,6 @@
+# Test run with clip_reward, death_ends_episode
+# games: montezuma
+
 from __future__ import print_function
 from __future__ import absolute_import
 
@@ -20,7 +23,7 @@ Fix to counting scheme. Fix config...
 """
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_test"
+mode = "ec2_m4_2x"
 n_parallel = 8
 snapshot_mode = "last"
 plot = False
@@ -28,13 +31,40 @@ use_gpu = False # should change conv_type and ~/.theanorc
 
 if "ec2_m4" in mode:
     config.AWS_INSTANCE_TYPE = "m4.large"
-    config.AWS_SPOT_PRICE = '1.5'
+    config.AWS_SPOT_PRICE = '0.12'
     config.DOCKER_IMAGE = "dementrock/rllab-shared"
     plot = False
+    n_parallel=1
+elif "ec2_m4_x" in mode:
+    config.AWS_INSTANCE_TYPE = "m4.xlarge"
+    config.AWS_SPOT_PRICE = '0.24'
+    config.DOCKER_IMAGE = "dementrock/rllab-shared"
+    plot = False
+    n_parallel=2
+elif "ec2_m4_2x" in mode:
+    config.AWS_INSTANCE_TYPE = "m4.2xlarge"
+    config.AWS_SPOT_PRICE = '0.48'
+    config.DOCKER_IMAGE = "dementrock/rllab-shared"
+    plot = False
+    n_parallel=4
 elif "ec2_c4" in mode:
     config.AWS_INSTANCE_TYPE = "c4.large"
-    config.AWS_SPOT_PRICE = '1.5'
+    config.AWS_SPOT_PRICE = '0.105'
     config.DOCKER_IMAGE = "dementrock/rllab-shared"
+    plot = False
+    n_parallel=1
+elif "ec2_c4_x" in mode:
+    config.AWS_INSTANCE_TYPE = "c4.xlarge"
+    config.AWS_SPOT_PRICE = '0.209'
+    config.DOCKER_IMAGE = "dementrock/rllab-shared"
+    plot = False
+    n_parallel=2
+elif "ec2_c4_2x" in mode:
+    config.AWS_INSTANCE_TYPE = "c4.2xlarge"
+    config.AWS_SPOT_PRICE = '0.419'
+    config.DOCKER_IMAGE = "dementrock/rllab-shared"
+    plot = False
+    n_parallel=4
 elif "ec2_g2" in mode:
     config.AWS_INSTANCE_TYPE = "g2.2xlarge"
     config.AWS_SPOT_PRICE = '1.5'
@@ -43,9 +73,15 @@ elif "ec2_g2" in mode:
 
 
 # params ---------------------------------------
-batch_size = 10000
-clip_reward = True
+batch_size = 50000
 max_path_length = 4500
+discount = 0.99
+n_itr = 1000
+
+clip_reward = True
+extra_dim_key = 1024 
+extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
+
 
 class VG(VariantGenerator):
     @variant
@@ -54,20 +90,23 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [0.1, 0.01, 0.001,0]
+        return [1, 0.1, 0.01, 0]
 
     @variant
     def dim_key(self):
         return [64, 256]
 
     @variant
-    def discount(self):
-        return [0.99]
+    def game(self):
+        return ["montezuma_revenge"]
 
     @variant
-    def game(self):
-        return ["breakout"]
+    def bonus_form(self):
+        return ["1/log(n+1)","1/n","1/sqrt(n)"]
 
+    @variant
+    def death_ends_episode(self):
+        return [False]
 
 variants = VG().variants()
 
@@ -87,21 +126,33 @@ for v in variants:
         print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
         sys.exit(1)
 
-    env = TfEnv(AtariEnv(game=v["game"], obs_type="ram"))
+    env = TfEnv(AtariEnv(game=v["game"], obs_type="ram",death_ends_episode=v["death_ends_episode"]))
     policy = CategoricalMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32), name="policy")
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     bonus_baseline = LinearFeatureBaseline(env_spec=env.spec)
-    bonus_evaluator = HashingBonusEvaluator(env_spec=env.spec, dim_key=v["dim_key"])
+    bonus_evaluator = HashingBonusEvaluator(
+        env_spec=env.spec, 
+        dim_key=v["dim_key"],
+        bonus_form=v["bonus_form"],
+        log_prefix="",
+    )
+    extra_bonus_evaluator = HashingBonusEvaluator(
+        env_spec=env.spec, 
+        dim_key=extra_dim_key,
+        bucket_sizes=extra_bucket_sizes,
+        log_prefix="Extra",
+    )
     algo = BonusTRPO(
         env=env,
         policy=policy,
         baseline=baseline,
         bonus_evaluator=bonus_evaluator,
+        extra_bonus_evaluator=extra_bonus_evaluator,
         bonus_baseline=bonus_baseline,
         bonus_coeff=v["bonus_coeff"],
         batch_size=batch_size,
         max_path_length=max_path_length,
-        discount=v["discount"],
+        discount=discount,
         n_itr=n_itr,
         clip_reward=clip_reward,
         plot=plot,
@@ -133,6 +184,6 @@ for v in variants:
     if "test" in mode:
         sys.exit(0)
 
-if "local" not in mode:
+if ("local" not in mode) and ("test" not in mode):
     os.system("chmod 444 %s"%(__file__))
 
