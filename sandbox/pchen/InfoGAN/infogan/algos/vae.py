@@ -252,6 +252,7 @@ class VAE(object):
                         # assume lr is always set
                         initial_value=self.optimizer_args["learning_rate"],
                         name="opt_lr",
+                        trainable=False,
                     )
                     self.optimizer_args["learning_rate"] = self.lr_var
                 optimizer = self.optimizer_cls(**self.optimizer_args)

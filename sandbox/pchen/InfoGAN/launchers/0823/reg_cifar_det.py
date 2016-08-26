@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [1024]#[12, 32]
+        return [256]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -92,6 +92,7 @@ class VG(VariantGenerator):
         # yield "small_res_small_kern"
         # yield "resv1_k3_pixel_bias_cifar"
         # yield "resv1_k3_pixel_bias_cifar_spatial_scale"
+        # yield "cifar_id"
         yield "resv1_k3_pixel_bias_cifar"
 
     @variant(hide=False)
@@ -190,15 +191,17 @@ for v in variants[:]:
             )
 
         mol = 3
-        out_dist = Mixture(
-            [
-                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
-                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
-                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
-                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
-                (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
-            ]
-        )
+        # out_dist = Mixture(
+        #     [
+        #         (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
+        #         (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
+        #         (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
+        #         (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
+        #         (DiscretizedLogistic(dataset.image_dim, init_scale=0.01), 1./mol),
+        #     ]
+        # )
+        out_dist = (DiscretizedLogistic(dataset.image_dim,
+                                        init_scale=0.005))#, 1./mol)
 
         model = RegularizedHelmholtzMachine(
             # output_dist=MeanBernoulli(dataset.image_dim),
@@ -231,7 +234,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0822_cifar_det",
+            exp_prefix="0823_cifar_det_id",
             seed=v["seed"],
             mode="local",
             # mode="lab_kube",
