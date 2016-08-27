@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 # updates_per_epoch = 100
-max_epoch = 1200
+max_epoch = 2500
 
 stub(globals())
 
@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [64, ]#[12, 32]
+        return [32, 64, ]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -62,7 +62,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [2,4,6,8,10]
+        return [1,2,3,4]
 
     @variant
     def nr(self, nar):
@@ -70,7 +70,7 @@ class VG(VariantGenerator):
             return [1]
         else:
             # return [1, 5, ]
-            return [3]
+            return [1,3]
 
     # @variant
     # def nm(self):
@@ -243,7 +243,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0825_omni_wider_tiear_depth",
+            exp_prefix="0826_omni_wider_tiear_depth2",
             seed=v["seed"],
             variant=v,
             # mode="local",
