@@ -42,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 33]
+        return [42, ]
         # return [123124234]
 
     @variant
@@ -62,7 +62,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [3,4,5]
+        return [4,5]
 
     @variant
     def nr(self, nar):
@@ -70,7 +70,7 @@ class VG(VariantGenerator):
             return [1]
         else:
             # return [1, 5, ]
-            return [1,]
+            return [5,8,10]
 
     # @variant
     # def nm(self):
@@ -98,7 +98,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def steps(self, ):
-        return [3,5]
+        return [3,]
     #
     @variant(hide=False)
     def base_filters(self, ):
@@ -152,8 +152,8 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def tiear(self):
-        return [False]
-        # return [True, False]
+        # return [False]
+        return ["all", "shearing", None]
 
 
 vg = VG()
@@ -178,13 +178,20 @@ for v in variants[:]:
         # dataset = MnistDataset()
 
         dist = Gaussian(zdim)
-        for _ in xrange(v["nar"]):
+        tiear = v["tiear"]
+        for i in xrange(v["nar"]):
+            if tiear == "all":
+                vs = "AR_scope"
+            elif tiear == "shearing":
+                vs = "AR_scope%s" % (i%2)
+            else:
+                vs = None
             dist = AR(
                 zdim,
                 dist,
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
-                var_scope="AR_scope" if v["tiear"] else None,
+                var_scope=vs,
             )
 
         latent_spec = [
