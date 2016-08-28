@@ -70,7 +70,7 @@ class VG(VariantGenerator):
             return [1]
         else:
             # return [1, 5, ]
-            return [5,8,10]
+            return [5,10]
 
     # @variant
     # def nm(self):
@@ -250,7 +250,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0827_omni_wide_thin_long",
+            exp_prefix="0827_omni_wide_tiear_long",
             seed=v["seed"],
             variant=v,
             # mode="local",
