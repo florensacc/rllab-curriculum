@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 # updates_per_epoch = 100
-max_epoch = 2000
+max_epoch = 1200
 
 stub(globals())
 
@@ -42,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 9999]
+        return [42, ]
         # return [123124234]
 
     @variant
@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [64, ]#[12, 32]
+        return [32, ]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -62,24 +62,18 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4,]
+        return [5]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            # return [1, 5, ]
-            return [1,5,]
+            return [1, ]
 
-    # @variant
-    # def nm(self):
-    #     return [0, ]
-    #     return [5, 10, 20]
-
-    # @variant
-    # def pr(self):
-    #     return [True, False]
+    @variant
+    def nmog(self):
+        return [10, 1,5,]
 
     @variant(hide=True)
     def network(self):
@@ -91,22 +85,7 @@ class VG(VariantGenerator):
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        # res_hybrid_long_re_real_anneal.pyyield "resv1_k3_pixel_bias"
-        # yield "resv1_k3_pixel_bias"
-        yield "resv1_k3_pixel_bias_widegen"
-        # yield "resv1_k3_pixel_bias_filters_ratio"
-
-    @variant(hide=False)
-    def steps(self, ):
-        return [3,]
-    #
-    @variant(hide=False)
-    def base_filters(self, ):
-        return [32, ]
-
-    # @variant(hide=False)
-    # def enc_nn(self, dec_nn):
-    #     return [dec_nn]
+        yield "resv1_k3_pixel_bias"
 
     @variant(hide=True)
     def wnorm(self):
@@ -121,12 +100,13 @@ class VG(VariantGenerator):
         return [128, ]
 
     @variant(hide=False)
-    def i_nar(self):
+    def i_nar(self, nar):
+        # ar vae
         return [4, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [10, ]
+        return [5, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -144,27 +124,33 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def anneal_after(self):
-        return [1400, ]
+        return [800, ]
+
+    @variant(hide=False)
+    def anneal_every(self):
+        return [75]
+
+    @variant(hide=False)
+    def anneal_factor(self):
+        return [0.75, ]
 
     @variant(hide=False)
     def exp_avg(self):
         return [0.999, ]
 
     @variant(hide=False)
-    def tiear(self):
-        # return [False]
-        return [None]
+    def share_context(self):
+        return [True, ]
 
     @variant(hide=False)
-    def rank(self, nr):
-        if nr == 1:
-            return [32, 64]
-        return [32, 64, 128, 256, 512, None]
+    def tiear(self):
+        # return [False]
+        return [False]
 
 
 vg = VG()
 
-variants = vg.variants(randomized=False)
+variants = vg.variants(randomized=True)
 
 print(len(variants))
 
@@ -173,32 +159,39 @@ for v in variants[:]:
     # with skip_if_exception():
 
         zdim = v["zdim"]
-        import tensorflow as tf
-        tf.reset_default_graph()
+        # import tensorflow as tf
+        # # tf.reset_default_graph()
         exp_name = "pa_mnist_%s" % (vg.to_name_suffix(v))
 
         print("Exp name: %s" % exp_name)
 
-
+        # dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
         dataset = ResamplingBinarizedOmniglotDataset()
         # dataset = MnistDataset()
 
-        dist = Gaussian(zdim)
-        tiear = v["tiear"]
-        for i in xrange(v["nar"]):
-            if tiear == "all":
-                vs = "AR_scope"
-            elif tiear == "shearing":
-                vs = "AR_scope%s" % (i%2)
-            else:
-                vs = None
+        nmog = v["nmog"]
+        dist = Mixture(
+            [
+                (
+                    Gaussian(
+                        zdim,
+                        # prior_mean=np.concatenate([[2.*((i>>j)%2) for j in xrange(4)], np.random.normal(scale=v["mix_std"], size=zdim-4)]),
+                        prior_mean=
+                            list(np.concatenate([np.random.normal(scale=0.5, size=zdim)])),
+                        prior_trainable=True,
+                    ),
+                    1. / nmog
+                ) for i in xrange(nmog)
+            ]
+        )
+        # dist = Gaussian(zdim)
+        for _ in xrange(v["nar"]):
             dist = AR(
                 zdim,
                 dist,
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
-                var_scope=vs,
-                rank=v["rank"],
+                var_scope="AR_scope" if v["tiear"] else None,
             )
 
         latent_spec = [
@@ -218,10 +211,8 @@ for v in variants[:]:
                 data_init_scale=v["i_init_scale"],
                 linear_context="linear" in v["i_context"],
                 gating_context="gating" in v["i_context"],
-                share_context=True,
+                share_context=v["share_context"],
                 var_scope="IAR_scope" if v["tiear"] else None,
-                # isolate changes
-                # rank=v["rank"],
             )
 
         model = RegularizedHelmholtzMachine(
@@ -232,12 +223,6 @@ for v in variants[:]:
             network_type=v["network"],
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
-            network_args=dict(
-                steps=v["steps"],
-                base_filters=v["base_filters"]
-                # enc_nn=v["enc_nn"],
-                # dec_nn=v["dec_nn"],
-            ),
         )
 
         algo = VAE(
@@ -251,15 +236,19 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*3,
+            vali_eval_interval=1500*4,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
+            anneal_every=v["anneal_every"],
+            anneal_factor=v["anneal_factor"],
+
             img_on=False,
+
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0829_omni_wide_lorank",
+            exp_prefix="0829_omni_hybrid_mog",
             seed=v["seed"],
             variant=v,
             # mode="local",
@@ -267,4 +256,5 @@ for v in variants[:]:
             n_parallel=0,
             use_gpu=True,
         )
+
 

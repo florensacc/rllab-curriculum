@@ -70,6 +70,12 @@ class Distribution(object):
         """
         raise NotImplementedError
 
+    def deactivate_dist(self, dict):
+        """
+        inverse of activate_dist
+        """
+        raise NotImplementedError
+
     @property
     def dist_info_keys(self):
         """
@@ -309,6 +315,12 @@ class Gaussian(Distribution):
         else:
             stddev = tf.sqrt(tf.exp(flat_dist[:, self.dim:]))
         return dict(mean=mean, stddev=stddev)
+
+    def deactivate_dist(self, dict):
+        return tf.concat(
+            1,
+            [dict["mean"], dict["stddev"]]
+        )
 
 
 class Uniform(Gaussian):
@@ -622,7 +634,7 @@ class Product(Distribution):
         return ret
 
 class Mixture(Distribution):
-    def __init__(self, pairs):
+    def __init__(self, pairs, trainable=True):
         assert len(pairs) >= 1
         self._pairs = pairs
         self._dim = pairs[0][0].dim
@@ -693,7 +705,10 @@ class Mixture(Distribution):
         return maxis
 
     def prior_dist_info(self, batch_size):
-        return dict(infos=[dist.prior_dist_info(batch_size) for dist, _ in self._pairs])
+        return dict(infos=[
+            dist.deactivate_dist(dist.prior_dist_info(batch_size))
+            for dist, _ in self._pairs
+            ])
 
     def init_prior_dist_info(self, batch_size):
         return dict(infos=[dist.init_prior_dist_info(batch_size) for dist, _ in self._pairs])
@@ -749,6 +764,12 @@ class Mixture(Distribution):
                 yield flat_dist[:, i:i+dist.dist_flat_dim]
                 i += dist.dist_flat_dim
         return dict(infos=list(go()))
+
+    def deactivate_dist(self, dict):
+        return tf.concat(
+            1,
+            dict["infos"]
+        )
 
 dist_book = pt.bookkeeper_for_default_graph()
 class AR(Distribution):
