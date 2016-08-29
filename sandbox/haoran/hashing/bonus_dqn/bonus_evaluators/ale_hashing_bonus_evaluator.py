@@ -1,7 +1,7 @@
 import numpy as np
 from rllab.misc import logger
-from sandbox.haoran.hashing.hash.sim_hash import SimHash
-from sandbox.haoran.hashing.bonus_evaluators.base import BonusEvaluator
+from sandbox.haoran.hashing.bonus_dqn.hash.sim_hash import SimHash
+from sandbox.haoran.hashing.bonus_dqn.bonus_evaluators.base import BonusEvaluator
 
 class ALEHashingBonusEvaluator(BonusEvaluator):
     """
@@ -20,6 +20,7 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
             bonus_coeff=1.0,
             state_bonus_mode="1/n_s",
             state_action_bonus_mode="log(n_s)/n_sa",
+            log_prefix="",
         ):
         self.state_dim = state_dim
         if state_preprocessor is not None:
@@ -61,6 +62,7 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         self.epoch_bonus_list = [] # record the bonus given throughout the epoch
         self.new_state_count = 0 # the number of new states used during q-value updates
         self.new_state_action_count = 0
+        self.log_prefix = log_prefix
 
     def preprocess(self,states):
         if self.state_preprocessor is not None:
@@ -154,11 +156,11 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         if phase == "Train":
             if self.count_mode == "s":
                 logger.record_tabular_misc_stat(
-                    "ReplayedStateCount",
+                    self.log_prefix + "ReplayedStateCount",
                     self.epoch_hash_count_list
                 )
                 logger.record_tabular(
-                    "NewStateCount",
+                    self.log_prefix + "NewStateCount",
                     self.new_state_count,
                 )
             else:
@@ -166,7 +168,7 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
 
             # record bonus
             logger.record_tabular_misc_stat(
-                "BonusReward",
+                self.log_prefix + "BonusReward",
                 self.epoch_bonus_list
             )
 

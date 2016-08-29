@@ -2,8 +2,11 @@ from rllab.misc import ext
 from rllab.misc.overrides import overrides
 from rllab.algos.batch_polopt import BatchPolopt
 import rllab.misc.logger as logger
+from rllab.sampler import parallel_sampler
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from sandbox.haoran.model_trpo.code.utils import compute_analytic_value_gradient
+from sandbox.haoran.model_trpo.code.utils import compute_approximate_value_gradient
+from sandbox.haoran.model_trpo.code.utils import _worker_compute_jacobians
 
 import theano
 import theano.tensor as TT
@@ -16,6 +19,7 @@ class NVG(BatchPolopt):
             optimizer_args=None,
             step_size=0.01,
             truncate_local_is_ratio=None,
+            fd_step=0,
             **kwargs
     ):
         if optimizer is None:
@@ -27,6 +31,7 @@ class NVG(BatchPolopt):
         self.optimizer = optimizer
         self.step_size = step_size
         self.truncate_local_is_ratio = truncate_local_is_ratio
+        self.fd_step = fd_step
         super(NVG, self).__init__(**kwargs)
 
     @overrides
@@ -125,21 +130,31 @@ class NVG(BatchPolopt):
         if self.policy.recurrent:
             all_input_values += (samples_data["valids"],)
 
-        # feed in gradients computed by recursion
         paths = samples_data["paths"]
+
+
+        # feed in gradients computed by recursion
+        logger.log("Computing value gradients.")
         grads = []
         for i,path in enumerate(paths):
             # logger.log("Computing value gradient of path # %d."%(i))
-            V_s, V_theta = compute_analytic_value_gradient(
-                self.env,
-                self.policy,
-                path,
-                self.discount,
-            )
+            if self.fd_step > 1e-8:
+                V_s, V_theta = compute_approximate_value_gradient(
+                    self.env,
+                    self.policy,
+                    path,
+                    self.discount,
+                    self.fd_step,
+                )
+            else:
+                V_s, V_theta = compute_analytic_value_gradient(
+                    self.env,
+                    self.policy,
+                    path,
+                    self.discount,
+                )
             grads.append(np.copy(V_theta[0]))
         flat_grad = - np.average(np.asarray(grads),axis=0)
-        # gradients = self.policy.flat_to_params(gradient,trainable=True)
-        # extra_inputs = gradients
         extra_inputs = (flat_grad,)
 
 

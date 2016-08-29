@@ -1,4 +1,4 @@
-from sandbox.haoran.hashing.preprocessor.base import Preprocessor
+from sandbox.haoran.hashing.bonus_dqn.preprocessor.base import Preprocessor
 
 class ImageVectorizePreprocessor(Preprocessor):
     def __init__(self,n_chanllel,width,height):
