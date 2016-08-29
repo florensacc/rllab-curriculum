@@ -766,6 +766,7 @@ class AR(Distribution):
             gating_context=False,
             share_context=False,
             var_scope=None,
+            rank=None,
     ):
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
@@ -782,6 +783,7 @@ class AR(Distribution):
         self._gating_context = gating_context
         self._context_dim = 0
         self._share_context = share_context
+        self._rank = rank
 
         self._iaf_template = pt.template("y", books=dist_book)
         if linear_context:
@@ -801,6 +803,7 @@ class AR(Distribution):
                 custom_phase=UnboundVariable('custom_phase'),
                 init_scale=self._data_init_scale,
                 var_scope=var_scope,
+                rank=rank,
         ):
             for di in xrange(depth):
                 self._iaf_template = \

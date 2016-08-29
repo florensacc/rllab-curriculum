@@ -389,6 +389,7 @@ def get_linear_ar_mask_by_groups(n_in, n_out, ngroups, zerodiagonal=True):
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'ngroups',
             'wnorm', 'custom_phase', 'init_scale', 'var_scope',
+            'rank',
     ))
 class arfc(prettytensor.VarStoreMethod):
     def __call__(self,
@@ -407,6 +408,7 @@ class arfc(prettytensor.VarStoreMethod):
                  custom_phase=CustomPhase.train,
                  init_scale=0.1,
                  var_scope=None,
+                 rank=None,
                  prefix="",
                  name=PROVIDED):
         """Adds the parameters for a fully connected layer and returns a tensor.
@@ -468,11 +470,28 @@ class arfc(prettytensor.VarStoreMethod):
             old_vars = self.vars
             new_vars = books.var_mapping[var_scope]
             self.vars = new_vars
-        params = self.variable(
-            prefix + 'weights',
-            weight_shape,
-            init,
-            dt=dtype)
+
+        if rank is None:
+            params = self.variable(
+                prefix + 'weights',
+                weight_shape,
+                init,
+                dt=dtype)
+        else:
+            assert not transpose_weights
+            # print("Using rank'd arfc %s " % rank)
+            params_l = self.variable(
+                prefix + 'weights_l',
+                [in_size, rank],
+                init,
+                dt=dtype)
+            params_r = self.variable(
+                prefix + 'weights_r',
+                [rank, size],
+                init,
+                dt=dtype)
+            params = tf.matmul(params_l, params_r)
+
         if var_scope:
             self.vars = old_vars
         if ngroups:
@@ -489,7 +508,12 @@ class arfc(prettytensor.VarStoreMethod):
         )
         assert not isinstance(mask, tf.Variable)
         if wnorm:
-            params_init = params.initialized_value()
+            if rank is None:
+                params_init = params.initialized_value()
+            else:
+                params_l_init = params_l.initialized_value()
+                params_r_init = params_r.initialized_value()
+                params_init = tf.matmul(params_l_init, params_r_init)
             normalized_init = tf.nn.l2_normalize(params_init, 0)
             y_init = tf.matmul(input_layer, normalized_init * mask, transpose_b=False)#transpose_weights)
             y_init = debug("y_init", y_init)
@@ -518,7 +542,8 @@ class arfc(prettytensor.VarStoreMethod):
 
         # real stuff
         if custom_phase == CustomPhase.init:
-            params = params.initialized_value()
+            assert wnorm
+            params = params_init
             bias = bias.initialized_value()
             if wnorm:
                 params_scale = params_scale.initialized_value()
