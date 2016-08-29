@@ -750,6 +750,7 @@ class Mixture(Distribution):
                 i += dist.dist_flat_dim
         return dict(infos=list(go()))
 
+dist_book = pt.bookkeeper_for_default_graph()
 class AR(Distribution):
     def __init__(
             self,
@@ -763,6 +764,8 @@ class AR(Distribution):
             data_init_scale=0.1,
             linear_context=False,
             gating_context=False,
+            share_context=False,
+            var_scope=None,
     ):
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
@@ -770,7 +773,6 @@ class AR(Distribution):
 
         self._dim = dim
         self._base_dist = base_dist
-        self._iaf_template = pt.template("y")
         self._depth = depth
         self._reverse = reverse
         self._wnorm = data_init_wnorm
@@ -779,12 +781,15 @@ class AR(Distribution):
         self._linear_context = linear_context
         self._gating_context = gating_context
         self._context_dim = 0
+        self._share_context = share_context
+
+        self._iaf_template = pt.template("y", books=dist_book)
         if linear_context:
-            lin_con = pt.template("linear_context")
+            lin_con = pt.template("linear_context", books=dist_book)
             self._linear_context_dim = 2*dim*neuron_ratio
             self._context_dim += self._linear_context_dim
         if gating_context:
-            gate_con = pt.template("gating_context")
+            gate_con = pt.template("gating_context", books=dist_book)
             self._gating_context_dim = 2*dim*neuron_ratio
             self._context_dim += self._gating_context_dim
 
@@ -795,6 +800,7 @@ class AR(Distribution):
                 wnorm=data_init_wnorm,
                 custom_phase=UnboundVariable('custom_phase'),
                 init_scale=self._data_init_scale,
+                var_scope=var_scope,
         ):
             for di in xrange(depth):
                 self._iaf_template = \
@@ -802,6 +808,7 @@ class AR(Distribution):
                         2*dim*neuron_ratio,
                         ngroups=dim,
                         zerodiagonal=di == 0, # only blocking the first layer can stop data flow
+                        prefix="arfc%s" % di,
                     )
                 if di == 0:
                     if gating_context:
@@ -814,6 +821,7 @@ class AR(Distribution):
                         dim * 2,
                         activation_fn=None,
                         ngroups=dim,
+                        prefix="arfc_last",
                     ).\
                     reshape([-1, self._dim, 2]).\
                     apply(tf.transpose, [0, 2, 1]).\
@@ -933,6 +941,10 @@ class IAR(AR):
         return logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
 
     def inserting_context(self):
+        if self._share_context:
+            if (isinstance(self._base_dist, AR)):
+                assert self._base_dist._share_context
+                return False
         return self._linear_context or self._gating_context
         # this is for sharing context version
         # keys = self._base_dist.dist_info_keys
