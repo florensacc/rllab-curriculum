@@ -2,6 +2,7 @@ from __future__ import print_function
 import sys
 sys.path.append('.')
 import matplotlib
+import os
 
 matplotlib.use('Agg')
 import flask  # import Flask, render_template, send_from_directory

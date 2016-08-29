@@ -39,6 +39,10 @@ if "ec2_cpu" in mode:
     config.AWS_SPOT_PRICE = '0.1'
     config.DOCKER_IMAGE = "dementrock/rllab-shared"
     plot = False
+elif "ec2_c4" in mode:
+    config.AWS_INSTANCE_TYPE = "c4.large"
+    config.AWS_SPOT_PRICE = '1.5'
+    config.DOCKER_IMAGE = "dementrock/rllab-shared"
 elif "ec2_gpu" in mode:
     config.AWS_INSTANCE_TYPE = "g2.2xlarge"
     config.AWS_SPOT_PRICE = '0.5'

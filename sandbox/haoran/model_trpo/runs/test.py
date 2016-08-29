@@ -29,6 +29,7 @@ from sandbox.haoran.model_trpo.code.natural_value_gradient import NVG
 
 # environments
 from sandbox.haoran.model_trpo.code.hopper_env import HopperEnv
+from sandbox.haoran.model_trpo.code.swimmer_env import SwimmerEnv
 from sandbox.haoran.model_trpo.code.point_env import PointEnv
 from sandbox.haoran.model_trpo.code.analytic_cartpole_env import AnalyticCartpoleEnv
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
@@ -37,13 +38,14 @@ from rllab.envs.normalized_env import normalize
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 
 
-stub(globals())
+# stub(globals())
 
 # define running mode specific params -----------------------------------
 exp_prefix = "model_trpo/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_test"
-snapshot_mode = "all"
+mode = "local"
+snapshot_mode = "last"
 plot = False
+pause_for_plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
 
 # config.DOCKER_IMAGE = 'tsukuyomi2044/rllab'
@@ -52,8 +54,12 @@ if "ec2_cpu" in mode:
     config.AWS_SPOT_PRICE = '0.1'
     config.DOCKER_IMAGE = "dementrock/rllab-shared"
     plot = False
+elif "ec2_c4" in mode:
+    config.AWS_INSTANCE_TYPE = "c4.large"
+    config.AWS_SPOT_PRICE = '1.5'
+    config.DOCKER_IMAGE = "dementrock/rllab-shared"
 elif "ec2_gpu" in mode:
-    config.AWS_INSTANCE_TYPE = "g2.2xlarge"
+    config.AWS_INSTANcE_TYPE = "g2.2xlarge"
     config.AWS_SPOT_PRICE = '0.5'
     config.DOCKER_IMAGE = "tsukuyomi2044/rllab_gpu"
     plot = False
@@ -67,19 +73,33 @@ class VG(VariantGenerator):
 
     @variant
     def env(self):
-        return ["hopper"]
+        return ["analytic_cartpole"]
 
     @variant
     def lr(self):
         return [0.001]
 
-    @variant
-    def fd_step(self):
-        return [1e-3]
 
 variants = VG().variants()
 exp_names = []
 for v in variants:
+    # parameters --------------------------------------------
+    ALGO = "trpo"
+    n_itr = 100
+    batch_size = 10000
+    max_path_length = 100
+    discount = 0.99
+    n_parallel = 4
+
+    step_size = 0.01
+    init_std = 0.5
+    normalize_env = False
+    center_adv = False
+    learn_std = False
+    lr = v["lr"]
+    fd_step = 0
+    seed = v["seed"]
+
     # define the exp_name (log folder name) -------------------
     import datetime
     import dateutil.tz
@@ -94,30 +114,13 @@ for v in variants:
         print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
         sys.exit(1)
 
-    # parameters --------------------------------------------
-    ALGO = "trpo"
-    n_itr = 100
-    batch_size = 10000
-    max_path_length = 500
-    discount = 0.99
-    init_std = 0.5
-    lr = v["lr"]
-    pause_for_plot = False
-    fd_step = v["fd_step"]
-    seed = v["seed"]
-    step_size = 0.01
-    normalize_env = False
-    center_adv = False
-    learn_std = False
-    n_parallel = 4
-
     # environment
     if v["env"] == "hopper":
-        wrapped_env = HopperEnv(use_full_state=True,reset_at_fall=True)
-        env = AnalyticEnv(wrapped_env, fd_step)
+        env = HopperEnv(use_full_state=True)
+    elif v["env"] == "swimmer":
+        env = SwimmerEnv(use_full_state=False)
     elif v["env"] == "point":
-        wrapped_env = PointEnv()
-        env = AnalyticEnv(wrapped_env, fd_step)
+        env = PointEnv()
     elif v["env"] == "analytic_cartpole":
         env = AnalyticCartpoleEnv()
     elif v["env"] == "cartpole":
@@ -151,6 +154,7 @@ for v in variants:
         plot=plot,
         pause_for_plot=pause_for_plot,
         center_adv=center_adv,
+        fd_step=fd_step,
     )
     if ALGO == "value_gradient":
         algo = ValueGradient(
@@ -191,7 +195,6 @@ for v in variants:
             subsample_factor=0.5,
             backtrack_ratio=0.95,
             max_backtracks=50,
-
         )
         algo = NVG(
             step_size=step_size,

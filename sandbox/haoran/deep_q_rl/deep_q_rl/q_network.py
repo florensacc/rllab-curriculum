@@ -30,7 +30,8 @@ class DeepQLearner(Serializable):
                  num_frames, discount, learning_rate, rho,
                  rms_epsilon, momentum, clip_delta, freeze_interval,
                  use_double, batch_size, network_type, conv_type, update_rule,
-                 batch_accumulator, input_scale=255.0, network_args=dict()):
+                 batch_accumulator, input_scale=255.0, network_args=dict(),
+                 eta=0):
         Serializable.quick_init(self,locals())
 
         self.input_width = input_width
@@ -46,6 +47,7 @@ class DeepQLearner(Serializable):
         self.clip_delta = clip_delta
         self.freeze_interval = freeze_interval
         self.use_double = use_double
+        self.eta = eta
 
         # Using Double DQN is pointless without periodic freezing
         if self.use_double:
@@ -74,6 +76,7 @@ class DeepQLearner(Serializable):
         rewards = T.col('rewards')
         actions = T.icol('actions')
         terminals = T.icol('terminals')
+        returns = T.col('returns')
 
         self.states_shared = theano.shared(
             np.zeros((batch_size, num_frames, input_height, input_width),
@@ -95,6 +98,10 @@ class DeepQLearner(Serializable):
             np.zeros((batch_size, 1), dtype='int32'),
             broadcastable=(False, True))
 
+        self.returns_shared = theano.shared(
+            np.zeros((batch_size, 1), dtype=theano.config.floatX),
+            broadcastable=(False, True))
+
         q_vals = lasagne.layers.get_output(self.l_out, states / input_scale)
 
         if self.freeze_interval > 0:
@@ -108,13 +115,14 @@ class DeepQLearner(Serializable):
         if self.use_double:
             maxaction = T.argmax(q_vals, axis=1, keepdims=False)
             temptargets = next_q_vals[T.arange(batch_size),maxaction].reshape((-1, 1))
-            target = (rewards +
-                      (T.ones_like(terminals) - terminals) *
-                      self.discount * temptargets)
+            bootstrap_target = (rewards +
+                          (T.ones_like(terminals) - terminals) *
+                          self.discount * temptargets)
         else:
-            target = (rewards +
-                      (T.ones_like(terminals) - terminals) *
-                      self.discount * T.max(next_q_vals, axis=1, keepdims=True))
+            bootstrap_target = (rewards +
+                          (T.ones_like(terminals) - terminals) *
+                          self.discount * T.max(next_q_vals, axis=1, keepdims=True))
+        target = (1-self.eta) * bootstrap_target + self.eta * returns
         diff = target - q_vals[T.arange(batch_size),
                                actions.reshape((-1,))].reshape((-1, 1))
 
@@ -150,7 +158,8 @@ class DeepQLearner(Serializable):
             next_states: self.next_states_shared,
             rewards: self.rewards_shared,
             actions: self.actions_shared,
-            terminals: self.terminals_shared
+            terminals: self.terminals_shared,
+            returns: self.returns_shared,
         }
         if update_rule == 'deepmind_rmsprop':
             updates = deepmind_rmsprop(loss, params, self.lr, self.rho,
@@ -168,9 +177,9 @@ class DeepQLearner(Serializable):
                                                      self.momentum)
 
         self._train = theano.function([], [loss, q_vals], updates=updates,
-                                      givens=givens)
+                                      givens=givens,allow_input_downcast=True)
         self._q_vals = theano.function([], q_vals,
-                                       givens={states: self.states_shared})
+                                       givens={states: self.states_shared},allow_input_downcast=True)
 
     def build_network(self, network_type, conv_type, input_width, input_height,
                       output_dim, num_frames, batch_size, extra_args=dict()):
@@ -205,7 +214,7 @@ class DeepQLearner(Serializable):
                 batch_size, conv_layer,**extra_args)
 
 
-    def train(self, states, actions, rewards, next_states, terminals):
+    def train(self, states, actions, rewards, next_states, terminals, returns):
         """
         Train one batch.
 
@@ -217,6 +226,7 @@ class DeepQLearner(Serializable):
         rewards - b x 1 numpy array
         next_states - b x f x h x w numpy array
         terminals - b x 1 numpy boolean array (currently ignored)
+        returns - b x 1 numpy array of total total rewards
 
         Returns: average loss
         """
@@ -225,6 +235,7 @@ class DeepQLearner(Serializable):
         self.actions_shared.set_value(actions)
         self.rewards_shared.set_value(rewards)
         self.terminals_shared.set_value(terminals)
+        self.returns_shared.set_value(returns)
         if (self.freeze_interval > 0 and
             self.update_counter % self.freeze_interval == 0):
             self.reset_q_hat()
