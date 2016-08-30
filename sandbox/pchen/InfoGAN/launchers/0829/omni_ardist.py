@@ -8,7 +8,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorica
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset
+    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 # updates_per_epoch = 100
-max_epoch = 625
+max_epoch = 1400
 
 stub(globals())
 
@@ -66,7 +66,7 @@ class VG(VariantGenerator):
 
     @variant
     def nr(self, nar):
-        return [2, 5, ]
+        return [2, ]
 
     @variant
     def depth(self, ):
@@ -74,7 +74,7 @@ class VG(VariantGenerator):
 
     @variant
     def nmog(self):
-        return [10, 1,2,3,5,]
+        return [10, 3,]
 
     @variant(hide=True)
     def network(self):
@@ -125,7 +125,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def anneal_after(self):
-        return [300, ]
+        return [800, ]
 
     @variant(hide=False)
     def anneal_every(self):
@@ -166,7 +166,8 @@ for v in variants[:]:
 
         print("Exp name: %s" % exp_name)
 
-        dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
+        dataset = ResamplingBinarizedOmniglotDataset()
+        # dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
         # dataset = MnistDataset()
 
         nmog = v["nmog"]
@@ -241,7 +242,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0829_ar_dist_mog",
+            exp_prefix="0829_omni_ar_dist_mog",
             seed=v["seed"],
             variant=v,
             # mode="local",
