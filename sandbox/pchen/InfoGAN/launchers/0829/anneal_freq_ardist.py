@@ -8,7 +8,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorica
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset
+    ResamplingBinarizedMnistDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 # updates_per_epoch = 100
-max_epoch = 1500
+max_epoch = 625
 
 stub(globals())
 
@@ -69,11 +69,11 @@ class VG(VariantGenerator):
         if nar == 0:
             return [1]
         else:
-            return [1, ]
+            return [5, ]
 
     @variant
     def nmog(self):
-        return [10, 1,5,]
+        return [10, 1,2,3,4,5,]
 
     @variant(hide=True)
     def network(self):
@@ -102,11 +102,11 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def i_nar(self, nar):
         # ar vae
-        return [4, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [5, ]
+        return [20, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -124,7 +124,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def anneal_after(self):
-        return [800, ]
+        return [300, ]
 
     @variant(hide=False)
     def anneal_every(self):
@@ -165,35 +165,25 @@ for v in variants[:]:
 
         print("Exp name: %s" % exp_name)
 
-        # dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
-        dataset = ResamplingBinarizedOmniglotDataset()
+        dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
         # dataset = MnistDataset()
 
         nmog = v["nmog"]
-        dist = Mixture(
+        tgt_dist = Mixture(
             [
                 (
                     Gaussian(
                         zdim,
-                        # prior_mean=np.concatenate([[2.*((i>>j)%2) for j in xrange(4)], np.random.normal(scale=v["mix_std"], size=zdim-4)]),
-                        prior_mean=
-                            list(np.concatenate([np.random.normal(scale=0.5, size=zdim)])),
-                        prior_trainable=True,
                     ),
                     1. / nmog
                 ) for i in xrange(nmog)
             ]
         )
+        dist = DistAR(
+            zdim,
+            tgt_dist
+        )
         # dist = Gaussian(zdim)
-        for _ in xrange(v["nar"]):
-            dist = AR(
-                zdim,
-                dist,
-                neuron_ratio=v["nr"],
-                data_init_wnorm=v["ar_wnorm"],
-                var_scope="AR_scope" if v["tiear"] else None,
-            )
-
         latent_spec = [
             (
                 dist
@@ -248,13 +238,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0829_omni_hybrid_mog",
+            exp_prefix="0829_ar_dist_mog",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 
