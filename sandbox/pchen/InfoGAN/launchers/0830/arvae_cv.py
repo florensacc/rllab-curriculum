@@ -89,7 +89,7 @@ algo = CVVAE(
     optimizer_args=dict(learning_rate=0.002),
     monte_carlo_kl=True,
     min_kl=0.0,
-    k=128,
+    k=1,
     vali_eval_interval=1500*4,
     anneal_after=300,
     anneal_every=75,

@@ -328,7 +328,8 @@ class Gaussian(Distribution):
         """
         mu, std = dist_info["mean"], dist_info["stddev"]
         return tf.reduce_sum(
-            0.5 * (np.log(2) + 2.*tf.log(std) + np.log(np.pi) + 1.)
+            0.5 * (np.log(2) + 2.*tf.log(std) + np.log(np.pi) + 1.),
+            reduction_indices=[1]
         )
 
 

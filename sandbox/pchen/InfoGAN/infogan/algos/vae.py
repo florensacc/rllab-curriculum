@@ -453,6 +453,10 @@ class VAE(object):
                         print("Initial: " + log_line)
                         # import ipdb; ipdb.set_trace()
 
+                    go = dict(locals())
+                    del go["self"]
+                    self.iter_hook(**go)
+
                     log_vals = sess.run(
                         [self.trainer] + log_vars,
                         feed
@@ -540,4 +544,7 @@ class VAE(object):
         pass
 
     def pre_epoch(self, epoch):
+        pass
+
+    def iter_hook(self, **kw):
         pass

@@ -16,6 +16,7 @@ class CVVAE(VAE):
                  model,
                  dataset,
                  batch_size,
+                 alpha_update_interval=10,
                  **kwargs
     ):
         super(CVVAE, self).__init__(
@@ -24,21 +25,23 @@ class CVVAE(VAE):
             batch_size,
             **kwargs
         )
+        self.alpha_update_interval = alpha_update_interval
         self.alpha_var = tf.Variable(
             initial_value=0.,
             trainable=True,
             name="cv_coeff",
         )
+        self.alpha_trainer = None
 
     def init_hook(self, vars):
         from rllab.misc.ext import extract
         eval, final_losses, log_vars, init,\
             log_p_x_given_z, log_p_z, z_dist_info,\
-            z_var = extract(
+            z_var, ndim = extract(
             vars,
             "eval", "final_losses", "log_vars", "init",
             "log_p_x_given_z", "log_p_z", "z_dist_info",
-            "z_var",
+            "z_var", "ndim"
         )
         # if eval:
         #     return
@@ -53,12 +56,12 @@ class CVVAE(VAE):
             z_var,
             dict([
                 (k, tf.stop_gradient(v))
-                for k,v in z_dist_info.items()
+                for k, v in z_dist_info.items()
             ])
         )
-        ent_vlb = tf.reduce_mean(ent_vlbs)
-        cv = tf.reduce_mean(cvs)
-        cv_ent_vlb = ent_vlb - tf.stop_gradient(self.alpha_var) * cv
+        ent_vlb = tf.reduce_mean(ent_vlbs) / ndim
+        cv = tf.reduce_mean(cvs) / ndim
+        cv_ent_vlb = (ent_vlb - tf.stop_gradient(self.alpha_var) * cv) / ndim
         log_vars.append((
             "ent_vlb",
             ent_vlb
@@ -80,6 +83,7 @@ class CVVAE(VAE):
             self.alpha_var
         ))
 
+        final_losses[:] = [-cv_ent_vlb, ]
         if init or eval:
             # during init, skip anything that has to do with grad
             return
@@ -106,6 +110,15 @@ class CVVAE(VAE):
                 for eg, cg in zip(ent_grads, cv_grads) if eg is not None and cg is not None
             ]
         ) / total_params
-        final_losses[:] = [-cv_ent_vlb, grad_norm]
 
+        with tf.variable_scope("optim_alpha"):
+            # optimizer = tf.train.AdamOptimizer(self.learning_rate)
+            optimizer = self.optimizer_cls(**self.optimizer_args)
+            self.alpha_trainer = optimizer.minimize(grad_norm, var_list=[self.alpha_var])
 
+    def iter_hook(self, sess, counter, feed, **kw):
+        if (counter+1) % self.alpha_update_interval == 0:
+            sess.run(
+                [self.alpha_trainer],
+                feed
+            )
