@@ -16,6 +16,7 @@ class CVVAE(VAE):
                  model,
                  dataset,
                  batch_size,
+                 alpha_init=1.,
                  alpha_update_interval=10,
                  **kwargs
     ):
@@ -27,7 +28,7 @@ class CVVAE(VAE):
         )
         self.alpha_update_interval = alpha_update_interval
         self.alpha_var = tf.Variable(
-            initial_value=0.,
+            initial_value=alpha_init,
             trainable=True,
             name="cv_coeff",
         )
