@@ -143,6 +143,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
         plt.title('visitation: ' + exp_name)
 
         plt.savefig(osp.join(log_dir, 'visitation.png'))
+        plt.close()
 
         total_visitation = np.count_nonzero(visitation)
         logger.record_tabular('VisitationTotal', total_visitation)
