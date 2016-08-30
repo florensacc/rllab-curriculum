@@ -322,6 +322,15 @@ class Gaussian(Distribution):
             [dict["mean"], dict["stddev"]]
         )
 
+    def entropy(self, dist_info):
+        """
+        :return: entropy for each minibatch entry
+        """
+        mu, std = dist_info["mean"], dist_info["stddev"]
+        return tf.reduce_sum(
+            0.5 * (np.log(2) + 2.*tf.log(std) + np.log(np.pi) + 1.)
+        )
+
 
 class Uniform(Gaussian):
     """

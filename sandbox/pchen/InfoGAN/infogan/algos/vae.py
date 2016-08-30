@@ -132,10 +132,11 @@ class VAE(object):
         )
 
         ndim = self.model.output_dist.effective_dim
+        log_p_z = self.model.latent_dist.logli_prior(z_var)
         if eval:
             assert self.monte_carlo_kl
             kls = (
-                    - self.model.latent_dist.logli_prior(z_var) \
+                    - log_p_z \
                     + log_p_z_given_x
                 )
             kl = tf.reduce_mean(kls)
@@ -155,7 +156,7 @@ class VAE(object):
             if self.monte_carlo_kl:
                 # Construct the variational lower bound
                 kl = tf.reduce_mean(
-                    - self.model.latent_dist.logli_prior(z_var)  \
+                    - log_p_z  \
                     + log_p_z_given_x
                 )
             else:
@@ -224,6 +225,7 @@ class VAE(object):
                 self.l2_reg * tf.nn.l2_loss(var) for var in tf.trainable_variables() \
                     if "scale" not in var.name
             ]
+        # import ipdb; ipdb.set_trace()
         self.init_hook(locals())
 
         log_vars.append((
