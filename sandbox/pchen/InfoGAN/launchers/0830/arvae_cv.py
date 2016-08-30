@@ -95,6 +95,7 @@ algo = CVVAE(
     anneal_every=75,
     anneal_factor=0.75,
     img_on=False,
+    per_dim=True,
 )
 
 run_experiment_lite(
