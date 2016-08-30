@@ -13,14 +13,15 @@ TINY = 1e-8
 #     return ret
 
 
-# def from_onehot(x_var): # this is only for one onehot!
+# def from_onehot(x_var): # this is only for one onehot vector (no array of one-hots)!
 #     ret = np.zeros((len(x_var),), 'int32')
 #     nonzero_n, nonzero_a = np.nonzero(x_var)
 #     ret[nonzero_n] = nonzero_a
 #     return ret
 
-def from_onehot(
-        x_var):  # return an array of shape all but the last form x_var, where that last one has been collapsed to the corresp index
+
+# return an array with ONE LESS axis than x_var, as the last one has been collapsed to the corresp index
+def from_onehot(x_var):
     ret = np.zeros(np.shape(x_var)[:-1], 'int32')
     nonzero_indexes = np.nonzero(x_var)
     ret[nonzero_indexes[:-1]] = nonzero_indexes[-1]
@@ -96,12 +97,14 @@ class Categorical(Distribution):  # modified version where the array "prob" has 
         return self._srng.multinomial(pvals=probs, dtype='uint8')
 
     def sample(self, dist_info):
-        probs = dist_info["prob"]  # here this has to be of shape (dim,) NOT (dim, 1) or whatever larger than 1!!
+        probs = dist_info["prob"]  # here this has to be of shape (dim,) OR (dim, 1); NO whatever larger than 1!!
+        if isinstance(probs[0], (list, tuple, np.ndarray)):
+            probs = probs[0]
         # samples = []  # if we need to input sevaral distributions at the same time (along axis 0 of probs)
         # for prob in probs:
         #     samples.append(np.random.multinomial(n=1, pvals=prob, size=1))
         # return samples
-        return np.random.multinomial(n=1, pvals=probs, size=1)  # this gives a one-hot of shape (1, dim)
+        return np.random.multinomial(n=1, pvals=probs) #, size=1)  # this gives a one-hot of shape (1, dim)
 
     @property
     def dist_info_keys(self):

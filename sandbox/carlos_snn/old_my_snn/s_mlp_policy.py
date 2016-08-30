@@ -243,6 +243,12 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
         self.pre_fix_latent = np.array([])
 
     @contextmanager
+    def fix_latent(self, latent):
+        self.pre_fix_latent = np.array(latent)
+        yield
+        self.pre_fix_latent = np.array([])
+
+    @contextmanager
     def set_std_to_0(self):
         self._set_std_to_0 = True
         yield

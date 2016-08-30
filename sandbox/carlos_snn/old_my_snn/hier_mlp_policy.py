@@ -83,6 +83,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         self.trainable_snn = trainable_snn
         self.pkl_path = pkl_path
 
+        print latent_name
         if latent_name == 'normal':
             self.latent_dist = DiagonalGaussian(self.latent_dim)
             self.latent_dist_info = dict(mean=np.zeros(self.latent_dim), log_std=np.zeros(self.latent_dim))
@@ -203,6 +204,11 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             inputs=[all_obs_var],
             outputs=[mean_var, log_std_var],
         )
+        # if I want to monitor the selector output
+        self._f_select = ext.compile_function(
+            inputs=[all_obs_var],
+            outputs=[selection_var],
+        )
 
     # # I shouldn't need the latent space anymore
     # @property
@@ -281,12 +287,20 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             rnd = np.random.normal(size=mean.shape)
             actions = rnd * np.exp(log_std) + mean
         # print latents
+        selector_output = self._f_select(observations)
+        print selector_output
         return actions, dict(mean=mean, log_std=log_std)
 
     def set_pre_fix_latent(self, latent):
         self.pre_fix_latent = np.array(latent)
 
     def unset_pre_fix_latent(self):
+        self.pre_fix_latent = np.array([])
+
+    @contextmanager
+    def fix_latent(self, latent):
+        self.pre_fix_latent = np.array(latent)
+        yield
         self.pre_fix_latent = np.array([])
 
     @contextmanager
