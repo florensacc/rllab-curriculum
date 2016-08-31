@@ -8,7 +8,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorica
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset
+    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -24,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 # updates_per_epoch = 100
-max_epoch = 625
+max_epoch = 1200
 
 stub(globals())
 
@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [32, ]#[12, 32]
+        return [64, ]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -62,21 +62,23 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0, 5]
+        return [0,4]
 
     @variant
     def nr(self, nar):
+        return [1, ]
+
+    @variant
+    def depth(self, nar):
         if nar == 0:
-            return [5, 10]
-        else:
-            return [5, 15]
+            return [2, 5, ]
+        return [-99]
 
     @variant
     def nmog(self, nar):
         if nar == 0:
-            return [10, 15, 30]
-        else:
-            return [0]
+            return [10, 3, 1]
+        return [-99]
 
     @variant(hide=True)
     def network(self):
@@ -88,7 +90,8 @@ class VG(VariantGenerator):
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        yield "resv1_k3_pixel_bias"
+        # yield "resv1_k3_pixel_bias"
+        yield "resv1_k3_pixel_bias_widegen"
 
     @variant(hide=True)
     def wnorm(self):
@@ -105,11 +108,11 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def i_nar(self, nar):
         # ar vae
-        return [0, ]
+        return [4, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [20, ]
+        return [10, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -127,15 +130,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def anneal_after(self):
-        return [300, ]
-
-    @variant(hide=False)
-    def anneal_every(self):
-        return [75]
-
-    @variant(hide=False)
-    def anneal_factor(self):
-        return [0.75, ]
+        return [800, ]
 
     @variant(hide=False)
     def exp_avg(self):
@@ -149,6 +144,14 @@ class VG(VariantGenerator):
     def tiear(self):
         # return [False]
         return [False]
+
+    @variant(hide=False)
+    def steps(self, ):
+        return [3]
+    #
+    @variant(hide=False)
+    def base_filters(self, ):
+        return [32, ]
 
 
 vg = VG()
@@ -168,7 +171,8 @@ for v in variants[:]:
 
         print("Exp name: %s" % exp_name)
 
-        dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
+        dataset = ResamplingBinarizedOmniglotDataset()
+        # dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
         # dataset = MnistDataset()
 
         nar = v["nar"]
@@ -182,12 +186,12 @@ for v in variants[:]:
                         ),
                         1. / nmog
                     ) for i in xrange(nmog)
-                    ]
+                ]
             )
             dist = DistAR(
                 zdim,
                 tgt_dist,
-                # depth=v["depth"],
+                depth=v["depth"],
                 neuron_ratio=v["nr"],
             )
         else:
@@ -200,8 +204,6 @@ for v in variants[:]:
                     data_init_wnorm=v["ar_wnorm"],
                     var_scope="AR_scope" if v["tiear"] else None,
                 )
-
-
         latent_spec = [
             (
                 dist
@@ -231,6 +233,12 @@ for v in variants[:]:
             network_type=v["network"],
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
+            network_args=dict(
+                steps=v["steps"],
+                base_filters=v["base_filters"]
+                # enc_nn=v["enc_nn"],
+                # dec_nn=v["dec_nn"],
+            ),
         )
 
         algo = VAE(
@@ -244,19 +252,16 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*4,
+            vali_eval_interval=1500*3,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
-            anneal_every=v["anneal_every"],
-            anneal_factor=v["anneal_factor"],
-
             img_on=False,
 
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0831_ardist_mog_comp",
+            exp_prefix="0831_omni_wide_ardist_fix",
             seed=v["seed"],
             variant=v,
             # mode="local",

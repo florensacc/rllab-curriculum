@@ -258,9 +258,10 @@ class VAE(object):
                         trainable=False,
                     )
                     self.optimizer_args["learning_rate"] = self.lr_var
+                final_loss = tf.reduce_sum(final_losses)
                 optimizer = self.optimizer_cls(**self.optimizer_args)
                 if len(grads_and_vars) == 0:
-                    grads_and_vars = optimizer.compute_gradients(final_losses)
+                    grads_and_vars = optimizer.compute_gradients(final_loss)
                 else:
                     print("grads supplied by hook")
                 self.trainer = optimizer.apply_gradients(grads_and_vars=grads_and_vars)
