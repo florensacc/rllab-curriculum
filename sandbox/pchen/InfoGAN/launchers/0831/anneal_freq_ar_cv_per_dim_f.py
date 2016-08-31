@@ -267,7 +267,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0831_ar_cv_perdim_f_debug",
+            exp_prefix="0831_ar_cv_perdim_f_memfix",
             seed=v["seed"],
             variant=v,
             # mode="local",
@@ -275,6 +275,5 @@ for v in variants[:]:
             n_parallel=0,
             use_gpu=True,
         )
-        break
 
 

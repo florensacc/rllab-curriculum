@@ -191,7 +191,3 @@ class CVVAE(VAE):
                 [self.alpha_trainer],
                 feed
             )
-
-        if (counter % 50) == 0:
-            from mem_top import mem_top
-            print(mem_top(limit=25))

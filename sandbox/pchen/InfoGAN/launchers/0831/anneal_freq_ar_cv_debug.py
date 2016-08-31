@@ -262,7 +262,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0831_ar_cv_f_debug_plain",
+            exp_prefix="0831_ar_cv_f_debug_plain_memfix",
             seed=v["seed"],
             variant=v,
             # mode="local",

@@ -256,7 +256,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0831_ardist_mog_comp_again",
+            exp_prefix="0831_ardist_mog_comp_memfix",
             seed=v["seed"],
             variant=v,
             # mode="local",

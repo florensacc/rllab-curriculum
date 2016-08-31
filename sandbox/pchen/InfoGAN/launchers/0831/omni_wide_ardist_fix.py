@@ -261,7 +261,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0831_omni_wide_ardist_fix",
+            exp_prefix="0831_omni_wide_ardist_memfix",
             seed=v["seed"],
             variant=v,
             # mode="local",

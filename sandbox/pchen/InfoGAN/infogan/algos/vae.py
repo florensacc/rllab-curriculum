@@ -460,9 +460,12 @@ class VAE(object):
                         print("Initial: " + log_line)
                         # import ipdb; ipdb.set_trace()
 
-                    go = dict(locals())
-                    del go["self"]
-                    self.iter_hook(**go)
+                    # go = dict(locals())
+                    # del go["self"]
+                    # self.iter_hook(**go)
+                    self.iter_hook(
+                       sess=sess, counter=counter, feed=feed
+                    )
 
                     log_vals = sess.run(
                         [self.trainer] + log_vars,
