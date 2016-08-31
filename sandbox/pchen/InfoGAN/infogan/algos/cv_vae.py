@@ -16,7 +16,7 @@ class CVVAE(VAE):
                  model,
                  dataset,
                  batch_size,
-                 alpha_init=1.,
+                 alpha_init=0.,
                  alpha_update_interval=10,
                  per_dim=False,
                  **kwargs
@@ -55,11 +55,21 @@ class CVVAE(VAE):
         else:
             return self.alpha_var
 
-    def get_avg_alpha(self, ):
+    def get_alpha_flat(self, ):
         if self.per_dim:
-            return 0.
+            if len(self.alpha_var_dict) == 0:
+                return tf.constant(0.)
+            return \
+                tf.concat(
+                    0,
+                    [tf.reshape(p, [-1,1]) for p in self.alpha_var_dict.values()]
+                )
+
         else:
             return self.alpha_var
+
+    def get_avg_alpha(self):
+        return tf.reduce_mean(self.get_alpha_flat())
 
     def get_alpha_list(self, ):
         if self.per_dim:
@@ -141,13 +151,32 @@ class CVVAE(VAE):
             ]
         ) / total_params
 
-        log_vars.append((
-            "alpha",
-            self.get_avg_alpha()
-        ))
+        if self.per_dim:
+            flat = self.get_alpha_flat()
+            log_vars.append((
+                "alpha_avg",
+                tf.reduce_mean(flat)
+            ))
+            log_vars.append((
+                "alpha_max",
+                tf.reduce_max(flat)
+            ))
+            log_vars.append((
+                "alpha_min",
+                tf.reduce_min(flat)
+            ))
+            log_vars.append((
+                "alpha_var",
+                tf.reduce_mean(tf.square(flat)) - tf.square(tf.reduce_mean(flat))
+            ))
+        else:
+            log_vars.append((
+                "alpha",
+                self.get_avg_alpha()
+            ))
 
         grads_and_vars[:] = [
-            (eg - (self.get_alpha(p)*cg if cg is not None else 0.), p)
+            (-eg + (self.get_alpha(p)*cg if cg is not None else 0.), p)
             for p, eg, cg in zip(params, ent_grads, cv_grads) if eg is not None
         ]
 

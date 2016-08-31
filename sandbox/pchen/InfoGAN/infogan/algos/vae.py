@@ -438,7 +438,8 @@ class VAE(object):
                         vs = tf.all_variables()
                         sess.run(tf.initialize_variables([
                             v for v in vs if
-                                "optim" in v.name or "global_step" in v.name
+                                "optim" in v.name or "global_step" in v.name or \
+                                ("cv_coeff" in v.name)
                         ]))
                         print("vars initd")
 
