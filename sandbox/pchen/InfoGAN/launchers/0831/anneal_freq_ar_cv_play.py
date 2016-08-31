@@ -63,7 +63,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [5, ]
+        return [0]
 
     @variant
     def nr(self, nar):
@@ -160,18 +160,14 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def alpha_update_interval(self, cv):
         if cv:
-            return [50, ]
+            return [5, ]
         return [0]
 
     @variant(hide=False)
     def alpha_init(self, cv):
         if cv:
-            return [0., 1.]
+            return [0., ]
         return [0]
-
-    @variant(hide=False)
-    def per_dim(self, cv):
-        return [True, False]
 
 
 vg = VG()
@@ -257,7 +253,6 @@ for v in variants[:]:
             algo = CVVAE(
                 alpha_update_interval=v["alpha_update_interval"],
                 alpha_init=v["alpha_init"],
-                per_dim=v["per_dim"],
                 **go
             )
         else:
@@ -267,14 +262,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0831_ar_cv_perdim_f_debug",
+            exp_prefix="0831_ar_cv_f_play",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
-        break
 
 
