@@ -1364,8 +1364,8 @@ class RegularizedHelmholtzMachine(object):
             self.decode(qz_mean)[1]
         )
         grad_z_mean = tf.reshape(tf.gradients(log_p_x_given_z, qz_mean), [-1, zdim])
-        grad_z_mean = tf.stop_gradient(grad_z_mean)
-        grad_z_mean = tf.nn.sigmoid(grad_z_mean) # seems important for stability reason
+        # grad_z_mean = tf.stop_gradient(grad_z_mean)
+        # grad_z_mean = tf.nn.sigmoid(grad_z_mean) # seems important for stability reason
         context = self.context_template.construct(grad=grad_z_mean, custom_phase=self.custom_phase).tensor
         # context = tf.stop_gradient(context)
         z_dist_flat_aug = tf.concat(

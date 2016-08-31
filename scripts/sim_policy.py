@@ -25,6 +25,11 @@ if __name__ == "__main__":
 
     policy = None
     env = None
+
+    # If the snapshot file use tensorflow, do:
+    # import tensorflow as tf
+    # with tf.Session():
+    #     [rest of the code]
     while True:
         if ':' in args.file:
             # fetch file using ssh

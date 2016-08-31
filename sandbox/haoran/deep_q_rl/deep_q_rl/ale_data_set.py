@@ -36,6 +36,8 @@ actions, and rewards.
         self.actions = np.zeros(max_steps, dtype='int32')
         self.rewards = np.zeros(max_steps, dtype=floatX)
         self.terminal = np.zeros(max_steps, dtype='bool')
+        self.terminal[max_steps-1] = True # useful if we track back to find the end of the 0-th episode
+        self.returns = np.zeros(max_steps, dtype=floatX)
 
         self.bottom = 0
         self.top = 0
@@ -61,6 +63,27 @@ actions, and rewards.
         else:
             self.size += 1
         self.top = (self.top + 1) % self.max_steps
+
+    def supply_returns(self,returns):
+        memory_index = (self.top - 1) % self.max_steps # end of the current episode
+        episode_index = len(returns) - 1
+        assert self.terminal[memory_index]
+
+        while True: # until the end of the prev episode
+            self.returns[memory_index] = returns[episode_index]
+            memory_index = (memory_index - 1) % self.max_steps
+            episode_index -= 1
+
+            if episode_index < 0:
+                # len(returns) < len(episode)
+                if not self.terminal[memory_index]:
+                    import pdb; pdb.set_trace()
+                else:
+                    break
+            else:
+                # len(returns) > len(episode)
+                if self.terminal[memory_index]:
+                    import pdb; pdb.set_trace()
 
     def __len__(self):
         """Return an approximate count of stored state transitions."""
@@ -106,6 +129,7 @@ next_states for batch_size randomly chosen state transitions.
                                 self.height,
                                 self.width),
                                dtype='uint8')
+        returns = np.zeros((batch_size, 1), dtype=floatX)
 
         count = 0
         while count < batch_size:
@@ -135,9 +159,10 @@ next_states for batch_size randomly chosen state transitions.
             next_states[count] = self.imgs.take(transition_indices,
                                                 axis=0,
                                                 mode='wrap')
+            returns[count] = self.returns.take(end_index, mode='wrap')
             count += 1
 
-        return states, actions, rewards, next_states, terminal
+        return states, actions, rewards, next_states, terminal, returns
 
 
 # TESTING CODE BELOW THIS POINT...

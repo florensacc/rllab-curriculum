@@ -1,4 +1,4 @@
-from sandbox.haoran.hashing.hash.base import Hash
+from sandbox.haoran.hashing.bonus_dqn.hash.base import Hash
 import numpy as np
 
 class SimHash(Hash):

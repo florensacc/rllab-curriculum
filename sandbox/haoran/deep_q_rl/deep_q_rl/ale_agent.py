@@ -10,6 +10,7 @@ import os
 import cPickle
 import time
 from rllab.misc import logger
+from rllab.misc import special
 
 import numpy as np
 
@@ -22,7 +23,9 @@ class NeuralAgent(object):
 
     def __init__(self, q_network, epsilon_start, epsilon_min,
                  epsilon_decay, replay_memory_size, experiment_directory,
-                 replay_start_size, update_frequency, clip_reward, bonus_evaluator=None,
+                 replay_start_size, update_frequency, clip_reward,
+                 bonus_evaluator=None,
+                 extra_bonus_evaluator=None,
                  recording=True,
                  unpicklable_list=["data_set","test_data_set"]
                  ):
@@ -96,6 +99,7 @@ class NeuralAgent(object):
         self.last_action = None
 
         self.bonus_evaluator = bonus_evaluator
+        self.extra_bonus_evaluator = extra_bonus_evaluator
 
         self.unpicklable_list = unpicklable_list
 
@@ -155,7 +159,7 @@ class NeuralAgent(object):
 
         self.step_counter = 0
         self.batch_counter = 0
-        self.episode_reward = 0
+        self.episode_rewards = []
 
         # We report the mean loss for every epoch.
         self.episode_td_losses = []
@@ -220,11 +224,11 @@ class NeuralAgent(object):
         """
 
         self.step_counter += 1
+        self.episode_rewards.append(reward) # do not record clipped reward
 
         # beware that the clipped reward is only added to the replay memory, not any report statistics
         #TESTING---------------------------
         if self.testing:
-            self.episode_reward += reward # do not record clipped reward
             if self.clip_reward:
                 reward = np.clip(reward, -1, 1)
             action = self._choose_action(self.test_data_set, .05,
@@ -268,10 +272,14 @@ class NeuralAgent(object):
         if self.step_counter >= self.phi_length:
             phi = data_set.phi(cur_img)
             action = self.network.choose_action(phi, epsilon)
+
+            states = np.asarray([phi])
+            actions = np.asarray([action])
             if self.bonus_evaluator is not None:
-                states = np.asarray([phi])
-                actions = np.asarray([action])
                 self.bonus_evaluator.update(states,actions)
+            if self.extra_bonus_evaluator is not None:
+                self.extra_bonus_evaluator.update(states,actions)
+
         else:
             action = np.random.randint(0, self.num_actions)
 
@@ -283,14 +291,19 @@ class NeuralAgent(object):
         May be overridden if a subclass needs to train the network
         differently.
         """
-        states, actions, rewards, next_states, terminals = \
+        states, actions, rewards, next_states, terminals, returns = \
                                 self.data_set.random_batch(
                                     self.network.batch_size)
 
         if self.bonus_evaluator is not None:
             bonus_rewards = self.bonus_evaluator.evaluate(states,actions,next_states)
-            rewards += bonus_rewards.reshape((len(bonus_rewards),1))
-        loss =  self.network.train(states, actions, rewards, next_states, terminals)
+            rewards = rewards + bonus_rewards.reshape((len(bonus_rewards),1))
+            rewards = rewards.astype(np.float32)
+        if self.extra_bonus_evaluator is not None:
+            self.extra_bonus_evaluator.evaluate(states,actions,next_states) # do nothing
+
+
+        loss =  self.network.train(states, actions, rewards, next_states, terminals, returns)
         return loss
 
 
@@ -305,7 +318,8 @@ class NeuralAgent(object):
         Returns:
             None
         """
-        self.episode_reward += reward
+        self.episode_rewards.append(reward)
+        self.episode_reward = np.sum(self.episode_rewards)
         self.step_counter += 1
         total_time = time.time() - self.start_time
 
@@ -326,6 +340,8 @@ class NeuralAgent(object):
                                      self.last_action,
                                      reward,
                                      True)
+            returns = special.discount_cumsum(self.episode_rewards,self.network.discount)
+            self.data_set.supply_returns(returns)
 
             logger.log("steps/second: {:.2f}".format(\
                             self.step_counter/total_time))
@@ -343,6 +359,8 @@ class NeuralAgent(object):
     def finish_epoch(self, epoch,phase):
         if self.bonus_evaluator is not None:
             self.bonus_evaluator.finish_epoch(epoch,phase)
+        if self.extra_bonus_evaluator is not None:
+            self.extra_bonus_evaluator.finish_epoch(epoch,phase)
 
         if phase == "Train":
             logger.record_tabular(

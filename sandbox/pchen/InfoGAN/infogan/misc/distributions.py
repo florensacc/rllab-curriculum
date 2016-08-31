@@ -70,6 +70,12 @@ class Distribution(object):
         """
         raise NotImplementedError
 
+    def deactivate_dist(self, dict):
+        """
+        inverse of activate_dist
+        """
+        raise NotImplementedError
+
     @property
     def dist_info_keys(self):
         """
@@ -309,6 +315,22 @@ class Gaussian(Distribution):
         else:
             stddev = tf.sqrt(tf.exp(flat_dist[:, self.dim:]))
         return dict(mean=mean, stddev=stddev)
+
+    def deactivate_dist(self, dict):
+        return tf.concat(
+            1,
+            [dict["mean"], dict["stddev"]]
+        )
+
+    def entropy(self, dist_info):
+        """
+        :return: entropy for each minibatch entry
+        """
+        mu, std = dist_info["mean"], dist_info["stddev"]
+        return tf.reduce_sum(
+            0.5 * (np.log(2) + 2.*tf.log(std) + np.log(np.pi) + 1.),
+            reduction_indices=[1]
+        )
 
 
 class Uniform(Gaussian):
@@ -622,7 +644,7 @@ class Product(Distribution):
         return ret
 
 class Mixture(Distribution):
-    def __init__(self, pairs):
+    def __init__(self, pairs, trainable=True):
         assert len(pairs) >= 1
         self._pairs = pairs
         self._dim = pairs[0][0].dim
@@ -693,7 +715,10 @@ class Mixture(Distribution):
         return maxis
 
     def prior_dist_info(self, batch_size):
-        return dict(infos=[dist.prior_dist_info(batch_size) for dist, _ in self._pairs])
+        return dict(infos=[
+            dist.deactivate_dist(dist.prior_dist_info(batch_size))
+            for dist, _ in self._pairs
+            ])
 
     def init_prior_dist_info(self, batch_size):
         return dict(infos=[dist.init_prior_dist_info(batch_size) for dist, _ in self._pairs])
@@ -750,6 +775,12 @@ class Mixture(Distribution):
                 i += dist.dist_flat_dim
         return dict(infos=list(go()))
 
+    def deactivate_dist(self, dict):
+        return tf.concat(
+            1,
+            dict["infos"]
+        )
+
 dist_book = pt.bookkeeper_for_default_graph()
 class AR(Distribution):
     def __init__(
@@ -766,6 +797,7 @@ class AR(Distribution):
             gating_context=False,
             share_context=False,
             var_scope=None,
+            rank=None,
     ):
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
@@ -782,6 +814,7 @@ class AR(Distribution):
         self._gating_context = gating_context
         self._context_dim = 0
         self._share_context = share_context
+        self._rank = rank
 
         self._iaf_template = pt.template("y", books=dist_book)
         if linear_context:
@@ -801,6 +834,7 @@ class AR(Distribution):
                 custom_phase=UnboundVariable('custom_phase'),
                 init_scale=self._data_init_scale,
                 var_scope=var_scope,
+                rank=rank,
         ):
             for di in xrange(depth):
                 self._iaf_template = \
@@ -982,3 +1016,154 @@ class IAR(AR):
             return out
         else:
             return self._base_dist.activate_dist(flat)
+
+class DistAR(Distribution):
+    def __init__(
+            self,
+            dim,
+            tgt_dist,
+            depth=2,
+            neuron_ratio=4,
+            nl=tf.nn.relu,
+            data_init_wnorm=True,
+            data_init_scale=0.1,
+            linear_context=False,
+            gating_context=False,
+            share_context=False,
+            var_scope=None,
+            rank=None,
+    ):
+        self._name = "%sD_AR_id_%s" % (dim, G_IDX)
+        global G_IDX
+        G_IDX += 1
+
+        assert isinstance(tgt_dist, Mixture)
+        nom = len(tgt_dist._pairs)
+        mode_flat_dim = tgt_dist._pairs[0][0].dist_flat_dim
+        for d,p in tgt_dist._pairs:
+            assert isinstance(d, Gaussian)
+
+        self._dim = dim
+        self._tgt_dist = tgt_dist
+        self._depth = depth
+        self._wnorm = data_init_wnorm
+        self._data_init = data_init_wnorm
+        self._data_init_scale = data_init_scale
+        self._linear_context = linear_context
+        self._gating_context = gating_context
+        self._context_dim = 0
+        self._share_context = share_context
+        self._rank = rank
+
+        self._iaf_template = pt.template("y", books=dist_book)
+        if linear_context:
+            lin_con = pt.template("linear_context", books=dist_book)
+            self._linear_context_dim = 2*dim*neuron_ratio
+            self._context_dim += self._linear_context_dim
+        if gating_context:
+            gate_con = pt.template("gating_context", books=dist_book)
+            self._gating_context_dim = 2*dim*neuron_ratio
+            self._context_dim += self._gating_context_dim
+
+        assert depth >= 1
+        from prettytensor import UnboundVariable
+        with pt.defaults_scope(
+                activation_fn=nl,
+                wnorm=data_init_wnorm,
+                custom_phase=UnboundVariable('custom_phase'),
+                init_scale=self._data_init_scale,
+                var_scope=var_scope,
+                rank=rank,
+        ):
+            for di in xrange(depth):
+                self._iaf_template = \
+                    self._iaf_template.arfc(
+                        2*dim*neuron_ratio,
+                        ngroups=dim,
+                        zerodiagonal=di == 0, # only blocking the first layer can stop data flow
+                        prefix="arfc%s" % di,
+                        )
+                if di == 0:
+                    if gating_context:
+                        self._iaf_template *= (gate_con+1).apply(tf.nn.sigmoid)
+                    if linear_context:
+                        self._iaf_template += lin_con
+            self._iaf_template = \
+                self._iaf_template. \
+                    arfc(
+                    dim * 2 * nom,
+                    activation_fn=None,
+                    ngroups=dim,
+                    prefix="arfc_last",
+                    ). \
+                    reshape([-1, self._dim, 2*nom]). \
+                    apply(tf.transpose, [0, 2, 1]). \
+                    reshape([-1, 2*self._dim*nom])
+
+    @overrides
+    def init_mode(self):
+        if self._wnorm:
+            self._custom_phase = CustomPhase.init
+            # self._base_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        if self._wnorm:
+            self._custom_phase = CustomPhase.train
+            # self._base_dist.train_mode()
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def effective_dim(self):
+        return self._dim
+
+    def infer(self, x_var, lin_con=None, gating_con=None):
+        in_dict = dict(
+            y=x_var,
+            custom_phase=self._custom_phase,
+        )
+        if self._linear_context:
+            assert lin_con is not None
+            in_dict["linear_context"] = lin_con
+        if self._gating_context:
+            assert gating_con is not None
+            in_dict["gating_context"] = gating_con
+        flat_iaf = self._iaf_template.construct(
+            **in_dict
+        ).tensor
+        return flat_iaf
+
+    def logli(self, x_var, dist_info):
+        tgt_flat = self.infer(x_var)
+        tgt_info = self._tgt_dist.activate_dist(tgt_flat)
+        return self._tgt_dist.logli(x_var, tgt_info)
+
+    def prior_dist_info(self, batch_size):
+        return dict(batch_size=batch_size)
+
+    def sample_logli(self, info):
+        print("warning, dist_ar sample invoked")
+        go = tf.zeros([info["batch_size"], self.dim]) # place holder
+        for i in xrange(self._dim):
+            tgt_flat = self.infer(go)
+            tgt_info = self._tgt_dist.activate_dist(tgt_flat)
+            go, logli = self._tgt_dist.sample_logli(tgt_info)
+        return go, logli
+
+    @property
+    def dist_info_keys(self):
+        return []
+
+    @property
+    def dist_flat_dim(self):
+        return 0
+
+    def activate_dist(self, flat):
+        return dict()
+
+    def nonreparam_logli(self, x_var, dist_info):
+        raise "not defined"
+

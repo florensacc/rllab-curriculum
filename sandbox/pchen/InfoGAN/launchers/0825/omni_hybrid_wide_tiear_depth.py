@@ -62,7 +62,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [2,4,5,6,7,10]
+        return [2,4,6,8,10]
 
     @variant
     def nr(self, nar):
@@ -243,7 +243,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0824_omni_wider_tiear",
+            exp_prefix="0825_omni_wider_tiear_depth",
             seed=v["seed"],
             variant=v,
             # mode="local",
