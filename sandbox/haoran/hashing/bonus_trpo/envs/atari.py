@@ -62,7 +62,7 @@ def to_ram(ale):
 
 
 class AtariEnv(Env, Serializable):
-    def __init__(self, game="pong", obs_type="ram", frame_skip=4, death_ends_episode=False):
+    def __init__(self, game="pong", obs_type="ram", frame_skip=4, death_ends_episode=False, death_penalty=0):
         Serializable.quick_init(self, locals())
         assert obs_type in ("ram", "image")
         game_path = atari_py.get_game_path(game)
@@ -74,6 +74,7 @@ class AtariEnv(Env, Serializable):
         self._action_set = self.ale.getMinimalActionSet()
         self.frame_skip = frame_skip
         self.death_ends_episode = death_ends_episode
+        self.death_penalty = death_penalty
 
     def step(self, a):
         reward = 0.0
@@ -82,12 +83,16 @@ class AtariEnv(Env, Serializable):
             reward += self.ale.act(action)
         ob = self._get_obs()
 
+        cur_lives = self.ale.lives()
+        lose_life = cur_lives < self.start_lives
         if self.death_ends_episode:
-            cur_lives = self.ale.lives()
-            lose_life = cur_lives < self.start_lives
             done = self.ale.game_over() or lose_life
         else:
             done = self.ale.game_over()
+
+        if lose_life:
+            reward -= self.death_penalty
+            logger.log(0,"Death penalty: %f"%(self.death_penalty))
 
         return ob, reward, done, {}
 
