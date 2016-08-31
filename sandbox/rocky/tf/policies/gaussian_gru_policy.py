@@ -9,6 +9,7 @@ from sandbox.rocky.tf.policies.base import StochasticPolicy
 
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
+from rllab.misc import logger
 
 
 class GaussianGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
@@ -155,7 +156,7 @@ class GaussianGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
 
     @property
     def vectorized(self):
-        return False#True
+        return True
 
     def reset(self, dones=None):
         if dones is None:
@@ -216,3 +217,7 @@ class GaussianGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             ]
         else:
             return []
+
+    def log_diagnostics(self, paths):
+        log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])
+        logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
