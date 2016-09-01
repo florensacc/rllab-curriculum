@@ -11,7 +11,7 @@ from sandbox.haoran.hashing.bonus_trpo.envs.atari import AtariEnv
 from rllab import config
 import sys,os
 
-stub(globals())
+# stub(globals())
 
 from rllab.misc.instrument import VariantGenerator, variant
 
@@ -46,6 +46,7 @@ elif "ec2_g2" in mode:
 batch_size = 10000
 clip_reward = True
 max_path_length = 4500
+n_itr = 100
 
 class VG(VariantGenerator):
     @variant
@@ -98,6 +99,7 @@ for v in variants:
         baseline=baseline,
         bonus_evaluator=bonus_evaluator,
         bonus_baseline=bonus_baseline,
+        extra_bonus_evaluator=None,
         bonus_coeff=v["bonus_coeff"],
         batch_size=batch_size,
         max_path_length=max_path_length,
@@ -129,10 +131,9 @@ for v in variants:
         variant=v,
         use_gpu=use_gpu,
     )
-    
+
     if "test" in mode:
         sys.exit(0)
 
 if "local" not in mode:
     os.system("chmod 444 %s"%(__file__))
-
