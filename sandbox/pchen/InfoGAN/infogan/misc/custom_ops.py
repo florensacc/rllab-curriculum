@@ -1046,7 +1046,7 @@ def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=Fals
                 origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
     return seq.as_layer().nl()
 
-def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False):
+def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")

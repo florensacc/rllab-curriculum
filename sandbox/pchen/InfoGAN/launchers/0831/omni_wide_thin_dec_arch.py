@@ -2,14 +2,13 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 from rllab.misc.instrument import run_experiment_lite, stub
-from sandbox.pchen.InfoGAN.infogan.algos.cv_vae import CVVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
     IAR
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset
+    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -25,7 +24,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 # updates_per_epoch = 100
-max_epoch = 625
+max_epoch = 1400
 
 stub(globals())
 
@@ -52,25 +51,26 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [32, ]#[12, 32]
+        return [64, ]#[12, 32]
 
     @variant
     def min_kl(self):
-        return [0.0, ] #0.05, 0.1]
+        return [0.01, ] #0.05, 0.1]
     #
     @variant
     def nar(self):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4]
+        return [4,]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [ 5, ]
+            # return [1, 5, ]
+            return [1,2]
 
     # @variant
     # def nm(self):
@@ -91,7 +91,22 @@ class VG(VariantGenerator):
         # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        yield "resv1_k3_pixel_bias"
+        # res_hybrid_long_re_real_anneal.pyyield "resv1_k3_pixel_bias"
+        # yield "resv1_k3_pixel_bias"
+        yield "resv1_k3_pixel_bias_widegen"
+        # yield "resv1_k3_pixel_bias_filters_ratio"
+
+    @variant(hide=False)
+    def steps(self, ):
+        return [3,]
+    #
+    @variant(hide=False)
+    def base_filters(self, ):
+        return [32, 32+12]
+
+    @variant(hide=False)
+    def dec_init_size(self, ):
+        return [1,2,3,4]
 
     @variant(hide=True)
     def wnorm(self):
@@ -106,12 +121,12 @@ class VG(VariantGenerator):
         return [128, ]
 
     @variant(hide=False)
-    def i_nar(self, nar):
-        return [0]
+    def i_nar(self):
+        return [4, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [20, ]
+        return [10, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -129,45 +144,16 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def anneal_after(self):
-        return [300, ]
-
-    @variant(hide=False)
-    def anneal_every(self):
-        return [75]
-
-    @variant(hide=False)
-    def anneal_factor(self):
-        return [0.75, ]
+        return [800, ]
 
     @variant(hide=False)
     def exp_avg(self):
         return [0.999, ]
 
     @variant(hide=False)
-    def share_context(self):
-        return [True, ]
-
-    @variant(hide=False)
     def tiear(self):
-        # return [False]
         return [False]
-
-    @variant(hide=False)
-    def cv(self):
-        # return [False]
-        return [True, ]
-
-    @variant(hide=False)
-    def alpha_update_interval(self, cv):
-        if cv:
-            return [5, ]
-        return [0]
-
-    @variant(hide=False)
-    def alpha_init(self, cv):
-        if cv:
-            return [0., ]
-        return [0]
+        # return [True, False]
 
 
 vg = VG()
@@ -187,7 +173,8 @@ for v in variants[:]:
 
         print("Exp name: %s" % exp_name)
 
-        dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
+
+        dataset = ResamplingBinarizedOmniglotDataset()
         # dataset = MnistDataset()
 
         dist = Gaussian(zdim)
@@ -217,7 +204,7 @@ for v in variants[:]:
                 data_init_scale=v["i_init_scale"],
                 linear_context="linear" in v["i_context"],
                 gating_context="gating" in v["i_context"],
-                share_context=v["share_context"],
+                share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
             )
 
@@ -229,9 +216,16 @@ for v in variants[:]:
             network_type=v["network"],
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
+            network_args=dict(
+                steps=v["steps"],
+                base_filters=v["base_filters"],
+                dec_init_size=v["dec_init_size"],
+                # enc_nn=v["enc_nn"],
+                # dec_nn=v["dec_nn"],
+            ),
         )
 
-        go = dict(
+        algo = VAE(
             model=model,
             dataset=dataset,
             batch_size=batch_size,
@@ -241,35 +235,22 @@ for v in variants[:]:
             optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
-            k=1,
-            vali_eval_interval=1500*4,
+            k=v["k"],
+            vali_eval_interval=1500*3,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
-            anneal_every=v["anneal_every"],
-            anneal_factor=v["anneal_factor"],
             img_on=False,
         )
-        if v["cv"]:
-            algo = CVVAE(
-                alpha_update_interval=v["alpha_update_interval"],
-                alpha_init=v["alpha_init"],
-                no_stop=True,
-                **go
-            )
-        else:
-            algo = VAE(
-                **go
-            )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0831_ar_cv_f_play",
+            exp_prefix="0831_omni_wider_dec_arch_fix",
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 

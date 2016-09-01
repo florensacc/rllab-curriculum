@@ -63,7 +63,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4]
+        return [5, ]
 
     @variant
     def nr(self, nar):
@@ -160,14 +160,18 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def alpha_update_interval(self, cv):
         if cv:
-            return [5, ]
+            return [50, ]
         return [0]
 
     @variant(hide=False)
     def alpha_init(self, cv):
         if cv:
-            return [0., ]
+            return [1., 0., ]
         return [0]
+
+    @variant(hide=False)
+    def no_stop(self, cv):
+        return [True, False]
 
 
 vg = VG()
@@ -241,7 +245,7 @@ for v in variants[:]:
             optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
-            k=1,
+            k=v["k"],
             vali_eval_interval=1500*4,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
@@ -253,7 +257,8 @@ for v in variants[:]:
             algo = CVVAE(
                 alpha_update_interval=v["alpha_update_interval"],
                 alpha_init=v["alpha_init"],
-                no_stop=True,
+                no_stop=v['no_stop'],
+                per_dim=True,
                 **go
             )
         else:
@@ -263,13 +268,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0831_ar_cv_f_play",
+            exp_prefix="0831_ar_cv_f_ns_perdim",
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 

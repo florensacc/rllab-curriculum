@@ -421,6 +421,8 @@ class RegularizedHelmholtzMachine(object):
                     enc_fc = network_args.get("enc_fc", True)
                     enc_rep = network_args.get("enc_rep", 1)
                     dec_fs = network_args.get("dec_fs", 5)
+                    # dec_context = network_args.get("dec_context", False)
+                    dec_init_size = network_args.get("dec_init_size", 4)
                     print(network_args)
                     encoder = \
                         (pt.template('input', self.book).
@@ -446,9 +448,16 @@ class RegularizedHelmholtzMachine(object):
                         wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
                     decoder = (pt.template('input', self.book).
                                wnorm_fc(128, ).
-                               reshape([-1, 4, 4, 8])
+                               reshape([
+                                    -1,
+                                    dec_init_size,
+                                    dec_init_size,
+                                    128 / dec_init_size / dec_init_size
+                                ])
                                )
-                    decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[7,7], nn=False)
+                    decoder = decoder.apply(tf.image.resize_nearest_neighbor, [4,4])
+                    # context = decoder if dec_context else None
+                    decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[7,7], nn=False, )
                     decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[14,14], nn=True)
                     decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[28,28], nn=True)
                     for _ in xrange(steps):

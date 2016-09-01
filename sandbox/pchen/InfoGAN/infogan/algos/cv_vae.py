@@ -19,6 +19,7 @@ class CVVAE(VAE):
                  alpha_init=0.,
                  alpha_update_interval=10,
                  per_dim=False,
+                 no_stop=False,
                  **kwargs
     ):
         super(CVVAE, self).__init__(
@@ -27,6 +28,7 @@ class CVVAE(VAE):
             batch_size,
             **kwargs
         )
+        self.no_stop = no_stop
         self.per_dim = per_dim
         self.alpha_update_interval = alpha_update_interval
         self.alpha_init = alpha_init
@@ -81,11 +83,13 @@ class CVVAE(VAE):
         from rllab.misc.ext import extract
         eval, final_losses, log_vars, init,\
             log_p_x_given_z, log_p_z, z_dist_info,\
-            z_var, ndim, grads_and_vars = extract(
+            z_var, ndim, grads_and_vars, \
+            log_p_z_given_x = extract(
             vars,
             "eval", "final_losses", "log_vars", "init",
             "log_p_x_given_z", "log_p_z", "z_dist_info",
             "z_var", "ndim", "grads_and_vars",
+            "log_p_z_given_x"
         )
         # if eval:
         #     return
@@ -95,11 +99,11 @@ class CVVAE(VAE):
         assert self.monte_carlo_kl
         assert self.min_kl == 0.
         q_z_ent = self.model.inference_dist.entropy(z_dist_info)
-        ent_vlbs = log_p_x_given_z + log_p_z + q_z_ent
+        ent_vlbs = log_p_x_given_z + log_p_z + (q_z_ent)
         cvs = q_z_ent + self.model.inference_dist.logli(
             z_var,
             dict([
-                (k, tf.stop_gradient(v))
+                (k, v if self.no_stop else tf.stop_gradient(v))
                 for k, v in z_dist_info.items()
             ])
         )
