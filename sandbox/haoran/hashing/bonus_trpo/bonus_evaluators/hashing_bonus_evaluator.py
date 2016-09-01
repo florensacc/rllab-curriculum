@@ -6,7 +6,7 @@ from rllab.misc import logger
 
 
 class HashingBonusEvaluator(object):
-    def __init__(self, env_spec, dim_key=128, bucket_sizes=None,bonus_form="1/sqrt(n)"):
+    def __init__(self, env_spec, dim_key=128, bucket_sizes=None,bonus_form="1/sqrt(n)",log_prefix=""):
         # Hashing function: SimHash
         if bucket_sizes is None:
             # some large prime numbers
@@ -26,6 +26,7 @@ class HashingBonusEvaluator(object):
         self.projection_matrix = np.random.normal(size=(obs_dim, dim_key))
         self.total_state_count = 0
         self.bonus_form = bonus_form
+        self.log_prefix = log_prefix
 
 
     def compute_keys(self, observations):
@@ -51,12 +52,12 @@ class HashingBonusEvaluator(object):
         observations = np.concatenate([p["observations"] for p in paths])
         self.inc_hash(observations)
         counts = self.query_hash(observations)
-        logger.record_tabular_misc_stat('StateCount',counts)
+        logger.record_tabular_misc_stat(self.log_prefix + 'StateCount',counts)
         new_state_count = len(np.where(counts==1)[0])
-        logger.record_tabular('NewSteateCount',new_state_count)
+        logger.record_tabular(self.log_prefix + 'NewSteateCount',new_state_count)
 
         self.total_state_count += new_state_count
-        logger.record_tabular('TotalStateCount',self.total_state_count)
+        logger.record_tabular(self.log_prefix + 'TotalStateCount',self.total_state_count)
 
     def predict(self, path):
         counts = np.maximum(1.,self.query_hash(path["observations"]))

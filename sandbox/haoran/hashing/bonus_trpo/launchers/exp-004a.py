@@ -1,3 +1,5 @@
+# Try death penalty
+
 from __future__ import print_function
 from __future__ import absolute_import
 
@@ -5,13 +7,15 @@ from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo import BonusTRPO
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from sandbox.rocky.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
+from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.haoran.hashing.bonus_trpo.envs.atari import AtariEnv
 from rllab import config
 import sys,os
 
-# stub(globals())
+stub(globals())
 
 from rllab.misc.instrument import VariantGenerator, variant
 
@@ -20,22 +24,49 @@ Fix to counting scheme. Fix config...
 """
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_test"
+mode = "ec2_c4_x"
 n_parallel = 8
 snapshot_mode = "last"
 plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
 
-if "ec2_m4" in mode:
+if mode == "ec2_m4":
     config.AWS_INSTANCE_TYPE = "m4.large"
-    config.AWS_SPOT_PRICE = '1.5'
+    config.AWS_SPOT_PRICE = '0.12'
     config.DOCKER_IMAGE = "dementrock/rllab-shared"
     plot = False
-elif "ec2_c4" in mode:
-    config.AWS_INSTANCE_TYPE = "c4.large"
-    config.AWS_SPOT_PRICE = '1.5'
+    n_parallel=1
+elif mode == "ec2_m4_x":
+    config.AWS_INSTANCE_TYPE = "m4.xlarge"
+    config.AWS_SPOT_PRICE = '0.24'
     config.DOCKER_IMAGE = "dementrock/rllab-shared"
-elif "ec2_g2" in mode:
+    plot = False
+    n_parallel=2
+elif mode == "ec2_m4_2x":
+    config.AWS_INSTANCE_TYPE = "m4.2xlarge"
+    config.AWS_SPOT_PRICE = '0.48'
+    config.DOCKER_IMAGE = "dementrock/rllab-shared"
+    plot = False
+    n_parallel=4
+elif mode == "ec2_c4":
+    config.AWS_INSTANCE_TYPE = "c4.large"
+    config.AWS_SPOT_PRICE = '0.105'
+    config.DOCKER_IMAGE = "dementrock/rllab-shared"
+    plot = False
+    n_parallel=1
+elif mode == "ec2_c4_x":
+    config.AWS_INSTANCE_TYPE = "c4.xlarge"
+    config.AWS_SPOT_PRICE = '0.209'
+    config.DOCKER_IMAGE = "dementrock/rllab-shared"
+    plot = False
+    n_parallel=2
+elif mode == "ec2_c4_2x":
+    config.AWS_INSTANCE_TYPE = "c4.2xlarge"
+    config.AWS_SPOT_PRICE = '0.419'
+    config.DOCKER_IMAGE = "dementrock/rllab-shared"
+    plot = False
+    n_parallel=4
+elif mode == "ec2_g2":
     config.AWS_INSTANCE_TYPE = "g2.2xlarge"
     config.AWS_SPOT_PRICE = '1.5'
     config.DOCKER_IMAGE = "tsukuyomi2044/rllab_gpu"
@@ -43,32 +74,44 @@ elif "ec2_g2" in mode:
 
 
 # params ---------------------------------------
-batch_size = 10000
-clip_reward = True
+batch_size = 50000
 max_path_length = 4500
-n_itr = 100
+discount = 0.99
+n_itr = 1000
+
+clip_reward = True
+extra_dim_key = 1024 
+extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
+
 
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [311, 411, 511, 611, 711]
+        return [111, 211, 311, 411, 511]
 
     @variant
     def bonus_coeff(self):
-        return [0.1, 0.01, 0.001,0]
+        return [ 0.01, 0]
 
     @variant
     def dim_key(self):
-        return [64, 256]
-
-    @variant
-    def discount(self):
-        return [0.99]
+        return [64]
 
     @variant
     def game(self):
-        return ["breakout"]
+        return ["breakout","freeway"]
 
+    @variant
+    def bonus_form(self):
+        return ["1/sqrt(n)"]
+
+    @variant
+    def death_ends_episode(self):
+        return [False]
+
+    @variant
+    def death_penalty(self):
+        return [1,0.1,0.01]
 
 variants = VG().variants()
 
@@ -88,25 +131,38 @@ for v in variants:
         print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
         sys.exit(1)
 
-    env = TfEnv(AtariEnv(game=v["game"], obs_type="ram"))
-    policy = CategoricalMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32), name="policy")
+    env = TfEnv(AtariEnv(game=v["game"], obs_type="ram",death_ends_episode=v["death_ends_episode"],death_penalty=v["death_penalty"]))
+    # policy = CategoricalMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32), name="policy")
+    policy = CategoricalGRUPolicy(env_spec=env.spec, hidden_dim=32, name="policy")
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     bonus_baseline = LinearFeatureBaseline(env_spec=env.spec)
-    bonus_evaluator = HashingBonusEvaluator(env_spec=env.spec, dim_key=v["dim_key"])
+    bonus_evaluator = HashingBonusEvaluator(
+        env_spec=env.spec, 
+        dim_key=v["dim_key"],
+        bonus_form=v["bonus_form"],
+        log_prefix="",
+    )
+    extra_bonus_evaluator = HashingBonusEvaluator(
+        env_spec=env.spec, 
+        dim_key=extra_dim_key,
+        bucket_sizes=extra_bucket_sizes,
+        log_prefix="Extra",
+    )
     algo = BonusTRPO(
         env=env,
         policy=policy,
         baseline=baseline,
         bonus_evaluator=bonus_evaluator,
+        extra_bonus_evaluator=extra_bonus_evaluator,
         bonus_baseline=bonus_baseline,
-        extra_bonus_evaluator=None,
         bonus_coeff=v["bonus_coeff"],
         batch_size=batch_size,
         max_path_length=max_path_length,
-        discount=v["discount"],
+        discount=discount,
         n_itr=n_itr,
         clip_reward=clip_reward,
         plot=plot,
+        optimizer=ConjugateGradientOptimizer(hvp_approach=FiniteDifferenceHvp(base_eps=1e-5))
     )
 
     # run --------------------------------------------------
@@ -130,10 +186,12 @@ for v in variants:
         mode=actual_mode,
         variant=v,
         use_gpu=use_gpu,
+        sync_s3_pkl=True,
     )
-
+    
     if "test" in mode:
         sys.exit(0)
 
-if "local" not in mode:
+if ("local" not in mode) and ("test" not in mode):
     os.system("chmod 444 %s"%(__file__))
+

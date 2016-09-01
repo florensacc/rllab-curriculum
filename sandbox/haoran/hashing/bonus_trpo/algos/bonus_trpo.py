@@ -9,8 +9,9 @@ import numpy as np
 
 
 class BonusTRPO(TRPO):
-    def __init__(self, bonus_evaluator, bonus_coeff, clip_reward=True,*args, **kwargs):
+    def __init__(self, bonus_evaluator, bonus_coeff, extra_bonus_evaluator, clip_reward=True,*args, **kwargs):
         self.bonus_evaluator = bonus_evaluator
+        self.extra_bonus_evaluator = extra_bonus_evaluator
         self.bonus_coeff = bonus_coeff
         self.clip_reward= clip_reward
         super(BonusTRPO, self).__init__(*args, **kwargs)
@@ -22,6 +23,7 @@ class BonusTRPO(TRPO):
     def process_samples(self, itr, paths):
         logger.log("fitting bonus evaluator before processing...")
         self.bonus_evaluator.fit_before_process_samples(paths)
+        self.extra_bonus_evaluator.fit_before_process_samples(paths)
         logger.log("fitted")
 
         # recompute the advantages
@@ -84,7 +86,64 @@ class BonusTRPO(TRPO):
                 paths=paths,
             )
         else:
-            raise NotImplementedError
+            max_path_length = max([len(path["advantages"]) for path in paths])
+
+            # make all paths the same length (pad extra advantages with 0)
+            obs = [path["observations"] for path in paths]
+            obs = np.array([tensor_utils.pad_tensor(ob, max_path_length) for ob in obs])
+
+            if self.center_adv:
+                raw_adv = np.concatenate([path["advantages"] for path in paths])
+                adv_mean = np.mean(raw_adv)
+                adv_std = np.std(raw_adv) + 1e-8
+                adv = [(path["advantages"] - adv_mean) / adv_std for path in paths]
+            else:
+                adv = [path["advantages"] for path in paths]
+
+            adv = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in adv])
+
+            actions = [path["actions"] for path in paths]
+            actions = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in actions])
+
+            rewards = [path["rewards"] for path in paths]
+            rewards = np.array([tensor_utils.pad_tensor(r, max_path_length) for r in rewards])
+
+            agent_infos = [path["agent_infos"] for path in paths]
+            agent_infos = tensor_utils.stack_tensor_dict_list(
+                [tensor_utils.pad_tensor_dict(p, max_path_length) for p in agent_infos]
+            )
+
+            env_infos = [path["env_infos"] for path in paths]
+            env_infos = tensor_utils.stack_tensor_dict_list(
+                [tensor_utils.pad_tensor_dict(p, max_path_length) for p in env_infos]
+            )
+
+            valids = [np.ones_like(path["returns"]) for path in paths]
+            valids = np.array([tensor_utils.pad_tensor(v, max_path_length) for v in valids])
+
+            average_discounted_return = \
+                np.mean([path["returns"][0] for path in paths])
+
+            undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
+            undiscounted_bonus_returns = [sum(path["rewards"]) for path in paths]
+
+            ent = np.sum(self.policy.distribution.entropy(agent_infos) * valids) / np.sum(valids)
+
+            ev = special.explained_variance_1d(
+                np.concatenate(baselines),
+                np.concatenate(returns)
+            )
+
+            samples_data = dict(
+                observations=obs,
+                actions=actions,
+                advantages=adv,
+                rewards=rewards,
+                valids=valids,
+                agent_infos=agent_infos,
+                env_infos=env_infos,
+                paths=paths,
+            )
 
         logger.log("fitting baseline...")
         self.baseline.fit(paths)
