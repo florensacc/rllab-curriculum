@@ -421,7 +421,7 @@ class RegularizedHelmholtzMachine(object):
                     enc_fc = network_args.get("enc_fc", True)
                     enc_rep = network_args.get("enc_rep", 1)
                     dec_fs = network_args.get("dec_fs", 5)
-                    # dec_context = network_args.get("dec_context", False)
+                    dec_context = network_args.get("dec_context", False)
                     dec_init_size = network_args.get("dec_init_size", 4)
                     print(network_args)
                     encoder = \
@@ -446,7 +446,8 @@ class RegularizedHelmholtzMachine(object):
                             wnorm_fc(450, )
                     self.encoder_template = self.encoder_template. \
                         wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
-                    decoder = (pt.template('input', self.book).
+                    decoder_inp = pt.template('input', self.book)
+                    decoder = (decoder_inp.
                                wnorm_fc(128, ).
                                reshape([
                                     -1,
@@ -456,10 +457,15 @@ class RegularizedHelmholtzMachine(object):
                                 ])
                                )
                     decoder = decoder.apply(tf.image.resize_nearest_neighbor, [4,4])
-                    # context = decoder if dec_context else None
                     decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[7,7], nn=False, )
-                    decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[14,14], nn=True)
-                    decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[28,28], nn=True)
+                    if dec_context:
+                        context = decoder_inp.wnorm_fc(7*7).reshape([-1,7,7,1])
+                        context2 = context.apply(tf.image.resize_nearest_neighbor, [14,14])
+                        context3 = context.apply(tf.image.resize_nearest_neighbor, [28,28])
+                    else:
+                        context = context2 = context3 = None
+                    decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[14,14], nn=True, context=context)
+                    decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[28,28], nn=True, context=context2)
                     for _ in xrange(steps):
                         with pt.defaults_scope(
                                 var_scope="wide_gen"
@@ -469,6 +475,7 @@ class RegularizedHelmholtzMachine(object):
                                 dec_fs,
                                 base_filters,
                                 stride=1,
+                                context=context3,
                             )
                     self.decoder_template = (
                         decoder.

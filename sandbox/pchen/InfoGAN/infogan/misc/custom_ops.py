@@ -1031,9 +1031,11 @@ def resize_nearest_neighbor(x, scale):
     x = tf.image.resize_nearest_neighbor(x, size)
     return x
 
-def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False):
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
+        if context is not None:
+            blk.join([context], lambda lst: tf.concat(3, lst))
         blk.conv2d_mod(kernel, nch, stride=stride, prefix="pre")
         blk.custom_dropout(keep_prob)
         blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
@@ -1049,6 +1051,8 @@ def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=Fals
 def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
+        if context is not None:
+            blk.join([context], lambda lst: tf.concat(3, lst))
         blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")
         blk.custom_dropout(keep_prob)
         blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
