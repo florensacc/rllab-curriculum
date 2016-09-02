@@ -25,45 +25,46 @@ class DiscreteConvQFunction(LayersPowered, Serializable):
             action_dim = env_spec.action_space.flat_dim
 
             l_obs = L.InputLayer(
-                shape=(None, 84, 84, 1),
+                shape=(None, 84*84),
                 name="input",
             )
-            l_hid = l_obs
+            l_hid = L.reshape(
+                l_obs,
+                [-1, 84, 84, 1],
+                name="rs"
+            )
             l_hid = L.Conv2DLayer(
                 l_hid,
+                "conv1",
                 num_filters=32,
                 filter_size=8,
                 stride=4,
             )
             l_hid = L.Conv2DLayer(
                 l_hid,
+                "conv2",
                 num_filters=64,
                 filter_size=4,
                 stride=2,
             )
             l_hid = L.Conv2DLayer(
                 l_hid,
+                "conv3",
                 num_filters=64,
                 filter_size=3,
                 stride=1,
             )
             l_hid = L.DenseLayer(
                 l_hid,
+                "h1",
                 512,
+                nonlinearity=tf.nn.relu,
             )
-            l_qvals = L.DenseLayer(l_hid, action_dim)
-
-            q_network = MLP(
-                name="q_network",
-                input_shape=(obs_dim,),
-                output_dim=action_dim,
-                hidden_sizes=hidden_sizes,
-                hidden_nonlinearity=hidden_nonlinearity,
-                output_nonlinearity=None,
+            l_q = L.DenseLayer(
+                l_hid,
+                "out",
+                action_dim
             )
-
-            l_obs = q_network.input_layer
-            l_q = q_network.output_layer
 
             self.l_obs = l_obs
             self.l_q = l_q
@@ -104,3 +105,4 @@ class DiscreteConvQFunction(LayersPowered, Serializable):
         qvals = self.f_qval(flat_obs)
         actions = np.argmax(qvals, axis=1)
         return actions, dict()
+
