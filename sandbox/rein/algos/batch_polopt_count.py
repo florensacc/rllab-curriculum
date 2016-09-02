@@ -119,20 +119,6 @@ class SimpleReplayPool(object):
             next_observations=self._observations[transition_indices]
         )
 
-    def mean_obs_act(self):
-        #         if self._size >= self._max_pool_size:
-        #             obs = self._observations
-        #             act = self._actions
-        #         else:
-        #             obs = self._observations[:self._top + 1]
-        #             act = self._actions[:self._top + 1]
-        #         obs_mean = np.mean(obs, axis=0)
-        #         obs_std = np.std(obs, axis=0)
-        #         act_mean = np.mean(act, axis=0)
-        #         act_std = np.std(act, axis=0)
-        #         return obs_mean, obs_std, act_mean, act_std
-        return 0, 1, 0, 1
-
     @property
     def size(self):
         return self._size

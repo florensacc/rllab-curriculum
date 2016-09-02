@@ -297,18 +297,18 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         for _ in xrange(self.n_samples):
             # Make prediction.
             pred = self.pred_fn(input)
-            if self._ind_softmax:
-                pred_rshp = pred[:, :-1].reshape((-1, self.num_classes))
-                rnd = np.random.rand(pred_rshp.shape[0])
-                pred_cumsum = np.cumsum(pred_rshp, axis=1)
-                pred_fill = np.zeros((pred_rshp.shape[0],), dtype=int)
-                for c in xrange(self.num_classes - 1):
-                    pred_fill[pred_cumsum[:, c] < rnd] = c + 1
-                pred = pred_fill.reshape((pred.shape[0], self.state_dim[1], self.state_dim[2]))
+            # if self._ind_softmax:
+                # pred_rshp = pred[:, :-1].reshape((-1, self.num_classes))
+                # rnd = np.random.rand(pred_rshp.shape[0])
+                # pred_cumsum = np.cumsum(pred_rshp, axis=1)
+                # pred_fill = np.zeros((pred_rshp.shape[0],), dtype=int)
+                # for c in xrange(self.num_classes - 1):
+                #     pred_fill[pred_cumsum[:, c] < rnd] = c + 1
+                # pred = pred_fill.reshape((pred.shape[0], self.state_dim[1], self.state_dim[2]))
+                # pred_rshp = pred[:, :-1].reshape((-1, self.num_classes))
             lst_pred.append(pred)
         arr_pred = np.asarray(lst_pred)
-
-        return np.mean(np.var(arr_pred, axis=0), axis=(1, 2))
+        return np.mean(np.var(arr_pred, axis=0), axis=1)
 
     def surprise(self, **kwargs):
 

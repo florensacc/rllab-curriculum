@@ -24,12 +24,14 @@ dropout = False
 
 # Param ranges
 seeds = range(5)
-etas = [0.01]
+etas = [1., 0.01]
 lst_factor = [1]
 lst_pred_delta = [False]
 kl_ratios = [False]
-mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]
+mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=4),
+        AtariEnvX(game='breakout', obs_type="image", frame_skip=4),
+        AtariEnvX(game='frostbite', obs_type="image", frame_skip=4),
+        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=4)]
 
 param_cart_product = itertools.product(
     lst_pred_delta, lst_factor, kl_ratios, mdps, etas, seeds
@@ -183,7 +185,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=5,
+        n_samples=10,
         num_train_samples=1,
         prior_sd=0.05,
         second_order_update=False,
@@ -209,9 +211,9 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         policy=policy,
         baseline=baseline,
         dyn_mdl=dyn_mdl,
-        batch_size=25000,
+        batch_size=500,
         whole_paths=True,
-        max_path_length=4500,
+        max_path_length=45,
         n_itr=400,
         step_size=0.01,
         optimizer_args=dict(
@@ -224,17 +226,17 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
         kl_batch_size=512,
-        num_sample_updates=5,  # Every sample in traj batch will be used in `num_sample_updates' updates.
+        num_sample_updates=1,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=False,
         replay_kl_schedule=0.98,
         n_itr_update=1,  # Fake itr updates in sampler
         dyn_pool_args=dict(
             enable=dyn_pool_enable,
-            size=200000,
+            size=100000,
             min_size=10,
             batch_size=32
         ),
-        surprise_transform=BatchPolopt.SurpriseTransform.ZERO100,
+        surprise_transform=None,#BatchPolopt.SurpriseTransform.CAP99PERC,
         predict_delta=pred_delta,
         num_seq_frames=num_seq_frames,
         predict_reward=True,
@@ -242,11 +244,11 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-42x52-var-c",
+        exp_prefix="trpo-vime-atari-42x52-",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",
