@@ -11,12 +11,19 @@ import itertools
 
 
 class VectorizedSampler(BaseSampler):
+
+    def __init__(self, algo, n_envs=None):
+        super(VectorizedSampler, self).__init__(algo)
+        self.n_envs = n_envs
+
     def start_worker(self):
-        estimated_envs = int(self.algo.batch_size / self.algo.max_path_length)
-        estimated_envs = max(1, min(estimated_envs, 100))
+        n_envs = self.n_envs
+        if n_envs is None:
+            n_envs = int(self.algo.batch_size / self.algo.max_path_length)
+            n_envs = max(1, min(n_envs, 100))
         self.vec_env = VecEnvExecutor(
             self.algo.env,
-            n=estimated_envs,
+            n=n_envs,
             max_path_length=self.algo.max_path_length
         )
         self.env_spec = self.algo.env.spec

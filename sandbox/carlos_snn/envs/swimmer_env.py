@@ -7,6 +7,16 @@ from rllab.misc import logger
 from rllab.misc import autoargs
 
 
+import matplotlib as mpl
+# from matplotlib.figure import Figure
+# from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+
+mpl.use('Agg')
+import matplotlib.pyplot as plt
+import os.path as osp
+
+import gc
+
 class SwimmerEnv(MujocoEnv, Serializable):
     FILE = 'swimmer.xml'
 
@@ -41,23 +51,100 @@ class SwimmerEnv(MujocoEnv, Serializable):
 
     @overrides
     def log_diagnostics(self, paths):
-        # instead of just path["obs"][-1][-3] we will look at the distance to origin
         progs = [
-            np.linalg.norm(path["observations"][-1][-3:-1] - path["observations"][0][-3:-1])  # gives (x,y) coord -not last z
+            np.linalg.norm(path["observations"][-1][-3:-1] - path["observations"][0][-3:-1])
             for path in paths
             ]
         logger.record_tabular('AverageForwardProgress', np.mean(progs))
         logger.record_tabular('MaxForwardProgress', np.max(progs))
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
+
         # now we will grid the space and check how much of it the policy is covering
-        visitation = np.zeros((120, 120))  # we assume the furthest it can go is 6 Check it!!
-        for path in paths:
-            com_x = np.clip(((np.array(path['observations'][:][-3]) + 6) * 10).astype(int), 0, 119)
-            com_y = np.clip(((np.array(path['observations'][:][-2]) + 6) * 10).astype(int), 0, 119)
-            coms = zip(com_x, com_y)
-            for com in coms:
-                visitation[com] += 1
-        print visitation
+        furthest = np.ceil(np.abs(np.max(np.concatenate([path["observations"][:, -3:-1] for path in paths]))))
+        print 'THE FUTHEST IT WENT COMPONENT-WISE IS', furthest
+        furthest = max(furthest, 5)
+        c_grid = int(furthest * 10 * 2)
+
+        if 'agent_infos' in paths[0].keys() and 'latents' in paths[0]['agent_infos'].keys():
+            dict_visit = {}
+            # keep track of the overlap
+            overlap = 0
+            for path in paths:
+                lat = str(path['agent_infos']['latents'][0])
+                if lat not in dict_visit.keys():
+                    dict_visit[lat] = np.zeros((c_grid + 1, c_grid + 1))
+                com_x = np.clip(np.ceil(((np.array(path['observations'][:, -3]) + furthest) * 10)).astype(int), 0,
+                                c_grid)
+                com_y = np.clip(np.ceil(((np.array(path['observations'][:, -2]) + furthest) * 10)).astype(int), 0,
+                                c_grid)
+                coms = zip(com_x, com_y)
+                for com in coms:
+                    dict_visit[lat][com] += 1
+            num_latents = len(dict_visit.keys())
+            num_colors = num_latents + 2  # +2 for the 0 and Repetitions
+            cmap = plt.get_cmap('nipy_spectral', num_colors)
+            visitation_by_lat = np.zeros((c_grid + 1, c_grid + 1))
+            for i, visit in enumerate(dict_visit.itervalues()):
+                lat_visit = np.where(visit == 0, visit, i + 1)  # transform the map into 0 or i+1
+                visitation_by_lat += lat_visit
+                overlap += np.sum(np.where(visitation_by_lat > lat_visit))  # add the overlaps of this latent
+                visitation_by_lat = np.where(visitation_by_lat <= i + 1, visitation_by_lat,
+                                             num_colors - 1)  # mark overlaps
+            x = np.arange(c_grid + 1) / 10. - furthest
+            y = np.arange(c_grid + 1) / 10. - furthest
+
+            fig = plt.figure(0)
+            # fig = Figure()
+            # canvas = FigureCanvas(fig)
+            # fig.clf()
+            ax = fig.add_subplot(111)
+            map_plot = ax.pcolormesh(x, y, visitation_by_lat, cmap=cmap, vmin=0.1, vmax=num_latents + 1)
+            color_len = (num_colors - 1.) / num_colors
+            ticks = np.arange(color_len / 2., num_colors - 1, color_len)
+            cbar = fig.colorbar(map_plot, ticks=ticks)
+            latent_tick_labels = ['latent: ' + l for l in dict_visit.keys()]
+            cbar.ax.set_yticklabels(['No visitation'] + latent_tick_labels + ['Repetitions'])  # horizontal colorbar
+
+            # still log the total visitation and the overlap
+            visitation = reduce(np.add, [visit for visit in dict_visit.itervalues()])
+        else:
+            visitation = np.zeros((c_grid + 1, c_grid + 1))
+            for path in paths:
+                com_x = np.clip(np.ceil(((np.array(path['observations'][:, -3]) + furthest) * 10)).astype(int), 0,
+                                c_grid)
+                com_y = np.clip(np.ceil(((np.array(path['observations'][:, -2]) + furthest) * 10)).astype(int), 0,
+                                c_grid)
+                coms = zip(com_x, com_y)
+                for com in coms:
+                    visitation[com] += 1
+            x = np.arange(c_grid + 1) / 10. - furthest
+            y = np.arange(c_grid + 1) / 10. - furthest
+
+            fig = plt.figure(0)
+            ax = fig.add_subplot(111)
+            map_plot = ax.pcolormesh(x, y, visitation, vmax=10)
+
+            overlap = np.sum(np.where(visitation > 1, visitation, 0))  # sum of all visitations larger than 1
+        ax.set_xlim([x[0], x[-1]])
+        ax.set_ylim([y[0], y[-1]])
+
         total_visitation = np.count_nonzero(visitation)
         logger.record_tabular('VisitationTotal', total_visitation)
+        logger.record_tabular('VisitationOverlap', overlap)
+
+        log_dir = logger.get_snapshot_dir()
+        exp_name = log_dir.split('/')[-1]
+        plt.title(exp_name)
+
+        plt.savefig(osp.join(log_dir, 'visitation.png'))
+
+        plt.cla()
+        plt.clf()
+        plt.close('all')
+        del fig, ax, cmap, cbar, map_plot
+        gc.collect()
+
+        # print "printing the tracker after log_diagnostics:"
+        # self.tr.print_diff()
+

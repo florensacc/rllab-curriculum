@@ -3,7 +3,7 @@ import prettytensor as pt
 import tensorflow as tf
 import numpy as np
 from progressbar import ETA, Bar, Percentage, ProgressBar
-from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture
+from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture, DiscretizedLogistic
 import rllab.misc.logger as logger
 import sys
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp
@@ -34,9 +34,12 @@ class VAE(object):
                  k=1, # importance sampling ratio
                  cond_px_ent=None,
                  anneal_after=None,
+                 anneal_every=100,
+                 anneal_factor=0.75,
                  exp_avg=None,
                  l2_reg=None,
                  img_on=True,
+                 kl_coeff=1.,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -46,6 +49,9 @@ class VAE(object):
         :type recog_reg_coeff: float
         :type learning_rate: float
         """
+        self.kl_coeff = kl_coeff
+        self.anneal_factor = anneal_factor
+        self.anneal_every = anneal_every
         self.img_on = img_on
         self.l2_reg = l2_reg
         self.exp_avg = exp_avg
@@ -126,10 +132,11 @@ class VAE(object):
         )
 
         ndim = self.model.output_dist.effective_dim
+        log_p_z = self.model.latent_dist.logli_prior(z_var)
         if eval:
             assert self.monte_carlo_kl
             kls = (
-                    - self.model.latent_dist.logli_prior(z_var) \
+                    - log_p_z \
                     + log_p_z_given_x
                 )
             kl = tf.reduce_mean(kls)
@@ -140,7 +147,7 @@ class VAE(object):
             ) - np.log(self.k)
             # this is shaky but ok since we are just in eval mode
             vlb = tf.reduce_mean(log_p_x_given_z) - \
-                  tf.maximum(kl, self.min_kl * ndim)
+                  tf.maximum(kl, self.min_kl * ndim) * self.kl_coeff
             log_vars.append((
                 "true_vlb_sum_k0",
                 tf.reduce_mean(log_p_x_given_z - kls)
@@ -149,7 +156,7 @@ class VAE(object):
             if self.monte_carlo_kl:
                 # Construct the variational lower bound
                 kl = tf.reduce_mean(
-                    - self.model.latent_dist.logli_prior(z_var)  \
+                    - log_p_z  \
                     + log_p_z_given_x
                 )
             else:
@@ -157,7 +164,7 @@ class VAE(object):
                 kl = tf.reduce_mean(self.model.latent_dist.kl_prior(z_dist_info))
 
             true_vlb = tf.reduce_mean(log_p_x_given_z) - kl
-            vlb = tf.reduce_mean(log_p_x_given_z) - tf.maximum(kl, self.min_kl * ndim)
+            vlb = tf.reduce_mean(log_p_x_given_z) - tf.maximum(kl, self.min_kl * ndim) * self.kl_coeff
 
         # ld = self.model.latent_dist
         # prior_z_var = ld.sample_prior(self.batch_size)
@@ -218,12 +225,19 @@ class VAE(object):
                 self.l2_reg * tf.nn.l2_loss(var) for var in tf.trainable_variables() \
                     if "scale" not in var.name
             ]
+        grads_and_vars = []
+
         self.init_hook(locals())
 
         log_vars.append((
             "final_loss",
             tf.reduce_sum(final_losses)
         ))
+        if isinstance(self.model.output_dist, DiscretizedLogistic):
+            log_vars.append((
+                "logistic_scale",
+                tf.reduce_mean(x_dist_info["scale"])
+            ))
 
         if init and self.exp_avg is not None:
             self.ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
@@ -241,10 +255,16 @@ class VAE(object):
                         # assume lr is always set
                         initial_value=self.optimizer_args["learning_rate"],
                         name="opt_lr",
+                        trainable=False,
                     )
                     self.optimizer_args["learning_rate"] = self.lr_var
+                final_loss = tf.reduce_sum(final_losses)
                 optimizer = self.optimizer_cls(**self.optimizer_args)
-                self.trainer = pt.apply_optimizer(optimizer, losses=final_losses)
+                if len(grads_and_vars) == 0:
+                    grads_and_vars = optimizer.compute_gradients(final_loss)
+                else:
+                    print("grads supplied by hook")
+                self.trainer = optimizer.apply_gradients(grads_and_vars=grads_and_vars)
                 if self.exp_avg is not None:
                     with tf.name_scope(None):
                         self.trainer = tf.group(*[self.trainer, self.ema_applied])
@@ -274,6 +294,8 @@ class VAE(object):
                         img_var = x_dist_info["p"]
                     elif isinstance(self.model.output_dist, Gaussian):
                         img_var = x_dist_info["mean"]
+                    elif isinstance(self.model.output_dist, DiscretizedLogistic):
+                        img_var = x_dist_info["mu"]
                     else:
                         img_var = x_var
                         # raise NotImplementedError
@@ -417,7 +439,8 @@ class VAE(object):
                         vs = tf.all_variables()
                         sess.run(tf.initialize_variables([
                             v for v in vs if
-                                "optim" in v.name or "global_step" in v.name
+                                "optim" in v.name or "global_step" in v.name or \
+                                ("cv_coeff" in v.name)
                         ]))
                         print("vars initd")
 
@@ -436,6 +459,13 @@ class VAE(object):
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
                         print("Initial: " + log_line)
                         # import ipdb; ipdb.set_trace()
+
+                    # go = dict(locals())
+                    # del go["self"]
+                    # self.iter_hook(**go)
+                    self.iter_hook(
+                       sess=sess, counter=counter, feed=feed
+                    )
 
                     log_vals = sess.run(
                         [self.trainer] + log_vars,
@@ -492,10 +522,10 @@ class VAE(object):
                 logger.dump_tabular(with_prefix=False)
 
                 if self.anneal_after is not None and epoch >= self.anneal_after:
-                    if (epoch % 100) == 0:
+                    if (epoch % self.anneal_every) == 0:
                         lr_val = sess.run([
                             self.lr_var.assign(
-                                self.lr_var * 0.75
+                                self.lr_var * self.anneal_factor
                             )
                         ])
                         logger.log("Learning rate annealed to %s" % lr_val)
@@ -524,4 +554,7 @@ class VAE(object):
         pass
 
     def pre_epoch(self, epoch):
+        pass
+
+    def iter_hook(self, **kw):
         pass

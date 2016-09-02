@@ -357,11 +357,12 @@ class NPO_snn(BatchPolopt):
                 all_latent_avg_returns = []
                 clustered_by_latents = {}  # this could be done within the distribution to be more general, but ugly
                 for path in paths:
-                    lat = str(path['agent_infos']['latents'][0])
-                    if lat not in clustered_by_latents:
-                        clustered_by_latents[lat] = [path]
+                    lat = path['agent_infos']['latents'][0]
+                    lat_str = str(lat)
+                    if lat_str not in clustered_by_latents:
+                        clustered_by_latents[lat_str] = [path]
                     else:
-                        clustered_by_latents[lat].append(path)
+                        clustered_by_latents[lat_str].append(path)
                 for latent_code, paths in clustered_by_latents.iteritems():
                     with logger.tabular_prefix(latent_code), logger.prefix(latent_code):
                         undiscounted_rewards = [sum(path["true_rewards"]) for path in paths]
@@ -370,9 +371,10 @@ class NPO_snn(BatchPolopt):
                         logger.record_tabular('Std_TrueReturn', np.std(undiscounted_rewards))
                         logger.record_tabular('Max_TrueReturn', np.max(undiscounted_rewards))
                         if self.log_deterministic:
-                            with self.policy.set_std_to_0():
-                                path = rollout(self.env, self.policy, self.max_path_length)
-                            logger.record_tabular('Deterministic_TrueReturn', np.sum(path["rewards"]))
+                            lat = paths[0]['agent_infos']['latents'][0]
+                            with self.policy.fix_latent(lat), self.policy.set_std_to_0():
+                                path_det = rollout(self.env, self.policy, self.max_path_length)
+                                logger.record_tabular('Deterministic_TrueReturn', np.sum(path_det["rewards"]))
 
                 with logger.tabular_prefix('all_lat_'), logger.prefix('all_lat_'):
                     logger.record_tabular('MaxAvgReturn', np.max(all_latent_avg_returns))

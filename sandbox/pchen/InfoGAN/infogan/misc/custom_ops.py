@@ -99,12 +99,15 @@ class custom_conv2d(pt.VarStoreMethod):
 
 
 @pt.Register(
-    assign_defaults=('activation_fn', 'custom_phase', 'wnorm', 'pixel_bias'))
+    assign_defaults=('activation_fn', 'custom_phase', 'wnorm', 'pixel_bias',
+                     'var_scope',
+    )
+)
 class custom_deconv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_shape,
                  k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
                  name="deconv2d", activation_fn=None, custom_phase=CustomPhase.train, init_scale=0.1,
-                 wnorm=False, pixel_bias=False, var_scope=None,
+                 wnorm=False, pixel_bias=False, var_scope=None, prefix="",
                  ):
         # print "data init: ", custom_phase
         output_shape[0] = input_layer.shape[0]
@@ -114,7 +117,7 @@ class custom_deconv2d(pt.VarStoreMethod):
         ts_output_shape = tf.pack(output_shape)
         with tf.variable_scope(name):
             # filter : [height, width, output_channels, in_channels]
-            w = self.variable('w', [k_h, k_w, output_shape[-1], input_layer.shape[-1]],
+            w = self.variable(prefix + 'w', [k_h, k_w, output_shape[-1], input_layer.shape[-1]],
                               init=tf.random_normal_initializer(stddev=stddev))
             if custom_phase == CustomPhase.init:
                 w = w.initialized_value()
@@ -385,7 +388,8 @@ def get_linear_ar_mask_by_groups(n_in, n_out, ngroups, zerodiagonal=True):
 @prettytensor.Register(
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'ngroups',
-            'wnorm', 'custom_phase', 'init_scale',
+            'wnorm', 'custom_phase', 'init_scale', 'var_scope',
+            'rank',
     ))
 class arfc(prettytensor.VarStoreMethod):
     def __call__(self,
@@ -403,6 +407,9 @@ class arfc(prettytensor.VarStoreMethod):
                  wnorm=False,
                  custom_phase=CustomPhase.train,
                  init_scale=0.1,
+                 var_scope=None,
+                 rank=None,
+                 prefix="",
                  name=PROVIDED):
         """Adds the parameters for a fully connected layer and returns a tensor.
         The current head must be a rank 2 Tensor.
@@ -459,11 +466,34 @@ class arfc(prettytensor.VarStoreMethod):
         dtype = input_layer.tensor.dtype
         weight_shape = [size, in_size] if transpose_weights else [in_size, size]
 
-        params = self.variable(
-            'weights',
-            weight_shape,
-            init,
-            dt=dtype)
+        if var_scope:
+            old_vars = self.vars
+            new_vars = books.var_mapping[var_scope]
+            self.vars = new_vars
+
+        if rank is None:
+            params = self.variable(
+                prefix + 'weights',
+                weight_shape,
+                init,
+                dt=dtype)
+        else:
+            assert not transpose_weights
+            # print("Using rank'd arfc %s " % rank)
+            params_l = self.variable(
+                prefix + 'weights_l',
+                [in_size, rank],
+                init,
+                dt=dtype)
+            params_r = self.variable(
+                prefix + 'weights_r',
+                [rank, size],
+                init,
+                dt=dtype)
+            params = tf.matmul(params_l, params_r)
+
+        if var_scope:
+            self.vars = old_vars
         if ngroups:
             mask = get_linear_ar_mask_by_groups(in_size, size, ngroups, zerodiagonal=zerodiagonal)
         else:
@@ -478,7 +508,12 @@ class arfc(prettytensor.VarStoreMethod):
         )
         assert not isinstance(mask, tf.Variable)
         if wnorm:
-            params_init = params.initialized_value()
+            if rank is None:
+                params_init = params.initialized_value()
+            else:
+                params_l_init = params_l.initialized_value()
+                params_r_init = params_r.initialized_value()
+                params_init = tf.matmul(params_l_init, params_r_init)
             normalized_init = tf.nn.l2_normalize(params_init, 0)
             y_init = tf.matmul(input_layer, normalized_init * mask, transpose_b=False)#transpose_weights)
             y_init = debug("y_init", y_init)
@@ -507,7 +542,8 @@ class arfc(prettytensor.VarStoreMethod):
 
         # real stuff
         if custom_phase == CustomPhase.init:
-            params = params.initialized_value()
+            assert wnorm
+            params = params_init
             bias = bias.initialized_value()
             if wnorm:
                 params_scale = params_scale.initialized_value()
@@ -538,7 +574,7 @@ from prettytensor.pretty_tensor_image_methods import *
 @prettytensor.Register(
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'batch_normalize',
-            'custom_phase', 'wnorm', 'pixel_bias',
+            'custom_phase', 'wnorm', 'pixel_bias', 'var_scope',
     )
 )
 class conv2d_mod(prettytensor.VarStoreMethod):
@@ -562,6 +598,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
                pixel_bias=False,
                scale_init=0.1,
                var_scope=None,
+               prefix="",
                name=PROVIDED
                ):
     """Adds a convolution to the stack of operations.
@@ -610,11 +647,17 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     books = input_layer.bookkeeper
 
     if var_scope:
-        self.vars = books.var_mapping[var_scope]
+        old_vars = self.vars
+        new_vars = books.var_mapping[var_scope]
+        self.vars = new_vars
+        # import ipdb; ipdb.set_trace()
     assert init is None
     init = tf.random_normal_initializer(stddev=0.02)
     dtype = input_layer.tensor.dtype
-    params = self.variable('weights', size, init, dt=dtype)
+    params = self.variable(prefix + 'weights', size, init, dt=dtype)
+    # only the linear operator is shared
+    if var_scope:
+        self.vars = old_vars
     if custom_phase == CustomPhase.init:
         params = params.initialized_value()
     params_norm = tf.nn.l2_normalize(params, [0,1,2]) if wnorm else params
@@ -983,31 +1026,36 @@ class AdamaxOptimizer(optimizer.Optimizer):
 
 def resize_nearest_neighbor(x, scale):
     input_shape = map(int, x.get_shape().as_list())
-    size = [int(input_shape[1] * scale), int(input_shape[2] * scale)]
+    import math
+    size = [int(math.ceil(input_shape[1] * scale)), int(math.ceil(input_shape[2] * scale))]
     x = tf.image.resize_nearest_neighbor(x, size)
     return x
 
-def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False):
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
-        blk.conv2d_mod(kernel, nch, stride=stride)
+        if context is not None:
+            blk.join([context], lambda lst: tf.concat(3, lst))
+        blk.conv2d_mod(kernel, nch, stride=stride, prefix="pre")
         blk.custom_dropout(keep_prob)
-        blk.conv2d_mod(kernel, nch, activation_fn=None)
+        blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
         blk.apply(lambda x: x*add_coeff)
-        if stride != 1:
-            if nn:
-                origin.apply(resize_nearest_neighbor, 1./stride)
-                origin.apply(lambda o: tf.tile(o, [1,1,1,nch/int(o.get_shape()[3])]))
-            else:
+        if nn:
+            origin.apply(resize_nearest_neighbor, 1./stride)
+            origin.apply(lambda o: tf.tile(o, [1,1,1,nch/int(o.get_shape()[3])]))
+        else:
+            if stride != 1:
                 origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
     return seq.as_layer().nl()
 
-def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False):
+def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
-        blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, )
+        if context is not None:
+            blk.join([context], lambda lst: tf.concat(3, lst))
+        blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")
         blk.custom_dropout(keep_prob)
-        blk.conv2d_mod(kernel, nch, activation_fn=None)
+        blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
         blk.apply(lambda x: x*add_coeff)
         if nn:
             origin.apply(tf.image.resize_nearest_neighbor, out_wh)
@@ -1015,7 +1063,7 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=Fals
             # origin.reshape([-1,]+out_wh+[nch, 2])
             origin.apply(tf.reduce_mean, [4],)
         else:
-            origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None)
+            origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None, prefix="de_pre")
     return seq.as_layer().nl()
 
 def logsumexp(x):

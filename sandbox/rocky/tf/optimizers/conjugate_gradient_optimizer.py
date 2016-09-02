@@ -28,6 +28,7 @@ class PerlmutterHvp(object):
         xs = tuple([tensor_utils.new_tensor_like(p.name.split(":")[0], p) for p in params])
 
         def Hx_plain():
+            import pdb; pdb.set_trace()
             Hx_plain_splits = tf.gradients(
                 tf.reduce_sum(
                     tf.pack([tf.reduce_sum(g * x) for g, x in itertools.izip(constraint_grads, xs)])
@@ -88,6 +89,7 @@ class FiniteDifferenceHvp(object):
                 self.target.set_param_values(param_val - eps * flat_xs, trainable=True)
                 flat_grad_dvminus = self.opt_fun["f_grad"](*inputs_)
                 hx = (flat_grad_dvplus - flat_grad_dvminus) / (2 * eps)
+                self.target.set_param_values(param_val, trainable=True)
             else:
                 flat_grad = self.opt_fun["f_grad"](*inputs_)
                 hx = (flat_grad_dvplus - flat_grad) / eps

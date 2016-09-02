@@ -352,14 +352,14 @@ class DenseLayer(Layer):
 
 
 class BaseConvLayer(Layer):
-    def __init__(self, incoming, num_filters, filter_size, stride=1, pad="VALID",
+    def __init__(self, incoming, name, num_filters, filter_size, stride=1, pad="VALID",
                  untie_biases=False,
                  W=xavier_init, b=tf.zeros_initializer,
                  nonlinearity=tf.nn.relu, n=None, **kwargs):
         """
         Input is assumed to be of shape batch*height*width*channels
         """
-        super(BaseConvLayer, self).__init__(incoming, **kwargs)
+        super(BaseConvLayer, self).__init__(incoming, name, **kwargs)
         if nonlinearity is None:
             self.nonlinearity = tf.identity
         else:
@@ -465,12 +465,12 @@ class BaseConvLayer(Layer):
 
 
 class Conv2DLayer(BaseConvLayer):
-    def __init__(self, incoming, num_filters, filter_size, stride=(1, 1),
+    def __init__(self, incoming, name, num_filters, filter_size, stride=(1, 1),
                  pad="VALID", untie_biases=False,
                  W=xavier_init, b=tf.zeros_initializer,
                  nonlinearity=tf.nn.relu,
                  convolution=tf.nn.conv2d, **kwargs):
-        super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size,
+        super(Conv2DLayer, self).__init__(incoming, name, num_filters, filter_size,
                                           stride, pad, untie_biases, W, b,
                                           nonlinearity, n=2, **kwargs)
         self.convolution = convolution
@@ -478,6 +478,65 @@ class Conv2DLayer(BaseConvLayer):
     def convolve(self, input, **kwargs):
         conved = self.convolution(input, self.W, strides=(1,) + self.stride + (1,), padding=self.pad)
         return conved
+
+
+def pool_output_length(input_length, pool_size, stride, pad):
+    if input_length is None or pool_size is None:
+        return None
+
+    if pad == "SAME":
+        return int(np.ceil(float(input_length) / float(stride)))
+
+    return int(np.ceil(float(input_length - pool_size + 1) / float(stride)))
+
+
+class Pool2DLayer(Layer):
+    def __init__(self, incoming, pool_size, stride=None, pad="VALID", mode='max', **kwargs):
+        super(Pool2DLayer, self).__init__(incoming, **kwargs)
+
+        self.pool_size = as_tuple(pool_size, 2)
+
+        if len(self.input_shape) != 4:
+            raise ValueError("Tried to create a 2D pooling layer with "
+                             "input shape %r. Expected 4 input dimensions "
+                             "(batchsize, 2 spatial dimensions, channels)."
+                             % (self.input_shape,))
+
+        if stride is None:
+            self.stride = self.pool_size
+        else:
+            self.stride = as_tuple(stride, 2)
+
+        self.pad = pad
+
+        self.mode = mode
+
+    def get_output_shape_for(self, input_shape):
+        output_shape = list(input_shape)  # copy / convert to mutable list
+
+        output_shape[1] = pool_output_length(input_shape[1],
+                                             pool_size=self.pool_size[0],
+                                             stride=self.stride[0],
+                                             pad=self.pad,
+                                             )
+
+        output_shape[2] = pool_output_length(input_shape[2],
+                                             pool_size=self.pool_size[1],
+                                             stride=self.stride[1],
+                                             pad=self.pad,
+                                             )
+
+        return tuple(output_shape)
+
+    def get_output_for(self, input, **kwargs):
+        assert self.mode == "max"
+        pooled = tf.nn.max_pool(
+            input,
+            ksize=(1,) + self.pool_size + (1,),
+            strides=(1,) + self.stride + (1,),
+            padding=self.pad,
+        )
+        return pooled
 
 
 # TODO: add Conv3DLayer
