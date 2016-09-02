@@ -68,7 +68,7 @@ def to_ram(ale):
 
 
 class AtariEnvCX(Env, Serializable):
-    def __init__(self, game="pong", obs_type="ram", frame_skip=4):
+    def __init__(self, game="pong", obs_type="ram", frame_skip=4, life_terminating=False):
         Serializable.quick_init(self, locals())
         assert obs_type in ("ram", "image")
         game_path = atari_py.get_game_path(game)
@@ -79,15 +79,22 @@ class AtariEnvCX(Env, Serializable):
         self._obs_type = obs_type
         self._action_set = self.ale.getMinimalActionSet()
         self.frame_skip = frame_skip
+        self.lives = self.ale.lives()
+        self.life_terminating = life_terminating
+
+    def over(self):
+        return self.ale.game_over() or (self.life_terminating and (self.lives > self.ale.lives()))
 
     def step(self, a):
         reward = 0.0
         action = self._action_set[a]
         for _ in xrange(self.frame_skip):
             reward += self.ale.act(action)
+            if self.over():
+                break
         ob = self._get_obs()
 
-        return ob, reward, self.ale.game_over(), {}
+        return ob, reward, self.over(), {}
 
     @property
     def action_space(self):
