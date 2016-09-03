@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, ] #0.001]
+        return [0.002, 0.0005] #0.001]
 
     @variant
     def seed(self):
@@ -95,15 +95,20 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias"
         # yield "resv1_k3_pixel_bias_widegen"
         # yield "resv1_k3_pixel_bias_filters_ratio"
+        yield "res_encoder_plstm_drawy"
         yield "res_encoder_cgru_drawy"
 
     @variant(hide=False)
     def steps(self, ):
-        return [6]
+        return [6,12]
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [24, ]
+        return [20]
+
+    @variant(hide=False)
+    def dec_ac(self, steps):
+        return [1./steps, 1.]
 
     @variant(hide=False)
     def dec_res(self, network):
@@ -126,7 +131,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self):
-        return [1, ]
+        return [128, ]
 
     @variant(hide=False)
     def i_nar(self):
@@ -228,6 +233,7 @@ for v in variants[:]:
                 steps=v["steps"],
                 base_filters=v["base_filters"],
                 dec_res=v["dec_res"],
+                dec_ac=v["dec_ac"],
                 # enc_nn=v["enc_nn"],
                 # dec_nn=v["dec_nn"],
             ),
@@ -252,13 +258,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0902_omni_cgru_drawy_play",
+            exp_prefix="0902_omni_arch_drawy",
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 
