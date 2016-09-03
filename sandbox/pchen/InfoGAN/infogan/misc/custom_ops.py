@@ -1066,6 +1066,15 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=Fals
             origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None, prefix="de_pre")
     return seq.as_layer().nl()
 
+def gruconv_v1(l_in, kernel, nch, ):
+    update_gate = l_in.\
+        conv2d_mod(kernel, nch, activation_fn=tf.nn.sigmoid, prefix="update_gate")
+    read_gate = l_in. \
+        conv2d_mod(kernel, nch, activation_fn=tf.nn.sigmoid, prefix="read_gate")
+    proposal = (l_in * read_gate). \
+        conv2d_mod(kernel, nch, activation_fn=tf.nn.tanh, prefix="proposal")
+    return l_in*update_gate + proposal*(1.-update_gate)
+
 def logsumexp(x):
     x_max = tf.reduce_max(x, [1], keep_dims=True)
     return tf.reshape(x_max, [-1]) + tf.log(tf.reduce_sum(tf.exp(x - x_max), [1]))
