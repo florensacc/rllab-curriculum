@@ -13,7 +13,7 @@ from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungro
     plot_mnist_digit
 from scipy import stats, misc
 from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_unformat_image
-from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianLayer
+from sandbox.rein.algos.replay_pool import ReplayPool
 
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
@@ -26,108 +26,11 @@ from collections import deque
 from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
 
 
-class SimpleReplayPool(object):
-    """Replay pool"""
-
-    def __init__(
-            self,
-            max_pool_size,
-            observation_shape,
-            action_dim,
-            observation_dtype=theano.config.floatX,
-            action_dtype=theano.config.floatX,
-            num_seq_frames=1,
-            **kwargs
-    ):
-        self._observation_shape = observation_shape
-        self._action_dim = action_dim
-        self._observation_dtype = observation_dtype
-        self._action_dtype = action_dtype
-        self._max_pool_size = max_pool_size
-        self._num_seq_frames = num_seq_frames
-
-        self._observations = np.zeros(
-            (max_pool_size,) + observation_shape,
-            dtype=observation_dtype
-        )
-        self._actions = np.zeros(
-            (max_pool_size, action_dim),
-            dtype=action_dtype
-        )
-        self._rewards = np.zeros(max_pool_size, dtype='float32')
-        self._terminals = np.zeros(max_pool_size, dtype='uint8')
-        self._bottom = 0
-        self._top = 0
-        self._size = 0
-
-    def __str__(self):
-        sb = []
-        for key in self.__dict__:
-            sb.append(
-                "{key}='{value}'".format(key=key, value=self.__dict__[key]))
-        return ', '.join(sb)
-
-    def add_sample(self, observation, action, reward, terminal):
-        # Select last frame, which is the 'true' frame. Only add this one, to save replay pool memory. When
-        # the samples are fetched, we rebuild the sequence.
-        self._observations[self._top] = observation[-self._observation_shape[0]:]
-        self._actions[self._top] = action
-        self._rewards[self._top] = reward
-        self._terminals[self._top] = terminal
-        self._top = (self._top + 1) % self._max_pool_size
-        if self._size >= self._max_pool_size:
-            self._bottom = (self._bottom + 1) % self._max_pool_size
-        else:
-            self._size += 1
-
-    def random_batch(self, batch_size):
-        # Here, based on the num_seq_frames, we will construct a batch of elements that comform num_seq_frames.
-        assert self._size > batch_size
-        indices = np.zeros(batch_size, dtype='uint64')
-        transition_indices = np.zeros(batch_size, dtype='uint64')
-        count = 0
-        while count < batch_size:
-            # We don't want to hit the bottom when using num_seq_frames in history.
-            index = np.random.randint(
-                self._bottom + self._num_seq_frames, self._bottom + self._size) % self._max_pool_size
-            # make sure that the transition is valid: if we are at the end of the pool, we need to discard
-            # this sample. Also check whether terminal sample: no next state exists.
-            if (index == self._size - 1 and self._size <= self._max_pool_size) or self._terminals[index] == 1:
-                continue
-            transition_index = (index + 1) % self._max_pool_size
-            indices[count] = index
-            transition_indices[count] = transition_index
-            # Here we add num_seq_frames - 1 additional previous frames; until we encounter term frame, in which
-            # case we add black frames.
-            lst_obs = [None] * self._num_seq_frames
-            insert_empty = np.zeros(batch_size, dtype='bool')
-            for i in xrange(self._num_seq_frames):
-                obs = self._observations[indices - i]
-                insert_empty = np.maximum(self._terminals[indices - i].astype('bool'), insert_empty)
-                if insert_empty.any():
-                    obs_prev = self._observations[indices - i + 1]
-                    obs[insert_empty] = obs_prev[insert_empty]
-                lst_obs[self._num_seq_frames - i - 1] = obs
-            arr_obs = np.stack(lst_obs, axis=1).reshape((lst_obs[0].shape[0], -1))
-
-            count += 1
-        return dict(
-            observations=arr_obs,
-            actions=self._actions[indices],
-            rewards=self._rewards[indices],
-            terminals=self._terminals[indices],
-            next_observations=self._observations[transition_indices]
-        )
-
-    @property
-    def size(self):
-        return self._size
-
-
 class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
+    This one is specifically created for using discrete embedding-based counts.
     """
 
     # Enums
@@ -143,7 +46,7 @@ class BatchPolopt(RLAlgorithm):
             env,
             policy,
             baseline,
-            dyn_mdl,
+            autoenc,
             n_itr=500,
             start_itr=0,
             batch_size=5000,
@@ -203,7 +106,7 @@ class BatchPolopt(RLAlgorithm):
         self.env = env
         self.policy = policy
         self.baseline = baseline
-        self.bnn = dyn_mdl
+        self.autoenc = autoenc
 
         self.n_itr = n_itr
         self.start_itr = start_itr
@@ -240,9 +143,6 @@ class BatchPolopt(RLAlgorithm):
         self._dyn_pool_args = dyn_pool_args
         self._num_seq_frames = num_seq_frames
 
-        if self.bnn.second_order_update:
-            assert self.n_itr_update == 1
-
         # Params to keep track of moving average (both intrinsic and external
         # reward) mean/var.
         if self.normalize_reward:
@@ -261,7 +161,7 @@ class BatchPolopt(RLAlgorithm):
             self.kl_previous = deque(maxlen=self.kl_q_len)
 
     def start_worker(self):
-        parallel_sampler.populate_task(self.env, self.policy, self.bnn)
+        parallel_sampler.populate_task(self.env, self.policy, self.autoenc)
         if self.plot:
             plotter.init_plot(self.env, self.policy)
 
@@ -282,47 +182,6 @@ class BatchPolopt(RLAlgorithm):
             else:
                 acc += np.sum(np.square(_o - _t))
         return acc / _inputs.shape[0]
-
-    def make_train_set(self, inputs, targets):
-
-        inputs = np.array(inputs)
-        targets = np.array(targets)
-
-        input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
-        target_im = targets[:, :-1].reshape(tuple([-1]) + self.bnn.state_dim).transpose(0, 2, 3, 1)
-        input_im = input_im[:, :].reshape(tuple([-1]) + self.bnn.state_dim).transpose(0, 2, 3, 1)
-        act = inputs[:, -self.env.spec.action_space.flat_dim:]
-        rew = targets[:, -1:]
-
-        if self._predict_delta:
-            target_im += input_im
-
-        # Subsample
-        idx = np.random.randint(0, len(input_im), 100)
-        inputs = input_im[idx]
-        targets = target_im[idx]
-        actions = act[idx]
-        rewards = rew[idx]
-
-        path = '/Users/rein/programming/openai/vime'
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-        if os.path.exists(path + '/dataset.pkl'):
-            _dataset = pickle.load(open(path + '/dataset.pkl', 'wb'))
-            _dataset['x'] = np.concatenate((_dataset['x'], inputs))
-            _dataset['y'] = np.concatenate((_dataset['y'], targets))
-            _dataset['a'] = np.concatenate((_dataset['a'], actions))
-            _dataset['r'] = np.concatenate((_dataset['r'], rewards))
-
-
-        else:
-            _dataset = dict(x=inputs, y=targets, a=actions, r=rewards)
-
-        pickle.dump(_dataset, open(path + '/dataset.pkl', 'wb'))
-
-        # import ipdb; ipdb.set_trace()
-        tmp = pickle.load(open(path + '/dataset.pkl', 'r'))
 
     def plot_pred_imgs(self, inputs, targets, itr, count):
         # try:
@@ -358,30 +217,30 @@ class BatchPolopt(RLAlgorithm):
             self._im5, self._im6, self._im7, self._im8 = None, None, None, None
 
         idx = np.random.randint(0, inputs.shape[0], 1)
-        sanity_pred = self.bnn.pred_fn(inputs)
+        sanity_pred = self.autoenc.pred_fn(inputs)
         input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
-        lst_input_im = [input_im[idx, i * np.prod(self.bnn.state_dim):(i + 1) * np.prod(self.bnn.state_dim)].reshape(
-            self.bnn.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
+        lst_input_im = [input_im[idx, i * np.prod(self.autoenc.state_dim):(i + 1) * np.prod(self.autoenc.state_dim)].reshape(
+            self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
                         xrange(self._num_seq_frames)]
-        input_im = input_im[:, -np.prod(self.bnn.state_dim):]
-        input_im = input_im[idx, :].reshape(self.bnn.state_dim).transpose(1, 2, 0)[:, :, 0]
+        input_im = input_im[:, -np.prod(self.autoenc.state_dim):]
+        input_im = input_im[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
         sanity_pred_im = sanity_pred[idx, :-1]
-        if self.bnn.output_type == self.bnn.OutputType.CLASSIFICATION:
-            sanity_pred_im = sanity_pred_im.reshape((-1, self.bnn.num_classes))
+        if self.autoenc.output_type == self.autoenc.OutputType.CLASSIFICATION:
+            sanity_pred_im = sanity_pred_im.reshape((-1, self.autoenc.num_classes))
             sanity_pred_im = np.argmax(sanity_pred_im, axis=1)
-        sanity_pred_im = sanity_pred_im.reshape(self.bnn.state_dim).transpose(1, 2, 0)[:, :, 0]
-        target_im = targets[idx, :-1].reshape(self.bnn.state_dim).transpose(1, 2, 0)[:, :, 0]
+        sanity_pred_im = sanity_pred_im.reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
+        target_im = targets[idx, :-1].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
 
         if self._predict_delta:
             sanity_pred_im += input_im
             target_im += input_im
 
-        if self.bnn.output_type == self.bnn.OutputType.CLASSIFICATION:
-            sanity_pred_im = sanity_pred_im.astype(float) / float(self.bnn.num_classes)
-            target_im = target_im.astype(float) / float(self.bnn.num_classes)
-            input_im = input_im.astype(float) / float(self.bnn.num_classes)
+        if self.autoenc.output_type == self.autoenc.OutputType.CLASSIFICATION:
+            sanity_pred_im = sanity_pred_im.astype(float) / float(self.autoenc.num_classes)
+            target_im = target_im.astype(float) / float(self.autoenc.num_classes)
+            input_im = input_im.astype(float) / float(self.autoenc.num_classes)
             for i in xrange(len(lst_input_im)):
-                lst_input_im[i] = lst_input_im[i].astype(float) / float(self.bnn.num_classes)
+                lst_input_im[i] = lst_input_im[i].astype(float) / float(self.autoenc.num_classes)
 
         sanity_pred_im *= 256.
         sanity_pred_im = np.around(sanity_pred_im).astype(int)
@@ -427,7 +286,7 @@ class BatchPolopt(RLAlgorithm):
 
         if self._dyn_pool_args['enable']:
             observation_dtype = "uint8"
-            self.pool = SimpleReplayPool(
+            self.pool = ReplayPool(
                 max_pool_size=self._dyn_pool_args['size'],
                 # self.env.observation_space.shape,
                 observation_shape=(self.env.observation_space.flat_dim,),
@@ -461,7 +320,7 @@ class BatchPolopt(RLAlgorithm):
                 for path in paths:
                     path_len = len(path['rewards'])
                     for i in xrange(path_len):
-                        obs = (path['observations'][i] * self.bnn.num_classes).astype(int)
+                        obs = (path['observations'][i] * self.autoenc.num_classes).astype(int)
                         act = path['actions'][i]
                         rew_orig = path['rewards_orig'][i]
                         term = (i == path_len - 1)
@@ -492,7 +351,7 @@ class BatchPolopt(RLAlgorithm):
                         else:
                             _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
 
-                        _tl = self.bnn.train_fn(_x, _y, 0 * kl_factor)
+                        _tl = self.autoenc.train_fn(_x, _y, 0 * kl_factor)
                         train_loss += _tl
                         if i % int(np.ceil(itr_tot / 3.)) == 0:
                             self.plot_pred_imgs(_x, _y, itr, i)
@@ -524,21 +383,21 @@ class BatchPolopt(RLAlgorithm):
                             lst_obs_nxt.append(obs_nxt)
                             lst_act.append(act)
                             lst_rew.append(rew)
-                        if self.bnn.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
-                            o = (path['observations'][i] * self.bnn.num_classes).astype(int)
-                            o_nxt = (path['observations'][i + 1] * self.bnn.num_classes).astype(int)
+                        if self.autoenc.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
+                            o = (path['observations'][i] * self.autoenc.num_classes).astype(int)
+                            o_nxt = (path['observations'][i + 1] * self.autoenc.num_classes).astype(int)
                         else:
                             o = path['observations'][i]
                             o_nxt = path['observations'][i + 1]
                         obs.append(o)
                         act.append(path['actions'][i])
                         rew.append(path['rewards_orig'][i])
-                        if self.bnn.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
+                        if self.autoenc.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
                             if self._predict_delta:
                                 # Predict \Delta(s',s)
-                                obs_nxt.append(o_nxt[-np.prod(self.bnn.state_dim):] - o[-np.prod(self.bnn.state_dim):])
+                                obs_nxt.append(o_nxt[-np.prod(self.autoenc.state_dim):] - o[-np.prod(self.autoenc.state_dim):])
                             else:
-                                obs_nxt.append(o_nxt[-np.prod(self.bnn.state_dim):])
+                                obs_nxt.append(o_nxt[-np.prod(self.autoenc.state_dim):])
                         else:
                             if self._predict_delta:
                                 # Predict \Delta(s',s)
@@ -567,29 +426,29 @@ class BatchPolopt(RLAlgorithm):
                 for idx in lst_idx:
                     # Don't use kl_factor when using no replay pool. So here we form an outer
                     # loop around the individual minibatches, the model gets updated on each minibatch.
-                    if itr > 0 and self.bnn.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.bnn.second_order_update:
-                        logp_before = self.bnn.fn_logp(X_train[idx], T_train[idx])
+                    if itr > 0 and self.autoenc.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.autoenc.second_order_update:
+                        logp_before = self.autoenc.fn_logp(X_train[idx], T_train[idx])
                     # Save old posterior as new prior.
-                    self.bnn.save_params()
+                    self.autoenc.save_params()
 
                     for _ in xrange(self.num_sample_updates):
-                        train_loss = float(self.bnn.train_fn(X_train[idx], T_train[idx], 1.0))
+                        train_loss = float(self.autoenc.train_fn(X_train[idx], T_train[idx], 1.0))
                         assert not np.isnan(train_loss)
                         assert not np.isinf(train_loss)
                         if count % int(np.ceil(self.num_sample_updates * len(lst_idx) / 20.)) == 0:
                             self.plot_pred_imgs(X_train[idx], T_train[idx], itr, count)
                         count += 1
 
-                    if itr > 0 and self.bnn.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.bnn.second_order_update:
+                    if itr > 0 and self.autoenc.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR and not self.autoenc.second_order_update:
                         # Samples will default path['KL'] to np.nan. It is filled in here.
-                        logp_after = self.bnn.fn_logp(X_train[idx], T_train[idx])
+                        logp_after = self.autoenc.fn_logp(X_train[idx], T_train[idx])
                         lst_surpr[idx] = logp_after - logp_before
-                    elif itr > 0 and self.bnn.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.INFGAIN and not self.bnn.second_order_update:
-                        lst_surpr[idx] = np.tile(self.bnn.fn_kl(), reps=X_train[idx].shape[0])
+                    elif itr > 0 and self.autoenc.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.INFGAIN and not self.autoenc.second_order_update:
+                        lst_surpr[idx] = np.tile(self.autoenc.fn_kl(), reps=X_train[idx].shape[0])
 
-                if itr > 0 and (self.bnn.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR \
-                                        or self.bnn.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.INFGAIN) \
-                        and not self.bnn.second_order_update:
+                if itr > 0 and (self.autoenc.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR \
+                                        or self.autoenc.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.INFGAIN) \
+                        and not self.autoenc.second_order_update:
                     # Make sure surprise >= 0
                     lst_surpr = np.concatenate(lst_surpr)
                     lst_surpr[lst_surpr < 0] = 0.
@@ -667,7 +526,7 @@ class BatchPolopt(RLAlgorithm):
 
     def obtain_samples(self, itr):
         cur_params = self.policy.get_param_values()
-        cur_dynamics_params = self.bnn.get_param_values()
+        cur_dynamics_params = self.autoenc.get_param_values()
 
         reward_mean = None
         reward_std = None
@@ -676,11 +535,8 @@ class BatchPolopt(RLAlgorithm):
             reward_mean = np.mean(np.asarray(self._reward_mean))
             reward_std = np.mean(np.asarray(self._reward_std))
 
-        # Mean/std obs/act based on replay pool.
-        if self._dyn_pool_args['enable']:
-            obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
-        else:
-            obs_mean, obs_std, act_mean, act_std = 0, 1, 0, 1
+        # FIXME: this should be updated
+        obs_mean, obs_std, act_mean, act_std = 0, 1, 0, 1
 
         paths = parallel_sampler.sample_paths(
             policy_params=cur_params,
@@ -698,9 +554,9 @@ class BatchPolopt(RLAlgorithm):
             obs_std=obs_std,
             act_mean=act_mean,
             act_std=act_std,
-            second_order_update=self.bnn.second_order_update,
+            second_order_update=self.autoenc.second_order_update,
             predict_reward=self.predict_reward,
-            surprise_type=self.bnn.surprise_type,
+            surprise_type=self.autoenc.surprise_type,
             num_seq_frames=self._num_seq_frames
         )
 
@@ -971,8 +827,8 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
         logger.record_tabular('MinReturn', np.min(undiscounted_returns))
         logger.record_tabular('VIME_eta', self.eta)
-        if self.bnn.update_likelihood_sd and self.bnn.output_type == 'regression':
+        if self.autoenc.update_likelihood_sd and self.autoenc.output_type == 'regression':
             logger.record_tabular(
-                'LikelihoodStd', self.bnn.likelihood_sd.eval())
+                'LikelihoodStd', self.autoenc.likelihood_sd.eval())
 
         return samples_data

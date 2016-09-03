@@ -198,7 +198,8 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         disable_variance=False,
         ind_softmax=True,
         num_seq_inputs=num_seq_frames,
-        label_smoothing=0.003
+        label_smoothing=0.003,
+        disable_act_rew_paths=True
     )
 
     algo = TRPO(
