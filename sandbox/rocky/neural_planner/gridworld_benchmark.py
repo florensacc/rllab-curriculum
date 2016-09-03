@@ -267,21 +267,200 @@ def gen_demos(shape, max_n_obstacles, n_maps):
 
 # Now construct various NNs
 
-def cnn(shape):
-    nrow, ncol = shape
-    net = L.InputLayer(shape=(None, nrow, ncol, 3), name="input")
-    net = L.Conv2DLayer(net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv1")
-    net = L.Pool2DLayer(net, pool_size=(2, 2), pad="SAME", name="pool1")
-    net = L.Conv2DLayer(net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2")
-    net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv3")
-    net = L.Pool2DLayer(net, pool_size=(2, 2), pad="SAME", name="pool2")
-    net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv4")
-    net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv5")
-    net = L.DenseLayer(net, num_units=8, nonlinearity=tf.nn.softmax, name="output")
-    return net
+class CNN(object):
+
+    def __call__(self, shape):
+        nrow, ncol = shape
+        # debug = []
+        input = L.InputLayer(shape=(None, nrow, ncol, 3), name="input")
+
+        map_in = L.SliceLayer(input, indices=slice(0, 1), axis=-1, name="map_in")
+        state_in = L.SliceLayer(input, indices=slice(1, 2), axis=-1, name="state_in")
+        goal_in = L.SliceLayer(input, indices=slice(2, 3), axis=-1, name="goal_in")
+
+        net_in = L.concat([map_in, goal_in], axis=3, name="net_in")
+
+        net = L.batch_norm(net_in, name="bn0")
+
+        case = 1
+
+        if case == 0:
+            net = L.batch_norm(
+                L.Conv2DLayer(
+                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv1"
+                ),
+                name="bn1"
+            )
+            net = L.batch_norm(
+                L.Conv2DLayer(
+                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2"
+                ),
+                name="bn2"
+            )
+            net = L.batch_norm(
+                L.Conv2DLayer(
+                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv3"
+                ),
+                name="bn3"
+            )
+            net = L.batch_norm(
+                L.Conv2DLayer(
+                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv4"
+                ),
+                name="bn4"
+            )
+            net = L.batch_norm(
+                L.Conv2DLayer(
+                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv5"
+                ),
+                name="bn5"
+            )
+        elif case == 1:
+            net = L.batch_norm(
+                L.Conv2DLayer(
+                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv1",
+                ),
+                name="bn1",
+            )
+            for idx in xrange(2, 36+1):
+                net = L.batch_norm(
+                    L.Conv2DLayer(
+                        net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2",
+                        variable_reuse=idx > 2,
+                    ),
+                    name="bn%d" % idx,
+                )
+            # for idx in xrange(36):
+            #     net = L.Conv2DLayer(
+            #         net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv%d" % idx,
+            #         variable_reuse=idx > 0,
+            #     )
+            # net = L.Conv2DLayer(
+            #     net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2",
+            #     variable_reuse=True
+            # )
+            # net = L.Conv2DLayer(
+            #     net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2",
+            #     variable_reuse=True
+            # )
+            # net = L.Conv2DLayer(
+            #     net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2",
+            #     variable_reuse=True
+            # )
+        else:
+            raise NotImplementedError
+
+        net = L.OpLayer(
+            net,
+            extras=[state_in],
+            op=lambda q_val, state_val: tf.reduce_sum(tf.reduce_sum(q_val * state_val, 1), 1),
+            shape_op=lambda q_shape, state_shape: (q_shape[0], q_shape[-1]),
+            name="q_out"
+        )
+
+        # net = L.Conv2DLayer(net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2")
+        # net = L.batch_norm(net, name="bn2")
+        # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv3")
+        # net = L.batch_norm(net, name="bn3")
+        # # net = L.Pool2DLayer(net, pool_size=(2, 2), pad="SAME", name="pool2")
+        # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv4")
+        # net = L.batch_norm(net, name="bn4")
+        # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv5")
+        # net = L.batch_norm(net, name="bn5")
+        # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv6")
+        # net = L.batch_norm(net, name="bn6")
+        # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv7")
+        # net = L.batch_norm(net, name="bn7")
+        net = L.DenseLayer(net, num_units=8, nonlinearity=tf.nn.softmax, name="output")
+        # net.debug = debug
+        return net
 
 
-def evaluate(sess, policy, maps, fromtos, opt_trajlen, max_horizon):
+class VIN(object):
+
+    def __init__(self, n_iter):
+        self.n_iter = n_iter
+
+    def __call__(self, shape):
+        nrow, ncol = shape
+        l_q = 10
+        n_iter = self.n_iter
+        input = L.InputLayer(shape=(None, nrow, ncol, 3), name="input")
+
+        bias = tf.get_variable(name="bias", shape=(150,), initializer=tf.random_normal_initializer(stddev=0.01))
+
+        w0 = tf.get_variable(name="w0", shape=(3, 3, 2, 150), initializer=tf.random_normal_initializer(stddev=0.01))
+        w1 = tf.get_variable(name="w1", shape=(3, 3, 150, 1), initializer=tf.random_normal_initializer(stddev=0.01))
+
+        w = tf.get_variable(name="w", shape=(3, 3, 1, l_q), initializer=tf.random_normal_initializer(stddev=0.01))
+        w_fb = tf.get_variable(name="w_fb", shape=(3, 3, 1, l_q), initializer=tf.random_normal_initializer(stddev=0.01))
+        w_bi = tf.concat(2, [w, w_fb])
+
+        map_in = L.SliceLayer(input, indices=slice(0, 1), axis=-1, name="map_in")
+        state_in = L.SliceLayer(input, indices=slice(1, 2), axis=-1, name="state_in")
+        goal_in = L.SliceLayer(input, indices=slice(2, 3), axis=-1, name="goal_in")
+
+        net_in = L.concat([map_in, goal_in], axis=3, name="net_in")
+
+        # initial conv layer over image+reward prior
+
+        h = L.Conv2DLayer(
+            net_in, num_filters=150, filter_size=(3, 3), pad="SAME", nonlinearity=None, name="h",
+            W=w0, b=bias,
+        )
+        r = L.Conv2DLayer(
+            h, num_filters=1, filter_size=(1, 1), pad="SAME", name="r0", nonlinearity=None,
+            W=w1, b=None
+        )
+
+        q = L.Conv2DLayer(
+            r, num_filters=l_q, filter_size=(3, 3), pad="SAME", name="q0", nonlinearity=None,
+            W=w, b=None
+        )
+        v = L.OpLayer(
+            q,
+            op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
+            shape_op=lambda shape: shape[:-1] + (1,),
+            name="v0"
+        )
+        for idx in xrange(1, n_iter + 1):
+            q = L.Conv2DLayer(
+                L.concat([r, v], axis=3, name="rv%d" % idx),
+                num_filters=l_q, filter_size=(3, 3), pad="SAME", name="q%d" % idx,
+                W=w_bi, b=None, nonlinearity=None,
+            )
+            v = L.OpLayer(
+                q,
+                op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
+                shape_op=lambda shape: shape[:-1] + (1,),
+                name="v%d" % idx,
+            )
+        q = L.Conv2DLayer(
+            L.concat([r, v], axis=3, name="rv_last"),
+            num_filters=l_q, filter_size=(3, 3), pad="SAME", name="q_last",
+            W=w_bi, b=None, nonlinearity=None,
+        )
+
+        q_out = L.OpLayer(
+            q,
+            extras=[state_in],
+            op=lambda q_val, state_val: tf.reduce_sum(tf.reduce_sum(q_val * state_val, 1), 1),
+            shape_op=lambda q_shape, state_shape: (q_shape[0], q_shape[-1]),
+            name="q_out"
+        )
+
+        out = L.DenseLayer(
+            q_out,
+            num_units=8,
+            nonlinearity=tf.nn.softmax,
+            name="output"
+        )
+
+        # Do one last convolution
+        return out
+
+
+def evaluate(policy, maps, fromtos, opt_trajlen, max_horizon):
     # Run the neural network on all the tasks at least once
     maps = np.asarray(maps)
     from_xs, from_ys, to_xs, to_ys = map(np.asarray, zip(*fromtos))
@@ -343,6 +522,7 @@ def evaluate(sess, policy, maps, fromtos, opt_trajlen, max_horizon):
             if progbar.active:
                 progbar.stop()
             break
+    n_trials += np.sum(1 - tried)
 
     return n_success * 1.0 / n_trials, np.mean(traj_difflen)
 
@@ -366,6 +546,9 @@ class GridworldBenchmark(object):
             train_ratio=0.9,
             n_epochs=1000,
             eval_max_horizon=500,
+            learning_rate=1e-3,
+            lr_schedule=None,
+            network=CNN(),
     ):
         self.shape = shape
         self.max_n_obstacles = max_n_obstacles
@@ -375,6 +558,9 @@ class GridworldBenchmark(object):
         self.train_ratio = train_ratio
         self.n_epochs = n_epochs
         self.eval_max_horizon = eval_max_horizon
+        self.learning_rate = learning_rate
+        self.lr_schedule = lr_schedule
+        self.network = network
 
     def train(self):
 
@@ -402,41 +588,91 @@ class GridworldBenchmark(object):
         test_opt_trajlen = np.asarray(map(len, traj_states[n_train:]))
         test_fromtos = fromtos[n_train:]
 
+        self.eval_max_horizon = max(np.max(train_opt_trajlen), np.max(test_opt_trajlen)) * 2
+
         dataset = BatchDataset(inputs=[train_states, train_actions], batch_size=self.batch_size)
 
-        net = cnn(self.shape)
+        net = self.network(self.shape)
 
         state_var = tf.placeholder(dtype=tf.float32, shape=(None,) + self.shape + (3,), name="state")
         action_var = tf.placeholder(dtype=tf.float32, shape=(None, self.n_actions), name="action")
 
-        action_prob_var = L.get_output(net, state_var)
+        train_action_prob_var = L.get_output(net, state_var, phase='train')
+        test_action_prob_var = L.get_output(net, state_var, phase='test')
 
-        loss_var = tf.reduce_mean(
-            tf.reduce_sum(action_var * -tf.log(action_prob_var + 1e-8), -1)
+        train_loss_var = tf.reduce_mean(
+            tf.reduce_sum(action_var * -tf.log(train_action_prob_var + 1e-8), -1)
         )
-        err_var = tf.reduce_mean(
-            tf.cast(tf.not_equal(tf.arg_max(action_var, 1), tf.arg_max(action_prob_var, 1)), tf.float32)
+        train_err_var = tf.reduce_mean(
+            tf.cast(tf.not_equal(tf.arg_max(action_var, 1), tf.arg_max(train_action_prob_var, 1)), tf.float32)
         )
 
-        train_op = tf.train.AdamOptimizer().minimize(loss_var, var_list=L.get_all_params(net, trainable=True))
+        test_loss_var = tf.reduce_mean(
+            tf.reduce_sum(action_var * -tf.log(test_action_prob_var + 1e-8), -1)
+        )
+        test_err_var = tf.reduce_mean(
+            tf.cast(tf.not_equal(tf.arg_max(action_var, 1), tf.arg_max(test_action_prob_var, 1)), tf.float32)
+        )
+
+        params = L.get_all_params(net, trainable=True)
+        params = filter(lambda x: isinstance(x, tf.Variable), params)
+
+        lr_var = tf.placeholder(dtype=tf.float32, shape=(), name="lr")
+
+        optimizer = tf.train.AdamOptimizer(learning_rate=lr_var, epsilon=1e-6)
+        train_op = optimizer.minimize(train_loss_var, var_list=params)
+
+        if self.lr_schedule is not None:
+            lr_list = []
+            for lr, n_epochs in self.lr_schedule:
+                lr_list.extend([lr] * n_epochs)
+            assert len(lr_list) == self.n_epochs
+            self.n_epochs = len(lr_list)
+        else:
+            lr_list = [self.learning_rate] * self.n_epochs
 
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
 
-            policy = new_policy(sess, state_var, action_prob_var)
+            policy = new_policy(sess, state_var, test_action_prob_var)
+
             for epoch in xrange(self.n_epochs):
+
                 logger.log("Epoch %d" % epoch)
                 bar = pyprind.ProgBar(len(train_states))
 
                 train_losses = []
                 train_errs = []
 
+                if epoch == 0 or lr_list[epoch] != lr_list[epoch - 1]:
+                    # If learning rate changed, reset the optimizer state
+                    logger.log("Resetting optimizer state..")
+                    if isinstance(optimizer, tf.train.AdamOptimizer):
+                        vars = optimizer._slots['m'].values() + optimizer._slots['v'].values()
+                        var_vals = sess.run(vars)
+                        ops = []
+                        for var, val in zip(vars, var_vals):
+                            ops.append(tf.assign(var, np.zeros_like(val)))
+                        sess.run(ops)
+                    elif isinstance(optimizer, tf.train.RMSPropOptimizer):
+                        vars = optimizer._slots['rms'].values() + optimizer._slots['momentum'].values()
+                        var_vals = sess.run(vars)
+                        ops = []
+                        for var, val in zip(vars, var_vals):
+                            ops.append(tf.assign(var, np.zeros_like(val)))
+                        sess.run(ops)
+                    else:
+                        import ipdb; ipdb.set_trace()
+
                 for batch_states, batch_actions in dataset.iterate():
+                    # print(map(np.linalg.norm, sess.run(net.debug)))
+                    # import ipdb; ipdb.set_trace()
                     train_loss, train_err, _ = sess.run(
-                        [loss_var, err_var, train_op],
+                        [train_loss_var, train_err_var, train_op],
                         feed_dict={
                             state_var: batch_states,
-                            action_var: batch_actions
+                            action_var: batch_actions,
+                            lr_var: lr_list[epoch],
                         }
                     )
                     bar.update(len(batch_states))
@@ -448,7 +684,7 @@ class GridworldBenchmark(object):
 
                 logger.log("Evaluating error on test set")
                 test_loss, test_err = sess.run(
-                    [loss_var, err_var],
+                    [test_loss_var, test_err_var],
                     feed_dict={
                         state_var: test_states,
                         action_var: test_actions
@@ -456,10 +692,13 @@ class GridworldBenchmark(object):
                 )
 
                 logger.log("Evaluating policy")
+
+                # subsample the same number of states from training data
                 train_success_rate, avg_train_traj_len = evaluate(
-                    sess, policy, train_maps, train_fromtos, train_opt_trajlen, self.eval_max_horizon)
+                    policy, train_maps[:len(test_maps)], train_fromtos[:len(test_maps)], train_opt_trajlen[:len(
+                        test_maps)], self.eval_max_horizon)
                 test_success_rate, avg_test_traj_len = evaluate(
-                    sess, policy, test_maps, test_fromtos, test_opt_trajlen, self.eval_max_horizon)
+                    policy, test_maps, test_fromtos, test_opt_trajlen, self.eval_max_horizon)
 
                 logger.record_tabular("Epoch", epoch)
                 logger.record_tabular("AvgTrainLoss", np.mean(train_losses))
