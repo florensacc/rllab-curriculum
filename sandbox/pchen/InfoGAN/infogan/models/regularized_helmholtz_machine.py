@@ -632,11 +632,12 @@ class RegularizedHelmholtzMachine(object):
                     canvas = tf.constant(np.zeros([1,28,28,1], dtype='float32'))
                     for _ in xrange(steps):
                         with pt.defaults_scope(
-                                var_scope="gru"
+                                var_scope="plstm"
                         ):
                             add = decoder.nl(activation_fn=tf.nn.tanh). \
                                 custom_deconv2d(
                                 [0, 28, 28, 1], k_h=5, k_w=5, prefix="step_dec",
+                                activation_fn=None,
                             )
                             canvas = add*dec_ac + canvas
                             rnn_inp = canvas. \
@@ -725,6 +726,7 @@ class RegularizedHelmholtzMachine(object):
                             add = decoder. \
                                 custom_deconv2d(
                                     [0, 28, 28, 1], k_h=5, k_w=5, prefix="step_dec",
+                                    activation_fn=None,
                                 )
                             canvas = add*dec_ac + canvas
                             rnn_inp = canvas.\

@@ -1104,7 +1104,8 @@ def plstmconv_v1(l_in, inp, kernel, nch, ):
         ).nl()
         remember_gate = (
             squashed_h.conv2d_mod(kernel, nch, activation_fn=None, prefix="rem_gate_from_hidden") +
-            inp.conv2d_mod(kernel, nch, activation_fn=None, prefix="rem_gate_from_input")
+            inp.conv2d_mod(kernel, nch, activation_fn=None, prefix="rem_gate_from_input") +
+            2
         ).nl()
     proposal = (
         (squashed_h * output_gate).
