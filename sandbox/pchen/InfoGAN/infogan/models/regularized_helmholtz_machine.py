@@ -587,6 +587,7 @@ class RegularizedHelmholtzMachine(object):
                     dec_init_size = network_args.get("dec_init_size", 4)
                     dec_res = network_args.get("dec_res", True)
                     dec_ac = network_args.get("dec_ac", 1.)
+                    dec_ac_exp = network_args.get("dec_ac_exp", 1.)
                     print(network_args)
                     encoder = \
                         (pt.template('input', self.book).
@@ -640,6 +641,7 @@ class RegularizedHelmholtzMachine(object):
                                 activation_fn=None,
                             )
                             canvas = add*dec_ac + canvas
+                            dec_ac *= dec_ac_exp
                             rnn_inp = canvas. \
                                 conv2d_mod(5, base_filters, stride=2, prefix="step_enc")
                             decoder, _ = plstmconv_v1(

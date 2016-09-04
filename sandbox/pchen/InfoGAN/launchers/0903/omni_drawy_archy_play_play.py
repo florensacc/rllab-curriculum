@@ -81,7 +81,7 @@ class VG(VariantGenerator):
     # def pr(self):
     #     return [True, False]
 
-    @variant(hide=False)
+    @variant(hide=True)
     def network(self):
         # yield "large_conv"
         # yield "small_conv"
@@ -96,11 +96,11 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen"
         # yield "resv1_k3_pixel_bias_filters_ratio"
         yield "res_encoder_plstm_drawy"
-        yield "res_encoder_cgru_drawy"
+        # yield "res_encoder_cgru_drawy"
 
     @variant(hide=False)
     def steps(self, ):
-        return [6,12]
+        return [12]
     #
     @variant(hide=False)
     def base_filters(self, ):
@@ -108,7 +108,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def dec_ac(self, steps):
-        return [1./steps, 1.]
+        return [1.]
 
     @variant(hide=False)
     def dec_res(self, network):
@@ -234,6 +234,7 @@ for v in variants[:]:
                 base_filters=v["base_filters"],
                 dec_res=v["dec_res"],
                 dec_ac=v["dec_ac"],
+                dec_ac_exp=0.6,
                 # enc_nn=v["enc_nn"],
                 # dec_nn=v["dec_nn"],
             ),
@@ -258,13 +259,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0903_omni_arch_drawy_fixed_fixed",
+            exp_prefix="0902_omni_arch_drawy",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 
