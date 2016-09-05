@@ -10,11 +10,55 @@ from rllab.core.serializable import Serializable
 from rllab.misc import ext
 from collections import OrderedDict
 import theano
+from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 from rllab.misc.special import to_onehot_sym
 from sandbox.rein.dynamics_models.utils import enum
 from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, BayesianDeConvLayer, BayesianDenseLayer, \
     BayesianLayer
+
+
+class DiscreteEmbeddingLayer(lasagne.layers.Layers):
+    """
+    Discrete embedding layer for counting
+    """
+
+    def __init__(self, incoming, num_units, W=lasagne.init.GlorotUniform(),
+                 b=lasagne.init.Constant(0.), nonlinearity=lasagne.nonlinearities.rectify,
+                 **kwargs):
+        super(DiscreteEmbeddingLayer, self).__init__(incoming, **kwargs)
+        self.nonlinearity = (lasagne.nonlinearities.identity if nonlinearity is None
+                             else nonlinearity)
+
+        self.num_units = num_units
+        num_inputs = int(np.prod(self.input_shape[1:]))
+
+        self.W = self.add_param(W, (num_inputs, num_units), name="W")
+        if b is None:
+            self.b = None
+        else:
+            self.b = self.add_param(b, (num_units,), name="b",
+                                    regularizable=False)
+
+        self._srng = RandomStreams()
+
+    def get_embedding(self, input):
+        return T.cast(T.round(self.get_output_for(input)), 'int32')
+
+    def get_output_shape_for(self, input_shape):
+        return input_shape[0], self.num_units
+
+    def get_output_for(self, input, **kwargs):
+        if input.ndim > 2:
+            # if the input has more than two dimensions, flatten it into a
+            # batch of feature vectors.
+            input = input.flatten(2)
+
+        activation = T.dot(input, self.W)
+        if self.b is not None:
+            activation = activation + self.b.dimshuffle('x', 0)
+        # Add noise to activation for discretization
+        return self.nonlinearity(activation) + self._srng.uniform(low=-0.5, high=0.5)
 
 
 class IndependentSoftmaxLayer(lasagne.layers.Layer):
@@ -298,14 +342,14 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             # Make prediction.
             pred = self.pred_fn(input)
             # if self._ind_softmax:
-                # pred_rshp = pred[:, :-1].reshape((-1, self.num_classes))
-                # rnd = np.random.rand(pred_rshp.shape[0])
-                # pred_cumsum = np.cumsum(pred_rshp, axis=1)
-                # pred_fill = np.zeros((pred_rshp.shape[0],), dtype=int)
-                # for c in xrange(self.num_classes - 1):
-                #     pred_fill[pred_cumsum[:, c] < rnd] = c + 1
-                # pred = pred_fill.reshape((pred.shape[0], self.state_dim[1], self.state_dim[2]))
-                # pred_rshp = pred[:, :-1].reshape((-1, self.num_classes))
+            # pred_rshp = pred[:, :-1].reshape((-1, self.num_classes))
+            # rnd = np.random.rand(pred_rshp.shape[0])
+            # pred_cumsum = np.cumsum(pred_rshp, axis=1)
+            # pred_fill = np.zeros((pred_rshp.shape[0],), dtype=int)
+            # for c in xrange(self.num_classes - 1):
+            #     pred_fill[pred_cumsum[:, c] < rnd] = c + 1
+            # pred = pred_fill.reshape((pred.shape[0], self.state_dim[1], self.state_dim[2]))
+            # pred_rshp = pred[:, :-1].reshape((-1, self.num_classes))
             lst_pred.append(pred)
         arr_pred = np.asarray(lst_pred)
         return np.mean(np.var(arr_pred, axis=0), axis=1)

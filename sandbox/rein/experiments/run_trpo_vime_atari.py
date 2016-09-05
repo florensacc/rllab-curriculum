@@ -65,7 +65,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         num_seq_inputs=num_seq_frames,
         regressor_args=dict(
             mean_network=network,
-            batchsize=30000,
+            batchsize=10000,
             subsample_factor=0.1),
     )
 
@@ -199,7 +199,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         ind_softmax=True,
         num_seq_inputs=num_seq_frames,
         label_smoothing=0.003,
-        disable_act_rew_paths=True
+        disable_act_rew_paths=False
     )
 
     algo = TRPO(
@@ -224,14 +224,14 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         eta=eta,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=512,
+        kl_batch_size=256,
         num_sample_updates=5,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=False,
         replay_kl_schedule=0.98,
         n_itr_update=1,  # Fake itr updates in sampler
         dyn_pool_args=dict(
             enable=dyn_pool_enable,
-            size=200000,
+            size=100000,
             min_size=10,
             batch_size=32
         ),
@@ -243,7 +243,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-42x52-var-c",
+        exp_prefix="trpo-vime-atari-42x52-var-d",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
