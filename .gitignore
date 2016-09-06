@@ -46,3 +46,4 @@ MNIST/
 logs/
 *.pkl
 *.ipynb
+sandbox/rocky/exp_data

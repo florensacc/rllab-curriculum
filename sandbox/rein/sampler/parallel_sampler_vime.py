@@ -125,7 +125,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
             G.dynamics.load_prev_params()
 
         elif surprise_type == G.dynamics.SurpriseType.COMPR:
-            if second_order_update:
+            if second_order_update or use_replay_pool:
                 # G.dynamics.save_params()
                 #
                 # logp_before = G.dynamics.fn_logp(
@@ -140,9 +140,8 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 # G.dynamics.load_prev_params()
                 #
                 # surpr = logp_after - logp_before
-                surpr = - G.dynamics.fn_logp(
-                    _inputs[start:end], _targets[start:end])
-                surpr[surpr < 0] = 0.
+                surpr = (1. - np.exp(G.dynamics.fn_logp(_inputs[start:end], _targets[start:end])))
+                # surpr[surpr < 0] = 0.
 
             else:
                 surpr = np.nan

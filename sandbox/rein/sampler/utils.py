@@ -16,7 +16,7 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, num_s
         env.render()
     # buffer of empty frames.
     top_ptr = 0
-    obs_bfr = np.zeros((num_seq_frames,) + env.spec.observation_space.shape[1:],)
+    obs_bfr = np.zeros((num_seq_frames, env.spec.observation_space.shape[1], env.spec.observation_space.shape[2]))
     # We fill up with the starting frame, better than black.
     for i in xrange(num_seq_frames):
         obs_bfr[i] = o

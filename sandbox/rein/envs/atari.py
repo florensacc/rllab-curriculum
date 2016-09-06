@@ -43,7 +43,7 @@ except ImportError:
         "atari.py: Couldn't import opencv. Atari image environments will raise an error (RAM ones will still work).")
     cv2 = NoCV2()
 
-IMG_WH = (84, 84)  # width, height of images
+IMG_WH = (42, 52)  # width, height of images
 
 
 def to_rgb(ale):
@@ -86,7 +86,6 @@ class AtariEnvX(Env, Serializable):
         for _ in xrange(self.frame_skip):
             reward += self.ale.act(action)
         ob = self._get_obs()
-
         return ob, reward, self.ale.game_over(), {}
 
     @property
@@ -121,7 +120,7 @@ class AtariEnvX(Env, Serializable):
         elif self._obs_type == "image":
             next_obs = self._get_image()[1:-1, :, :]
             next_obs = scipy.misc.imresize(
-                next_obs, (IMG_WH[0], IMG_WH[1], 3), interp='bilinear', mode=None)
+                next_obs, (IMG_WH[1], IMG_WH[0], 3), interp='bicubic', mode=None)
             next_obs = rgb2gray(next_obs)
             next_obs = next_obs / 256.
             next_obs = next_obs[np.newaxis, :, :]
