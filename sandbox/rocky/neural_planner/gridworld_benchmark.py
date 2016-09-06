@@ -7,29 +7,36 @@ import scipy.sparse
 import sandbox.rocky.tf.core.layers as L
 import tensorflow as tf
 import pyprind
+import os.path
+import scipy.io as sio
 from rllab.misc import special
 from rllab.misc import logger
 from rllab.optimizers.minibatch_dataset import BatchDataset
-
-# 0: left top
-# 1: top
-# 2: right top
-# 3: right
-# 4: right bottom
-# 5: bottom
-# 6: left bottom
-# 7: left
+from rllab import config
 
 ACTION_MAP = np.array([
-    [-1, -1],
     [-1, 0],
-    [-1, 1],
-    [0, 1],
-    [1, 1],
     [1, 0],
-    [1, -1],
+    [0, 1],
     [0, -1],
+    [-1, 1],
+    [-1, -1],
+    [1, 1],
+    [1, -1],
 ])
+
+ACTION_LENGTH_MAP = np.array([
+    1,
+    1,
+    1,
+    1,
+    np.sqrt(2),
+    np.sqrt(2),
+    np.sqrt(2),
+    np.sqrt(2),
+])
+
+N_ACTIONS = 8
 
 
 def logical_or(*args):
@@ -166,11 +173,19 @@ def to_sparse_adj_graph(map):
     edge_vals = np.concatenate([
         np.ones(len(from_hids) * 2),
         np.ones(len(from_vids) * 2) - 1e-5,
-        np.ones(len(from_mdids) * 2) + 1e-5,
-        np.ones(len(from_sdids) * 2) + 2e-5,
+        np.ones(len(from_mdids) * 2) * np.sqrt(2) + 1e-5,
+        np.ones(len(from_sdids) * 2) * np.sqrt(2) + 2e-5,
     ])
 
     return scipy.sparse.csr_matrix((edge_vals, (row_ids, col_ids)), shape=(nrow * ncol, nrow * ncol))
+
+
+def compute_optimal_trajlen(map, S1_list, S2_list):
+    import ipdb;
+    ipdb.set_trace()
+    graph = to_sparse_adj_graph(map[:, :, 0])
+
+    sps, preds = scipy.sparse.csgraph.dijkstra(map, directed=False, indices=[from_id], return_predecessors=True)
 
 
 def gen_demos(shape, max_n_obstacles, n_maps):
@@ -268,7 +283,6 @@ def gen_demos(shape, max_n_obstacles, n_maps):
 # Now construct various NNs
 
 class CNN(object):
-
     def __call__(self, shape):
         nrow, ncol = shape
         # debug = []
@@ -316,37 +330,21 @@ class CNN(object):
                 name="bn5"
             )
         elif case == 1:
-            net = L.batch_norm(
-                L.Conv2DLayer(
-                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv1",
-                ),
-                name="bn1",
+            net = L.Conv2DLayer(
+                net, num_filters=50, filter_size=(7, 7), pad="SAME", nonlinearity=tf.nn.relu, name="conv1",
             )
-            for idx in xrange(2, 36+1):
-                net = L.batch_norm(
-                    L.Conv2DLayer(
-                        net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2",
-                        variable_reuse=idx > 2,
-                    ),
-                    name="bn%d" % idx,
+            for idx in xrange(2, 4 + 1):
+                net = L.Conv2DLayer(
+                    net, num_filters=50, filter_size=(7, 7), pad="SAME", nonlinearity=tf.nn.relu, name="conv%d" % idx,
                 )
-            # for idx in xrange(36):
-            #     net = L.Conv2DLayer(
-            #         net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv%d" % idx,
-            #         variable_reuse=idx > 0,
-            #     )
-            # net = L.Conv2DLayer(
-            #     net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2",
-            #     variable_reuse=True
-            # )
-            # net = L.Conv2DLayer(
-            #     net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2",
-            #     variable_reuse=True
-            # )
-            # net = L.Conv2DLayer(
-            #     net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2",
-            #     variable_reuse=True
-            # )
+                net = L.Conv2DLayer(
+                    net, num_filters=50, filter_size=(7, 7), pad="SAME", nonlinearity=tf.nn.relu, name="conv%d" % idx,
+                    variable_reuse=True
+                )
+                # for idx in xrange(5):
+                #     net = L.Conv2DLayer(
+                #         net, num_filters=50, filter_size=(7, 7), pad="SAME", nonlinearity=tf.nn.relu, name="conv%d" %
+                #     )
         else:
             raise NotImplementedError
 
@@ -367,97 +365,81 @@ class CNN(object):
         # net = L.batch_norm(net, name="bn4")
         # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv5")
         # net = L.batch_norm(net, name="bn5")
-        # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv6")
+        # net = L.Conv2DLayer(net, num_filters=100, filter_ize=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv6")
         # net = L.batch_norm(net, name="bn6")
         # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv7")
         # net = L.batch_norm(net, name="bn7")
-        net = L.DenseLayer(net, num_units=8, nonlinearity=tf.nn.softmax, name="output")
+        net = L.DenseLayer(net, num_units=N_ACTIONS, nonlinearity=tf.nn.softmax, name="output")
         # net.debug = debug
         return net
 
 
 class VIN(object):
-
     def __init__(self, n_iter):
         self.n_iter = n_iter
 
-    def __call__(self, shape):
+    def build(self, shape):
         nrow, ncol = shape
         l_q = 10
         n_iter = self.n_iter
-        input = L.InputLayer(shape=(None, nrow, ncol, 3), name="input")
+        net_in = L.InputLayer(shape=(None, nrow, ncol, 2))
 
         bias = tf.get_variable(name="bias", shape=(150,), initializer=tf.random_normal_initializer(stddev=0.01))
 
         w0 = tf.get_variable(name="w0", shape=(3, 3, 2, 150), initializer=tf.random_normal_initializer(stddev=0.01))
-        w1 = tf.get_variable(name="w1", shape=(3, 3, 150, 1), initializer=tf.random_normal_initializer(stddev=0.01))
+        w1 = tf.get_variable(name="w1", shape=(1, 1, 150, 1), initializer=tf.random_normal_initializer(stddev=0.01))
 
         w = tf.get_variable(name="w", shape=(3, 3, 1, l_q), initializer=tf.random_normal_initializer(stddev=0.01))
         w_fb = tf.get_variable(name="w_fb", shape=(3, 3, 1, l_q), initializer=tf.random_normal_initializer(stddev=0.01))
         w_bi = tf.concat(2, [w, w_fb])
 
-        map_in = L.SliceLayer(input, indices=slice(0, 1), axis=-1, name="map_in")
-        state_in = L.SliceLayer(input, indices=slice(1, 2), axis=-1, name="state_in")
-        goal_in = L.SliceLayer(input, indices=slice(2, 3), axis=-1, name="goal_in")
-
-        net_in = L.concat([map_in, goal_in], axis=3, name="net_in")
-
         # initial conv layer over image+reward prior
 
         h = L.Conv2DLayer(
-            net_in, num_filters=150, filter_size=(3, 3), pad="SAME", nonlinearity=None, name="h",
+            net_in, num_filters=150, filter_size=(3, 3), pad="SAME", nonlinearity=None,
             W=w0, b=bias,
         )
         r = L.Conv2DLayer(
-            h, num_filters=1, filter_size=(1, 1), pad="SAME", name="r0", nonlinearity=None,
+            h, num_filters=1, filter_size=(1, 1), pad="SAME", nonlinearity=None,
             W=w1, b=None
         )
 
         q = L.Conv2DLayer(
-            r, num_filters=l_q, filter_size=(3, 3), pad="SAME", name="q0", nonlinearity=None,
+            r, num_filters=l_q, filter_size=(3, 3), pad="SAME", nonlinearity=None,
             W=w, b=None
         )
         v = L.OpLayer(
             q,
             op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
             shape_op=lambda shape: shape[:-1] + (1,),
-            name="v0"
         )
-        for idx in xrange(1, n_iter + 1):
+        for idx in xrange(n_iter):
             q = L.Conv2DLayer(
-                L.concat([r, v], axis=3, name="rv%d" % idx),
-                num_filters=l_q, filter_size=(3, 3), pad="SAME", name="q%d" % idx,
+                L.concat([r, v], axis=3),
+                num_filters=l_q, filter_size=(3, 3), pad="SAME",
                 W=w_bi, b=None, nonlinearity=None,
             )
             v = L.OpLayer(
                 q,
                 op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
                 shape_op=lambda shape: shape[:-1] + (1,),
-                name="v%d" % idx,
             )
         q = L.Conv2DLayer(
-            L.concat([r, v], axis=3, name="rv_last"),
-            num_filters=l_q, filter_size=(3, 3), pad="SAME", name="q_last",
+            L.concat([r, v], axis=3),
+            num_filters=l_q, filter_size=(3, 3), pad="SAME",
             W=w_bi, b=None, nonlinearity=None,
         )
 
-        q_out = L.OpLayer(
-            q,
-            extras=[state_in],
-            op=lambda q_val, state_val: tf.reduce_sum(tf.reduce_sum(q_val * state_val, 1), 1),
-            shape_op=lambda q_shape, state_shape: (q_shape[0], q_shape[-1]),
-            name="q_out"
+        # The softmax operation is not yet applied!
+        out = L.Conv2DLayer(
+            q, num_filters=N_ACTIONS, filter_size=(1, 1), pad="SAME",
+            nonlinearity=None, b=None,
         )
+        # At this moment the shape should be batch_size * height * width * N_actions
+        # Should be more convenient to apply softmax outside
 
-        out = L.DenseLayer(
-            q_out,
-            num_units=8,
-            nonlinearity=tf.nn.softmax,
-            name="output"
-        )
-
-        # Do one last convolution
-        return out
+        self.l_out = out
+        self.params = [w0, bias, w1, w, w_fb, out.W]
 
 
 def evaluate(policy, maps, fromtos, opt_trajlen, max_horizon):
@@ -490,6 +472,7 @@ def evaluate(policy, maps, fromtos, opt_trajlen, max_horizon):
         steps = ACTION_MAP[actions]
         next_xs = cur_xs + steps[:, 0]
         next_ys = cur_ys + steps[:, 1]
+
         failed = logical_or(
             next_xs < 0,
             next_xs >= nrow,
@@ -535,70 +518,203 @@ def new_policy(sess, state_var, action_prob_var):
     return get_action
 
 
-class GridworldBenchmark(object):
-    def __init__(
-            self,
-            shape=(16, 16),
-            max_n_obstacles=5,
-            n_maps=10000,
-            batch_size=128,
-            n_actions=8,
-            train_ratio=0.9,
-            n_epochs=1000,
-            eval_max_horizon=500,
-            learning_rate=1e-3,
-            lr_schedule=None,
-            network=CNN(),
-    ):
-        self.shape = shape
-        self.max_n_obstacles = max_n_obstacles
-        self.n_maps = n_maps
-        self.batch_size = batch_size
-        self.n_actions = n_actions
-        self.train_ratio = train_ratio
-        self.n_epochs = n_epochs
-        self.eval_max_horizon = eval_max_horizon
-        self.learning_rate = learning_rate
-        self.lr_schedule = lr_schedule
-        self.network = network
+def gather_nd(params, indices, name=None):
+    shape = params.get_shape().as_list()
+    rank = len(shape)
+    flat_params = tf.reshape(params, [-1])
+    multipliers = [reduce(lambda x, y: x * y, shape[i + 1:], 1) for i in range(0, rank)]
+    indices_unpacked = tf.unpack(tf.transpose(indices, [rank - 1] + range(0, rank - 1), name))
+    flat_indices = sum([a * b for a, b in zip(multipliers, indices_unpacked)])
+    return tf.gather(flat_params, flat_indices, name=name)
 
-    def train(self):
 
-        traj_states, traj_actions, maps, fromtos = gen_demos(
-            shape=self.shape,
-            max_n_obstacles=self.max_n_obstacles,
-            n_maps=self.n_maps
+def evaluate_matlab(Xtest, S1test, S2test, opt_traj_lens, state_var, slice_1d_ids_var, test_action_prob_var):
+    state_batch_size = S1test.shape[-1]
+
+    from_xs = S1test.flatten()
+    from_ys = S2test.flatten()
+
+    _, to_xs, to_ys = np.where(Xtest[:, :, :, 1])
+
+    to_xs = np.repeat(to_xs, state_batch_size)
+    to_ys = np.repeat(to_ys, state_batch_size)
+
+    cur_xs = np.copy(from_xs)
+    cur_ys = np.copy(from_ys)
+
+    nrow, ncol = Xtest.shape[1], Xtest.shape[2]
+
+    n_trials = 0
+    n_success = 0
+
+    tried = np.zeros_like(cur_xs)
+    traj_difflen = []
+
+    last_tried = 0
+
+    test_traj_lens = np.zeros_like(cur_xs, dtype=np.float32)
+
+    progbar = pyprind.ProgBar(cur_xs.size)
+
+    max_horizon = (nrow + ncol) * 2
+
+    for i in xrange(max_horizon):
+
+        test_1st_ids = np.repeat(np.arange(len(Xtest)), state_batch_size)
+        test_all_ids = np.stack([
+            test_1st_ids, cur_xs, cur_ys,
+        ], axis=1)
+        flat_test_ids = test_all_ids[:, 0] * nrow * ncol + \
+                        test_all_ids[:, 1] * ncol + \
+                        test_all_ids[:, 2]
+        test_action_probs = tf.get_default_session().run(
+            test_action_prob_var,
+            feed_dict={
+                state_var: Xtest,
+                slice_1d_ids_var: flat_test_ids,
+            }
         )
+        actions = special.weighted_sample_n(test_action_probs, np.arange(N_ACTIONS))
 
-        n_train = int(np.ceil(self.train_ratio * self.n_maps))
+        steps = ACTION_MAP[actions]
+        next_xs = cur_xs + steps[:, 0]
+        next_ys = cur_ys + steps[:, 1]
+        test_traj_lens += ACTION_LENGTH_MAP[actions]
+        failed = logical_or(
+            next_xs < 0,
+            next_xs >= nrow,
+            next_ys < 0,
+            next_ys >= ncol,
+            Xtest[test_1st_ids, next_xs % nrow, next_ys % ncol, 0]
+        )
+        success = np.logical_and(
+            np.equal(next_xs, to_xs),
+            np.equal(next_ys, to_ys),
+        )
+        done = np.logical_or(success, failed)
+        tried[done] = 1
+        n_trials += np.sum(done)
+        n_success += np.sum(success)
 
-        train_states = np.concatenate(traj_states[:n_train], axis=0)
-        train_actions = np.concatenate(traj_actions[:n_train], axis=0)
-        # convert actions to one-hot
-        train_actions = np.eye(self.n_actions)[train_actions]
-        train_maps = maps[:n_train]
-        train_opt_trajlen = np.asarray(map(len, traj_states[:n_train]))
-        train_fromtos = fromtos[:n_train]
+        traj_difflen.extend(test_traj_lens[success] - opt_traj_lens[success])
 
-        test_states = np.concatenate(traj_states[n_train:], axis=0)
-        test_actions = np.concatenate(traj_actions[n_train:], axis=0)
-        # convert actions to one-hot
-        test_actions = np.eye(self.n_actions)[test_actions]
-        test_maps = maps[n_train:]
-        test_opt_trajlen = np.asarray(map(len, traj_states[n_train:]))
-        test_fromtos = fromtos[n_train:]
+        test_traj_lens[done] = 0
 
-        self.eval_max_horizon = max(np.max(train_opt_trajlen), np.max(test_opt_trajlen)) * 2
+        cur_xs = next_xs
+        cur_ys = next_ys
+        cur_xs[done] = from_xs[done]
+        cur_ys[done] = from_ys[done]
 
-        dataset = BatchDataset(inputs=[train_states, train_actions], batch_size=self.batch_size)
+        progbar.update(np.sum(tried) - last_tried)
+        last_tried = np.sum(tried)
 
-        net = self.network(self.shape)
+        if np.all(tried):
+            if progbar.active:
+                progbar.stop()
+            break
+    n_trials += np.sum(1 - tried)
 
-        state_var = tf.placeholder(dtype=tf.float32, shape=(None,) + self.shape + (3,), name="state")
-        action_var = tf.placeholder(dtype=tf.float32, shape=(None, self.n_actions), name="action")
+    return n_success * 1.0 / n_trials, np.mean(traj_difflen)
 
-        train_action_prob_var = L.get_output(net, state_var, phase='train')
-        test_action_prob_var = L.get_output(net, state_var, phase='test')
+
+class MatlabData(object):
+    def __init__(self, shape, data_fraction=1):
+        if shape == (16, 16):
+            file = "gridworld_16.mat"
+        elif shape == (8, 8):
+            file = "gridworld_8.mat"
+        elif shape == (28, 28):
+            file = "gridworld_28.mat"
+        elif shape == (36, 36):
+            file = "gridworld_36.mat"
+        else:
+            raise NotImplementedError
+
+        file_path = os.path.join(config.PROJECT_PATH, 'sandbox/rocky/exp_data', file)
+
+        matlab_data = sio.loadmat(file_path)
+
+        im_data = matlab_data["batch_im_data"]
+        im_data = (im_data - 1) / 255
+        # Note: the value at the goal is 10 instead of 1. Worth investigating whether this matters
+        value_data = matlab_data["batch_value_data"]
+        state1_data = matlab_data["state_x_data"]
+        state2_data = matlab_data["state_y_data"]
+        label_data = matlab_data["batch_label_data"]
+        ydata = label_data.astype('int')
+        Xim_data = im_data.astype('float32')
+        Xim_data = Xim_data.reshape((-1,) + shape + (1,))
+        Xval_data = value_data.astype('float32')
+        Xval_data = Xval_data.reshape((-1,) + shape + (1,))
+        Xdata = np.append(Xim_data, Xval_data, axis=-1)
+        S1data = state1_data.astype('int')
+        S2data = state2_data.astype('int')
+
+        all_training_samples = int(6 / 7.0 * Xdata.shape[0])
+        training_samples = int(data_fraction * all_training_samples)
+
+        self.Xtrain = Xdata[0:training_samples]  # N * height * width * 2
+        self.S1train = S1data[0:training_samples]  # N * state_batch_size
+        self.S2train = S2data[0:training_samples]  # N * state_batch_size
+        self.ytrain = ydata[0:training_samples]  # N * state_batch_size
+
+        self.Xtest = Xdata[all_training_samples:]
+        self.S1test = S1data[all_training_samples:]
+        self.S2test = S2data[all_training_samples:]
+        self.ytest = ydata[all_training_samples:]  # .flatten()
+
+        self.shape = shape
+
+    def train(self, benchmark):
+
+        state_batch_size = self.S1train.shape[1]
+
+        state_var = tf.placeholder(dtype=tf.float32, shape=(None,) + self.shape + (2,), name="state")
+
+        opt_traj_lens = []
+
+        # Figure out the optimal trajectory lengths for the portion of data we'd like to test
+        logger.log("computing optimal trajectory lengths for test data...")
+        bar = pyprind.ProgBar(len(self.Xtest))
+        for idx in xrange(len(self.Xtest)):
+            map_ = self.Xtest[idx, :, :, 0]
+            graph = to_sparse_adj_graph(map_)
+            to_x, to_y = map(int, np.where(self.Xtest[idx, :, :, 1]))
+            to_id = to_x * self.shape[1] + to_y
+            from_ids = self.S1test[idx] * self.shape[1] + self.S2test[idx]
+            sps, preds = scipy.sparse.csgraph.dijkstra(graph, directed=False, indices=[to_id], return_predecessors=True)
+            opt_traj_lens.append(sps[:, from_ids].flatten())
+            bar.update(1)
+        if bar.active:
+            bar.stop()
+
+        opt_traj_lens = np.asarray(opt_traj_lens).flatten()
+
+        # instead of passing in separate coordinates, pass in already well-formed 1D ids
+        slice_1d_ids = tf.placeholder(dtype=tf.int32, shape=(None,), name="slice_id_ids")
+        action_var = tf.placeholder(dtype=tf.float32, shape=(None, N_ACTIONS), name="action")
+
+        net = benchmark.network  # (self.shape)
+        net.build(self.shape)
+
+        train_action_logits_var = L.get_output(net.l_out, state_var, phase='train')
+        test_action_logits_var = L.get_output(net.l_out, state_var, phase='test')
+
+        # batch_size = tf.shape(state_var)[0]
+
+        # batch_ids = tf.reshape(
+        #     tf.tile(
+        #         tf.reshape(tf.range(batch_size), (1, -1)),
+        #         (state_batch_size, 1)
+        #     ), (-1,)
+        # )
+
+        train_action_prob_var = tf.nn.softmax(
+            tf.gather(tf.reshape(train_action_logits_var, (-1, N_ACTIONS)), slice_1d_ids),
+        )
+        test_action_prob_var = tf.nn.softmax(
+            tf.gather(tf.reshape(test_action_logits_var, (-1, N_ACTIONS)), slice_1d_ids),
+        )
 
         train_loss_var = tf.reduce_mean(
             tf.reduce_sum(action_var * -tf.log(train_action_prob_var + 1e-8), -1)
@@ -614,67 +730,75 @@ class GridworldBenchmark(object):
             tf.cast(tf.not_equal(tf.arg_max(action_var, 1), tf.arg_max(test_action_prob_var, 1)), tf.float32)
         )
 
-        params = L.get_all_params(net, trainable=True)
-        params = filter(lambda x: isinstance(x, tf.Variable), params)
+        params = net.params  # L.get_all_params(net, trainable=True)
+        # params = filter(lambda x: isinstance(x, tf.Variable), params)
+
+        # import ipdb; ipdb.set_trace()
 
         lr_var = tf.placeholder(dtype=tf.float32, shape=(), name="lr")
 
-        optimizer = tf.train.AdamOptimizer(learning_rate=lr_var, epsilon=1e-6)
-        train_op = optimizer.minimize(train_loss_var, var_list=params)
+        # optimizer = tf.train.RMSPropOptimizer(learning_rate=lr_var, epsilon=1e-6)
 
-        if self.lr_schedule is not None:
-            lr_list = []
-            for lr, n_epochs in self.lr_schedule:
-                lr_list.extend([lr] * n_epochs)
-            assert len(lr_list) == self.n_epochs
-            self.n_epochs = len(lr_list)
-        else:
-            lr_list = [self.learning_rate] * self.n_epochs
+        optimizer = tf.train.AdamOptimizer(learning_rate=lr_var)  # , epsilon=1e-6)
+        gradients = tf.gradients(train_loss_var, xs=params)
+        noised_gradients = [
+            g + tf.random_normal(g.get_shape(), stddev=benchmark.gradient_noise_scale) for g in gradients
+            ]
+        train_op = optimizer.apply_gradients(zip(noised_gradients, params))
+        # train_op = optimizer.minimize(train_loss_var, var_list=params)
+
+        # if benchmark.lr_schedule is not None:
+        #     lr_list = []
+        #     for lr, n_epochs in benchmark.lr_schedule:
+        #         lr_list.extend([lr] * n_epochs)
+        #     assert len(lr_list) == benchmark.n_epochs
+        #     benchmark.n_epochs = len(lr_list)
+        # else:
+        #     lr_list = [benchmark.learning_rate] * benchmark.n_epochs
+
+        dataset = BatchDataset([self.Xtrain, self.S1train, self.S2train, self.ytrain], batch_size=benchmark.batch_size)
+
+        # prev_loss = np.inf
+        best_loss = np.inf
+        best_params = None
+        n_no_improvement = 0
+
+        learning_rate = benchmark.learning_rate
 
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
 
-            policy = new_policy(sess, state_var, test_action_prob_var)
+            # policy = new_policy(sess, state_var, test_action_prob_var)
 
-            for epoch in xrange(self.n_epochs):
+            for epoch in xrange(benchmark.n_epochs):
 
                 logger.log("Epoch %d" % epoch)
-                bar = pyprind.ProgBar(len(train_states))
+                bar = pyprind.ProgBar(len(self.Xtrain))
 
                 train_losses = []
                 train_errs = []
 
-                if epoch == 0 or lr_list[epoch] != lr_list[epoch - 1]:
-                    # If learning rate changed, reset the optimizer state
-                    logger.log("Resetting optimizer state..")
-                    if isinstance(optimizer, tf.train.AdamOptimizer):
-                        vars = optimizer._slots['m'].values() + optimizer._slots['v'].values()
-                        var_vals = sess.run(vars)
-                        ops = []
-                        for var, val in zip(vars, var_vals):
-                            ops.append(tf.assign(var, np.zeros_like(val)))
-                        sess.run(ops)
-                    elif isinstance(optimizer, tf.train.RMSPropOptimizer):
-                        vars = optimizer._slots['rms'].values() + optimizer._slots['momentum'].values()
-                        var_vals = sess.run(vars)
-                        ops = []
-                        for var, val in zip(vars, var_vals):
-                            ops.append(tf.assign(var, np.zeros_like(val)))
-                        sess.run(ops)
-                    else:
-                        import ipdb; ipdb.set_trace()
+                for batch in dataset.iterate():
+                    batch_states, batch_s1, batch_s2, batch_ys = batch
+                    batch_1st_ids = np.repeat(np.arange(len(batch_states)), state_batch_size)
+                    batch_all_ids = np.stack([
+                        batch_1st_ids, batch_s1.flatten(), batch_s2.flatten()
+                    ], axis=1)
+                    flat_ids = batch_all_ids[:, 0] * self.shape[0] * self.shape[1] + \
+                               batch_all_ids[:, 1] * self.shape[1] + \
+                               batch_all_ids[:, 2]
+                    flat_ys = np.eye(N_ACTIONS)[batch_ys.flatten()]
 
-                for batch_states, batch_actions in dataset.iterate():
-                    # print(map(np.linalg.norm, sess.run(net.debug)))
-                    # import ipdb; ipdb.set_trace()
                     train_loss, train_err, _ = sess.run(
                         [train_loss_var, train_err_var, train_op],
                         feed_dict={
                             state_var: batch_states,
-                            action_var: batch_actions,
-                            lr_var: lr_list[epoch],
+                            slice_1d_ids: flat_ids,
+                            action_var: flat_ys,
+                            lr_var: learning_rate,
                         }
                     )
+
                     bar.update(len(batch_states))
                     train_losses.append(train_loss)
                     train_errs.append(train_err)
@@ -682,31 +806,242 @@ class GridworldBenchmark(object):
                 if bar.active:
                     bar.stop()
 
+                avg_train_loss = np.mean(train_losses)
+                if avg_train_loss > best_loss:
+                    n_no_improvement += 1
+                else:
+                    n_no_improvement = 0
+                    best_loss = avg_train_loss
+                    # collect best params
+                    best_params = sess.run(params)
+
+                test_1st_ids = np.repeat(np.arange(len(self.Xtest)), state_batch_size)
+                test_all_ids = np.stack([
+                    test_1st_ids, self.S1test.flatten(), self.S2test.flatten()
+                ], axis=1)
+                flat_test_ids = test_all_ids[:, 0] * self.shape[0] * self.shape[1] + \
+                                test_all_ids[:, 1] * self.shape[1] + \
+                                test_all_ids[:, 2]
+                flat_test_ys = np.eye(N_ACTIONS)[self.ytest.flatten()]
+
                 logger.log("Evaluating error on test set")
                 test_loss, test_err = sess.run(
                     [test_loss_var, test_err_var],
                     feed_dict={
-                        state_var: test_states,
-                        action_var: test_actions
+                        state_var: self.Xtest,
+                        slice_1d_ids: flat_test_ids,
+                        action_var: flat_test_ys,
                     }
                 )
-
+                #
                 logger.log("Evaluating policy")
 
-                # subsample the same number of states from training data
-                train_success_rate, avg_train_traj_len = evaluate(
-                    policy, train_maps[:len(test_maps)], train_fromtos[:len(test_maps)], train_opt_trajlen[:len(
-                        test_maps)], self.eval_max_horizon)
-                test_success_rate, avg_test_traj_len = evaluate(
-                    policy, test_maps, test_fromtos, test_opt_trajlen, self.eval_max_horizon)
+                test_success_rate, avg_test_traj_len = evaluate_matlab(
+                    self.Xtest, self.S1test, self.S2test, opt_traj_lens, state_var, slice_1d_ids, test_action_prob_var
+                )
 
                 logger.record_tabular("Epoch", epoch)
+                logger.record_tabular("LearningRate", learning_rate)
+                logger.record_tabular("NoImprovementEpochs", n_no_improvement)
                 logger.record_tabular("AvgTrainLoss", np.mean(train_losses))
                 logger.record_tabular("AvgTrainErr", np.mean(train_errs))
                 logger.record_tabular("AvgTestLoss", test_loss)
                 logger.record_tabular("AvgTestErr", test_err)
-                logger.record_tabular("TrainSuccessRate", train_success_rate)
-                logger.record_tabular("AvgTrainSuccessTrajLenDiff", avg_train_traj_len)
+
+                # logger.record_tabular("TrainSuccessRate", train_success_rate)
+                # logger.record_tabular("AvgTrainSuccessTrajLenDiff", avg_train_traj_len)
                 logger.record_tabular("TestSuccessRate", test_success_rate)
                 logger.record_tabular("AvgTestSuccessTrajLenDiff", avg_test_traj_len)
                 logger.dump_tabular()
+
+                if n_no_improvement >= benchmark.no_improvement_tolerance:
+                    learning_rate *= 0.5
+                    logger.log("No improvement for %d epochs. Reducing learning rate to %f" % (n_no_improvement,
+                                                                                               learning_rate))
+                    n_no_improvement = 0
+                    # restore to best params
+                    sess.run([tf.assign(p, pv) for p, pv in zip(params, best_params)])
+
+
+class GridworldBenchmark(object):
+    def __init__(
+            self,
+            shape=(16, 16),
+            max_n_obstacles=5,
+            n_maps=10000,
+            batch_size=128,
+            n_actions=8,
+            train_ratio=0.9,
+            n_epochs=1000,
+            eval_max_horizon=500,
+            learning_rate=1e-3,
+            gradient_noise_scale=0.,
+            no_improvement_tolerance=5,
+            # lr_schedule=None,
+            network=CNN(),
+    ):
+        self.shape = shape
+        self.max_n_obstacles = max_n_obstacles
+        self.n_maps = n_maps
+        self.batch_size = batch_size
+        self.n_actions = n_actions
+        self.train_ratio = train_ratio
+        self.n_epochs = n_epochs
+        self.eval_max_horizon = eval_max_horizon
+        self.learning_rate = learning_rate
+        self.no_improvement_tolerance = no_improvement_tolerance
+        # self.lr_schedule = lr_schedule
+        self.network = network
+        self.gradient_noise_scale = gradient_noise_scale
+
+    def train(self):
+        data = MatlabData(self.shape)
+        data.train(self)
+        return
+
+        # traj_states, traj_actions, maps, fromtos = gen_demos(
+        #     shape=self.shape,
+        #     max_n_obstacles=self.max_n_obstacles,
+        #     n_maps=self.n_maps
+        # )
+        #
+        # n_train = int(np.ceil(self.train_ratio * self.n_maps))
+        #
+        # train_states = np.concatenate(traj_states[:n_train], axis=0)
+        # train_actions = np.concatenate(traj_actions[:n_train], axis=0)
+        # # convert actions to one-hot
+        # train_actions = np.eye(self.n_actions)[train_actions]
+        # train_maps = maps[:n_train]
+        # train_opt_trajlen = np.asarray(map(len, traj_states[:n_train]))
+        # train_fromtos = fromtos[:n_train]
+        #
+        # test_states = np.concatenate(traj_states[n_train:], axis=0)
+        # test_actions = np.concatenate(traj_actions[n_train:], axis=0)
+        # # convert actions to one-hot
+        # test_actions = np.eye(self.n_actions)[test_actions]
+        # test_maps = maps[n_train:]
+        # test_opt_trajlen = np.asarray(map(len, traj_states[n_train:]))
+        # test_fromtos = fromtos[n_train:]
+        #
+        # self.eval_max_horizon = max(np.max(train_opt_trajlen), np.max(test_opt_trajlen)) * 2
+        #
+        # dataset = BatchDataset(inputs=[train_states, train_actions], batch_size=self.batch_size)
+        #
+        # net = self.network(self.shape)
+        #
+        # state_var = tf.placeholder(dtype=tf.float32, shape=(None,) + self.shape + (3,), name="state")
+        # action_var = tf.placeholder(dtype=tf.float32, shape=(None, self.n_actions), name="action")
+        #
+        # train_action_prob_var = L.get_output(net, state_var, phase='train')
+        # test_action_prob_var = L.get_output(net, state_var, phase='test')
+        #
+        # train_loss_var = tf.reduce_mean(
+        #     tf.reduce_sum(action_var * -tf.log(train_action_prob_var + 1e-8), -1)
+        # )
+        # train_err_var = tf.reduce_mean(
+        #     tf.cast(tf.not_equal(tf.arg_max(action_var, 1), tf.arg_max(train_action_prob_var, 1)), tf.float32)
+        # )
+        #
+        # test_loss_var = tf.reduce_mean(
+        #     tf.reduce_sum(action_var * -tf.log(test_action_prob_var + 1e-8), -1)
+        # )
+        # test_err_var = tf.reduce_mean(
+        #     tf.cast(tf.not_equal(tf.arg_max(action_var, 1), tf.arg_max(test_action_prob_var, 1)), tf.float32)
+        # )
+        #
+        # params = L.get_all_params(net, trainable=True)
+        # params = filter(lambda x: isinstance(x, tf.Variable), params)
+        #
+        # lr_var = tf.placeholder(dtype=tf.float32, shape=(), name="lr")
+        #
+        # optimizer = tf.train.RMSPropOptimizer(learning_rate=lr_var, epsilon=1e-6)
+        # train_op = optimizer.minimize(train_loss_var, var_list=params)
+        #
+        # if self.lr_schedule is not None:
+        #     lr_list = []
+        #     for lr, n_epochs in self.lr_schedule:
+        #         lr_list.extend([lr] * n_epochs)
+        #     assert len(lr_list) == self.n_epochs
+        #     self.n_epochs = len(lr_list)
+        # else:
+        #     lr_list = [self.learning_rate] * self.n_epochs
+        #
+        # with tf.Session() as sess:
+        #     sess.run(tf.initialize_all_variables())
+        #
+        #     policy = new_policy(sess, state_var, test_action_prob_var)
+        #
+        #     for epoch in xrange(self.n_epochs):
+        #
+        #         logger.log("Epoch %d" % epoch)
+        #         bar = pyprind.ProgBar(len(train_states))
+        #
+        #         train_losses = []
+        #         train_errs = []
+        #
+        #         # if epoch == 0 or lr_list[epoch] != lr_list[epoch - 1]:
+        #         #     # If learning rate changed, reset the optimizer state
+        #         #     logger.log("Resetting optimizer state..")
+        #         #     if isinstance(optimizer, tf.train.AdamOptimizer):
+        #         #         vars = optimizer._slots['m'].values() + optimizer._slots['v'].values()
+        #         #         var_vals = sess.run(vars)
+        #         #         ops = []
+        #         #         for var, val in zip(vars, var_vals):
+        #         #             ops.append(tf.assign(var, np.zeros_like(val)))
+        #         #         sess.run(ops)
+        #         #     elif isinstance(optimizer, tf.train.RMSPropOptimizer):
+        #         #         vars = optimizer._slots['rms'].values() + optimizer._slots['momentum'].values()
+        #         #         var_vals = sess.run(vars)
+        #         #         ops = []
+        #         #         for var, val in zip(vars, var_vals):
+        #         #             ops.append(tf.assign(var, np.zeros_like(val)))
+        #         #         sess.run(ops)
+        #         #     else:
+        #         #         import ipdb; ipdb.set_trace()
+        #
+        #         for batch_states, batch_actions in dataset.iterate():
+        #             # print(map(np.linalg.norm, sess.run(net.debug)))
+        #             # import ipdb; ipdb.set_trace()
+        #             train_loss, train_err, _ = sess.run(
+        #                 [train_loss_var, train_err_var, train_op],
+        #                 feed_dict={
+        #                     state_var: batch_states,
+        #                     action_var: batch_actions,
+        #                     lr_var: lr_list[epoch],
+        #                 }
+        #             )
+        #             bar.update(len(batch_states))
+        #             train_losses.append(train_loss)
+        #             train_errs.append(train_err)
+        #
+        #         if bar.active:
+        #             bar.stop()
+        #
+        #         logger.log("Evaluating error on test set")
+        #         test_loss, test_err = sess.run(
+        #             [test_loss_var, test_err_var],
+        #             feed_dict={
+        #                 state_var: test_states,
+        #                 action_var: test_actions
+        #             }
+        #         )
+        #
+        #         logger.log("Evaluating policy")
+        #
+        #         # subsample the same number of states from training data
+        #         train_success_rate, avg_train_traj_len = evaluate(
+        #             policy, train_maps[:len(test_maps)], train_fromtos[:len(test_maps)], train_opt_trajlen[:len(
+        #                 test_maps)], self.eval_max_horizon)
+        #         test_success_rate, avg_test_traj_len = evaluate(
+        #             policy, test_maps, test_fromtos, test_opt_trajlen, self.eval_max_horizon)
+        #
+        #         logger.record_tabular("Epoch", epoch)
+        #         logger.record_tabular("AvgTrainLoss", np.mean(train_losses))
+        #         logger.record_tabular("AvgTrainErr", np.mean(train_errs))
+        #         logger.record_tabular("AvgTestLoss", test_loss)
+        #         logger.record_tabular("AvgTestErr", test_err)
+        #         logger.record_tabular("TrainSuccessRate", train_success_rate)
+        #         logger.record_tabular("AvgTrainSuccessTrajLenDiff", avg_train_traj_len)
+        #         logger.record_tabular("TestSuccessRate", test_success_rate)
+        #         logger.record_tabular("AvgTestSuccessTrajLenDiff", avg_test_traj_len)
+        #         logger.dump_tabular()
