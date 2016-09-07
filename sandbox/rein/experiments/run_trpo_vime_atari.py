@@ -24,12 +24,11 @@ dropout = False
 
 # Param ranges
 seeds = range(5)
-etas = [0.01]
+etas = [0.1]
 lst_factor = [1]
 lst_pred_delta = [False]
 kl_ratios = [False]
-mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]
+mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8)]
 
 param_cart_product = itertools.product(
     lst_pred_delta, lst_factor, kl_ratios, mdps, etas, seeds
@@ -210,9 +209,9 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         policy=policy,
         baseline=baseline,
         dyn_mdl=dyn_mdl,
-        batch_size=25000,
+        batch_size=2500,
         whole_paths=True,
-        max_path_length=4500,
+        max_path_length=450,
         n_itr=400,
         step_size=0.01,
         optimizer_args=dict(
@@ -247,7 +246,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",
