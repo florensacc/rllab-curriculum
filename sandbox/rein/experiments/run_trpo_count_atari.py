@@ -9,7 +9,6 @@ from rllab.misc.instrument import stub, run_experiment_lite
 
 from sandbox.rein.envs.atari import AtariEnvX
 from sandbox.rein.algos.trpo_count import TRPO
-from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
 from sandbox.rein.dynamics_models.bnn.conv_bnn_vime import ConvBNNVIME
 
 os.environ["THEANO_FLAGS"] = "device=gpu"
@@ -69,16 +68,13 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
             batchsize=30000,
             subsample_factor=0.1),
     )
+
     # If we don't use a replay pool, we could have correct values here, as
     # it is purely Bayesian. We then divide the KL divergence term by the
     # number of batches in each iteration `batch'. Also the batch size
     # would be given correctly.
-    if dyn_pool_enable:
-        batch_size = 1
-        n_batches = 50
-    else:
-        batch_size = 1
-        n_batches = 1
+    batch_size = 1
+    n_batches = 50
 
     autoenc = ConvBNNVIME(
         state_dim=mdp.spec.observation_space.shape,
@@ -175,7 +171,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         second_order_update=False,
         learning_rate=0.001,
         surprise_type=ConvBNNVIME.SurpriseType.VAR,
-        update_prior=(not dyn_pool_enable),
+        update_prior=False,
         update_likelihood_sd=False,
         output_type=ConvBNNVIME.OutputType.CLASSIFICATION,
         num_classes=64,
@@ -224,7 +220,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-42x52-",
+        exp_prefix="trpo-count-atari-42x52-a",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

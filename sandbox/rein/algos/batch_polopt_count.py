@@ -1,15 +1,14 @@
 import numpy as np
 from rllab.algos.base import RLAlgorithm
-from sandbox.rein.sampler import parallel_sampler as parallel_sampler
+from sandbox.rein.sampler import parallel_sampler_count as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup, \
-    plot_mnist_digit
+from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup
 from scipy import stats, misc
-from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_unformat_image
+from sandbox.rein.dynamics_models.utils import enum
 from sandbox.rein.algos.replay_pool import ReplayPool
 from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
 
@@ -50,9 +49,7 @@ class BatchPolopt(RLAlgorithm):
             whole_paths=True,
             center_adv=True,
             positive_adv=False,
-            record_states=False,
             store_paths=False,
-            algorithm_parallelized=False,
             # exploration params
             eta=1.,
             use_kl_ratio=False,
@@ -110,9 +107,7 @@ class BatchPolopt(RLAlgorithm):
         self.store_paths = store_paths
 
         if dyn_pool_args is None:
-            dyn_pool_args = dict(enable=True, size=100000, min_size=10, batch_size=32)
-        else:
-            assert dyn_pool_args['enable'] is True
+            dyn_pool_args = dict(size=100000, min_size=10, batch_size=32)
 
         self.eta = eta
         self.use_kl_ratio = use_kl_ratio
@@ -150,11 +145,11 @@ class BatchPolopt(RLAlgorithm):
         acc = 0.
         for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
             _i, _t, _ = batch
-            _o = self.bnn.pred_fn(_i)
-            if self.bnn.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
+            _o = self.autoenc.pred_fn(_i)
+            if self.autoenc.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
                 _o_s = _o[:, :-1]
                 _o_r = _o[:, -1]
-                _o_s = _o_s.reshape((-1, np.prod(self.bnn.state_dim), self.bnn.num_classes))
+                _o_s = _o_s.reshape((-1, np.prod(self.autoenc.state_dim), self.autoenc.num_classes))
                 _o_s = np.argmax(_o_s, axis=2)
                 acc += np.sum(np.abs(_o_s - _t[:, :-1])) + np.sum(np.abs(_o_r - _t[:, -1]))
             else:
@@ -278,7 +273,7 @@ class BatchPolopt(RLAlgorithm):
             logger.push_prefix('itr #%d | ' % itr)
 
             # Sample trajectories.
-            paths = self.obtain_samples(itr)
+            paths = self.obtain_samples()
 
             # Fill replay pool with samples of current batch. Exclude the
             # last one.
@@ -400,7 +395,7 @@ class BatchPolopt(RLAlgorithm):
         if self.plot:
             plotter.update_plot(self.policy, self.max_path_length)
 
-    def obtain_samples(self, itr):
+    def obtain_samples(self):
         cur_params = self.policy.get_param_values()
 
         paths = parallel_sampler.sample_paths(
@@ -464,16 +459,6 @@ class BatchPolopt(RLAlgorithm):
             kls = group(zerohunderd, lens)
 
         kls_flat = np.hstack(kls)
-
-        if self.use_kl_ratio:
-            logger.record_tabular('VIME_MeanSurpr_norm', np.mean(kls_flat))
-            logger.record_tabular('VIME_StdSurpr_norm', np.std(kls_flat))
-            logger.record_tabular('VIME_MinSurpr_norm', np.min(kls_flat))
-            logger.record_tabular('VIME_MaxSurpr_norm', np.max(kls_flat))
-            logger.record_tabular('VIME_MedianSurpr_norm', np.median(kls_flat))
-            logger.record_tabular('VIME_25percSurpr_norm', np.percentile(kls_flat, 25))
-            logger.record_tabular('VIME_75percSurpr_norm', np.percentile(kls_flat, 75))
-            logger.record_tabular('VIME_90percSurpr_norm', np.percentile(kls_flat, 90))
 
         # Add Surpr as intrinsic reward to external reward
         for i in xrange(len(paths)):

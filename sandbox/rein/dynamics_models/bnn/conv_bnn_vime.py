@@ -58,7 +58,7 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layer):
         if self.b is not None:
             activation = activation + self.b.dimshuffle('x', 0)
         # Add noise to activation for discretization
-        return self.nonlinearity(activation) + self._srng.uniform(low=-0.5, high=0.5)
+        return self.nonlinearity(activation) + self._srng.uniform(size=activation.shape, low=-0.5, high=0.5)
 
 
 class IndependentSoftmaxLayer(lasagne.layers.Layer):
@@ -590,13 +590,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 if 'nonlinearity' not in layer_disc.keys():
                     layer_disc['nonlinearity'] = lasagne.nonlinearities.rectify
                 s_net = DiscreteEmbeddingLayer(
-                    s_net, num_units=layer_disc['n_units'],
-                    nonlinearity=layer_disc['nonlinearity'],
-                    prior_sd=self.prior_sd,
-                    use_local_reparametrization_trick=self.use_local_reparametrization_trick,
-                    disable_variance=layer_disc['deterministic'],
-                    matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'],
-                    logit_weights=self._logit_weights)
+                    s_net,
+                    num_units=layer_disc['n_units'],
+                    nonlinearity=layer_disc['nonlinearity'])
                 if layer_disc['dropout'] is True:
                     s_net = dropout(s_net, p=dropout_p)
                 if layer_disc['batch_norm'] is True:
