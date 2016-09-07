@@ -2,7 +2,6 @@ import numpy as np
 import os
 import sys
 import atari_py
-import collections
 
 import logging
 
@@ -63,14 +62,7 @@ def to_ram(ale):
 
 
 class AtariEnv(Env, Serializable):
-    def __init__(self, game="pong",
-            obs_type="ram",
-            frame_skip=4,
-            death_ends_episode=False,
-            death_penalty=0,
-            n_last_screens=0,
-            image_resize_method="scale",
-        ):
+    def __init__(self, game="pong", obs_type="ram", frame_skip=4, death_ends_episode=False, death_penalty=0):
         Serializable.quick_init(self, locals())
         assert obs_type in ("ram", "image")
         game_path = atari_py.get_game_path(game)
@@ -83,23 +75,13 @@ class AtariEnv(Env, Serializable):
         self.frame_skip = frame_skip
         self.death_ends_episode = death_ends_episode
         self.death_penalty = death_penalty
-        self.n_last_screens = n_last_screens
-        self.image_resize_method = image_resize_method
-
-        self.last_raw_screen = self._get_image()
-        self.last_screens = collections.deque(
-            [np.zeros((84, 84), dtype=np.uint8)] * self.n_last_screens,
-            maxlen=self.n_last_screens)
 
     def step(self, a):
         reward = 0.0
         action = self._action_set[a]
-        for i in xrange(self.frame_skip):
-            if i == (self.frame_skip - 1):
-                self.last_raw_screen = self._get_image()
+        for _ in xrange(self.frame_skip):
             reward += self.ale.act(action)
         ob = self._get_obs()
-        self.last_screens.append(self.get_current_screen())
 
         cur_lives = self.ale.lives()
         lose_life = cur_lives < self.start_lives
@@ -112,10 +94,7 @@ class AtariEnv(Env, Serializable):
             reward -= self.death_penalty
             logger.log(0,"Death penalty: %f"%(self.death_penalty))
 
-        env_infos = {
-            "images": np.asarray(self.last_screens)
-        }
-        return ob, reward, done, env_infos
+        return ob, reward, done, {}
 
     @property
     def action_space(self):
@@ -127,38 +106,6 @@ class AtariEnv(Env, Serializable):
             return spaces.Box(low=-1, high=1, shape=(128,))#np.zeros(128), high=np.ones(128))# + 255)
         elif self._obs_type == "image":
             return spaces.Box(low=-1, high=1, shape=IMG_WH[::-1])
-
-    def get_current_screen(self):
-        # Max of two consecutive frames
-        assert self.last_raw_screen is not None
-        rgb_img = np.maximum(self.ale.getScreenRGB(), self.last_raw_screen)
-        # Make sure the last raw screen is used only once
-        self.last_raw_screen = None
-        assert rgb_img.shape == (210, 160, 3)
-        # RGB -> Luminance
-        img = rgb_img[:, :, 0] * 0.2126 + rgb_img[:, :, 1] * \
-            0.0722 + rgb_img[:, :, 2] * 0.7152
-        img = img.astype(np.uint8)
-        if img.shape == (250, 160):
-            raise RuntimeError("This ROM is for PAL. Please use ROMs for NTSC")
-        assert img.shape == (210, 160)
-        if self.image_resize_method == 'crop':
-            # Shrink (210, 160) -> (110, 84)
-            img = cv2.resize(img, (84, 110),
-                             interpolation=cv2.INTER_LINEAR)
-            assert img.shape == (110, 84)
-            # Crop (110, 84) -> (84, 84)
-            unused_height = 110 - 84
-            bottom_crop = 8
-            top_crop = unused_height - bottom_crop
-            img = img[top_crop: 110 - bottom_crop, :]
-        elif self.image_resize_method == 'scale':
-            img = cv2.resize(img, (84, 84),
-                             interpolation=cv2.INTER_LINEAR)
-        else:
-            raise RuntimeError('crop_or_scale must be either crop or scale')
-        assert img.shape == (84, 84)
-        return img
 
     def _get_image(self):
         return to_rgb(self.ale)
@@ -192,9 +139,6 @@ class AtariEnv(Env, Serializable):
     def reset(self):
         self.ale.reset_game()
         self.start_lives = self.ale.lives()
-        self.last_screens = collections.deque(
-            [np.zeros((84, 84), dtype=np.uint8)] * self.n_last_screens,
-            maxlen=self.n_last_screens)
         return self._get_obs()
 
     def render(self, return_array=False):

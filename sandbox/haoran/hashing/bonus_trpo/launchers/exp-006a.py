@@ -7,13 +7,14 @@ from __future__ import absolute_import
 from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo import BonusTRPO
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from sandbox.rocky.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
-from sandbox.rocky.tf.envs.base import TfEnv
-from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
+from sandbox.haoran.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from sandbox.haoran.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
+from sandbox.haoran.tf.envs.base import TfEnv
+from sandbox.haoran.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.haoran.hashing.bonus_trpo.envs.atari import AtariEnv
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
+from sandbox.haoran.ec2_info import instance_info, subnet_info
 from rllab import config
 import sys,os
 
@@ -26,7 +27,7 @@ Fix to counting scheme. Fix config...
 """
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_test"
+mode = "ec2"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 
@@ -54,7 +55,7 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [0.1,0.001]
+        return [0.1,0.01]
 
     @variant
     def dim_key(self):
@@ -87,10 +88,9 @@ for v in variants:
         sys.exit(1)
 
     env = TfEnv(AtariEnv(game=v["game"], obs_type="ram",death_ends_episode=v["death_ends_episode"]))
-    # policy = CategoricalMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32), name="policy")
-    policy = CategoricalGRUPolicy(env_spec=env.spec, hidden_dim=32, name="policy")
+    policy = CategoricalMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32), name="policy")
+    # policy = CategoricalGRUPolicy(env_spec=env.spec, hidden_dim=32, name="policy")
     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    bonus_baseline = LinearFeatureBaseline(env_spec=env.spec)
     bonus_evaluator = HashingBonusEvaluator(
         env_spec=env.spec,
         dim_key=v["dim_key"],
@@ -109,7 +109,6 @@ for v in variants:
         baseline=baseline,
         bonus_evaluator=bonus_evaluator,
         extra_bonus_evaluator=extra_bonus_evaluator,
-        bonus_baseline=bonus_baseline,
         bonus_coeff=v["bonus_coeff"],
         batch_size=batch_size,
         max_path_length=max_path_length,
@@ -131,7 +130,7 @@ for v in variants:
         info = instance_info[ec2_instance]
         config.AWS_INSTANCE_TYPE = ec2_instance
         config.AWS_SPOT_PRICE = str(info["price"])
-        n_parallel = info["vCPU"]
+        n_parallel = int(info["vCPU"] / 2)
 
         # choose subnet
         config.AWS_NETWORK_INTERFACES = [
