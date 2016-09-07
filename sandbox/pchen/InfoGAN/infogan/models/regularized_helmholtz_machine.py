@@ -1380,7 +1380,7 @@ class RegularizedHelmholtzMachine(object):
                          wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
                          )
                     decoder = (pt.template('input', self.book).
-                               wnorm_fc(450, ).
+                               # wnorm_fc(450, ).
                                wnorm_fc(512, ).
                                reshape([-1, 4, 4, 32])
                                )

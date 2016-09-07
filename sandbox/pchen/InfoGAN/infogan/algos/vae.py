@@ -40,6 +40,7 @@ class VAE(object):
                  l2_reg=None,
                  img_on=True,
                  kl_coeff=1.,
+                 noise=True,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -48,7 +49,11 @@ class VAE(object):
         :type use_recog_reg: bool
         :type recog_reg_coeff: float
         :type learning_rate: float
+
+        Parameters
+        ----------
         """
+        self.noise = noise
         self.kl_coeff = kl_coeff
         self.anneal_factor = anneal_factor
         self.anneal_every = anneal_every
@@ -121,6 +126,9 @@ class VAE(object):
         # with pt.defaults_scope(phase=phase):
         z_var, log_p_z_given_x, z_dist_info = \
             self.model.encode(input_tensor, k=self.k if eval else 1)
+        if not self.noise:
+            z_var = z_dist_info["mean"]
+            log_p_x_given_z = 1.
         x_var, x_dist_info = self.model.decode(z_var)
 
         log_p_x_given_z = self.model.output_dist.logli(
