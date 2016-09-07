@@ -1,6 +1,6 @@
 from __future__ import print_function
 from rllab.misc.tabulate import tabulate
-from rllab.misc.console import mkdir_p
+from rllab.misc.console import mkdir_p,colorize
 from rllab.misc.autoargs import get_all_parameters
 from contextlib import contextmanager
 import numpy as np
@@ -102,7 +102,7 @@ def get_log_tabular_only():
     return _log_tabular_only
 
 
-def log(s, with_prefix=True, with_timestamp=True):
+def log(s, with_prefix=True, with_timestamp=True,color=None):
     out = s
     if with_prefix:
         out = _prefix_str + out
@@ -110,6 +110,8 @@ def log(s, with_prefix=True, with_timestamp=True):
         now = datetime.datetime.now(dateutil.tz.tzlocal())
         timestamp = now.strftime('%Y-%m-%d %H:%M:%S.%f %Z')
         out = "%s | %s" % (timestamp, out)
+    if color is not None:
+        out = colorize(out,color)
     if not _log_tabular_only:
         # Also log to stdout
         print(out)

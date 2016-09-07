@@ -262,7 +262,7 @@ class RegularizedHelmholtzMachine(object):
                         (pt.template('input', self.book).
                          reshape([self.batch_size] + list(image_shape))
                          )
-                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1, gruconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2) #14
                     encoder = resconv_v1(encoder, 3, 16, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #7
@@ -481,6 +481,266 @@ class RegularizedHelmholtzMachine(object):
                         decoder.
                             conv2d_mod(3, 1, activation_fn=None).
                             flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "res_encoder_gru_decoder":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        custom_phase=UnboundVariable('custom_phase'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                ):
+                    steps = network_args["steps"]
+                    base_filters = network_args["base_filters"]
+                    enc_fc = network_args.get("enc_fc", True)
+                    enc_rep = network_args.get("enc_rep", 1)
+                    dec_fs = network_args.get("dec_fs", 5)
+                    dec_init_size = network_args.get("dec_init_size", 4)
+                    dec_res = network_args.get("dec_res", True)
+                    print(network_args)
+                    encoder = \
+                        (pt.template('input', self.book).
+                         reshape([-1] + list(image_shape))
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1, gruconv_v1
+                    encoder = resconv_v1(encoder, 3, 16, stride=2) #14
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 16, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #7
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #4
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    self.encoder_template = \
+                        (encoder.
+                         flatten())
+                    if enc_fc:
+                        self.encoder_template = self.encoder_template. \
+                            wnorm_fc(450, )
+                    self.encoder_template = self.encoder_template. \
+                        wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
+                    decoder_inp = pt.template('input', self.book)
+                    decoder = (decoder_inp.
+                        wnorm_fc(128, ).
+                        reshape([
+                        -1,
+                        dec_init_size,
+                        dec_init_size,
+                        128 / dec_init_size / dec_init_size
+                    ])
+                    )
+                    decoder = decoder.apply(tf.image.resize_nearest_neighbor, [4,4])
+                    if dec_res:
+                        decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[7,7], nn=False, )
+                        context = context2 = context3 = None
+                        decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[14,14], nn=True, context=context)
+                        decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[28,28], nn=True, context=context2)
+                    else:
+                        decoder = resconv_v1(decoder, 3, base_filters, nn=True)
+                        decoder = decoder.apply(tf.image.resize_nearest_neighbor, [28,28])
+                    for _ in xrange(steps):
+                        with pt.defaults_scope(
+                                var_scope="gru"
+                        ):
+                            decoder = gruconv_v1(
+                                decoder,
+                                dec_fs,
+                                base_filters,
+                            )
+                    self.decoder_template = (
+                        decoder.
+                            conv2d_mod(3, 1, activation_fn=None).
+                            flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "res_encoder_plstm_drawy":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        custom_phase=UnboundVariable('custom_phase'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                ):
+                    steps = network_args["steps"]
+                    base_filters = network_args["base_filters"]
+                    enc_fc = network_args.get("enc_fc", True)
+                    enc_rep = network_args.get("enc_rep", 1)
+                    dec_fs = network_args.get("dec_fs", 5)
+                    dec_init_size = network_args.get("dec_init_size", 4)
+                    dec_res = network_args.get("dec_res", True)
+                    dec_ac = network_args.get("dec_ac", 1.)
+                    dec_ac_exp = network_args.get("dec_ac_exp", 1.)
+                    print(network_args)
+                    encoder = \
+                        (pt.template('input', self.book).
+                         reshape([-1] + list(image_shape))
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1,plstmconv_v1
+                    encoder = resconv_v1(encoder, 3, 16, stride=2) #14
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 16, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #7
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #4
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    self.encoder_template = \
+                        (encoder.
+                         flatten())
+                    if enc_fc:
+                        self.encoder_template = self.encoder_template. \
+                            wnorm_fc(450, )
+                    self.encoder_template = self.encoder_template. \
+                        wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
+                    decoder_inp = pt.template('input', self.book)
+                    decoder = (decoder_inp.
+                        wnorm_fc(128, ).
+                        reshape([
+                        -1,
+                        dec_init_size,
+                        dec_init_size,
+                        128 / dec_init_size / dec_init_size
+                    ])
+                    )
+                    decoder = decoder.apply(tf.image.resize_nearest_neighbor, [4,4])
+                    if dec_res:
+                        decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[7,7], nn=False, )
+                        context = context2 = context3 = None
+                        decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[14,14], nn=True, context=context)
+                    else:
+                        decoder = resconv_v1(decoder, 3, base_filters, nn=True)
+                        decoder = decoder.apply(tf.image.resize_nearest_neighbor, [14,14])
+
+                    canvas = tf.constant(np.zeros([1,28,28,1], dtype='float32'))
+                    for _ in xrange(steps):
+                        with pt.defaults_scope(
+                                var_scope="plstm"
+                        ):
+                            add = decoder.nl(activation_fn=tf.nn.tanh). \
+                                custom_deconv2d(
+                                [0, 28, 28, 1], k_h=5, k_w=5, prefix="step_dec",
+                                activation_fn=None,
+                            )
+                            canvas = add*dec_ac + canvas
+                            dec_ac *= dec_ac_exp
+                            rnn_inp = canvas. \
+                                conv2d_mod(5, base_filters, stride=2, prefix="step_enc")
+                            decoder, _ = plstmconv_v1(
+                                decoder,
+                                rnn_inp,
+                                dec_fs,
+                                base_filters,
+                            )
+                    self.decoder_template = (
+                        canvas.flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "res_encoder_cgru_drawy":
+                from prettytensor import UnboundVariable
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        custom_phase=UnboundVariable('custom_phase'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                ):
+                    steps = network_args["steps"]
+                    base_filters = network_args["base_filters"]
+                    enc_fc = network_args.get("enc_fc", True)
+                    enc_rep = network_args.get("enc_rep", 1)
+                    dec_fs = network_args.get("dec_fs", 5)
+                    dec_init_size = network_args.get("dec_init_size", 4)
+                    dec_res = network_args.get("dec_res", True)
+                    dec_ac = network_args.get("dec_ac", 1.)
+                    print(network_args)
+                    encoder = \
+                        (pt.template('input', self.book).
+                         reshape([-1] + list(image_shape))
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1, gruconv_v1
+                    encoder = resconv_v1(encoder, 3, 16, stride=2) #14
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 16, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #7
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    encoder = resconv_v1(encoder, 3, 32, stride=2) #4
+                    for _ in xrange(enc_rep):
+                        encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    self.encoder_template = \
+                        (encoder.
+                         flatten())
+                    if enc_fc:
+                        self.encoder_template = self.encoder_template. \
+                            wnorm_fc(450, )
+                    self.encoder_template = self.encoder_template. \
+                        wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
+                    decoder_inp = pt.template('input', self.book)
+                    decoder = (decoder_inp.
+                        wnorm_fc(128, ).
+                        reshape([
+                        -1,
+                        dec_init_size,
+                        dec_init_size,
+                        128 / dec_init_size / dec_init_size
+                    ])
+                    )
+                    decoder = decoder.apply(tf.image.resize_nearest_neighbor, [4,4])
+                    if dec_res:
+                        decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[7,7], nn=False, )
+                        context = context2 = context3 = None
+                        decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[14,14], nn=True, context=context)
+                    else:
+                        decoder = resconv_v1(decoder, 3, base_filters, nn=True)
+                        decoder = decoder.apply(tf.image.resize_nearest_neighbor, [14,14])
+
+                    canvas = tf.constant(np.zeros([1,28,28,1], dtype='float32'))
+                    for _ in xrange(steps):
+                        with pt.defaults_scope(
+                                var_scope="gru"
+                        ):
+                            add = decoder. \
+                                custom_deconv2d(
+                                    [0, 28, 28, 1], k_h=5, k_w=5, prefix="step_dec",
+                                    activation_fn=None,
+                                )
+                            canvas = add*dec_ac + canvas
+                            rnn_inp = canvas.\
+                                conv2d_mod(5, base_filters, stride=2, prefix="step_enc")
+                            decoder = gruconv_v1(
+                                decoder,
+                                dec_fs,
+                                base_filters,
+                                inp=rnn_inp,
+                            )
+                    self.decoder_template = (
+                            canvas.flatten()
                     )
                     self.reg_encoder_template = \
                         (pt.template('input').

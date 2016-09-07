@@ -59,11 +59,12 @@ for v in variants:
     algo = DQNP(env)
     run_experiment_lite(
         algo.train(),
-        exp_prefix="0901-atari-initial",
+        exp_prefix="0901-atari-initial-gpu",
         seed=v["seed"],
         # n_parallel=4,
         snapshot_mode="last",
         mode="lab_kube",
         variant=v,
+        use_gpu=True,
         # mode="local",
     )
