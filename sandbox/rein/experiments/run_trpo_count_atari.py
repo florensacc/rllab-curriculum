@@ -9,7 +9,6 @@ from rllab.misc.instrument import stub, run_experiment_lite
 
 from sandbox.rein.envs.atari import AtariEnvX
 from sandbox.rein.algos.trpo_count import TRPO
-from sandbox.rein.algos.batch_polopt_vime import BatchPolopt
 from sandbox.rein.dynamics_models.bnn.conv_bnn_vime import ConvBNNVIME
 
 os.environ["THEANO_FLAGS"] = "device=gpu"
@@ -18,7 +17,6 @@ stub(globals())
 
 # global params
 num_seq_frames = 4
-dyn_pool_enable = True
 batch_norm = True
 dropout = False
 
@@ -75,13 +73,116 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
     # it is purely Bayesian. We then divide the KL divergence term by the
     # number of batches in each iteration `batch'. Also the batch size
     # would be given correctly.
-    if dyn_pool_enable:
-        batch_size = 1
-        n_batches = 50
-    else:
-        batch_size = 1
-        n_batches = 1
+    batch_size = 1
+    n_batches = 50
 
+    autoenc = ConvBNNVIME(
+        state_dim=mdp.spec.observation_space.shape,
+        action_dim=(mdp.spec.action_space.flat_dim,),
+        reward_dim=(1,),
+        layers_disc=[
+            dict(name='convolution',
+                 n_filters=64 * factor,
+                 filter_size=(6, 6),
+                 stride=(2, 2),
+                 pad=(0, 0),
+                 batch_norm=batch_norm,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='convolution',
+                 n_filters=64 * factor,
+                 filter_size=(6, 6),
+                 stride=(2, 2),
+                 pad=(2, 2),
+                 batch_norm=batch_norm,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='convolution',
+                 n_filters=64 * factor,
+                 filter_size=(6, 6),
+                 stride=(2, 2),
+                 pad=(2, 2),
+                 batch_norm=batch_norm,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='reshape',
+                 shape=([0], -1)),
+            dict(name='gaussian',
+                 n_units=128 * factor,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=dropout,
+                 deterministic=False),
+            dict(name='discrete_embedding',
+                 n_units=128 * factor,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=dropout,
+                 deterministic=False),
+            dict(name='gaussian',
+                 n_units=1536 * factor,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='reshape',
+                 shape=([0], 64 * factor, 6, 4)),
+            dict(name='deconvolution',
+                 n_filters=64 * factor,
+                 filter_size=(6, 6),
+                 stride=(2, 2),
+                 pad=(2, 2),
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='deconvolution',
+                 n_filters=64 * factor,
+                 filter_size=(6, 6),
+                 stride=(2, 2),
+                 pad=(2, 0),
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=False,
+                 deterministic=False),
+            dict(name='deconvolution',
+                 n_filters=64 * factor,
+                 filter_size=(6, 6),
+                 stride=(2, 2),
+                 pad=(0, 1),
+                 nonlinearity=lasagne.nonlinearities.linear,
+                 batch_norm=True,
+                 dropout=False,
+                 deterministic=False),
+        ],
+        n_batches=n_batches,
+        trans_func=lasagne.nonlinearities.rectify,
+        out_func=lasagne.nonlinearities.linear,
+        batch_size=batch_size,
+        n_samples=5,
+        num_train_samples=1,
+        prior_sd=0.05,
+        second_order_update=False,
+        learning_rate=0.001,
+        surprise_type=ConvBNNVIME.SurpriseType.VAR,
+        update_prior=False,
+        update_likelihood_sd=False,
+        output_type=ConvBNNVIME.OutputType.CLASSIFICATION,
+        num_classes=64,
+        use_local_reparametrization_trick=True,
+        likelihood_sd_init=0.1,
+        disable_variance=False,
+        ind_softmax=True,
+        num_seq_inputs=num_seq_frames,
+        label_smoothing=0.003,
+        disable_act_rew_paths=True  # Disable prediction of rewards and intake of actions, act as actual autoenc
+    )
 
     algo = TRPO(
         # TRPO settings
@@ -90,7 +191,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        dyn_mdl=dyn_mdl,
+        autoenc=autoenc,
         batch_size=500,
         whole_paths=True,
         max_path_length=45,
@@ -103,28 +204,23 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        use_kl_ratio=kl_ratio,
-        use_kl_ratio_q=kl_ratio,
-        kl_batch_size=512,
         num_sample_updates=1,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=False,
         replay_kl_schedule=0.98,
         n_itr_update=1,  # Fake itr updates in sampler
         dyn_pool_args=dict(
-            enable=dyn_pool_enable,
             size=100000,
             min_size=10,
             batch_size=32
         ),
-        surprise_transform=None,#BatchPolopt.SurpriseTransform.CAP99PERC,
+        surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP99PERC,
         predict_delta=pred_delta,
         num_seq_frames=num_seq_frames,
-        predict_reward=True,
     )
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-42x52-",
+        exp_prefix="trpo-count-atari-42x52-a",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

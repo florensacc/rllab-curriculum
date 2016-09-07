@@ -86,7 +86,7 @@ class AtariEnv(Env, Serializable):
         self.n_last_screens = n_last_screens
         self.image_resize_method = image_resize_method
 
-        self.last_raw_screen = self.ale.getScreenRGB()
+        self.last_raw_screen = self._get_image()
         self.last_screens = collections.deque(
             [np.zeros((84, 84), dtype=np.uint8)] * self.n_last_screens,
             maxlen=self.n_last_screens)
@@ -96,7 +96,7 @@ class AtariEnv(Env, Serializable):
         action = self._action_set[a]
         for i in range(self.frame_skip):
             if i == (self.frame_skip - 1):
-                self.last_raw_screen = self.ale.getScreenRGB()
+                self.last_raw_screen = self._get_image()
             reward += self.ale.act(action)
         ob = self._get_obs()
         self.last_screens.append(self.get_current_screen())
