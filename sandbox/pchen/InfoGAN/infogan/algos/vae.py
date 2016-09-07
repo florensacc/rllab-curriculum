@@ -506,11 +506,16 @@ class VAE(object):
                                     eval_feed,
                                 )
                                 all_test_log_vals.append(test_log_vals)
+                                # fast eval for the first itr
+                                if counter == 0:
+                                    if ti >= 4:
+                                        break
+
                             avg_test_log_vals = np.mean(np.array(all_test_log_vals), axis=0)
                             log_line = "EVAL" + "; ".join("%s: %s" % (str(k), str(v))
                                                       for k, v in zip(eval_log_keys, avg_test_log_vals))
                             logger.log(log_line)
-                            for k,v in zip(log_keys, avg_test_log_vals):
+                            for k, v in zip(log_keys, avg_test_log_vals):
                                 summary.value.add(
                                     tag="vali_%s"%k,
                                     simple_value=float(v),

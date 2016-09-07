@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.00002] #0.001]
+        return [0.0002] #0.001]
 
     @variant
     def seed(self):
@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [512]#[12, 32]
+        return [128]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -201,7 +201,7 @@ for v in variants[:]:
         #     ]
         # )
         out_dist = (DiscretizedLogistic(dataset.image_dim,
-                                        init_scale=0.1))#, 1./mol)
+                                        init_scale=0.01))#, 1./mol)
 
         model = RegularizedHelmholtzMachine(
             # output_dist=MeanBernoulli(dataset.image_dim),
@@ -235,7 +235,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0907_cifar",
+            exp_prefix="0907_cifar_128",
             seed=v["seed"],
             mode="local",
             # mode="lab_kube",

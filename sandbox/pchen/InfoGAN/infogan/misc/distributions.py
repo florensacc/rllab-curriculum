@@ -440,7 +440,7 @@ class DiscretizedLogistic(Distribution):
             tf.log(
                 self.cdf(floored + 1./self._bins, dist_info) -
                     self.cdf(floored, dist_info) +
-                    TINY
+                    1e-7
             ),
             reduction_indices=[1],
         )
