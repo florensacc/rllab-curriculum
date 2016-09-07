@@ -340,7 +340,7 @@ def sliced_fun(f, n_slices):
         if isinstance(non_sliced_inputs, tuple):
             non_sliced_inputs = list(non_sliced_inputs)
         n_paths = len(sliced_inputs[0])
-        slice_size = max(1, n_paths / n_slices)
+        slice_size = max(1, n_paths // n_slices)
         ret_vals = None
         for start in range(0, n_paths, slice_size):
             inputs_slice = [v[start:start + slice_size] for v in sliced_inputs]

@@ -197,7 +197,7 @@ class VariantGenerator(object):
 
     def _populate_variants(self):
         methods = inspect.getmembers(
-            self.__class__, predicate=inspect.ismethod)
+            self.__class__, predicate=lambda x: inspect.isfunction(x) or inspect.ismethod(x))
         methods = [x[1].__get__(self, self.__class__)
                    for x in methods if getattr(x[1], '__is_variant', False)]
         for m in methods:
@@ -224,7 +224,7 @@ class VariantGenerator(object):
         for key, vals, _ in self._variants:
             if hasattr(vals, "__call__"):
                 args = inspect.getargspec(vals).args
-                if hasattr(vals, 'im_self'):
+                if hasattr(vals, 'im_self') or hasattr(vals, "__self__"):
                     # remove the first 'self' parameter
                     args = args[1:]
                 dependencies.append((key, set(args)))
@@ -259,7 +259,7 @@ class VariantGenerator(object):
             last_vals = [v for k, v, _ in self._variants if k == last_key][0]
             if hasattr(last_vals, "__call__"):
                 last_val_keys = inspect.getargspec(last_vals).args
-                if hasattr(last_vals, 'im_self'):
+                if hasattr(last_vals, 'im_self') or hasattr(last_vals, '__self__'):
                     last_val_keys = last_val_keys[1:]
             else:
                 last_val_keys = None
