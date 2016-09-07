@@ -46,3 +46,4 @@ MNIST/
 logs/
 *.pkl
 *.ipynb
+.remote-sync.json
