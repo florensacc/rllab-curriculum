@@ -111,6 +111,7 @@ class MjModel(MjModelWrapper):
     @property
     def numeric_names(self):
         start_addr = ctypes.addressof(self.names.contents)
+        import ipdb; ipdb.set_trace()
         return [ctypes.string_at(start_addr + inc)
                 for inc in self.name_numericadr.flatten()]
 
