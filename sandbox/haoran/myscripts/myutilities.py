@@ -6,6 +6,14 @@ import sys
 import os
 import csv
 
+def get_time_stamp():
+    import datetime
+    import dateutil.tz
+    now = datetime.datetime.now(dateutil.tz.tzlocal())
+    timestamp = now.strftime('%Y%m%d_%H%M%S_%f')
+    return timestamp
+
+
 def collect_data(algo, batch_size=None, n_parallel=4):
     from rllab.sampler import parallel_sampler
     parallel_sampler.initialize(n_parallel=n_parallel)

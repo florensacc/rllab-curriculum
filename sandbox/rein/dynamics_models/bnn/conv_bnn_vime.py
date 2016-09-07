@@ -18,7 +18,7 @@ from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, Bayesia
     BayesianLayer
 
 
-class DiscreteEmbeddingLayer(lasagne.layers.Layers):
+class DiscreteEmbeddingLayer(lasagne.layers.Layer):
     """
     Discrete embedding layer for counting
     """
@@ -58,7 +58,7 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layers):
         if self.b is not None:
             activation = activation + self.b.dimshuffle('x', 0)
         # Add noise to activation for discretization
-        return self.nonlinearity(activation) + self._srng.uniform(low=-0.5, high=0.5)
+        return self.nonlinearity(activation) + self._srng.uniform(size=activation.shape, low=-0.5, high=0.5)
 
 
 class IndependentSoftmaxLayer(lasagne.layers.Layer):
@@ -582,6 +582,17 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     disable_variance=layer_disc['deterministic'],
                     matrix_variate_gaussian=layer_disc['matrix_variate_gaussian'],
                     logit_weights=self._logit_weights)
+                if layer_disc['dropout'] is True:
+                    s_net = dropout(s_net, p=dropout_p)
+                if layer_disc['batch_norm'] is True:
+                    s_net = batch_norm(s_net)
+            elif layer_disc['name'] == 'discrete_embedding':
+                if 'nonlinearity' not in layer_disc.keys():
+                    layer_disc['nonlinearity'] = lasagne.nonlinearities.rectify
+                s_net = DiscreteEmbeddingLayer(
+                    s_net,
+                    num_units=layer_disc['n_units'],
+                    nonlinearity=layer_disc['nonlinearity'])
                 if layer_disc['dropout'] is True:
                     s_net = dropout(s_net, p=dropout_p)
                 if layer_disc['batch_norm'] is True:
