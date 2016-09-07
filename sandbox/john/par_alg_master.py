@@ -1,4 +1,4 @@
-import zerorpc, cPickle
+import zerorpc, pickle
 
 class ParAlgMaster(object):
     """
@@ -24,7 +24,7 @@ class ParAlgMaster(object):
 
 def _maybe_unpickle(x):
     if isinstance(x, str) and x.startswith('\x80'):
-        return cPickle.loads(x)
+        return pickle.loads(x)
     else:
         return x
 
@@ -34,7 +34,7 @@ def _sync(futures):
 def reduce_params(name2values, name2reducer):
     out = {}
     nvalues = len(name2values)
-    for name in name2reducer.keys():
+    for name in list(name2reducer.keys()):
         reducer = name2reducer.get(name, "average")
         if reducer == "average":
             out[name] = name2values[0].copy()

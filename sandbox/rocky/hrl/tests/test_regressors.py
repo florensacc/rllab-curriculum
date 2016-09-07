@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from nose2.tools import such
 from sandbox.rocky.hrl.regressors.shared_network_auto_mlp_regressor import SharedNetworkAutoMLPRegressor, \

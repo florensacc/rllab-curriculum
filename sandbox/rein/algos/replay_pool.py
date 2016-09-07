@@ -78,7 +78,7 @@ class ReplayPool(object):
             # case we add black frames.
             lst_obs = [None] * self._num_seq_frames
             insert_empty = np.zeros(batch_size, dtype='bool')
-            for i in xrange(self._num_seq_frames):
+            for i in range(self._num_seq_frames):
                 obs = self._observations[indices - i]
                 insert_empty = np.maximum(self._terminals[indices - i].astype('bool'), insert_empty)
                 if insert_empty.any():

@@ -69,11 +69,11 @@ class NPO_snn(BatchPolopt):
         #check the latents
         self.latent_regressor.fit(paths)
         for path in paths:
-            print 'the action: ', path['actions']
-            print 'the latents: ', path['agent_infos']['latents']
-            print 'the regressor distr: ', self.latent_regressor.get_output_p(path)
-            print 'latents entropy: ', self.policy.latent_dist.entropy(self.policy.latent_dist_info)
-            print 'mutual info lb: ', self.latent_regressor.lowb_mutual(paths)
+            print('the action: ', path['actions'])
+            print('the latents: ', path['agent_infos']['latents'])
+            print('the regressor distr: ', self.latent_regressor.get_output_p(path))
+            print('latents entropy: ', self.policy.latent_dist.entropy(self.policy.latent_dist_info))
+            print('mutual info lb: ', self.latent_regressor.lowb_mutual(paths))
         # now, hallucinate some more...
         if self.hallucinator is None:
             return real_samples
@@ -97,7 +97,7 @@ class NPO_snn(BatchPolopt):
         self.init_opt()
         episode_rewards = []
         episode_lengths = []
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in range(self.start_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.obtain_samples(itr)
                 samples_data = self.process_samples(itr, paths)
@@ -113,7 +113,7 @@ class NPO_snn(BatchPolopt):
                 if self.plot:
                     self.update_plot()
                     if self.pause_for_plot:
-                        raw_input("Plotting evaluation run: Press Enter to "
+                        input("Plotting evaluation run: Press Enter to "
                                   "continue...")
 
         self.shutdown_worker()

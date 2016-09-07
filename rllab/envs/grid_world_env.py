@@ -46,9 +46,9 @@ class GridWorldEnv(Env, Serializable):
 
     def __init__(self, desc='4x4'):
         Serializable.quick_init(self, locals())
-        if isinstance(desc, basestring):
+        if isinstance(desc, str):
             desc = MAPS[desc]
-        desc = np.array(map(list, desc))
+        desc = np.array(list(map(list, desc)))
         desc[desc == '.'] = 'F'
         desc[desc == 'o'] = 'H'
         desc[desc == 'x'] = 'W'

@@ -1,9 +1,9 @@
 from ctypes import POINTER, create_string_buffer, pointer
 import numpy as np
-from mjtypes import *
-from mjlib import mjlib
-from util import *
-import mjconstants as C
+from .mjtypes import *
+from .mjlib import mjlib
+from .util import *
+from . import mjconstants as C
 
 
 class MjError(Exception):
@@ -49,7 +49,7 @@ class MjModel(MjModelWrapper):
         body_vels = np.zeros((self.nbody, 6))
         # bodywise quantities
         mass = self.body_mass.flatten()
-        for i in xrange(self.nbody):
+        for i in range(self.nbody):
             # body velocity
             mjlib.mj_objectVelocity(
                 self.ptr, self.data.ptr, C.mjOBJ_BODY, i,
@@ -61,7 +61,7 @@ class MjModel(MjModelWrapper):
         # init subtree mass
         body_parentid = self.body_parentid
         # subtree com and com_vel
-        for i in xrange(self.nbody - 1, -1, -1):
+        for i in range(self.nbody - 1, -1, -1):
             if i > 0:
                 parent = body_parentid[i]
                 # add scaled velocities

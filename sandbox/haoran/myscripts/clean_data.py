@@ -23,15 +23,15 @@ for folder in filter(isdir,os.listdir(args.root)):
             n_line = len(f.readlines())
     if n_line < args.nlines:
         bad_folders.append(folder)
-        print folder + " n_line: %d"%(n_line)
+        print(folder + " n_line: %d"%(n_line))
 
-answer = raw_input("Are you sure to delete {n_folder} folders? (y/n)".format(n_folder=len(bad_folders)))
+answer = input("Are you sure to delete {n_folder} folders? (y/n)".format(n_folder=len(bad_folders)))
 while answer not in ['y','Y','n','N']:
-    print "Please input y(Y) or n(N)"
-    answer = raw_input("Are you sure? (y/n)")
+    print("Please input y(Y) or n(N)")
+    answer = input("Are you sure? (y/n)")
 if answer in ['y','Y']:
     for folder in bad_folders:
         shutil.rmtree(os.path.join(args.root,folder))
-    print "Deleteion complete."
+    print("Deleteion complete.")
 else:
-    print "Abort deletion."
+    print("Abort deletion.")

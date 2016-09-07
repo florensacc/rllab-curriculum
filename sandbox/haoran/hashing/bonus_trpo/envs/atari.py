@@ -94,7 +94,7 @@ class AtariEnv(Env, Serializable):
     def step(self, a):
         reward = 0.0
         action = self._action_set[a]
-        for i in xrange(self.frame_skip):
+        for i in range(self.frame_skip):
             if i == (self.frame_skip - 1):
                 self.last_raw_screen = self.ale.getScreenRGB()
             reward += self.ale.act(action)

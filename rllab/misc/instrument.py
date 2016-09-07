@@ -3,7 +3,7 @@ import re
 import subprocess
 import base64
 import os.path as osp
-import cPickle as pickle
+import pickle as pickle
 import inspect
 import sys
 from contextlib import contextmanager
@@ -14,7 +14,7 @@ from rllab.core.serializable import Serializable
 from rllab import config
 from rllab.misc.console import mkdir_p
 from rllab.misc import ext
-from StringIO import StringIO
+from io import StringIO
 import datetime
 import dateutil.tz
 import json
@@ -22,6 +22,7 @@ import numpy as np
 
 from rllab.misc.ext import AttrDict
 from rllab.viskit.core import flatten
+import collections
 
 
 class StubBase(object):
@@ -109,7 +110,7 @@ class StubClass(StubBase):
         if len(args) > 0:
             # Convert the positional arguments to keyword arguments
             spec = inspect.getargspec(self.proxy_class.__init__)
-            kwargs = dict(zip(spec.args[1:], args), **kwargs)
+            kwargs = dict(list(zip(spec.args[1:], args)), **kwargs)
             args = tuple()
         return StubObject(self.proxy_class, *args, **kwargs)
 
@@ -132,7 +133,7 @@ class StubObject(StubBase):
     def __init__(self, __proxy_class, *args, **kwargs):
         if len(args) > 0:
             spec = inspect.getargspec(__proxy_class.__init__)
-            kwargs = dict(zip(spec.args[1:], args), **kwargs)
+            kwargs = dict(list(zip(spec.args[1:], args)), **kwargs)
             args = tuple()
         self.proxy_class = __proxy_class
         self.args = args
@@ -164,7 +165,7 @@ class VariantDict(AttrDict):
         self._hidden_keys = hidden_keys
 
     def dump(self):
-        return {k: v for k, v in self.iteritems() if k not in self._hidden_keys}
+        return {k: v for k, v in self.items() if k not in self._hidden_keys}
 
 
 class VariantGenerator(object):
@@ -206,7 +207,7 @@ class VariantGenerator(object):
         ret = list(self.ivariants())
         if randomized:
             np.random.shuffle(ret)
-        return map(self.variant_dict, ret)
+        return list(map(self.variant_dict, ret))
 
     def variant_dict(self, variant):
         return VariantDict(variant, self._hidden_keys)
@@ -279,7 +280,7 @@ def variant(*args, **kwargs):
         fn.__variant_config = kwargs
         return fn
 
-    if len(args) == 1 and callable(args[0]):
+    if len(args) == 1 and isinstance(args[0], collections.Callable):
         return _variant(args[0])
     return _variant
 
@@ -287,7 +288,7 @@ def variant(*args, **kwargs):
 def stub(glbs):
     # replace the __init__ method in all classes
     # hacky!!!
-    for k, v in glbs.items():
+    for k, v in list(glbs.items()):
         # look at all variables that are instances of a class (not yet Stub)
         if isinstance(v, type) and v != StubClass:
             glbs[k] = StubClass(v)  # and replaces them by a the same but Stub
@@ -316,7 +317,7 @@ def query_yes_no(question, default="yes"):
 
     while True:
         sys.stdout.write(question + prompt)
-        choice = raw_input().lower()
+        choice = input().lower()
         if default is not None and choice == '':
             return valid[default]
         elif choice in valid:
@@ -426,7 +427,7 @@ def run_experiment_lite(
                 subprocess.call(
                     command, shell=True, env=dict(os.environ, **env))
             except Exception as e:
-                print e
+                print(e)
                 if isinstance(e, KeyboardInterrupt):
                     raise
     elif mode == "local_docker":
@@ -514,7 +515,7 @@ def ensure_dir(dirname):
     """
     try:
         os.makedirs(dirname)
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.EEXIST:
             raise
 
@@ -537,7 +538,7 @@ def _to_param_val(v):
     if v is None:
         return ""
     elif isinstance(v, list):
-        return " ".join(map(_shellquote, map(str, v)))
+        return " ".join(map(_shellquote, list(map(str, v))))
     else:
         return _shellquote(str(v))
 
@@ -546,9 +547,9 @@ def to_local_command(params, script=osp.join(config.PROJECT_PATH, 'scripts/run_e
     command = "python " + script
     if use_gpu and not config.USE_TF:
         command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto' " + command
-    for k, v in params.iteritems():
+    for k, v in params.items():
         if isinstance(v, dict):
-            for nk, nv in v.iteritems():
+            for nk, nv in v.items():
                 if str(nk) == "_name":
                     command += "  --%s %s" % (k, _to_param_val(nv))
                 else:
@@ -579,7 +580,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
         command_prefix = "docker run"
     docker_log_dir = config.DOCKER_LOG_DIR
     if env is not None:
-        for k, v in env.iteritems():
+        for k, v in env.items():
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
     command_prefix += " -v {local_mujoco_key_dir}:{docker_mujoco_key_dir}".format(
         local_mujoco_key_dir=config.MUJOCO_KEY_PATH, docker_mujoco_key_dir='/root/.mujoco')
@@ -760,9 +761,9 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     if not aws_config["spot"]:
         instance_args["MinCount"] = 1
         instance_args["MaxCount"] = 1
-    print "************************************************************"
-    print instance_args["UserData"]
-    print "************************************************************"
+    print("************************************************************")
+    print(instance_args["UserData"])
+    print("************************************************************")
     if aws_config["spot"]:
         instance_args["UserData"] = base64.b64encode(instance_args["UserData"])
         spot_args = dict(
@@ -776,7 +777,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         pprint.pprint(spot_args)
         if not dry:
             response = ec2.request_spot_instances(**spot_args)
-            print response
+            print(response)
             spot_request_id = response['SpotInstanceRequests'][
                 0]['SpotInstanceRequestId']
             for _ in range(10):
@@ -813,7 +814,7 @@ def s3_sync_code(config, dry=False):
         clean_state = len(
             subprocess.check_output(["git", "status", "--porcelain"])) == 0
     except subprocess.CalledProcessError as _:
-        print "Warning: failed to execute git commands"
+        print("Warning: failed to execute git commands")
         has_git = False
     dir_hash = base64.b64encode(subprocess.check_output(["pwd"]))
     code_path = "%s_%s" % (
@@ -832,7 +833,7 @@ def s3_sync_code(config, dry=False):
                    [full_path, cache_path]
     mujoco_key_cmd = [
         "aws", "s3", "sync", config.MUJOCO_KEY_PATH, "{}/.mujoco/".format(base)]
-    print cache_cmds, cmds, caching_cmds, mujoco_key_cmd
+    print(cache_cmds, cmds, caching_cmds, mujoco_key_cmd)
     if not dry:
         subprocess.check_call(cache_cmds)
         subprocess.check_call(cmds)
@@ -924,7 +925,7 @@ def to_lab_kube_pod(
     pod_name = config.KUBE_PREFIX + params["exp_name"]
     # underscore is not allowed in pod names
     pod_name = pod_name.replace("_", "-")
-    print "Is gpu: ", is_gpu
+    print("Is gpu: ", is_gpu)
     if not is_gpu:
         return {
             "apiVersion": "v1",
@@ -1031,7 +1032,7 @@ def concretize(maybe_stub):
                 maybe_stub.__stub_cache = maybe_stub.proxy_class(
                     *args, **kwargs)
             except Exception as e:
-                print("Error while instantiating %s" % maybe_stub.proxy_class)
+                print(("Error while instantiating %s" % maybe_stub.proxy_class))
                 import traceback
                 traceback.print_exc()
                 # import ipdb; ipdb.set_trace()
@@ -1040,10 +1041,10 @@ def concretize(maybe_stub):
     elif isinstance(maybe_stub, dict):
         # make sure that there's no hidden caveat
         ret = dict()
-        for k, v in maybe_stub.iteritems():
+        for k, v in maybe_stub.items():
             ret[concretize(k)] = concretize(v)
         return ret
     elif isinstance(maybe_stub, (list, tuple)):
-        return maybe_stub.__class__(map(concretize, maybe_stub))
+        return maybe_stub.__class__(list(map(concretize, maybe_stub)))
     else:
         return maybe_stub

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import lasagne.layers as L
 import lasagne.nonlinearities as LN
 from rllab.core.lasagne_powered import LasagnePowered
@@ -31,7 +31,7 @@ def space_to_distribution(space):
         return DiagonalGaussian(space.flat_dim)
     elif isinstance(space, Product):
         components = space.components
-        component_dists = map(space_to_distribution, components)
+        component_dists = list(map(space_to_distribution, components))
         return ProductDistribution(component_dists)
     else:
         raise NotImplementedError
@@ -49,7 +49,7 @@ def output_to_info(output_var, output_space):
         ret = dict()
         for idx, slice_from, slice_to, subspace in zip(itertools.count(), [0] + cum_dims, cum_dims, components):
             sub_info = output_to_info(output_var[:, slice_from:slice_to], subspace)
-            for k, v in sub_info.iteritems():
+            for k, v in sub_info.items():
                 ret["id_%d_%s" % (idx, k)] = v
         return ret
 
@@ -114,7 +114,7 @@ class SharedNetworkAutoMLPRegressor(LasagnePowered, Serializable):
         info_vars = output_to_info(output_var, output_space)
 
         old_info_vars_list = [TT.matrix("old_%s" % k) for k in dist.dist_info_keys]
-        old_info_vars = dict(zip(dist.dist_info_keys, old_info_vars_list))
+        old_info_vars = dict(list(zip(dist.dist_info_keys, old_info_vars_list)))
 
         mean_kl = TT.mean(dist.kl_sym(old_info_vars, info_vars))
 

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.sampler.base import BaseSampler
 from sandbox.rocky.tf.envs.parallel_vec_env_executor import ParallelVecEnvExecutor
 from sandbox.rocky.tf.envs.vec_env_executor import VecEnvExecutor
@@ -51,9 +51,9 @@ class VectorizedSampler(BaseSampler):
             agent_infos = tensor_utils.split_tensor_dict_list(agent_infos)
             env_infos = tensor_utils.split_tensor_dict_list(env_infos)
             if env_infos is None:
-                env_infos = [dict() for _ in xrange(self.vec_env.num_envs)]
+                env_infos = [dict() for _ in range(self.vec_env.num_envs)]
             if agent_infos is None:
-                agent_infos = [dict() for _ in xrange(self.vec_env.num_envs)]
+                agent_infos = [dict() for _ in range(self.vec_env.num_envs)]
             for idx, observation, action, reward, env_info, agent_info, done in zip(itertools.count(), obses, actions,
                                                                                     rewards, env_infos, agent_infos,
                                                                                     dones):

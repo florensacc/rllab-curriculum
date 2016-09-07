@@ -67,7 +67,7 @@ class RegularAntEnv(MujocoEnv, Serializable):
 
         # problem with paths of different lenghts: call twice max
         furthest = np.ceil(np.abs(np.max([np.max(path["observations"][:,-3:-1]) for path in paths])))
-        print 'THE FUTHEST IT WENT COMPONENT-WISE IS', furthest
+        print('THE FUTHEST IT WENT COMPONENT-WISE IS', furthest)
         furthest = max(furthest, 10)
 
         # c_grid = furthest * 10 * 2

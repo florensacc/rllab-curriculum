@@ -30,7 +30,7 @@ class PerlmutterHvp(object):
         def Hx_plain():
             Hx_plain_splits = tf.gradients(
                 tf.reduce_sum(
-                    tf.pack([tf.reduce_sum(g * x) for g, x in itertools.izip(constraint_grads, xs)])
+                    tf.pack([tf.reduce_sum(g * x) for g, x in zip(constraint_grads, xs)])
                 ),
                 params
             )
@@ -78,7 +78,7 @@ class FiniteDifferenceHvp(object):
         def f_Hx_plain(*args):
             inputs_ = args[:len(inputs)]
             xs = args[len(inputs):]
-            flat_xs = np.concatenate(map(lambda x: np.reshape(x, (-1,)), xs))
+            flat_xs = np.concatenate([np.reshape(x, (-1,)) for x in xs])
             param_val = self.target.get_param_values(trainable=True)
             eps = np.cast['float32'](self.base_eps / (np.linalg.norm(param_val) + 1e-8))
             self.target.set_param_values(param_val + eps * flat_xs, trainable=True)

@@ -43,7 +43,7 @@ repo = git.Repo('.')
 if repo.is_dirty():
     answer = ''
     while answer not in ['y','Y','n','N']:
-        answer = raw_input("The repository has uncommitted changes. Do you want to continue? (y/n)")
+        answer = input("The repository has uncommitted changes. Do you want to continue? (y/n)")
     if answer in ['n','N']:
         sys.exit(1)
 
@@ -207,7 +207,7 @@ for env_name,env_args in zip(env_name_list,env_args_list):
                     )
             elif "ec2" in mode:
                 if len(exp_name) > 64:
-                    print "Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name)
+                    print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
                     sys.exit(1)
                 def run():
                     run_experiment_lite(

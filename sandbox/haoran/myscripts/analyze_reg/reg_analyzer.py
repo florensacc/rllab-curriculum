@@ -153,7 +153,7 @@ class RegAnalyzer(object):
                 merge = ask_permission("The remote data file exists. Do you want to merge with it (y/Y)?")
             if merge:
                 data_tmp = joblib.load(local_data_file_tmp)
-                for k,v in data_tmp.items():
+                for k,v in list(data_tmp.items()):
                     if k not in self.data:
                         self.data[k] = v
 
@@ -214,7 +214,7 @@ class RegAnalyzer(object):
                     cg_iters_list=cg_iters_list_finite,
                 )
 
-                for itr, soln in solns.items():
+                for itr, soln in list(solns.items()):
                     k = "sub_%d_reg_%.2e_cg_%d_list"%(self.bootstrap_subsample_size,reg,itr)
                     self.data[k].append(soln)
 
@@ -383,7 +383,7 @@ class RegAnalyzer(object):
         return average_return, average_discounted_return
 
     def pprint(self,string):
-        print '\033[93m' + string + '\033[0m'
+        print('\033[93m' + string + '\033[0m')
 
     def subsample_inputs(self,inputs,subsample_size):
         for x in inputs:

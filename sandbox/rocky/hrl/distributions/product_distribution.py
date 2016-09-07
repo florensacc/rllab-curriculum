@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from .base import DistributionExt
 from rllab.distributions.categorical import Categorical
 import numpy as np

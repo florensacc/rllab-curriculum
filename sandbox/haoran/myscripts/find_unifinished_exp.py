@@ -38,6 +38,6 @@ if __name__ == "__main__":
                         i += 1
                 if (i-1) < n_itr:
                     unfinished_folders.append(folder)
-                    print folder, (i-1), n_itr
+                    print(folder, (i-1), n_itr)
 
 

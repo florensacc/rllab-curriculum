@@ -40,7 +40,7 @@ class NONO(NPO):
                 to_delete.append(idx)
 
             if prev_mean_kl <= self.trust_region:
-                print "%s using... %s" % (idx, prev_mean_kl)
+                print("%s using... %s" % (idx, prev_mean_kl))
                 with self.optimization_setup(itr, policy, data, opt_info) as (
                         inputs, flat_descent_step):
                     logger.log("performing backtracking")
@@ -65,7 +65,7 @@ class NONO(NPO):
                     logger.record_tabular('MeanKL', mean_kl)
                     logger.record_tabular('MaxKL', max_kl)
             else:
-                print "%s skipping... %s" % (idx, prev_mean_kl)
+                print("%s skipping... %s" % (idx, prev_mean_kl))
         logger.record_tabular('BatchesUsed', used)
         for id in reversed(to_delete):
             self.memory.pop(id)

@@ -221,7 +221,7 @@ class MujocoEnv(Env):
 
     def print_stats(self):
         super(MujocoEnv, self).print_stats()
-        print "qpos dim:\t%d" % len(self.model.data.qpos)
+        print("qpos dim:\t%d" % len(self.model.data.qpos))
 
     def action_from_key(self, key):
         raise NotImplementedError

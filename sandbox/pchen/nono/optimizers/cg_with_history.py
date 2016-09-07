@@ -82,7 +82,7 @@ class ConjugateGradientOptimizerWithHistory(Serializable):
 
         def Hx_plain():
             Hx_plain_splits = TT.grad(
-                TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
+                TT.sum([TT.sum(g * x) for g, x in zip(constraint_grads, xs)]),
                 wrt=params,
                 disconnected_inputs='ignore'
             )
@@ -185,8 +185,8 @@ class ConjugateGradientOptimizerWithHistory(Serializable):
             inputs[4] = act_info_dict["log_std"]
             inputs = tuple(inputs)
 
-        print "========================================"
-        print inputs[0].shape
+        print("========================================")
+        print(inputs[0].shape)
         def Hx(x):
             xs = tuple(self._target.flat_to_params(x, trainable=True))
             #     rop = f_Hx_rop(*(inputs + xs))

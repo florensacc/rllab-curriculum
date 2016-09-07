@@ -4,9 +4,8 @@ import abc
 import numpy as np
 
 
-class Dynamics(object):
+class Dynamics(object, metaclass=abc.ABCMeta):
     """ Dynamics superclass. """
-    __metaclass__ = abc.ABCMeta
 
     def __init__(self, hyperparams):
         self._hyperparams = hyperparams

@@ -24,7 +24,7 @@ def plot_reward(data_unpickle,color,fig_dir):
     if fig_dir:
         plt.savefig(os.path.join(fig_dir,'Reward_function'))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 #Plot learning curve
 def plot_learning_curve(exp,color,fig_dir):#######
@@ -38,7 +38,7 @@ def plot_learning_curve(exp,color,fig_dir):#######
     if fig_dir:
         plt.savefig(os.path.join(fig_dir,'learning_curve'))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 
 #final policy learned
@@ -64,7 +64,7 @@ def plot_policy_learned(data_unpickle, color, fig_dir=None):
     if fig_dir:
         plt.savefig(os.path.join(fig_dir,'policy_learned'))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 def plot_all_policy_at0(path_experiment,color,num_iter=100,fig_dir=None):
     mean_at_0 = []
@@ -76,7 +76,7 @@ def plot_all_policy_at0(path_experiment,color,num_iter=100,fig_dir=None):
         mean_at_0.append(action_at_0[1]['mean'])
         var_at_0.append(action_at_0[1]['log_std'])
         # print "sampled action in iter {}: {}. Reward should be: {}".format(itr, action_at_0[0], reward(action_at_0[0]))
-    itr = range(num_iter)
+    itr = list(range(num_iter))
     plt.plot(itr,mean_at_0, color=color, label = 'mean at 0')
     plt.plot(itr, var_at_0, color=color * 0.7, label = 'logstd at 0')
     plt.title('How the policy variates accross iterations')
@@ -86,7 +86,7 @@ def plot_all_policy_at0(path_experiment,color,num_iter=100,fig_dir=None):
     if fig_dir:
         plt.savefig(os.path.join(fig_dir,'policy_progress'))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 ## estimate by MC the policy at 0!
 def plot_snn_at0(data_unpickle, itr=0, color=(1,0.1,0.1),fig_dir=None):
@@ -101,7 +101,7 @@ def plot_snn_at0(data_unpickle, itr=0, color=(1,0.1,0.1),fig_dir=None):
     samples=num_bins*10
     x = np.arange(-bound,bound+step, step)
     px = np.zeros(np.size(x))
-    for _ in xrange(samples):
+    for _ in range(samples):
         poli.reset()
         a = poli.get_action(np.array([0,]))[0]
         idx=int(np.floor(a/step) + bound/step)
@@ -122,7 +122,7 @@ def plot_snn_at0(data_unpickle, itr=0, color=(1,0.1,0.1),fig_dir=None):
     if fig_dir:
         plt.savefig(os.path.join(fig_dir,'MC_policy_learned_at0_iter{}'.format(itr)))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 
 def plot_all_exp(datadir):
@@ -149,19 +149,19 @@ def plot_all_exp(datadir):
         #fix a color for plots of this exp
         color = np.array(colors[i%gather ])
         #plot everything
-        print 'Plotting for: ',exp_name
+        print('Plotting for: ',exp_name)
         plt.figure( 1 + (i/gather)*6 )
         plot_reward(first_data_unpickle,color,fig_dir)
-        print 'Plotting learning curve'
+        print('Plotting learning curve')
         plt.figure(2 +(i/gather)*6 )
         plot_learning_curve(exp,color,fig_dir)
-        print 'Plotting last policy'
+        print('Plotting last policy')
         plt.figure(3+(i/gather)*6 )
         plot_policy_learned(last_data_unpickle,color,fig_dir=fig_dir)
         # print 'Plotting policy progress'
         # plt.figure(4+(i/3)*6 )
         # plot_all_policy_at0(path_experiment,color,num_iter=last_iter+1,fig_dir=fig_dir)
-        print 'Plotting last policy MC'
+        print('Plotting last policy MC')
         plt.figure(5+(i/gather)*6 )
         plot_snn_at0(last_data_unpickle, itr=last_iter+1, color=color, fig_dir=fig_dir)
         # print 'Plotting first policy MC'
@@ -175,6 +175,6 @@ if __name__ == "__main__":
     import sys
     name_dir=sys.argv[1]
     path_dir = "./data/local/"+name_dir
-    print "plotting all experiments in: " +path_dir
+    print("plotting all experiments in: " +path_dir)
     plot_all_exp(path_dir)
 

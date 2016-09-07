@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.rocky.tf.policies.base import StochasticPolicy
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
 from rllab.core.serializable import Serializable
@@ -53,7 +53,7 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializabl
 
             prob_networks = []
 
-            for subgoal in xrange(subgoal_dim):
+            for subgoal in range(subgoal_dim):
                 prob_network = MLP(
                     input_layer=l_bottleneck,
                     output_dim=env_spec.action_space.n,
@@ -129,14 +129,14 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializabl
     def get_action(self, observation):
         flat_obs = self.observation_space.flatten(observation)
         dist_info = self.dist_info([flat_obs])
-        act = special.weighted_sample(dist_info["prob"], range(self.action_space.n))
+        act = special.weighted_sample(dist_info["prob"], list(range(self.action_space.n)))
         return act, dist_info
 
     def get_actions(self, observations):
         N = len(observations)
         flat_obses = self.observation_space.flatten_n(observations)
         dist_info = self.dist_info(flat_obses)
-        act = [special.weighted_sample(p, range(self.action_space.n)) for p in dist_info["prob"]]
+        act = [special.weighted_sample(p, list(range(self.action_space.n))) for p in dist_info["prob"]]
         return act, dist_info
 
     @property

@@ -28,9 +28,9 @@ def count_modes(data_unpickle):
     all_latent_dists_at_0 = []
     for lat in all_latents:
         policy.set_pre_fix_latent(lat)
-        print "pre-setting the latent to: ", lat
+        print("pre-setting the latent to: ", lat)
         all_latent_dists_at_0.append(policy.get_action(np.array((0, 0)))[1])
-        print "the path had latent: ", all_latent_dists_at_0[-1]['latents']
+        print("the path had latent: ", all_latent_dists_at_0[-1]['latents'])
     policy.unset_pre_fix_latent()
 
     # count the number of good modes: at a distance of 0.1 of any of the n good modes:
@@ -39,19 +39,19 @@ def count_modes(data_unpickle):
     A = np.array([[np.cos(2. * np.pi / env.n), -np.sin(2. * np.pi / env.n)],
                   [np.sin(2. * np.pi / env.n), np.cos(2. * np.pi / env.n)]])  # rotation matrix
     good_modes_means = [np.dot(np.linalg.matrix_power(A, k), mu) for k in range(env.n)]
-    print "all good modes are: ", good_modes_means
+    print("all good modes are: ", good_modes_means)
     distance_between_good_modes = np.linalg.norm(mu - good_modes_means[1], 2)
     min_dist_modes = distance_between_good_modes / 5.
     for i, info_dist in enumerate(all_latent_dists_at_0):
-        print 'latent {} produces mean {}'.format(info_dist['latents'], info_dist['mean'])
+        print('latent {} produces mean {}'.format(info_dist['latents'], info_dist['mean']))
         for j, good_mode_mean in enumerate(good_modes_means):
             if np.linalg.norm(info_dist['mean'] - good_mode_mean, 2) < min_dist_modes:
-                print 'latent {} is affiliated to good_mode {}\n'.format(info_dist['latents'], j)
+                print('latent {} is affiliated to good_mode {}\n'.format(info_dist['latents'], j))
                 good_modes_affiliation[j] += 1
-    print good_modes_affiliation
+    print(good_modes_affiliation)
     num_good_modes = np.count_nonzero(good_modes_affiliation)
 
-    free_config = range(len(all_latents))
+    free_config = list(range(len(all_latents)))
     modes = [0] * len(free_config)
     mode_num = 0
     while free_config:
@@ -60,7 +60,7 @@ def count_modes(data_unpickle):
         free_config.remove(k)
         modes[k] = mode_num
         cluster(policy, all_latent_dists_at_0, free_config, modes, min_dist_modes, k)
-    print modes
+    print(modes)
     return mode_num, num_good_modes
 
 
@@ -82,7 +82,7 @@ def analyze_modes(datadir):
         exp_name = exp.params['exp_name']
         if os.path.isdir(os.path.join(datadir, exp_name)):
             path_experiment = os.path.join(datadir, exp_name)
-            print "Analyzing the exp in: ", path_experiment
+            print("Analyzing the exp in: ", path_experiment)
         else:
             path_experiment = datadir
         pkl_file = 'params.pkl'
@@ -110,7 +110,7 @@ def analyze_modes(datadir):
 
 
 def plot_modes(analyzed_modes, latent_dims, rew_coefs, n_hallus):
-    print 'plotting modes'
+    print('plotting modes')
     matrix_modes = np.zeros((len(latent_dims), len(rew_coefs), len(n_hallus)))
     matrix_good_modes = np.zeros((len(latent_dims), len(rew_coefs), len(n_hallus)))
     matrix_last_true_rew = np.zeros((len(latent_dims), len(rew_coefs), len(n_hallus)))
@@ -122,7 +122,7 @@ def plot_modes(analyzed_modes, latent_dims, rew_coefs, n_hallus):
     sorted_rew_coefs = np.sort(rew_coefs)  # just in case, but they should already be sorted
     sorted_n_hallus = np.sort(n_hallus)
     sorted_latent_dims = np.sort(latent_dims)
-    print sorted_latent_dims, sorted_rew_coefs, sorted_n_hallus
+    print(sorted_latent_dims, sorted_rew_coefs, sorted_n_hallus)
     i = 0
     while i < len(analyzed_modes):
         mode = analyzed_modes[i]
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     # name_dir=sys.argv[1]
     # path_dir = "./data/local/"+name_dir
     path_dir = sys.argv[1]
-    print "counting modes in all experiments in: " + path_dir
+    print("counting modes in all experiments in: " + path_dir)
     analyzed_modes, latent_dims, rew_coefs, n_hallus = analyze_modes(path_dir)
     params_experiments = dict(latent_dims=latent_dims, rew_coefs=rew_coefs, n_hallus=n_hallus)
     matrix_modes, matrix_good_modes, matrix_last_true_rew, \
@@ -173,4 +173,4 @@ if __name__ == "__main__":
                     matrix_last_true_rew_std=matrix_last_true_rew_std,
                     )
     joblib.dump(save_dic, save_file)
-    print 'modes: \n', matrix_modes, '\ngood modes\n', matrix_good_modes, '\nlast True Rew:\n', matrix_last_true_rew
+    print('modes: \n', matrix_modes, '\ngood modes\n', matrix_good_modes, '\nlast True Rew:\n', matrix_last_true_rew)

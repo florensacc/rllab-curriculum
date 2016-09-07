@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.spaces.discrete import Discrete
 from rllab.spaces.box import Box

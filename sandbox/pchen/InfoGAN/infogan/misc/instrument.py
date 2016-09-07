@@ -1,5 +1,6 @@
 import numpy as np
 import inspect
+import collections
 
 
 class VariantGenerator(object):
@@ -104,6 +105,6 @@ def variant(*args, **kwargs):
         fn.__is_variant = True
         fn.__variant_config = kwargs
         return fn
-    if len(args) == 1 and callable(args[0]):
+    if len(args) == 1 and isinstance(args[0], collections.Callable):
         return _variant(args[0])
     return _variant

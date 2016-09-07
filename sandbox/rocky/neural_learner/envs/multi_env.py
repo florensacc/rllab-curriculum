@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.envs.base import Step
 from rllab.spaces.product import Product
@@ -73,13 +73,13 @@ class MultiEnv(ProxyEnv, Serializable):
         # Log the avg reward for each episode
         all_episode_rewards = None
         for path in paths:
-            episode_rewards = np.asarray(map(
+            episode_rewards = np.asarray(list(map(
                 np.sum,
                 np.split(
                     path['rewards'],
                     np.where(path['env_infos']['episode_done'])[0][:-1] + 1
                 )
-            ))
+            )))
             if all_episode_rewards is None:
                 all_episode_rewards = episode_rewards
             else:

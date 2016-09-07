@@ -231,7 +231,7 @@ class InfoGANSemiTrainer(object):
             if isinstance(dist, Gaussian):
                 assert dist.dim == 1, "Only dim=1 is currently supported"
                 c_vals = []
-                for idx in xrange(10):
+                for idx in range(10):
                     c_vals.extend([-1.0 + idx * 2.0 / 9] * 10)
                 c_vals.extend([0.] * (self.batch_size - 100))
                 vary_cat = np.asarray(c_vals, dtype=np.float32).reshape((-1, 1))
@@ -242,7 +242,7 @@ class InfoGANSemiTrainer(object):
                 # assert dist.dim == 10, "Only dim=10 is currently supported"
                 lookup = np.eye(dist.dim, dtype=np.float32)
                 cat_ids = []
-                for idx in xrange(10):
+                for idx in range(10):
                     cat_ids.extend([idx] * 10)
                 cat_ids.extend([0] * (self.batch_size - 100))
                 cur_cat = np.copy(fixed_cat)
@@ -252,7 +252,7 @@ class InfoGANSemiTrainer(object):
                 assert dist.dim == 1, "Only dim=1 is currently supported"
                 lookup = np.eye(dist.dim, dtype=np.float32)
                 cat_ids = []
-                for idx in xrange(10):
+                for idx in range(10):
                     cat_ids.extend([int(idx / 5)] * 10)
                 cat_ids.extend([0] * (self.batch_size - 100))
                 cur_cat = np.copy(fixed_cat)
@@ -278,9 +278,9 @@ class InfoGANSemiTrainer(object):
             img_var = img_var[:rows * rows, :, :, :]
             imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))
             stacked_img = []
-            for row in xrange(rows):
+            for row in range(rows):
                 row_img = []
-                for col in xrange(rows):
+                for col in range(rows):
                     row_img.append(imgs[row, col, :, :, :])
                 stacked_img.append(tf.concat(1, row_img))
             imgs = tf.concat(0, stacked_img)
@@ -295,7 +295,7 @@ class InfoGANSemiTrainer(object):
         sup_labels = self.dataset.supervised_train.labels
         real_reg_z_dist_info = self.semi_syms["real_reg_z_dist_info"]
         real_reg_z_dist_flat = self.semi_syms["real_reg_z_dist_flat"]
-        info_items = real_reg_z_dist_info.items()
+        info_items = list(real_reg_z_dist_info.items())
         info_keys = [x[0] for x in info_items]
         info_vals = [x[1] for x in info_items]
         if self.semi_mode == "reg_latent_dist_flat":
@@ -342,7 +342,7 @@ class InfoGANSemiTrainer(object):
                 ),
             ]
         )
-        print("Train Acc: %f; Val Acc: %f; Test Acc: %f" % (train_acc, val_acc, test_acc))
+        print(("Train Acc: %f; Val Acc: %f; Test Acc: %f" % (train_acc, val_acc, test_acc)))
         return s
 
     def train(self):
@@ -391,7 +391,7 @@ class InfoGANSemiTrainer(object):
                         if counter % self.snapshot_interval == 0:
                             snapshot_name = "%s_%s" % (self.exp_name, str(counter))
                             fn = saver.save(sess, "%s/%s.ckpt" % (self.checkpoint_dir, snapshot_name))
-                            print("Model saved in file: %s" % fn)
+                            print(("Model saved in file: %s" % fn))
 
                     x, _ = self.dataset.train.next_batch(self.batch_size)
 
@@ -402,7 +402,7 @@ class InfoGANSemiTrainer(object):
                     summary_writer.add_summary(s, counter)
 
                     avg_log_vals = np.mean(np.array(all_log_vals), axis=0)
-                    log_dict = dict(zip(log_keys, avg_log_vals))
+                    log_dict = dict(list(zip(log_keys, avg_log_vals)))
 
                     if epoch >= self.reg_epochs and \
                             (min(log_dict["discriminator_loss"], log_dict["generator_loss"]) < 1e-3 or log_dict[
@@ -411,8 +411,8 @@ class InfoGANSemiTrainer(object):
                     else:
                         n_stuck_epochs = 0
                     log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, avg_log_vals))
-                    print("Dataset %d | Epoch %d | " % (dataset_idx, epoch) + log_line)
-                    print("Stuck for %d epochs" % n_stuck_epochs)
+                    print(("Dataset %d | Epoch %d | " % (dataset_idx, epoch) + log_line))
+                    print(("Stuck for %d epochs" % n_stuck_epochs))
                     sys.stdout.flush()
                     if np.any(np.isnan(avg_log_vals)):
                         raise ValueError("NaN detected!")

@@ -74,7 +74,7 @@ def _get_base_class_names(frame):
             extended_arg = 0
             i += 2
             if op == dis.EXTENDED_ARG:
-                extended_arg = oparg*long(65536)
+                extended_arg = oparg*int(65536)
             if op in dis.hasconst:
                 if type(co.co_consts[oparg]) == str:
                     extends = []

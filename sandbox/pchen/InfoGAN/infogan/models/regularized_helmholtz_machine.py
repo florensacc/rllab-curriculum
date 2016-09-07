@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Product, Distribution, Mixture
 import prettytensor as pt
 import tensorflow as tf
@@ -430,13 +430,13 @@ class RegularizedHelmholtzMachine(object):
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2) #14
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 16, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #7
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #4
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     self.encoder_template = \
                         (encoder.
@@ -466,7 +466,7 @@ class RegularizedHelmholtzMachine(object):
                         context = context2 = context3 = None
                     decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[14,14], nn=True, context=context)
                     decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[28,28], nn=True, context=context2)
-                    for _ in xrange(steps):
+                    for _ in range(steps):
                         with pt.defaults_scope(
                                 var_scope="wide_gen"
                         ):
@@ -513,13 +513,13 @@ class RegularizedHelmholtzMachine(object):
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1, gruconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2) #14
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 16, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #7
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #4
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     self.encoder_template = \
                         (encoder.
@@ -548,7 +548,7 @@ class RegularizedHelmholtzMachine(object):
                     else:
                         decoder = resconv_v1(decoder, 3, base_filters, nn=True)
                         decoder = decoder.apply(tf.image.resize_nearest_neighbor, [28,28])
-                    for _ in xrange(steps):
+                    for _ in range(steps):
                         with pt.defaults_scope(
                                 var_scope="gru"
                         ):
@@ -595,13 +595,13 @@ class RegularizedHelmholtzMachine(object):
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1,plstmconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2) #14
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 16, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #7
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #4
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     self.encoder_template = \
                         (encoder.
@@ -631,7 +631,7 @@ class RegularizedHelmholtzMachine(object):
                         decoder = decoder.apply(tf.image.resize_nearest_neighbor, [14,14])
 
                     canvas = tf.constant(np.zeros([1,28,28,1], dtype='float32'))
-                    for _ in xrange(steps):
+                    for _ in range(steps):
                         with pt.defaults_scope(
                                 var_scope="plstm"
                         ):
@@ -685,13 +685,13 @@ class RegularizedHelmholtzMachine(object):
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1, gruconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2) #14
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 16, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #7
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #4
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     self.encoder_template = \
                         (encoder.
@@ -721,7 +721,7 @@ class RegularizedHelmholtzMachine(object):
                         decoder = decoder.apply(tf.image.resize_nearest_neighbor, [14,14])
 
                     canvas = tf.constant(np.zeros([1,28,28,1], dtype='float32'))
-                    for _ in xrange(steps):
+                    for _ in range(steps):
                         with pt.defaults_scope(
                                 var_scope="gru"
                         ):
@@ -773,13 +773,13 @@ class RegularizedHelmholtzMachine(object):
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2) #14
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 16, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #7
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #4
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     self.encoder_template = \
                         (encoder.
@@ -809,7 +809,7 @@ class RegularizedHelmholtzMachine(object):
                         context = context2 = context3 = None
                     decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[14,14], nn=True, context=context)
                     decoder = resdeconv_v1(decoder, dec_fs, base_filters, out_wh=[28,28], nn=True, context=context2)
-                    for _ in xrange(steps):
+                    for _ in range(steps):
                         with pt.defaults_scope(
                                 var_scope="wide_gen"
                         ):
@@ -852,13 +852,13 @@ class RegularizedHelmholtzMachine(object):
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2) #14
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 16, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #7
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     encoder = resconv_v1(encoder, 3, 32, stride=2) #4
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1)
                     self.encoder_template = \
                         (encoder.
@@ -875,7 +875,7 @@ class RegularizedHelmholtzMachine(object):
                     decoder = decoder.\
                         apply(tf.image.resize_nearest_neighbor, [28, 28])
                     decoder = resconv_v1(decoder, 3, base_filters, stride=1, nn=True)
-                    for _ in xrange(steps):
+                    for _ in range(steps):
                         with pt.defaults_scope(
                                 var_scope="wide_gen"
                         ):
@@ -920,13 +920,13 @@ class RegularizedHelmholtzMachine(object):
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
                     encoder = resconv_v1(encoder, 3, 16, stride=2, nn=enc_nn, keep_prob=enc_keep) #14
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 16, stride=1, keep_prob=enc_keep)
                     encoder = resconv_v1(encoder, 3, 32, stride=2, nn=enc_nn, keep_prob=enc_keep) #7
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1, keep_prob=enc_keep)
                     encoder = resconv_v1(encoder, 3, 32, stride=2, nn=enc_nn, keep_prob=enc_keep) #4
-                    for _ in xrange(enc_rep):
+                    for _ in range(enc_rep):
                         encoder = resconv_v1(encoder, 3, 32, stride=1, keep_prob=enc_keep)
                     self.encoder_template = \
                         (encoder.
@@ -942,7 +942,7 @@ class RegularizedHelmholtzMachine(object):
                     decoder = resconv_v1(decoder, 2, base_filters, stride=1, nn=True)
                     decoder = decoder. \
                         apply(tf.image.resize_nearest_neighbor, [7, 7])
-                    for _ in xrange(steps):
+                    for _ in range(steps):
                         with pt.defaults_scope(
                                 var_scope="wide_gen"
                         ):
@@ -954,7 +954,7 @@ class RegularizedHelmholtzMachine(object):
                             )
                     decoder = decoder. \
                         apply(tf.image.resize_nearest_neighbor, [14, 14])
-                    for _ in xrange(steps):
+                    for _ in range(steps):
                         with pt.defaults_scope(
                                 var_scope="wide_gen"
                         ):
@@ -966,7 +966,7 @@ class RegularizedHelmholtzMachine(object):
                             )
                     decoder = decoder. \
                         apply(tf.image.resize_nearest_neighbor, [28, 28])
-                    for _ in xrange(steps):
+                    for _ in range(steps):
                         with pt.defaults_scope(
                                 var_scope="wide_gen"
                         ):
@@ -1077,7 +1077,7 @@ class RegularizedHelmholtzMachine(object):
                         nn=nn,
                         add_coeff=ac
                     ) #14
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                        encoder = resconv_v1(encoder, fs, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     encoder = resconv_v1(
                         encoder,
@@ -1087,7 +1087,7 @@ class RegularizedHelmholtzMachine(object):
                         keep_prob=res_keep_prob,
                         add_coeff=ac
                     ) #7
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         encoder = resconv_v1(encoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     encoder = resconv_v1(
                         encoder,
@@ -1097,7 +1097,7 @@ class RegularizedHelmholtzMachine(object):
                         keep_prob=res_keep_prob,
                         add_coeff=ac
                     ) #4
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         encoder = resconv_v1(encoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     self.encoder_template = \
                         (encoder.
@@ -1117,7 +1117,7 @@ class RegularizedHelmholtzMachine(object):
                                wnorm_fc(4*4*(base_filters*2), ).dropout(fc_keep_prob).
                                reshape([-1, 4, 4, base_filters*2])
                                )
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         decoder = resconv_v1(decoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     decoder = resdeconv_v1(
                         decoder,
@@ -1128,7 +1128,7 @@ class RegularizedHelmholtzMachine(object):
                         nn=nn,
                         add_coeff=ac
                     )
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         decoder = resconv_v1(decoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     decoder = resdeconv_v1(
                         decoder,
@@ -1139,7 +1139,7 @@ class RegularizedHelmholtzMachine(object):
                         nn=nn,
                         add_coeff=ac
                     )
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         decoder = resconv_v1(decoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     decoder = resdeconv_v1(
                         decoder,
@@ -1150,7 +1150,7 @@ class RegularizedHelmholtzMachine(object):
                         nn=nn,
                         add_coeff=ac
                     )
-                    for _ in xrange(rep-1):
+                    for _ in range(rep-1):
                         decoder = resconv_v1(decoder, fs, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     self.decoder_template = (
                         decoder.
@@ -1197,7 +1197,7 @@ class RegularizedHelmholtzMachine(object):
                         nn=nn,
                         add_coeff=ac
                     ) #14
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         with pt.defaults_scope(
                             var_scope="res_1" if tie_weights else None
                         ):
@@ -1217,7 +1217,7 @@ class RegularizedHelmholtzMachine(object):
                         keep_prob=res_keep_prob,
                         add_coeff=ac
                     ) #7
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         with pt.defaults_scope(
                                 var_scope="res_2" if tie_weights else None
                         ):
@@ -1237,7 +1237,7 @@ class RegularizedHelmholtzMachine(object):
                         keep_prob=res_keep_prob,
                         add_coeff=ac
                     ) #4
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         with pt.defaults_scope(
                                 var_scope="res_3" if tie_weights else None
                         ):
@@ -1265,7 +1265,7 @@ class RegularizedHelmholtzMachine(object):
                                apply(tf.tile, [1,4,4,1]).
                                conv2d_mod(fs, base_filters*2)
                                )
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         with pt.defaults_scope(
                                 var_scope="de_res_1" if tie_weights else None
                         ):
@@ -1286,7 +1286,7 @@ class RegularizedHelmholtzMachine(object):
                         nn=nn,
                         add_coeff=ac
                     )
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         with pt.defaults_scope(
                                 var_scope="de_res_2" if tie_weights else None
                         ):
@@ -1307,7 +1307,7 @@ class RegularizedHelmholtzMachine(object):
                         nn=nn,
                         add_coeff=ac
                     )
-                    for _ in xrange(rep):
+                    for _ in range(rep):
                         with pt.defaults_scope(
                                 var_scope="de_res_3" if tie_weights else None
                         ):
@@ -1328,7 +1328,7 @@ class RegularizedHelmholtzMachine(object):
                         nn=nn,
                         add_coeff=ac
                     )
-                    for _ in xrange(rep-1):
+                    for _ in range(rep-1):
                         with pt.defaults_scope(
                                 var_scope="de_res_4" if tie_weights else None
                         ):

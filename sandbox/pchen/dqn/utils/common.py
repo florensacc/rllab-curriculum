@@ -8,7 +8,7 @@ import time, sys
 import pdb
 import itertools, random
 import math
-import cPickle as pickle
+import pickle as pickle
 import scipy.optimize
 import scipy.misc
 import matplotlib.pyplot as plt
@@ -46,12 +46,12 @@ def load_vars(vars, fname, mask=None):
 def experiment_iter(max_iter, out_dir, exp_name, checkpoint_freq, checkpoint_vars, start_from=1):
     stats = []
     stats_file = "%s/%s_stats.npz" % (out_dir, exp_name)
-    for i in xrange(start_from, max_iter):
+    for i in range(start_from, max_iter):
         this_stat = OrderedDict()
         yield (i, this_stat)
-        if len(this_stat.keys()) != 0:
-            print "Experiment: %s\nIteration: %i" % (exp_name, i)
-            print tabulate([(k, str(v)) for k,v in this_stat.items()])
+        if len(list(this_stat.keys())) != 0:
+            print("Experiment: %s\nIteration: %i" % (exp_name, i))
+            print(tabulate([(k, str(v)) for k,v in list(this_stat.items())]))
             this_stat["iter"] = i
             stats.append(this_stat)
             np.savez_compressed(stats_file, stats=stats)
@@ -82,19 +82,19 @@ def gen_cmd(base_cmd, exp_base_name, params, runs=3):
     fixed = []
     varying_ks = []
     varying_vss = []
-    for k, v in params.items():
+    for k, v in list(params.items()):
         if isinstance(v, collections.Iterable) and not isinstance(v, str):
             varying_ks.append(k)
             varying_vss.append(v)
         else:
             fixed.append((k, v))
     for prod in itertools.product(*varying_vss):
-        varied = zip(varying_ks, prod)
+        varied = list(zip(varying_ks, prod))
         this_params = fixed + varied
         exp_name = "_".join(
             [exp_base_name] +
             ["%s_%s" % p for p in varied])
-        for i in xrange(runs):
+        for i in range(runs):
             run_exp_name = exp_name + ("_run%i" % i)
             cmd_args = params_to_cmd_args(
                 [("exp_name", run_exp_name)] + this_params)
@@ -169,7 +169,7 @@ def gen_updates(loss, params, args):
                                        learning_rate=args.learning_rate, epsilon=0.01, rho=0.95)
 
 def copy_from_params(ps):
-    return map(lambda p: np.copy(p.get_value()), ps)
+    return [np.copy(p.get_value()) for p in ps]
 
 def set_to_params(values, ps):
     for p, v in zip(ps, values):
@@ -236,7 +236,7 @@ def colorize(string, color, bold=False, highlight = False):
     attr = []
     num = color2num[color]
     if highlight: num += 10
-    attr.append(unicode(num))
+    attr.append(str(num))
     if bold: attr.append('1')
     return '\x1b[%sm%s\x1b[0m' % (';'.join(attr), string)
 
@@ -248,7 +248,7 @@ class Message(object):
     def __enter__(self):
         if self.show:
             global MESSAGE_DEPTH #pylint: disable=W0603
-            print colorize('\t'*MESSAGE_DEPTH + '=: ' + self.msg,'magenta')
+            print(colorize('\t'*MESSAGE_DEPTH + '=: ' + self.msg,'magenta'))
             self.tstart = time.time()
             MESSAGE_DEPTH += 1
     def __exit__(self, etype, *args):
@@ -256,7 +256,7 @@ class Message(object):
              global MESSAGE_DEPTH #pylint: disable=W0603
              MESSAGE_DEPTH -= 1
              maybe_exc = "" if etype is None else " (with exception)"
-             print colorize('\t'*MESSAGE_DEPTH + "done%s in %.3f seconds"%(maybe_exc, time.time() - self.tstart), 'magenta')
+             print(colorize('\t'*MESSAGE_DEPTH + "done%s in %.3f seconds"%(maybe_exc, time.time() - self.tstart), 'magenta'))
 
 
 # -*- coding: utf-8 -*-

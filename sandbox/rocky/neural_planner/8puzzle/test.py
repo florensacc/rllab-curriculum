@@ -80,7 +80,7 @@ class EightPuzzle:
             p._parent = self
             return p
 
-        return map(lambda pair: swap_and_clone(zero, pair), free)
+        return [swap_and_clone(zero, pair) for pair in free]
 
     def _generate_solution_path(self, path):
         if self._parent == None:
@@ -240,11 +240,11 @@ def main():
 
     import time
     start = time.time()
-    for _ in xrange(10000):
+    for _ in range(10000):
         p = EightPuzzle()
         p.shuffle(20)
         path, count = p.solve(h_manhattan)
-    print(time.time() - start)
+    print((time.time() - start))
 
     # path.reverse()
     # for i in path:

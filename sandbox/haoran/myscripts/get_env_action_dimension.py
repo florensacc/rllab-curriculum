@@ -53,5 +53,5 @@ for env_name in env_names:
     else: 
         raise NotImplementedError
     
-    print "%-20s %d"%(env_name,len(env.action_bounds[0]))
+    print("%-20s %d"%(env_name,len(env.action_bounds[0])))
 

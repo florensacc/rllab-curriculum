@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.rocky.hrl.envs.supervised_env import SupervisedEnv
 from sandbox.rocky.hrl.misc.hrl_utils import using_seed
 from rllab.envs.base import Step
@@ -30,9 +30,9 @@ class PermGridEnv(SupervisedEnv, Serializable):
         always start from the top left corner.
         """
         if object_seed is None:
-            object_seed = np.random.randint(sys.maxint)
+            object_seed = np.random.randint(sys.maxsize)
         if perm_seed is None:
-            perm_seed = np.random.randint(sys.maxint)
+            perm_seed = np.random.randint(sys.maxsize)
         Serializable.quick_init(self, locals())
         self.size = size
         self.n_objects = n_objects
@@ -48,7 +48,7 @@ class PermGridEnv(SupervisedEnv, Serializable):
         if n_fixed_perm is not None:
             assert n_fixed_perm >= 1
             with using_seed(perm_seed):
-                self.perms = [tuple(np.random.permutation(self.n_objects)[:order_length]) for _ in xrange(n_fixed_perm)]
+                self.perms = [tuple(np.random.permutation(self.n_objects)[:order_length]) for _ in range(n_fixed_perm)]
         else:
             self.perms = None
         self.n_fixed_perm = n_fixed_perm
@@ -60,8 +60,8 @@ class PermGridEnv(SupervisedEnv, Serializable):
         self.random_restart = random_restart
         self._observation_space = Product([
             Product([Discrete(self.size), Discrete(self.size)]),
-            Product([Discrete(self.n_objects) for _ in xrange(self.order_length)]),
-            Product([Discrete(2) for _ in xrange(self.order_length)]),
+            Product([Discrete(self.n_objects) for _ in range(self.order_length)]),
+            Product([Discrete(2) for _ in range(self.order_length)]),
         ])
         self._action_space = Discrete(4)
         self.reset()

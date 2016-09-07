@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.policies.base import Policy
 import lasagne.nonlinearities as NL
@@ -72,7 +72,7 @@ class StateGoalCategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializab
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)
         probs = self._f_prob(flat_obs)
-        actions = map(self.action_space.weighted_sample, probs)
+        actions = list(map(self.action_space.weighted_sample, probs))
         return actions, dict(prob=probs)
 
     @property

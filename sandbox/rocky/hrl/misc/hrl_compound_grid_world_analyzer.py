@@ -17,8 +17,8 @@ class GridPlot(object):
         if title:
             plt.title(title)
 
-        ax.set_xticks(range(grid_size + 1))
-        ax.set_yticks(range(grid_size + 1))
+        ax.set_xticks(list(range(grid_size + 1)))
+        ax.set_yticks(list(range(grid_size + 1)))
         ax.grid(True, linestyle='-', color=(0, 0, 0), alpha=1, linewidth=1)
         self._grid_size = grid_size
         self._ax = ax
@@ -61,11 +61,11 @@ class HrlAnalyzer(object):
 
     def __init__(self, file_name=None, params=None):
         if params is None:
-            print "loading"
+            print("loading")
             import sys
             sys.stdout.flush()
             params = joblib.load(file_name)
-            print "loaded"
+            print("loaded")
             sys.stdout.flush()
         self._env = env = params["env"]
         self._policy = policy = params["policy"]
@@ -97,7 +97,7 @@ class HrlAnalyzer(object):
             for y in range(self._n_col):
                 state = x * self._n_col + y
                 # for state in range(env.observation_space.n):
-                print "State (%d,%d)" % (x, y)
+                print("State (%d,%d)" % (x, y))
                 tabulate_data = []
                 high_obs = self._high_obs_space.flatten(state)
                 high_prob = self._policy.high_policy.dist_info([high_obs], dict())['prob'].flatten()
@@ -112,8 +112,8 @@ class HrlAnalyzer(object):
                         prob = self._policy.low_policy.dist_info([low_obs], dict())['prob'].flatten()
                         row.append(" ".join(["%.2f" % px for px in prob]))
                     tabulate_data.append(row)
-                print tabulate(tabulate_data)
-                print ""
+                print(tabulate(tabulate_data))
+                print("")
 
     def print_marginalized_policy(self):
         marginal_policy = np.zeros((self._n_states, self._n_actions))
@@ -142,10 +142,10 @@ class HrlAnalyzer(object):
 
     def print_state_visitation_frequency(self):
         paths = []
-        for _ in xrange(50):
+        for _ in range(50):
             paths.append(rollout(env=self._env, agent=self._policy, max_path_length=60))
         states = np.vstack([p["observations"] for p in paths])
-        print np.array_str(np.mean(states, axis=0)[:16].reshape((4, 4)))
+        print(np.array_str(np.mean(states, axis=0)[:16].reshape((4, 4))))
 
     def rollout(self, max_length=100):
         path = rollout(env=self._env, agent=self._policy, max_path_length=max_length)
@@ -153,5 +153,5 @@ class HrlAnalyzer(object):
         actions = [self._action_space.unflatten(x) for x in path["actions"]]
         subgoals = [self._subgoal_space.unflatten(x) for x in path["agent_infos"]["subgoal"]]
         for o, a, g in zip(obs, actions, subgoals):
-            print "At state %d, subgoal %d, took action %s" % (o, g, self.ACTION_MAP[a])
+            print("At state %d, subgoal %d, took action %s" % (o, g, self.ACTION_MAP[a]))
 

@@ -21,7 +21,7 @@ class SimHash(Hash):
         for bucket_size in bucket_sizes:
             mod = 1
             mods = []
-            for _ in xrange(dim_key):
+            for _ in range(dim_key):
                 mods.append(mod)
                 mod = (mod * 2) % bucket_size
             mods_list.append(mods)
@@ -48,7 +48,7 @@ class SimHash(Hash):
         self.inc_keys(keys,values,attribute)
 
     def inc_keys(self, keys, values, attribute):
-        for idx in xrange(len(self.bucket_sizes)):
+        for idx in range(len(self.bucket_sizes)):
             np.add.at(self.tables[attribute, idx], keys[:, idx], values)
 
     def query(self, items, attribute):
@@ -60,7 +60,7 @@ class SimHash(Hash):
 
     def query_keys(self,keys, attribute):
         all_values = []
-        for idx in xrange(len(self.bucket_sizes)):
+        for idx in range(len(self.bucket_sizes)):
             all_values.append(self.tables[attribute, idx, keys[:, idx]])
         values = np.asarray(all_values).min(axis=0)
         return values
@@ -71,7 +71,7 @@ class SimHash(Hash):
         Note that each bucket is set to the same value
         """
         for key, value in zip(keys, values):
-            for idx in xrange(len(self.bucket_sizes)):
+            for idx in range(len(self.bucket_sizes)):
                 self.tables[attribute, idx, key[idx]] = value
 
     def reset(self):

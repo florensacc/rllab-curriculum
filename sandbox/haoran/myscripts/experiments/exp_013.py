@@ -137,7 +137,7 @@ for batch_size,env_name,cg_iters_dict in \
 
         
         cg_iters_spec = ""
-        for k,v in cg_iters_dict.iteritems():
+        for k,v in cg_iters_dict.items():
             cg_iters_spec += "%d_%d_"%(k,v)
         cg_iters_spec = cg_iters_spec[:-1]
 
@@ -166,7 +166,7 @@ for batch_size,env_name,cg_iters_dict in \
                     )
             elif (mode=="ec2") or (mode=="ec2_parallel"):
                 if len(exp_name) > 64:
-                    print "Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name)
+                    print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
                     sys.exit(1)
                 def run():
                     run_experiment_lite(

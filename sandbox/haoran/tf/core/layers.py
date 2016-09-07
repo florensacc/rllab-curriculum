@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import numpy as np
 import math
 import tensorflow as tf
@@ -142,19 +142,19 @@ class Layer(object):
             tags['trainable'] = tags.get('trainable', True)
             tags['regularizable'] = tags.get('regularizable', True)
             param = create_param(spec, shape, name, **tags)
-            self.params[param] = set(tag for tag, value in tags.items() if value)
+            self.params[param] = set(tag for tag, value in list(tags.items()) if value)
             return param
 
     def get_params(self, **tags):
         result = list(self.params.keys())
 
-        only = set(tag for tag, value in tags.items() if value)
+        only = set(tag for tag, value in list(tags.items()) if value)
         if only:
             # retain all parameters that have all of the tags in `only`
             result = [param for param in result
                       if not (only - self.params[param])]
 
-        exclude = set(tag for tag, value in tags.items() if not value)
+        exclude = set(tag for tag, value in list(tags.items()) if not value)
         if exclude:
             # retain all parameters that have none of the tags in `exclude`
             result = [param for param in result
@@ -630,7 +630,7 @@ class SliceLayer(Layer):
             del output_shape[self.axis]
         elif input_shape[self.axis] is not None:
             output_shape[self.axis] = len(
-                range(*self.slice.indices(input_shape[self.axis])))
+                list(range(*self.slice.indices(input_shape[self.axis]))))
         else:
             output_shape[self.axis] = None
         return tuple(output_shape)
@@ -1026,7 +1026,7 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
     # track accepted kwargs used by get_output_for
     accepted_kwargs = {'deterministic'}
     # obtain topological ordering of all layers the output layer(s) depend on
-    treat_as_input = inputs.keys() if isinstance(inputs, dict) else []
+    treat_as_input = list(inputs.keys()) if isinstance(inputs, dict) else []
     all_layers = get_all_layers(layer_or_layers, treat_as_input)
     # initialize layer-to-expression mapping from all input layers
     all_outputs = dict((layer, layer.input_var)
@@ -1036,7 +1036,7 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
     # update layer-to-expression mapping from given input(s), if any
     if isinstance(inputs, dict):
         all_outputs.update((layer, tf.convert_to_tensor(expr))
-                           for layer, expr in inputs.items())
+                           for layer, expr in list(inputs.items()))
     elif inputs is not None:
         if len(all_outputs) > 1:
             raise ValueError("get_output() was called with a single input "

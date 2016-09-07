@@ -91,7 +91,7 @@ class PFQI(object):
         logger.push_prefix('[%s] | ' % (self.exp_name))
         opt_info = self.init_opt(mdp, qfunc)
         self.start_worker(mdp, qfunc)
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in range(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
             samples_data = self.obtain_samples(itr, mdp, qfunc, opt_info)
             for opt_itr in range(10):
@@ -163,7 +163,7 @@ class PFQI(object):
             def evaluate(params):
                 qfunc.set_param_values(params)
                 grad = f_grads(*train_vals)
-                flattened_grad = flatten_tensors(map(np.asarray, grad))
+                flattened_grad = flatten_tensors(list(map(np.asarray, grad)))
                 return flattened_grad.astype(np.float64)
             return evaluate
 

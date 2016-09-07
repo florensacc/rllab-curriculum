@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt, VectorizedSampler
 from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
@@ -45,15 +45,15 @@ class PolicyImitationTrainer(object):
 
         grouped_obs_var, obs_var = self.wrapped_placeholder(obs_var)
         grouped_valid_var, valid_var = self.wrapped_placeholder(valid_var)
-        grouped_state_info_vars_list, state_info_vars_list = map(list, zip(*map(self.wrapped_placeholder,
-                                                                                state_info_vars_list)))
-        grouped_old_dist_info_vars_list, old_dist_info_vars_list = map(list, zip(*map(self.wrapped_placeholder,
-                                                                                      old_dist_info_vars_list)))
+        grouped_state_info_vars_list, state_info_vars_list = list(map(list, list(zip(*list(map(self.wrapped_placeholder,
+                                                                                state_info_vars_list))))))
+        grouped_old_dist_info_vars_list, old_dist_info_vars_list = list(map(list, list(zip(*list(map(self.wrapped_placeholder,
+                                                                                      old_dist_info_vars_list))))))
 
         valid_var = tf.cast(valid_var, tf.float32)
-        state_info_vars = dict(zip(policy.state_info_keys, state_info_vars_list))
-        hier_state_info_vars = dict(zip(hier_policy.state_info_keys, state_info_vars_list))
-        old_dist_info_vars = dict(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list))
+        state_info_vars = dict(list(zip(policy.state_info_keys, state_info_vars_list)))
+        hier_state_info_vars = dict(list(zip(hier_policy.state_info_keys, state_info_vars_list)))
+        old_dist_info_vars = dict(list(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list)))
 
         dist_info_vars = policy.dist_info_sym(obs_var, state_info_vars)
         kl_sym = hier_policy.proper_mean_kl_sym_mixture_vs_flat(obs_var, valid_var, hier_state_info_vars,
@@ -92,8 +92,8 @@ class PolicyImprovementTrainer(object):
         """
 
         valid_var = tf.cast(valid_var, tf.float32)
-        state_info_vars = dict(zip(policy.state_info_keys, state_info_vars_list))
-        old_dist_info_vars = dict(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list))
+        state_info_vars = dict(list(zip(policy.state_info_keys, state_info_vars_list)))
+        old_dist_info_vars = dict(list(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list)))
 
         dist = policy.distribution
 
@@ -163,14 +163,14 @@ class BonusImitationTrainer(object):
 
         grouped_obs_var, obs_var = self.wrapped_placeholder(obs_var)
         grouped_valid_var, valid_var = self.wrapped_placeholder(valid_var)
-        grouped_state_info_vars_list, state_info_vars_list = map(list, zip(*map(self.wrapped_placeholder,
-                                                                                state_info_vars_list)))
-        grouped_old_dist_info_vars_list, old_dist_info_vars_list = map(list, zip(*map(self.wrapped_placeholder,
-                                                                                      old_dist_info_vars_list)))
+        grouped_state_info_vars_list, state_info_vars_list = list(map(list, list(zip(*list(map(self.wrapped_placeholder,
+                                                                                state_info_vars_list))))))
+        grouped_old_dist_info_vars_list, old_dist_info_vars_list = list(map(list, list(zip(*list(map(self.wrapped_placeholder,
+                                                                                      old_dist_info_vars_list))))))
 
         valid_var = tf.cast(valid_var, tf.float32)
-        state_info_vars = dict(zip(policy.state_info_keys, state_info_vars_list))
-        old_dist_info_vars = dict(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list))
+        state_info_vars = dict(list(zip(policy.state_info_keys, state_info_vars_list)))
+        old_dist_info_vars = dict(list(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list)))
 
         bonus_sym = self.bonus_evaluator.bonus_sym(obs_var, valid_var, state_info_vars)
 

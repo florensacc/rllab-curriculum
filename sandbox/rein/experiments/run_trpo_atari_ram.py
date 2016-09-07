@@ -28,7 +28,7 @@ num_seq_frames = 4
 stub(globals())
 
 # Param ranges
-seeds = range(10)
+seeds = list(range(10))
 
 mdps = [GymEnv("Freeway-ram-v0", record_video=RECORD_VIDEO),
         GymEnv("Breakout-ram-v0", record_video=RECORD_VIDEO),

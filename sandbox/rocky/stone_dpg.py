@@ -57,9 +57,9 @@ def run():
     obs = None
     t = 0
 
-    for epoch in xrange(n_epochs):
-        print "Epoch %d" % epoch
-        for epoch_itr in xrange(n_epoch_itrs):
+    for epoch in range(n_epochs):
+        print("Epoch %d" % epoch)
+        for epoch_itr in range(n_epoch_itrs):
             if terminal:
                 es.reset()
                 obs = env.reset()
@@ -81,7 +81,7 @@ def run():
             network.update()
         # test performance
         paths = []
-        for _ in xrange(n_eval_trajs):
+        for _ in range(n_eval_trajs):
             path = rollout(
                 env,
                 AttrDict(
@@ -92,14 +92,14 @@ def run():
             )
             paths.append(path)
         avg_return = np.mean([np.sum(p["rewards"]) for p in paths])
-        print "Average Return: %f" % avg_return
-        print "Actor net"
+        print("Average Return: %f" % avg_return)
+        print("Actor net")
         network.actor_net.print_diagnostics()
-        print "Critic net"
+        print("Critic net")
         network.critic_net.print_diagnostics()
-        print "Actor target net"
+        print("Actor target net")
         network.actor_target_net.print_diagnostics()
-        print "Critic target net"
+        print("Critic target net")
         network.critic_target_net.print_diagnostics()
 
 

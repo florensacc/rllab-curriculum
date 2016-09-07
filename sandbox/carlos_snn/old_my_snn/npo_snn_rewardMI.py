@@ -105,7 +105,7 @@ class NPO_snn(BatchPolopt):
                     # 'optimizer': self.latent_regressor.optimizer,
                     'regressor_args': self.latent_regressor.regressor_args,
                 }
-                for key, value in reg_dict.iteritems():
+                for key, value in reg_dict.items():
                     extra_regressor_args[key] = value
                 temp_lat_reg = Latent_regressor(**extra_regressor_args)
                 self.other_regressors.append(temp_lat_reg)
@@ -117,12 +117,12 @@ class NPO_snn(BatchPolopt):
 
         for i, path in enumerate(paths):
             if np.isnan(path['observations']).any():
-                print 'The RAW observation of path {} have a NaN: '.format(i), path['observations'][0]
+                print('The RAW observation of path {} have a NaN: '.format(i), path['observations'][0])
             if np.isnan(path['actions']).any() or np.isnan(path['agent_infos']['mean']).any():
-                print 'The RAW actions of path {} have a Nan: '.format(i), path['actions'][0]
-                print 'the params of the nn are: ', self.policy.get_param_values()
+                print('The RAW actions of path {} have a Nan: '.format(i), path['actions'][0])
+                print('the params of the nn are: ', self.policy.get_param_values())
             if np.isnan(path['rewards']).any():
-                print 'The RAW rewards of path {} have a Nan: '.format(i), path['rewards'][0]
+                print('The RAW rewards of path {} have a Nan: '.format(i), path['rewards'][0])
         undiscounted_returns = [sum(path["rewards"]) for path in paths]
         logger.record_tabular('TrueAverageReturn', np.mean(undiscounted_returns))
 
@@ -190,7 +190,7 @@ class NPO_snn(BatchPolopt):
         self.init_opt()
         episode_rewards = []
         episode_lengths = []
-        for itr in xrange(self.current_itr, self.n_itr):
+        for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 # print "print_diff entering the itr loop: "
                 # tr.print_diff()
@@ -210,11 +210,11 @@ class NPO_snn(BatchPolopt):
                 if self.plot:
                     self.update_plot()
                     if self.pause_for_plot:
-                        raw_input("Plotting evaluation run: Press Enter to "
+                        input("Plotting evaluation run: Press Enter to "
                                   "continue...")
                 # print "print_diff exiting the itr loop:"
                 # tr.print_diff()
-                print "collecting Garbage: "
+                print("collecting Garbage: ")
                 gc.collect()
                 # gc.collect()
                 # pdb.set_trace()
@@ -363,7 +363,7 @@ class NPO_snn(BatchPolopt):
                         clustered_by_latents[lat_str] = [path]
                     else:
                         clustered_by_latents[lat_str].append(path)
-                for latent_code, paths in clustered_by_latents.iteritems():
+                for latent_code, paths in clustered_by_latents.items():
                     with logger.tabular_prefix(latent_code), logger.prefix(latent_code):
                         undiscounted_rewards = [sum(path["true_rewards"]) for path in paths]
                         all_latent_avg_returns.append(np.mean(undiscounted_rewards))

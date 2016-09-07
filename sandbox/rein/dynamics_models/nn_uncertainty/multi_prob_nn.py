@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import time
 import numpy as np
 import theano
@@ -280,7 +280,7 @@ class VBNN:
         log_q_w, log_p_w, log_p_D_given_w, sum_lqw, sum_ratio = 0., 0., 0., 0., 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -326,7 +326,7 @@ class VBNN:
         network = lasagne.layers.InputLayer(shape=(self.batch_size, self.n_in))
 
         # Hidden layers
-        for i in xrange(len(self.n_hidden)):
+        for i in range(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             if self.layers_type[i] == 1:
                 network = VBNNLayer(
@@ -395,7 +395,7 @@ class VBNN:
             log_q_w, log_p_w, log_p_D_given_w, sum_lqw = 0., 0., 0., 0.
 
             # MC samples.
-            for _ in xrange(self.n_samples):
+            for _ in range(self.n_samples):
                 # Make prediction.
                 prediction = self.pred_fn(input)
                 # Calculate model likelihood log(P(D|w)).
@@ -469,8 +469,8 @@ class VBNN:
             _f, axarr = plt.subplots(
                 n_plots_v, n_plots_h, sharex=True, sharey=True)
             painter = []
-            for i in xrange(n_plots_v):
-                for j in xrange(n_plots_h):
+            for i in range(n_plots_v):
+                for j in range(n_plots_h):
                     hl, = axarr[i][j].plot(x, x)
                     axarr[i][j].set_ylim(ymin=0, ymax=2)
                     painter.append(hl)
@@ -539,7 +539,7 @@ class VBNN:
 
             elif PLOT_WEIGHTS_INDIVIDUAL:
                 if epoch % 1 == 0:
-                    for i in xrange(n_plots):
+                    for i in range(n_plots):
                         w_mu = layer.mu.eval()[i, 0]
                         w_rho = layer.rho.eval()[i, 0]
                         w_sigma = np.log(1 + np.exp(w_rho))

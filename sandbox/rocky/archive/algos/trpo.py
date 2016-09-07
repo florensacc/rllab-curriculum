@@ -72,7 +72,7 @@ class TRPO(object):
         policy = gen_policy(mdp.observation_shape, mdp.action_dims, input_var)
 
         Q_est_var = T.vector('Q_est')  # N
-        action_range = range(len(policy.action_dims))
+        action_range = list(range(len(policy.action_dims)))
         pi_old_vars = [T.matrix('pi_old_%d' % i) for i in action_range]
         action_vars = [T.vector('action_%d' % i, dtype='uint8')
                        for i in action_range]
@@ -89,7 +89,7 @@ class TRPO(object):
         
         # This is kind of annoying, but this Fisher-vector product function
         # takes sliced vectors as input, and outputs flattened products
-        ys = map(lambda x: x.type(x.name + '_input'), policy.params)#T.vector('y')
+        ys = [x.type(x.name + '_input') for x in policy.params]#T.vector('y')
         jtmjy = 0
 
         for probs_var, pi_old_var in zip(policy.probs_vars, pi_old_vars):
@@ -97,7 +97,7 @@ class TRPO(object):
             jy = T.Rop(probs_var, policy.params, ys)
             mjy = policy.fisher_vector_product(pi_old_var, probs_var, jy)
             jtmjy_raw = T.Lop(probs_var, policy.params, mjy)
-            jtmjy += T.concatenate(map(T.flatten, jtmjy_raw)) / N_var
+            jtmjy += T.concatenate(list(map(T.flatten, jtmjy_raw))) / N_var
 
 
         all_inputs = [input_var, Q_est_var] + pi_old_vars + action_vars
@@ -120,7 +120,7 @@ class TRPO(object):
                 self._sampler_module, self._n_parallel, gen_mdp,
                 gen_policy) as sampler:
 
-            for itr in xrange(self._n_itr):
+            for itr in range(self._n_itr):
 
                 itr_log = prefix_log('itr #%d | ' % (itr + 1), logger=logger)
 
@@ -155,7 +155,7 @@ class TRPO(object):
                 def evaluate_grad(params):
                     policy.set_param_values(params)
                     grad = compute_grads(*all_input_values)
-                    flattened_grad = flatten_tensors(map(np.asarray, grad))
+                    flattened_grad = flatten_tensors(list(map(np.asarray, grad)))
                     return flattened_grad.astype(np.float64)
 
                 import ipdb; ipdb.set_trace()

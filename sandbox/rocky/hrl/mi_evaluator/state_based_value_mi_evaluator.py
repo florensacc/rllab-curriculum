@@ -1,5 +1,5 @@
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import numba
 import numpy as np
@@ -15,7 +15,7 @@ def downsampled_discount_cumsum(x, discount, subgoal_interval):
     result = np.empty_like(x)
     cur_sum = 0
     terminal = len(x) - 1
-    for t in xrange(terminal, -1, -1):
+    for t in range(terminal, -1, -1):
         multiplier = discount if (t % subgoal_interval == subgoal_interval - 1) else 1.
         cur_sum = cur_sum * multiplier + x[t]
         result[t] = cur_sum

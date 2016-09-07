@@ -23,7 +23,7 @@ batch_norm = True
 dropout = False
 
 # Param ranges
-seeds = range(5)
+seeds = list(range(5))
 etas = [0.01]
 lst_factor = [1]
 lst_pred_delta = [False]

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy as np
 import random
@@ -83,7 +83,7 @@ def new_map(shape, n_obstacles):
     obs_types = ['circ', 'rect']
     max_obstacle_size = max(nrow, ncol) / 4
 
-    for _ in xrange(n_obstacles):
+    for _ in range(n_obstacles):
         rand_type = random.choice(obs_types)
         if rand_type == 'circ':
             rand_radius = np.random.randint(low=1, high=max_obstacle_size + 1)
@@ -322,7 +322,7 @@ class CNN(object):
                 ),
                 name="bn1",
             )
-            for idx in xrange(2, 36+1):
+            for idx in range(2, 36+1):
                 net = L.batch_norm(
                     L.Conv2DLayer(
                         net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2",
@@ -423,7 +423,7 @@ class VIN(object):
             shape_op=lambda shape: shape[:-1] + (1,),
             name="v0"
         )
-        for idx in xrange(1, n_iter + 1):
+        for idx in range(1, n_iter + 1):
             q = L.Conv2DLayer(
                 L.concat([r, v], axis=3, name="rv%d" % idx),
                 num_filters=l_q, filter_size=(3, 3), pad="SAME", name="q%d" % idx,
@@ -463,7 +463,7 @@ class VIN(object):
 def evaluate(policy, maps, fromtos, opt_trajlen, max_horizon):
     # Run the neural network on all the tasks at least once
     maps = np.asarray(maps)
-    from_xs, from_ys, to_xs, to_ys = map(np.asarray, zip(*fromtos))
+    from_xs, from_ys, to_xs, to_ys = list(map(np.asarray, list(zip(*fromtos))))
     goals = np.zeros_like(maps)
     goals[np.arange(len(maps)), to_xs, to_ys] = 1
 
@@ -480,7 +480,7 @@ def evaluate(policy, maps, fromtos, opt_trajlen, max_horizon):
     last_tried = 0
     progbar = pyprind.ProgBar(len(maps))
 
-    for i in xrange(max_horizon):
+    for i in range(max_horizon):
         # print(i)
         counter += 1
         states = np.zeros_like(maps)
@@ -577,7 +577,7 @@ class GridworldBenchmark(object):
         # convert actions to one-hot
         train_actions = np.eye(self.n_actions)[train_actions]
         train_maps = maps[:n_train]
-        train_opt_trajlen = np.asarray(map(len, traj_states[:n_train]))
+        train_opt_trajlen = np.asarray(list(map(len, traj_states[:n_train])))
         train_fromtos = fromtos[:n_train]
 
         test_states = np.concatenate(traj_states[n_train:], axis=0)
@@ -585,7 +585,7 @@ class GridworldBenchmark(object):
         # convert actions to one-hot
         test_actions = np.eye(self.n_actions)[test_actions]
         test_maps = maps[n_train:]
-        test_opt_trajlen = np.asarray(map(len, traj_states[n_train:]))
+        test_opt_trajlen = np.asarray(list(map(len, traj_states[n_train:])))
         test_fromtos = fromtos[n_train:]
 
         self.eval_max_horizon = max(np.max(train_opt_trajlen), np.max(test_opt_trajlen)) * 2
@@ -615,7 +615,7 @@ class GridworldBenchmark(object):
         )
 
         params = L.get_all_params(net, trainable=True)
-        params = filter(lambda x: isinstance(x, tf.Variable), params)
+        params = [x for x in params if isinstance(x, tf.Variable)]
 
         lr_var = tf.placeholder(dtype=tf.float32, shape=(), name="lr")
 
@@ -636,7 +636,7 @@ class GridworldBenchmark(object):
 
             policy = new_policy(sess, state_var, test_action_prob_var)
 
-            for epoch in xrange(self.n_epochs):
+            for epoch in range(self.n_epochs):
 
                 logger.log("Epoch %d" % epoch)
                 bar = pyprind.ProgBar(len(train_states))
@@ -648,14 +648,14 @@ class GridworldBenchmark(object):
                     # If learning rate changed, reset the optimizer state
                     logger.log("Resetting optimizer state..")
                     if isinstance(optimizer, tf.train.AdamOptimizer):
-                        vars = optimizer._slots['m'].values() + optimizer._slots['v'].values()
+                        vars = list(optimizer._slots['m'].values()) + list(optimizer._slots['v'].values())
                         var_vals = sess.run(vars)
                         ops = []
                         for var, val in zip(vars, var_vals):
                             ops.append(tf.assign(var, np.zeros_like(val)))
                         sess.run(ops)
                     elif isinstance(optimizer, tf.train.RMSPropOptimizer):
-                        vars = optimizer._slots['rms'].values() + optimizer._slots['momentum'].values()
+                        vars = list(optimizer._slots['rms'].values()) + list(optimizer._slots['momentum'].values())
                         var_vals = sess.run(vars)
                         ops = []
                         for var, val in zip(vars, var_vals):

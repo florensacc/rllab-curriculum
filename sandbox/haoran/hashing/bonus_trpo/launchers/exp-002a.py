@@ -1,8 +1,8 @@
 # Test run with clip_reward, death_ends_episode
 # games: venture, frostbite
 
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo import BonusTRPO
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator

@@ -1,10 +1,10 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 """
 2D rendering framework
 """
-from __future__ import division
+
 import os, sys
 
 if "Apple" in sys.version:

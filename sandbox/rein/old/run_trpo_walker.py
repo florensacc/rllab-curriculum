@@ -13,7 +13,7 @@ from rllab import config
 stub(globals())
 
 # Param ranges
-seeds = range(10)
+seeds = list(range(10))
 
 for seed in seeds:
 

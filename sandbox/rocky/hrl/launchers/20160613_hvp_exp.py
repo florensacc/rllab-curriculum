@@ -1,5 +1,5 @@
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy

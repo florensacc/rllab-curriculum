@@ -1,12 +1,13 @@
-from __future__ import absolute_import
+
 from path import Path
 import sys
-import cPickle as pickle
+import pickle as pickle
 import random
 from rllab.misc.console import colorize, Message
 from collections import OrderedDict
 import numpy as np
 import operator
+from functools import reduce
 
 sys.setrecursionlimit(50000)
 
@@ -34,9 +35,9 @@ def compact(x):
     all None elements; otherwise it returns the input itself.
     """
     if isinstance(x, dict):
-        return dict((k, v) for k, v in x.iteritems() if v is not None)
+        return dict((k, v) for k, v in x.items() if v is not None)
     elif isinstance(x, list):
-        return filter(lambda elem: elem is not None, x)
+        return [elem for elem in x if elem is not None]
     return x
 
 
@@ -155,7 +156,7 @@ class AttrDict(dict):
 
 
 def is_iterable(obj):
-    return isinstance(obj, basestring) or getattr(obj, '__iter__', False)
+    return isinstance(obj, str) or getattr(obj, '__iter__', False)
 
 
 # cut the path for any time >= t
@@ -165,7 +166,7 @@ def truncate_path(p, t):
 
 def concat_paths(p1, p2):
     import numpy as np
-    return dict((k1, np.concatenate([p1[k1], p2[k1]])) for k1 in p1.keys() if k1 in p2)
+    return dict((k1, np.concatenate([p1[k1], p2[k1]])) for k1 in list(p1.keys()) if k1 in p2)
 
 
 def path_len(p):
@@ -197,12 +198,12 @@ def set_seed(seed):
         tf.set_random_seed(seed)
     except Exception as e:
         print(e)
-    print(
+    print((
         colorize(
             'using seed %s' % (str(seed)),
             'green'
         )
-    )
+    ))
 
 
 def get_seed():
@@ -295,7 +296,7 @@ def flatten_hessian(cost, wrt, consider_constant=None,
 
 def flatten_tensor_variables(ts):
     import theano.tensor as TT
-    return TT.concatenate(map(TT.flatten, ts))
+    return TT.concatenate(list(map(TT.flatten, ts)))
 
 
 def flatten_shape_dim(shape):
@@ -309,7 +310,7 @@ def print_lasagne_layer(layer, prefix=""):
     if getattr(layer, 'nonlinearity', None):
         params += ", nonlinearity=" + layer.nonlinearity.__name__
     params = params[2:]
-    print prefix + layer.__class__.__name__ + "[" + params + "]"
+    print(prefix + layer.__class__.__name__ + "[" + params + "]")
     if hasattr(layer, 'input_layers') and layer.input_layers is not None:
         [print_lasagne_layer(x, prefix + "  ") for x in layer.input_layers]
     elif hasattr(layer, 'input_layer') and layer.input_layer is not None:
@@ -377,7 +378,7 @@ def iterate_minibatches_generic(input_lst=None, batchsize=None, shuffle=False):
     if shuffle:
         indices = np.arange(len(input_lst[0]))
         np.random.shuffle(indices)
-    for start_idx in xrange(0, len(input_lst[0]), batchsize):
+    for start_idx in range(0, len(input_lst[0]), batchsize):
         if shuffle:
             excerpt = indices[start_idx:start_idx + batchsize]
         else:

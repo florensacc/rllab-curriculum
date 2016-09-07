@@ -13,7 +13,7 @@ from rllab import config
 stub(globals())
 
 # Param ranges
-seeds = range(10)
+seeds = list(range(10))
 etas = 10. ^ [-5, -4, -3, -2, -1]
 replay_pools = [True]
 kl_ratios = [True]

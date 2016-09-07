@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy as np
 import tensorflow as tf
@@ -208,7 +208,7 @@ class DQN(object):
             path_return = 0
             done = False
 
-            for epoch in xrange(self.n_epochs):
+            for epoch in range(self.n_epochs):
 
                 logger.log("Starting epoch %d" % epoch)
                 logger.record_tabular('Epoch', epoch)
@@ -216,7 +216,7 @@ class DQN(object):
                 self.es_path_returns = []
                 self.logged_columns = []
 
-                for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
+                for epoch_itr in pyprind.prog_bar(range(self.epoch_length)):
                     if done:
                         obs = self.env.reset()
                         self.es.reset()

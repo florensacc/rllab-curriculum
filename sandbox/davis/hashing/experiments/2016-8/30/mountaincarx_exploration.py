@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 info = """Running sparse task MountainCarEnvX with Hashing Bonus Reward"""
 
@@ -30,7 +30,7 @@ def experiment_variant_generator():
     vg.add("step_size", [0.01], hide=True)
     vg.add("max_path_length", [100], hide=True)
     vg.add("discount", [0.99], hide=True)
-    vg.add("seed", range(5), hide=True)
+    vg.add("seed", list(range(5)), hide=True)
     vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1, 1])
     vg.add("bonus_evaluator", lambda env: [HashingBonusEvaluator(env.spec)], hide=True)
     vg.add("baseline",

@@ -77,9 +77,9 @@ class MazeEnv(ProxyEnv, Serializable):
             M[1][c / 2] = 'r'
             M[c - 2][c / 2] = 'g'
             structure = M
-            print self.__class__.MAZE_STRUCTURE
+            print(self.__class__.MAZE_STRUCTURE)
             self.__class__.MAZE_STRUCTURE = structure
-            print "the new one is", self.__class__.MAZE_STRUCTURE
+            print("the new one is", self.__class__.MAZE_STRUCTURE)
 
         elif self._maze_id == 2:  # spiral maze: need to use all the keys (only makes sense for length >=3)
             c = length + 4
@@ -93,7 +93,7 @@ class MazeEnv(ProxyEnv, Serializable):
             M[1][c / 2 - 2] = 'g'
             structure = M
             self.__class__.MAZE_STRUCTURE = structure
-            print structure
+            print(structure)
 
         elif self._maze_id == 3:  # corridor with goals at the 2 extremes
             structure = [
@@ -102,7 +102,7 @@ class MazeEnv(ProxyEnv, Serializable):
                 [1] * (2 * length + 5),
             ]
             self.__class__.MAZE_STRUCTURE = structure
-            print structure
+            print(structure)
 
         elif self._maze_id == 4:  # cross corridor
             c = 2 * length + 5
@@ -123,14 +123,14 @@ class MazeEnv(ProxyEnv, Serializable):
                     M[i][j] = 'g'
             structure = M
             self.__class__.MAZE_STRUCTURE = structure
-            print structure
+            print(structure)
 
         torso_x, torso_y = self._find_robot()
         self._init_torso_x = torso_x
         self._init_torso_y = torso_y
 
-        for i in xrange(len(structure)):
-            for j in xrange(len(structure[0])):
+        for i in range(len(structure)):
+            for j in range(len(structure[0])):
                 if str(structure[i][j]) == '1':
                     # offset all coordinates so that robot starts at the origin
                     ET.SubElement(
@@ -219,7 +219,7 @@ class MazeEnv(ProxyEnv, Serializable):
         wall_readings = np.zeros(self._n_bins)
         goal_readings = np.zeros(self._n_bins)
 
-        for ray_idx in xrange(self._n_bins):
+        for ray_idx in range(self._n_bins):
             ray_ori = ori - self._sensor_span * 0.5 + 1.0 * (2 * ray_idx + 1) / (2 * self._n_bins) * self._sensor_span
             ray_segments = []
             for seg in segments:
@@ -295,7 +295,7 @@ class MazeEnv(ProxyEnv, Serializable):
         wall_readings = np.zeros(self._n_bins)
         goal_readings = np.zeros(self._n_bins)
 
-        for ray_idx in xrange(self._n_bins):
+        for ray_idx in range(self._n_bins):
             ray_ori = ori - self._sensor_span * 0.5 + 1.0 * (2 * ray_idx + 1) / (2 * self._n_bins) * self._sensor_span
             ray_segments = []
             for seg in segments:
@@ -381,8 +381,8 @@ class MazeEnv(ProxyEnv, Serializable):
     def _find_goal_range(self):
         structure = self.__class__.MAZE_STRUCTURE
         size_scaling = self.__class__.MAZE_SIZE_SCALING
-        for i in xrange(len(structure)):
-            for j in xrange(len(structure[0])):
+        for i in range(len(structure)):
+            for j in range(len(structure[0])):
                 if structure[i][j] == 'g':
                     minx = j * size_scaling - size_scaling * 0.5 - self._init_torso_x
                     maxx = j * size_scaling + size_scaling * 0.5 - self._init_torso_x
@@ -394,8 +394,8 @@ class MazeEnv(ProxyEnv, Serializable):
         x, y = pos
         structure = self.__class__.MAZE_STRUCTURE
         size_scaling = self.__class__.MAZE_SIZE_SCALING
-        for i in xrange(len(structure)):
-            for j in xrange(len(structure[0])):
+        for i in range(len(structure)):
+            for j in range(len(structure[0])):
                 if structure[i][j] == 1:
                     minx = j * size_scaling - size_scaling * 0.5 - self._init_torso_x
                     maxx = j * size_scaling + size_scaling * 0.5 - self._init_torso_x

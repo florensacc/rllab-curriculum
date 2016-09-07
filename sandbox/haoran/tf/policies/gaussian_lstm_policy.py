@@ -180,7 +180,7 @@ class GaussianLSTMPolicy(StochasticPolicy, LayersPowered, Serializable):
     @overrides
     def get_action(self, observation):
         actions, agent_infos = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in agent_infos.iteritems()}
+        return actions[0], {k: v[0] for k, v in agent_infos.items()}
 
     @overrides
     def get_actions(self, observations):

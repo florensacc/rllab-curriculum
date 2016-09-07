@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import time
 import numpy as np
 import theano.tensor as T
@@ -298,14 +298,11 @@ class VBNN(LasagnePowered, Serializable):
 
     def _get_prob_layers(self):
         if self.stochastic_output:
-            layers_mean = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                                 lasagne.layers.get_all_layers(self.network_mean)[1:])
-            layers_stdn = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                                 lasagne.layers.get_all_layers(self.network_stdn)[1:])
+            layers_mean = [l for l in lasagne.layers.get_all_layers(self.network_mean)[1:] if l.name == VBNN_LAYER_TAG]
+            layers_stdn = [l for l in lasagne.layers.get_all_layers(self.network_stdn)[1:] if l.name == VBNN_LAYER_TAG]
             layers = layers_mean + layers_stdn
         else:
-            layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                            lasagne.layers.get_all_layers(self.network)[1:])
+            layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == VBNN_LAYER_TAG]
         return layers
 
     def save_params(self):
@@ -395,7 +392,7 @@ class VBNN(LasagnePowered, Serializable):
         log_p_D_given_w = 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -432,7 +429,7 @@ class VBNN(LasagnePowered, Serializable):
         log_p_D_given_w = 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -466,7 +463,7 @@ class VBNN(LasagnePowered, Serializable):
         log_q_w, log_p_w, log_p_D_given_w = 0., 0., 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -507,7 +504,7 @@ class VBNN(LasagnePowered, Serializable):
 
         # Hidden layers
         network = input
-        for i in xrange(len(self.n_hidden)):
+        for i in range(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             if self.layers_type[i] == 1:
                 network = VBNNLayer(
@@ -595,7 +592,7 @@ class VBNN(LasagnePowered, Serializable):
             def sgd(loss_or_grads, params, oldparams):
                 grads = T.grad(loss_or_grads, params)
                 updates = OrderedDict()
-                for i in xrange(len(params)):
+                for i in range(len(params)):
                     param = params[i]
                     grad = grads[i]
                     if param.name == 'mu' or param.name == 'b_mu':
@@ -671,8 +668,8 @@ class VBNN(LasagnePowered, Serializable):
             _f, axarr = plt.subplots(
                 n_plots_v, n_plots_h, sharex=True, sharey=True)
             painter_weights_individual = []
-            for i in xrange(n_plots_v):
-                for j in xrange(n_plots_h):
+            for i in range(n_plots_v):
+                for j in range(n_plots_h):
                     hl, = axarr[i][j].plot(x, x)
                     axarr[i][j].set_ylim(ymin=0, ymax=2)
                     painter_weights_individual.append(hl)
@@ -776,7 +773,7 @@ class VBNN(LasagnePowered, Serializable):
                 plt.draw()
 
             elif PLOT_WEIGHTS_INDIVIDUAL:
-                for i in xrange(n_plots):
+                for i in range(n_plots):
                     w_mu = layer.mu.eval()[i, 0]
                     w_rho = layer.rho.eval()[i, 0]
                     w_sigma = np.log(1 + np.exp(w_rho))
@@ -794,7 +791,7 @@ class VBNN(LasagnePowered, Serializable):
                 import matplotlib.pyplot as plt
 
                 ys = []
-                for i in xrange(100):
+                for i in range(100):
                     y = [self.pred_fn(x[None, :])[0][0] for x in X_test]
                     y = np.asarray(y)[:, None]
                     ys.append(y)
@@ -836,7 +833,7 @@ class VBNN(LasagnePowered, Serializable):
                 rnd_indices = np.random.random_integers(
                     low=0, high=(100 - 1), size=ys.shape[0])
                 axarr[0].plot(np.array(X_test)[:, 0][:, None], np.array(
-                    ys[range(ys.shape[0]), rnd_indices]), 'o', label="y", color=(0, 0.7, 0, 0.2))
+                    ys[list(range(ys.shape[0])), rnd_indices]), 'o', label="y", color=(0, 0.7, 0, 0.2))
                 axarr[0].set_xlim([-8.5, 9.5])
                 axarr[0].set_ylim([-5, 5])
                 axarr[1].set_xlim([-8.5, 9.5])
@@ -845,7 +842,7 @@ class VBNN(LasagnePowered, Serializable):
                 plt.show()
 
             elif PLOT_KL:
-                painter_kl.set_xdata(range(counter))
+                painter_kl.set_xdata(list(range(counter)))
                 painter_kl.set_ydata(
                     sliding_mean(np.hstack(kl_all_values), window=25))
                 plt.draw()

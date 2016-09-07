@@ -175,7 +175,7 @@ for batch_size,sf in zip(batch_size_list,sf_list):
                         )
                 elif "ec2" in mode:
                     if len(exp_name) > 64:
-                        print "Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name)
+                        print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
                         sys.exit(1)
                     def run():
                         run_experiment_lite(
