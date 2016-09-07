@@ -1,4 +1,3 @@
-
 from rllab.misc.tabulate import tabulate
 from rllab.misc.console import mkdir_p
 from rllab.misc.autoargs import get_all_parameters
@@ -66,7 +65,7 @@ def remove_text_output(file_name):
 
 
 def add_tabular_output(file_name):
-    _add_output(file_name, _tabular_outputs, _tabular_fds, mode='wb')
+    _add_output(file_name, _tabular_outputs, _tabular_fds, mode='w')
 
 
 def remove_tabular_output(file_name):

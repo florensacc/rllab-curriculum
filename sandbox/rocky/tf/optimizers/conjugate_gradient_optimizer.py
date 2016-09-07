@@ -28,7 +28,6 @@ class PerlmutterHvp(object):
         xs = tuple([tensor_utils.new_tensor_like(p.name.split(":")[0], p) for p in params])
 
         def Hx_plain():
-            import pdb; pdb.set_trace()
             Hx_plain_splits = tf.gradients(
                 tf.reduce_sum(
                     tf.pack([tf.reduce_sum(g * x) for g, x in zip(constraint_grads, xs)])
