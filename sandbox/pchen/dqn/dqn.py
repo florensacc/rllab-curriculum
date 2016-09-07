@@ -193,7 +193,6 @@ observation_mask = slice(0, network_input_img_size[0] * network_input_img_size[1
 action_mask = slice(observation_mask.stop, observation_mask.stop + network_output_dim)
 terminal_mask = slice(action_mask.stop, action_mask.stop + 1)
 reward_mask = slice(terminal_mask.stop, terminal_mask.stop + 1)
-
 memory = np.zeros((memory_size, reward_mask.stop), dtype='float32')
 
 

@@ -1,14 +1,15 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-info = """Running sparse task MountainCarEnvX with Hashing Bonus Reward"""
+info = """Running more sparse tasks with Hashing Bonus Reward (no mujoco)"""
 
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from sandbox.rocky.hashing.algos.bonus_trpo import BonusTRPO
 from sandbox.rocky.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
-from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
+from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
+from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
 from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 
@@ -19,13 +20,16 @@ stub(globals())
 
 from rllab.misc.instrument import VariantGenerator
 
-N_ITR = 100
+N_ITR = 200
 N_ITR_DEBUG = 5
+
+envs = [CartpoleSwingupEnvX(),
+        DoublePendulumEnvX()]
 
 
 def experiment_variant_generator():
     vg = VariantGenerator()
-    vg.add("env", [TfEnv(normalize(MountainCarEnvX()))], hide=True)
+    vg.add("env", map(TfEnv, map(normalize, envs)))
     vg.add("batch_size", [4000], hide=True)
     vg.add("step_size", [0.01], hide=True)
     vg.add("max_path_length", [100], hide=True)
@@ -63,10 +67,6 @@ def parse_args():
     return args
 
 if __name__ == '__main__':
-    # import pdb; pdb.set_trace()
-    test_env = TfEnv(MountainCarEnvX())
-    print(type(test_env))
-
     args = parse_args()
     exp_prefix = __file__.split('/')[-1][:-3].replace('_', '-')
     if args.debug:

@@ -46,4 +46,6 @@ MNIST/
 logs/
 *.pkl
 *.ipynb
+<<<<<<< HEAD
 .remote-sync.json
+sandbox/rocky/exp_data

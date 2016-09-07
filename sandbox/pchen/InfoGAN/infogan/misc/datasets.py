@@ -271,6 +271,8 @@ def load_omniglot_iwae(dataset=_get_datafolder_path()+'/omniglot_iwae'):
     test_t = np.argmax(data['testtarget'].astype('float32').T,axis=1)
     test_char = data['testtargetchar'].astype('float32')
 
+    # import ipdb; ipdb.set_trace()
+
 
     return train_x, train_t, train_char, test_x, test_t, test_char
 

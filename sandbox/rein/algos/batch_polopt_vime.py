@@ -254,11 +254,6 @@ class BatchPolopt(RLAlgorithm):
         self._dyn_pool_args = dyn_pool_args
         self._num_seq_frames = num_seq_frames
 
-        if self.bnn.surprise_type == conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
-            assert self.use_kl_ratio is False
-            print('ATTENTION: running {} with second_order_update={}'.format(
-                self.bnn.surprise_type, self.bnn.second_order_update))
-
         if self.bnn.second_order_update:
             assert self.n_itr_update == 1
 
@@ -747,16 +742,12 @@ class BatchPolopt(RLAlgorithm):
             for i in xrange(len(paths)):
                 paths[i]['rewards'] = (paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
 
-        if itr > 0:
+        if itr > -1:
             kls = []
             for i in xrange(len(paths)):
                 # We divide the KL by the number of weights in the network, to
                 # get a more normalized surprise measure accross models.
-                if self.bnn.surprise_type is not conv_bnn_vime.ConvBNNVIME.SurpriseType.COMPR:
-                    # Don't normalize by weight division in case of compr gain.
-                    kls.append(paths[i]['KL'])
-                else:
-                    kls.append(paths[i]['KL'] / float(self.num_weights))
+                kls.append(paths[i]['KL'])
 
             kls_flat = np.hstack(kls)
 
@@ -790,13 +781,11 @@ class BatchPolopt(RLAlgorithm):
                 for i in xrange(len(paths)):
                     kls[i] = np.minimum(kls[i], 1000)
             elif self.surprise_transform == BatchPolopt.SurpriseTransform.ZERO100:
-                cap = np.percentile(kls_flat, 95)
+                cap = np.percentile(kls_flat, 100)
                 kls = [np.minimum(kl, cap) for kl in kls]
                 kls_flat, lens = ungroup(kls)
                 zerohunderd = stats.rankdata(kls_flat, "average") / len(kls_flat)
                 kls = group(zerohunderd, lens)
-
-            kls_flat = np.hstack(kls)
 
             # Normalize intrinsic rewards.
             if self.use_kl_ratio:
@@ -827,8 +816,7 @@ class BatchPolopt(RLAlgorithm):
 
             # Add Surpr as intrinsic reward to external reward
             for i in xrange(len(paths)):
-                surprise_threshold = np.maximum(paths[i]['rewards'], 1e-1)
-                paths[i]['rewards'] = paths[i]['rewards'] + np.minimum(self.eta * kls[i], surprise_threshold)
+                paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
 
         else:
             logger.record_tabular('S_avg', 0.)

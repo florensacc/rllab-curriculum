@@ -30,10 +30,9 @@ stub(globals())
 # Param ranges
 seeds = range(10)
 
-mdps = [AtariEnvX(game='freeway', obs_type="image"),
-        AtariEnvX(game='breakout', obs_type="image"),
-        AtariEnvX(game='frostbite', obs_type="image"),
-        AtariEnvX(game='montezuma_revenge', obs_type="image")]
+mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
+        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]
+
 param_cart_product = itertools.product(
     mdps, seeds
 )
@@ -77,7 +76,7 @@ for mdp, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=100000,
+        batch_size=25000,
         whole_paths=True,
         max_path_length=4500,
         n_itr=400,
@@ -90,7 +89,7 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-atari-84x84-b",
+        exp_prefix="trpo-atari-42x52-c",
         n_parallel=4,
         snapshot_mode="last",
         seed=seed,

@@ -16,8 +16,10 @@ class CVVAE(VAE):
                  model,
                  dataset,
                  batch_size,
-                 alpha_init=1.,
+                 alpha_init=0.,
                  alpha_update_interval=10,
+                 per_dim=False,
+                 no_stop=False,
                  **kwargs
     ):
         super(CVVAE, self).__init__(
@@ -26,23 +28,68 @@ class CVVAE(VAE):
             batch_size,
             **kwargs
         )
+        self.no_stop = no_stop
+        self.per_dim = per_dim
         self.alpha_update_interval = alpha_update_interval
-        self.alpha_var = tf.Variable(
-            initial_value=alpha_init,
-            trainable=True,
-            name="cv_coeff",
-        )
+        self.alpha_init = alpha_init
+        if per_dim:
+            self.alpha_var_dict = dict()
+        else:
+            self.alpha_var = tf.Variable(
+                initial_value=alpha_init,
+                trainable=True,
+                name="cv_coeff",
+            )
         self.alpha_trainer = None
+
+    def get_alpha(self, param):
+        if self.per_dim:
+            if param.name not in self.alpha_var_dict:
+                self.alpha_var_dict[param.name] = tf.Variable(
+                    initial_value=self.alpha_init * np.ones(
+                        [dim.value for dim in param.get_shape()],
+                        dtype='float32'
+                    ),
+                    trainable=True,
+                    name="cv_coeff_%s" % param.name.replace('/', '_').replace(':', '_')
+                )
+            return self.alpha_var_dict[param.name]
+        else:
+            return self.alpha_var
+
+    def get_alpha_flat(self, ):
+        if self.per_dim:
+            if len(self.alpha_var_dict) == 0:
+                return tf.constant(0.)
+            return \
+                tf.concat(
+                    0,
+                    [tf.reshape(p, [-1,1]) for p in self.alpha_var_dict.values()]
+                )
+
+        else:
+            return self.alpha_var
+
+    def get_avg_alpha(self):
+        return tf.reduce_mean(self.get_alpha_flat())
+
+    def get_alpha_list(self, ):
+        if self.per_dim:
+            return self.alpha_var_dict.values()
+        else:
+            return [self.alpha_var]
 
     def init_hook(self, vars):
         from rllab.misc.ext import extract
         eval, final_losses, log_vars, init,\
             log_p_x_given_z, log_p_z, z_dist_info,\
-            z_var, ndim = extract(
+            z_var, ndim, grads_and_vars, \
+            log_p_z_given_x = extract(
             vars,
             "eval", "final_losses", "log_vars", "init",
             "log_p_x_given_z", "log_p_z", "z_dist_info",
-            "z_var", "ndim"
+            "z_var", "ndim", "grads_and_vars",
+            "log_p_z_given_x"
         )
         # if eval:
         #     return
@@ -52,17 +99,17 @@ class CVVAE(VAE):
         assert self.monte_carlo_kl
         assert self.min_kl == 0.
         q_z_ent = self.model.inference_dist.entropy(z_dist_info)
-        ent_vlbs = log_p_x_given_z + log_p_z + q_z_ent
+        ent_vlbs = log_p_x_given_z + log_p_z + (q_z_ent)
         cvs = q_z_ent + self.model.inference_dist.logli(
             z_var,
             dict([
-                (k, tf.stop_gradient(v))
+                (k, v if self.no_stop else tf.stop_gradient(v))
                 for k, v in z_dist_info.items()
             ])
         )
         ent_vlb = tf.reduce_mean(ent_vlbs) / ndim
         cv = tf.reduce_mean(cvs) / ndim
-        cv_ent_vlb = (ent_vlb - tf.stop_gradient(self.alpha_var) * cv) / ndim
+        cv_ent_vlb = (ent_vlb - tf.stop_gradient(self.get_avg_alpha()) * cv) / ndim
         log_vars.append((
             "ent_vlb",
             ent_vlb
@@ -78,10 +125,6 @@ class CVVAE(VAE):
         log_vars.append((
             "cv_ent_vlb",
             cv_ent_vlb
-        ))
-        log_vars.append((
-            "alpha",
-            self.alpha_var
         ))
 
         final_losses[:] = [-cv_ent_vlb, ]
@@ -107,15 +150,44 @@ class CVVAE(VAE):
         # import ipdb; ipdb.set_trace()
         grad_norm = tf.reduce_sum(
             [
-                tf.nn.l2_loss(tf.stop_gradient(eg) - self.alpha_var*tf.stop_gradient(cg))
-                for eg, cg in zip(ent_grads, cv_grads) if eg is not None and cg is not None
+                tf.nn.l2_loss(tf.stop_gradient(eg) - self.get_alpha(p)*tf.stop_gradient(cg))
+                for p, eg, cg in zip(params, ent_grads, cv_grads) if eg is not None and cg is not None
             ]
         ) / total_params
+
+        if self.per_dim:
+            flat = self.get_alpha_flat()
+            log_vars.append((
+                "alpha_avg",
+                tf.reduce_mean(flat)
+            ))
+            log_vars.append((
+                "alpha_max",
+                tf.reduce_max(flat)
+            ))
+            log_vars.append((
+                "alpha_min",
+                tf.reduce_min(flat)
+            ))
+            log_vars.append((
+                "alpha_var",
+                tf.reduce_mean(tf.square(flat)) - tf.square(tf.reduce_mean(flat))
+            ))
+        else:
+            log_vars.append((
+                "alpha",
+                self.get_avg_alpha()
+            ))
+
+        grads_and_vars[:] = [
+            (-eg + (self.get_alpha(p)*cg if cg is not None else 0.), p)
+            for p, eg, cg in zip(params, ent_grads, cv_grads) if eg is not None
+        ]
 
         with tf.variable_scope("optim_alpha"):
             # optimizer = tf.train.AdamOptimizer(self.learning_rate)
             optimizer = self.optimizer_cls(**self.optimizer_args)
-            self.alpha_trainer = optimizer.minimize(grad_norm, var_list=[self.alpha_var])
+            self.alpha_trainer = optimizer.minimize(grad_norm, var_list=self.get_alpha_list())
 
     def iter_hook(self, sess, counter, feed, **kw):
         if (counter+1) % self.alpha_update_interval == 0:

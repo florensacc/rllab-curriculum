@@ -352,14 +352,14 @@ class DenseLayer(Layer):
 
 
 class BaseConvLayer(Layer):
-    def __init__(self, incoming, num_filters, filter_size, stride=1, pad="VALID",
+    def __init__(self, incoming, name, num_filters, filter_size, stride=1, pad="VALID",
                  untie_biases=False,
                  W=xavier_init, b=tf.zeros_initializer,
                  nonlinearity=tf.nn.relu, n=None, **kwargs):
         """
         Input is assumed to be of shape batch*height*width*channels
         """
-        super(BaseConvLayer, self).__init__(incoming, **kwargs)
+        super(BaseConvLayer, self).__init__(incoming, name, **kwargs)
         if nonlinearity is None:
             self.nonlinearity = tf.identity
         else:
@@ -465,12 +465,12 @@ class BaseConvLayer(Layer):
 
 
 class Conv2DLayer(BaseConvLayer):
-    def __init__(self, incoming, num_filters, filter_size, stride=(1, 1),
+    def __init__(self, incoming, name, num_filters, filter_size, stride=(1, 1),
                  pad="VALID", untie_biases=False,
                  W=xavier_init, b=tf.zeros_initializer,
                  nonlinearity=tf.nn.relu,
                  convolution=tf.nn.conv2d, **kwargs):
-        super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size,
+        super(Conv2DLayer, self).__init__(incoming, name, num_filters, filter_size,
                                           stride, pad, untie_biases, W, b,
                                           nonlinearity, n=2, **kwargs)
         self.convolution = convolution

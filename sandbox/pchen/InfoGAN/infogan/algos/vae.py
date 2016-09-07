@@ -225,7 +225,8 @@ class VAE(object):
                 self.l2_reg * tf.nn.l2_loss(var) for var in tf.trainable_variables() \
                     if "scale" not in var.name
             ]
-        # import ipdb; ipdb.set_trace()
+        grads_and_vars = []
+
         self.init_hook(locals())
 
         log_vars.append((
@@ -257,8 +258,13 @@ class VAE(object):
                         trainable=False,
                     )
                     self.optimizer_args["learning_rate"] = self.lr_var
+                final_loss = tf.reduce_sum(final_losses)
                 optimizer = self.optimizer_cls(**self.optimizer_args)
-                self.trainer = pt.apply_optimizer(optimizer, losses=final_losses)
+                if len(grads_and_vars) == 0:
+                    grads_and_vars = optimizer.compute_gradients(final_loss)
+                else:
+                    print("grads supplied by hook")
+                self.trainer = optimizer.apply_gradients(grads_and_vars=grads_and_vars)
                 if self.exp_avg is not None:
                     with tf.name_scope(None):
                         self.trainer = tf.group(*[self.trainer, self.ema_applied])
@@ -433,7 +439,8 @@ class VAE(object):
                         vs = tf.all_variables()
                         sess.run(tf.initialize_variables([
                             v for v in vs if
-                                "optim" in v.name or "global_step" in v.name
+                                "optim" in v.name or "global_step" in v.name or \
+                                ("cv_coeff" in v.name)
                         ]))
                         print("vars initd")
 
@@ -453,9 +460,12 @@ class VAE(object):
                         print("Initial: " + log_line)
                         # import ipdb; ipdb.set_trace()
 
-                    go = dict(locals())
-                    del go["self"]
-                    self.iter_hook(**go)
+                    # go = dict(locals())
+                    # del go["self"]
+                    # self.iter_hook(**go)
+                    self.iter_hook(
+                       sess=sess, counter=counter, feed=feed
+                    )
 
                     log_vals = sess.run(
                         [self.trainer] + log_vars,
