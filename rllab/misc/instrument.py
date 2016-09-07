@@ -386,7 +386,7 @@ def run_experiment_lite(
 
     for task in batch_tasks:
         call = task.pop("stub_method_call")
-        data = base64.b64encode(pickle.dumps(call))
+        data = base64.b64encode(pickle.dumps(call)).decode("utf-8")
         task["args_data"] = data
         exp_count += 1
         params = dict(kwargs)
@@ -400,7 +400,7 @@ def run_experiment_lite(
             variant = task.pop("variant")
             if "exp_name" not in variant:
                 variant["exp_name"] = task["exp_name"]
-            task["variant_data"] = base64.b64encode(pickle.dumps(variant))
+            task["variant_data"] = base64.b64encode(pickle.dumps(variant)).decode("utf-8")
         elif "variant" in task:
             del task["variant"]
         task["remote_log_dir"] = osp.join(
@@ -728,7 +728,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
             aws_secret_access_key=config.AWS_ACCESS_SECRET,
         )
 
-    if len(full_script) > 10000 or len(base64.b64encode(full_script)) > 10000:
+    if len(full_script) > 10000 or len(base64.b64encode(full_script).decode("utf-8")) > 10000:
         # Script too long; need to upload script to s3 first.
         # We're being conservative here since the actual limit is 16384 bytes
         s3_path = upload_file_to_s3(full_script)
@@ -765,7 +765,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     print(instance_args["UserData"])
     print("************************************************************")
     if aws_config["spot"]:
-        instance_args["UserData"] = base64.b64encode(instance_args["UserData"])
+        instance_args["UserData"] = base64.b64encode(instance_args["UserData"]).decode("utf-8")
         spot_args = dict(
             DryRun=dry,
             InstanceCount=1,
@@ -816,7 +816,7 @@ def s3_sync_code(config, dry=False):
     except subprocess.CalledProcessError as _:
         print("Warning: failed to execute git commands")
         has_git = False
-    dir_hash = base64.b64encode(subprocess.check_output(["pwd"]))
+    dir_hash = base64.b64encode(subprocess.check_output(["pwd"])).decode("utf-8")
     code_path = "%s_%s" % (
         dir_hash,
         (current_commit if clean_state else "%s_dirty_%s" % (current_commit, timestamp)) if
