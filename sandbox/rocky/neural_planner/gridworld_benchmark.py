@@ -15,13 +15,21 @@ from rllab.optimizers.minibatch_dataset import BatchDataset
 from rllab import config
 
 ACTION_MAP = np.array([
+    # Top
     [-1, 0],
+    # Down
     [1, 0],
+    # Right
     [0, 1],
+    # Left
     [0, -1],
+    # Top right
     [-1, 1],
+    # Top left
     [-1, -1],
+    # Bottom right
     [1, 1],
+    # Bottom left
     [1, -1],
 ])
 
@@ -282,99 +290,140 @@ def gen_demos(shape, max_n_obstacles, n_maps):
 
 # Now construct various NNs
 
+def resnet_batchnorm_nl(net, prev_net, nonlinearity):
+    return L.NonlinearityLayer(
+        L.ElemwiseSumLayer([L.batch_norm(net), prev_net]),
+        nonlinearity=nonlinearity
+    )
+
+
 class CNN(object):
-    def __call__(self, shape):
+
+    def __init__(self, n_iter):
+        self.n_iter = n_iter
+
+    def build(self, shape):
         nrow, ncol = shape
-        # debug = []
-        input = L.InputLayer(shape=(None, nrow, ncol, 3), name="input")
-
-        map_in = L.SliceLayer(input, indices=slice(0, 1), axis=-1, name="map_in")
-        state_in = L.SliceLayer(input, indices=slice(1, 2), axis=-1, name="state_in")
-        goal_in = L.SliceLayer(input, indices=slice(2, 3), axis=-1, name="goal_in")
-
-        net_in = L.concat([map_in, goal_in], axis=3, name="net_in")
+        net_in = L.InputLayer(shape=(None, nrow, ncol, 2), name="input")
 
         net = L.batch_norm(net_in, name="bn0")
 
-        case = 1
+        net = L.Conv2DLayer(
+            net, num_filters=20, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu,
+        )
+        for idx in xrange(self.n_iter):
+            net = resnet_batchnorm_nl(
+                L.Conv2DLayer(
+                    net, num_filters=20, filter_size=(3, 3), pad="SAME", nonlinearity=None,
+                ), net, tf.nn.relu
+            )
 
-        if case == 0:
-            net = L.batch_norm(
-                L.Conv2DLayer(
-                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv1"
-                ),
-                name="bn1"
-            )
-            net = L.batch_norm(
-                L.Conv2DLayer(
-                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2"
-                ),
-                name="bn2"
-            )
-            net = L.batch_norm(
-                L.Conv2DLayer(
-                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv3"
-                ),
-                name="bn3"
-            )
-            net = L.batch_norm(
-                L.Conv2DLayer(
-                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv4"
-                ),
-                name="bn4"
-            )
-            net = L.batch_norm(
-                L.Conv2DLayer(
-                    net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv5"
-                ),
-                name="bn5"
-            )
-        elif case == 1:
-            net = L.Conv2DLayer(
-                net, num_filters=50, filter_size=(7, 7), pad="SAME", nonlinearity=tf.nn.relu, name="conv1",
-            )
-            for idx in xrange(2, 4 + 1):
-                net = L.Conv2DLayer(
-                    net, num_filters=50, filter_size=(7, 7), pad="SAME", nonlinearity=tf.nn.relu, name="conv%d" % idx,
-                )
-                net = L.Conv2DLayer(
-                    net, num_filters=50, filter_size=(7, 7), pad="SAME", nonlinearity=tf.nn.relu, name="conv%d" % idx,
-                    variable_reuse=True
-                )
-                # for idx in xrange(5):
-                #     net = L.Conv2DLayer(
-                #         net, num_filters=50, filter_size=(7, 7), pad="SAME", nonlinearity=tf.nn.relu, name="conv%d" %
-                #     )
-        else:
-            raise NotImplementedError
-
-        net = L.OpLayer(
-            net,
-            extras=[state_in],
-            op=lambda q_val, state_val: tf.reduce_sum(tf.reduce_sum(q_val * state_val, 1), 1),
-            shape_op=lambda q_shape, state_shape: (q_shape[0], q_shape[-1]),
-            name="q_out"
+        net = L.Conv2DLayer(
+            net, num_filters=N_ACTIONS, filter_size=(1, 1), pad="SAME", nonlinearity=None,
         )
 
-        # net = L.Conv2DLayer(net, num_filters=50, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv2")
-        # net = L.batch_norm(net, name="bn2")
-        # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv3")
-        # net = L.batch_norm(net, name="bn3")
-        # # net = L.Pool2DLayer(net, pool_size=(2, 2), pad="SAME", name="pool2")
-        # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv4")
-        # net = L.batch_norm(net, name="bn4")
-        # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv5")
-        # net = L.batch_norm(net, name="bn5")
-        # net = L.Conv2DLayer(net, num_filters=100, filter_ize=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv6")
-        # net = L.batch_norm(net, name="bn6")
-        # net = L.Conv2DLayer(net, num_filters=100, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu, name="conv7")
-        # net = L.batch_norm(net, name="bn7")
-        net = L.DenseLayer(net, num_units=N_ACTIONS, nonlinearity=tf.nn.softmax, name="output")
-        # net.debug = debug
-        return net
+        self.l_out = net
+        self.l_out_variants = []
+        self.params = L.get_all_params(self.l_out, trainable=True)
 
 
 class VIN(object):
+    def __init__(
+            self, n_iter, n_q_filters, has_nonlinearity=False, untie_weights=False,
+            batch_norm=False, has_bias=False):
+        self.n_iter = n_iter
+        self.n_q_filters = n_q_filters
+        self.has_nonlinearity = has_nonlinearity
+        self.untie_weights = untie_weights
+        self.batch_norm = batch_norm
+        self.has_bias = has_bias
+        self.l_out_variants = []
+
+    def build(self, shape):
+        nrow, ncol = shape
+        l_q = self.n_q_filters
+        n_iter = self.n_iter
+        net_in = L.InputLayer(shape=(None, nrow, ncol, 2))
+
+        bias = tf.get_variable(name="bias", shape=(150,), initializer=tf.random_normal_initializer(stddev=0.01))
+
+        w0 = tf.get_variable(name="w0", shape=(3, 3, 2, 150), initializer=tf.random_normal_initializer(stddev=0.01))
+        w1 = tf.get_variable(name="w1", shape=(1, 1, 150, 1), initializer=tf.random_normal_initializer(stddev=0.01))
+
+        w = tf.get_variable(name="w", shape=(3, 3, 1, l_q), initializer=tf.random_normal_initializer(stddev=0.01))
+        w_fb = tf.get_variable(name="w_fb", shape=(3, 3, 1, l_q), initializer=tf.random_normal_initializer(stddev=0.01))
+        w_bi = tf.concat(2, [w, w_fb])
+
+        if self.has_nonlinearity:
+            nonlinearity = tf.nn.relu
+        else:
+            nonlinearity = None
+
+        # initial conv layer over image+reward prior
+
+        h = L.Conv2DLayer(
+            net_in, num_filters=150, filter_size=(3, 3), pad="SAME", nonlinearity=nonlinearity,
+            W=w0, b=bias,
+        )
+        r = L.Conv2DLayer(
+            h, num_filters=1, filter_size=(1, 1), pad="SAME", nonlinearity=nonlinearity,
+            W=w1, b=None
+        )
+
+        q = L.Conv2DLayer(
+            r, num_filters=l_q, filter_size=(3, 3), pad="SAME", nonlinearity=nonlinearity,
+            W=w, b=None
+        )
+        v = L.OpLayer(
+            q,
+            op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
+            shape_op=lambda shape: shape[:-1] + (1,),
+        )
+
+        params = [w0, bias, w1, w]
+        if not self.untie_weights:
+            params.append(w_fb)
+
+        if self.untie_weights:
+            q_W = tf.random_normal_initializer(stddev=0.01)
+        else:
+            q_W = w_bi
+
+        for idx in xrange(n_iter):
+            q = L.Conv2DLayer(
+                L.concat([r, v], axis=3),
+                num_filters=l_q, filter_size=(3, 3), pad="SAME",
+                W=q_W, b=None, nonlinearity=nonlinearity,
+            )
+            v = L.OpLayer(
+                q,
+                op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
+                shape_op=lambda shape: shape[:-1] + (1,),
+            )
+            if self.untie_weights:
+                params.append(q.W)
+
+        q = L.Conv2DLayer(
+            L.concat([r, v], axis=3),
+            num_filters=l_q, filter_size=(3, 3), pad="SAME",
+            W=q_W, b=None, nonlinearity=nonlinearity,
+        )
+        if self.untie_weights:
+            params.append(q.W)
+
+        # The softmax operation is not yet applied!
+        out = L.Conv2DLayer(
+            q, num_filters=N_ACTIONS, filter_size=(1, 1), pad="SAME",
+            nonlinearity=nonlinearity, b=None,
+        )
+        # At this moment the shape should be batch_size * height * width * N_actions
+        # Should be more convenient to apply softmax outside
+
+        self.l_out = out
+        self.params = params + [out.W]  # [w0, bias, w1, w, w_fb, out.W]
+
+
+class VIN1(object):
     def __init__(self, n_iter):
         self.n_iter = n_iter
 
@@ -396,7 +445,7 @@ class VIN(object):
         # initial conv layer over image+reward prior
 
         h = L.Conv2DLayer(
-            net_in, num_filters=150, filter_size=(3, 3), pad="SAME", nonlinearity=None,
+            net_in, num_filters=150, filter_size=(3, 3), pad="SAME", nonlinearity=tf.nn.relu,
             W=w0, b=bias,
         )
         r = L.Conv2DLayer(
@@ -442,6 +491,130 @@ class VIN(object):
         self.params = [w0, bias, w1, w, w_fb, out.W]
 
 
+class VINMulti(object):
+    def __init__(self, n_iter):
+        self.n_iter = n_iter
+        self.l_out = None
+        self.params = None
+        self.l_out_variants = None
+
+    def build(self, shape):
+        nrow, ncol = shape
+        n_iter = self.n_iter
+        l_q = 20
+        net_in = L.InputLayer(shape=(None, nrow, ncol, 2))
+
+        bias = tf.get_variable(name="bias", shape=(150,), initializer=tf.random_normal_initializer(stddev=0.01))
+
+        w0 = tf.get_variable(name="w0", shape=(3, 3, 2, 150), initializer=tf.random_normal_initializer(stddev=0.01))
+        w1 = tf.get_variable(name="w1", shape=(1, 1, 150, 1), initializer=tf.random_normal_initializer(stddev=0.01))
+
+        w = tf.get_variable(name="w", shape=(3, 3, 1, l_q), initializer=tf.random_normal_initializer(stddev=0.01))
+        w_fb = tf.get_variable(name="w_fb", shape=(3, 3, 1, l_q), initializer=tf.random_normal_initializer(stddev=0.01))
+        w_bi = tf.concat(2, [w, w_fb])
+
+        nonlinearity = None
+
+        # initial conv layer over image+reward prior
+
+        h = L.Conv2DLayer(
+            net_in, num_filters=150, filter_size=(3, 3), pad="SAME", nonlinearity=nonlinearity,
+            W=w0, b=bias,
+        )
+        r = L.Conv2DLayer(
+            h, num_filters=1, filter_size=(1, 1), pad="SAME", nonlinearity=nonlinearity,
+            W=w1, b=None
+        )
+
+        q = L.Conv2DLayer(
+            r, num_filters=l_q, filter_size=(3, 3), pad="SAME", nonlinearity=nonlinearity,
+            W=w, b=None
+        )
+        v = L.OpLayer(
+            q,
+            op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
+            shape_op=lambda shape: shape[:-1] + (1,),
+        )
+
+        params = [w0, bias, w1, w, w_fb]
+
+        for idx in xrange(n_iter):
+            q = L.Conv2DLayer(
+                L.concat([r, v], axis=3),
+                num_filters=l_q, filter_size=(3, 3), pad="SAME",
+                W=w_bi, b=None, nonlinearity=nonlinearity,
+            )
+            v = L.OpLayer(
+                q,
+                op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
+                shape_op=lambda shape: shape[:-1] + (1,),
+            )
+
+        q = L.Conv2DLayer(
+            L.concat([r, v], axis=3),
+            num_filters=l_q, filter_size=(3, 3), pad="SAME",
+            W=w_bi, b=None, nonlinearity=nonlinearity,
+        )
+
+        # The softmax operation is not yet applied!
+        out = L.Conv2DLayer(
+            q, num_filters=N_ACTIONS, filter_size=(1, 1), pad="SAME",
+            nonlinearity=nonlinearity, b=None,
+        )
+
+        out_W = out.W
+        # At this moment the shape should be batch_size * height * width * N_actions
+        # Should be more convenient to apply softmax outside
+
+        self.l_out = out
+        self.params = params + [out_W]  # [w0, bias, w1, w, w_fb, out.W]
+
+        self.l_out_variants = []
+
+        for name, var_n_iter in [
+            # ('3', 3),
+            # ('x-10', n_iter - 10),
+            # ('x-3', n_iter - 3),
+            # ('x+3', n_iter + 3),
+            # ('x+10', n_iter + 10)
+        ]:
+            q = L.Conv2DLayer(
+                r, num_filters=l_q, filter_size=(3, 3), pad="SAME", nonlinearity=nonlinearity,
+                W=w, b=None
+            )
+            v = L.OpLayer(
+                q,
+                op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
+                shape_op=lambda shape: shape[:-1] + (1,),
+            )
+
+            for idx in xrange(var_n_iter):
+                q = L.Conv2DLayer(
+                    L.concat([r, v], axis=3),
+                    num_filters=l_q, filter_size=(3, 3), pad="SAME",
+                    W=w_bi, b=None, nonlinearity=nonlinearity,
+                )
+                v = L.OpLayer(
+                    q,
+                    op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
+                    shape_op=lambda shape: shape[:-1] + (1,),
+                )
+
+            q = L.Conv2DLayer(
+                L.concat([r, v], axis=3),
+                num_filters=l_q, filter_size=(3, 3), pad="SAME",
+                W=w_bi, b=None, nonlinearity=nonlinearity,
+            )
+
+            # The softmax operation is not yet applied!
+            out = L.Conv2DLayer(
+                q, num_filters=N_ACTIONS, filter_size=(1, 1), pad="SAME", nonlinearity=nonlinearity,
+                W=out_W, b=None,
+            )
+
+            self.l_out_variants.append((name, out))
+
+
 def evaluate(policy, maps, fromtos, opt_trajlen, max_horizon):
     # Run the neural network on all the tasks at least once
     maps = np.asarray(maps)
@@ -463,7 +636,6 @@ def evaluate(policy, maps, fromtos, opt_trajlen, max_horizon):
     progbar = pyprind.ProgBar(len(maps))
 
     for i in xrange(max_horizon):
-        # print(i)
         counter += 1
         states = np.zeros_like(maps)
         states[np.arange(len(maps)), cur_xs, cur_ys] = 1
@@ -556,7 +728,7 @@ def evaluate_matlab(Xtest, S1test, S2test, opt_traj_lens, state_var, slice_1d_id
 
     progbar = pyprind.ProgBar(cur_xs.size)
 
-    max_horizon = (nrow + ncol) * 2
+    max_horizon = max(int(np.max(opt_traj_lens)) + 10, (nrow + ncol) * 2)
 
     for i in xrange(max_horizon):
 
@@ -613,8 +785,10 @@ def evaluate_matlab(Xtest, S1test, S2test, opt_traj_lens, state_var, slice_1d_id
                 progbar.stop()
             break
     n_trials += np.sum(1 - tried)
+    if progbar.active:
+        progbar.stop()
 
-    return n_success * 1.0 / n_trials, np.mean(traj_difflen)
+    return n_success * 1.0 / n_trials, traj_difflen
 
 
 class MatlabData(object):
@@ -627,6 +801,12 @@ class MatlabData(object):
             file = "gridworld_28.mat"
         elif shape == (36, 36):
             file = "gridworld_36.mat"
+        elif shape == (17, 17):
+            file = "gridworld_17.mat"
+        elif shape == (9, 9):
+            file = "gridworld_9.mat"
+        elif shape == (29, 29):
+            file = "gridworld_29.mat"
         else:
             raise NotImplementedError
 
@@ -699,6 +879,9 @@ class MatlabData(object):
 
         train_action_logits_var = L.get_output(net.l_out, state_var, phase='train')
         test_action_logits_var = L.get_output(net.l_out, state_var, phase='test')
+        variant_test_action_logits_vars = []
+        for _, var_out in net.l_out_variants:
+            variant_test_action_logits_vars.append(L.get_output(var_out, state_var, phase='test'))
 
         # batch_size = tf.shape(state_var)[0]
 
@@ -715,6 +898,13 @@ class MatlabData(object):
         test_action_prob_var = tf.nn.softmax(
             tf.gather(tf.reshape(test_action_logits_var, (-1, N_ACTIONS)), slice_1d_ids),
         )
+        variant_test_action_prob_vars = []
+        for variant_test_action_logits_var in variant_test_action_logits_vars:
+            variant_test_action_prob_vars.append(
+                tf.nn.softmax(
+                    tf.gather(tf.reshape(variant_test_action_logits_var, (-1, N_ACTIONS)), slice_1d_ids),
+                )
+            )
 
         train_loss_var = tf.reduce_mean(
             tf.reduce_sum(action_var * -tf.log(train_action_prob_var + 1e-8), -1)
@@ -729,6 +919,21 @@ class MatlabData(object):
         test_err_var = tf.reduce_mean(
             tf.cast(tf.not_equal(tf.arg_max(action_var, 1), tf.arg_max(test_action_prob_var, 1)), tf.float32)
         )
+
+        variant_test_loss_vars = []
+        variant_test_err_vars = []
+        for variant_test_action_prob_var in variant_test_action_prob_vars:
+            variant_test_loss_vars.append(
+                tf.reduce_mean(
+                    tf.reduce_sum(action_var * -tf.log(variant_test_action_prob_var + 1e-8), -1)
+                )
+            )
+            variant_test_err_vars.append(
+                tf.reduce_mean(
+                    tf.cast(tf.not_equal(tf.arg_max(action_var, 1), tf.arg_max(variant_test_action_prob_var, 1)),
+                            tf.float32)
+                )
+            )
 
         params = net.params  # L.get_all_params(net, trainable=True)
         # params = filter(lambda x: isinstance(x, tf.Variable), params)
@@ -836,7 +1041,7 @@ class MatlabData(object):
                 #
                 logger.log("Evaluating policy")
 
-                test_success_rate, avg_test_traj_len = evaluate_matlab(
+                test_success_rate, test_traj_lens = evaluate_matlab(
                     self.Xtest, self.S1test, self.S2test, opt_traj_lens, state_var, slice_1d_ids, test_action_prob_var
                 )
 
@@ -847,11 +1052,25 @@ class MatlabData(object):
                 logger.record_tabular("AvgTrainErr", np.mean(train_errs))
                 logger.record_tabular("AvgTestLoss", test_loss)
                 logger.record_tabular("AvgTestErr", test_err)
-
-                # logger.record_tabular("TrainSuccessRate", train_success_rate)
-                # logger.record_tabular("AvgTrainSuccessTrajLenDiff", avg_train_traj_len)
                 logger.record_tabular("TestSuccessRate", test_success_rate)
-                logger.record_tabular("AvgTestSuccessTrajLenDiff", avg_test_traj_len)
+                logger.record_tabular("AvgTestSuccessTrajLenDiff", np.mean(test_traj_lens))
+                logger.record_tabular("MaxTestSuccessTrajLenDiff", np.max(test_traj_lens))
+                logger.record_tabular("MinTestSuccessTrajLenDiff", np.min(test_traj_lens))
+
+                for (variant_name, _), variant_test_action_prob_var in zip(
+                        net.l_out_variants, variant_test_action_prob_vars):
+                    variant_test_success_rate, variant_test_traj_lens = evaluate_matlab(
+                        self.Xtest, self.S1test, self.S2test, opt_traj_lens, state_var, slice_1d_ids,
+                        variant_test_action_prob_var
+                    )
+                    logger.record_tabular("TestSuccessRate(%s)" % variant_name, variant_test_success_rate)
+                    logger.record_tabular("AvgTestSuccessTrajLenDiff(%s)" % variant_name,
+                                          np.mean(variant_test_traj_lens))
+                    logger.record_tabular("MaxTestSuccessTrajLenDiff(%s)" % variant_name,
+                                          np.max(variant_test_traj_lens))
+                    logger.record_tabular("MinTestSuccessTrajLenDiff(%s)" % variant_name,
+                                          np.min(variant_test_traj_lens))
+
                 logger.dump_tabular()
 
                 if n_no_improvement >= benchmark.no_improvement_tolerance:
@@ -866,6 +1085,7 @@ class MatlabData(object):
 class GridworldBenchmark(object):
     def __init__(
             self,
+            network,
             shape=(16, 16),
             max_n_obstacles=5,
             n_maps=10000,
@@ -878,7 +1098,6 @@ class GridworldBenchmark(object):
             gradient_noise_scale=0.,
             no_improvement_tolerance=5,
             # lr_schedule=None,
-            network=CNN(),
     ):
         self.shape = shape
         self.max_n_obstacles = max_n_obstacles

@@ -22,6 +22,7 @@ def flatten(l):
 
 
 def load_progress(progress_csv_path):
+    print("Reading %s" % progress_csv_path)
     entries = dict()
     with open(progress_csv_path, 'rb') as csvfile:
         reader = csv.DictReader(csvfile)
