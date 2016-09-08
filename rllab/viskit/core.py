@@ -92,7 +92,7 @@ def lookup(d, keys):
     return d
 
 
-def load_exps_data(exp_folder_paths):
+def load_exps_data(exp_folder_paths,disable_variant=False):
     exps = []
     for exp_folder_path in exp_folder_paths:
         exps += [x[0] for x in os.walk(exp_folder_path)]
@@ -104,10 +104,13 @@ def load_exps_data(exp_folder_paths):
             variant_json_path = os.path.join(exp_path, "variant.json")
             progress_csv_path = os.path.join(exp_path, "progress.csv")
             progress = load_progress(progress_csv_path)
-            try:
-                params = load_params(variant_json_path)
-            except IOError:
+            if disable_variant:
                 params = load_params(params_json_path)
+            else:
+                try:
+                    params = load_params(variant_json_path)
+                except IOError:
+                    params = load_params(params_json_path)
             exps_data.append(ext.AttrDict(
                 progress=progress, params=params, flat_params=flatten_dict(params)))
         except IOError as e:

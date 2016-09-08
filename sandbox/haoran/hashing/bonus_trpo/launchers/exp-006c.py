@@ -1,12 +1,13 @@
 # Tune for Montezuma's Revenge
-# Now, try infinite horizon
+# Try NN baselines
 
 from __future__ import print_function
 from __future__ import absolute_import
 
 from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo import BonusTRPO
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+# from sandbox.haoran.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
+from sandbox.haoran.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.haoran.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.haoran.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
 from sandbox.haoran.tf.envs.base import TfEnv
@@ -27,7 +28,7 @@ Fix to counting scheme. Fix config...
 """
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_test"
+mode = "ec2"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1c"
 
@@ -39,7 +40,7 @@ use_gpu = False # should change conv_type and ~/.theanorc
 
 # params ---------------------------------------
 batch_size = 100000
-max_path_length = 10000
+max_path_length = 4500
 discount = 0.99
 n_itr = 1000
 
@@ -89,8 +90,18 @@ for v in variants:
 
     env = TfEnv(AtariEnv(game=v["game"], obs_type="ram",death_ends_episode=v["death_ends_episode"]))
     policy = CategoricalMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32), name="policy")
-    # policy = CategoricalGRUPolicy(env_spec=env.spec, hidden_dim=32, name="policy")
-    baseline = LinearFeatureBaseline(env_spec=env.spec)
+
+    regressor_args = dict(
+        hidden_sizes=(64,64,64),
+        optimizer=None,
+        use_trust_region=True,
+        step_size=0.01,
+        learn_std=False,
+        init_std=1.0,
+        normalize_inputs=True,
+        normalize_outputs=True,
+    )
+    baseline = GaussianMLPBaseline(env_spec=env.spec,regressor_args=regressor_args)
     bonus_evaluator = HashingBonusEvaluator(
         env_spec=env.spec,
         dim_key=v["dim_key"],

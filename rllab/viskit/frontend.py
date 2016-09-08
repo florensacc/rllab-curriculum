@@ -536,7 +536,7 @@ def reload_data():
     global exps_data
     global plottable_keys
     global distinct_params
-    exps_data = core.load_exps_data(args.data_paths)
+    exps_data = core.load_exps_data(args.data_paths,args.disable_variant)
     plottable_keys = sorted(list(
         set(flatten(exp.progress.keys() for exp in exps_data))))
     distinct_params = sorted(core.extract_distinct_params(exps_data))
@@ -548,6 +548,7 @@ if __name__ == "__main__":
     parser.add_argument("--prefix",type=str,nargs='?',default="???")
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--disable-variant",default=False,action='store_true')
     args = parser.parse_args(sys.argv[1:])
 
     # load all folders following a prefix

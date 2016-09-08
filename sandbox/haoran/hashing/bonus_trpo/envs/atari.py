@@ -62,7 +62,15 @@ def to_ram(ale):
 
 
 class AtariEnv(Env, Serializable):
-    def __init__(self, game="pong", obs_type="ram", frame_skip=4, death_ends_episode=False, death_penalty=0):
+    def __init__(self,
+            game="pong",
+            obs_type="ram",
+            frame_skip=4,
+            death_ends_episode=False,
+            death_penalty=0,
+            record_internal_state=False,
+            resetter=None,
+        ):
         Serializable.quick_init(self, locals())
         assert obs_type in ("ram", "image")
         game_path = atari_py.get_game_path(game)
@@ -75,6 +83,8 @@ class AtariEnv(Env, Serializable):
         self.frame_skip = frame_skip
         self.death_ends_episode = death_ends_episode
         self.death_penalty = death_penalty
+        self.record_internal_state = record_internal_state
+        self.resetter = resetter
 
     def step(self, a):
         reward = 0.0
@@ -94,7 +104,12 @@ class AtariEnv(Env, Serializable):
             reward -= self.death_penalty
             logger.log(0,"Death penalty: %f"%(self.death_penalty))
 
-        return ob, reward, done, {}
+        env_info = dict()
+        if self.record_internal_state:
+            env_info["internal_states"] = self.ale.cloneState()
+            env_info["env_ids"] = hex(id(self))
+
+        return ob, reward, done, env_info
 
     @property
     def action_space(self):
@@ -137,12 +152,27 @@ class AtariEnv(Env, Serializable):
 
     # return: (states, observations)
     def reset(self):
-        self.ale.reset_game()
+        if self.resetter is None:
+            self.ale.reset_game()
+        else:
+            self.resetter.reset(self)
         self.start_lives = self.ale.lives()
         return self._get_obs()
 
     def render(self, return_array=False):
+        import pdb; pdb.set_trace()
         img = self._get_image()
         cv2.imshow("atarigame", img)
         cv2.waitKey(10)
         if return_array: return img
+
+    def get_param_values(self):
+        params = dict()
+        if self.resetter is not None:
+            params["resetter_params"] = self.resetter.get_param_values()
+        return params
+
+
+    def set_param_values(self,params):
+        if self.resetter is not None:
+            self.resetter.set_param_values(params["resetter_params"])

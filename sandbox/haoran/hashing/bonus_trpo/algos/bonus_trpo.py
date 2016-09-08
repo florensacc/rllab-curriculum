@@ -48,6 +48,8 @@ class BonusTRPO(TRPO):
             path["raw_returns"] = special.discount_cumsum(path["raw_rewards"], self.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
+        if self.env.wrapped_env.resetter is not None:
+            self.env.wrapped_env.resetter.update(paths)
 
         if not self.policy.recurrent:
             observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
