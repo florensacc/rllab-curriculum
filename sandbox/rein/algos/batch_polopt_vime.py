@@ -9,134 +9,17 @@ from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup, \
-    plot_mnist_digit
-from scipy import stats, misc
-from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_unformat_image
-from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianLayer
+from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup
+from scipy import stats
+from sandbox.rein.dynamics_models.utils import enum
+
+from collections import deque
+from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
+from sandbox.rein.algos.replay_pool import ReplayPool
 
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
-
-# exploration imports
-# -------------------
-import theano
-from collections import deque
-from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
-
-
-class SimpleReplayPool(object):
-    """Replay pool"""
-
-    def __init__(
-            self,
-            max_pool_size,
-            observation_shape,
-            action_dim,
-            observation_dtype=theano.config.floatX,
-            action_dtype=theano.config.floatX,
-            num_seq_frames=1,
-            **kwargs
-    ):
-        self._observation_shape = observation_shape
-        self._action_dim = action_dim
-        self._observation_dtype = observation_dtype
-        self._action_dtype = action_dtype
-        self._max_pool_size = max_pool_size
-        self._num_seq_frames = num_seq_frames
-
-        self._observations = np.zeros(
-            (max_pool_size,) + observation_shape,
-            dtype=observation_dtype
-        )
-        self._actions = np.zeros(
-            (max_pool_size, action_dim),
-            dtype=action_dtype
-        )
-        self._rewards = np.zeros(max_pool_size, dtype='float32')
-        self._terminals = np.zeros(max_pool_size, dtype='uint8')
-        self._bottom = 0
-        self._top = 0
-        self._size = 0
-
-    def __str__(self):
-        sb = []
-        for key in self.__dict__:
-            sb.append(
-                "{key}='{value}'".format(key=key, value=self.__dict__[key]))
-        return ', '.join(sb)
-
-    def add_sample(self, observation, action, reward, terminal):
-        # Select last frame, which is the 'true' frame. Only add this one, to save replay pool memory. When
-        # the samples are fetched, we rebuild the sequence.
-        self._observations[self._top] = observation[-self._observation_shape[0]:]
-        self._actions[self._top] = action
-        self._rewards[self._top] = reward
-        self._terminals[self._top] = terminal
-        self._top = (self._top + 1) % self._max_pool_size
-        if self._size >= self._max_pool_size:
-            self._bottom = (self._bottom + 1) % self._max_pool_size
-        else:
-            self._size += 1
-
-    def random_batch(self, batch_size):
-        # Here, based on the num_seq_frames, we will construct a batch of elements that comform num_seq_frames.
-        assert self._size > batch_size
-        indices = np.zeros(batch_size, dtype='uint64')
-        transition_indices = np.zeros(batch_size, dtype='uint64')
-        count = 0
-        while count < batch_size:
-            # We don't want to hit the bottom when using num_seq_frames in history.
-            index = np.random.randint(
-                self._bottom + self._num_seq_frames, self._bottom + self._size) % self._max_pool_size
-            # make sure that the transition is valid: if we are at the end of the pool, we need to discard
-            # this sample. Also check whether terminal sample: no next state exists.
-            if (index == self._size - 1 and self._size <= self._max_pool_size) or self._terminals[index] == 1:
-                continue
-            transition_index = (index + 1) % self._max_pool_size
-            indices[count] = index
-            transition_indices[count] = transition_index
-            # Here we add num_seq_frames - 1 additional previous frames; until we encounter term frame, in which
-            # case we add black frames.
-            lst_obs = [None] * self._num_seq_frames
-            insert_empty = np.zeros(batch_size, dtype='bool')
-            for i in xrange(self._num_seq_frames):
-                obs = self._observations[indices - i]
-                insert_empty = np.maximum(self._terminals[indices - i].astype('bool'), insert_empty)
-                if insert_empty.any():
-                    obs_prev = self._observations[indices - i + 1]
-                    obs[insert_empty] = obs_prev[insert_empty]
-                lst_obs[self._num_seq_frames - i - 1] = obs
-            arr_obs = np.stack(lst_obs, axis=1).reshape((lst_obs[0].shape[0], -1))
-
-            count += 1
-        return dict(
-            observations=arr_obs,
-            actions=self._actions[indices],
-            rewards=self._rewards[indices],
-            terminals=self._terminals[indices],
-            next_observations=self._observations[transition_indices]
-        )
-
-    def mean_obs_act(self):
-        #         if self._size >= self._max_pool_size:
-        #             obs = self._observations
-        #             act = self._actions
-        #         else:
-        #             obs = self._observations[:self._top + 1]
-        #             act = self._actions[:self._top + 1]
-        #         obs_mean = np.mean(obs, axis=0)
-        #         obs_std = np.std(obs, axis=0)
-        #         act_mean = np.mean(act, axis=0)
-        #         act_std = np.std(act, axis=0)
-        #         return obs_mean, obs_std, act_mean, act_std
-        return 0, 1, 0, 1
-
-    @property
-    def size(self):
-        return self._size
-
 
 class BatchPolopt(RLAlgorithm):
     """
@@ -236,6 +119,8 @@ class BatchPolopt(RLAlgorithm):
         # ----------------------
         if dyn_pool_args is None:
             dyn_pool_args = dict(enable=False, size=100000, min_size=10, batch_size=32)
+        else:
+            self.pool = None
 
         self.eta = eta
         self.use_kl_ratio = use_kl_ratio
@@ -441,9 +326,8 @@ class BatchPolopt(RLAlgorithm):
 
         if self._dyn_pool_args['enable']:
             observation_dtype = "uint8"
-            self.pool = SimpleReplayPool(
+            self.pool = ReplayPool(
                 max_pool_size=self._dyn_pool_args['size'],
-                # self.env.observation_space.shape,
                 observation_shape=(self.env.observation_space.flat_dim,),
                 action_dim=self.env.action_dim,
                 observation_dtype=observation_dtype,
@@ -691,10 +575,7 @@ class BatchPolopt(RLAlgorithm):
             reward_std = np.mean(np.asarray(self._reward_std))
 
         # Mean/std obs/act based on replay pool.
-        if self._dyn_pool_args['enable']:
-            obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
-        else:
-            obs_mean, obs_std, act_mean, act_std = 0, 1, 0, 1
+        obs_mean, obs_std, act_mean, act_std = 0, 1, 0, 1
 
         paths = parallel_sampler.sample_paths(
             policy_params=cur_params,
@@ -742,7 +623,7 @@ class BatchPolopt(RLAlgorithm):
             for i in xrange(len(paths)):
                 paths[i]['rewards'] = (paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
 
-        if itr > -1:
+        if itr > 5:
             kls = []
             for i in xrange(len(paths)):
                 # We divide the KL by the number of weights in the network, to

@@ -6,6 +6,7 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.core.network import ConvNetwork
 from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 
 from sandbox.rein.envs.atari import AtariEnvX
 from sandbox.rein.algos.trpo_vime import TRPO
@@ -24,11 +25,13 @@ dropout = False
 
 # Param ranges
 seeds = range(5)
-etas = [0.1]
+etas = [1.0, 0.1, 0.01]
 lst_factor = [1]
 lst_pred_delta = [False]
 kl_ratios = [False]
-mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8)]
+mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
+        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
+        AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
 
 param_cart_product = itertools.product(
     lst_pred_delta, lst_factor, kl_ratios, mdps, etas, seeds
@@ -60,12 +63,18 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         conv_pads=(0, 2, 2),
     )
     baseline = GaussianMLPBaseline(
-        mdp.spec,
+        env_spec=mdp.spec,
         num_seq_inputs=num_seq_frames,
         regressor_args=dict(
             mean_network=network,
-            batchsize=10000,
-            subsample_factor=0.1),
+            batchsize=None,
+            subsample_factor=0.1,
+            optimizer=FirstOrderOptimizer(
+                max_epochs=100,
+                verbose=True,
+            ),
+            use_trust_region=False,
+        ),
     )
 
     # If we don't use a replay pool, we could have correct values here, as
@@ -182,12 +191,12 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=batch_size,
-        n_samples=5,
+        n_samples=1,
         num_train_samples=1,
         prior_sd=0.05,
-        second_order_update=False,
+        second_order_update=True,
         learning_rate=0.001,
-        surprise_type=ConvBNNVIME.SurpriseType.VAR,
+        surprise_type=ConvBNNVIME.SurpriseType.INFGAIN,
         update_prior=(not dyn_pool_enable),
         update_likelihood_sd=False,
         output_type=ConvBNNVIME.OutputType.CLASSIFICATION,
@@ -209,9 +218,9 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         policy=policy,
         baseline=baseline,
         dyn_mdl=dyn_mdl,
-        batch_size=2500,
+        batch_size=250,
         whole_paths=True,
-        max_path_length=450,
+        max_path_length=45,
         n_itr=400,
         step_size=0.01,
         optimizer_args=dict(
@@ -223,18 +232,18 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         eta=eta,
         use_kl_ratio=kl_ratio,
         use_kl_ratio_q=kl_ratio,
-        kl_batch_size=256,
-        num_sample_updates=5,  # Every sample in traj batch will be used in `num_sample_updates' updates.
+        kl_batch_size=8,
+        num_sample_updates=3,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=False,
         replay_kl_schedule=0.98,
         n_itr_update=1,  # Fake itr updates in sampler
         dyn_pool_args=dict(
             enable=dyn_pool_enable,
-            size=100000,
+            size=200000,
             min_size=10,
             batch_size=32
         ),
-        surprise_transform=BatchPolopt.SurpriseTransform.ZERO100,
+        surprise_transform=BatchPolopt.SurpriseTransform.CAP90PERC,  # BatchPolopt.SurpriseTransform.ZERO100,
         predict_delta=pred_delta,
         num_seq_frames=num_seq_frames,
         predict_reward=True,
@@ -242,7 +251,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-42x52-var-d",
+        exp_prefix="trpo-vime-atari-42x52-inf-c",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,

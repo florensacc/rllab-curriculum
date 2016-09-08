@@ -21,7 +21,8 @@ class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
-    This one is specifically created for using discrete embedding-based counts.
+    This one is specifically created for using discrete embedding-based counts. This means autoencoding from #n frames
+    to last frame, to also capture some of the motion.
     """
 
     # Enums
@@ -122,10 +123,10 @@ class BatchPolopt(RLAlgorithm):
         self._dyn_pool_args = dyn_pool_args
         self._num_seq_frames = num_seq_frames
 
+        # Specific for Atar
         observation_dtype = "uint8"
         self.pool = ReplayPool(
             max_pool_size=self._dyn_pool_args['size'],
-            # self.env.observation_space.shape,
             observation_shape=(self.env.observation_space.flat_dim,),
             action_dim=self.env.action_dim,
             observation_dtype=observation_dtype,
@@ -147,11 +148,10 @@ class BatchPolopt(RLAlgorithm):
             _i, _t, _ = batch
             _o = self.autoenc.pred_fn(_i)
             if self.autoenc.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
-                _o_s = _o[:, :-1]
-                _o_r = _o[:, -1]
+                _o_s = _o
                 _o_s = _o_s.reshape((-1, np.prod(self.autoenc.state_dim), self.autoenc.num_classes))
                 _o_s = np.argmax(_o_s, axis=2)
-                acc += np.sum(np.abs(_o_s - _t[:, :-1])) + np.sum(np.abs(_o_r - _t[:, -1]))
+                acc += np.sum(np.abs(_o_s - _t))
             else:
                 acc += np.sum(np.square(_o - _t))
         return acc / _inputs.shape[0]
@@ -191,19 +191,19 @@ class BatchPolopt(RLAlgorithm):
 
         idx = np.random.randint(0, inputs.shape[0], 1)
         sanity_pred = self.autoenc.pred_fn(inputs)
-        input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
+        input_im = inputs
         lst_input_im = [
             input_im[idx, i * np.prod(self.autoenc.state_dim):(i + 1) * np.prod(self.autoenc.state_dim)].reshape(
                 self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
             xrange(self._num_seq_frames)]
         input_im = input_im[:, -np.prod(self.autoenc.state_dim):]
         input_im = input_im[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
-        sanity_pred_im = sanity_pred[idx, :-1]
+        sanity_pred_im = sanity_pred[idx, :]
         if self.autoenc.output_type == self.autoenc.OutputType.CLASSIFICATION:
             sanity_pred_im = sanity_pred_im.reshape((-1, self.autoenc.num_classes))
             sanity_pred_im = np.argmax(sanity_pred_im, axis=1)
         sanity_pred_im = sanity_pred_im.reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
-        target_im = targets[idx, :-1].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
+        target_im = targets[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
 
         if self._predict_delta:
             sanity_pred_im += input_im
@@ -296,8 +296,8 @@ class BatchPolopt(RLAlgorithm):
 
                 for _ in xrange(20):
                     batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-                    _x = np.hstack([batch['observations'], batch['actions']])
-                    _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
+                    _x = batch['observations']
+                    _y = batch['next_observations']
                     acc_before += self.accuracy(_x, _y)
                 acc_before /= 20.
 
@@ -305,12 +305,11 @@ class BatchPolopt(RLAlgorithm):
 
                     batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
 
-                    _x = np.hstack([batch['observations'], batch['actions']])
+                    _x = batch['observations']
                     if self._predict_delta:
-                        _y = np.hstack(
-                            [(batch['next_observations'] - batch['observations']), batch['rewards'][:, np.newaxis]])
+                        _y = batch['next_observations'] - batch['observations']
                     else:
-                        _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
+                        _y = batch['next_observations']
 
                     _tl = self.autoenc.train_fn(_x, _y, 0 * kl_factor)
                     train_loss += _tl
@@ -319,8 +318,8 @@ class BatchPolopt(RLAlgorithm):
 
                 for _ in xrange(20):
                     batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-                    _x = np.hstack([batch['observations'], batch['actions']])
-                    _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
+                    _x = batch['observations']
+                    _y = batch['next_observations']
                     acc_after += self.accuracy(_x, _y)
                 acc_after /= 20.
 
@@ -340,8 +339,6 @@ class BatchPolopt(RLAlgorithm):
             logger.record_tabular('DynModel_TrainLoss', train_loss)
 
             # Here we should extract discrete embedding from samples and use it for updating count table.
-
-
             # Postprocess trajectory data.
             samples_data = self.process_samples(itr, paths)
 

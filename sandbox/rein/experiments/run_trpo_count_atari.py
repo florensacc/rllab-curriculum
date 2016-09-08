@@ -6,6 +6,8 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.core.network import ConvNetwork
 from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
+
 
 from sandbox.rein.envs.atari import AtariEnvX
 from sandbox.rein.algos.trpo_count import TRPO
@@ -61,12 +63,18 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         conv_pads=(0, 2, 2),
     )
     baseline = GaussianMLPBaseline(
-        mdp.spec,
+        env_spec=mdp.spec,
         num_seq_inputs=num_seq_frames,
         regressor_args=dict(
             mean_network=network,
-            batchsize=30000,
-            subsample_factor=0.1),
+            batchsize=None,
+            subsample_factor=0.1,
+            optimizer=FirstOrderOptimizer(
+                max_epochs=100,
+                verbose=True,
+            ),
+            use_trust_region=False,
+        ),
     )
 
     # If we don't use a replay pool, we could have correct values here, as
@@ -117,13 +125,13 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  batch_norm=batch_norm,
                  dropout=dropout,
                  deterministic=False),
-            dict(name='discrete_embedding',
-                 n_units=128 * factor,
-                 matrix_variate_gaussian=False,
-                 nonlinearity=lasagne.nonlinearities.rectify,
-                 batch_norm=batch_norm,
-                 dropout=dropout,
-                 deterministic=False),
+            # dict(name='discrete_embedding',
+            #      n_units=128 * factor,
+            #      matrix_variate_gaussian=False,
+            #      nonlinearity=lasagne.nonlinearities.rectify,
+            #      batch_norm=batch_norm,
+            #      dropout=dropout,
+            #      deterministic=False),
             dict(name='gaussian',
                  n_units=1536 * factor,
                  matrix_variate_gaussian=False,
