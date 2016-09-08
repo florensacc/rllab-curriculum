@@ -503,7 +503,11 @@ class VAE(object):
 
                     if counter % self.summary_interval == 0:
                         summary = tf.Summary()
-                        summary_str = sess.run(summary_op, feed)
+                        try:
+                            summary_str = sess.run(summary_op, feed)
+                        except tf.python.framework.errors.InvalidArgumentError as e:
+                            # sometimes there are transient errors
+                            print("Ignoring %s"%e)
                         summary.MergeFromString(summary_str)
                         if counter % self.vali_eval_interval == 0:
                             ds = self.dataset.validation

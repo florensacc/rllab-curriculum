@@ -1127,6 +1127,10 @@ class CustomBookkeeper(Bookkeeper):
         super(CustomBookkeeper, self).__init__(**kw)
         self.var_mapping = defaultdict(dict)
 
+    def add_histogram_summary(self, tensor, tag=None):
+        """Add a summary operation to visualize any tensor."""
+        print("passing histogram %s"%tag)
+
 prettytensor.bookkeeper.BOOKKEEPER_FACTORY = CustomBookkeeper
 
 @prettytensor.Register(assign_defaults=['custom_phase','model_avg'],)
