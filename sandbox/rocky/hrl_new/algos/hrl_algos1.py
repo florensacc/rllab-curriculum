@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
 from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
@@ -28,8 +28,8 @@ class PolicyImitationTrainer(object):
         :type policy: StochasticPolicy
         """
 
-        state_info_vars = dict(zip(policy.state_info_keys, state_info_vars_list))
-        old_dist_info_vars = dict(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list))
+        state_info_vars = dict(list(zip(policy.state_info_keys, state_info_vars_list)))
+        old_dist_info_vars = dict(list(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list)))
 
         dist_info_vars = policy.dist_info_sym(obs_var, state_info_vars)
         kl_sym = policy.distribution.kl_sym(old_dist_info_vars, dist_info_vars)
@@ -57,8 +57,8 @@ class PolicyImprovementTrainer(object):
         """
         :type policy: StochasticPolicy
         """
-        state_info_vars = dict(zip(policy.state_info_keys, state_info_vars_list))
-        old_dist_info_vars = dict(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list))
+        state_info_vars = dict(list(zip(policy.state_info_keys, state_info_vars_list)))
+        old_dist_info_vars = dict(list(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list)))
 
         dist = policy.distribution
 
@@ -110,8 +110,8 @@ class BonusImitationTrainer(object):
         :type policy: StochasticPolicy
         """
 
-        state_info_vars = dict(zip(policy.state_info_keys, state_info_vars_list))
-        old_dist_info_vars = dict(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list))
+        state_info_vars = dict(list(zip(policy.state_info_keys, state_info_vars_list)))
+        old_dist_info_vars = dict(list(zip(policy.distribution.dist_info_keys, old_dist_info_vars_list)))
 
         dist_info_vars = policy.dist_info_sym(obs_var, state_info_vars)
         kl_sym = policy.distribution.kl_sym(old_dist_info_vars, dist_info_vars)

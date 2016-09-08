@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy as np
 
@@ -114,7 +114,7 @@ class BottleneckStateGoalSurpriseBonusEvaluator(object):
         self.fit_delayed()
 
     def log_diagnostics(self, paths):
-        bonuses = np.concatenate(map(self.predict, paths))
+        bonuses = np.concatenate(list(map(self.predict, paths)))
         logger.record_tabular("AverageBonus", np.mean(bonuses))
         logger.record_tabular("MaxBonus", np.max(bonuses))
         logger.record_tabular("MinBonus", np.min(bonuses))
@@ -238,7 +238,7 @@ class FixedClockPolicy(StochasticPolicy, LayersPowered, Serializable):
 
     def get_action(self, observation):
         actions, infos = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in infos.iteritems()}
+        return actions[0], {k: v[0] for k, v in infos.items()}
 
     def reset(self, dones=None):
         if dones is None:

@@ -1,5 +1,5 @@
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import theano.tensor as TT
 
@@ -88,7 +88,7 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
     def _split_dict(self, d):
         high_dict = dict()
         low_dict = dict()
-        for k, v in d.iteritems():
+        for k, v in d.items():
             if k.startswith("high_"):
                 high_dict[k[len("high_"):]] = v
             elif k.startswith("low_"):
@@ -97,9 +97,9 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
 
     def _merge_dict(self, high_dict, low_dict):
         d = dict()
-        for k, v in high_dict.iteritems():
+        for k, v in high_dict.items():
             d["high_%s" % k] = v
-        for k, v in low_dict.iteritems():
+        for k, v in low_dict.items():
             d["low_%s" % k] = v
         return d
 
@@ -130,13 +130,13 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
             if self.high_policy.recurrent and not self.low_policy.recurrent:
                 # need to flatten the data before passing in
                 low_obs = low_obs.reshape((N * T, -1))
-                low_state_info_vars = {k: v.reshape((N * T, -1)) for k, v in low_state_info_vars.iteritems()}
+                low_state_info_vars = {k: v.reshape((N * T, -1)) for k, v in low_state_info_vars.items()}
             low_dist_info = self.low_policy.dist_info_sym(
                 obs_var=low_obs,
                 state_info_vars=low_state_info_vars
             )
             if self.high_policy.recurrent and not self.low_policy.recurrent:
-                low_dist_info = {k: v.reshape((N, T, -1)) for k, v in low_dist_info.iteritems()}
+                low_dist_info = {k: v.reshape((N, T, -1)) for k, v in low_dist_info.items()}
             return self._merge_dict(dict(), low_dist_info)
         else:
             assert isinstance(self.high_policy, StochasticPolicy)
@@ -190,9 +190,9 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
             high_kl = self.high_policy.distribution.kl_sym(old_high, new_high)
 
         if self.high_policy.recurrent and not self.low_policy.recurrent:
-            N, T, _ = old_dist_info_vars.values()[0].shape
-            old_low = {k: v.reshape((N * T, -1)) for k, v in old_low.iteritems()}
-            new_low = {k: v.reshape((N * T, -1)) for k, v in new_low.iteritems()}
+            N, T, _ = list(old_dist_info_vars.values())[0].shape
+            old_low = {k: v.reshape((N * T, -1)) for k, v in old_low.items()}
+            new_low = {k: v.reshape((N * T, -1)) for k, v in new_low.items()}
             low_kl = self.low_policy.distribution.kl_sym(old_low, new_low)
             low_kl = low_kl.reshape((N, T))
         else:
@@ -215,8 +215,8 @@ class TwoPartPolicy(StochasticPolicy, Serializable):
         if self.high_policy.recurrent and not self.low_policy.recurrent:
             N, T, _ = x_var.shape
             low_action_var = x_var.reshape((N * T, -1))
-            old_low = {k: v.reshape((N * T, -1)) for k, v in old_low.iteritems()}
-            new_low = {k: v.reshape((N * T, -1)) for k, v in new_low.iteritems()}
+            old_low = {k: v.reshape((N * T, -1)) for k, v in old_low.items()}
+            new_low = {k: v.reshape((N * T, -1)) for k, v in new_low.items()}
             low_lr = self.low_policy.distribution.likelihood_ratio_sym(low_action_var, old_low, new_low)
             low_lr = low_lr.reshape((N, T))
         else:

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy as np
 from rllab.misc import special
@@ -16,7 +16,7 @@ from rllab.sampler.stateful_pool import singleton_pool
 from rllab.sampler.utils import rollout
 import theano
 import theano.tensor as TT
-import cPickle as pickle
+import pickle as pickle
 
 floatX = theano.config.floatX
 

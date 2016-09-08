@@ -3,7 +3,7 @@ import numpy as np
 from misc.console import log
 import time
 from multiprocessing import Process, Queue, Pool
-from Queue import Empty
+from queue import Empty
 
 def cem(f, x0, init_std, n_samples=100, n_iter=100, best_frac=0.05, extra_std=1.0, extra_decay_time=100):
 
@@ -17,7 +17,7 @@ def cem(f, x0, init_std, n_samples=100, n_iter=100, best_frac=0.05, extra_std=1.
         extra_var_mult = max(1.0 - itr / extra_decay_time, 0)
         sample_std = np.sqrt(np.square(cur_std) + np.square(extra_std) * extra_var_mult)
         xs = np.random.randn(n_samples, K) * sample_std.reshape(1, -1) + cur_mean.reshape(1, -1)
-        fs = np.array(map(f, xs))
+        fs = np.array(list(map(f, xs)))
         best_inds = (-fs).argsort()[:n_best]
         best_xs = xs[best_inds]
         cur_mean = best_xs.mean(axis=0)
@@ -44,7 +44,7 @@ def rollout(policy, param_val, mdp, discount):
     for reward in rewards[::-1]:
         ret = ret*discount + reward
 
-    print 'demo reward: %f' % ret
+    print('demo reward: %f' % ret)
         #time.sleep(timestep)#mdp.timestep)
     policy.set_param_values(prev_x)
 
@@ -123,11 +123,11 @@ class CEM(object):
                             break
                         elif msg[0] == 'demo':
                             itr, cur_mean = msg[1:]
-                            print('demoing itr %d' % itr)
+                            print(('demoing itr %d' % itr))
                             rollout(policy, cur_mean, mdp, self.discount)
                         elif msg[0] == 'loop':
                             itr, cur_mean = msg[1:]
-                            print('demoing itr %d' % itr)
+                            print(('demoing itr %d' % itr))
                             while True:
                                 rollout(policy, cur_mean, mdp, self.discount)
 

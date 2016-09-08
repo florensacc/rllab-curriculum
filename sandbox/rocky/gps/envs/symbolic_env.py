@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.envs.base import Env
 from rllab.envs.normalized_env import NormalizedEnv
 

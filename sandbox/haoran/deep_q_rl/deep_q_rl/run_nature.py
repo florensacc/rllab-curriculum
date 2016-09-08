@@ -8,7 +8,7 @@ Nature, 518(7540):529-533, February 2015
 
 """
 
-import launcher
+from . import launcher
 import sys
 
 class Defaults:

@@ -2,9 +2,8 @@
 import abc
 
 
-class TrajOpt(object):
+class TrajOpt(object, metaclass=abc.ABCMeta):
     """ Trajectory optimization superclass. """
-    __metaclass__ = abc.ABCMeta
 
     def __init__(self, hyperparams):
         self._hyperparams = hyperparams

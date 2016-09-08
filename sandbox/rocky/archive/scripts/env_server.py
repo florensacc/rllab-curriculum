@@ -46,8 +46,8 @@ if __name__ == "__main__":
                 socket.send(message)
             elif msg.startswith('step'):
                 _, state_str, action_str = msg.split(';')
-                state = np.array(map(float, state_str.split(",")))
-                action = np.array(map(float, action_str.split(",")))
+                state = np.array(list(map(float, state_str.split(","))))
+                action = np.array(list(map(float, action_str.split(","))))
                 next_state, next_action, reward, terminal = env.step(state, action)
                 socket.send("%s;%s;%s;%s" % (
                     ",".join(map(str, next_state)),

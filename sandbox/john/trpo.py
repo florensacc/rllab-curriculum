@@ -38,7 +38,7 @@ class TRPO(Serializable):
         # Build graph
         # ----------------------------------------        
         self.syms = defaultdict(list)
-        for t in xrange(horizon):
+        for t in range(horizon):
             ob = common.space2variable(ob_space, name = "ob%i"%t, prepend_shape=[batch_size])
             ac, psi = policy.act(ob)
             self.syms["psi"].append(psi)
@@ -70,7 +70,7 @@ class TRPO(Serializable):
         self.pg = U.flatgrad(avg_surr, policy_vars)        
         klgrads = tf.gradients(avg_kl_local, policy_vars)
         self.flat_tangent = tf.placeholder(tf.float32, shape=num_params)
-        shapes = [map(lambda x : x.value, var.get_shape()) for var in policy_vars]
+        shapes = [[x.value for x in var.get_shape()] for var in policy_vars]
         start = 0
         tangents = []
         for shape in shapes:
@@ -95,7 +95,7 @@ class TRPO(Serializable):
         total_timesteps = 0
         total_episodes = 0
         rets = np.zeros(batch_size, 'float32')
-        for i_update in xrange(n_updates):
+        for i_update in range(n_updates):
             episode_returns = []
             setup = U.SESSION.partial_run_setup(
                 self.syms["ac"] + self.syms["psi"],
@@ -108,7 +108,7 @@ class TRPO(Serializable):
             allacs = []
 
 
-            for t in xrange(self.horizon):
+            for t in range(self.horizon):
                 news[t] = new
                 obs[t] = ob
                 ob_sym = self.syms["ob"][t]
@@ -143,7 +143,7 @@ class TRPO(Serializable):
             advs = common.discounted_future_sum(deltas, news, self.gae_lambda * self.discount)
             # Note that we demean advantages by computing mean at each timestep
             standardized_advs = (advs - advs.mean()) / (advs.std() + 1e-8)
-            for t in xrange(self.horizon):
+            for t in range(self.horizon):
                 feed[self.syms["adv"][t]] = standardized_advs[t]
 
             # _log("Updating policy")    
@@ -179,7 +179,7 @@ class TRPO(Serializable):
                 logger.record_tabular("%s_After"%name, afterval)
 
             vtargs = vpreds[:-1] + advs
-            losses_dict = dict(zip(self.loss_names, losses_after))
+            losses_dict = dict(list(zip(self.loss_names, losses_after)))
             ent = losses_dict["ent"]
             total_episodes += len(episode_returns)         
             logger.record_tabular("Iteration", i_update)

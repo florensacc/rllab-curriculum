@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.core.serializable import Serializable
 from rllab.spaces.product import Product
 from rllab.spaces.box import Box
@@ -69,7 +69,7 @@ class PosteriorHallucinator(Serializable):
         agent_infos = samples_data["agent_infos"]
         xs = np.concatenate([observations, actions], axis=1)
         ys = []
-        for idx in xrange(len(self.policy.latent_layers)):
+        for idx in range(len(self.policy.latent_layers)):
             ys.append(agent_infos["latent_%d" % idx])
         ys = np.concatenate(ys, axis=1)
         self.regressor.fit(xs, ys)
@@ -84,7 +84,7 @@ class PosteriorHallucinator(Serializable):
         # this gives p(a|s, h_old)
         old_action_logli = self.policy.log_likelihood(actions, agent_infos, action_only=True)
         h_samples = []
-        for _ in xrange(self.n_hallucinate_samples):
+        for _ in range(self.n_hallucinate_samples):
             latents = self.regressor.sample_predict(xs)
             # this gives q(h_new|s, a)
             regressor_latent_logli = self.regressor.predict_log_likelihood(xs, latents)

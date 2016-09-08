@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 # Synchronous Advantage Actor-Critic
 import tensorflow as tf
@@ -44,7 +44,7 @@ class PolicyWrapper(StochasticPolicy, LayersPowered, Serializable):
 
     def get_action(self, observation):
         actions, agent_infos = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in agent_infos.iteritems()}
+        return actions[0], {k: v[0] for k, v in agent_infos.items()}
 
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)
@@ -141,7 +141,7 @@ class TimeLogger(object):
         self.stats[key].append(duration)
 
     def dump_log(self):
-        for k, vs in self.stats.iteritems():
+        for k, vs in self.stats.items():
             logger.record_tabular(k, np.sum(vs))
 
     def reset(self):
@@ -306,7 +306,7 @@ class SAAC(object):
                             past_returns = [None] * (parallel_t - t_start)
                             past_advantages = [None] * (parallel_t - t_start)
                             past_values = [None] * (parallel_t - t_start)
-                            for t in reversed(xrange(t_start, parallel_t)):
+                            for t in reversed(range(t_start, parallel_t)):
                                 returns = returns * self.discount * (1. - past_dones[t - t_start]) + past_rewards[
                                     t - t_start]
                                 with time_logger.time("PredictTime"):
@@ -318,7 +318,7 @@ class SAAC(object):
 
                         with time_logger.time("ReshapeTime"):
                             vec_obs = self.env.observation_space.flatten_n(sum(past_observations, []))
-                            vec_actions = self.env.action_space.flatten_n(sum(map(list, past_actions), []))
+                            vec_actions = self.env.action_space.flatten_n(sum(list(map(list, past_actions)), []))
                             vec_returns = tensor_utils.concat_tensor_list(past_returns)
                             vec_advantages = tensor_utils.concat_tensor_list(past_advantages)
                             vec_agent_infos = tensor_utils.concat_tensor_dict_list(past_agent_infos)

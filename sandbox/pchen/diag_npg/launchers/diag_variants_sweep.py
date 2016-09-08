@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.algos.npo import NPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
@@ -37,12 +37,12 @@ class VG(VariantGenerator):
 
     @variant
     def env(self):
-        return map(normalize, [
+        return list(map(normalize, [
             CartpoleEnv(),
             CartpoleSwingupEnv(),
             HalfCheetahEnv(),
             SwimmerEnv(),
-        ])
+        ]))
 
     @variant
     def mode(self):

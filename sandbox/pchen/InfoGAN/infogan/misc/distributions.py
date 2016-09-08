@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import itertools
 import tensorflow as tf
 import numpy as np
@@ -39,7 +39,7 @@ class Distribution(object):
         raise NotImplementedError
 
     def kl_prior(self, dist_info):
-        return self.kl(dist_info, self.prior_dist_info(dist_info.values()[0].get_shape()[0]))
+        return self.kl(dist_info, self.prior_dist_info(list(dist_info.values())[0].get_shape()[0]))
 
     def logli(self, x_var, dist_info):
         """
@@ -597,7 +597,7 @@ class Product(Distribution):
         ret = dict()
         for idx, dist_flat_i, dist_i in zip(itertools.count(), self.split_dist_flat(dist_flat), self.dists):
             dist_info_i = dist_i.activate_dist(dist_flat_i)
-            for k, v in dist_info_i.iteritems():
+            for k, v in dist_info_i.items():
                 ret["id_%d_%s" % (idx, k)] = v
         return ret
 
@@ -836,7 +836,7 @@ class AR(Distribution):
                 var_scope=var_scope,
                 rank=rank,
         ):
-            for di in xrange(depth):
+            for di in range(depth):
                 self._iaf_template = \
                     self._iaf_template.arfc(
                         2*dim*neuron_ratio,
@@ -928,7 +928,7 @@ class AR(Distribution):
         if self._reverse:
             z = tf.reverse(z, [False, True])
         go = z # place holder
-        for i in xrange(self._dim):
+        for i in range(self._dim):
             iaf_mu, iaf_logstd = self.infer(go)
             go = iaf_mu + tf.exp(iaf_logstd)*z
         return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
@@ -964,7 +964,7 @@ class IAR(AR):
     def logli(self, x_var, dist_info):
         print("warning, iar logli invoked")
         go = x_var # place holder
-        for i in xrange(self._dim):
+        for i in range(self._dim):
             iaf_mu, iaf_logstd = self.infer(
                 go,
                 lin_con=dist_info.get("linear_context"),
@@ -1075,7 +1075,7 @@ class DistAR(Distribution):
                 var_scope=var_scope,
                 rank=rank,
         ):
-            for di in xrange(depth):
+            for di in range(depth):
                 self._iaf_template = \
                     self._iaf_template.arfc(
                         2*dim*neuron_ratio,
@@ -1147,7 +1147,7 @@ class DistAR(Distribution):
     def sample_logli(self, info):
         print("warning, dist_ar sample invoked")
         go = tf.zeros([info["batch_size"], self.dim]) # place holder
-        for i in xrange(self._dim):
+        for i in range(self._dim):
             tgt_flat = self.infer(go)
             tgt_info = self._tgt_dist.activate_dist(tgt_flat)
             go, logli = self._tgt_dist.sample_logli(tgt_info)

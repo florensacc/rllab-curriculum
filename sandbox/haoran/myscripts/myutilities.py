@@ -45,10 +45,10 @@ def trpo_plot_by_batchsize(dir_groups,name_groups,stat,xlim=None,ylim=None,figsi
     colors = hsv(np.linspace(0, 1.0, len(name_groups)+1))[:-1]
 
     # loop over different param settings
-    for i,color,dirs in zip(range(len(colors)),colors,dir_groups):
+    for i,color,dirs in zip(list(range(len(colors))),colors,dir_groups):
         data = []
         if len(dirs) == 0:
-            print "Emptry directory list %s"%(name_groups[i])
+            print("Emptry directory list %s"%(name_groups[i]))
             sys.exit(1)
 
         # loop over different seeds
@@ -57,7 +57,7 @@ def trpo_plot_by_batchsize(dir_groups,name_groups,stat,xlim=None,ylim=None,figsi
             import os
             progress_file = "%s/progress.csv"%(directory)
             if not os.path.isfile(progress_file):
-                print "No progress.csv file for %s"%(directory)
+                print("No progress.csv file for %s"%(directory))
                 sys.exit(1)
             progress = read_csv(progress_file)
 
@@ -74,7 +74,7 @@ def trpo_plot_by_batchsize(dir_groups,name_groups,stat,xlim=None,ylim=None,figsi
         batch_size = params["json_args"]["algo"]["batch_size"]
 
 
-        if stat in progress.keys():
+        if stat in list(progress.keys()):
             # trim to the shortest data curve
             n = np.amin([len(datum) for datum in data])
             data = [datum[:n] for datum in data]
@@ -122,7 +122,7 @@ def load_problem(log_dir, iteration=None, pkl_file=None):
     if os.path.isfile(pkl_file_full):
         data = joblib.load(pkl_file_full)
     else:
-        print "Cannot find %s"%(pkl_file_full)
+        print("Cannot find %s"%(pkl_file_full))
         sys.exit(1)
 
     # read algo (a bit cumbersome) ------------------------
@@ -293,7 +293,7 @@ def animate_traj(mdp,states,speedup=5):
         mdp.plot()
         import time
         time.sleep(mdp.timestep / speedup)
-    print i
+    print(i)
     mdp.stop_viewer()
 
 # generate trajectories and return
@@ -319,11 +319,11 @@ def plot_common(dirs,names,stat,stat2=None,xlim=None,ylim=None,figsize=None,smoo
     for i in range(len(dirs)):
         progress = read_csv("%s/progress.csv"%(dirs[i]))
         # null resetters do not have test data
-        if stat not in progress.keys():
+        if stat not in list(progress.keys()):
             stat3 = stat2
         else:
             stat3 = stat
-        if stat3 in progress.keys():
+        if stat3 in list(progress.keys()):
             ii.append(i)
             data = []
             for datum in progress[stat3]:
@@ -361,10 +361,10 @@ def plot_common_group(dir_groups,name_groups,stat,stat2=None,xlim=None,ylim=None
 
     hsv = plt.get_cmap('hsv')
     colors = hsv(np.linspace(0, 1.0, len(name_groups)+1))[:-1]
-    for i,color,dirs in zip(range(len(colors)),colors,dir_groups):
+    for i,color,dirs in zip(list(range(len(colors))),colors,dir_groups):
         data = []
         if len(dirs) == 0:
-            print "Emptry directory list %s"%(name_groups[i])
+            print("Emptry directory list %s"%(name_groups[i]))
             sys.exit(1)
         for directory in dirs:
             import os
@@ -375,22 +375,22 @@ def plot_common_group(dir_groups,name_groups,stat,stat2=None,xlim=None,ylim=None
             elif os.path.isfile(file1):
                 progress_file = file1
             else:
-                print "No progress.csv file for %s"%(directory)
+                print("No progress.csv file for %s"%(directory))
                 sys.exit(1)
 
             progress = read_csv(progress_file)
-            if stat not in progress.keys():
+            if stat not in list(progress.keys()):
                 stat3 = stat2
             else:
                 stat3 = stat
-            if stat3 not in progress.keys():
+            if stat3 not in list(progress.keys()):
                 break
             datum = np.array(progress[stat3])
             if smoothing is not None:
                 weights = np.repeat(1.0, smoothing)/smoothing
                 datum = np.convolve(data,weights,mode='same')
             data.append(datum)
-        if stat3 in progress.keys():
+        if stat3 in list(progress.keys()):
             # trim to the shortest data curve
             n = np.amin([len(datum) for datum in data])
             data = [datum[:n] for datum in data]
@@ -432,18 +432,18 @@ def plot_common_group_std(dir_groups,name_groups,stat,stat2=None,xlim=None,ylim=
             else:
                 progress_file = file1
             progress = read_csv(progress_file)
-            if stat not in progress.keys():
+            if stat not in list(progress.keys()):
                 stat3 = stat2
             else:
                 stat3 = stat
-            if stat3 not in progress.keys():
+            if stat3 not in list(progress.keys()):
                 break
             datum = np.array(progress[stat3])
             if smoothing is not None:
                 weights = np.repeat(1.0, smoothing)/smoothing
                 datum = np.convolve(data,weights,mode='same')
             data.append(datum)
-        if stat3 in progress.keys():
+        if stat3 in list(progress.keys()):
             # trim to the shortest data curve
             n = np.amin([len(datum) for datum in data])
             data = [datum[:n] for datum in data]
@@ -470,7 +470,7 @@ def plot_common_errorbar(dirs,names,mean,std,loc):
         stat_mean = np.array(progress[mean])
         stat_std = np.array(progress[std])
         xlim = min(xlim,len(stat_mean))
-        plt.errorbar(x=range(len(stat_mean)),
+        plt.errorbar(x=list(range(len(stat_mean))),
                  y=stat_mean,
                  yerr=stat_std)
     # plt.xlim([0,xlim])

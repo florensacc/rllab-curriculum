@@ -25,7 +25,7 @@ class BatchDataset(object):
         if self._batch_size is None:
             yield list(self._inputs) + list(self._extra_inputs)
         else:
-            for itr in xrange(self.number_batches):
+            for itr in range(self.number_batches):
                 batch_start = itr * self._batch_size
                 batch_end = (itr + 1) * self._batch_size
                 batch_ids = self._ids[batch_start:batch_end]

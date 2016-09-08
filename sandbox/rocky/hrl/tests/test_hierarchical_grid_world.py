@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import numpy as np
 from rllab.spaces.discrete import Discrete
 from rllab.spaces.product import Product
@@ -110,9 +110,9 @@ with such.A("hierarchical grid world analyzer") as it:
             1.0
         )
 
-        for state in xrange(analyzer.n_states):
+        for state in range(analyzer.n_states):
             prob = 0.
-            for next_state in xrange(analyzer.n_states):
+            for next_state in range(analyzer.n_states):
                 for state_seq, action_seq, _ in analyzer.get_posterior_sequences(2, state, next_state):
                     prob += analyzer.get_sequence_transition_probability(state, state_seq + (next_state,), action_seq)
             # assume a uniform prior over the actions

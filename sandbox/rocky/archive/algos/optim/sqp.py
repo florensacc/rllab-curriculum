@@ -115,15 +115,15 @@ def solve(
 
             within_merit_itr += 1
             if within_merit_itr > 10:
-                print 'within merit itr exceeded'
+                print('within merit itr exceeded')
                 break
 
-            print 'convexifying'
+            print('convexifying')
             fx, fu, cx, cu, cxx, cxu, cuu = extract(
                 convexify(x, u, f_forward, f_cost, f_final_cost, grad_hints),
                 "fx", "fu", "cx", "cu", "cxx", "cxu", "cuu"
             )
-            print 'convexified'
+            print('convexified')
 
             loss = ip(cx[N], dx[N]) + quad_form(dx[N], 0.5*reg_psd(cxx[N])) + f_final_cost(x[N])
 
@@ -181,9 +181,9 @@ def solve(
                             xnew[t][k] = x[t][k] + dxtk.x
                     model_improve = before_cost - after_cost
                     if model_improve < -1e-5:
-                        print "approximate merit function got worse (%f). (convexification is probably wrong to zeroth order)" % model_improve
+                        print("approximate merit function got worse (%f). (convexification is probably wrong to zeroth order)" % model_improve)
                     if model_improve < min_model_improve:
-                        print "converged because improvement was small (%f < %f)" % (model_improve, min_model_improve)
+                        print("converged because improvement was small (%f < %f)" % (model_improve, min_model_improve))
                         no_improve = True
                         break
                     xnewref = [None] + [f_forward(xnew[t], unew[t]) for t in range(N)]
@@ -191,7 +191,7 @@ def solve(
 
                     #xnew_shooting, _, _ = forward_pass(x[0], unew, f_forward, f_cost, f_final_cost)
                     true_after_cost = compute_cost(xnew, xnewref, unew, merit, f_cost, f_final_cost)
-                    print "cost before: ", before_cost, "cost after: ", after_cost, "true cost after: ", true_after_cost
+                    print("cost before: ", before_cost, "cost after: ", after_cost, "true cost after: ", true_after_cost)
 
                     #x = xnew
                     #u = unew
@@ -204,22 +204,22 @@ def solve(
                     improve_ratio = true_improve / model_improve
                     if improve_ratio >= improve_ratio_threshold:
                         trust_box_size *= trust_expand_ratio
-                        print "trust box expanded to %f" % trust_box_size
+                        print("trust box expanded to %f" % trust_box_size)
                         x = xnew
                         u = unew
                         xref = xnewref
                         break
                     else:
                         trust_box_size *= trust_shrink_ratio
-                        print "trust box shrunk to %f" % trust_box_size
+                        print("trust box shrunk to %f" % trust_box_size)
                     if sco_itr > 100:
-                        print "sco iteration exceeded"
+                        print("sco iteration exceeded")
                         break
                 if sco_itr > 100:
-                    print "sco iteration exceeded"
+                    print("sco iteration exceeded")
                     break
                 if trust_box_size < min_trust_box_size:
-                    print "converged because trust region is tiny"
+                    print("converged because trust region is tiny")
                     break
                 if no_improve:
                     break
@@ -233,12 +233,12 @@ def solve(
                 yield dict(x=x, u=u, before_cost=before_cost, after_cost=after_cost, true_after_cost=true_after_cost)
         vio = compute_violation(x, xref)
         if vio < 1e-5:
-            print 'all constraints satisfied!'
+            print('all constraints satisfied!')
             break
         elif merit_itr == max_merit_itr - 1:
-            print 'violation: %f' % vio
+            print('violation: %f' % vio)
         if sco_itr > 100:
-            print "sco iteration exceeded"
+            print("sco iteration exceeded")
             break
 
         merit *= merit_increase_ratio

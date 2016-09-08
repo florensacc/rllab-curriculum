@@ -17,4 +17,4 @@ class TestClass(object):
         os.system(command)
         with open(local_file,"r") as f:
             for line in f.readlines():
-                print line
+                print(line)

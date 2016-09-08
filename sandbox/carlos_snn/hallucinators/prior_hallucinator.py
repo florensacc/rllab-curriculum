@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.core.serializable import Serializable
 import numpy as np
@@ -28,7 +28,7 @@ class PriorHallucinator(Serializable):
         agent_infos = samples_data["agent_infos"]
         h_samples = []
         old_logli = self.policy.log_likelihood(actions, agent_infos, action_only=True)
-        for _ in xrange(self.n_hallucinate_samples):
+        for _ in range(self.n_hallucinate_samples):
             self.policy.reset()  # this will sample a new fixed latents if needed (resample False)
             new_actions, new_agent_infos = self.policy.get_actions(observations)
             new_logli = self.policy.log_likelihood(actions, new_agent_infos, action_only=True)

@@ -23,17 +23,17 @@ def to_onehot(ind, dim):
     return ret
 
 
-def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
+def visualize_env(env, mode, max_steps=sys.maxsize, speedup=1):
     timestep = 0.05
     # step ahead with all-zero action
     if mode == 'noop':
-        for _ in xrange(max_steps):
+        for _ in range(max_steps):
             env.render()
             time.sleep(timestep / speedup)
     elif mode == 'random':
         env.reset()
         env.render()
-        for i in xrange(max_steps):
+        for i in range(max_steps):
             action = env.action_space.sample()
             _, _, done, _ = env.step(action)
             # if i % 10 == 0:
@@ -53,7 +53,7 @@ def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
         tr = 0.
         from rllab.envs.box2d.box2d_env import Box2DEnv
         if isinstance(env, Box2DEnv):
-            for _ in xrange(max_steps):
+            for _ in range(max_steps):
                 pygame.event.pump()
                 keys = pygame.key.get_pressed()
                 action = env.action_from_keys(keys)
@@ -91,7 +91,7 @@ def visualize_env(env, mode, max_steps=sys.maxint, speedup=1):
                         trs[0] = 0.
                         env.reset()
                 except Exception as e:
-                    print e
+                    print(e)
             return
 
         assert hasattr(env, "start_interactive"), "The environment must implement method start_interactive"
@@ -129,7 +129,7 @@ if __name__ == "__main__":
                         help='module path to the env class')
     parser.add_argument('--speedup', type=float, default=1, help='speedup')
     parser.add_argument('--max_steps', type=int,
-                        default=sys.maxint, help='max steps')
+                        default=sys.maxsize, help='max steps')
     args = parser.parse_args()
     env = load_class(args.env, Env, ["rllab", "envs"])()
     visualize_env(env, mode=args.mode, max_steps=args.max_steps,

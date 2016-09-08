@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.rocky.tf.misc import tensor_utils
 import tensorflow as tf
 from rllab.optimizers.minibatch_dataset import BatchDataset
@@ -58,7 +58,7 @@ class QuadraticPenaltyOptimizer(object):
         best_params = None
         for penalty, n_epoch, batch_size in zip(self.penalty_seq, self.epoch_seq, self.batch_size_seq):
             dataset = BatchDataset(inputs=input_vals, batch_size=batch_size)
-            for epoch in xrange(n_epoch):
+            for epoch in range(n_epoch):
                 for batch in dataset.iterate():
                     self.f_train(*(tuple(batch) + (penalty,)))
                 cur_loss = self.loss(input_vals)

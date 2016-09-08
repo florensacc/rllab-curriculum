@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy as np
 from rllab.misc import special
@@ -17,7 +17,7 @@ from rllab.sampler.stateful_pool import singleton_pool
 from rllab.sampler.utils import rollout
 import theano
 import theano.tensor as TT
-import cPickle as pickle
+import pickle as pickle
 
 floatX = theano.config.floatX
 
@@ -39,7 +39,7 @@ class MultiAltBatchPolopt(RLAlgorithm, Serializable):
                 algo.start_worker()
                 algo.init_opt()
 
-        for itr in xrange(self.n_itr):
+        for itr in range(self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 all_samples_data = dict()
                 for algo, name in self.algos:

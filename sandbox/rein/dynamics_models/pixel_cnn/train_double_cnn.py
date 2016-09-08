@@ -4,10 +4,10 @@ import time
 import numpy as np
 import tensorflow as tf
 
-import nn
-import plotting
-import scopes
-from utils import load_dataset_MNIST, load_dataset_Atari
+from . import nn
+from . import plotting
+from . import scopes
+from .utils import load_dataset_MNIST, load_dataset_Atari
 import rllab.misc.logger as logger
 
 sys.setrecursionlimit(10000)
@@ -258,8 +258,8 @@ class ExperimentPixelCNN(object):
                     sess.run(maintain_averages_op)
                 train_loss /= nr_batches_train_per_gpu
 
-                print("Iteration %d, time = %ds, train bits_per_dim = %.4f" % (
-                    epoch, time.time() - begin, train_loss))
+                print(("Iteration %d, time = %ds, train bits_per_dim = %.4f" % (
+                    epoch, time.time() - begin, train_loss)))
                 sys.stdout.flush()
 
                 if epoch % 1 == 0:

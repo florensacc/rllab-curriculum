@@ -195,7 +195,7 @@ class BatchPolopt(RLAlgorithm):
         lst_input_im = [
             input_im[idx, i * np.prod(self.autoenc.state_dim):(i + 1) * np.prod(self.autoenc.state_dim)].reshape(
                 self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
-            xrange(self._num_seq_frames)]
+            range(self._num_seq_frames)]
         input_im = input_im[:, -np.prod(self.autoenc.state_dim):]
         input_im = input_im[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
         sanity_pred_im = sanity_pred[idx, :-1]
@@ -213,7 +213,7 @@ class BatchPolopt(RLAlgorithm):
             sanity_pred_im = sanity_pred_im.astype(float) / float(self.autoenc.num_classes)
             target_im = target_im.astype(float) / float(self.autoenc.num_classes)
             input_im = input_im.astype(float) / float(self.autoenc.num_classes)
-            for i in xrange(len(lst_input_im)):
+            for i in range(len(lst_input_im)):
                 lst_input_im[i] = lst_input_im[i].astype(float) / float(self.autoenc.num_classes)
 
         sanity_pred_im *= 256.
@@ -269,7 +269,7 @@ class BatchPolopt(RLAlgorithm):
 
         # ATTENTION: important to know when 'rewards' and 'rewards_orig' needs
         # to be used!
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in range(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
             # Sample trajectories.
@@ -280,7 +280,7 @@ class BatchPolopt(RLAlgorithm):
             logger.log("Fitting dynamics model using replay pool ...")
             for path in paths:
                 path_len = len(path['rewards'])
-                for i in xrange(path_len):
+                for i in range(path_len):
                     obs = (path['observations'][i] * self.autoenc.num_classes).astype(int)
                     act = path['actions'][i]
                     rew_orig = path['rewards_orig'][i]
@@ -294,14 +294,14 @@ class BatchPolopt(RLAlgorithm):
                 itr_tot = int(
                     np.ceil(self.num_sample_updates * float(self.batch_size) / self._dyn_pool_args['batch_size']))
 
-                for _ in xrange(20):
+                for _ in range(20):
                     batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
                     _x = np.hstack([batch['observations'], batch['actions']])
                     _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
                     acc_before += self.accuracy(_x, _y)
                 acc_before /= 20.
 
-                for i in xrange(itr_tot):
+                for i in range(itr_tot):
 
                     batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
 
@@ -317,7 +317,7 @@ class BatchPolopt(RLAlgorithm):
                     if i % int(np.ceil(itr_tot / 3.)) == 0:
                         self.plot_pred_imgs(_x, _y, itr, i)
 
-                for _ in xrange(20):
+                for _ in range(20):
                     batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
                     _x = np.hstack([batch['observations'], batch['actions']])
                     _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
@@ -366,7 +366,7 @@ class BatchPolopt(RLAlgorithm):
             if self.plot:
                 self.update_plot()
                 if self.pause_for_plot:
-                    raw_input("Plotting evaluation run: Press Enter to "
+                    input("Plotting evaluation run: Press Enter to "
                               "continue...")
 
         # Training complete: terminate environment.

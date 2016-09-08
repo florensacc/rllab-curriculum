@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.rocky.bayesian_nn_policy.policies.bayesian_nn_policy import BayesianNNPolicy
 from rllab.core.serializable import Serializable
 from rllab.misc import ext
@@ -89,7 +89,7 @@ class BNNConjugateGradientOptimizer(Serializable):
 
         def Hx_plain():
             Hx_plain_splits = TT.grad(
-                TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
+                TT.sum([TT.sum(g * x) for g, x in zip(constraint_grads, xs)]),
                 wrt=params,
                 disconnected_inputs='ignore'
             )

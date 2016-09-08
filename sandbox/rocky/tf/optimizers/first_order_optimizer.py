@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.misc import ext
 from rllab.misc import logger
@@ -102,9 +102,9 @@ class FirstOrderOptimizer(Serializable):
 
         sess = tf.get_default_session()
 
-        for epoch in xrange(self._max_epochs):
+        for epoch in range(self._max_epochs):
             for batch in dataset.iterate(update=True):
-                sess.run(self._train_op, dict(zip(self._input_vars, batch)))
+                sess.run(self._train_op, dict(list(zip(self._input_vars, batch))))
 
             new_loss = f_loss(*(tuple(inputs) + extra_inputs))
 

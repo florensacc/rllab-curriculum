@@ -7,7 +7,7 @@ import numpy as np
 from collections import OrderedDict
 
 def SGD(w, objective, alpha=.1):
-    print 'SGD', 'alpha:',alpha
+    print('SGD', 'alpha:',alpha)
     g = T.grad(objective.sum(), w, disconnected_inputs='warn')
     updates = OrderedDict()
     for i in range(len(g)):
@@ -16,7 +16,7 @@ def SGD(w, objective, alpha=.1):
 
 # Adam
 def Adam(ws, objective, alpha=.0003, beta=.9, gamma=.999):
-    print 'Adam', 'alpha:',alpha,'beta1:',beta,'gamma:',gamma
+    print('Adam', 'alpha:',alpha,'beta1:',beta,'gamma:',gamma)
     
     new = OrderedDict()
 
@@ -54,7 +54,7 @@ def Adam(ws, objective, alpha=.0003, beta=.9, gamma=.999):
 
 
 def AdaMax(w, objective, alpha=.01, beta1=.1, beta2=.001):
-    print 'AdaMax', 'alpha:',alpha,'beta1:',beta1,'beta2:',beta2
+    print('AdaMax', 'alpha:',alpha,'beta1:',beta1,'beta2:',beta2)
     g = T.grad(objective.sum(), w, disconnected_inputs='warn')
     
     new = OrderedDict()
@@ -71,7 +71,7 @@ def AdaMax(w, objective, alpha=.01, beta1=.1, beta2=.001):
 
 # AdaMax that averages over multiple minibatches
 def AdaMax2(w, objective, alpha=.01, beta1=.1, beta2=.001, n_accum=2):
-    print 'AdaMax2', 'alpha:',alpha,'beta1:',beta1,'beta2:',beta2, 'n_accum:', n_accum
+    print('AdaMax2', 'alpha:',alpha,'beta1:',beta1,'beta2:',beta2, 'n_accum:', n_accum)
     g = T.grad(objective.sum(), w, disconnected_inputs='warn')
     
     new = OrderedDict()
@@ -97,12 +97,12 @@ def AdaMax2(w, objective, alpha=.01, beta1=.1, beta2=.001, n_accum=2):
 
 # AdaMax that keeps running average of parameter
 def AdaMaxAvg(ws, ws_avg, objective, alpha=.01, beta1=.1, beta2=.001, beta3=0.01, update_keys=None, disconnected_inputs='raise'):
-    print 'AdaMax_Avg', 'alpha:',alpha,'beta1:',beta1,'beta2:',beta2,'beta3:',beta3
+    print('AdaMax_Avg', 'alpha:',alpha,'beta1:',beta1,'beta2:',beta2,'beta3:',beta3)
     
     gs = G.ndict.T_grad(objective.sum(), ws, disconnected_inputs=disconnected_inputs) #warn/raise
     
     if update_keys is None:
-        update_keys = [ws[j].keys() for j in range(len(ws))]
+        update_keys = [list(ws[j].keys()) for j in range(len(ws))]
     
     new = OrderedDict()
     for j in range(len(ws)):
@@ -124,7 +124,7 @@ def AdaMaxAvg(ws, ws_avg, objective, alpha=.01, beta1=.1, beta2=.001, beta3=0.01
 
 # Eve that keeps running average of parameter
 def Eve(w, w_avg, f, alpha=.01, beta1=.1, beta2=.001, beta3=0.01, disconnected_inputs='raise'):
-    print 'Eve', 'alpha:',alpha,'beta1:',beta1,'beta2:',beta2,'beta3:',beta3
+    print('Eve', 'alpha:',alpha,'beta1:',beta1,'beta2:',beta2,'beta3:',beta3)
 
     mom = {}
     _max = {}
@@ -155,7 +155,7 @@ def Eve(w, w_avg, f, alpha=.01, beta1=.1, beta2=.001, beta3=0.01, disconnected_i
 def AdaMaxAvg2(ws, objective, alpha=.01, beta1=.1, beta2=.001, beta3=0.01, n_accum=1):
     if n_accum == 1:
         return AdaMaxAvg(ws, objective, alpha, beta1, beta2, beta3)
-    print 'AdaMax_Avg2', 'alpha:',alpha,'beta1:',beta1,'beta2:',beta2,'beta3:',beta3,'n_accum:',n_accum
+    print('AdaMax_Avg2', 'alpha:',alpha,'beta1:',beta1,'beta2:',beta2,'beta3:',beta3,'n_accum:',n_accum)
     
     gs = G.ndict.T_grad(objective.sum(), ws, disconnected_inputs='raise')
 

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 info = """Using extreme linear basleine in a setting in which I've analytically derived the exact
 form of the value estimate, and it is linear. Confirming that the baseline fits perfectly. Here the
@@ -29,7 +29,7 @@ def experiment_variant_generator():
     vg.add("step_size", [0.01], hide=True)
     vg.add("max_path_length", [10], hide=True)
     vg.add("discount", [1], hide=True)
-    vg.add("seed", range(5), hide=True)
+    vg.add("seed", list(range(5)), hide=True)
     vg.add("start_state", [-1, 0, 1])
     vg.add("action_scale", [1])
     vg.add("lookahead", [10], hide=True)

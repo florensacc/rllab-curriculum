@@ -36,7 +36,7 @@ class VPG(Serializable):
         pol_loss = 0
         vf_loss = 0
         total_ent = 0
-        for t in xrange(horizon):
+        for t in range(horizon):
             ob = common.space2variable(ob_space, name = "ob%i"%t, prepend_shape=[batch_size])
             ac, logp, vpred, ent = policy(ob)
             self.syms["vpred"].append(vpred)
@@ -69,7 +69,7 @@ class VPG(Serializable):
         total_timesteps = 0
         total_episodes = 0
         rets = np.zeros(batch_size, 'float32')
-        for i_update in xrange(n_updates):
+        for i_update in range(n_updates):
             episode_returns = []
             setup = U.SESSION.partial_run_setup(
                 self.syms["ac"] + self.syms["vpred"] + self.losses + [self.dummy],
@@ -78,7 +78,7 @@ class VPG(Serializable):
             rews = np.zeros((self.horizon, batch_size), 'float32')
             vpreds = np.zeros((self.horizon+1, batch_size), 'float32')
             news = np.zeros((self.horizon, batch_size) , 'float32')
-            for t in xrange(self.horizon):
+            for t in range(self.horizon):
                 news[t] = new
                 ac, vpreds[t] = U.SESSION.partial_run(setup, [self.syms["ac"][t], self.syms["vpred"][t]], feed_dict={self.syms["ob"][t] : ob})
                 ob_raw, rews[t], new = self.venv.step(ac)
@@ -97,9 +97,9 @@ class VPG(Serializable):
             standardized_advs = (advs - advs.mean()) / (advs.std() + 1e-8)
             vtargs = vpreds[:-1] + advs
             losses = U.SESSION.partial_run(setup, self.losses + [self.dummy], feed_dict = dict(
-                zip(self.syms["adv"], standardized_advs) +
-                zip(self.syms["vtarg"], vtargs)))[:-1]
-            losses_dict = dict(zip(self.loss_names, losses))
+                list(zip(self.syms["adv"], standardized_advs)) +
+                list(zip(self.syms["vtarg"], vtargs))))[:-1]
+            losses_dict = dict(list(zip(self.loss_names, losses)))
             ent = losses_dict["ent"]
             total_episodes += len(episode_returns)         
             logger.record_tabular("Iteration", i_update)

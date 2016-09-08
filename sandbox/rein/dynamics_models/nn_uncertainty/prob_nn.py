@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import numpy as np
 import theano.tensor as T
 import lasagne
@@ -298,27 +298,23 @@ class ProbNN(LasagnePowered, Serializable):
         self.build_model()
         
     def save_params(self):
-        layers = filter(lambda l: isinstance(l, GaussianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, GaussianLayer)]
         for layer in layers:
             layer.save_params()
 
     def load_prev_params(self):
-        layers = filter(lambda l: isinstance(l, GaussianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, GaussianLayer)]
         for layer in layers:
             layer.load_prev_params()
 
     def compr_impr_kl(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = filter(lambda l: isinstance(l, GaussianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, GaussianLayer)]
         return sum(l.kl_div_old_new() for l in layers)
 
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, GaussianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, GaussianLayer)]
         return sum(l.kl_div_new_old() for l in layers)
 
     def surprise(self):
@@ -331,20 +327,17 @@ class ProbNN(LasagnePowered, Serializable):
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, GaussianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, GaussianLayer)]
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: isinstance(l, GaussianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, GaussianLayer)]
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: isinstance(l, GaussianLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, GaussianLayer)]
         return sum(l.kl_div_prior_new() for l in layers)
 
     def _log_prob_normal(self, input, mu=0., sigma=1.):
@@ -360,7 +353,7 @@ class ProbNN(LasagnePowered, Serializable):
  
         # MC samples.
         _log_p_D_given_w = []
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -407,7 +400,7 @@ class ProbNN(LasagnePowered, Serializable):
         log_p_D_given_w = 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -433,7 +426,7 @@ class ProbNN(LasagnePowered, Serializable):
         log_q_w, log_p_w, log_p_D_given_w = 0., 0., 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -468,7 +461,7 @@ class ProbNN(LasagnePowered, Serializable):
         network = lasagne.layers.InputLayer(shape=(1, self.n_in))
 
         # Hidden layers
-        for i in xrange(len(self.n_hidden)):
+        for i in range(len(self.n_hidden)):
             if self.layers_type[i] == 'gaussian':
                 network = GaussianLayer(
                     network, self.n_hidden[i], nonlinearity=self.transf, prior_sd=self.prior_sd)

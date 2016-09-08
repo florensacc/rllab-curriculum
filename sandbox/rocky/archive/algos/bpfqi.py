@@ -112,7 +112,7 @@ class BPFQI(object):
         boltz_policy = BoltzmannPolicy(qfunc, temperature=self.initial_temperature)
         self.start_worker(mdp, qfunc, boltz_policy)
         opt_info = self.init_opt(mdp, qfunc, boltz_policy)
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in range(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
             samples_data = self.obtain_samples(itr, mdp, qfunc, boltz_policy, opt_info)
             if self.opt_mode == 'joint':
@@ -224,7 +224,7 @@ class BPFQI(object):
             def evaluate(params):
                 boltz_policy.set_param_values(params)
                 grad = f_grads(*train_vals)
-                flattened_grad = flatten_tensors(map(np.asarray, grad))
+                flattened_grad = flatten_tensors(list(map(np.asarray, grad)))
                 return flattened_grad.astype(np.float64)
             return evaluate
 
@@ -309,7 +309,7 @@ class BPFQI(object):
             def evaluate(params):
                 qfunc.set_param_values(params)
                 grad = f_grads(*train_vals)
-                flattened_grad = flatten_tensors(map(np.asarray, grad))
+                flattened_grad = flatten_tensors(list(map(np.asarray, grad)))
                 return flattened_grad.astype(np.float64)
             return evaluate
 
@@ -388,7 +388,7 @@ class BPFQI(object):
             def evaluate(params):
                 boltz_policy.set_self_param_values(params)
                 grad = f_grads(*train_vals)
-                flattened_grad = flatten_tensors(map(np.asarray, grad))
+                flattened_grad = flatten_tensors(list(map(np.asarray, grad)))
                 return flattened_grad.astype(np.float64)
             return evaluate
 

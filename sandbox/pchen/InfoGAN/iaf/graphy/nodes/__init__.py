@@ -69,7 +69,7 @@ def linear_l2(name, n_in, n_out, w):
         else:
             w[name+'_s'] = G.sharedf(np.ones((n_out,)))
     else:
-        print 'WARNING: constant rescale, these weights arent saved'
+        print('WARNING: constant rescale, these weights arent saved')
         constant_rescale = G.sharedf(np.zeros((n_out,)))
     
     

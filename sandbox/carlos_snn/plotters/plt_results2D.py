@@ -38,7 +38,7 @@ def plot_reward(fig, data_unpickle, color, fig_dir):
     if fig_dir:
         plt.savefig(os.path.join(fig_dir, 'Reward_function'))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 
 # Plot learning curve
@@ -54,7 +54,7 @@ def plot_learning_curve(exp, color, fig_dir):  #######
     if fig_dir:
         plt.savefig(os.path.join(fig_dir, 'learning_curve'))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 
 # final policy learned
@@ -84,7 +84,7 @@ def plot_policy_learned(data_unpickle, color, fig_dir=None):
     if fig_dir:
         plt.savefig(os.path.join(fig_dir, 'policy_learned'))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 
 ## estimate by MC the policy at 0!
@@ -101,7 +101,7 @@ def plot_snn_at0(fig, data_unpickle, itr='last', color=(1, 0.1, 0.1), fig_dir=No
     y = np.arange(-bound, bound + step, step)
     x, y = np.meshgrid(x, y)
     p_xy = np.zeros_like(x)
-    for _ in xrange(samples):
+    for _ in range(samples):
         a = poli.get_action(np.array((0, 0)))[0]
         idx_x = int(np.floor(a[0] / step) + bound / step)
         idx_y = int(np.floor(a[1] / step) + bound / step)
@@ -132,7 +132,7 @@ def plot_snn_at0(fig, data_unpickle, itr='last', color=(1, 0.1, 0.1), fig_dir=No
     if fig_dir:
         plt.savefig(os.path.join(fig_dir, 'MC_policy_learned_at0_iter{}'.format(itr)))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 def plot_modes_snn_at0(fig, data_unpickle, itr='last', color=(1,0.1,0.1), fig_dir=None):
     # recover the policy
@@ -156,7 +156,7 @@ def plot_modes_snn_at0(fig, data_unpickle, itr='last', color=(1,0.1,0.1), fig_di
         # print "the path had latent: ", all_latent_dists_at_0[-1]['latents']
     poli.unset_pre_fix_latent()
     all_latent_means = np.array(all_latent_means)
-    print all_latent_means.transpose()
+    print(all_latent_means.transpose())
 
     ax = plt.subplot(aspect='equal')
     ax.scatter(np.transpose(all_latent_means)[0], np.transpose(all_latent_means)[1], s=np.linalg.norm(all_latent_stds))
@@ -177,7 +177,7 @@ def plot_modes_snn_at0(fig, data_unpickle, itr='last', color=(1,0.1,0.1), fig_di
     if fig_dir:
         plt.savefig(os.path.join(fig_dir, 'modes_learned_at0_iter{}'.format(itr)))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 def plot_all_policy_at0(path_experiment, color, num_iter=100, fig_dir=None):
     mean_at_0 = []
@@ -188,7 +188,7 @@ def plot_all_policy_at0(path_experiment, color, num_iter=100, fig_dir=None):
         action_at_0 = poli.get_action(np.array((0,)))
         mean_at_0.append(action_at_0[1]['mean'])
         var_at_0.append(action_at_0[1]['log_std'])
-    itr = range(num_iter)
+    itr = list(range(num_iter))
     plt.plot(itr, mean_at_0, color=color, label='mean at 0')
     plt.plot(itr, var_at_0, color=color * 0.7, label='logstd at 0')
     plt.title('How the policy variates accross iterations')
@@ -198,7 +198,7 @@ def plot_all_policy_at0(path_experiment, color, num_iter=100, fig_dir=None):
     if fig_dir:
         plt.savefig(os.path.join(fig_dir, 'policy_at_0'))
     else:
-        print "No directory for saving plots"
+        print("No directory for saving plots")
 
 
 ## plot for all the experiments
@@ -233,13 +233,13 @@ def plot_all_exp(datadir):
         # fix a color for plots of this exp
         color = np.array(colors[i % gather])
         # plot everything
-        print 'Plotting for: ', path_experiment
+        print('Plotting for: ', path_experiment)
         fig1 = plt.figure(1 + (i / gather) * 6)
         plot_reward(fig1, first_data_unpickle, color, fig_dir)
-        print 'Plotting learning curve'
+        print('Plotting learning curve')
         fig2 = plt.figure(2 + (i / gather) * 6)
         plot_learning_curve(exp, color, fig_dir)
-        print 'Plotting last policy'
+        print('Plotting last policy')
         fig3 = plt.figure(3 + (i / gather) * 6)
         # plot_policy_learned(last_data_unpickle, color, fig_dir=fig_dir)
         plot_modes_snn_at0(fig3, last_data_unpickle, color=color, fig_dir=fig_dir)
@@ -262,6 +262,6 @@ if __name__ == "__main__":
     # name_dir = sys.argv[1]
     # path_dir = "./data/local/" + name_dir
     path_dir = sys.argv[1]
-    print "plotting all experiments in: " + path_dir
+    print("plotting all experiments in: " + path_dir)
     np.set_printoptions(precision=3)
     plot_all_exp(path_dir)

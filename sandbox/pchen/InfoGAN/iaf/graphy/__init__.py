@@ -1,4 +1,4 @@
-import ndict
+from . import ndict
 
 import numpy as np
 import theano
@@ -12,7 +12,7 @@ sys.setrecursionlimit(10000)
 
 # some config
 floatX = theano.config.floatX # @UndefinedVariable
-print '[graphy] floatX = '+floatX
+print('[graphy] floatX = '+floatX)
 
 rng = theano.tensor.shared_randomstreams.RandomStreams(0)
 rng_curand = rng
@@ -36,15 +36,15 @@ class Struct:
     def __init__(self, **entries): 
         self.__dict__.update(entries)
     def __repr__(self): # nice printing
-        return '<%s>' % str('\n '.join('%s : %s' % (k, repr(v)) for (k, v) in self.__dict__.iteritems()))
+        return '<%s>' % str('\n '.join('%s : %s' % (k, repr(v)) for (k, v) in self.__dict__.items()))
 
 # Import rest of the files
-from function import *
+from .function import *
 
-import misc
-import misc.data
-import misc.optim
-import misc.logger
+from . import misc
+from . import misc.data
+from . import misc.optim
+from . import misc.logger
 
-import nodes
-import graphics
+from . import nodes
+from . import graphics

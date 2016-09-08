@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy as np
 import random
@@ -98,7 +98,7 @@ def new_map(shape, n_obstacles):
     obs_types = ['circ', 'rect']
     max_obstacle_size = max(nrow, ncol) / 4
 
-    for _ in xrange(n_obstacles):
+    for _ in range(n_obstacles):
         rand_type = random.choice(obs_types)
         if rand_type == 'circ':
             rand_radius = np.random.randint(low=1, high=max_obstacle_size + 1)
@@ -403,6 +403,7 @@ class VIN(object):
             if self.untie_weights:
                 params.append(q.W)
 
+
         q = L.Conv2DLayer(
             L.concat([r, v], axis=3),
             num_filters=l_q, filter_size=(3, 3), pad="SAME",
@@ -462,7 +463,7 @@ class VIN1(object):
             op=lambda x: tf.reduce_max(x, reduction_indices=-1, keep_dims=True),
             shape_op=lambda shape: shape[:-1] + (1,),
         )
-        for idx in xrange(n_iter):
+        for idx in range(n_iter):
             q = L.Conv2DLayer(
                 L.concat([r, v], axis=3),
                 num_filters=l_q, filter_size=(3, 3), pad="SAME",
@@ -618,7 +619,7 @@ class VINMulti(object):
 def evaluate(policy, maps, fromtos, opt_trajlen, max_horizon):
     # Run the neural network on all the tasks at least once
     maps = np.asarray(maps)
-    from_xs, from_ys, to_xs, to_ys = map(np.asarray, zip(*fromtos))
+    from_xs, from_ys, to_xs, to_ys = list(map(np.asarray, list(zip(*fromtos))))
     goals = np.zeros_like(maps)
     goals[np.arange(len(maps)), to_xs, to_ys] = 1
 
@@ -635,7 +636,7 @@ def evaluate(policy, maps, fromtos, opt_trajlen, max_horizon):
     last_tried = 0
     progbar = pyprind.ProgBar(len(maps))
 
-    for i in xrange(max_horizon):
+    for i in range(max_horizon):
         counter += 1
         states = np.zeros_like(maps)
         states[np.arange(len(maps)), cur_xs, cur_ys] = 1
@@ -975,7 +976,7 @@ class MatlabData(object):
 
             # policy = new_policy(sess, state_var, test_action_prob_var)
 
-            for epoch in xrange(benchmark.n_epochs):
+            for epoch in range(benchmark.n_epochs):
 
                 logger.log("Epoch %d" % epoch)
                 bar = pyprind.ProgBar(len(self.Xtrain))

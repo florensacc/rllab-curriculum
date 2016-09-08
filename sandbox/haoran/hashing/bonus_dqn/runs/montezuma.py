@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import sys,os
 sys.path.append('.')
@@ -26,7 +26,7 @@ repo = git.Repo('.')
 if repo.is_dirty():
     answer = ''
     while answer not in ['y','Y','n','N']:
-        answer = raw_input("The repository has uncommitted changes. Do you want to continue? (y/n)")
+        answer = input("The repository has uncommitted changes. Do you want to continue? (y/n)")
     if answer in ['n','N']:
         sys.exit(1)
 

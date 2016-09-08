@@ -25,7 +25,7 @@ class ILQG(object):
                 f_final_cost=mdp.final_cost,
                 grad_hints=mdp.grad_hints,
                 ):
-            print result["cost"]
+            print(result["cost"])
             mdp.plot(result["x"], pause=True)
         #mdp.noise_level = 0.01
         #print 'rollout...'

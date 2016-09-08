@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli
 
 import tensorflow as tf

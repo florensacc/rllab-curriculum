@@ -5,11 +5,11 @@ import numpy as np
 n_components = 2
 X1 = np.load('/home/rein/workspace_python/rllab/data/mc_obs_act_trpo.npy')
 X2 = np.load('/home/rein/workspace_python/rllab/data/mc_obs_act_trpo_ex.npy')
-print(X1.shape, X2.shape)
+print((X1.shape, X2.shape))
 
 mean = np.mean(np.vstack((X1, X2)), axis=0)
 sd = np.std(np.vstack((X1, X2)), axis=0)
-print(mean, sd)
+print((mean, sd))
 X1 = (X1 - mean) / sd
 X2 = (X2 - mean) / sd
 
@@ -20,15 +20,15 @@ end_itr = 200
 X1 = X1[batch_size * start_itr:batch_size * 200, :]
 X2 = X2[batch_size * start_itr:batch_size * 50, :]
 
-print(X1.shape, X2.shape)
+print((X1.shape, X2.shape))
 
 counter = 0
 for counter in range(100):
     success = True
     try:
         n_samples = 200000
-        rand_ind1 = np.random.choice(range(X1.shape[0]), n_samples)
-        rand_ind2 = np.random.choice(range(X2.shape[0]), n_samples)
+        rand_ind1 = np.random.choice(list(range(X1.shape[0])), n_samples)
+        rand_ind2 = np.random.choice(list(range(X2.shape[0])), n_samples)
 
         X1 = X1[rand_ind1, :]
         X2 = X2[rand_ind2, :]
@@ -46,7 +46,7 @@ for counter in range(100):
     #     Y1 = X1
     #     Y2 = X2
         color = [
-            'blue' if i <= n_samples else 'red' for i in xrange(Y.shape[0])]
+            'blue' if i <= n_samples else 'red' for i in range(Y.shape[0])]
         plt.scatter(
             Y[:, 0], Y[:, 1], c=color, cmap=plt.cm.Spectral, lw=0, alpha=0.05)
         

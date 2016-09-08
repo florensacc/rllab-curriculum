@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import time
 import numpy as np
 import theano.tensor as T
@@ -273,14 +273,12 @@ class VBNN:
             assert self.symbolic_prior_kl == True
 
     def save_params(self):
-        layers = filter(lambda l: l.name == 'problayer',
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == 'problayer']
         for layer in layers:
             layer.save_params()
 
     def load_prev_params(self):
-        layers = filter(lambda l: l.name == 'problayer',
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == 'problayer']
         for layer in layers:
             layer.load_prev_params()
 
@@ -305,26 +303,22 @@ class VBNN:
 
     def rev_kl_div(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = filter(lambda l: l.name == 'problayer',
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == 'problayer']
         return sum(l.kl_div_old_new() for l in layers)
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: l.name == 'problayer',
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == 'problayer']
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: l.name == 'problayer',
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == 'problayer']
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: l.name == 'problayer',
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == 'problayer']
         return sum(l.kl_div_prior_new() for l in layers)
 
     def _log_prob_normal(self, input, mu=0., sigma=0.01):
@@ -353,7 +347,7 @@ class VBNN:
         log_p_D_given_w = 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -386,7 +380,7 @@ class VBNN:
         log_p_D_given_w = 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -419,7 +413,7 @@ class VBNN:
         log_p_D_given_w = 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -445,7 +439,7 @@ class VBNN:
         log_q_w, log_p_w, log_p_D_given_w = 0., 0., 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -481,7 +475,7 @@ class VBNN:
         network = lasagne.layers.InputLayer(shape=(self.batch_size, self.n_in))
 
         # Hidden layers
-        for i in xrange(len(self.n_hidden)):
+        for i in range(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             if self.layers_type[i] == 1:
                 network = VBNNLayer(
@@ -529,8 +523,7 @@ class VBNN:
 
         # Replace placeholders
         # --------------------
-        layers = filter(lambda l: l.name == 'problayer',
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == 'problayer']
         replace = []
         for layer in layers:
             replace.append((layer.epsilon_W_ph, layer.epsilon_W))
@@ -610,8 +603,8 @@ class VBNN:
             _f, axarr = plt.subplots(
                 n_plots_v, n_plots_h, sharex=True, sharey=True)
             painter_weights_individual = []
-            for i in xrange(n_plots_v):
-                for j in xrange(n_plots_h):
+            for i in range(n_plots_v):
+                for j in range(n_plots_h):
                     hl, = axarr[i][j].plot(x, x)
                     axarr[i][j].set_ylim(ymin=0, ymax=2)
                     painter_weights_individual.append(hl)
@@ -704,7 +697,7 @@ class VBNN:
                 plt.draw()
 
             elif PLOT_WEIGHTS_INDIVIDUAL:
-                for i in xrange(n_plots):
+                for i in range(n_plots):
                     w_mu = layer.mu.eval()[i, 0]
                     w_rho = layer.rho.eval()[i, 0]
                     w_sigma = np.log(1 + np.exp(w_rho))
@@ -721,7 +714,7 @@ class VBNN:
                 import matplotlib.pyplot as plt
 
                 ys = []
-                for i in xrange(100):
+                for i in range(100):
                     y = [self.pred_fn(x[None, :])[0][0] for x in X_test]
                     y = np.asarray(y)[:, None]
                     ys.append(y)
@@ -763,7 +756,7 @@ class VBNN:
                 rnd_indices = np.random.random_integers(
                     low=0, high=(100 - 1), size=ys.shape[0])
                 axarr[0].plot(np.array(X_test)[:, 0][:, None], np.array(
-                    ys[range(ys.shape[0]), rnd_indices]), 'o', label="y", color=(0, 0.7, 0, 0.2))
+                    ys[list(range(ys.shape[0])), rnd_indices]), 'o', label="y", color=(0, 0.7, 0, 0.2))
                 axarr[0].set_xlim([-8.5, 9.5])
                 axarr[0].set_ylim([-5, 5])
                 axarr[1].set_xlim([-8.5, 9.5])
@@ -772,7 +765,7 @@ class VBNN:
                 plt.show()
 
             elif PLOT_KL:
-                painter_kl.set_xdata(range((epoch + 1)))
+                painter_kl.set_xdata(list(range((epoch + 1))))
                 painter_kl.set_ydata(kl_div_means)
                 plt.draw()
 

@@ -51,7 +51,7 @@ class ExactModelBaseline(Baseline):
             noise = path['agent_infos']['noise'][t:]
             curr_obs = path['observations'][t]
             max_path_length = min(self.lookahead, path_length - t)
-            for itr in xrange(self.num_rollouts_per_state):
+            for itr in range(self.num_rollouts_per_state):
                 final_observation, return_so_far = self.partial_rollout_fixed_policy_noise(
                     policy, noise, curr_obs, env_state, max_path_length)
                 final_observations[itr][t] = final_observation

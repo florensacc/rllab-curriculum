@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 from pylearn2.training_algorithms.learning_rule import RMSProp
 import numpy as np
 import theano 
@@ -125,7 +125,7 @@ class DQN(object):
             # choose action
             a_idx = None
             if np.random.rand() < epsilon:
-                a_idx = np.random.choice(range(Da))
+                a_idx = np.random.choice(list(range(Da)))
             else:
                 q_val = Q_tgt.compute_q_val([obs])[0]
                 a_idx = np.argmax(q_val)

@@ -84,7 +84,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
                 self.latent_dist_info = dict(prob=1./self.latent_dim * np.ones(self.latent_dim))
             else:
                 self.latent_dist_info = dict(prob=np.ones(self.latent_dim))
-            print self.latent_dist_info
+            print(self.latent_dist_info)
         else:
             raise NotImplementedError
 
@@ -187,7 +187,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
     @overrides
     def get_action(self, observation):
         actions, outputs = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in outputs.iteritems()}
+        return actions[0], {k: v[0] for k, v in outputs.items()}
 
     def get_actions(self, observations):
         ##CF

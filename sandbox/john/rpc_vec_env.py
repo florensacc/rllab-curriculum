@@ -1,6 +1,6 @@
-import tempfile, cPickle, subprocess, sys, numpy as np, os
+import tempfile, pickle, subprocess, sys, numpy as np, os
 import zerorpc
-from vec_env import VecEnv
+from .vec_env import VecEnv
 
 class ServerSideEnvWrapper(object):
     def __init__(self, envs, max_path_length):
@@ -11,7 +11,7 @@ class ServerSideEnvWrapper(object):
         acs = loads(acs_str)
         assert len(acs) == len(self.envs)
         results = [env.step(ac) for (env, ac) in zip(self.envs, acs)]
-        obs, rews, dones, _ = map(np.array, zip(*results))
+        obs, rews, dones, _ = list(map(np.array, list(zip(*results))))
         self.ts += 1
         dones[self.ts >= self.max_path_length] = True
         for (i, done) in enumerate(dones):
@@ -31,16 +31,16 @@ def _start_server():
     max_path_length = int(sys.argv[4])
     with open(fname, 'r') as fh:
         s = fh.read()    
-    envs = [loads(s) for _ in xrange(k)]
+    envs = [loads(s) for _ in range(k)]
     server = zerorpc.Server(ServerSideEnvWrapper(envs, max_path_length))
     server.bind(addr)
     server.run()
 
 def loads(s):
-    return cPickle.loads(s)
+    return pickle.loads(s)
 
 def dumps(o):
-    return cPickle.dumps(o, protocol=-1)
+    return pickle.dumps(o, protocol=-1)
 
 class EnvProxy(object):
     def __init__(self, env, i, k, max_path_length):
@@ -66,14 +66,14 @@ class RpcVecEnv(VecEnv):
         n : number of processes
         k : number of environments per process
         """
-        self.remotes = [EnvProxy(env, i, k, max_path_length) for i in xrange(n)]
+        self.remotes = [EnvProxy(env, i, k, max_path_length) for i in range(n)]
         self.k = k
         self._action_space = env.action_space
         self._observation_space = env.observation_space        
     def step(self, action_n):
         results = get_values([remote.vstep(action_n[i * self.k : (i+1) * self.k])
             for (i,remote) in enumerate(self.remotes)])
-        obs, rews, dones = zip(*results)
+        obs, rews, dones = list(zip(*results))
         return np.concatenate(obs), np.concatenate(rews), np.concatenate(dones)
     def reset(self):        
         results = get_values([remote.vreset() for remote in self.remotes])

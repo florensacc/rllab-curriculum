@@ -132,11 +132,11 @@ class ExtremeModelBaseline(Baseline):
         baselines = []  # baselines[i] is estimate of V(s_i) (zero-indexed)
         for t, start_state in enumerate(states):
             batch = []
-            for _ in xrange(num_paths):
+            for _ in range(num_paths):
                 state = start_state
                 empirical_return = 0
                 action = policy.get_action(state)
-                for i in xrange(self.lookahead):
+                for i in range(self.lookahead):
                     if t+i >= path_length:  # We have reached the end of the path; no more reward
                         break
                     if i > 0:  # We don't fix noise for the first time step
@@ -161,11 +161,11 @@ class ExtremeModelBaseline(Baseline):
         path_length, _ = states_along_path.shape
         num_paths = max(1, self.batch_size / path_length)  # Must have at least one path
         baselines = []
-        for t in xrange(path_length):
+        for t in range(path_length):
             rollout_states = np.repeat(states_along_path[t], num_paths, axis=0)
             returns = np.zeros((num_paths,))
             actions = policy.get_actions(rollout_states)
-            for i in xrange(self.lookahead):
+            for i in range(self.lookahead):
                 if t+i >= path_length:
                     break
                 if i > 0:  # Don't fix noise for the first time step
@@ -191,7 +191,7 @@ class ExtremeModelBaseline(Baseline):
         actions, _ = policy.get_actions(rollout_states)
 
         i = 0  # For handling the self.lookahead = 0 case
-        for i in xrange(min(self.lookahead, path_length)):
+        for i in range(min(self.lookahead, path_length)):
             if i > 0:  # Don't fix noise for first time step
                 # import pdb; pdb.set_trace()
                 actions, _ = policy.get_actions_with_fixed_noise(rollout_states, noise[i])

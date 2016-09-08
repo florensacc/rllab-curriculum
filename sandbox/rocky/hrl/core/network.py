@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import lasagne.layers as L
 import lasagne.init as LI
 import lasagne.nonlinearities as LN
@@ -141,8 +141,8 @@ class ConvMergeNetwork(Serializable):
         l_extra_in = L.reshape(L.SliceLayer(l_in, indices=slice(input_flat_dim, None)), ([0],) + extra_input_shape)
 
         l_conv_hid = l_conv_in
-        for idx, conv_filter, filter_size, stride, pad in itertools.izip(
-                xrange(len(conv_filters)),
+        for idx, conv_filter, filter_size, stride, pad in zip(
+                range(len(conv_filters)),
                 conv_filters,
                 conv_filter_sizes,
                 conv_strides,
@@ -257,8 +257,8 @@ class ActionConditionedConvDeconvNetwork(Serializable):
 
         l_conv_hid = l_conv_in
         l_conv_hids = []
-        for idx, conv_filter, filter_size, stride, pad in itertools.izip(
-                xrange(len(conv_filters)),
+        for idx, conv_filter, filter_size, stride, pad in zip(
+                range(len(conv_filters)),
                 conv_filters,
                 conv_filter_sizes,
                 conv_strides,
@@ -321,7 +321,7 @@ class ActionConditionedConvDeconvNetwork(Serializable):
         l_deconv_hid = l_embed_to_hid
 
         for idx, conv_filter, filter_size, stride, pad in zip(
-                xrange(len(conv_filters)),
+                range(len(conv_filters)),
                 conv_filters,
                 conv_filter_sizes,
                 conv_strides,

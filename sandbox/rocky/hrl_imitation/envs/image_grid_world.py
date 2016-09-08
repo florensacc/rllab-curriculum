@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.spaces.box import Box
 from rllab.envs.base import Step

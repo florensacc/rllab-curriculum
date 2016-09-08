@@ -7,7 +7,7 @@ from rllab.plotter import plotter
 from functools import partial
 import rllab.misc.logger as logger
 import theano.tensor as TT
-import cPickle as pickle
+import pickle as pickle
 import numpy as np
 import pyprind
 
@@ -420,12 +420,12 @@ class DDPG(RLAlgorithm):
         terminal = False
         observation = self.env.reset()
 
-        for epoch in xrange(self.n_epochs):
+        for epoch in range(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
 
             kls = []
-            for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
+            for epoch_itr in pyprind.prog_bar(range(self.epoch_length)):
                 # Execute policy
                 if terminal:  # or path_length > self.max_path_length:
                     # Note that if the last time step ends an episode, the very
@@ -472,7 +472,7 @@ class DDPG(RLAlgorithm):
                             if dyn_pool.size >= self.dyn_min_pool_size:
                                 _inputss = []
                                 _targetss = []
-                                for _ in xrange(self.dyn_n_updates_per_sample):
+                                for _ in range(self.dyn_n_updates_per_sample):
                                     batch = dyn_pool.random_batch(
                                         self.pool_batch_size)
                                     obs = batch['observations']
@@ -493,7 +493,7 @@ class DDPG(RLAlgorithm):
 
                 if pool.size >= self.min_pool_size:
                     # Here we train actual policy.
-                    for update_itr in xrange(self.n_updates_per_sample):
+                    for update_itr in range(self.n_updates_per_sample):
                         # Train policy
                         batch = pool.random_batch(self.batch_size)
                         self.do_training(itr, batch)
@@ -507,7 +507,7 @@ class DDPG(RLAlgorithm):
                             self.expl_policy.set_param_values(
                                 self.policy.get_param_values())
 
-                        for update_itr in xrange(self.n_updates_per_sample):
+                        for update_itr in range(self.n_updates_per_sample):
                             batch = pool.random_batch(self.batch_size)
 
                             # Calculate intrinsic rewards.
@@ -528,7 +528,7 @@ class DDPG(RLAlgorithm):
                             # KL vector assumes same shape as reward.
                             kl = np.zeros(rew.shape)
 
-                            for j in xrange(obs.shape[0]):
+                            for j in range(obs.shape[0]):
 
                                 # Save old params for every update.
                                 self.vbnn.save_params()
@@ -555,7 +555,7 @@ class DDPG(RLAlgorithm):
                                 else:
                                     # Update model weights based on current
                                     # minibatch.
-                                    for _ in xrange(self.n_itr_update):
+                                    for _ in range(self.n_itr_update):
                                         self.vbnn.train_update_fn(
                                             _inputs[start:end], _targets[start:end])
 
@@ -563,7 +563,7 @@ class DDPG(RLAlgorithm):
                                     kl_div = np.clip(
                                         float(self.vbnn.f_kl_div_closed_form()), 0, 1000)
 
-                                for k in xrange(start, end):
+                                for k in range(start, end):
                                     kl[k] = kl_div
 
                                 # If using replay pool, undo updates.

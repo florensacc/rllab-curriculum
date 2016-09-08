@@ -48,9 +48,9 @@ class ExactStateBasedMIEvaluator(object):
         subsampled_path = hrl_utils.downsample_path(path, self.subgoal_interval)
         self.update_cache()
         flat_obs, flat_next_obs, subgoals = self._get_relevant_data([subsampled_path])
-        obs = map(self.env.observation_space.unflatten, flat_obs)
-        obs = map(self.exact_computer.analyzer.get_int_state_from_obs, obs)
-        next_obs = map(self.component_space.unflatten, flat_next_obs)
+        obs = list(map(self.env.observation_space.unflatten, flat_obs))
+        obs = list(map(self.exact_computer.analyzer.get_int_state_from_obs, obs))
+        next_obs = list(map(self.component_space.unflatten, flat_next_obs))
         next_obs = [self.exact_computer.analyzer.get_int_component_state_from_obs(x, self.component_idx) for x in
                     next_obs]
         subgoals = [self.policy.subgoal_space.unflatten(g) for g in subgoals]

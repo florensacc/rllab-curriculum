@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy as np
 from rllab.misc import special
@@ -111,7 +111,7 @@ class MultiJointBatchPolopt(RLAlgorithm, Serializable):
     def train(self):
         self.start_worker()
         self.init_opt()
-        for itr in xrange(self.n_itr):
+        for itr in range(self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.obtain_samples(itr)
                 samples_data = self.process_samples(itr, paths)

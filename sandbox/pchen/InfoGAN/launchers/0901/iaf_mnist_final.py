@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -205,7 +205,7 @@ for v in variants[:]:
 
         inf_dist = Gaussian(zdim)
         if v["linear"]:
-            for _ in xrange(v["i_nar"]):
+            for _ in range(v["i_nar"]):
                 inf_dist = IAR(
                     zdim,
                     inf_dist,
@@ -218,7 +218,7 @@ for v in variants[:]:
                     nl=None,
                 )
         else:
-            for _ in xrange(v["i_nar"]):
+            for _ in range(v["i_nar"]):
                 inf_dist = IAR(
                     zdim,
                     inf_dist,

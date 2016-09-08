@@ -177,8 +177,8 @@ def function(inputs, outputs, updates=None):
     if isinstance(outputs, list):
         return _Function(inputs, outputs, updates)
     elif isinstance(outputs, dict):
-        f = _Function(inputs, outputs.values(), updates)
-        return lambda *inputs : dict(zip(outputs.keys(), f(*inputs)))
+        f = _Function(inputs, list(outputs.values()), updates)
+        return lambda *inputs : dict(list(zip(list(outputs.keys()), f(*inputs))))
     else:
         f = _Function(inputs, [outputs], updates)
         return lambda *inputs : f(*inputs)[0]
@@ -190,7 +190,7 @@ class _Function(object):
         self.updates = [] if updates is None else updates
     def __call__(self, *inputvals):
         assert len(inputvals) == len(self.inputs)
-        feed_dict = dict(zip(self.inputs, inputvals))
+        feed_dict = dict(list(zip(self.inputs, inputvals)))
         results = SESSION.run(self.outputs + self.updates, feed_dict=feed_dict)
         if any(r is not None and np.isnan(r).any() for r in results):
             raise RuntimeError("Nan detected")
@@ -310,7 +310,7 @@ def flatgrad(loss, var_list):
 class SetFromFlat(object):
     def __init__(self, var_list, dtype=tf_floatX):
         assigns = []
-        shapes = map(var_shape, var_list)
+        shapes = list(map(var_shape, var_list))
         total_size = np.sum([np.prod(shape) for shape in shapes])
 
         self.theta = theta = tf.placeholder(dtype,[total_size])

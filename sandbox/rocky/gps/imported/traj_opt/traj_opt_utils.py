@@ -88,9 +88,8 @@ def traj_distr_kl(new_mu, new_sigma, new_traj_distr, prev_traj_distr):
     return np.sum(kl_div)
 
 
-class LineSearch(object):
+class LineSearch(object, metaclass=abc.ABCMeta):
     """ Class for performing repeated line searches. """
-    __metaclass__ = abc.ABCMeta
 
     def __init__(self, min_eta):
         """

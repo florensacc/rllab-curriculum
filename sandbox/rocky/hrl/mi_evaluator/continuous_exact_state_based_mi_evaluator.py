@@ -1,5 +1,5 @@
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import numpy as np
 
@@ -59,7 +59,7 @@ class ContinuousExactStateBasedMIEvaluator(object):
         # MI can be approximated by I(g,s'|s) = E_{g,s'} [log p(s'|g,s) - log p(s'|s)]
         mi_states = []
         n_goal_samples = 100#1000
-        for state in xrange(analyzer.n_states):
+        for state in range(analyzer.n_states):
             obs_state = analyzer.get_obs_from_int_state(state)
             # sample goals conditioned on this state
             goals, _ = self.policy.high_policy.get_actions([obs_state] * n_goal_samples)
@@ -70,13 +70,13 @@ class ContinuousExactStateBasedMIEvaluator(object):
             mi_goal_states = 0.
 
             p_csp_given_s_g = np.zeros((analyzer.get_n_component_states(self.component_idx), n_goal_samples))
-            for next_state in xrange(analyzer.n_states):
+            for next_state in range(analyzer.n_states):
 
                 p_sp_given_s_g = 0.
                 for state_seq, action_seq, prob in analyzer.get_posterior_sequences(self.subgoal_interval, state,
                                                                                     next_state):
                     ps = analyzer.get_sequence_transition_probability(state, state_seq + (next_state,), action_seq)
-                    all_states = map(analyzer.get_obs_from_int_state, (state,) + state_seq)
+                    all_states = list(map(analyzer.get_obs_from_int_state, (state,) + state_seq))
 
                     flat_states = self.env.observation_space.flatten_n(all_states)
                     flat_actions = self.env.action_space.flatten_n(action_seq)

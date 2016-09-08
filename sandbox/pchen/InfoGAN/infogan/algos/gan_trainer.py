@@ -95,9 +95,9 @@ class GANTrainer(object):
                 img_var = img_var[:rows * rows, :, :, :]
                 imgs = tf.reshape(img_var, [rows, rows, 28, 28, 1])
                 stacked_img = []
-                for row in xrange(rows):
+                for row in range(rows):
                     row_img = []
-                    for col in xrange(rows):
+                    for col in range(rows):
                         row_img.append(imgs[row, col, :, :, :])
                     stacked_img.append(tf.concat(1, row_img))
                 imgs = tf.concat(0, stacked_img)
@@ -141,7 +141,7 @@ class GANTrainer(object):
                     if counter % self.snapshot_interval == 0:
                         snapshot_name = "%s_%s" % (self.exp_name, str(counter))
                         fn = saver.save(sess, "%s/%s.ckpt" % (self.checkpoint_dir, snapshot_name))
-                        print("Model saved in file: %s" % fn)
+                        print(("Model saved in file: %s" % fn))
 
                 x, _ = self.dataset.train.next_batch(self.batch_size)
                 # x = np.reshape(x, (-1, 28, 28, 1))

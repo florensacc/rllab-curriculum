@@ -14,12 +14,12 @@ if __name__ == "__main__":
     if args.folder:
         remote_dir = os.path.join(remote_dir, args.folder)
         local_dir = os.path.join(local_dir, args.folder)
-        print remote_dir
+        print(remote_dir)
     if args.all:
         command = ("""aws s3 sync {remote_dir} {local_dir} --content-type "UTF-8" """.format(local_dir=local_dir, remote_dir=remote_dir))
     else:
         command = ("""aws s3 sync {remote_dir} {local_dir} --exclude '*debug.log' --exclude '*stdout.log' --exclude '*stdouterr.log'  --content-type "UTF-8" """.format(local_dir=local_dir, remote_dir=remote_dir))
     if args.dry:
-        print command
+        print(command)
     else:
         os.system(command)
