@@ -10,7 +10,6 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 vg = VariantGenerator()
-# vg.add("network", ["cnn"])#, "cnn"])
 vg.add("seed", [11])#, 21, 31, 41, 51])
 vg.add("shape", [(29, 29)])#16, 16)])#17, 17)])#28, 28)])#16, 16)])#, (28, 28)])
 vg.add("n_iter", range(36))

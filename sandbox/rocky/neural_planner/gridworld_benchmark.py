@@ -691,16 +691,6 @@ def new_policy(sess, state_var, action_prob_var):
     return get_action
 
 
-def gather_nd(params, indices, name=None):
-    shape = params.get_shape().as_list()
-    rank = len(shape)
-    flat_params = tf.reshape(params, [-1])
-    multipliers = [reduce(lambda x, y: x * y, shape[i + 1:], 1) for i in range(0, rank)]
-    indices_unpacked = tf.unpack(tf.transpose(indices, [rank - 1] + range(0, rank - 1), name))
-    flat_indices = sum([a * b for a, b in zip(multipliers, indices_unpacked)])
-    return tf.gather(flat_params, flat_indices, name=name)
-
-
 def evaluate_matlab(Xtest, S1test, S2test, opt_traj_lens, state_var, slice_1d_ids_var, test_action_prob_var):
     state_batch_size = S1test.shape[-1]
 
@@ -942,8 +932,6 @@ class MatlabData(object):
         # import ipdb; ipdb.set_trace()
 
         lr_var = tf.placeholder(dtype=tf.float32, shape=(), name="lr")
-
-        # optimizer = tf.train.RMSPropOptimizer(learning_rate=lr_var, epsilon=1e-6)
 
         optimizer = tf.train.AdamOptimizer(learning_rate=lr_var)  # , epsilon=1e-6)
         gradients = tf.gradients(train_loss_var, xs=params)
