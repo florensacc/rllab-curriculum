@@ -62,7 +62,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0, ]
+        return [2, ]
 
     @variant
     def nr(self, nar):
@@ -110,7 +110,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [4, ]
+        return [2, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -155,7 +155,7 @@ for v in variants[:]:
 
         dist = Gaussian(zdim)
         for _ in xrange(v["nar"]):
-            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"])
+            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"], data_init_scale=0.1)
 
         latent_spec = [
             # (Gaussian(128), False),
@@ -230,13 +230,14 @@ for v in variants[:]:
             k=v["k"],
             # anneal_after=v["anneal_after"],
             vali_eval_interval=60000/batch_size*3,
+            exp_avg=0.99,
             # kl_coeff=0.,
             # noise=False,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0907_cifar_128",
+            exp_prefix="0907_cifar_128_hybrid",
             seed=v["seed"],
             mode="local",
             # mode="lab_kube",

@@ -62,7 +62,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [0, ]
+        return [4, ]
 
     @variant
     def nr(self, nar):
@@ -110,7 +110,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [4, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -155,7 +155,13 @@ for v in variants[:]:
 
         dist = Gaussian(zdim)
         for _ in xrange(v["nar"]):
-            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"])
+            dist = AR(
+                zdim,
+                dist,
+                neuron_ratio=v["nr"],
+                data_init_wnorm=v["ar_wnorm"],
+                data_init_scale=0.01
+            )
 
         latent_spec = [
             # (Gaussian(128), False),
@@ -202,7 +208,7 @@ for v in variants[:]:
         #     ]
         # )
         out_dist = (DiscretizedLogistic(dataset.image_dim,
-                                        init_scale=0.01))#, 1./mol)
+                                        init_scale=0.1))#, 1./mol)
 
         model = RegularizedHelmholtzMachine(
             # output_dist=MeanBernoulli(dataset.image_dim),
@@ -236,7 +242,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0907_cifar_128",
+            exp_prefix="0907_cifar_128_ar",
             seed=v["seed"],
             mode="local",
             # mode="lab_kube",

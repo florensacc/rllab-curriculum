@@ -4,7 +4,7 @@ from __future__ import absolute_import
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
-    DiscretizedLogistic, IAR, DiscretizedLogistic2
+    DiscretizedLogistic, IAR
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.0002] #0.001]
+        return [0.002] #0.001]
 
     @variant
     def seed(self):
@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [128]#[12, 32]
+        return [512]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -69,7 +69,7 @@ class VG(VariantGenerator):
         if nar == 0:
             return [1]
         else:
-            return [2, ]
+            return [5, ]
 
     # @variant
     # def nm(self):
@@ -110,11 +110,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [4, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [2, ]
+        return [10, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -202,7 +202,7 @@ for v in variants[:]:
         #     ]
         # )
         out_dist = (DiscretizedLogistic(dataset.image_dim,
-                                        init_scale=0.01))#, 1./mol)
+                                        init_scale=0.005))#, 1./mol)
 
         model = RegularizedHelmholtzMachine(
             # output_dist=MeanBernoulli(dataset.image_dim),
@@ -230,13 +230,13 @@ for v in variants[:]:
             k=v["k"],
             # anneal_after=v["anneal_after"],
             vali_eval_interval=60000/batch_size*3,
-            # kl_coeff=0.,
-            # noise=False,
+            kl_coeff=0.,
+            noise=False,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0907_cifar_128",
+            exp_prefix="0907_cifar_det_id_tail",
             seed=v["seed"],
             mode="local",
             # mode="lab_kube",
@@ -244,4 +244,5 @@ for v in variants[:]:
             # n_parallel=0,
             # use_gpu=True,
         )
+
 

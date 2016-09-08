@@ -1497,6 +1497,7 @@ class RegularizedHelmholtzMachine(object):
                          # dropout(0.9).
                          flatten().
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+                    raise "bugged"
             elif self.network_type == "resv1_k3_pixel_bias_cifar_pred_scale":
                 from prettytensor import UnboundVariable
                 with pt.defaults_scope(
@@ -1523,7 +1524,7 @@ class RegularizedHelmholtzMachine(object):
                          wnorm_fc(self.inference_dist.dist_flat_dim, activation_fn=None)
                          )
                     decoder = (pt.template('input', self.book).
-                               wnorm_fc(450, ).
+                               # wnorm_fc(450, ).
                                wnorm_fc(512, ).
                                reshape([-1, 4, 4, 32])
                                )
@@ -1533,18 +1534,41 @@ class RegularizedHelmholtzMachine(object):
                     decoder = resdeconv_v1(decoder, 5, 32, out_wh=[16,16])
                     decoder = resconv_v1(decoder, 5, 32, stride=1)
                     decoder = resdeconv_v1(decoder, 5, 16, out_wh=[32,32])
+                    decoder = resconv_v1(decoder, 5, 16, stride=1)
+                    if isinstance(self.output_dist, Mixture):
+                        modes = self.output_dist.modes
+                    else:
+                        modes = 1
+                    # modes have diff scale params
                     # scale_var = tf.Variable(
-                    #     initial_value=np.zeros([1,32,32,1], dtype='float32'),
-                    #     name="spatial_scale"
+                    #     initial_value=np.zeros([1,modes,3,1,1], dtype='float32'),
+                    #     name="channel_scale"
                     # )
                     self.decoder_template = (
                         decoder.
                             conv2d_mod(
-                            3,
-                            3*2,
+                            5,
+                            3*modes*2,
                             activation_fn=None
                         ).
-                        flatten()
+                            apply(tf.transpose, [0, 3, 1, 2]).
+                            reshape([-1, modes, 3*2, 32, 32]).
+                            # apply(lambda conv:
+                            #       tf.concat(
+                            #           2,
+                            #           [
+                            #               tf.clip_by_value(
+                            #                   conv,
+                            #                   -0.5 + 1 / 512.,
+                            #                   0.5 - 1 / 512.
+                            #               ),
+                            #               conv*0. + scale_var
+                            #           ]
+                            #       )
+                            #       ).
+                            reshape([-1, modes, 2, 3, 32, 32]).
+                            apply(tf.transpose, [0, 1, 2, 4, 5, 3]).
+                            flatten()
                     )
                     self.reg_encoder_template = \
                         (pt.template('input').

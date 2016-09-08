@@ -1,3 +1,5 @@
+from pip._vendor.distlib.locators import locate
+
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 import prettytensor as pt
 import tensorflow as tf
@@ -53,6 +55,8 @@ class VAE(object):
         Parameters
         ----------
         """
+        if isinstance(optimizer_cls, str):
+            optimizer_cls = eval(optimizer_cls)
         self.noise = noise
         self.kl_coeff = kl_coeff
         self.anneal_factor = anneal_factor
@@ -480,6 +484,16 @@ class VAE(object):
                         feed
                     )[1:]
                     all_log_vals.append(log_vals)
+                    if any(np.any(np.isnan(val)) for val in log_vals):
+                        print("NaN detected! ")
+                        if self.ema:
+                            print("restoring from ema")
+                            ema_out = sess.run(
+                                [tf.assign(var, avg) for var, avg in self.ema._averages.items()]
+                            )
+                        else:
+                            print("aborting")
+                            exit(1)
 
 
                     if counter % self.snapshot_interval == 0:

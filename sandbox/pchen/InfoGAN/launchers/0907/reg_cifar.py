@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.00002] #0.001]
+        return [0.0002] #0.001]
 
     @variant
     def seed(self):
@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [512]#[12, 32]
+        return [128]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -222,7 +222,8 @@ for v in variants[:]:
             exp_name=exp_name,
             max_epoch=max_epoch,
             updates_per_epoch=updates_per_epoch,
-            optimizer_cls=AdamaxOptimizer,
+            # optimizer_cls=AdamaxOptimizer,
+            optimizer_cls="tf.train.AdagradOptimizer",
             optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
