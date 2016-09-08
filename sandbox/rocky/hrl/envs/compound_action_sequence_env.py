@@ -41,7 +41,7 @@ class CompoundActionSequenceEnv(ProxyEnv, Serializable):
         assert not any([x.endswith(y) for x in action_strs for y in action_strs if x != y])
         if reset_history:
             assert len(set([len(x) for x in action_map])) == 1
-        self._action_map = map(np.array, action_map)
+        self._action_map = list(map(np.array, action_map))
         self._action_history = []
         if action_dim is None:
             self._action_dim = wrapped_env.action_space.n
@@ -56,7 +56,7 @@ class CompoundActionSequenceEnv(ProxyEnv, Serializable):
             # observation dimension is action_dim+1 to account for empty slots
             self._observation_space = Product(
                 [self.wrapped_env.observation_space] + [Discrete(self._action_dim + 1) for _ in
-                                                        xrange(self._history_length)]
+                                                        range(self._history_length)]
             )
         else:
             self._observation_space = self.wrapped_env.observation_space

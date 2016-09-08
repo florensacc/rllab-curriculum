@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import control_flow_ops
 
-import scopes
+from . import scopes
 
 
 def concat_elu(x):

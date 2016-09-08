@@ -28,7 +28,7 @@ class LinearFeatureBaseline(Baseline):
         featmat = np.concatenate([self._features(path) for path in paths])
         returns = np.concatenate([path["returns"] for path in paths])
         reg_coeff = self._reg_coeff
-        for _ in xrange(5):
+        for _ in range(5):
             self._coeffs = np.linalg.lstsq(
                 featmat.T.dot(featmat) + reg_coeff * np.identity(featmat.shape[1]),
                 featmat.T.dot(returns)

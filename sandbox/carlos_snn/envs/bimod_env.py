@@ -19,15 +19,15 @@ class BimodEnv(Env):
 
     def step(self, action):
         d = 1
-        print 'before taking action {}, state= {}'.format(action, self._state)
+        print('before taking action {}, state= {}'.format(action, self._state))
         self._state = self._state + action
-        print 'after step state= ', self._state
+        print('after step state= ', self._state)
         x, = self._state
         done = True
         next_observation = np.copy(self._state)
         reward = 1./(2.*np.sqrt(2.*np.pi*0.01))*(np.exp(-0.5/0.01*(x-d)**2)+np.exp(-0.5/0.01*(x+d)**2)) - 0.5
-        print 'hence the reward is = ', reward
+        print('hence the reward is = ', reward)
         return Step(observation=next_observation, reward=reward, done=done)
 
     def render(self):
-        print 'current state:', self._state
+        print('current state:', self._state)

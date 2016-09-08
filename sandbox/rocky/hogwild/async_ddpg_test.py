@@ -57,7 +57,7 @@ reward_scaling = {
 if ASYNC:
     vg = instrument.VariantGenerator()
 
-    vg.add("env", reward_scaling.keys())
+    vg.add("env", list(reward_scaling.keys()))
     vg.add("soft_target_tau", [1e-3])  # , 1e-4])
     vg.add("n_workers", [1, 4])#, 8, 16])
     vg.add("qf_learning_rate", [1e-4, 1e-5])#lambda n_workers: [1e-3, 1e-4] if n_workers <= 4 else [1e-4, 1e-5])
@@ -71,7 +71,7 @@ if ASYNC:
     vg.add("target_update_method", ['soft'])
     vg.add("hard_target_interval", [40000])
 
-    print "#Experiments:", len(vg.variants())
+    print("#Experiments:", len(vg.variants()))
     variants = vg.variants()
 
     config.AWS_INSTANCE_TYPE = 'c4.4xlarge'
@@ -127,28 +127,28 @@ if ASYNC:
     #
     # variants = [variants[i] for i in rest_ids]
 
-    n_zones = sum(map(len, zones.values()))
+    n_zones = sum(map(len, list(zones.values())))
 
-    zones = sum(zones.values(), [])
+    zones = sum(list(zones.values()), [])
 
     runs_per_zone = int(np.ceil(len(variants) * 1.0 / n_zones))
 
-    print("runs per zone: %d" % runs_per_zone)
+    print(("runs per zone: %d" % runs_per_zone))
 
-    for zone, zone_start_idx in zip(zones, range(0, len(variants), runs_per_zone)):
+    for zone, zone_start_idx in zip(zones, list(range(0, len(variants), runs_per_zone))):
 
         region = zone[:-1]
 
         # 6 zones, 160 jobs = around 30 jobs per zone
 
-        for variant_idx in xrange(zone_start_idx, zone_start_idx + runs_per_zone):
+        for variant_idx in range(zone_start_idx, zone_start_idx + runs_per_zone):
 
             if variant_idx >= len(variants):
                 sys.exit(0)
 
             print("*************************************************************")
             print("*************************************************************")
-            print("Launching task #%d" % variant_idx)
+            print(("Launching task #%d" % variant_idx))
             print("*************************************************************")
             print("*************************************************************")
 

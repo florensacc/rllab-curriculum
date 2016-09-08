@@ -20,7 +20,7 @@ batch_norm = True
 factor = 1
 
 # Param ranges
-seeds = range(5)
+seeds = list(range(5))
 etas = [0.001, 0.01, 0.1]
 normalize_rewards = [False]
 kl_ratios = [False]

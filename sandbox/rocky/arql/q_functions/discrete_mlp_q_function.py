@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
 import sandbox.rocky.tf.core.layers as L
@@ -68,7 +68,7 @@ class DiscreteMLPQFunction(LayersPowered, Serializable):
 
     def get_action(self, observation):
         actions, infos = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in infos.iteritems()}
+        return actions[0], {k: v[0] for k, v in infos.items()}
 
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)

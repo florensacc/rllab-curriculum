@@ -11,7 +11,7 @@ for game in games:
     game_info = dict()
     game_info_file = os.path.join(base_rom_path, game + '_info.json')
     if os.path.exists(game_info_file):
-        answer = raw_input('Overwrite %s?'%(game_info_file))
+        answer = input('Overwrite %s?'%(game_info_file))
         if answer in ['n','N']:
             continue
     full_rom_path = os.path.join(base_rom_path,game+'.bin')
@@ -21,4 +21,4 @@ for game in games:
 
     with open(game_info_file,'w') as f:
         json.dump(game_info, f)
-        print game_info
+        print(game_info)

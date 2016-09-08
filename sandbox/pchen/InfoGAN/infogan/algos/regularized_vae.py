@@ -268,7 +268,7 @@ class RegularizedVAE(object):
                     ])
                     lookup = np.eye(10, dtype=np.float32)
                     cat_ids = []
-                    for idx in xrange(10):
+                    for idx in range(10):
                         cat_ids.extend([idx] * 10)
                     cat_ids.extend([0] * (self.batch_size - 100))
                     cat_var = tf.constant(lookup[np.array(cat_ids)])
@@ -288,9 +288,9 @@ class RegularizedVAE(object):
                     img_var = img_var[:rows * rows, :, :, :]
                     imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))
                     stacked_img = []
-                    for row in xrange(rows):
+                    for row in range(rows):
                         row_img = []
-                        for col in xrange(rows):
+                        for col in range(rows):
                             row_img.append(imgs[row, col, :, :, :])
                         stacked_img.append(tf.concat(1, row_img))
                     imgs = tf.concat(0, stacked_img)
@@ -314,9 +314,9 @@ class RegularizedVAE(object):
                     img_var = img_var[:rows * rows, :, :, :]
                     imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))
                     stacked_img = []
-                    for row in xrange(rows):
+                    for row in range(rows):
                         row_img = []
-                        for col in xrange(rows):
+                        for col in range(rows):
                             row_img.append(imgs[row, col, :, :, :])
                         stacked_img.append(tf.concat(1, row_img))
                     imgs = tf.concat(0, stacked_img)
@@ -347,9 +347,9 @@ class RegularizedVAE(object):
                             img_var = img_var[:rows * rows, :, :, :]
                             imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))
                             stacked_img = []
-                            for row in xrange(rows):
+                            for row in range(rows):
                                 row_img = []
-                                for col in xrange(rows):
+                                for col in range(rows):
                                     row_img.append(imgs[row, col, :, :, :])
                                 stacked_img.append(tf.concat(1, row_img))
                             imgs = tf.concat(0, stacked_img)
@@ -372,9 +372,9 @@ class RegularizedVAE(object):
                         img_var = img_var[:rows * rows, :, :, :]
                         imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))
                         stacked_img = []
-                        for row in xrange(rows):
+                        for row in range(rows):
                             row_img = []
-                            for col in xrange(rows):
+                            for col in range(rows):
                                 row_img.append(imgs[row, col, :, :, :])
                             stacked_img.append(tf.concat(1, row_img))
                         imgs = tf.concat(0, stacked_img)
@@ -440,8 +440,8 @@ class RegularizedVAE(object):
                         ]))
 
                         log_dict = dict(self.log_vars)
-                        log_keys = log_dict.keys()
-                        log_vars = log_dict.values()
+                        log_keys = list(log_dict.keys())
+                        log_vars = list(log_dict.values())
 
                         summary_op = tf.merge_all_summaries()
                         summary_writer = tf.train.SummaryWriter(self.log_dir, sess.graph)
@@ -449,7 +449,7 @@ class RegularizedVAE(object):
 
                         log_vals = sess.run([] + log_vars, {self.input_tensor: x})[:]
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
-                        print("Initial: " + log_line)
+                        print(("Initial: " + log_line))
 
                     log_vals = sess.run([self.trainer] + log_vars, {self.input_tensor: x})[1:]
                     all_log_vals.append(log_vals)
@@ -459,7 +459,7 @@ class RegularizedVAE(object):
                     if counter % self.snapshot_interval == 0:
                         snapshot_name = "%s_%s" % (self.exp_name, str(counter))
                         fn = saver.save(sess, "%s/%s.ckpt" % (self.checkpoint_dir, snapshot_name))
-                        print("Model saved in file: %s" % fn)
+                        print(("Model saved in file: %s" % fn))
 
                     if counter % self.summary_interval == 0:
                         summary = tf.Summary()

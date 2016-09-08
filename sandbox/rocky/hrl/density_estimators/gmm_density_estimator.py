@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sklearn.mixture import GMM, DPGMM, VBGMM
 from .base import DensityEstimator
 import numpy as np

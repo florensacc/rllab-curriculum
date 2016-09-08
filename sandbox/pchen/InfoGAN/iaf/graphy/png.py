@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
+
 
 # png.py - PNG encoder/decoder in pure Python
 #
@@ -1620,7 +1620,7 @@ class Reader:
                 out.extend([mask&(o>>i) for i in shifts])
             return out[:width]
 
-        return map(asvalues, rows)
+        return list(map(asvalues, rows))
 
     def serialtoflat(self, bytes, width=None):
         """Convert serial format (byte stream) pixel data to flat row
@@ -1917,8 +1917,8 @@ class Reader:
             arraycode = 'BH'[self.bitdepth>8]
             # Like :meth:`group` but producing an array.array object for
             # each row.
-            pixels = map(lambda *row: array(arraycode, row),
-                       *[iter(self.deinterlace(raw))]*self.width*self.planes)
+            pixels = list(map(lambda *row: array(arraycode, row),
+                       *[iter(self.deinterlace(raw))]*self.width*self.planes))
         else:
             pixels = self.iterboxed(self.iterstraight(raw))
         meta = dict()
@@ -2054,11 +2054,11 @@ class Reader:
                     # True/False to 0/maxval (by multiplication),
                     # and add it as the extra channel.
                     row = group(row, planes)
-                    opa = map(it.__ne__, row)
-                    opa = map(maxval.__mul__, opa)
+                    opa = list(map(it.__ne__, row))
+                    opa = list(map(maxval.__mul__, opa))
                     opa = list(zip(opa)) # convert to 1-tuples
                     yield array(typecode,
-                      itertools.chain(*map(operator.add, row, opa)))
+                      itertools.chain(*list(map(operator.add, row, opa))))
             pixels = itertrns(pixels)
         targetbitdepth = None
         if self.sbit:

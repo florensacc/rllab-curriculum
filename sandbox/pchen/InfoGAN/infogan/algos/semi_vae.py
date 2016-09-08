@@ -121,7 +121,7 @@ class SemiVAE(VAE):
 
     def pre_epoch(self, epoch):
         if epoch >- self.delay_until:
-            print "enabling sup train at epoch %s" % epoch
+            print("enabling sup train at epoch %s" % epoch)
             # self.sess.run(
             #     [self.sup_train_flag.assign(1.)]
             # )

@@ -28,7 +28,7 @@ num_seq_frames = 4
 stub(globals())
 
 # Param ranges
-seeds = range(10)
+seeds = list(range(10))
 
 mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
         AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]

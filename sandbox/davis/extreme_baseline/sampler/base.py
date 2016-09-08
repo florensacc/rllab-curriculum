@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import numpy as np
 from rllab.misc import special
 from rllab.misc import tensor_utils
@@ -175,10 +175,10 @@ class BaseSampler(Sampler):
         correct_squared_env_noise_coeff = noise_level
         # All other correct coefficients are zero
         correct_coeffs = np.array([0, 0, correct_time_coeff, 0, 0] +
-                                  [correct_noise_coeff for _ in xrange(lookahead - 1)] +
-                                  [correct_squared_noise_coeff for _ in xrange(lookahead - 1)] +
-                                  [0 for _ in xrange(lookahead - 1)] +
-                                  [correct_squared_env_noise_coeff for _ in xrange(lookahead - 1)] +
+                                  [correct_noise_coeff for _ in range(lookahead - 1)] +
+                                  [correct_squared_noise_coeff for _ in range(lookahead - 1)] +
+                                  [0 for _ in range(lookahead - 1)] +
+                                  [correct_squared_env_noise_coeff for _ in range(lookahead - 1)] +
                                   [correct_constant])
 
         baseline_params = self.algo.baseline.get_param_values()
@@ -189,7 +189,7 @@ class BaseSampler(Sampler):
                               np.linalg.norm(correct_coeffs - baseline_params))
         if itr == 100: import pdb; pdb.set_trace()
 
-        if 'noise' in env_infos.keys():
+        if 'noise' in list(env_infos.keys()):
             num_rollouts = len(undiscounted_returns)
             path_length = len(env_infos['noise']) / num_rollouts
             # noise_per_rollout = env_infos['noise'].reshape(num_rollouts, path_length, 2)

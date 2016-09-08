@@ -20,7 +20,6 @@ MODEL_DIR = osp.abspath(
     )
 )
 
-
 BIG = 1e6
 
 
@@ -97,7 +96,7 @@ class MujocoEnv(Env):
     def action_bounds(self):
         return self.action_space.bounds
 
-    def reset_mujoco(self,init_state=None):
+    def reset_mujoco(self, init_state=None):
         if init_state is None:
             self.model.data.qpos = self.init_qpos + \
                                    np.random.normal(size=self.init_qpos.shape) * 0.01
@@ -107,7 +106,7 @@ class MujocoEnv(Env):
             self.model.data.ctrl = self.init_ctrl
         else:
             start = 0
-            for datum_name in ["qpos","qvel","qacc","ctrl"]:
+            for datum_name in ["qpos", "qvel", "qacc", "ctrl"]:
                 datum = getattr(self.model.data, datum_name)
                 datum_dim = datum.shape[0]
                 datum = init_state[start: start + datum_dim]
@@ -221,7 +220,7 @@ class MujocoEnv(Env):
 
     def print_stats(self):
         super(MujocoEnv, self).print_stats()
-        print "qpos dim:\t%d" % len(self.model.data.qpos)
+        print("qpos dim:\t%d" % len(self.model.data.qpos))
 
     def action_from_key(self, key):
         raise NotImplementedError

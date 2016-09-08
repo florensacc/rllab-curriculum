@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
 from .symbolic_env import SymbolicEnv

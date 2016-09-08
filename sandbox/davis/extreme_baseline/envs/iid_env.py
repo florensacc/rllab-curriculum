@@ -28,7 +28,7 @@ class IIDEnv(Env):
         return Step(observation=next_observation, reward=reward, done=False, noise=next_observation)
 
     def render(self):
-        print 'current state:', self._state
+        print('current state:', self._state)
 
     def get_state(self):
         return self._state

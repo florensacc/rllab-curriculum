@@ -30,7 +30,7 @@ class StaticEnv(Env):
         return Step(observation=self.start_state, reward=reward, done=False, noise=[noise])
 
     def render(self):
-        print 'current state:', self._state
+        print('current state:', self._state)
 
     def get_state(self):
         return self.start_state

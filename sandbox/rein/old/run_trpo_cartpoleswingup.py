@@ -12,7 +12,7 @@ from rllab.misc.instrument import stub, run_experiment_lite
 stub(globals())
 
 # Param ranges
-seeds = range(10)
+seeds = list(range(10))
 
 for seed in seeds:
 

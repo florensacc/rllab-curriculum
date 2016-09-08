@@ -299,7 +299,7 @@ class BatchPolopt(RLAlgorithm):
         self.init_opt()
         episode_rewards = []
         episode_lengths = []
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in range(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
             paths = self.obtain_samples(itr)
@@ -321,7 +321,7 @@ class BatchPolopt(RLAlgorithm):
                 logger.log("Fitting dynamics model using replay pool ...")
                 for path in samples_data['paths']:
                     path_len = len(path['rewards'])
-                    for i in xrange(path_len):
+                    for i in range(path_len):
                         obs = path['observations'][i]
                         act = path['actions'][i]
                         rew = path['rewards'][i]
@@ -334,7 +334,7 @@ class BatchPolopt(RLAlgorithm):
                     obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
                     _inputss = []
                     _targetss = []
-                    for _ in xrange(self.n_updates_per_sample):
+                    for _ in range(self.n_updates_per_sample):
                         batch = self.pool.random_batch(
                             self.pool_batch_size)
                         obs = (batch['observations'] - obs_mean) / \
@@ -391,7 +391,7 @@ class BatchPolopt(RLAlgorithm):
             if self.plot:
                 self.update_plot()
                 if self.pause_for_plot:
-                    raw_input("Plotting evaluation run: Press Enter to "
+                    input("Plotting evaluation run: Press Enter to "
                               "continue...")
 
         self.shutdown_worker()
@@ -461,7 +461,7 @@ class BatchPolopt(RLAlgorithm):
         if self.normalize_reward:
             # Update reward mean/std Q.
             rewards = []
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 rewards.append(paths[i]['rewards'])
             rewards_flat = np.hstack(rewards)
             self._reward_mean.append(np.mean(rewards_flat))
@@ -470,13 +470,13 @@ class BatchPolopt(RLAlgorithm):
             # Normalize rewards.
             reward_mean = np.mean(np.asarray(self._reward_mean))
             reward_std = np.mean(np.asarray(self._reward_std))
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 paths[i]['rewards'] = (
                     paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
 
         if itr > 0:
             kls = []
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 kls.append(paths[i]['KL'])
 
             kls_flat = np.hstack(kls)
@@ -492,11 +492,11 @@ class BatchPolopt(RLAlgorithm):
                     # Update kl Q
                     self.kl_previous.append(np.median(np.hstack(kls)))
                     previous_mean_kl = np.mean(np.asarray(self.kl_previous))
-                    for i in xrange(len(kls)):
+                    for i in range(len(kls)):
                         kls[i] = kls[i] / previous_mean_kl
 
             # Add KL ass intrinsic reward to external reward
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
 
             # Discount eta

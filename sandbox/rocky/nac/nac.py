@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.algos.base import RLAlgorithm
 from rllab.algos.ddpg import parse_update_method, SimpleReplayPool
@@ -11,7 +11,7 @@ from rllab.misc import special
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 import numpy as np
 import pyprind
-import cPickle as pickle
+import pickle as pickle
 import theano
 import theano.tensor as TT
 
@@ -139,10 +139,10 @@ class NAC(RLAlgorithm):
         terminal = False
         observation = self.env.reset()
 
-        for epoch in xrange(self.n_epochs):
+        for epoch in range(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Collecting samples")
-            for _ in pyprind.prog_bar(xrange(self.policy_update_interval)):
+            for _ in pyprind.prog_bar(range(self.policy_update_interval)):
                 # Execute policy
                 if terminal:  # or path_length > self.max_path_length:
                     # Note that if the last time step ends an episode, the very
@@ -171,7 +171,7 @@ class NAC(RLAlgorithm):
 
             if pool.size >= self.min_pool_size:
                 logger.log("Training Q function")
-                for _ in pyprind.prog_bar(xrange(self.qf_update_itrs)):
+                for _ in pyprind.prog_bar(range(self.qf_update_itrs)):
                     qf_batch = pool.random_batch(self.qf_batch_size)
                     self.train_qf(qf_batch)
                 logger.log("Training policy")

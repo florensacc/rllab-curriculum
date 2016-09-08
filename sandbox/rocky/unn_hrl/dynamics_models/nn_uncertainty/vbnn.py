@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import numpy as np
 import theano.tensor as T
 import theano
@@ -297,27 +297,23 @@ class VBNN(LasagnePowered, Serializable):
         self.build_model()
 
     def save_params(self):
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == VBNN_LAYER_TAG]
         for layer in layers:
             layer.save_params()
 
     def load_prev_params(self):
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == VBNN_LAYER_TAG]
         for layer in layers:
             layer.load_prev_params()
 
     def compr_impr_kl(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == VBNN_LAYER_TAG]
         return sum(l.kl_div_old_new() for l in layers)
 
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == VBNN_LAYER_TAG]
         return sum(l.kl_div_new_old() for l in layers)
 
     def surprise(self):
@@ -330,20 +326,17 @@ class VBNN(LasagnePowered, Serializable):
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == VBNN_LAYER_TAG]
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == VBNN_LAYER_TAG]
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: l.name == VBNN_LAYER_TAG,
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if l.name == VBNN_LAYER_TAG]
         return sum(l.kl_div_prior_new() for l in layers)
 
     def _log_prob_normal(self, input, mu=0., sigma=1.):
@@ -359,7 +352,7 @@ class VBNN(LasagnePowered, Serializable):
 
         # MC samples.
         _log_p_D_given_w = []
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -383,7 +376,7 @@ class VBNN(LasagnePowered, Serializable):
 
         # MC samples.
         _log_p_D_given_w = []
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(sample|w)).
@@ -400,7 +393,7 @@ class VBNN(LasagnePowered, Serializable):
         network = lasagne.layers.InputLayer(shape=(1, self.n_in))
 
         # Hidden layers
-        for i in xrange(len(self.n_hidden)):
+        for i in range(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             if self.layers_type[i] == 1:
                 network = VBNNLayer(
@@ -458,7 +451,7 @@ class VBNN(LasagnePowered, Serializable):
                 informed step in the correct descent direction."""
                 grads = T.grad(loss_or_grads, params)
                 updates = OrderedDict()
-                for i in xrange(len(params)):
+                for i in range(len(params)):
                     param = params[i]
                     grad = grads[i]
                     if param.name == 'mu' or param.name == 'b_mu':
@@ -480,7 +473,7 @@ class VBNN(LasagnePowered, Serializable):
                 grads = T.grad(loss, params)
 
                 kl_component = []
-                for i in xrange(len(params)):
+                for i in range(len(params)):
                     param = params[i]
                     grad = grads[i]
 

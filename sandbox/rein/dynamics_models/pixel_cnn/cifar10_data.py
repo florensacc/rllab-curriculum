@@ -1,4 +1,4 @@
-import cPickle
+import pickle
 import os
 import sys
 import tarfile
@@ -19,12 +19,12 @@ def maybe_download_and_extract(data_dir, url='http://www.cs.toronto.edu/~kriz/ci
             filepath, _ = urllib.request.urlretrieve(url, filepath, _progress)
             print()
             statinfo = os.stat(filepath)
-            print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
+            print(('Successfully downloaded', filename, statinfo.st_size, 'bytes.'))
             tarfile.open(filepath, 'r:gz').extractall(data_dir)
 
 def unpickle(file):
     fo = open(file, 'rb')
-    d = cPickle.load(fo)
+    d = pickle.load(fo)
     fo.close()
     #return {'x': d['data'].reshape((10000,3,32,32)), 'y': np.array(d['labels']).astype(np.uint8)}
     return {'x': np.cast[np.float32]((-127.5 + d['data'].reshape((10000,3,32,32)))/127.5), 'y': np.array(d['labels']).astype(np.uint8)}

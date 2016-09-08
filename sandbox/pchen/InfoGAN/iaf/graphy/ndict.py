@@ -33,7 +33,7 @@ def getRows_multiple(ds, ifrom, ito):
 #=== Shuffle along first dimension of dicts
 
 def shuffle(d):
-    n_rows = d.itervalues().next().shape[0]
+    n_rows = iter(d.values()).next().shape[0]
     idx = np.arange(n_rows)
     import time
     np.random.shuffle(idx)
@@ -115,7 +115,7 @@ def ordereddicts(ds):
 def orderedvals(ds):
     vals = []
     for d in ds:
-        vals += ordered(d).values()
+        vals += list(ordered(d).values())
     return vals
 
 
@@ -153,9 +153,9 @@ def flatten(ds, raiseOnDuplicateKeys=True):
             # recursion
             d = flatten(d, raiseOnDuplicateKeys)
         assert isinstance(d, dict)
-        if raiseOnDuplicateKeys and any(i in d.keys() for i in result.keys()):
-            print d.keys()
-            print result.keys()
+        if raiseOnDuplicateKeys and any(i in list(d.keys()) for i in list(result.keys())):
+            print(list(d.keys()))
+            print(list(result.keys()))
             raise Exception("Keys overlap overlap")
         result.update(d)
     return result
@@ -172,29 +172,29 @@ def T_grad(y, d, **kwargs):
         g_list = []
         idx = 0
         for i in range(len(d)):
-            g_list += [dict(zip(d[i].keys(), g[idx:idx+len(d[i].keys())]))]
-            idx += len(d[i].keys())
+            g_list += [dict(list(zip(list(d[i].keys()), g[idx:idx+len(list(d[i].keys()))])))]
+            idx += len(list(d[i].keys()))
         return g_list
     else:
         d = ordered(d)
-        keys = d.keys()
-        grads = T.grad(y, d.values(), **kwargs)
+        keys = list(d.keys())
+        grads = T.grad(y, list(d.values()), **kwargs)
         g = {keys[i]: grads[i] for i in range(len(grads))}
         return g
 
 #=== Printing
 
 def p(d):
-    for i in d: print i+'\n', d[i]
+    for i in d: print(i+'\n', d[i])
 
 def np_pNorm(d):
-    for i in d: print i, np.linalg.norm(d[i])
+    for i in d: print(i, np.linalg.norm(d[i]))
 
 def norm(d):
     return {i: np.linalg.norm(d[i]) for i in d}
 
 def pShape(d):
-    for i in d: print i, d[i].shape
+    for i in d: print(i, d[i].shape)
 
 def np_hasNaN(d):
     result = False
@@ -214,10 +214,10 @@ def np_savez(d, filename, addext=True):
     fname2 = 'names.txt'
     _d = ordered(d)
     # Write values (arrays)
-    np.savez(filename+'.'+fname1, *_d.values())
+    np.savez(filename+'.'+fname1, *list(_d.values()))
     # Write keys (names of arrays)
     with open(filename+'.'+fname2, 'w') as thefile:
-        for key in _d.keys(): thefile.write("%s\n" % key)
+        for key in list(_d.keys()): thefile.write("%s\n" % key)
     # Write TAR file
     tar = tarfile.open(filename, "w:gz")
     for fname in [fname1, fname2]:

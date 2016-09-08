@@ -150,8 +150,8 @@ class OnlinePenaltyOptimizer(Serializable):
             self._penalty_var.set_value(try_penalty)
 
         import matplotlib.pyplot as plt;
-        plt.plot(xrange(len(train)), [v[0] for v in train]);
-        plt.plot(xrange(len(train)), [v[0] for v in val]);
+        plt.plot(range(len(train)), [v[0] for v in train]);
+        plt.plot(range(len(train)), [v[0] for v in val]);
         # plt.show()
         import ipdb; ipdb.set_trace()
 

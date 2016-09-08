@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
@@ -117,16 +117,16 @@ class ReflectiveStochasticMLPPolicy(StochasticPolicy, Parameterized, Serializabl
 
     def _merge_dict(self, action_dict, gate_dict):
         d = dict()
-        for k, v in action_dict.iteritems():
+        for k, v in action_dict.items():
             d["action_%s" % k] = v
-        for k, v in gate_dict.iteritems():
+        for k, v in gate_dict.items():
             d["gate_%s" % k] = v
         return d
 
     def _split_dict(self, d):
         action_dict = dict()
         gate_dict = dict()
-        for k, v in d.iteritems():
+        for k, v in d.items():
             if k.startswith("action_"):
                 action_dict[k[len("action_"):]] = v
             elif k.startswith("gate_"):

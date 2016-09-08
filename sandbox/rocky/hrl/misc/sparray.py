@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy
 
@@ -17,7 +17,7 @@ class sparray(object):
         self.__data = {}
 
     def iteritems(self):
-        return self.__data.iteritems()
+        return iter(self.__data.items())
 
     def __setitem__(self, index, value):
         """ set value to position given in index, where index is a tuple. """
@@ -29,7 +29,7 @@ class sparray(object):
 
     def __delitem__(self, index):
         """ index is tuples of element to be deleted. """
-        if self.__data.has_key(index):
+        if index in self.__data:
             del(self.__data[index])
 
 
@@ -42,7 +42,7 @@ class sparray(object):
             for k in set.difference(set(out.__data.keys()),set(other.__data.keys())):
                 out.__data[k] = out.__data[k] + other.__default
             out.__default = self.__default + other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = out.__data.setdefault(k,self.__default)
                 out.__data[k] = old_val + other.__data[k]
             return out
@@ -58,7 +58,7 @@ class sparray(object):
             for k in set.difference(set(out.__data.keys()),set(other.__data.keys())):
                 out.__data[k] = out.__data[k] - other.__default
             out.__default = self.__default - other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = out.__data.setdefault(k,self.__default)
                 out.__data[k] = old_val - other.__data[k]
             return out
@@ -74,7 +74,7 @@ class sparray(object):
             for k in set.difference(set(out.__data.keys()),set(other.__data.keys())):
                 out.__data[k] = out.__data[k] * other.__default
             out.__default = self.__default * other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = out.__data.setdefault(k,self.__default)
                 out.__data[k] = old_val * other.__data[k]
             return out
@@ -91,7 +91,7 @@ class sparray(object):
             for k in set.difference(set(out.__data.keys()),set(other.__data.keys())):
                 out.__data[k] = out.__data[k] / other.__default
             out.__default = self.__default / other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = out.__data.setdefault(k,self.__default)
                 out.__data[k] = old_val / other.__data[k]
             return out
@@ -108,7 +108,7 @@ class sparray(object):
             for k in set.difference(set(out.__data.keys()),set(other.__data.keys())):
                 out.__data[k] = out.__data[k] / other.__default
             out.__default = self.__default / other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = out.__data.setdefault(k,self.__default)
                 out.__data[k] = old_val / other.__data[k]
             return out
@@ -124,7 +124,7 @@ class sparray(object):
             for k in set.difference(set(out.__data.keys()),set(other.__data.keys())):
                 out.__data[k] = out.__data[k] // other.__default
             out.__default = self.__default // other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = out.__data.setdefault(k,self.__default)
                 out.__data[k] = old_val // other.__data[k]
             return out
@@ -140,7 +140,7 @@ class sparray(object):
             for k in set.difference(set(out.__data.keys()),set(other.__data.keys())):
                 out.__data[k] = out.__data[k] % other.__default
             out.__default = self.__default % other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = out.__data.setdefault(k,self.__default)
                 out.__data[k] = old_val % other.__data[k]
             return out
@@ -156,7 +156,7 @@ class sparray(object):
             for k in set.difference(set(out.__data.keys()),set(other.__data.keys())):
                 out.__data[k] = out.__data[k] ** other.__default
             out.__default = self.__default ** other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = out.__data.setdefault(k,self.__default)
                 out.__data[k] = old_val ** other.__data[k]
             return out
@@ -169,7 +169,7 @@ class sparray(object):
             for k in set.difference(set(self.__data.keys()),set(other.__data.keys())):
                 self.__data[k] = self.__data[k] + other.__default
             self.__default = self.__default + other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = self.__data.setdefault(k,self.__default)
                 self.__data[k] = old_val + other.__data[k]
             return self
@@ -182,7 +182,7 @@ class sparray(object):
             for k in set.difference(set(self.__data.keys()),set(other.__data.keys())):
                 self.__data[k] = self.__data[k] - other.__default
             self.__default = self.__default - other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = self.__data.setdefault(k,self.__default)
                 self.__data[k] = old_val - other.__data[k]
             return self
@@ -195,7 +195,7 @@ class sparray(object):
             for k in set.difference(set(self.__data.keys()),set(other.__data.keys())):
                 self.__data[k] = self.__data[k] * other.__default
             self.__default = self.__default * other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = self.__data.setdefault(k,self.__default)
                 self.__data[k] = old_val * other.__data[k]
             return self
@@ -208,7 +208,7 @@ class sparray(object):
             for k in set.difference(set(self.__data.keys()),set(other.__data.keys())):
                 self.__data[k] = self.__data[k] / other.__default
             self.__default = self.__default / other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = self.__data.setdefault(k,self.__default)
                 self.__data[k] = old_val / other.__data[k]
             return self
@@ -221,7 +221,7 @@ class sparray(object):
             for k in set.difference(set(self.__data.keys()),set(other.__data.keys())):
                 self.__data[k] = self.__data[k] / other.__default
             self.__default = self.__default / other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = self.__data.setdefault(k,self.__default)
                 self.__data[k] = old_val / other.__data[k]
             return self
@@ -234,7 +234,7 @@ class sparray(object):
             for k in set.difference(set(self.__data.keys()),set(other.__data.keys())):
                 self.__data[k] = self.__data[k] // other.__default
             self.__default = self.__default // other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = self.__data.setdefault(k,self.__default)
                 self.__data[k] = old_val // other.__data[k]
             return self
@@ -247,7 +247,7 @@ class sparray(object):
             for k in set.difference(set(self.__data.keys()),set(other.__data.keys())):
                 self.__data[k] = self.__data[k] % other.__default
             self.__default = self.__default % other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = self.__data.setdefault(k,self.__default)
                 self.__data[k] = old_val % other.__data[k]
             return self
@@ -260,7 +260,7 @@ class sparray(object):
             for k in set.difference(set(self.__data.keys()),set(other.__data.keys())):
                 self.__data[k] = self.__data[k] ** other.__default
             self.__default = self.__default ** other.__default
-            for k in other.__data.keys():
+            for k in list(other.__data.keys()):
                 old_val = self.__data.setdefault(k,self.__default)
                 self.__data[k] = old_val ** other.__data[k]
             return self

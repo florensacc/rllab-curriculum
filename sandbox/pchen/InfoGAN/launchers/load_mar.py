@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR
 
 import tensorflow as tf
@@ -107,7 +107,7 @@ for v in variants:
         dataset = MnistDataset()
 
         dist = Gaussian(zdim)
-        for _ in xrange(v["nar"]):
+        for _ in range(v["nar"]):
             dist = AR(zdim, dist, neuron_ratio=v["nr"])
 
         latent_spec = [

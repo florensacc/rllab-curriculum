@@ -46,9 +46,9 @@ class GridWorldEnv(Env, Serializable):
 
     def __init__(self, desc='4x4'):
         Serializable.quick_init(self, locals())
-        if isinstance(desc, basestring):
+        if isinstance(desc, str):
             desc = MAPS[desc]
-        desc = np.array(map(list, desc))
+        desc = np.array(list(map(list, desc)))
         desc[desc == '.'] = 'F'
         desc[desc == 'o'] = 'H'
         desc[desc == 'x'] = 'W'
@@ -93,7 +93,7 @@ class GridWorldEnv(Env, Serializable):
         next_state_idx = np.random.choice(len(probs), p=probs)
         next_state = possible_next_states[next_state_idx][0]
 
-        next_x = next_state / self.n_col
+        next_x = next_state // self.n_col
         next_y = next_state % self.n_col
 
         next_state_type = self.desc[next_x, next_y]
@@ -122,7 +122,7 @@ class GridWorldEnv(Env, Serializable):
         # assert self.observation_space.contains(state)
         # assert self.action_space.contains(action)
 
-        x = state / self.n_col
+        x = state // self.n_col
         y = state % self.n_col
         coords = np.array([x, y])
 
@@ -147,3 +147,4 @@ class GridWorldEnv(Env, Serializable):
     @property
     def observation_space(self):
         return Discrete(self.n_row * self.n_col)
+

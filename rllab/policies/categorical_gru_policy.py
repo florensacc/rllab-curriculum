@@ -163,7 +163,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             # should not be used
             prev_action = np.nan
         probs, hidden_vec = [x[0] for x in self.f_step_prob([all_input], [self.prev_hidden])]
-        action = special.weighted_sample(probs, xrange(self.action_space.n))
+        action = special.weighted_sample(probs, range(self.action_space.n))
         self.prev_action = action
         self.prev_hidden = hidden_vec
         agent_info = dict(prob=probs)

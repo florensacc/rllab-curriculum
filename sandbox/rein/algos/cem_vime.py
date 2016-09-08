@@ -323,7 +323,7 @@ class CEM(RLAlgorithm, Serializable):
             if self.normalize_reward:
                 # Update reward mean/std Q.
                 rewards = []
-                for i in xrange(len(paths)):
+                for i in range(len(paths)):
                     rewards.append(paths[i]['rewards'])
                 rewards_flat = np.hstack(rewards)
                 self._reward_mean.append(np.mean(rewards_flat))
@@ -332,7 +332,7 @@ class CEM(RLAlgorithm, Serializable):
                 # Normalize rewards.
                 reward_mean = np.mean(np.asarray(self._reward_mean))
                 reward_std = np.mean(np.asarray(self._reward_std))
-                for i in xrange(len(paths)):
+                for i in range(len(paths)):
                     paths[i]['rewards'] = (
                         paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
 
@@ -348,7 +348,7 @@ class CEM(RLAlgorithm, Serializable):
                 # model on each observation, calculating the KL divergence of the new
                 # params to the old ones, and undoing this operation.
                 obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
-                for i in xrange(len(paths)):
+                for i in range(len(paths)):
                     obs = (paths[i]['observations'] - obs_mean) / \
                         (obs_std + 1e-8)
                     act = (paths[i]['actions'] - act_mean) / (act_std + 1e-8)
@@ -362,7 +362,7 @@ class CEM(RLAlgorithm, Serializable):
                     # KL vector assumes same shape as reward.
                     kl = np.zeros(rew.shape)
 
-                    for j in xrange(int(np.ceil(obs.shape[0] / float(self.kl_batch_size)))):
+                    for j in range(int(np.ceil(obs.shape[0] / float(self.kl_batch_size)))):
 
                         # Save old params for every update.
                         self.vbnn.save_params()
@@ -388,7 +388,7 @@ class CEM(RLAlgorithm, Serializable):
                                     self.vbnn.load_prev_params()
                         else:
                             # Update model weights based on current minibatch.
-                            for _ in xrange(self.n_itr_update):
+                            for _ in range(self.n_itr_update):
                                 self.vbnn.train_update_fn(
                                     _inputs[start:end], _targets[start:end])
 
@@ -396,7 +396,7 @@ class CEM(RLAlgorithm, Serializable):
                             kl_div = np.clip(
                                 float(self.vbnn.f_kl_div_closed_form()), 0, 50)
 
-                        for k in xrange(start, end):
+                        for k in range(start, end):
                             kl[k] = kl_div
 
                         # If using replay pool, undo updates.
@@ -419,11 +419,11 @@ class CEM(RLAlgorithm, Serializable):
                         self.kl_previous.append(np.median(np.hstack(kls)))
                         previous_mean_kl = np.mean(
                             np.asarray(self.kl_previous))
-                        for i in xrange(len(kls)):
+                        for i in range(len(kls)):
                             kls[i] = kls[i] / previous_mean_kl
 
                 # Add KL ass intrinsic reward to external reward
-                for i in xrange(len(paths)):
+                for i in range(len(paths)):
                     paths[i]['rewards'] = paths[i][
                         'rewards'] + self.eta * kls[i]
 
@@ -434,7 +434,7 @@ class CEM(RLAlgorithm, Serializable):
                 # ----------------------------
 
             # Compute discounted returns
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 paths[i]["returns"] = discount_cumsum(
                     paths[i]["rewards"], self.discount)
 
@@ -445,7 +445,7 @@ class CEM(RLAlgorithm, Serializable):
                 logger.log("Fitting dynamics model using replay pool ...")
                 for path in paths:
                     path_len = len(path['rewards'])
-                    for i in xrange(path_len):
+                    for i in range(path_len):
                         obs = path['observations'][i]
                         act = path['actions'][i]
                         rew = path['rewards'][i]
@@ -458,7 +458,7 @@ class CEM(RLAlgorithm, Serializable):
                     obs_mean, obs_std, act_mean, act_std = self.pool.mean_obs_act()
                     _inputss = []
                     _targetss = []
-                    for _ in xrange(self.n_updates_per_sample):
+                    for _ in range(self.n_updates_per_sample):
                         batch = self.pool.random_batch(
                             self.pool_batch_size)
                         obs = (batch['observations'] - obs_mean) / \

@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import sys
 sys.path.append('.')
 import matplotlib
@@ -22,8 +22,8 @@ def sliding_mean(data_array, window=5):
     data_array = np.array(data_array)
     new_list = []
     for i in range(len(data_array)):
-        indices = range(max(i - window + 1, 0),
-                        min(i + window + 1, len(data_array)))
+        indices = list(range(max(i - window + 1, 0),
+                        min(i + window + 1, len(data_array))))
         avg = 0
         for j in indices:
             avg += data_array[j]
@@ -61,12 +61,12 @@ def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None, ti
             p25.append(np.mean(plt.percentile25))
             p50.append(np.mean(plt.percentile50))
             p75.append(np.mean(plt.percentile75))
-            x = range(len(plt.percentile50))
+            x = list(range(len(plt.percentile50)))
             y = list(plt.percentile50)
             y_upper = list(plt.percentile75)
             y_lower = list(plt.percentile25)
         else:
-            x = range(len(plt.means))
+            x = list(range(len(plt.means)))
             y = list(plt.means)
             y_upper = list(plt.means + plt.stds)
             y_lower = list(plt.means - plt.stds)
@@ -131,12 +131,12 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
     for idx, plt in enumerate(plot_list):
         color = core.color_defaults[idx % len(core.color_defaults)]
         if use_median:
-            x = range(len(plt.percentile50))
+            x = list(range(len(plt.percentile50)))
             y = list(plt.percentile50)
             y_upper = list(plt.percentile75)
             y_lower = list(plt.percentile25)
         else:
-            x = range(len(plt.means))
+            x = list(range(len(plt.means)))
             y = list(plt.means)
             y_upper = list(plt.means + plt.stds)
             y_lower = list(plt.means - plt.stds)
@@ -213,7 +213,7 @@ def summary_name(exp, selector=None):
 
 
 def check_nan(exp):
-    return all(not np.any(np.isnan(vals)) for vals in exp.progress.values())
+    return all(not np.any(np.isnan(vals)) for vals in list(exp.progress.values()))
 
 
 def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
@@ -223,7 +223,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                          legend_post_processor=None, normalize_error=False, custom_series_splitter=None):
     print(plot_key, split_key, group_key, filters)
     if filter_nan:
-        nonnan_exps_data = filter(check_nan, exps_data)
+        nonnan_exps_data = list(filter(check_nan, exps_data))
         selector = core.Selector(nonnan_exps_data)
     else:
         selector = core.Selector(exps_data)
@@ -231,7 +231,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
         legend_post_processor = lambda x: x
     if filters is None:
         filters = dict()
-    for k, v in filters.iteritems():
+    for k, v in filters.items():
         selector = selector.where(k, str(v))
     if custom_filter is not None:
         selector = selector.custom_filter(custom_filter)
@@ -240,7 +240,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
     if split_key is not None:
         vs = [vs for k, vs in distinct_params if k == split_key][0]
         split_selectors = [selector.where(split_key, v) for v in vs]
-        split_legends = map(str, vs)
+        split_legends = list(map(str, vs))
     else:
         split_selectors = [selector]
         split_legends = ["Plot"]
@@ -255,14 +255,14 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                 if key not in splitted_dict:
                     splitted_dict[key] = list()
                 splitted_dict[key].append(exp)
-            splitted = splitted_dict.items()
+            splitted = list(splitted_dict.items())
             group_selectors = [core.Selector(list(x[1])) for x in splitted]
             group_legends = [x[0] for x in splitted]
         else:
             if group_key and group_key is not "exp_name":
                 vs = [vs for k, vs in distinct_params if k == group_key][0]
                 group_selectors = [split_selector.where(group_key, v) for v in vs]
-                group_legends = map(lambda x: str(x), vs)
+                group_legends = [str(x) for x in vs]
             else:
                 group_key = "exp_name"
                 vs = sorted([x.params["exp_name"] for x in split_selector.extract()])
@@ -297,7 +297,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                 exp.progress.get(plot_key, np.array([np.nan])) for exp in data
                             ]
                             #                             progresses = [progress[:500] for progress in progresses ]
-                            sizes = map(len, progresses)
+                            sizes = list(map(len, progresses))
                             max_size = max(sizes)
                             progresses = [
                                 np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
@@ -333,7 +333,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                         progresses = [
                             exp.progress.get(plot_key, np.array([np.nan])) for exp in data_best_regret]
                         #                         progresses = [progress[:500] for progress in progresses ]
-                        sizes = map(len, progresses)
+                        sizes = list(map(len, progresses))
                         # more intelligent:
                         max_size = max(sizes)
                         progresses = [
@@ -385,7 +385,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                 else:
                     progresses = [
                         exp.progress.get(plot_key, np.array([np.nan])) for exp in filtered_data]
-                    sizes = map(len, progresses)
+                    sizes = list(map(len, progresses))
                     # more intelligent:
                     max_size = max(sizes)
                     progresses = [
@@ -528,7 +528,7 @@ def index():
         group_key=group_key,
         plottable_keys=plottable_keys,
         distinct_param_keys=[str(k) for k, v in distinct_params],
-        distinct_params=dict([(str(k), map(str, v))
+        distinct_params=dict([(str(k), list(map(str, v)))
                               for k, v in distinct_params]),
     )
 
@@ -538,7 +538,7 @@ def reload_data():
     global distinct_params
     exps_data = core.load_exps_data(args.data_paths)
     plottable_keys = sorted(list(
-        set(flatten(exp.progress.keys() for exp in exps_data))))
+        set(flatten(list(exp.progress.keys()) for exp in exps_data))))
     distinct_params = sorted(core.extract_distinct_params(exps_data))
 
 

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.algos.npo import NPO
 from sandbox.rocky.online_npg.optimizers.diagonal_natural_gradient_optimizer import DiagonalNaturalGradientOptimizer

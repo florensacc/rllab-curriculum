@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import matplotlib
 
@@ -25,8 +25,8 @@ class GridPlot(object):
 
     def reset_grid(self):
         self.ax.clear()
-        self.ax.set_xticks(range(self.grid_size + 1))
-        self.ax.set_yticks(range(self.grid_size + 1))
+        self.ax.set_xticks(list(range(self.grid_size + 1)))
+        self.ax.set_yticks(list(range(self.grid_size + 1)))
         self.ax.grid(True, linestyle='-', color=(0, 0, 0), alpha=1, linewidth=1)
 
     def add_text(self, x, y, text, gravity='center', size=10):

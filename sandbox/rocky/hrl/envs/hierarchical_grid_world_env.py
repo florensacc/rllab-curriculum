@@ -1,5 +1,5 @@
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import itertools
 import sys
@@ -31,8 +31,8 @@ def expand_grid(high_grid, low_grid):
         - Wall and hole grids in the high grid will be replaced by an entire block of wall / hole grids
     :return: the expanded grid
     """
-    high_grid = np.array(map(list, high_grid))
-    low_grid = np.array(map(list, low_grid))
+    high_grid = np.array(list(map(list, high_grid)))
+    low_grid = np.array(list(map(list, low_grid)))
     high_n_row, high_n_col = high_grid.shape
     low_n_row, low_n_col = low_grid.shape
 
@@ -49,8 +49,8 @@ def expand_grid(high_grid, low_grid):
     free_only_low_grid[np.any([free_only_low_grid == 'S', free_only_low_grid == 'G'], axis=0)] = 'F'
 
     total_grid = np.zeros((total_n_row, total_n_col), high_grid.dtype)
-    for row in xrange(high_n_row):
-        for col in xrange(high_n_col):
+    for row in range(high_n_row):
+        for col in range(high_n_col):
             cell = high_grid[row, col]
             if cell == 'S':
                 replace_grid = start_only_low_grid
@@ -71,8 +71,8 @@ def expand_grid(high_grid, low_grid):
 class HierarchicalGridWorldEnv(Env, Serializable):
     def __init__(self, high_grid, low_grid):
         Serializable.quick_init(self, locals())
-        self.high_grid = np.array(map(list, high_grid))
-        self.low_grid = np.array(map(list, low_grid))
+        self.high_grid = np.array(list(map(list, high_grid)))
+        self.low_grid = np.array(list(map(list, low_grid)))
 
         self.high_n_row, self.high_n_col = self.high_grid.shape
         self.low_n_row, self.low_n_col = self.low_grid.shape
@@ -169,8 +169,8 @@ class HierarchicalGridWorldAnalyzer(object):
         current = self.env.flat_env.state
         current_row = current / self.env.total_n_col
         current_col = current % self.env.total_n_col
-        for row in xrange(self.env.total_n_row):
-            for col in xrange(self.env.total_n_col):
+        for row in range(self.env.total_n_row):
+            for col in range(self.env.total_n_col):
                 high_row = row / self.env.low_n_row
                 high_col = col / self.env.low_n_col
                 if row == current_row and col == current_col:
@@ -183,7 +183,7 @@ class HierarchicalGridWorldAnalyzer(object):
 
     def render_rollout(self):
         path = rollout(self.env, self.policy, max_path_length=100)
-        states = map(self.get_int_state_from_obs, map(self.env.observation_space.unflatten, path["observations"]))
+        states = list(map(self.get_int_state_from_obs, list(map(self.env.observation_space.unflatten, path["observations"]))))
         for state in states:
             self.env.flat_env.state = state
             self.print_total_grid()
@@ -246,8 +246,8 @@ class HierarchicalGridWorldAnalyzer(object):
         # [0] -> state, [1] -> action, [2] -> next state
         probs = sparray((self.n_states, self.n_actions, self.n_states))
         # probs = np.zeros((self.n_states, self.n_actions, self.n_states))
-        for state in xrange(self.n_states):
-            for action in xrange(self.n_actions):
+        for state in range(self.n_states):
+            for action in range(self.n_actions):
                 possible_next_states = self.env.flat_env.get_possible_next_states(state, action)
                 for next_state, prob in possible_next_states:
                     probs[state, action, next_state] += prob
@@ -270,7 +270,7 @@ class HierarchicalGridWorldAnalyzer(object):
             possible_further_states = self.get_sequence_possible_next_states(next_state, rest_actions)
             for further_states, further_prob in possible_further_states:
                 all_possible_states[(state,) + further_states] += prob * further_prob
-        return list(all_possible_states.iteritems())
+        return list(all_possible_states.items())
 
     def compute_sequence_transition_probabilities(self, interval):
         """
@@ -282,8 +282,8 @@ class HierarchicalGridWorldAnalyzer(object):
         if interval in self._sequence_transition_probabilities:
             return self._sequence_transition_probabilities[interval]
         probs = sparray((self.n_states,) * (interval + 1) + (self.n_actions,) * interval)
-        for state in xrange(self.n_states):
-            for action_sequence in itertools.product(*(xrange(self.n_actions) for _ in xrange(interval))):
+        for state in range(self.n_states):
+            for action_sequence in itertools.product(*(range(self.n_actions) for _ in range(interval))):
                 possible_next_states = self.get_sequence_possible_next_states(state, action_sequence)
                 for next_states, prob in possible_next_states:
                     key = tuple(next_states) + tuple(action_sequence)
@@ -304,7 +304,7 @@ class HierarchicalGridWorldAnalyzer(object):
         logger.log("computing posterior_sequences")
         forward_probs = self.compute_sequence_transition_probabilities(interval)
         posteriors = dict()
-        for key, prob in forward_probs.iteritems():
+        for key, prob in forward_probs.items():
             state = key[0]
             next_state = key[interval]
             state_seq = key[1:interval]
@@ -314,7 +314,7 @@ class HierarchicalGridWorldAnalyzer(object):
             posteriors[(state, next_state)].append((state_seq, action_seq, prob))
         norm_posteriors = dict()
         # normalize the probabilities
-        for key, lst in posteriors.iteritems():
+        for key, lst in posteriors.items():
             norm_factor = np.sum((prob for _, _, prob in lst))
             norm_posteriors[key] = [
                 (state_seq, action_seq, prob / norm_factor) for state_seq, action_seq, prob in lst
@@ -363,19 +363,19 @@ class HierarchicalGridWorldAnalyzer(object):
         interval = policy.subgoal_interval
         # [0] -> state, [1] -> goal, [2] -> next state
         probs = np.zeros((self.n_states, n_goals, self.n_states))
-        for state in xrange(self.n_states):
-            for next_state in xrange(self.n_states):
+        for state in range(self.n_states):
+            for next_state in range(self.n_states):
                 for state_seq, action_seq, _ in self.get_posterior_sequences(interval, state, next_state):
                     s_prob = self.get_sequence_transition_probability(
                         state, state_seq + (next_state,), action_seq
                     )
-                    prior_obs = map(self.env._get_hierarchical_obs, (state,) + state_seq)
-                    flat_actions = np.asarray(map(self.env.action_space.flatten, action_seq))
-                    for goal in xrange(n_goals):
-                        flat_states = np.asarray(map(
+                    prior_obs = list(map(self.env._get_hierarchical_obs, (state,) + state_seq))
+                    flat_actions = np.asarray(list(map(self.env.action_space.flatten, action_seq)))
+                    for goal in range(n_goals):
+                        flat_states = np.asarray(list(map(
                             policy.low_policy.observation_space.flatten,
                             [(x, goal) for x in prior_obs]
-                        ))
+                        )))
                         a_dists = policy.low_policy.dist_info(flat_states, dict())["prob"]
                         # select the actions we actually took
                         a_prob = np.prod([prob[a] for prob, a in zip(a_dists, action_seq)])
@@ -384,17 +384,17 @@ class HierarchicalGridWorldAnalyzer(object):
 
     def print_state_visitation_frequency(self, max_path_length=100, n_paths=50):
         paths = []
-        for _ in xrange(n_paths):
+        for _ in range(n_paths):
             paths.append(rollout(env=self.env, agent=self.policy, max_path_length=max_path_length))
         observations = np.vstack([p["observations"] for p in paths])
         self.print_total_frequency(observations)
         self.print_high_frequency(observations)
 
     def print_state_visitation_frequency_per_goal(self, max_path_length=100, n_paths=50):
-        for goal in xrange(self.policy.subgoal_space.n):
+        for goal in range(self.policy.subgoal_space.n):
             print("Goal #%d" % (goal + 1))
             paths = []
-            for _ in xrange(n_paths):
+            for _ in range(n_paths):
                 paths.append(
                     rollout(env=self.env, agent=FixedGoalPolicy(self.policy, goal), max_path_length=max_path_length))
             observations = np.vstack([p["observations"] for p in paths])
@@ -402,9 +402,9 @@ class HierarchicalGridWorldAnalyzer(object):
             self.print_high_frequency(observations)
 
     def print_total_frequency(self, observations):
-        total_obs = map(self.env.observation_space.unflatten, observations)
-        total_obs = map(self.get_int_state_from_obs, total_obs)
-        total_onehots = map(self.env.flat_env.observation_space.flatten, total_obs)
+        total_obs = list(map(self.env.observation_space.unflatten, observations))
+        total_obs = list(map(self.get_int_state_from_obs, total_obs))
+        total_onehots = list(map(self.env.flat_env.observation_space.flatten, total_obs))
         mean_onehots = np.mean(total_onehots, axis=0).reshape(
             (self.env.total_n_row, self.env.total_n_col)
         )
@@ -440,15 +440,15 @@ class HierarchicalGridWorldAnalyzer(object):
 
             path_length = len(path_obs)
 
-            unflat_obs = map(self.env.observation_space.unflatten, path_obs)
-            int_obs = map(self.get_int_state_from_obs, unflat_obs)
+            unflat_obs = list(map(self.env.observation_space.unflatten, path_obs))
+            int_obs = list(map(self.get_int_state_from_obs, unflat_obs))
             sub_int_obs = int_obs[::interval]
             component_obs = [self.get_int_component_state_from_obs(self.get_component_state(x, component_idx),
                                                                    component_idx) for x in int_obs]
             sub_component_obs = component_obs[::interval]
             next_sub_component_obs = np.append(sub_component_obs[1:], 0)
 
-            int_goals = map(self.policy.subgoal_space.unflatten, path_goals)
+            int_goals = list(map(self.policy.subgoal_space.unflatten, path_goals))
             sub_int_goals = int_goals[::interval]
 
             int_obs = np.repeat(sub_int_obs, interval, axis=0)[:path_length]
@@ -516,8 +516,8 @@ class HierarchicalGridWorldAnalyzer(object):
         n_subgoals = self.policy.subgoal_space.n
         interval = self.policy.subgoal_interval
         # Now let's fill in these arrays
-        for state in xrange(n_states):
-            for next_state in xrange(n_states):
+        for state in range(n_states):
+            for next_state in range(n_states):
                 next_component_state = self.get_component_state(next_state, component_idx)
                 for state_seq, action_seq, _ in self.get_posterior_sequences(interval, state, next_state):
                     prob = self.get_sequence_transition_probability(state, state_seq + (next_state,),
@@ -545,14 +545,14 @@ class HierarchicalGridWorldAnalyzer(object):
         # p_g_given_s_sym = TT.zeros((n_states, n_subgoals))
 
         nonseq_states = []
-        for state in xrange(n_states):
+        for state in range(n_states):
             nonseq_states.append(self.env.observation_space.flatten(self.get_obs_from_int_state(state)))
         nonseq_states = np.asarray(nonseq_states, dtype='uint8')
         nonseq_states_shared = theano.shared(nonseq_states)
 
         high_dist_info_sym = self.policy.high_policy.dist_info_sym(nonseq_states_shared, dict())
 
-        for goal in xrange(n_subgoals):
+        for goal in range(n_subgoals):
             subgoals = TT.zeros((flat_states_shared.shape[0], flat_states_shared.shape[1], n_subgoals))
             subgoals = TT.set_subtensor(subgoals[:, :, goal], 1)
             flat_states_with_subgoal = TT.concatenate([flat_states_shared, subgoals], axis=2)

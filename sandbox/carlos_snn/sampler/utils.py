@@ -32,8 +32,8 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
             time.sleep(timestep / speedup)
 
         if max_path_length == 1:
-            print "the action sampled recorded is: {}, the agent_info: {} and the reward: {}".format(a, agent_info, r)
-            print "but what is appended is {}".format(actions[-1])
+            print("the action sampled recorded is: {}, the agent_info: {} and the reward: {}".format(a, agent_info, r))
+            print("but what is appended is {}".format(actions[-1]))
 
     d = dict(
         observations=tensor_utils.stack_tensor_list(observations),
@@ -43,7 +43,7 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
         env_infos=tensor_utils.stack_tensor_dict_list(env_infos),
     )
     if max_path_length == 1:
-        print "all the info of the rollout is:{}".format(d)
+        print("all the info of the rollout is:{}".format(d))
     return dict(
         observations=tensor_utils.stack_tensor_list(observations),
         actions=tensor_utils.stack_tensor_list(actions),

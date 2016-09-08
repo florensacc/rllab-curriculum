@@ -7,14 +7,14 @@ Author: Nathan Sprague
 """
 
 import os
-import cPickle
+import pickle
 import time
 from rllab.misc import logger
 from rllab.misc import special
 
 import numpy as np
 
-import ale_data_set
+from . import ale_data_set
 
 import sys
 sys.setrecursionlimit(10000)
@@ -106,7 +106,7 @@ class NeuralAgent(object):
     def __getstate__(self):
         return dict(
                 (k, v)
-                for (k, v) in self.__dict__.iteritems()
+                for (k, v) in self.__dict__.items()
                 if k not in self.unpicklable_list
             )
 

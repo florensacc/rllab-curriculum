@@ -25,6 +25,6 @@ if __name__ == "__main__":
             aws s3 sync {remote_dir} {local_dir} --exclude '*debug.log' --exclude '*stdout.log' --exclude '*stdouterr.log' --content-type "UTF-8"
         """.format(local_dir=local_dir, remote_dir=remote_dir))
     if args.dry:
-        print command
+        print(command)
     else:
         os.system(command)

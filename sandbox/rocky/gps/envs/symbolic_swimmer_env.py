@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab.spaces.box import Box

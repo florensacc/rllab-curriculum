@@ -1,5 +1,5 @@
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 from sandbox.carlos_snn.envs.multiMod2D_env import MultiModEnv
 from sandbox.carlos_snn.envs.bimod_env_tunable import BimodEnv

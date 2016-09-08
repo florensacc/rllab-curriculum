@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 info = """{Explanation of experiment}"""
 
@@ -23,7 +23,7 @@ N_ITR_DEBUG = 5
 
 def experiment_variant_generator():
     vg = VariantGenerator()
-    vg.add("env", map(normalize, [HalfCheetahEnv()]), hide=True)
+    vg.add("env", list(map(normalize, [HalfCheetahEnv()])), hide=True)
     vg.add("batch_size", [4000], hide=True)
     vg.add("step_size", [0.01], hide=True)
     vg.add("max_path_length", [100], hide=True)

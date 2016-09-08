@@ -21,6 +21,7 @@ from sandbox.rein.algos.replay_pool import ReplayPool
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
 
+
 class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
@@ -261,7 +262,7 @@ class BatchPolopt(RLAlgorithm):
         input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
         lst_input_im = [input_im[idx, i * np.prod(self.bnn.state_dim):(i + 1) * np.prod(self.bnn.state_dim)].reshape(
             self.bnn.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
-                        xrange(self._num_seq_frames)]
+                        range(self._num_seq_frames)]
         input_im = input_im[:, -np.prod(self.bnn.state_dim):]
         input_im = input_im[idx, :].reshape(self.bnn.state_dim).transpose(1, 2, 0)[:, :, 0]
         sanity_pred_im = sanity_pred[idx, :-1]
@@ -279,7 +280,7 @@ class BatchPolopt(RLAlgorithm):
             sanity_pred_im = sanity_pred_im.astype(float) / float(self.bnn.num_classes)
             target_im = target_im.astype(float) / float(self.bnn.num_classes)
             input_im = input_im.astype(float) / float(self.bnn.num_classes)
-            for i in xrange(len(lst_input_im)):
+            for i in range(len(lst_input_im)):
                 lst_input_im[i] = lst_input_im[i].astype(float) / float(self.bnn.num_classes)
 
         sanity_pred_im *= 256.
@@ -345,7 +346,7 @@ class BatchPolopt(RLAlgorithm):
 
         # ATTENTION: important to know when 'rewards' and 'rewards_orig' needs
         # to be used!
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in range(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
             paths = self.obtain_samples(itr)
@@ -358,7 +359,7 @@ class BatchPolopt(RLAlgorithm):
                 logger.log("Fitting dynamics model using replay pool ...")
                 for path in paths:
                     path_len = len(path['rewards'])
-                    for i in xrange(path_len):
+                    for i in range(path_len):
                         obs = (path['observations'][i] * self.bnn.num_classes).astype(int)
                         act = path['actions'][i]
                         rew_orig = path['rewards_orig'][i]
@@ -372,14 +373,14 @@ class BatchPolopt(RLAlgorithm):
                     itr_tot = int(
                         np.ceil(self.num_sample_updates * float(self.batch_size) / self._dyn_pool_args['batch_size']))
 
-                    for _ in xrange(20):
+                    for _ in range(20):
                         batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
                         _x = np.hstack([batch['observations'], batch['actions']])
                         _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
                         acc_before += self.accuracy(_x, _y)
                     acc_before /= 20.
 
-                    for i in xrange(itr_tot):
+                    for i in range(itr_tot):
 
                         batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
 
@@ -395,7 +396,7 @@ class BatchPolopt(RLAlgorithm):
                         if i % int(np.ceil(itr_tot / 3.)) == 0:
                             self.plot_pred_imgs(_x, _y, itr, i)
 
-                    for _ in xrange(20):
+                    for _ in range(20):
                         batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
                         _x = np.hstack([batch['observations'], batch['actions']])
                         _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
@@ -415,7 +416,7 @@ class BatchPolopt(RLAlgorithm):
                     "Fitting dynamics model to current sample batch ...")
                 lst_obs, lst_obs_nxt, lst_act, lst_rew = [], [], [], []
                 for path in paths:
-                    for i in xrange(len(path['observations']) - 1):
+                    for i in range(len(path['observations']) - 1):
                         if i % self.kl_batch_size == 0:
                             obs, obs_nxt, act, rew = [], [], [], []
                             lst_obs.append(obs)
@@ -470,7 +471,7 @@ class BatchPolopt(RLAlgorithm):
                     # Save old posterior as new prior.
                     self.bnn.save_params()
 
-                    for _ in xrange(self.num_sample_updates):
+                    for _ in range(self.num_sample_updates):
                         train_loss = float(self.bnn.train_fn(X_train[idx], T_train[idx], 1.0))
                         assert not np.isnan(train_loss)
                         assert not np.isinf(train_loss)
@@ -534,8 +535,8 @@ class BatchPolopt(RLAlgorithm):
             if self.plot:
                 self.update_plot()
                 if self.pause_for_plot:
-                    raw_input("Plotting evaluation run: Press Enter to "
-                              "continue...")
+                    input("Plotting evaluation run: Press Enter to "
+                          "continue...")
 
         # Training complete: terminate environment.
         self.shutdown_worker()
@@ -611,7 +612,7 @@ class BatchPolopt(RLAlgorithm):
         if self.normalize_reward:
             # Update reward mean/std Q.
             rewards = []
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 rewards.append(paths[i]['rewards'])
             rewards_flat = np.hstack(rewards)
             self._reward_mean.append(np.mean(rewards_flat))
@@ -620,12 +621,12 @@ class BatchPolopt(RLAlgorithm):
             # Normalize rewards.
             reward_mean = np.mean(np.asarray(self._reward_mean))
             reward_std = np.mean(np.asarray(self._reward_std))
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 paths[i]['rewards'] = (paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
 
         if itr > 5:
             kls = []
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 # We divide the KL by the number of weights in the network, to
                 # get a more normalized surprise measure accross models.
                 kls.append(paths[i]['KL'])
@@ -645,21 +646,21 @@ class BatchPolopt(RLAlgorithm):
             # Transform intrinsic rewards.
             if self.surprise_transform == BatchPolopt.SurpriseTransform.LOG:
                 # Transform surprise into (positive) log space.
-                for i in xrange(len(paths)):
+                for i in range(len(paths)):
                     kls[i] = np.log(1 + kls[i])
             elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP90PERC:
                 perc90 = np.percentile(np.hstack(kls), 90)
                 # Cap max KL for stabilization.
-                for i in xrange(len(paths)):
+                for i in range(len(paths)):
                     kls[i] = np.minimum(kls[i], perc90)
             elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP99PERC:
                 perc99 = np.percentile(np.hstack(kls), 99)
                 # Cap max KL for stabilization.
-                for i in xrange(len(paths)):
+                for i in range(len(paths)):
                     kls[i] = np.minimum(kls[i], perc99)
             elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP1000:
                 # Cap max KL for stabilization.
-                for i in xrange(len(paths)):
+                for i in range(len(paths)):
                     kls[i] = np.minimum(kls[i], 1000)
             elif self.surprise_transform == BatchPolopt.SurpriseTransform.ZERO100:
                 cap = np.percentile(kls_flat, 100)
@@ -674,11 +675,11 @@ class BatchPolopt(RLAlgorithm):
                     # Update kl Q
                     self.kl_previous.append(np.median(np.hstack(kls)))
                     previous_mean_kl = np.mean(np.asarray(self.kl_previous))
-                    for i in xrange(len(kls)):
+                    for i in range(len(kls)):
                         kls[i] = kls[i] / (previous_mean_kl + 1.)
                 else:
                     median_KL_current_batch = np.median(np.hstack(kls))
-                    for i in xrange(len(kls)):
+                    for i in range(len(kls)):
                         kls[i] = kls[i] / median_KL_current_batch
                         # FIXME: inserted clip for stabilization.
                         kls[i] = np.minimum(kls[i], 100)
@@ -696,7 +697,7 @@ class BatchPolopt(RLAlgorithm):
                 logger.record_tabular('VIME_90percSurpr_norm', np.percentile(kls_flat, 90))
 
             # Add Surpr as intrinsic reward to external reward
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
 
         else:

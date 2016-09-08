@@ -72,14 +72,14 @@ def plot_experiments(
                 legends.append(exp_name)
         except KeyboardInterrupt:
             raise
-        except Exception,e:
-            print "error processing: ", f
-            print str(e)
+        except Exception as e:
+            print("error processing: ", f)
+            print(str(e))
     if legend:
         plt.legend(plots, legends, bbox_to_anchor=(1, 0.2))
     if aggregate:
-        all_s = all_returns.values()
-        max_len = max(map(len, all_s))
+        all_s = list(all_returns.values())
+        max_len = max(list(map(len, all_s)))
         # raws = zip(all_s)
         # all_lens = np.array(map(len, raws))
         # assert np.alltrue(all_lens == max(all_lens))
@@ -87,11 +87,11 @@ def plot_experiments(
         # stds = np.std(raws, axis=0).flatten()
         means = np.array([
             np.mean([s[ind] for s in all_s if ind < len(s)])
-            for ind in xrange(max_len)
+            for ind in range(max_len)
         ])
         stds = np.array([
             np.std([s[ind] for s in all_s if ind < len(s)])
-            for ind in xrange(max_len)
+            for ind in range(max_len)
         ])
         plot = plt.plot(means)[0]
         if get_color:
@@ -130,7 +130,7 @@ def batch_plot(*args, **kwargs):
         except:
             fn, name = arg, arg
         color = colors[i]
-        print color
+        print(color)
         patch = mpatches.Patch(color=color, label=name)
         patches.append(patch)
         plot_experiments(
@@ -164,7 +164,7 @@ def mk_matcher(*args, **h):
     def match(h1, h2):
         if h2 is None:
             return False
-        for k, v in h1.items():
+        for k, v in list(h1.items()):
             v2 = h2.get(k)
             if isinstance(v, dict):
                 if not match(v, v2):
@@ -192,15 +192,15 @@ def group_by_params(rets, warn=False, key=lambda x: -x[-1], trans=None):
             h = trans(h)
         return json.dumps(h, sort_keys=True)
     seen = defaultdict(list)
-    for filename, series in rets.items():
+    for filename, series in list(rets.items()):
         params = get_params(filename)
         if params is None:
-            print "params not found for ", filename
+            print("params not found for ", filename)
             continue
         seen[conv(params)].append((filename, series))
     outs = []
-    for param_str, tup in seen.items():
-        filenames, lst_series = zip(*tup)
+    for param_str, tup in list(seen.items()):
+        filenames, lst_series = list(zip(*tup))
         params = json.loads(param_str)
         max_len = max([len(s) for s in lst_series])
         # eligible_lst_series = [s for s in lst_series if len(s) == max_len]
@@ -211,11 +211,11 @@ def group_by_params(rets, warn=False, key=lambda x: -x[-1], trans=None):
         # std_series = np.std(eligible_lst_series, axis=0).flatten()
         means = np.array([
                              np.mean([s[ind] for s in lst_series if ind < len(s)])
-                             for ind in xrange(max_len)
+                             for ind in range(max_len)
                              ])
         stds = np.array([
                             np.std([s[ind] for s in lst_series if ind < len(s)])
-                            for ind in xrange(max_len)
+                            for ind in range(max_len)
                             ])
         outs.append(
             (params, means, stds, lst_series, filenames)
@@ -224,18 +224,18 @@ def group_by_params(rets, warn=False, key=lambda x: -x[-1], trans=None):
 
 # [Hash] -> (Common Hash, [Unique Hash]) in flatten format
 def factorize_params(lst_hash):
-    from __builtin__ import sum
+    from builtins import sum
     def flatten(h):
         return sum([
             [("%s_%s" % (k, kn), vn) for kn, vn in flatten(v)]
                 if isinstance(v, dict) else [(k, v)]
-                for k, v in h.items()
+                for k, v in list(h.items())
         ], [])
     def st(t): # serialize tuple
         return tuple(map(str, t))
-    flatten_lst_hash = map(flatten, lst_hash)
+    flatten_lst_hash = list(map(flatten, lst_hash))
     str_all_items_set = set(map(st, sum(flatten_lst_hash, [])))
-    s_pairs = [map(st, pairs) for pairs in flatten_lst_hash]
+    s_pairs = [list(map(st, pairs)) for pairs in flatten_lst_hash]
     str_common_items_set = str_all_items_set.intersection(*s_pairs)
     return (str_common_items_set, [
             sorted(list(set(sp).difference(str_common_items_set))) for sp in s_pairs
@@ -255,9 +255,9 @@ def comp(pattern, **kwargs):
     if mstd:
         # mean - std
         groups = sorted(groups, key=lambda group: -np.mean(group[1] - group[2]))
-    common, factors = factorize_params(map(lambda x: x[0], groups))
+    common, factors = factorize_params([x[0] for x in groups])
     for group in groups:
         plot_std(group[1], group[2])
-    plt.legend(map(str, factors), loc='upper center', bbox_to_anchor=(0.5, -0.05))
+    plt.legend(list(map(str, factors)), loc='upper center', bbox_to_anchor=(0.5, -0.05))
     return (rets, groups, common, factors)
 

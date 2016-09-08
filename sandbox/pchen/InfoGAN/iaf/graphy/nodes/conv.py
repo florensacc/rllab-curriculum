@@ -83,7 +83,7 @@ def pad2dwithchannel(x, size_kernel):
     else:
         # new code, requires that the minibatch size 'x.tag.test_value.shape[0]' is the same during execution
         # I thought this would be more memory-efficient, but seems not the case in practice
-        print 'new code, requires that the minibatch size "x.tag.test_value.shape[0]" is the same during execution' 
+        print('new code, requires that the minibatch size "x.tag.test_value.shape[0]" is the same during execution') 
         x_shape = x.tag.test_value.shape
         n_channels = x_shape[1]
         result_shape = (x_shape[0],x_shape[1]+1,x_shape[2]+2*a,x_shape[3]+2*b)
@@ -124,7 +124,7 @@ def conv2d(name, n_in, n_out, size_kernel=(3,3), pad_channel=True, border_mode='
     
     if not pad_channel:
         border_mode = 'same'
-        print 'No pad_channel, changing border_mode to same'
+        print('No pad_channel, changing border_mode to same')
 
     if '[sharedw]' in name and '[/sharedw]' in name:
         name_w = name
@@ -180,7 +180,7 @@ def conv2d(name, n_in, n_out, size_kernel=(3,3), pad_channel=True, border_mode='
         else:
             w[name+'_s'] = G.sharedf(np.ones((_n_out,)))
     elif do_constant_rescale:
-        print 'WARNING: constant rescale, these weights arent saved'
+        print('WARNING: constant rescale, these weights arent saved')
         constant_rescale = G.sharedf(np.ones((_n_out,)))
     
     
@@ -222,7 +222,7 @@ def conv2d(name, n_in, n_out, size_kernel=(3,3), pad_channel=True, border_mode='
             data_std = h.std(axis=(0,2,3))
             num_zeros = (data_std.tag.test_value == 0).sum()
             if num_zeros > 0:
-                print "Warning: Stdev=0 for "+str(num_zeros)+" features in "+name+". Skipping data-dependent init."
+                print("Warning: Stdev=0 for "+str(num_zeros)+" features in "+name+". Skipping data-dependent init.")
             else:
                 
                 std = (1./init_stdev) * data_std
@@ -250,7 +250,7 @@ def conv2d(name, n_in, n_out, size_kernel=(3,3), pad_channel=True, border_mode='
         
         if not '__init' in w:
             output_shape = h.tag.test_value.shape[1:]
-            print 'conv2d', name, input_shape, output_shape, size_kernel, pad_channel, border_mode, downsample, upsample
+            print('conv2d', name, input_shape, output_shape, size_kernel, pad_channel, border_mode, downsample, upsample)
         
         #print name, abs(h).max().tag.test_value, abs(h).min().tag.test_value
         #h = T.printing.Print(name)(h)

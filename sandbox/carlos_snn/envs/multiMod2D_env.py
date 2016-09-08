@@ -48,7 +48,7 @@ class MultiModEnv(Env):
         return Step(observation=next_observation, reward=reward, done=done)
 
     def render(self):
-        print 'current state:', self._state
+        print('current state:', self._state)
 
     def log_diagnostics(self, paths):
         # to count the modes I need the current policy!

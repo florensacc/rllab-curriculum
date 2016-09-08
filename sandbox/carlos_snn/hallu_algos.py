@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.algos.batch_polopt import BatchPolopt
 from rllab.algos.npo import NPO
@@ -31,7 +31,7 @@ class BatchPolopt_hallu(BatchPolopt, Serializable):
         """
         self.n_samples=n_samples
         self.asym = asym
-        self.func_dict = None # in init_opt we compile a function on this
+        self.__dict__ = None # in init_opt we compile a function on this
         Serializable.quick_init(self, locals())
         BatchPolopt.__init__(self, *args, **kwargs)
 
@@ -56,7 +56,7 @@ class BatchPolopt_hallu(BatchPolopt, Serializable):
     def train(self):
         self.start_worker()
         self.init_opt()
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in range(self.start_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.obtain_samples(itr)
                 samples_data = self.process_samples(itr, paths)
@@ -72,7 +72,7 @@ class BatchPolopt_hallu(BatchPolopt, Serializable):
                 if self.plot:
                     self.update_plot()
                     if self.pause_for_plot:
-                        raw_input("Plotting evaluation run: Press Enter to "
+                        input("Plotting evaluation run: Press Enter to "
                                   "continue...")
 
         self.shutdown_worker()
@@ -146,7 +146,7 @@ class NPO_hallu(NPO, BatchPolopt_hallu):
             input_list.append(valid_var)
 
         # try to save in self a function that returns the lr
-        self.func_dict = lazydict(
+        self.__dict__ = lazydict(
             f_lr=lambda: compile_function(input_list, lr, log_name="f_lr"),
             f_ll=lambda: compile_function(input_list, ll, log_name="f_ll")
         )
@@ -178,7 +178,7 @@ class NPO_hallu(NPO, BatchPolopt_hallu):
         loss_before = self.optimizer.loss(all_input_values)
 
         #lr_before = self.func_dict["f_lr"](*all_input_values)
-        ll_before = self.func_dict["f_ll"](*all_input_values)
+        ll_before = self.__dict__["f_ll"](*all_input_values)
         # print(*ll_before, sep='\n')
         logger.record_tabular('llBefore', ll_before)
 

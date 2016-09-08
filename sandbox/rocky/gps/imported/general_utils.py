@@ -8,7 +8,7 @@ class BundleType(object):
     namedtuple.
     """
     def __init__(self, variables):
-        for var, val in variables.items():
+        for var, val in list(variables.items()):
             object.__setattr__(self, var, val)
 
     # Freeze fields so new ones cannot be set.
@@ -76,7 +76,7 @@ def extract_condition(hyperparams, m):
     condition, and return a new hyperparameter dictionary.
     """
     return {var: val[m] if isinstance(val, list) else val
-            for var, val in hyperparams.items()}
+            for var, val in list(hyperparams.items())}
 
 
 def get_ee_points(offsets, ee_pos, ee_rot):

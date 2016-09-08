@@ -13,10 +13,10 @@ if __name__ == "__main__":
 
     # by default ask for confirmation
     if args.prompt == 1:
-        answer = raw_input("Copying from \n{remote_dir} \nto \n{local_dir}\n (y/n)?".format(remote_dir=remote_dir,local_dir=local_dir))
+        answer = input("Copying from \n{remote_dir} \nto \n{local_dir}\n (y/n)?".format(remote_dir=remote_dir,local_dir=local_dir))
         while answer not in ['y','Y','n','N']:
-            print "Please input y(Y) or n(N)"
-            answer = raw_input("Are you sure? (y/n)")
+            print("Please input y(Y) or n(N)")
+            answer = input("Are you sure? (y/n)")
     else:
         answer = 'y'
 
@@ -24,9 +24,9 @@ if __name__ == "__main__":
         os.system("""
             aws s3 cp {remote_dir} {local_dir} --recursive
         """.format(local_dir=local_dir, remote_dir=remote_dir))
-        print "Download complete."
+        print("Download complete.")
     else:
-        print "Abort download."
+        print("Abort download.")
 
     
 

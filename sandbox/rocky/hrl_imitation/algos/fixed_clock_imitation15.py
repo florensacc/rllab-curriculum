@@ -1,5 +1,5 @@
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import numpy as np
 import tensorflow as tf
@@ -181,7 +181,7 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializabl
 
             prob_networks = []
 
-            for subgoal in xrange(subgoal_dim):
+            for subgoal in range(subgoal_dim):
                 prob_network = MLP(
                     input_layer=l_bottleneck,
                     output_dim=env_spec.action_space.n,
@@ -279,7 +279,7 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializabl
         bottleneck_epsilon = np.random.normal(size=(self.bottleneck_dim,))
         flat_obs = self.observation_space.flatten(observation)
         dist_info = self.dist_info([flat_obs], dict(bottleneck_epsilon=[bottleneck_epsilon]))
-        act = special.weighted_sample(dist_info["prob"], range(self.action_space.n))
+        act = special.weighted_sample(dist_info["prob"], list(range(self.action_space.n)))
         return act, dist_info
 
     def get_actions(self, observations):
@@ -287,7 +287,7 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializabl
         bottleneck_epsilon = np.random.normal(size=(N, self.bottleneck_dim))
         flat_obses = self.observation_space.flatten_n(observations)
         dist_info = self.dist_info(flat_obses, dict(bottleneck_epsilon=bottleneck_epsilon))
-        act = [special.weighted_sample(p, range(self.action_space.n)) for p in dist_info["prob"]]
+        act = [special.weighted_sample(p, list(range(self.action_space.n))) for p in dist_info["prob"]]
         return act, dist_info
 
     @property
@@ -342,7 +342,7 @@ def merge_grads(grads, *extra_grads_list):
                     grad_dict[var] = grad
                 else:
                     grad_dict[var] += grad
-    return [(y, x) for x, y in grad_dict.iteritems()]
+    return [(y, x) for x, y in grad_dict.items()]
 
 
 UP = GridWorldEnv.action_from_direction("up")
@@ -478,7 +478,7 @@ class SeqGridExpert(object):
 
         bottleneck_epsilon = np.random.normal(size=(N, algo.bottleneck_dim))
         # use shared random numbers to reduce variance
-        for g in xrange(algo.subgoal_dim):
+        for g in range(algo.subgoal_dim):
             subgoals = np.tile(
                 np.asarray(algo.high_policy.action_space.flatten(g)).reshape((1, -1)),
                 (N, 1)
@@ -575,7 +575,7 @@ class SeqGridExpert(object):
         subgoal_all_nav_action_probs = []
         subgoal_ents = []
 
-        for subgoal in xrange(algo.subgoal_dim):
+        for subgoal in range(algo.subgoal_dim):
             subgoal_onehot = np.eye(algo.subgoal_dim, dtype=np.float32)[subgoal]
             all_low_obs = np.concatenate(
                 [all_flat_obs, np.tile(subgoal_onehot.reshape((1, -1)), (N, 1))],
@@ -609,7 +609,7 @@ class SeqGridExpert(object):
         path_discount_rewards = [None] * n_envs
         obses = test_venv.reset()
         dones = np.asarray([True] * n_envs)
-        for t in xrange(algo.max_path_length):
+        for t in range(algo.max_path_length):
             test_policy.reset(dones)
             acts, _ = test_policy.get_actions(obses)
             next_obses, rewards, dones, _ = test_venv.step(acts)
@@ -739,7 +739,7 @@ class FixedClockImitation(RLAlgorithm):
 
         all_sum_action_logli = []
 
-        for subgoal in xrange(self.subgoal_dim):
+        for subgoal in range(self.subgoal_dim):
             flat_subgoal = tf.tile(
                 np.eye(self.subgoal_dim, dtype=np.float32)[subgoal].reshape((1, -1)),
                 tf.pack([flat_N, 1]),
@@ -820,7 +820,7 @@ class FixedClockImitation(RLAlgorithm):
 
         low_kls = []
 
-        for subgoal, low_old_dist_info_vars in zip(xrange(self.subgoal_dim), low_old_dist_info_vars_dict_list):
+        for subgoal, low_old_dist_info_vars in zip(range(self.subgoal_dim), low_old_dist_info_vars_dict_list):
             flat_subgoal = tf.tile(
                 np.eye(self.subgoal_dim, dtype=np.float32)[subgoal].reshape((1, -1)),
                 tf.pack([flat_N, 1]),
@@ -866,7 +866,7 @@ class FixedClockImitation(RLAlgorithm):
                 k: tf.placeholder(tf.float32, shape=[None] + list(shape), name='subgoal_%d_low_old_%s' % (subgoal, k))
                 for k, shape in self.low_policy.distribution.dist_info_specs
                 }
-            for subgoal in xrange(self.subgoal_dim)
+            for subgoal in range(self.subgoal_dim)
             ]
         high_old_dist_info_vars_list = [high_old_dist_info_vars[k] for k in
                                         self.high_policy.distribution.dist_info_keys]
@@ -941,7 +941,7 @@ class FixedClockImitation(RLAlgorithm):
 
             obs_dim = self.env_expert.seg_obs.shape[-1]
 
-            for epoch_id in xrange(self.n_epochs):
+            for epoch_id in range(self.n_epochs):
 
                 logger.log("Start epoch %d..." % epoch_id)
                 logger.record_tabular("Epoch", epoch_id)
@@ -961,7 +961,7 @@ class FixedClockImitation(RLAlgorithm):
 
                 all_low_dist_vars = []
 
-                for g in xrange(self.subgoal_dim):
+                for g in range(self.subgoal_dim):
                     subgoals = np.tile(
                         np.asarray(self.high_policy.action_space.flatten(g)).reshape((1, -1)),
                         (N, 1)

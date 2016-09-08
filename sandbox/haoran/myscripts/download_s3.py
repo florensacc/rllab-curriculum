@@ -37,13 +37,13 @@ for objects in objects_iterator:
                 matched_keys.append(obj['Key'])
 
 # last check of files
-print "Ready to download keys:"
+print("Ready to download keys:")
 for key in matched_keys:
-    print key
-answer = raw_input("Are you sure to download {n_file} files? (y/n)".format(n_file=len(matched_keys)))
+    print(key)
+answer = input("Are you sure to download {n_file} files? (y/n)".format(n_file=len(matched_keys)))
 while answer not in ['y','Y','n','N']:
-    print "Please input y(Y) or n(N)"
-    answer = raw_input("Are you sure? (y/n)")
+    print("Please input y(Y) or n(N)")
+    answer = input("Are you sure? (y/n)")
 
 # start operation
 if answer in ['y','Y']: 
@@ -51,7 +51,7 @@ if answer in ['y','Y']:
         key2 = key.split('experiments/')[1]
         local_file = os.path.join(config.LOG_DIR,"s3",key2)
         client.download_file(args.bucket,key,local_file)
-    print "Download complete."
+    print("Download complete.")
 else:
-    print "Abort deletion."
+    print("Abort deletion.")
 

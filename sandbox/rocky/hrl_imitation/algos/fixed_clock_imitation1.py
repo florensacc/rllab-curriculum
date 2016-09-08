@@ -1,5 +1,5 @@
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import numpy as np
 import tensorflow as tf
@@ -35,7 +35,7 @@ def merge_grads(grads, extra_grads):
             grad_dict[var] = grad
         else:
             grad_dict[var] += grad
-    return [(y, x) for x, y in grad_dict.iteritems()]
+    return [(y, x) for x, y in grad_dict.items()]
 
 
 class FixedClockImitation(RLAlgorithm):
@@ -192,7 +192,7 @@ class FixedClockImitation(RLAlgorithm):
             sess.run(tf.initialize_all_variables())
             logger.log("initialized")
 
-            for epoch_id in xrange(self.n_epochs):
+            for epoch_id in range(self.n_epochs):
 
                 # losses = []
                 vlbs = []
@@ -200,7 +200,7 @@ class FixedClockImitation(RLAlgorithm):
 
                 logger.log("Start epoch %d..." % epoch_id)
 
-                for _ in xrange(self.n_sweep_per_epoch):
+                for _ in range(self.n_sweep_per_epoch):
 
                     for batch_obs, batch_actions in dataset.iterate():
                         # Sample minibatch and train

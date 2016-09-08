@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.envs.base import Env, Step
 from rllab.spaces.box import Box
 from rllab.spaces.discrete import Discrete
@@ -9,7 +9,7 @@ import random
 
 class STRAWMazeEnv(Env):
     def __init__(self, r=0.05):
-        self.map = np.array(map(list, [
+        self.map = np.array(list(map(list, [
             "xxxxxxxxxxx",
             "x.x.......x",
             "x.x.xxx.x.x",
@@ -21,8 +21,8 @@ class STRAWMazeEnv(Env):
             "x.xxxxxxx.x",
             "x.........x",
             "xxxxxxxxxxx",
-        ]))
-        self.free_positions = np.array(zip(*map(list, np.where(self.map == '.'))))
+        ])))
+        self.free_positions = np.array(list(zip(*list(map(list, np.where(self.map == '.'))))))
         self.agent_pos = None
         self.goal_pos = None
         self.obs_template = np.eye(4)[np.cast['int'](self.map == 'x')]

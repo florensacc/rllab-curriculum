@@ -1,4 +1,4 @@
-from itertools import izip
+
 
 import lasagne.layers as L
 import lasagne.nonlinearities as LN
@@ -29,7 +29,7 @@ def wrapped_conv(*args, **kwargs):
             **copy
         )
     except Exception as e:
-        print "falling back to default conv2d"
+        print("falling back to default conv2d")
         return theano.tensor.nnet.conv2d(*args, **kwargs)
 
 
@@ -294,8 +294,8 @@ class ConvNetwork(object):
         else:
             l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var)
             l_hid = l_in
-        for idx, conv_filter, filter_size, stride, pad in izip(
-                xrange(len(conv_filters)),
+        for idx, conv_filter, filter_size, stride, pad in zip(
+                range(len(conv_filters)),
                 conv_filters,
                 conv_filter_sizes,
                 conv_strides,

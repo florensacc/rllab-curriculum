@@ -9,7 +9,7 @@ def plot_series(series):
     # colors = [np.array([1, 0.1, 0.1]), np.array([0.1, 1, 0.1]), np.array([0.1, 0.1, 1])]
     colors = ['m', 'g', 'r', 'b', 'y']
     for i, s in enumerate(series):
-        print s['x'], s['y'], s['std'], s['label']
+        print(s['x'], s['y'], s['std'], s['label'])
         small_number = np.ones_like(s['x']) * (s['x'][1]*0.1)
         x_axis = np.where(s['x'] == 0, small_number, s['x'])
         plt.plot(x_axis, s['y'], color=colors[i], label=s['label'])
@@ -31,7 +31,7 @@ def give_coord_and_label(params_to_plot, all_params):
     for lat in latent_dim_to_plot:
         if lat == -1:
             x_axis = all_params['latent_dims']
-            lat_coord = range(len(x_axis))
+            lat_coord = list(range(len(x_axis)))
             lat_label = ''
         else:
             lat_coord = np.where(all_params['latent_dims'] == lat)
@@ -39,7 +39,7 @@ def give_coord_and_label(params_to_plot, all_params):
         for coef in rew_coef_to_plot:
             if coef == -1:
                 x_axis = all_params['rew_coefs']
-                coef_coord = range(len(x_axis))
+                coef_coord = list(range(len(x_axis)))
                 coef_label = ''
             else:
                 coef_coord = np.where(all_params['rew_coefs'] == coef)
@@ -47,7 +47,7 @@ def give_coord_and_label(params_to_plot, all_params):
             for hallu in n_hallu_to_plot:
                 if hallu == -1:
                     x_axis = all_params['n_hallus']
-                    hallu_coord = range(len(x_axis))
+                    hallu_coord = list(range(len(x_axis)))
                     hallu_label = ''
                 else:
                     hallu_coord = np.where(all_params['n_hallus'] == hallu)

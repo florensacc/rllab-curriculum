@@ -1,6 +1,6 @@
 import numpy as np
 import theano
-import ndict
+from . import ndict
 import math, time, sys
 import graphy as G
 from collections import OrderedDict
@@ -13,10 +13,10 @@ def nan_detection_mode():
     def detect_nan(i, node, fn):
         for output in fn.outputs:
             if np.isnan(output[0]).any():
-                print '*** NaN detected ***'
+                print('*** NaN detected ***')
                 theano.printing.debugprint(node)
-                print 'Inputs : %s' % [input[0] for input in fn.inputs]
-                print 'Outputs: %s' % [output[0] for output in fn.outputs]
+                print('Inputs : %s' % [input[0] for input in fn.inputs])
+                print('Outputs: %s' % [output[0] for output in fn.outputs])
                 #break
                 raise Exception()
     return theano.compile.MonitorMode(post_func=detect_nan) # @UndefinedVariable
@@ -36,9 +36,9 @@ Wraps theano function, same API, except:
 '''
 def function(x, y, lazy=False, _debug=False, checknan='raise', **kwargs):
     # Default keyword arguments
-    if not kwargs.has_key('on_unused_input'):
+    if 'on_unused_input' not in kwargs:
         kwargs['on_unused_input'] = 'warn'
-    if not kwargs.has_key('mode'):
+    if 'mode' not in kwargs:
         kwargs['mode'] = default_function_mode
     # Order the input dict
     x = ndict.ordered(ndict.flatten(x))
@@ -52,11 +52,11 @@ def function(x, y, lazy=False, _debug=False, checknan='raise', **kwargs):
     f = [None]
     def _compile(verbose=True):
         t0 = time.time()
-        print 'Compiling... ',
+        print('Compiling... ', end=' ')
         #print '[graphy] Compiling function '+str(x.keys())+' => '+str(y.keys())+' ...'
         sys.stdout.flush()
-        f[0] = theano.function(x.values(), y.values(), **kwargs)
-        print "%.2f" % (time.time()-t0), 's'
+        f[0] = theano.function(list(x.values()), list(y.values()), **kwargs)
+        print("%.2f" % (time.time()-t0), 's')
     if not lazy:
         _compile()
     # The function to be called
@@ -64,10 +64,10 @@ def function(x, y, lazy=False, _debug=False, checknan='raise', **kwargs):
         data = ndict.ordered(ndict.flatten(data))
         data_global = ndict.ordered(ndict.flatten(data_global))        
         # Check if keys of 'x' and 'inputs' match
-        allkeys = (data.keys() + data_global.keys())
+        allkeys = (list(data.keys()) + list(data_global.keys()))
         for i in range(len(data)):
-            if x.keys()[i] not in allkeys:
-                raise Exception('Non-matching keys:'+str(allkeys)+' vs. '+str(x.keys()))
+            if list(x.keys())[i] not in allkeys:
+                raise Exception('Non-matching keys:'+str(allkeys)+' vs. '+str(list(x.keys())))
         # Compile function if not already done
         if f[0] == None:
             _compile()
@@ -78,11 +78,11 @@ def function(x, y, lazy=False, _debug=False, checknan='raise', **kwargs):
             inputs_ordered = ndict.orderedvals((_data,))
             _result = f[0](*inputs_ordered)
             # Put it in a dictionary with the corresponding keys
-            result = {y.keys()[i]: _result[i] for i in range(len(y))}
+            result = {list(y.keys())[i]: _result[i] for i in range(len(y))}
         else:
             # Minibatch-based evaluation.
             # This assumes that input and output are tensors, and the first dimension iterates of datapoints
-            n_tot = data.itervalues().next().shape[0]
+            n_tot = iter(data.values()).next().shape[0]
             n_minibatches = int(math.ceil(1. * n_tot / n_batch))
             
             n_tile = 1
@@ -93,7 +93,7 @@ def function(x, y, lazy=False, _debug=False, checknan='raise', **kwargs):
             indices = np.tile(np.arange(n_tot),n_tile)
             if randomorder:
                 np.random.shuffle(indices)
-                adict = dict(zip(np.tile(np.arange(n_tot),n_tile),indices))
+                adict = dict(list(zip(np.tile(np.arange(n_tot),n_tile),indices)))
                 indices_inverse = sorted(adict, key=adict.get)
             
             results = []
@@ -103,12 +103,12 @@ def function(x, y, lazy=False, _debug=False, checknan='raise', **kwargs):
                 inputs_ordered = ndict.orderedvals((data_minibatch,))
                 results.append(f[0](*inputs_ordered))
                 if _debug:
-                    print 'Function debug', i, results[-1]
+                    print('Function debug', i, results[-1])
                 if checknan == 'raise':
                     if np.isnan(np.sum(results[-1])):
-                        print results[-1]
+                        print(results[-1])
                         raise Exception("NaN detected")
-            result = {y.keys()[i]: np.concatenate([results[j][i] for j in range(n_minibatches)]) for i in range(len(y))}
+            result = {list(y.keys())[i]: np.concatenate([results[j][i] for j in range(n_minibatches)]) for i in range(len(y))}
             if randomorder:
                 result = ndict.getRowsFromIndices(result, indices_inverse)
         
@@ -117,7 +117,7 @@ def function(x, y, lazy=False, _debug=False, checknan='raise', **kwargs):
         # Return result
         #raise Exception()
         if return_single_y:
-            return result[result.keys()[0]]
+            return result[list(result.keys())[0]]
         return result
     # Return the func
     return G.Struct(__call__=func, f=f)
@@ -128,5 +128,5 @@ def function(x, y, lazy=False, _debug=False, checknan='raise', **kwargs):
 def loop(f, f_data, n_batch, n_its, concat_axis=0):
     assert n_its >= 1
     results = [f(f_data(), n_batch=n_batch) for i in range(n_its)]
-    result = {i: np.concatenate([results[j][i] for j in range(n_its)], axis=0) for i in results[0].keys()}
+    result = {i: np.concatenate([results[j][i] for j in range(n_its)], axis=0) for i in list(results[0].keys())}
     return result

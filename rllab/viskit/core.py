@@ -22,18 +22,19 @@ def flatten(l):
 
 
 def load_progress(progress_csv_path):
+    print("Reading %s" % progress_csv_path)
     entries = dict()
     with open(progress_csv_path, 'rb') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            for k, v in row.iteritems():
+            for k, v in row.items():
                 if k not in entries:
                     entries[k] = []
                 try:
                     entries[k].append(float(v))
                 except:
                     entries[k].append(0.)
-    entries = dict([(k, np.array(v)) for k, v in entries.iteritems()])
+    entries = dict([(k, np.array(v)) for k, v in entries.items()])
     return entries
 
 
@@ -43,7 +44,7 @@ def to_json(stub_object):
     if isinstance(stub_object, StubObject):
         assert len(stub_object.args) == 0
         data = dict()
-        for k, v in stub_object.kwargs.iteritems():
+        for k, v in stub_object.kwargs.items():
             data[k] = to_json(v)
         data["_name"] = stub_object.proxy_class.__module__ + \
                         "." + stub_object.proxy_class.__name__
@@ -58,10 +59,10 @@ def to_json(stub_object):
 
 def flatten_dict(d):
     flat_params = dict()
-    for k, v in d.iteritems():
+    for k, v in d.items():
         if isinstance(v, dict):
             v = flatten_dict(v)
-            for subk, subv in flatten_dict(v).iteritems():
+            for subk, subv in flatten_dict(v).items():
                 flat_params[k + "." + subk] = subv
         else:
             flat_params[k] = v
@@ -135,7 +136,7 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
     # if logger:
     #     logger("(Excluding {excluded})".format(excluded=', '.join(excluded_params)))
     stringified_pairs = sorted(
-        map(eval, unique(flatten([map(smart_repr, d.flat_params.items()) for d in exps_data]))))
+        map(eval, unique(flatten([list(map(smart_repr, list(d.flat_params.items()))) for d in exps_data]))))
     proposals = [(k, [x[1] for x in v])
                  for k, v in itertools.groupby(stringified_pairs, lambda x: x[0])]
     filtered = [(k, v) for (k, v) in proposals if len(v) > l and all(
@@ -168,10 +169,10 @@ class Selector(object):
         ) and all(custom_filter(exp) for custom_filter in self._custom_filters)
 
     def extract(self):
-        return filter(self._check_exp, self._exps_data)
+        return list(filter(self._check_exp, self._exps_data))
 
     def iextract(self):
-        return itertools.ifilter(self._check_exp, self._exps_data)
+        return filter(self._check_exp, self._exps_data)
 
 
 # Taken from plot.ly

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -39,7 +39,7 @@ dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
 # dataset = MnistDataset()
 
 dist = Gaussian(zdim)
-for _ in xrange(5):
+for _ in range(5):
     dist = AR(
         zdim,
         dist,

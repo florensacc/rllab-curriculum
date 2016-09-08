@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 # We'd like to compute the gradient w.r.t. a discrete random variable, using the straight-through estimator.
 from rllab.misc import ext

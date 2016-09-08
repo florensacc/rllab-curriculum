@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import sandbox.rocky.tf.core.layers as L
 import tensorflow as tf
@@ -93,7 +93,7 @@ class ConvNetwork(object):
                 l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var, name="input")
                 l_hid = l_in
             for idx, conv_filter, filter_size, stride, pad in zip(
-                    xrange(len(conv_filters)),
+                    range(len(conv_filters)),
                     conv_filters,
                     conv_filter_sizes,
                     conv_strides,
@@ -384,8 +384,8 @@ class ConvMergeNetwork(LayersPowered, Serializable):
             )
 
             l_conv_hid = l_conv_in
-            for idx, conv_filter, filter_size, stride, pad in itertools.izip(
-                    xrange(len(conv_filters)),
+            for idx, conv_filter, filter_size, stride, pad in zip(
+                    range(len(conv_filters)),
                     conv_filters,
                     conv_filter_sizes,
                     conv_strides,

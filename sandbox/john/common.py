@@ -42,7 +42,7 @@ def discounted_future_sum(X, New, discount):
     Y = np.zeros_like(X)
     T = X.shape[0]
     Y[T-1] = X[T-1]
-    for t in xrange(T-2, -1, -1):
+    for t in range(T-2, -1, -1):
         Y[t] = X[t] + discount * Y[t+1] * (1 - New[t+1])
     return Y
 

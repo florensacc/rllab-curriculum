@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -120,7 +120,7 @@ for v in variants[:]:
         # dataset = MnistDataset()
 
         dist = Gaussian(zdim)
-        for _ in xrange(v["nar"]):
+        for _ in range(v["nar"]):
             dist = AR(zdim, dist, neuron_ratio=v["nr"],
                     data_init_wnorm=True,
                 data_init_scale=0.1,
@@ -151,7 +151,7 @@ for v in variants[:]:
         ]
 
         inf_dist = Gaussian(zdim)
-        for _ in xrange(1):
+        for _ in range(1):
             inf_dist = IAR(
                 zdim,
                 inf_dist,

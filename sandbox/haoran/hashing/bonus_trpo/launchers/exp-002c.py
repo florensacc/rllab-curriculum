@@ -1,8 +1,8 @@
 # Continue exp-002b, with a larger batch size
 # games: montezuma
 
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo import BonusTRPO
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.hrl.envs.image_grid_env import ImageGridEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
