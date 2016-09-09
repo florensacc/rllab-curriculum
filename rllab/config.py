@@ -49,6 +49,11 @@ DOCKER_CODE_DIR = "/root/code/rllab"
 
 AWS_CODE_SYNC_S3_PATH = "s3://to/be/overriden/in/personal"
 
+# whether to use fast code sync
+FAST_CODE_SYNC = False
+
+FAST_CODE_SYNC_IGNORES = [".git", "data", ".pod"]
+
 KUBE_DEFAULT_RESOURCES = {
     "requests": {
         "cpu": 0.8,

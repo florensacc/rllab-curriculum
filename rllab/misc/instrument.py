@@ -5,6 +5,7 @@ import base64
 import os.path as osp
 import pickle as pickle
 import inspect
+import hashlib
 import sys
 from contextlib import contextmanager
 
@@ -655,10 +656,24 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     sio.write("""
         docker --config /home/ubuntu/.docker pull {docker_image}
     """.format(docker_image=docker_image))
-    sio.write("""
-        aws s3 cp --recursive {code_full_path} {local_code_path} --region {aws_region}
-    """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
-               aws_region=config.AWS_REGION_NAME))
+    if config.FAST_CODE_SYNC:
+        sio.write("""
+            aws s3 cp {code_full_path} /tmp/rllab_code.tar.gz --region {aws_region}
+        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
+                   aws_region=config.AWS_REGION_NAME))
+        sio.write("""
+            mkdir -p {local_code_path}
+        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
+                   aws_region=config.AWS_REGION_NAME))
+        sio.write("""
+            tar -zxvf /tmp/rllab_code.tar.gz -C {local_code_path}
+        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
+                   aws_region=config.AWS_REGION_NAME))
+    else:
+        sio.write("""
+            aws s3 cp --recursive {code_full_path} {local_code_path} --region {aws_region}
+        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
+                   aws_region=config.AWS_REGION_NAME))
     sio.write("""
         cd {local_code_path}
     """.format(local_code_path=config.DOCKER_CODE_DIR))
@@ -728,7 +743,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
             aws_secret_access_key=config.AWS_ACCESS_SECRET,
         )
 
-    if len(full_script) > 10000 or len(base64.b64encode(full_script).decode("utf-8")) > 10000:
+    if len(full_script) > 10000 or len(base64.b64encode(full_script.encode()).decode("utf-8")) > 10000:
         # Script too long; need to upload script to s3 first.
         # We're being conservative here since the actual limit is 16384 bytes
         s3_path = upload_file_to_s3(full_script)
@@ -765,7 +780,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     print(instance_args["UserData"])
     print("************************************************************")
     if aws_config["spot"]:
-        instance_args["UserData"] = base64.b64encode(instance_args["UserData"]).decode("utf-8")
+        instance_args["UserData"] = base64.b64encode(instance_args["UserData"].encode()).decode("utf-8")
         spot_args = dict(
             DryRun=dry,
             InstanceCount=1,
@@ -785,7 +800,8 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                     ec2.create_tags(
                         Resources=[spot_request_id],
                         Tags=[
-                            {'Key': 'Name', 'Value': params_list[0]["exp_name"]}],
+                            {'Key': 'Name', 'Value': params_list[0]["exp_name"]}
+                        ],
                     )
                     break
                 except botocore.exceptions.ClientError:
@@ -808,42 +824,78 @@ def s3_sync_code(config, dry=False):
         return S3_CODE_PATH
     base = config.AWS_CODE_SYNC_S3_PATH
     has_git = True
-    try:
-        current_commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"]).strip()
-        clean_state = len(
-            subprocess.check_output(["git", "status", "--porcelain"])) == 0
-    except subprocess.CalledProcessError as _:
-        print("Warning: failed to execute git commands")
-        has_git = False
-    dir_hash = base64.b64encode(subprocess.check_output(["pwd"])).decode("utf-8")
-    code_path = "%s_%s" % (
-        dir_hash,
-        (current_commit if clean_state else "%s_dirty_%s" % (current_commit, timestamp)) if
-        has_git else timestamp
-    )
-    full_path = "%s/%s" % (base, code_path)
-    cache_path = "%s/%s" % (base, dir_hash)
-    cache_cmds = ["aws", "s3", "sync"] + \
-                 [cache_path, full_path]
-    cmds = ["aws", "s3", "sync"] + \
-           flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
-           [".", full_path]
-    caching_cmds = ["aws", "s3", "sync"] + \
-                   [full_path, cache_path]
-    mujoco_key_cmd = [
-        "aws", "s3", "sync", config.MUJOCO_KEY_PATH, "{}/.mujoco/".format(base)]
-    print(cache_cmds, cmds, caching_cmds, mujoco_key_cmd)
-    if not dry:
-        subprocess.check_call(cache_cmds)
-        subprocess.check_call(cmds)
-        subprocess.check_call(caching_cmds)
+
+    if config.FAST_CODE_SYNC:
         try:
-            subprocess.check_call(mujoco_key_cmd)
-        except Exception:
-            print('Unable to sync mujoco keys!')
-    S3_CODE_PATH = full_path
-    return full_path
+            current_commit = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"]).strip().decode("utf-8")
+        except subprocess.CalledProcessError as _:
+            print("Warning: failed to execute git commands")
+            current_commit = None
+
+        file_name = str(timestamp) + "_" + hashlib.sha224(
+            subprocess.check_output(["pwd"]) + str(current_commit).encode() + str(timestamp).encode()
+        ).hexdigest() + ".tar.gz"
+
+        file_path = "/tmp/" + file_name
+
+        tar_cmd = ["tar", "-zcvf", file_path, "-C", config.PROJECT_PATH]
+        for pattern in config.FAST_CODE_SYNC_IGNORES:
+            tar_cmd += ["--exclude", pattern]
+        tar_cmd += "."
+
+        remote_path = "%s/%s" % (base, file_name)
+
+        upload_cmd = ["aws", "s3", "cp", file_path, remote_path]
+
+        print(tar_cmd)
+        print(upload_cmd)
+
+        if not dry:
+            subprocess.check_call(tar_cmd)
+            subprocess.check_call(upload_cmd)
+
+        S3_CODE_PATH = remote_path
+        return remote_path
+    else:
+        try:
+            current_commit = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"]).strip().decode("utf-8")
+            clean_state = len(
+                subprocess.check_output(["git", "status", "--porcelain"])) == 0
+        except subprocess.CalledProcessError as _:
+            print("Warning: failed to execute git commands")
+            has_git = False
+        dir_hash = base64.b64encode(subprocess.check_output(["pwd"])).decode("utf-8")
+        code_path = "%s_%s" % (
+            dir_hash,
+            (current_commit if clean_state else "%s_dirty_%s" % (current_commit, timestamp)) if
+            has_git else timestamp
+        )
+        full_path = "%s/%s" % (base, code_path)
+        cache_path = "%s/%s" % (base, dir_hash)
+        cache_cmds = ["aws", "s3", "cp", "--recursive"] + \
+                     flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+                     [cache_path, full_path]
+        cmds = ["aws", "s3", "cp", "--recursive"] + \
+               flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+               [".", full_path]
+        caching_cmds = ["aws", "s3", "cp", "--recursive"] + \
+                       flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+                       [full_path, cache_path]
+        mujoco_key_cmd = [
+            "aws", "s3", "sync", config.MUJOCO_KEY_PATH, "{}/.mujoco/".format(base)]
+        print(cache_cmds, cmds, caching_cmds, mujoco_key_cmd)
+        if not dry:
+            subprocess.check_call(cache_cmds)
+            subprocess.check_call(cmds)
+            subprocess.check_call(caching_cmds)
+            try:
+                subprocess.check_call(mujoco_key_cmd)
+            except Exception:
+                print('Unable to sync mujoco keys!')
+        S3_CODE_PATH = full_path
+        return full_path
 
 
 def upload_file_to_s3(script_content):
@@ -888,8 +940,14 @@ def to_lab_kube_pod(
     s3_mujoco_key_path = config.AWS_CODE_SYNC_S3_PATH + '/.mujoco/'
     pre_commands.append(
         'aws s3 cp --recursive {} {}'.format(s3_mujoco_key_path, '~/.mujoco'))
-    pre_commands.append('aws s3 cp --recursive %s %s' %
-                        (code_full_path, config.DOCKER_CODE_DIR))
+
+    if config.FAST_CODE_SYNC:
+        pre_commands.append('aws s3 cp %s /tmp/rllab_code.tar.gz' % code_full_path)
+        pre_commands.append('mkdir -p %s' % code_full_path)
+        pre_commands.append('tar -zxvf /tmp/rllab_code.tar.gz -C %s' % config.DOCKER_CODE_DIR)
+    else:
+        pre_commands.append('aws s3 cp --recursive %s %s' %
+                            (code_full_path, config.DOCKER_CODE_DIR))
     pre_commands.append('cd %s' %
                         (config.DOCKER_CODE_DIR))
     pre_commands.append('mkdir -p %s' %
