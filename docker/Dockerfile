@@ -52,7 +52,7 @@ ADD environment.yml /root/code/environment.yml
 RUN conda env create -f /root/code/environment.yml
 
 ENV PYTHONPATH /root/code/rllab:$PYTHONPATH
-ENV PATH /opt/conda/envs/rllab/bin:$PATH
+ENV PATH /opt/conda/envs/rllab3/bin:$PATH
 RUN echo "source activate rllab3" >> /root/.bashrc
 ENV BASH_ENV /root/.bashrc
 WORKDIR /root/code
