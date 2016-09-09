@@ -1,12 +1,12 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.algos.base import RLAlgorithm
 from sandbox.haoran.tf.misc import tensor_utils
 from rllab.core.serializable import Serializable
 import tensorflow as tf
 import threading
-import Queue
-import cPickle as pickle
+import queue
+import pickle as pickle
 import numpy as np
 import time
 import multiprocessing
@@ -68,7 +68,7 @@ class A3C(RLAlgorithm, Serializable):
         self.batch_size = batch_size
         self.scale_reward = scale_reward
         self.worker_envs = None
-        self.worker_stats_queue = Queue.Queue()
+        self.worker_stats_queue = queue.Queue()
         self.max_epochs = max_epochs
         self.epoch_length = epoch_length
         self.max_T = max_epochs * epoch_length
@@ -280,7 +280,7 @@ class A3C(RLAlgorithm, Serializable):
                         while True:
                             try:
                                 all_stats.append(self.worker_stats_queue.get_nowait())
-                            except Queue.Empty, e:
+                            except queue.Empty as e:
                                 break
                         # log new results
                         epoch = self.T / self.epoch_length
@@ -292,7 +292,7 @@ class A3C(RLAlgorithm, Serializable):
                                 if (k, op) not in kvs:
                                     kvs[(k, op)] = list()
                                 kvs[(k, op)].append(v)
-                        for (k, op), vals in kvs.iteritems():
+                        for (k, op), vals in kvs.items():
                             logger.record_tabular(k, op(vals))
                         logger.dump_tabular()
                         last_T = self.T

@@ -1,8 +1,8 @@
 import numpy as np
 
 from rllab.core.serializable import Serializable
-from rllab.core.parameterized import Parameterized
 from rllab.misc.overrides import overrides
+from sandbox.haoran.tf.core.parameterized import Parameterized
 from sandbox.haoran.tf.baselines.base import Baseline
 from sandbox.haoran.tf.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 

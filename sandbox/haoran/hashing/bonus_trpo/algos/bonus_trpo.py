@@ -16,6 +16,16 @@ class BonusTRPO(TRPO):
         self.clip_reward= clip_reward
         super(BonusTRPO, self).__init__(*args, **kwargs)
 
+    def get_itr_snapshot(self, itr, samples_data):
+        return dict(
+            itr=itr,
+            policy=self.policy,
+            baseline=self.baseline,
+            env=self.env,
+            bonus_evaluator=self.bonus_evaluator,
+        )
+
+
     def log_diagnostics(self, paths):
         super(BonusTRPO, self).log_diagnostics(paths)
         self.bonus_evaluator.log_diagnostics(paths)
