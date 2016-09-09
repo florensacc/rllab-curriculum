@@ -44,8 +44,8 @@ def sliding_mean(data_array, window=5):
     data_array = np.array(data_array)
     new_list = []
     for i in range(len(data_array)):
-        indices = range(max(i - window + 1, 0),
-                        min(i + window + 1, len(data_array)))
+        indices = list(range(max(i - window + 1, 0),
+                        min(i + window + 1, len(data_array))))
         avg = 0
         for j in indices:
             avg += data_array[j]
@@ -218,7 +218,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
     if shuffle:
         indices = np.arange(len(inputs))
         np.random.shuffle(indices)
-    for start_idx in xrange(0, len(inputs), batchsize):
+    for start_idx in range(0, len(inputs), batchsize):
         if shuffle:
             excerpt = indices[start_idx:start_idx + batchsize]
         else:

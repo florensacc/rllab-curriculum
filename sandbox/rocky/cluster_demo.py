@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
@@ -48,8 +48,9 @@ for step_size in [0.01, 0.05, 0.1]:
             # Specifies the seed for the experiment. If this is not provided, a random seed
             # will be used
             seed=seed,
-            mode="local",
-            # mode="ec2",
+            # mode="local",
+            mode="ec2",
             # plot=True,
+            # terminate_machine=False,
         )
         sys.exit()

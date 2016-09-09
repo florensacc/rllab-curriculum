@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.spaces.base import Space
 import numpy as np
@@ -53,7 +53,7 @@ class Discrete(Space):
         return self.n
 
     def weighted_sample(self, weights):
-        return special.weighted_sample(weights, xrange(self.n))
+        return special.weighted_sample(weights, range(self.n))
 
     def new_tensor_variable(self, name, extra_dims):
         # needed for safe conversion to float32

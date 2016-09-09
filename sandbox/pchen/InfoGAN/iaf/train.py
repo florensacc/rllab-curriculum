@@ -2,7 +2,7 @@ import graphy as G
 import numpy as np
 import time, sys, os
 from sacred import Experiment
-from __builtin__ import False
+from builtins import False
 
 ex = Experiment('Deep VAE')
 
@@ -80,7 +80,7 @@ def init_logs():
     # Create log directory
     logdir = str(time.time())
     logpath = os.environ['ML_LOG_PATH']+'/'+logdir+'/'
-    print 'Logpath: '+logpath
+    print('Logpath: '+logpath)
     os.makedirs(logpath)
     # Log stdout messages to file
     sys.stdout = G.misc.logger.Logger(logpath+"log.txt")
@@ -88,7 +88,7 @@ def init_logs():
     os.system("rsync -au --include '*/' --include '*.py' --exclude '*' . "+logpath+"source")
     with open(logpath+"source/run.sh", 'w') as f:
         f.write("python "+" ".join(sys.argv)+"\n")
-    os.chmod(logpath+"source/run.sh", 0700)
+    os.chmod(logpath+"source/run.sh", 0o700)
     
 @ex.capture
 def construct_model(data_init, model_type, margs, load_model_path, load_model_complete, n_batch):
@@ -100,7 +100,7 @@ def construct_model(data_init, model_type, margs, load_model_path, load_model_co
         model = models.cvae1(**margs)
         
     if load_model_path != None:
-        print 'Loading existing model at '+load_model_path
+        print('Loading existing model at '+load_model_path)
         _w = G.ndict.np_loadz(load_model_path+'/weights.ndict.tar.gz')
         G.ndict.set_value(model.w, _w, load_model_complete)
         G.ndict.set_value(model.w_avg, _w, load_model_complete)
@@ -164,7 +164,7 @@ def train(shape_x, problem, n_batch, n_train, n_reporting, save_model, est_margl
             _max = np.max(_obj, axis=0)
             _est = np.log(np.exp(_obj - _max).mean(axis=0)) + _max
             if i%1 == 0:
-                print 'Estimate of logp(x) after', i+1, 'samples:', _est.mean() / correctionfactor
+                print('Estimate of logp(x) after', i+1, 'samples:', _est.mean() / correctionfactor)
         raise Exception()
         sys.exit()
     
@@ -190,8 +190,8 @@ def train(shape_x, problem, n_batch, n_train, n_reporting, save_model, est_margl
             # Write all results to file
             with open(logpath+"results.txt", "a") as log:
                 if epoch == 0:
-                    log.write("Epoch "+" ".join(map(str, results_valid.keys())) + "\n")
-                log.write(str(epoch)+" "+" ".join(map(str, results_valid.values())) + "\n")
+                    log.write("Epoch "+" ".join(map(str, list(results_valid.keys()))) + "\n")
+                log.write(str(epoch)+" "+" ".join(map(str, list(results_valid.values()))) + "\n")
         
         if True:
             eps = model.eps({'n_batch':100})
@@ -205,16 +205,16 @@ def train(shape_x, problem, n_batch, n_train, n_reporting, save_model, est_margl
             #    eps_fixed_copy['']
         
         if epoch == 0:
-            print 'logdir:', 't:', 'Epoch:', 'Train cost:', 'Valid cost:', 'Best:', 'log(stdev) of p(x|z):'
+            print('logdir:', 't:', 'Epoch:', 'Train cost:', 'Valid cost:', 'Best:', 'log(stdev) of p(x|z):')
         
         logsd_x = 0.
         if 'logsd_x' in model.w_avg:
             logsd_x = model.w_avg['logsd_x'].get_value()
-        print logdir, '%.2f'%dt, epoch, '%.5f'%cost, '%.5f'%results_valid['cost'], '%.5f'%cost_best[0], logsd_x
+        print(logdir, '%.2f'%dt, epoch, '%.5f'%cost, '%.5f'%results_valid['cost'], '%.5f'%cost_best[0], logsd_x)
     
-    print 'Training'
+    print('Training')
     
-    for epoch in xrange(1000000):
+    for epoch in range(1000000):
         t0 = time.time()
         
         result = model.train(data_train, n_batch=n_batch)

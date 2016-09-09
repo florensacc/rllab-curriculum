@@ -1,6 +1,5 @@
-from __future__ import print_function
 from rllab.misc.tabulate import tabulate
-from rllab.misc.console import mkdir_p,colorize
+from rllab.misc.console import mkdir_p, colorize
 from rllab.misc.autoargs import get_all_parameters
 from contextlib import contextmanager
 import numpy as np
@@ -12,7 +11,7 @@ import dateutil.tz
 import csv
 import joblib
 import json
-import cPickle as pickle
+import pickle as pickle
 import base64
 
 _prefixes = []
@@ -66,7 +65,7 @@ def remove_text_output(file_name):
 
 
 def add_tabular_output(file_name):
-    _add_output(file_name, _tabular_outputs, _tabular_fds, mode='wb')
+    _add_output(file_name, _tabular_outputs, _tabular_fds, mode='w')
 
 
 def remove_tabular_output(file_name):
@@ -102,7 +101,7 @@ def get_log_tabular_only():
     return _log_tabular_only
 
 
-def log(s, with_prefix=True, with_timestamp=True,color=None):
+def log(s, with_prefix=True, with_timestamp=True, color=None):
     out = s
     if with_prefix:
         out = _prefix_str + out
@@ -111,11 +110,11 @@ def log(s, with_prefix=True, with_timestamp=True,color=None):
         timestamp = now.strftime('%Y-%m-%d %H:%M:%S.%f %Z')
         out = "%s | %s" % (timestamp, out)
     if color is not None:
-        out = colorize(out,color)
+        out = colorize(out, color)
     if not _log_tabular_only:
         # Also log to stdout
         print(out)
-        for fd in _text_fds.values():
+        for fd in list(_text_fds.values()):
             fd.write(out + '\n')
             fd.flush()
         sys.stdout.flush()
@@ -188,8 +187,8 @@ def dump_tabular(*args, **kwargs):
         tabular_dict = dict(_tabular)
         # Also write to the csv files
         # This assumes that the keys in each iteration won't change!
-        for tabular_fd in _tabular_fds.values():
-            writer = csv.DictWriter(tabular_fd, fieldnames=tabular_dict.keys())
+        for tabular_fd in list(_tabular_fds.values()):
+            writer = csv.DictWriter(tabular_fd, fieldnames=list(tabular_dict.keys()))
             if tabular_fd not in _tabular_header_written:
                 writer.writeheader()
                 _tabular_header_written.add(tabular_fd)
@@ -221,11 +220,11 @@ def save_itr_params(itr, params):
 
 def log_parameters(log_file, args, classes):
     log_params = {}
-    for param_name, param_value in args.__dict__.iteritems():
-        if any([param_name.startswith(x) for x in classes.keys()]):
+    for param_name, param_value in args.__dict__.items():
+        if any([param_name.startswith(x) for x in list(classes.keys())]):
             continue
         log_params[param_name] = param_value
-    for name, cls in classes.iteritems():
+    for name, cls in classes.items():
         if isinstance(cls, type):
             params = get_all_parameters(cls, args)
             params["_name"] = getattr(args, name)
@@ -240,33 +239,34 @@ def log_parameters(log_file, args, classes):
 
 def stub_to_json(stub_sth):
     from rllab.misc import instrument
-    if isinstance(stub_sth, instrument.StubObject):
+    from rllab.misc import instrument2
+    if isinstance(stub_sth, instrument.StubObject) or isinstance(stub_sth, instrument2.StubObject):
         assert len(stub_sth.args) == 0
         data = dict()
-        for k, v in stub_sth.kwargs.iteritems():
+        for k, v in stub_sth.kwargs.items():
             data[k] = stub_to_json(v)
         data["_name"] = stub_sth.proxy_class.__module__ + "." + stub_sth.proxy_class.__name__
         return data
-    elif isinstance(stub_sth, instrument.StubAttr):
+    elif isinstance(stub_sth, instrument.StubAttr) or isinstance(stub_sth, instrument2.StubAttr):
         return dict(
             obj=stub_to_json(stub_sth.obj),
             attr=stub_to_json(stub_sth.attr_name)
         )
-    elif isinstance(stub_sth, instrument.StubMethodCall):
+    elif isinstance(stub_sth, instrument.StubMethodCall) or isinstance(stub_sth, instrument2.StubMethodCall):
         return dict(
             obj=stub_to_json(stub_sth.obj),
             method_name=stub_to_json(stub_sth.method_name),
             args=stub_to_json(stub_sth.args),
             kwargs=stub_to_json(stub_sth.kwargs),
         )
-    elif isinstance(stub_sth, instrument.BinaryOp):
+    elif isinstance(stub_sth, instrument.BinaryOp) or isinstance(stub_sth, instrument2.BinaryOp):
         return "binary_op"
-    elif isinstance(stub_sth, instrument.StubClass):
+    elif isinstance(stub_sth, instrument.StubClass) or isinstance(stub_sth, instrument2.StubClass):
         return stub_sth.proxy_class.__module__ + "." + stub_sth.proxy_class.__name__
     elif isinstance(stub_sth, dict):
-        return {stub_to_json(k): stub_to_json(v) for k, v in stub_sth.iteritems()}
+        return {stub_to_json(k): stub_to_json(v) for k, v in stub_sth.items()}
     elif isinstance(stub_sth, (list, tuple)):
-        return map(stub_to_json, stub_sth)
+        return list(map(stub_to_json, stub_sth))
     elif type(stub_sth) == type(lambda: None):
         return stub_sth.__module__ + "." + stub_sth.__name__
     elif "theano" in str(type(stub_sth)):
@@ -276,13 +276,13 @@ def stub_to_json(stub_sth):
 
 def log_parameters_lite(log_file, args):
     log_params = {}
-    for param_name, param_value in args.__dict__.iteritems():
+    for param_name, param_value in args.__dict__.items():
         log_params[param_name] = param_value
     if args.args_data is not None:
         stub_method = pickle.loads(base64.b64decode(args.args_data))
         method_args = stub_method.kwargs
         log_params["json_args"] = dict()
-        for k, v in method_args.items():
+        for k, v in list(method_args.items()):
             log_params["json_args"][k] = stub_to_json(v)
         kwargs = stub_method.obj.kwargs
         for k in ["baseline", "env", "policy"]:
@@ -302,7 +302,8 @@ def log_variant(log_file, variant_data):
     with open(log_file, "w") as f:
         json.dump(variant_json, f, indent=2, sort_keys=True)
 
-def record_tabular_misc_stat(key,values):
+
+def record_tabular_misc_stat(key, values):
     record_tabular(key + "Average", np.average(values))
     record_tabular(key + "Std", np.std(values))
     record_tabular(key + "Median", np.median(values))

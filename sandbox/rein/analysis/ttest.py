@@ -58,8 +58,8 @@ for m, s in zip(mean, std):
             result_test = welch2(m[i], s[i], 5,
                                        m[j], s[j], 5)
             if (not result_test[1] < 0.05) and (m[i] == np.max(m) or m[j] == np.max(m)) :
-                print('task %s: %s not different from %s (p = %s)' % (counter, methods[i], methods[j], result_test[1]))
-                print(m[i], m[j])
+                print(('task %s: %s not different from %s (p = %s)' % (counter, methods[i], methods[j], result_test[1])))
+                print((m[i], m[j]))
 #             else: 
 #                 print('task %s: %s IS different from %s (p = %s)' % (counter, methods[i], methods[j], result_test[1]))
     

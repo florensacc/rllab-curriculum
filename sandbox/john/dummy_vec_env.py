@@ -1,11 +1,11 @@
-import tempfile, cPickle, subprocess, sys, numpy as np, os
+import tempfile, pickle, subprocess, sys, numpy as np, os
 import zerorpc
-from vec_env import VecEnv
+from .vec_env import VecEnv
 from copy import deepcopy
 
 class DummyVecEnv(VecEnv):
     def __init__(self, env, n, k, max_path_length = np.inf):
-        self.envs = [deepcopy(env) for _ in xrange(n*k)]
+        self.envs = [deepcopy(env) for _ in range(n*k)]
         self.k = k
         self._action_space = env.action_space
         self._observation_space = env.observation_space        
@@ -13,7 +13,7 @@ class DummyVecEnv(VecEnv):
         self.max_path_length = max_path_length
     def step(self, action_n):
         results = [env.step(a)[:3] for (a,env) in zip(action_n, self.envs)]
-        obs, rews, dones = map(np.array, zip(*results))
+        obs, rews, dones = list(map(np.array, list(zip(*results))))
         self.ts += 1
         dones[self.ts >= self.max_path_length] = True
         for (i, done) in enumerate(dones):

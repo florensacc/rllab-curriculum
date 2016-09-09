@@ -39,7 +39,7 @@ class PointEnv(Env):
         return Step(observation=next_s, reward=reward, done=done)
 
     def render(self):
-        print 'current state:', self._state
+        print('current state:', self._state)
 
     def r(self,s,a):
         return -np.sum((s+a)** 2.)

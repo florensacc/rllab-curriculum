@@ -70,7 +70,7 @@ class AtariEnv(Env, Serializable):
     def step(self, a):
         reward = 0.0
         action = self._action_set[a]
-        for _ in xrange(self.frame_skip):
+        for _ in range(self.frame_skip):
             reward += self.ale.act(action)
         ob = self._get_obs()
 

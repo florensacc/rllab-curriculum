@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import numpy as np
 import itertools
 from rllab.misc import logger
@@ -15,7 +15,7 @@ class HashingBonusEvaluator(object):
         for bucket_size in bucket_sizes:
             mod = 1
             mods = []
-            for _ in xrange(dim_key):
+            for _ in range(dim_key):
                 mods.append(mod)
                 mod = (mod * 2) % bucket_size
             mods_list.append(mods)
@@ -37,13 +37,13 @@ class HashingBonusEvaluator(object):
 
     def inc_hash(self, observations):
         keys = self.compute_keys(observations)
-        for idx in xrange(len(self.bucket_sizes)):
+        for idx in range(len(self.bucket_sizes)):
             np.add.at(self.tables[idx], keys[:, idx], 1)
 
     def query_hash(self, observations):
         keys = self.compute_keys(observations)
         all_counts = []
-        for idx in xrange(len(self.bucket_sizes)):
+        for idx in range(len(self.bucket_sizes)):
             all_counts.append(self.tables[idx, keys[:, idx]])
         counts = np.asarray(all_counts).min(axis=0)
         return counts
@@ -69,6 +69,7 @@ class HashingBonusEvaluator(object):
             bonuses = 1./np.log(counts + 1)
         else:
             raise NotImplementedError
+        path["counts"] = counts
         return bonuses
 
     def fit_after_process_samples(self, samples_data):

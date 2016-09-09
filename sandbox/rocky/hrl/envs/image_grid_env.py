@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.envs.base import Step
 import numpy as np
 
@@ -49,8 +49,8 @@ class ImageGridEnv(Env, Serializable):
 
         actions = []
 
-        for k in xrange(action_interval, -1, -2):
-            for inc in xrange(k + 1):
+        for k in range(action_interval, -1, -2):
+            for inc in range(k + 1):
                 actions.append((k - inc, inc))
                 actions.append((k - inc, -inc))
                 actions.append((inc - k, -inc))

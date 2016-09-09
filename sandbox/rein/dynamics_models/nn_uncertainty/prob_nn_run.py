@@ -1,5 +1,5 @@
 import numpy as np
-from prob_nn import ProbNN
+from .prob_nn import ProbNN
 from sandbox.rein.dynamics_models.bnn.utils import load_dataset_1Dregression
 import lasagne
 import time
@@ -57,8 +57,8 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
         _f, axarr = plt.subplots(
             n_plots_v, n_plots_h, sharex=True, sharey=True)
         painter_weights_individual = []
-        for i in xrange(n_plots_v):
-            for j in xrange(n_plots_h):
+        for i in range(n_plots_v):
+            for j in range(n_plots_h):
                 hl, = axarr[i][j].plot(x, x)
                 axarr[i][j].set_ylim(ymin=0, ymax=2)
                 painter_weights_individual.append(hl)
@@ -142,7 +142,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             plt.draw()
 
         elif PLOT_WEIGHTS_INDIVIDUAL:
-            for i in xrange(n_plots):
+            for i in range(n_plots):
                 w_mu = layer.mu.eval()[i, 0]
                 w_rho = layer.rho.eval()[i, 0]
                 w_sigma = np.log(1 + np.exp(w_rho))
@@ -160,7 +160,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             import matplotlib.pyplot as plt
 
             ys = []
-            for i in xrange(100):
+            for i in range(100):
                 y = [model.pred_fn(x[None, :])[0][0] for x in X_test]
                 y = np.asarray(y)[:, None]
                 ys.append(y)
@@ -202,7 +202,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             rnd_indices = np.random.random_integers(
                 low=0, high=(100 - 1), size=ys.shape[0])
             axarr[0].plot(np.array(X_test)[:, 0][:, None], np.array(
-                ys[range(ys.shape[0]), rnd_indices]), 'o', label="y", color=(0, 0.7, 0, 0.2))
+                ys[list(range(ys.shape[0])), rnd_indices]), 'o', label="y", color=(0, 0.7, 0, 0.2))
             axarr[0].set_xlim([-8.5, 9.5])
             axarr[0].set_ylim([-5, 5])
             axarr[1].set_xlim([-8.5, 9.5])
@@ -211,18 +211,18 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             plt.show()
 
         elif PLOT_KL:
-            painter_kl.set_xdata(range((epoch + 1)))
+            painter_kl.set_xdata(list(range((epoch + 1))))
             painter_kl.set_ydata(kl_div_means)
             plt.draw()
         # ------------------
 
         # Then we print the results for this epoch:
-        print("Epoch {} of {} took {:.3f}s".format(
-            epoch + 1, num_epochs, time.time() - start_time))
-        print("  training loss:\t\t{:.6f}".format(
-            train_err / train_batches))
-        print(
-            "  KL divergence:\t\t{:.6f} ({:.6f})".format(kl_mean, kl_stdn))
+        print(("Epoch {} of {} took {:.3f}s".format(
+            epoch + 1, num_epochs, time.time() - start_time)))
+        print(("  training loss:\t\t{:.6f}".format(
+            train_err / train_batches)))
+        print((
+            "  KL divergence:\t\t{:.6f} ({:.6f})".format(kl_mean, kl_stdn)))
 
     print("Done training.")
 

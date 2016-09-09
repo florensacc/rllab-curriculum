@@ -2,8 +2,8 @@
 # Hyper-parameters are the same as Nature DQN
 # Notice that Monte-Carlo returns contribute to Q update targets
 
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import sys,os
 sys.path.append('.')

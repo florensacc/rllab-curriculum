@@ -9,7 +9,7 @@ import time, sys
 import pdb
 import itertools, random
 import math
-import cPickle as pickle
+import pickle as pickle
 import scipy.optimize
 import scipy.misc
 import matplotlib.pyplot as plt
@@ -179,7 +179,7 @@ class DQNP(object):
         def prepare_inputX(memory, idx):
             bs = len(idx)
             bnX = np.zeros((bs,) + network_input_dim, dtype='float32')
-            for i, ind in zip(xrange(bs), idx):
+            for i, ind in zip(range(bs), idx):
                 bnX[i] = memory[(ind - self.temporal_frames + 1):(ind + 1), observation_mask].reshape(network_input_dim)
             return bnX
 
@@ -193,7 +193,7 @@ class DQNP(object):
 
         ob = env.reset()
 
-        for step_i in xrange(self.max_iter):
+        for step_i in range(self.max_iter):
             memory[memory_i, observation_mask] = preprocess(ob, network_input_img_size).ravel()
 
             eps = max(self.min_eps, 1 - 0.9 / 1e6 * step_i)
@@ -218,7 +218,7 @@ class DQNP(object):
 
             if step_i >= self.replay_min:
                 # fixing behabior policy but approximate gradient steps
-                for _ in xrange(self.dup_factor):
+                for _ in range(self.dup_factor):
                     to_train_inds.append(
                         np.random.randint(
                             self.temporal_frames - 1,
@@ -250,7 +250,7 @@ class DQNP(object):
                     t *= 0.
                     t += time.time()
 
-                    for k,v in this_stat.items():
+                    for k,v in list(this_stat.items()):
                         logger.record_tabular(k, v)
                 logger.dump_tabular(with_prefix=False)
 

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.semi_vae import SemiVAE
@@ -121,7 +121,7 @@ for v in variants[:1]:
         # dataset = MnistDataset()
 
         dist = Gaussian(zdim)
-        for _ in xrange(v["nar"]):
+        for _ in range(v["nar"]):
             dist = AR(zdim, dist, neuron_ratio=v["nr"],
                     data_init_wnorm=True,
                 data_init_scale=0.1,

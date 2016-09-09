@@ -50,7 +50,7 @@ class DeterministicValueGradient(RLAlgorithm):
 
     def train(self):
         self.start_worker()
-        for itr in xrange(self.n_itr):
+        for itr in range(self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 path = rollout(
                     self.env,
@@ -71,7 +71,7 @@ class DeterministicValueGradient(RLAlgorithm):
                 if self.plot:
                     self.update_plot()
                     if self.pause_for_plot:
-                        raw_input("Plotting evaluation run: Press Enter to "
+                        input("Plotting evaluation run: Press Enter to "
                                   "continue...")
         self.shutdown_worker()
 

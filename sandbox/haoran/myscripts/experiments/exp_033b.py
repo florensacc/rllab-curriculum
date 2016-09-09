@@ -42,7 +42,7 @@ repo = git.Repo('.')
 if repo.is_dirty():
     answer = ''
     while answer not in ['y','Y','n','N']:
-        answer = raw_input("The repository has uncommitted changes. Do you want to continue? (y/n)")
+        answer = input("The repository has uncommitted changes. Do you want to continue? (y/n)")
     if answer in ['n','N']:
         sys.exit(1)
 
@@ -138,7 +138,7 @@ for env_name,lr,gae_lambda in itertools.product(env_names,lr_list,gae_lambda_lis
         elif baseline_type == "zero":
             baseline = ZeroBaseline(env_spec=env.spec)
         else:
-            print "Unknown baseline."
+            print("Unknown baseline.")
             sys.exit(1)
 
 
@@ -190,7 +190,7 @@ for env_name,lr,gae_lambda in itertools.product(env_names,lr_list,gae_lambda_lis
                 ),
             )
         else:
-            print "Unknown algorithm %s"%(algo_type)
+            print("Unknown algorithm %s"%(algo_type))
             sys.exit(1)
 
 
@@ -222,7 +222,7 @@ for env_name,lr,gae_lambda in itertools.product(env_names,lr_list,gae_lambda_lis
                     )
             elif "ec2" in mode:
                 if len(exp_name) > 64:
-                    print "Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name)
+                    print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
                     sys.exit(1)
                 def run():
                     run_experiment_lite(

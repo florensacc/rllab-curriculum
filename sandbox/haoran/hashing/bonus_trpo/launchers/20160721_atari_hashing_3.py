@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.hashing.algos.bonus_trpo import BonusTRPO
 from sandbox.rocky.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
@@ -70,7 +70,7 @@ for v in variants:
         bonus_evaluator=bonus_evaluator,
         bonus_baseline=bonus_baseline,
         bonus_coeff=v["bonus_coeff"],
-        batch_size=50000,
+        batch_size=500,
         max_path_length=4500,
         discount=v["discount"],
         n_itr=1000,
@@ -82,7 +82,7 @@ for v in variants:
         seed=v["seed"],
         n_parallel=4,
         snapshot_mode="last",
-        mode="lab_kube",
+        mode="local",
         variant=v,
     )
     # break

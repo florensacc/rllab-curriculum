@@ -1,13 +1,13 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 import numpy as np
-import cPickle as pickle
+import pickle as pickle
 
 
 class DummyVecEnv(object):
     def __init__(self, env, n, max_path_length=np.inf, envs=None):
         if envs is None:
-            envs = [pickle.loads(pickle.dumps(env)) for _ in xrange(n)]
+            envs = [pickle.loads(pickle.dumps(env)) for _ in range(n)]
         self.envs = envs
         self._action_space = env.action_space
         self._observation_space = env.observation_space
@@ -16,7 +16,7 @@ class DummyVecEnv(object):
 
     def step(self, action_n):
         results = [env.step(a)[:3] for (a, env) in zip(action_n, self.envs)]
-        obs, rews, dones = map(np.asarray, zip(*results))
+        obs, rews, dones = list(map(np.asarray, list(zip(*results))))
         self.ts += 1
         dones[self.ts >= self.max_path_length] = True
         for (i, done) in enumerate(dones):

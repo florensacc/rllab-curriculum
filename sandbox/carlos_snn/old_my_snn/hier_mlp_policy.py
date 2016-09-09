@@ -83,7 +83,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         self.trainable_snn = trainable_snn
         self.pkl_path = pkl_path
 
-        print latent_name
+        print(latent_name)
         if latent_name == 'normal':
             self.latent_dist = DiagonalGaussian(self.latent_dim)
             self.latent_dist_info = dict(mean=np.zeros(self.latent_dim), log_std=np.zeros(self.latent_dim))
@@ -96,7 +96,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
                 self.latent_dist_info = dict(prob=1. / self.latent_dim * np.ones(self.latent_dim))
             else:
                 self.latent_dist_info = dict(prob=np.ones(self.latent_dim))
-            print self.latent_dist_info
+            print(self.latent_dist_info)
         else:
             raise NotImplementedError
 
@@ -153,7 +153,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         )
         if not self.trainable_snn:
             for layer in mean_network.layers:
-                for param, tags in layer.params.iteritems():  # params of layer are OrDict: key=the shared var, val=tags
+                for param, tags in layer.params.items():  # params of layer are OrDict: key=the shared var, val=tags
                     tags.remove("trainable")
 
         self._layers_mean = mean_network.layers
@@ -240,7 +240,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
     @overrides
     def get_action(self, observation):
         actions, outputs = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in outputs.iteritems()}
+        return actions[0], {k: v[0] for k, v in outputs.items()}
 
     def get_actions(self, observations):
         ##CF
@@ -288,7 +288,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             actions = rnd * np.exp(log_std) + mean
         # print latents
         selector_output = self._f_select(observations)
-        print selector_output
+        print(selector_output)
         return actions, dict(mean=mean, log_std=log_std)
 
     def set_pre_fix_latent(self, latent):

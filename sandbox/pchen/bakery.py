@@ -6,7 +6,7 @@ from functools import partial
 import joblib
 
 from rllab.algos.base import Algorithm
-import cPickle as pickle
+import pickle as pickle
 
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
@@ -54,7 +54,7 @@ class Bakery(Algorithm, LasagnePowered):
         #     new_pi = pickle.loads(pickle.dumps(policy))
 
         cur_ds = sum(p["observations"].shape[0] for p in paths)
-        print "cur data size", cur_ds
+        print("cur data size", cur_ds)
         if data_size and data_size > cur_ds:
             diff_ds = data_size - cur_ds
             cur_params = policy.get_param_values()
@@ -65,10 +65,10 @@ class Bakery(Algorithm, LasagnePowered):
                 max_path_length=max_path_length,
             )
 
-        print "env", env
+        print("env", env)
 
         layers = new_pi._mean_network.layers
-        print "pi has ", len(layers)
+        print("pi has ", len(layers))
         last_encoder_layer = layers[2]
         bake_layers = [last_encoder_layer]
         predictions_tgt_var = TT.matrix("predictions")

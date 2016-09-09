@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy as np
 
@@ -43,7 +43,7 @@ class PredictionBonusEvaluator(object):
         self.bonus_scale = np.median(all_bonuses)
 
     def log_diagnostics(self, samples_data):
-        bonuses = np.concatenate(map(self.predict, samples_data["paths"]))
+        bonuses = np.concatenate(list(map(self.predict, samples_data["paths"])))
         logger.record_tabular("AverageBonus", np.mean(bonuses))
         logger.record_tabular("MaxBonus", np.max(bonuses))
         logger.record_tabular("MinBonus", np.min(bonuses))

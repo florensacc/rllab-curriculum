@@ -48,12 +48,12 @@ class Latent_regressor(Parameterized, Serializable):
         self.regressor_args = regressor_args
         # decide what obs variables will be regressed upon
         if obs_regressed == 'all':
-            self.obs_regressed = range(env_spec.observation_space.flat_dim)
+            self.obs_regressed = list(range(env_spec.observation_space.flat_dim))
         else:
             self.obs_regressed = obs_regressed
         # decide what action variables will be regressed upon
         if act_regressed == 'all':
-            self.act_regressed = range(env_spec.action_space.flat_dim)
+            self.act_regressed = list(range(env_spec.action_space.flat_dim))
         else:
             self.act_regressed = act_regressed
         # shape the input dimension of the NN for the above decisions.
@@ -92,7 +92,7 @@ class Latent_regressor(Parameterized, Serializable):
                 )
         elif policy.latent_name == 'categorical':
             if self.recurrent:
-                print 'setting a recurrent categorical regressor'
+                print('setting a recurrent categorical regressor')
                 self._regressor = CategoricalRecurrentRegressor(  # not implemented
                     input_shape=(self.obs_act_dim,),
                     output_dim=policy.latent_dim,
@@ -101,7 +101,7 @@ class Latent_regressor(Parameterized, Serializable):
                     **regressor_args
                 )
             else:
-                print 'setting a MLP categorical regressor'
+                print('setting a MLP categorical regressor')
                 self._regressor = CategoricalMLPRegressor(
                     input_shape=(self.obs_act_dim,),
                     output_dim=policy.latent_dim,

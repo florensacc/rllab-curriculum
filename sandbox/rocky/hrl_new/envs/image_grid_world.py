@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.envs.grid_world_env import GridWorldEnv
 from rllab.spaces.box import Box
 from rllab.envs.base import Step
@@ -49,10 +49,10 @@ class ImageGridWorld(GridWorldEnv):
 class RandomImageGridWorld(ImageGridWorld, Serializable):
     def __init__(self, base_desc):
         Serializable.quick_init(self, locals())
-        base_desc = np.asarray(map(list, base_desc))
+        base_desc = np.asarray(list(map(list, base_desc)))
         base_desc[base_desc == 'F'] = '.'
         self.base_desc = base_desc
-        self.valid_positions = zip(*np.where(base_desc == '.'))
+        self.valid_positions = list(zip(*np.where(base_desc == '.')))
         self.reset()
 
     def reset(self):
@@ -67,23 +67,20 @@ class RandomImageGridWorld(ImageGridWorld, Serializable):
 class CurriculumRandomImageGridWorld(ImageGridWorld, Serializable):
     def __init__(self, base_desc, n_itr, sample_mode='uniform_in_dist', interp_mode='linear'):
         Serializable.quick_init(self, locals())
-        base_desc = np.asarray(map(list, base_desc))
+        base_desc = np.asarray(list(map(list, base_desc)))
         base_desc[base_desc == 'F'] = '.'
         self.base_desc = base_desc
 
 
-        self.valid_positions = zip(*np.where(base_desc == '.'))
+        self.valid_positions = list(zip(*np.where(base_desc == '.')))
         self.valid_pairs = dict(sorted(
-            map(
-                lambda x: (x[0], list(x[1])),
-                itertools.groupby(
+            [(x[0], list(x[1])) for x in itertools.groupby(
                     sorted(
                         list(itertools.permutations(self.valid_positions, 2)),
                         key=self.pos_dist
                     ),
                     self.pos_dist
-                )
-            ),
+                )],
             key=lambda x: x[0]
         ))
 

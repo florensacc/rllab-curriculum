@@ -18,7 +18,7 @@ def load_problem(log_dir, iteration=None, pkl_file=None, json_file=None):
     if osp.isfile(pkl_file_path):
         data = joblib.load(pkl_file_path)  # load the pkl file
     else:
-        print "Cannot find %s" % (pkl_file_path)
+        print("Cannot find %s" % (pkl_file_path))
         sys.exit(1)
     # load json file
     if json_file is None:
@@ -32,7 +32,7 @@ def load_problem(log_dir, iteration=None, pkl_file=None, json_file=None):
     if osp.isfile(json_file_path):
         params = json.load(file(json_file_path, "r"))  # load the json file
     else:
-        print "Cannot find %s" % (json_file_path)
+        print("Cannot find %s" % (json_file_path))
         sys.exit(1)
 
     # read algo (a bit cumbersome) ------------------------
@@ -41,7 +41,7 @@ def load_problem(log_dir, iteration=None, pkl_file=None, json_file=None):
     _name = algo_spec['_name']  # this is always the dot path of the module!
     script_name = _name.split('.')[-2]
     class_name = _name.split('.')[-1]
-    print '\n\n' + script_name + '\n\n'
+    print('\n\n' + script_name + '\n\n')
     algo_class = imp.load_source('%s' % class_name, 'sandbox/carlos_snn/old_my_snn/%s.py' % script_name)
 
     ALGO = getattr(algo_class, class_name)

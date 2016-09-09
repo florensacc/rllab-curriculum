@@ -62,7 +62,7 @@ class FirstOrderOptimizer(Serializable):
         if gradients is None:
             gradients = theano.grad(loss, target.get_params(trainable=True), disconnected_inputs='ignore')
         updates = self._update_method(gradients, target.get_params(trainable=True))
-        updates = OrderedDict([(k, v.astype(k.dtype)) for k, v in updates.iteritems()])
+        updates = OrderedDict([(k, v.astype(k.dtype)) for k, v in updates.items()])
 
         if extra_inputs is None:
             extra_inputs = list()
@@ -104,7 +104,7 @@ class FirstOrderOptimizer(Serializable):
         )
 
         itr = 0
-        for epoch in pyprind.prog_bar(range(self._max_epochs)):
+        for epoch in pyprind.prog_bar(list(range(self._max_epochs))):
             for batch in dataset.iterate(update=True):
                 f_opt(*batch)
                 if yield_itr is not None and (itr % (yield_itr+1)) == 0:

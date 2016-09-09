@@ -85,7 +85,7 @@ for algo in [VPG, TNPG, PPO, TRPO, CEM, CMAES, ERWR, REPS]:
 
 @tools.params(*polopt_cases)
 def test_polopt_algo(algo_cls, env_cls, policy_cls):
-    print "Testing %s, %s, %s" % (algo_cls.__name__, env_cls.__name__, policy_cls.__name__)
+    print("Testing %s, %s, %s" % (algo_cls.__name__, env_cls.__name__, policy_cls.__name__))
     env = env_cls()
     policy = policy_cls(env_spec=env.spec, )
     baseline = ZeroBaseline(env_spec=env.spec)

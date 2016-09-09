@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from nose2.tools import such
 from sandbox.rocky.hrl.envs.perm_grid_env import PermGridEnv
@@ -19,6 +19,6 @@ with such.A("Perm Grid Env") as it:
         for a in path["actions"]:
             _, rew, _, _ = env.step(env.action_space.unflatten(a))
             score += rew
-        it.assertEquals(score, 5)
+        it.assertEqual(score, 5)
 
 it.createTests(globals())

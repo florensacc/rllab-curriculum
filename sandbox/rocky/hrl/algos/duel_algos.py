@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy as np
 from rllab.misc import special
@@ -16,7 +16,7 @@ from rllab.sampler.stateful_pool import singleton_pool
 from rllab.sampler.utils import rollout
 import theano
 import theano.tensor as TT
-import cPickle as pickle
+import pickle as pickle
 
 floatX = theano.config.floatX
 
@@ -47,7 +47,7 @@ class DuelBatchPolopt(BatchPolopt, Serializable):
             self.duel_algo.start_worker()
             self.duel_algo.init_opt()
 
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in range(self.start_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 with logger.tabular_prefix('Master_'), logger.prefix('Master | '):
                     master_paths = self.master_algo.obtain_samples(itr)
@@ -71,7 +71,7 @@ class DuelBatchPolopt(BatchPolopt, Serializable):
                 if self.plot:
                     self.master_algo.update_plot()
                     if self.pause_for_plot:
-                        raw_input("Plotting evaluation run: Press Enter to "
+                        input("Plotting evaluation run: Press Enter to "
                                   "continue...")
 
         self.master_algo.shutdown_worker()

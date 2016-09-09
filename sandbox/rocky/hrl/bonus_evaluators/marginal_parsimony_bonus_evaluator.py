@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.rocky.hrl.bonus_evaluators.base import BonusEvaluator
 from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
 from rllab.envs.base import EnvSpec

@@ -45,7 +45,7 @@ class NN:
         network = lasagne.layers.InputLayer(shape=(self.batch_size, self.n_in))
 
         # Hidden layers
-        for i in xrange(len(self.n_hidden)):
+        for i in range(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             network = lasagne.layers.DenseLayer(
                 network, self.n_hidden[i], nonlinearity=self.transf)
@@ -202,7 +202,7 @@ class BootstrapNetwork(LasagnePowered, Parameterized):
                 rnd_indices = np.random.random_integers(
                     low=0, high=(len(self._networks) - 1), size=ys.shape[0])
                 axarr[0].plot(np.array(X_test)[:, 0][:, None], np.array(
-                    ys[range(ys.shape[0]),rnd_indices]), 'o', label="y", color=(0, 0.7, 0, 0.2))
+                    ys[list(range(ys.shape[0])),rnd_indices]), 'o', label="y", color=(0, 0.7, 0, 0.2))
 #                 axarr[0].xlim(xmin=-8.5, xmax=9.5)
 #                 axarr[0].ylim(ymin=-5, ymax=5)
                 axarr[0].set_xlim([-8.5, 9.5])
@@ -213,10 +213,10 @@ class BootstrapNetwork(LasagnePowered, Parameterized):
                 plt.show()
 
             # Then we print the results for this epoch:
-            print("Epoch {} of {} took {:.3f}s".format(
-                epoch + 1, num_epochs, time.time() - start_time))
-            print("  training loss:\t\t{:.6f}".format(
-                train_err / train_batches))
+            print(("Epoch {} of {} took {:.3f}s".format(
+                epoch + 1, num_epochs, time.time() - start_time)))
+            print(("  training loss:\t\t{:.6f}".format(
+                train_err / train_batches)))
 
         print("Done training.")
 

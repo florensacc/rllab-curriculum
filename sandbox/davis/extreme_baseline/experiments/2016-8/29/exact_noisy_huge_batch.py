@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 info = """Same as previous experiment but with huge batch size. Trying to see if data starvation is
 the reason the extreme linear baseline is not learning the optimal coefficients by force-feeding it
@@ -29,7 +29,7 @@ def experiment_variant_generator():
     vg.add("step_size", [0.01], hide=True)
     vg.add("max_path_length", [10], hide=True)
     vg.add("discount", [1], hide=True)
-    vg.add("seed", range(5), hide=True)
+    vg.add("seed", list(range(5)), hide=True)
     vg.add("start_state", [0, 1, 10])
     vg.add("noise_level", [0.01, 0.1, 1, 10])
     vg.add("lookahead", [0, 10], hide=True)

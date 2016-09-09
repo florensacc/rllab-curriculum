@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.gps.envs.symbolic_swimmer_env import SymbolicSwimmerEnv
 from sandbox.rocky.gps.envs.symbolic_double_pendulum_env import SymbolicDoublePendulumEnv
@@ -11,12 +11,12 @@ from rllab.misc.instrument import stub, run_experiment_lite
 
 stub(globals())
 
-envs = map(SymbolicNormalize, [
+envs = list(map(SymbolicNormalize, [
     SymbolicDoublePendulumEnv(),
     SymbolicSwimmerEnv(),
     SymbolicCartpoleEnv(),
     SymbolicCartpoleSwingupEnv(),
-])
+]))
 
 for env in envs:
     for init_controller_std in [0.1, 0.3, 0.5, 0.7, 1.0]:

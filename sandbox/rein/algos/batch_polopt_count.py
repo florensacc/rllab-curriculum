@@ -21,7 +21,8 @@ class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
-    This one is specifically created for using discrete embedding-based counts.
+    This one is specifically created for using discrete embedding-based counts. This means autoencoding from #n frames
+    to last frame, to also capture some of the motion.
     """
 
     # Enums
@@ -122,16 +123,19 @@ class BatchPolopt(RLAlgorithm):
         self._dyn_pool_args = dyn_pool_args
         self._num_seq_frames = num_seq_frames
 
+        # Specific for Atari
         observation_dtype = "uint8"
         self.pool = ReplayPool(
             max_pool_size=self._dyn_pool_args['size'],
-            # self.env.observation_space.shape,
             observation_shape=(self.env.observation_space.flat_dim,),
             action_dim=self.env.action_dim,
             observation_dtype=observation_dtype,
             num_seq_frames=self._num_seq_frames,
             **self._dyn_pool_args
         )
+
+        # Counting table
+        self.counting_table = np.zeros(shape=(2 ** 32, 1))
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy, self.autoenc)
@@ -147,11 +151,10 @@ class BatchPolopt(RLAlgorithm):
             _i, _t, _ = batch
             _o = self.autoenc.pred_fn(_i)
             if self.autoenc.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
-                _o_s = _o[:, :-1]
-                _o_r = _o[:, -1]
+                _o_s = _o
                 _o_s = _o_s.reshape((-1, np.prod(self.autoenc.state_dim), self.autoenc.num_classes))
                 _o_s = np.argmax(_o_s, axis=2)
-                acc += np.sum(np.abs(_o_s - _t[:, :-1])) + np.sum(np.abs(_o_r - _t[:, -1]))
+                acc += np.sum(np.abs(_o_s - _t))
             else:
                 acc += np.sum(np.square(_o - _t))
         return acc / _inputs.shape[0]
@@ -162,48 +165,36 @@ class BatchPolopt(RLAlgorithm):
         import matplotlib.pyplot as plt
         if not hasattr(self, '_fig'):
             self._fig = plt.figure()
-            self._fig_1 = self._fig.add_subplot(241)
+            self._fig_1 = self._fig.add_subplot(141)
             plt.tick_params(axis='both', which='both', bottom='off', top='off',
                             labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_2 = self._fig.add_subplot(242)
+            self._fig_2 = self._fig.add_subplot(142)
             plt.tick_params(axis='both', which='both', bottom='off', top='off',
                             labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_3 = self._fig.add_subplot(243)
+            self._fig_3 = self._fig.add_subplot(143)
             plt.tick_params(axis='both', which='both', bottom='off', top='off',
                             labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_4 = self._fig.add_subplot(244)
-            plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                            labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_5 = self._fig.add_subplot(245)
-            plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                            labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_6 = self._fig.add_subplot(246)
-            plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                            labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_7 = self._fig.add_subplot(247)
-            plt.tick_params(axis='both', which='both', bottom='off', top='off',
-                            labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_8 = self._fig.add_subplot(248)
+            self._fig_4 = self._fig.add_subplot(144)
+            self._fig_4 = self._fig.add_subplot(144)
             plt.tick_params(axis='both', which='both', bottom='off', top='off',
                             labelbottom='off', right='off', left='off', labelleft='off')
             self._im1, self._im2, self._im3, self._im4 = None, None, None, None
-            self._im5, self._im6, self._im7, self._im8 = None, None, None, None
 
         idx = np.random.randint(0, inputs.shape[0], 1)
         sanity_pred = self.autoenc.pred_fn(inputs)
-        input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
+        input_im = inputs
         lst_input_im = [
             input_im[idx, i * np.prod(self.autoenc.state_dim):(i + 1) * np.prod(self.autoenc.state_dim)].reshape(
                 self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
-            xrange(self._num_seq_frames)]
+            range(self._num_seq_frames)]
         input_im = input_im[:, -np.prod(self.autoenc.state_dim):]
         input_im = input_im[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
-        sanity_pred_im = sanity_pred[idx, :-1]
+        sanity_pred_im = sanity_pred[idx, :]
         if self.autoenc.output_type == self.autoenc.OutputType.CLASSIFICATION:
             sanity_pred_im = sanity_pred_im.reshape((-1, self.autoenc.num_classes))
             sanity_pred_im = np.argmax(sanity_pred_im, axis=1)
         sanity_pred_im = sanity_pred_im.reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
-        target_im = targets[idx, :-1].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
+        target_im = targets[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
 
         if self._predict_delta:
             sanity_pred_im += input_im
@@ -213,7 +204,7 @@ class BatchPolopt(RLAlgorithm):
             sanity_pred_im = sanity_pred_im.astype(float) / float(self.autoenc.num_classes)
             target_im = target_im.astype(float) / float(self.autoenc.num_classes)
             input_im = input_im.astype(float) / float(self.autoenc.num_classes)
-            for i in xrange(len(lst_input_im)):
+            for i in range(len(lst_input_im)):
                 lst_input_im[i] = lst_input_im[i].astype(float) / float(self.autoenc.num_classes)
 
         sanity_pred_im *= 256.
@@ -233,28 +224,68 @@ class BatchPolopt(RLAlgorithm):
                 sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
             self._im4 = self._fig_4.imshow(
                 err, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im5 = self._fig_5.imshow(
-                lst_input_im[0], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im6 = self._fig_6.imshow(
-                lst_input_im[1], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im7 = self._fig_7.imshow(
-                lst_input_im[2], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im8 = self._fig_8.imshow(
-                lst_input_im[3], interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
 
         else:
             self._im1.set_data(input_im)
             self._im2.set_data(target_im)
             self._im3.set_data(sanity_pred_im)
             self._im4.set_data(err)
-            self._im5.set_data(lst_input_im[0])
-            self._im6.set_data(lst_input_im[1])
-            self._im7.set_data(lst_input_im[2])
-            self._im8.set_data(lst_input_im[3])
         plt.savefig(
             logger._snapshot_dir + '/dynpred_img_{}_{}.png'.format(itr, count), bbox_inches='tight')
         # except Exception:
         #     pass
+
+    def fill_replay_pool(self, paths):
+        # Fill replay pool with samples of current batch. Exclude the
+        # last one.
+        for path in paths:
+            path_len = len(path['rewards'])
+            for i in range(path_len):
+                obs = (path['observations'][i] * self.autoenc.num_classes).astype(int)
+                act = path['actions'][i]
+                rew_orig = path['rewards_orig'][i]
+                term = (i == path_len - 1)
+                self.pool.add_sample(obs, act, rew_orig, term)
+
+    def train_autoenc(self, itr):
+        logger.log('Updating autoencoder using replay pool ...')
+        acc_before, acc_after, train_loss = 0., 0., 0.
+        if self.pool.size >= self._dyn_pool_args['min_size']:
+            itr_tot = int(
+                np.ceil(self.num_sample_updates * float(self.batch_size) / self._dyn_pool_args['batch_size']))
+
+            for _ in range(20):
+                batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                _x = batch['observations']
+                _y = batch['observations'][:, -np.prod(self.autoenc.state_dim):]
+                acc_before += self.accuracy(_x, _y)
+            acc_before /= 20.
+
+            for i in range(itr_tot):
+
+                batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+
+                _x = batch['observations']
+                _y = batch['observations'][:, -np.prod(self.autoenc.state_dim):]
+
+                _tl = self.autoenc.train_fn(_x, _y, 0)
+                train_loss += _tl
+                if i % int(np.ceil(itr_tot / 3.)) == 0:
+                    self.plot_pred_imgs(_x, _y, itr, i)
+
+            for _ in range(20):
+                batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                _x = batch['observations']
+                _y = batch['observations'][:, -np.prod(self.autoenc.state_dim):]
+                acc_after += self.accuracy(_x, _y)
+            acc_after /= 20.
+
+            train_loss /= itr_tot
+
+        logger.record_tabular('DynModel_SqErrBefore', acc_before)
+        logger.record_tabular('DynModel_SqErrAfter', acc_after)
+        logger.record_tabular('DynModel_TrainLoss', train_loss)
+        logger.log('Autoencoder updated.')
 
     def train(self):
 
@@ -262,89 +293,26 @@ class BatchPolopt(RLAlgorithm):
         self.init_opt()
 
         episode_rewards, episode_lengths = [], []
-        acc_before, acc_after, train_loss = 0., 0., 0.
 
-        # KL rescaling factor for replay pool-based training.
-        kl_factor = 1.0
-
-        # ATTENTION: important to know when 'rewards' and 'rewards_orig' needs
-        # to be used!
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in range(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
             # Sample trajectories.
             paths = self.obtain_samples()
 
-            # Fill replay pool with samples of current batch. Exclude the
-            # last one.
-            logger.log("Fitting dynamics model using replay pool ...")
-            for path in paths:
-                path_len = len(path['rewards'])
-                for i in xrange(path_len):
-                    obs = (path['observations'][i] * self.autoenc.num_classes).astype(int)
-                    act = path['actions'][i]
-                    rew_orig = path['rewards_orig'][i]
-                    term = (i == path_len - 1)
-                    self.pool.add_sample(obs, act, rew_orig, term)
+            # Add sampled trajectories to the replay pool.
+            self.fill_replay_pool(paths)
 
-            # Now we train the dynamics model using the replay self.pool; only
-            # if self.pool is large enough.
-            if self.pool.size >= self._dyn_pool_args['min_size']:
-                acc_before, acc_after, train_loss = 0., 0., 0.
-                itr_tot = int(
-                    np.ceil(self.num_sample_updates * float(self.batch_size) / self._dyn_pool_args['batch_size']))
-
-                for _ in xrange(20):
-                    batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-                    _x = np.hstack([batch['observations'], batch['actions']])
-                    _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
-                    acc_before += self.accuracy(_x, _y)
-                acc_before /= 20.
-
-                for i in xrange(itr_tot):
-
-                    batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-
-                    _x = np.hstack([batch['observations'], batch['actions']])
-                    if self._predict_delta:
-                        _y = np.hstack(
-                            [(batch['next_observations'] - batch['observations']), batch['rewards'][:, np.newaxis]])
-                    else:
-                        _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
-
-                    _tl = self.autoenc.train_fn(_x, _y, 0 * kl_factor)
-                    train_loss += _tl
-                    if i % int(np.ceil(itr_tot / 3.)) == 0:
-                        self.plot_pred_imgs(_x, _y, itr, i)
-
-                for _ in xrange(20):
-                    batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-                    _x = np.hstack([batch['observations'], batch['actions']])
-                    _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
-                    acc_after += self.accuracy(_x, _y)
-                acc_after /= 20.
-
-                train_loss /= itr_tot
-
-                kl_factor *= self.replay_kl_schedule
-
-            # At this point, the dynamics model has been updated
-            # according to new data, either from the replay pool
-            # or from the current batch, using coarse- or fine-grained
-            # posterior chaining.
-            logger.log('Dynamics model updated.')
-
-            logger.record_tabular('SurprFactor', kl_factor)
-            logger.record_tabular('DynModel_SqErrBefore', acc_before)
-            logger.record_tabular('DynModel_SqErrAfter', acc_after)
-            logger.record_tabular('DynModel_TrainLoss', train_loss)
+            # Train autoencoder using replay pool.
+            self.train_autoenc(itr)
 
             # Here we should extract discrete embedding from samples and use it for updating count table.
-
+            self.count(paths)
 
             # Postprocess trajectory data.
             samples_data = self.process_samples(itr, paths)
 
+            # Diagnostics
             self.env.log_diagnostics(paths)
             self.policy.log_diagnostics(paths)
             self.baseline.log_diagnostics(paths)
@@ -366,8 +334,8 @@ class BatchPolopt(RLAlgorithm):
             if self.plot:
                 self.update_plot()
                 if self.pause_for_plot:
-                    raw_input("Plotting evaluation run: Press Enter to "
-                              "continue...")
+                    input("Plotting evaluation run: Press Enter to "
+                          "continue...")
 
         # Training complete: terminate environment.
         self.shutdown_worker()
@@ -395,6 +363,26 @@ class BatchPolopt(RLAlgorithm):
         if self.plot:
             plotter.update_plot(self.policy, self.max_path_length)
 
+    def count(self, paths):
+
+        def bin_to_int(bitlist):
+            out = 0
+            for bit in bitlist:
+                out = (out << 1) | bit
+            return out
+
+        def count_to_ir(count):
+            return 1. / np.sqrt(count)
+
+        for idx, path in enumerate(paths):
+            keys = np.cast['int'](np.round(self.autoenc.discrete_emb(path['observations'])))
+            counts = np.zeros(len(keys))
+            for idy, key in enumerate(keys):
+                count_as_int = bin_to_int(key)
+                self.counting_table[count_as_int] += 1
+                counts[idy] = self.counting_table[count_as_int]
+            path['KL'] = count_to_ir(counts)
+
     def obtain_samples(self):
         cur_params = self.policy.get_param_values()
 
@@ -415,7 +403,7 @@ class BatchPolopt(RLAlgorithm):
     def process_samples(self, itr, paths):
 
         kls = []
-        for i in xrange(len(paths)):
+        for i in range(len(paths)):
             # We divide the KL by the number of weights in the network, to
             # get a more normalized surprise measure accross models.
             kls.append(paths[i]['KL'])
@@ -435,21 +423,21 @@ class BatchPolopt(RLAlgorithm):
         # Transform intrinsic rewards.
         if self.surprise_transform == BatchPolopt.SurpriseTransform.LOG:
             # Transform surprise into (positive) log space.
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 kls[i] = np.log(1 + kls[i])
         elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP90PERC:
             perc90 = np.percentile(np.hstack(kls), 90)
             # Cap max KL for stabilization.
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 kls[i] = np.minimum(kls[i], perc90)
         elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP99PERC:
             perc99 = np.percentile(np.hstack(kls), 99)
             # Cap max KL for stabilization.
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 kls[i] = np.minimum(kls[i], perc99)
         elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP1000:
             # Cap max KL for stabilization.
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 kls[i] = np.minimum(kls[i], 1000)
         elif self.surprise_transform == BatchPolopt.SurpriseTransform.ZERO100:
             cap = np.percentile(kls_flat, 100)
@@ -461,7 +449,7 @@ class BatchPolopt(RLAlgorithm):
         kls_flat = np.hstack(kls)
 
         # Add Surpr as intrinsic reward to external reward
-        for i in xrange(len(paths)):
+        for i in range(len(paths)):
             paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
 
         baselines = []

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import lasagne
 import lasagne.nonlinearities as NL
@@ -101,15 +101,15 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
         if self._f_dist_info_givens is None:
             # compile function
             obs_var = self._mean_network.input_var
-            latent_keys = ["latent_%d" % idx for idx in xrange(self._n_latent_layers)]
-            latent_vars = [TT.matrix("latent_%d" % idx) for idx in xrange(self._n_latent_layers)]
-            latent_dict = dict(zip(latent_keys, latent_vars))
+            latent_keys = ["latent_%d" % idx for idx in range(self._n_latent_layers)]
+            latent_vars = [TT.matrix("latent_%d" % idx) for idx in range(self._n_latent_layers)]
+            latent_dict = dict(list(zip(latent_keys, latent_vars)))
             self._f_dist_info_givens = ext.compile_function(
                 inputs=[obs_var] + latent_vars,
                 outputs=self.dist_info_sym(obs_var, latent_dict),
             )
         latent_vals = []
-        for idx in xrange(self._n_latent_layers):
+        for idx in range(self._n_latent_layers):
             latent_vals.append(state_infos["latent_%d" % idx])
         return self._f_dist_info_givens(*[obs] + latent_vals)
 
@@ -129,7 +129,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
             for idx, latent_layer in enumerate(self._mean_network.latent_layers):
                 cur_dist_info = dict()
                 prefix = "latent_%d_" % idx
-                for k, v in state_info_vars.iteritems():
+                for k, v in state_info_vars.items():
                     if k.startswith(prefix):
                         cur_dist_info[k[len(prefix):]] = v
                 latent_dist_infos[latent_layer] = cur_dist_info
@@ -153,7 +153,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
         output_dict = dict(mean=mean_var, log_std=log_std_var)
         for idx, latent_var, latent_dist_info in zip(itertools.count(), latent_vars, latent_dist_infos):
             output_dict["latent_%d" % idx] = latent_var
-            for k, v in latent_dist_info.iteritems():
+            for k, v in latent_dist_info.items():
                 output_dict["latent_%d_%s" % (idx, k)] = v
 
         return output_dict
@@ -166,9 +166,9 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
         for idx, latent_dist in enumerate(self._latent_distributions):
             # collect dist info for each latents variable
             prefix = "latent_%d_" % idx
-            old_latent_dist_info = {k[len(prefix):]: v for k, v in old_dist_info_vars.iteritems() if k.startswith(
+            old_latent_dist_info = {k[len(prefix):]: v for k, v in old_dist_info_vars.items() if k.startswith(
                 prefix)}
-            new_latent_dist_info = {k[len(prefix):]: v for k, v in new_dist_info_vars.iteritems() if k.startswith(
+            new_latent_dist_info = {k[len(prefix):]: v for k, v in new_dist_info_vars.items() if k.startswith(
                 prefix)}
             kl += latent_dist.kl_sym(old_latent_dist_info, new_latent_dist_info)
         return kl
@@ -181,9 +181,9 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
         for idx, latent_dist in enumerate(self._latent_distributions):
             latent_var = old_dist_info_vars["latent_%d" % idx]
             prefix = "latent_%d_" % idx
-            old_latent_dist_info = {k[len(prefix):]: v for k, v in old_dist_info_vars.iteritems() if k.startswith(
+            old_latent_dist_info = {k[len(prefix):]: v for k, v in old_dist_info_vars.items() if k.startswith(
                 prefix)}
-            new_latent_dist_info = {k[len(prefix):]: v for k, v in new_dist_info_vars.iteritems() if k.startswith(
+            new_latent_dist_info = {k[len(prefix):]: v for k, v in new_dist_info_vars.items() if k.startswith(
                 prefix)}
             lr *= latent_dist.likelihood_ratio_sym(latent_var, old_latent_dist_info, new_latent_dist_info)
         return lr
@@ -199,7 +199,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
             for idx, latent_dist in enumerate(self._latent_distributions):
                 latent_var = dist_info["latent_%d" % idx]
                 prefix = "latent_%d_" % idx
-                latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.iteritems() if k.startswith(
+                latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.items() if k.startswith(
                     prefix)}
                 logli += latent_dist.log_likelihood(latent_var, latent_dist_info)
         return logli
@@ -209,7 +209,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
         for idx, latent_dist in enumerate(self._latent_distributions):
             latent_var = dist_info_vars["latent_%d" % idx]
             prefix = "latent_%d_" % idx
-            latent_dist_info = {k[len(prefix):]: v for k, v in dist_info_vars.iteritems() if k.startswith(
+            latent_dist_info = {k[len(prefix):]: v for k, v in dist_info_vars.items() if k.startswith(
                 prefix)}
             logli += latent_dist.log_likelihood_sym(latent_var, latent_dist_info)
         return logli
@@ -218,7 +218,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
         ent = self._dist.entropy(dist_info)
         for idx, latent_dist in enumerate(self._latent_distributions):
             prefix = "latent_%d_" % idx
-            latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.iteritems() if k.startswith(prefix)}
+            latent_dist_info = {k[len(prefix):]: v for k, v in dist_info.items() if k.startswith(prefix)}
             ent += latent_dist.entropy(latent_dist_info)
         return ent
 
@@ -229,7 +229,7 @@ class StochasticGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable
     @overrides
     def get_action(self, observation):
         actions, outputs = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in outputs.iteritems()}
+        return actions[0], {k: v[0] for k, v in outputs.items()}
 
     def get_actions(self, observations):
         outputs = self._f_dist_info(observations)

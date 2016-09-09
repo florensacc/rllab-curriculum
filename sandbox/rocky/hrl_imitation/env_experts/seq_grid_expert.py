@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.rocky.hrl_imitation.envs.image_grid_world import ImageGridWorld
 from sandbox.rocky.hrl_imitation.fixed_clock_policy import FixedClockPolicy
 from sandbox.rocky.hrl.envs.compound_action_sequence_env import CompoundActionSequenceEnv
@@ -138,7 +138,7 @@ class SeqGridExpert(object):
 
         all_low_probs = []
 
-        for g in xrange(algo.subgoal_dim):
+        for g in range(algo.subgoal_dim):
             subgoals = np.tile(
                 algo.high_policy.action_space.flatten(g).reshape((1, -1)),
                 (N, 1)
@@ -179,7 +179,7 @@ class SeqGridExpert(object):
         path_discount_rewards = [None] * len(self.envs)
         obses = train_venv.reset()
         dones = np.asarray([True] * len(self.envs))
-        for t in xrange(algo.max_path_length):
+        for t in range(algo.max_path_length):
             trained_policy.reset(dones)
             acts, _ = trained_policy.get_actions(obses)
             next_obses, rewards, dones, _ = train_venv.step(acts)
@@ -205,7 +205,7 @@ class SeqGridExpert(object):
         path_discount_rewards = [None] * n_envs
         obses = test_venv.reset()
         dones = np.asarray([True] * n_envs)
-        for t in xrange(algo.max_path_length):
+        for t in range(algo.max_path_length):
             test_policy.reset(dones)
             acts, _ = test_policy.get_actions(obses)
             next_obses, rewards, dones, _ = test_venv.step(acts)

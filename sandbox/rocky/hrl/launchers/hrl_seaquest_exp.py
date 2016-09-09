@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.hrl.policies.stochastic_gru_policy import StochasticGRUPolicy
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
@@ -73,7 +73,7 @@ if POLICY_MODE == "baseline":
             )
             algos.append(algo)
 
-        multi_algo = MultiAlgo(algos_dict=dict(zip(range(len(algos)), algos)))
+        multi_algo = MultiAlgo(algos_dict=dict(list(zip(list(range(len(algos))), algos))))
 
         run_experiment_lite(
             multi_algo.train(),
@@ -158,7 +158,7 @@ else:
             )
             algos.append(algo)
 
-        multi_algo = MultiAlgo(algos_dict=dict(zip(range(len(algos)), algos)))
+        multi_algo = MultiAlgo(algos_dict=dict(list(zip(list(range(len(algos))), algos))))
 
         run_experiment_lite(
             multi_algo.train(),

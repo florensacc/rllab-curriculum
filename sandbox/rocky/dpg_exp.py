@@ -28,7 +28,7 @@ instrument.stub(globals())
 
 vg = instrument.VariantGenerator()
 vg.add("seed", [1, 11, 21, 31, 41])
-vg.add("env", map(normalize, [
+vg.add("env", list(map(normalize, [
     AntGatherEnv(),
     # SwimmerGatherEnv(),
     # AntMazeEnv(),
@@ -46,7 +46,7 @@ vg.add("env", map(normalize, [
     # InvertedDoublePendulumEnv(),
     # SimpleHumanoidEnv(),
     # HumanoidEnv(),
-]))
+])))
 vg.add("es", lambda env: [OUStrategy(env_spec=env.spec, theta=0.15, sigma=0.3)])
 vg.add("qf_weight_decay", [0.])  # , 0.01])
 vg.add("qf_lr", [1e-3])  # , 1e-4, 1e-5])
@@ -55,7 +55,7 @@ vg.add("policy_lr", [1e-4])  # 5, 1e-4, 1e-3])
 vg.add("soft_target_tau", [1e-3])  # , 1e-4])
 vg.add("bn", [False])
 
-print "#Experiments:", len(vg.variants())
+print("#Experiments:", len(vg.variants()))
 for variant in vg.variants():
     policy = DeterministicMLPPolicy(
         env_spec=variant["env"].spec,

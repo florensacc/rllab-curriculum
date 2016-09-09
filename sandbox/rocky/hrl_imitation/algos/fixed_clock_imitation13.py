@@ -1,5 +1,5 @@
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import numpy as np
 import tensorflow as tf
@@ -202,7 +202,7 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializabl
 
             prob_networks = []
 
-            for subgoal in xrange(subgoal_dim):
+            for subgoal in range(subgoal_dim):
                 prob_network = MLP(
                     input_layer=l_bottleneck,
                     output_dim=env_spec.action_space.n,
@@ -283,14 +283,14 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LayersPowered, Serializabl
     def get_action(self, observation):
         flat_obs = self.observation_space.flatten(observation)
         dist_info = self.dist_info([flat_obs])
-        act = special.weighted_sample(dist_info["prob"], range(self.action_space.n))
+        act = special.weighted_sample(dist_info["prob"], list(range(self.action_space.n)))
         return act, dist_info
 
     def get_actions(self, observations):
         N = len(observations)
         flat_obses = self.observation_space.flatten_n(observations)
         dist_info = self.dist_info(flat_obses)
-        act = [special.weighted_sample(p, range(self.action_space.n)) for p in dist_info["prob"]]
+        act = [special.weighted_sample(p, list(range(self.action_space.n))) for p in dist_info["prob"]]
         return act, dist_info
 
     @property
@@ -345,7 +345,7 @@ def merge_grads(grads, *extra_grads_list):
                     grad_dict[var] = grad
                 else:
                     grad_dict[var] += grad
-    return [(y, x) for x, y in grad_dict.iteritems()]
+    return [(y, x) for x, y in grad_dict.items()]
 
 
 UP = GridWorldEnv.action_from_direction("up")
@@ -497,7 +497,7 @@ class SeqGridExpert(object):
 
         all_low_probs = []
 
-        for g in xrange(algo.subgoal_dim):
+        for g in range(algo.subgoal_dim):
             subgoals = np.tile(
                 np.asarray(algo.high_policy.action_space.flatten(g)).reshape((1, -1)),
                 (N, 1)
@@ -555,7 +555,7 @@ class SeqGridExpert(object):
         path_discount_rewards = [None] * n_envs
         obses = train_venv.reset()
         dones = np.asarray([True] * n_envs)
-        for t in xrange(algo.max_path_length):
+        for t in range(algo.max_path_length):
             trained_policy.reset(dones)
             acts, _ = trained_policy.get_actions(obses)
             next_obses, rewards, dones, _ = train_venv.step(acts)
@@ -592,7 +592,7 @@ class SeqGridExpert(object):
         subgoal_all_nav_action_probs = []
         subgoal_ents = []
 
-        for subgoal in xrange(algo.subgoal_dim):
+        for subgoal in range(algo.subgoal_dim):
             subgoal_onehot = np.eye(algo.subgoal_dim, dtype=np.float32)[subgoal]
             all_low_obs = np.concatenate(
                 [all_flat_obs, np.tile(subgoal_onehot.reshape((1, -1)), (N, 1))],
@@ -625,7 +625,7 @@ class SeqGridExpert(object):
         path_discount_rewards = [None] * n_envs
         obses = test_venv.reset()
         dones = np.asarray([True] * n_envs)
-        for t in xrange(algo.max_path_length):
+        for t in range(algo.max_path_length):
             test_policy.reset(dones)
             acts, _ = test_policy.get_actions(obses)
             next_obses, rewards, dones, _ = test_venv.step(acts)
@@ -909,7 +909,7 @@ class FixedClockImitation(RLAlgorithm):
             sess.run(tf.initialize_all_variables())
             logger.log("initialized")
 
-            for epoch_id in xrange(self.n_epochs):
+            for epoch_id in range(self.n_epochs):
 
                 logger.log("Start epoch %d..." % epoch_id)
 

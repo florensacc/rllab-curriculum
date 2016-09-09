@@ -21,7 +21,7 @@ class SimHash(Hash):
         for bucket_size in bucket_sizes:
             mod = 1
             mods = []
-            for _ in xrange(dim_key):
+            for _ in range(dim_key):
                 mods.append(mod)
                 mod = (mod * 2) % bucket_size
             mods_list.append(mods)
@@ -45,7 +45,7 @@ class SimHash(Hash):
         Increment hash table counts for many items (row-wise stacked as a matrix)
         """
         keys = self.compute_keys(items)
-        for idx in xrange(len(self.bucket_sizes)):
+        for idx in range(len(self.bucket_sizes)):
             np.add.at(self.tables[idx], keys[:, idx], 1)
 
     def query(self, items):
@@ -54,7 +54,7 @@ class SimHash(Hash):
         """
         keys = self.compute_keys(items)
         all_counts = []
-        for idx in xrange(len(self.bucket_sizes)):
+        for idx in range(len(self.bucket_sizes)):
             all_counts.append(self.tables[idx, keys[:, idx]])
         counts = np.asarray(all_counts).min(axis=0)
         return counts

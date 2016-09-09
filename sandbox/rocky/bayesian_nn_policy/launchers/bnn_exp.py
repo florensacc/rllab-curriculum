@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.cartpole_swingup_env import CartpoleSwingupEnv
@@ -26,7 +26,7 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator
 
 vg = VariantGenerator()
-vg.add("env", map(normalize, [
+vg.add("env", list(map(normalize, [
     CartpoleEnv(),
     CartpoleSwingupEnv(),
     DoublePendulumEnv(),
@@ -39,7 +39,7 @@ vg.add("env", map(normalize, [
     SimpleHumanoidEnv(),
     HumanoidEnv(),
     Walker2DEnv(),
-]))
+])))
 
 vg.add("seed", [11, 111, 211, 311, 411])
 

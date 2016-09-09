@@ -16,7 +16,7 @@ def _worker_init(G, id):
 def initialize(n_parallel):
     singleton_pool.initialize(n_parallel)
     singleton_pool.run_each(
-        _worker_init, [(id,) for id in xrange(singleton_pool.n_parallel)])
+        _worker_init, [(id,) for id in range(singleton_pool.n_parallel)])
 
 
 def _worker_populate_task(G, env, policy, dynamics):
@@ -41,7 +41,7 @@ def _worker_set_seed(_, seed):
 def set_seed(seed):
     singleton_pool.run_each(
         _worker_set_seed,
-        [(seed + i,) for i in xrange(singleton_pool.n_parallel)]
+        [(seed + i,) for i in range(singleton_pool.n_parallel)]
     )
 
 
@@ -88,7 +88,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
     # KL vector assumes same shape as reward.
     kl = np.zeros(rew_orig.shape)
 
-    for j in xrange(int(np.ceil((obs.shape[0] - 1) / float(kl_batch_size)))):
+    for j in range(int(np.ceil((obs.shape[0] - 1) / float(kl_batch_size)))):
 
         start = j * kl_batch_size
         end = np.minimum((j + 1) * kl_batch_size, _inputs.shape[0])
@@ -101,7 +101,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                     _inputs[start:end], _targets[start:end], step_size)
             elif use_replay_pool:
                 G.dynamics.save_params()
-                for _ in xrange(n_itr_update):
+                for _ in range(n_itr_update):
                     G.dynamics.train_update_fn(
                         _inputs[start:end], _targets[start:end], 1.0)
                 surpr = G.dynamics.fn_kl()
@@ -118,7 +118,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
         elif surprise_type == G.dynamics.SurpriseType.L1:
             assert use_replay_pool
             G.dynamics.save_params()
-            for _ in xrange(n_itr_update):
+            for _ in range(n_itr_update):
                 G.dynamics.train_update_fn(
                     _inputs[start:end], _targets[start:end], 1.0)
             surpr = G.dynamics.fn_l1()
@@ -147,7 +147,7 @@ def _worker_collect_one_path(G, max_path_length, itr, normalize_reward,
                 surpr = np.nan
 
         # Load suprise into np.array.
-        for k in xrange(start, end):
+        for k in range(start, end):
             if isinstance(surpr, float) or len(surpr.shape) == 0:
                 kl[k] = surpr
             else:
@@ -247,7 +247,7 @@ def truncate_paths(paths, max_samples):
         truncated_last_path = dict()
         truncated_len = len(
             last_path["rewards"]) - (total_n_samples - max_samples)
-        for k, v in last_path.iteritems():
+        for k, v in last_path.items():
             if k in ["observations", "actions", "rewards"]:
                 truncated_last_path[k] = tensor_utils.truncate_tensor_list(
                     v, truncated_len)

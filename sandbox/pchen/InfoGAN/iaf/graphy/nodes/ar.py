@@ -58,7 +58,7 @@ def linear(name, n_in, n_out, diagonalzeros, l2norm=True, w={}):
         else:
             w[name+'_s'] = G.sharedf(np.ones((n_out,)))
     elif do_constant_rescale:
-        print 'WARNING: constant rescale, these weights arent saved'
+        print('WARNING: constant rescale, these weights arent saved')
         constant_rescale = G.sharedf(np.zeros((n_out,)))
     
     
@@ -206,7 +206,7 @@ def conv2d(name, n_in, n_out, size_kernel=(3,3), zerodiagonal=True, flipmask=Fal
     
     if not pad_channel:
         border_mode = 'same'
-        print 'No pad_channel, changing border_mode to same'
+        print('No pad_channel, changing border_mode to same')
         
     #if 'whitener' not in name:
     #    pad_channel = False
@@ -297,7 +297,7 @@ def conv2d(name, n_in, n_out, size_kernel=(3,3), zerodiagonal=True, flipmask=Fal
         else:
             w[name+'_s'] = G.sharedf(np.ones((n_out,)))
     elif do_constant_rescale:
-        print 'WARNING: constant rescale, these weights arent saved'
+        print('WARNING: constant rescale, these weights arent saved')
         constant_rescale = G.sharedf(np.ones((n_out,)))
     
     
@@ -334,7 +334,7 @@ def conv2d(name, n_in, n_out, size_kernel=(3,3), zerodiagonal=True, flipmask=Fal
             data_std = h.std(axis=(0,2,3))
             num_zeros = (data_std.tag.test_value == 0).sum()
             if num_zeros > 0:
-                print "Warning: Stdev=0 for "+str(num_zeros)+" features in "+name+". Skipping data-dependent init."
+                print("Warning: Stdev=0 for "+str(num_zeros)+" features in "+name+". Skipping data-dependent init.")
             else:
                 if name+'_s' in w:
                     if logscale:
@@ -356,7 +356,7 @@ def conv2d(name, n_in, n_out, size_kernel=(3,3), zerodiagonal=True, flipmask=Fal
         
         if not '__init' in w:
             output_shape = h.tag.test_value.shape[1:]
-            print 'ar.conv2d', name, input_shape, output_shape, size_kernel, zerodiagonal, flipmask, pad_channel, border_mode, zeroinit, l2norm
+            print('ar.conv2d', name, input_shape, output_shape, size_kernel, zerodiagonal, flipmask, pad_channel, border_mode, zeroinit, l2norm)
         
         #print name, abs(h).max().tag.test_value, abs(h).min().tag.test_value
         #h = T.printing.Print(name)(h)

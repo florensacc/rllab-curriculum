@@ -1,6 +1,6 @@
-from __future__ import print_function
 # matplotlib without x-server.
 import matplotlib as mpl
+
 mpl.use('Agg')
 
 import sys
@@ -8,7 +8,7 @@ import sys
 sys.path.append(".")
 
 from rllab.misc.ext import is_iterable, set_seed
-from rllab.misc.instrument import concretize
+from rllab.misc.instrument2 import concretize
 from rllab import config
 import rllab.misc.logger as logger
 import argparse
@@ -17,8 +17,9 @@ import datetime
 import dateutil.tz
 import ast
 import uuid
-import cPickle as pickle
+import pickle as pickle
 import base64
+
 
 def run_experiment(argv):
 

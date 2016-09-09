@@ -17,9 +17,9 @@ def plot_experiments(name_or_patterns, legend=False, post_processing=None, key='
         matched_files = glob(osp.join(data_folder, name_or_pattern))
         files += matched_files
     files = sorted(files)
-    print 'plotting the following experiments:'
+    print('plotting the following experiments:')
     for f in files:
-        print f
+        print(f)
     plots = []
     legends = []
     for f in files:
@@ -49,9 +49,9 @@ class Experiment(object):
 
     def _flatten_params(self, params, depth=2):
         flat_params = dict()
-        for k, v in params.iteritems():
+        for k, v in params.items():
             if isinstance(v, dict) and depth != 0:
-                for subk, subv in self._flatten_params(v, depth=depth - 1).iteritems():
+                for subk, subv in self._flatten_params(v, depth=depth - 1).items():
                     if subk == "_name":
                         flat_params[k] = subv
                     else:
@@ -76,11 +76,11 @@ class ExperimentDatabase(object):
         with open(progress_file, 'rb') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                for k, v in row.iteritems():
+                for k, v in row.items():
                     if k not in entries:
                         entries[k] = []
                     entries[k].append(float(v))
-        entries = dict([(k, np.array(v)) for k, v in entries.iteritems()])
+        entries = dict([(k, np.array(v)) for k, v in entries.items()])
         return entries
 
     def _read_params(self, params_file):
@@ -111,13 +111,13 @@ class ExperimentDatabase(object):
                     else:
                         experiments.append(Experiment(progress, params))
                 except Exception as e:
-                    print e
+                    print(e)
             elif 'progress.csv' in f:  # in case you're giving as datafolder the dir that contains the files!
                 progress_f = self._read_data(f)
             elif 'params.json' in f:
                 params_f = self._read_params(f)
             elif 'params.pkl' in f:
-                print 'about to load', f
+                print('about to load', f)
                 pkl_data = joblib.load(f)
         if params_f and progress_f:
             if pkl_data:
@@ -130,7 +130,7 @@ class ExperimentDatabase(object):
     def plot_experiments(self, key=None, legend=None, color_key=None, filter_exp=None, **kwargs):
         experiments = list(self.filter_experiments(**kwargs))
         if filter_exp:
-            experiments = filter(filter_exp, experiments)
+            experiments = list(filter(filter_exp, experiments))
         plots = []
         legends = []
         color_pool = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
@@ -141,8 +141,8 @@ class ExperimentDatabase(object):
             if len(exp_color_keys) > len(color_pool):
                 raise NotImplementedError
             for exp_color_key, color in zip(exp_color_keys, color_pool):
-                print "%s: %s" % (str(exp_color_key), color)
-            color_map = dict(zip(exp_color_keys, color_pool))
+                print("%s: %s" % (str(exp_color_key), color))
+            color_map = dict(list(zip(exp_color_keys, color_pool)))
         used_legends = []
         legend_list = []
 
@@ -170,7 +170,7 @@ class ExperimentDatabase(object):
         for exp in self._experiments:
             exp_params = exp.flat_params
             match = True
-            for key, val in kwargs.iteritems():
+            for key, val in kwargs.items():
                 if exp_params.get(key, None) != val:
                     match = False
                     break

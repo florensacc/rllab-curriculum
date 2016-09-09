@@ -97,7 +97,7 @@ class POGA(BatchPolopt):
         self._optimizer.optimize(fin)
         # import ipdb; ipdb.set_trace()
         score_before = self._disc_scorer(cur_obs).mean()
-        for inner_i in xrange(self._inner_n_itr):
+        for inner_i in range(self._inner_n_itr):
             with logger.tabular_prefix("InnerItr%s" % inner_i):
                 if inner_i != 0:
                     paths = self._inner.sampler.obtain_samples(itr)

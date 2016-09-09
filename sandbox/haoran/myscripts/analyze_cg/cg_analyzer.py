@@ -142,7 +142,7 @@ class CGAnalyzer(object):
 
         # compare residual norms
         # should expect more CG, smaller norm
-        for name,soln in solns.iteritems():
+        for name,soln in solns.items():
             soln["train_residual_norm"] = np.linalg.norm(train_g - train_Hx(soln["direction"]))
 
         # linear surrogate loss, quadratic constraint
@@ -151,12 +151,12 @@ class CGAnalyzer(object):
             step_size = np.sqrt(2.0 * delta / (direction.dot(Hx(algo,direction,inputs))+1e-8))
             return step_size
 
-        for name,soln in solns.iteritems():
+        for name,soln in solns.items():
             step_size = compute_step_size(algo,train_inputs,soln["direction"])
             soln["train_init_step"] = -step_size * soln["direction"]
 
         # surrogate loss, back tracking
-        for name,soln in solns.iteritems():
+        for name,soln in solns.items():
             step, loss, constraint_val, n_iter = self.backtrack(algo,soln["train_init_step"],train_inputs)
             soln["train_surr_loss"] = loss
             soln["train_step"] = step
@@ -178,13 +178,13 @@ class CGAnalyzer(object):
         # linear cost, quadratic constraint
         def test_Hx(x):
             return Hx(algo,x,test_inputs)
-        for name,soln in solns.iteritems():
+        for name,soln in solns.items():
             step_size = compute_step_size(algo,test_inputs,soln["direction"])
             soln["test_init_step"] = -step_size * soln["direction"]
             soln["test_residual_norm"] = np.linalg.norm(test_g - test_Hx(soln["direction"]))
 
         # surrogate loss, kl constraint
-        for name,soln in solns.iteritems():
+        for name,soln in solns.items():
             step, loss, constraint, n_iter = self.backtrack(algo,soln["test_init_step"],test_inputs)
             soln["test_surr_loss"] = loss
             soln["test_step"] = step
@@ -196,7 +196,7 @@ class CGAnalyzer(object):
         progress = problem["progress"]
         cur_average_discounted_return = progress["AverageDiscountedReturn"][self.iteration]
         cur_average_return = progress["AverageReturn"][self.iteration]
-        for name,soln in solns.iteritems():
+        for name,soln in solns.items():
             self.pprint("-- Working on %s "%(name))
             average_return, average_discounted_return = self.compute_true_score(algo,soln["train_step"],batch_size=self.real_test_batch_size)
             soln["average_return"] = average_return
@@ -272,4 +272,4 @@ class CGAnalyzer(object):
         return average_return, average_discounted_return
 
     def pprint(self,string):
-        print '\033[93m' + string + '\033[0m'
+        print('\033[93m' + string + '\033[0m')
