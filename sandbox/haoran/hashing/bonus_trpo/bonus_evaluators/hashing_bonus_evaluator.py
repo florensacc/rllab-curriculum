@@ -69,6 +69,7 @@ class HashingBonusEvaluator(object):
             bonuses = 1./np.log(counts + 1)
         else:
             raise NotImplementedError
+        path["counts"] = counts
         return bonuses
 
     def fit_after_process_samples(self, samples_data):

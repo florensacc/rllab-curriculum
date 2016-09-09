@@ -48,8 +48,9 @@ for step_size in [0.01, 0.05, 0.1]:
             # Specifies the seed for the experiment. If this is not provided, a random seed
             # will be used
             seed=seed,
-            mode="local",
-            # mode="ec2",
+            # mode="local",
+            mode="ec2",
             # plot=True,
+            # terminate_machine=False,
         )
         sys.exit()

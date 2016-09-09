@@ -1,7 +1,7 @@
-
-
-from sandbox.rocky.tf.algos.trpo import TRPO
-from sandbox.rocky.tf.misc import tensor_utils
+from __future__ import print_function
+from __future__ import absolute_import
+from sandbox.haoran.tf.algos.trpo import TRPO
+from sandbox.haoran.tf.misc import tensor_utils
 from rllab.misc import logger
 from rllab.misc import special
 from rllab.algos import util
@@ -48,6 +48,8 @@ class BonusTRPO(TRPO):
             path["raw_returns"] = special.discount_cumsum(path["raw_rewards"], self.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
+        if self.env.wrapped_env.resetter is not None:
+            self.env.wrapped_env.resetter.update(paths)
 
         if not self.policy.recurrent:
             observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
