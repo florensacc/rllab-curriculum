@@ -26,7 +26,7 @@ dropout = False
 baseline = False
 
 if TEST_RUN:
-    exp_prefix = 'test'
+    exp_prefix = 'test-vime'
     seeds = [0]
     etas = [0.1]
     mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]

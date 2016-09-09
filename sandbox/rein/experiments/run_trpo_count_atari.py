@@ -20,22 +20,23 @@ stub(globals())
 TEST_RUN = True
 
 # global params
-num_seq_frames = 4
+num_seq_frames = 1
 batch_norm = True
 dropout = False
 baseline = False
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'test'
+    exp_prefix = 'test-count'
     seeds = [0]
     etas = [0.1]
     mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
     lst_factor = [1]
     batch_size = 200
     max_path_length = 50
+    batch_norm = False
 else:
-    exp_prefix = 'trpo-vime-atari-42x52-inf-a'
+    exp_prefix = 'trpo-count-atari-42x52-a'
     seeds = range(5)
     etas = [0, 10.0, 1.0, 0.1]
     mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
@@ -44,6 +45,7 @@ else:
     lst_factor = [2]
     batch_size = 20000
     max_path_length = 4500
+    batch_norm = True
 
 lst_pred_delta = [False]
 kl_ratios = [False]
@@ -146,7 +148,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=dropout,
                  deterministic=True),
             dict(name='discrete_embedding',
-                 n_units=128 * factor,
+                 n_units=32,
                  deterministic=True),
             dict(name='gaussian',
                  n_units=1536 * factor,
