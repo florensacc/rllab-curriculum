@@ -14,7 +14,6 @@ import uuid
 from rllab.core.serializable import Serializable
 from rllab import config
 from rllab.misc.console import mkdir_p
-from io import StringIO
 import datetime
 import dateutil.tz
 import json
@@ -463,20 +462,7 @@ def run_experiment_lite(
             except Exception as e:
                 if isinstance(e, KeyboardInterrupt):
                     raise
-    elif mode == "ec2":
-        if docker_image is None:
-            docker_image = config.DOCKER_IMAGE
-        s3_code_path = s3_sync_code(config, dry=dry)
-        launch_ec2(batch_tasks,
-                   exp_prefix=exp_prefix,
-                   docker_image=docker_image,
-                   script=script,
-                   aws_config=aws_config,
-                   dry=dry,
-                   terminate_machine=terminate_machine,
-                   use_gpu=use_gpu,
-                   code_full_path=s3_code_path,
-                   sync_s3_pkl=sync_s3_pkl)
+
     elif mode == "lab_kube":
 
         assert env is None
@@ -629,191 +615,6 @@ def dedent(s):
     return '\n'.join(lines)
 
 
-def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
-               script='scripts/run_experiment.py',
-               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False,
-               periodic_sync=True, periodic_sync_interval=15):
-    if len(params_list) == 0:
-        return
-
-    default_config = dict(
-        image_id=config.AWS_IMAGE_ID,
-        instance_type=config.AWS_INSTANCE_TYPE,
-        key_name=config.AWS_KEY_NAME,
-        spot=config.AWS_SPOT,
-        spot_price=config.AWS_SPOT_PRICE,
-        iam_instance_profile_name=config.AWS_IAM_INSTANCE_PROFILE_NAME,
-        security_groups=config.AWS_SECURITY_GROUPS,
-        security_group_ids=config.AWS_SECURITY_GROUP_IDS,
-        network_interfaces=config.AWS_NETWORK_INTERFACES,
-    )
-
-    if aws_config is None:
-        aws_config = dict()
-    aws_config = dict(default_config, **aws_config)
-
-    sio = StringIO()
-    sio.write("#!/bin/bash\n")
-    sio.write("{\n")
-    sio.write("""
-        die() { status=$1; shift; echo "FATAL: $*"; exit $status; }
-    """)
-    sio.write("""
-        EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
-    """)
-    sio.write("""
-        aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={exp_name} --region {aws_region}
-    """.format(exp_name=params_list[0].get("exp_name"), aws_region=config.AWS_REGION_NAME))
-    sio.write("""
-        service docker start
-    """)
-    sio.write("""
-        docker --config /home/ubuntu/.docker pull {docker_image}
-    """.format(docker_image=docker_image))
-    sio.write("""
-        aws s3 cp --recursive {code_full_path} {local_code_path} --region {aws_region}
-    """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
-               aws_region=config.AWS_REGION_NAME))
-    sio.write("""
-        cd {local_code_path}
-    """.format(local_code_path=config.DOCKER_CODE_DIR))
-
-    for params in params_list:
-        log_dir = params.get("log_dir")
-        remote_log_dir = params.pop("remote_log_dir")
-        env = params.pop("env", None)
-
-        sio.write("""
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={exp_name} --region {aws_region}
-        """.format(exp_name=params.get("exp_name"), aws_region=config.AWS_REGION_NAME))
-        sio.write("""
-            mkdir -p {log_dir}
-        """.format(log_dir=log_dir))
-        if periodic_sync:
-            if sync_s3_pkl:
-                sio.write("""
-                    while /bin/true; do
-                        aws s3 sync --exclude '*' --include '*.csv' --include '*.json' --include '*.pkl' {log_dir} {remote_log_dir} --region {aws_region}
-                        sleep {periodic_sync_interval}
-                    done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                         aws_region=config.AWS_REGION_NAME,
-                                                         periodic_sync_interval=periodic_sync_interval))
-            else:
-                sio.write("""
-                    while /bin/true; do
-                        aws s3 sync --exclude '*' --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
-                        sleep {periodic_sync_interval}
-                    done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                         aws_region=config.AWS_REGION_NAME,
-                                                         periodic_sync_interval=periodic_sync_interval))
-        sio.write("""
-            {command}
-        """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu, env=env,
-                                             local_code_dir=config.DOCKER_CODE_DIR)))
-        sio.write("""
-            aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
-        """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
-        sio.write("""
-            aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
-        """.format(remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
-
-    if terminate_machine:
-        sio.write("""
-            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
-            aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {aws_region}
-        """.format(aws_region=config.AWS_REGION_NAME))
-    sio.write("} >> /home/ubuntu/user_data.log 2>&1\n")
-
-    full_script = dedent(sio.getvalue())
-
-    import boto3
-    import botocore
-    if aws_config["spot"]:
-        ec2 = boto3.client(
-            "ec2",
-            region_name=config.AWS_REGION_NAME,
-            aws_access_key_id=config.AWS_ACCESS_KEY,
-            aws_secret_access_key=config.AWS_ACCESS_SECRET,
-        )
-    else:
-        ec2 = boto3.resource(
-            "ec2",
-            region_name=config.AWS_REGION_NAME,
-            aws_access_key_id=config.AWS_ACCESS_KEY,
-            aws_secret_access_key=config.AWS_ACCESS_SECRET,
-        )
-
-    if len(full_script) > 10000 or len(base64.b64encode(full_script).decode("utf-8")) > 10000:
-        # Script too long; need to upload script to s3 first.
-        # We're being conservative here since the actual limit is 16384 bytes
-        s3_path = upload_file_to_s3(full_script)
-        sio = StringIO()
-        sio.write("#!/bin/bash\n")
-        sio.write("""
-        aws s3 cp {s3_path} /home/ubuntu/remote_script.sh --region {aws_region} && \\
-        chmod +x /home/ubuntu/remote_script.sh && \\
-        bash /home/ubuntu/remote_script.sh
-        """.format(s3_path=s3_path, aws_region=config.AWS_REGION_NAME))
-        user_data = dedent(sio.getvalue())
-    else:
-        user_data = full_script
-
-    instance_args = dict(
-        ImageId=aws_config["image_id"],
-        KeyName=aws_config["key_name"],
-        UserData=user_data,
-        InstanceType=aws_config["instance_type"],
-        EbsOptimized=True,
-        SecurityGroups=aws_config["security_groups"],
-        SecurityGroupIds=aws_config["security_group_ids"],
-        NetworkInterfaces=aws_config["network_interfaces"],
-        IamInstanceProfile=dict(
-            Name=aws_config["iam_instance_profile_name"],
-        ),
-    )
-    if aws_config.get("placement", None) is not None:
-        instance_args["Placement"] = aws_config["placement"]
-    if not aws_config["spot"]:
-        instance_args["MinCount"] = 1
-        instance_args["MaxCount"] = 1
-    print("************************************************************")
-    print(instance_args["UserData"])
-    print("************************************************************")
-    if aws_config["spot"]:
-        instance_args["UserData"] = base64.b64encode(instance_args["UserData"]).decode("utf-8")
-        spot_args = dict(
-            DryRun=dry,
-            InstanceCount=1,
-            LaunchSpecification=instance_args,
-            SpotPrice=aws_config["spot_price"],
-            # ClientToken=params_list[0]["exp_name"],
-        )
-        import pprint
-        pprint.pprint(spot_args)
-        if not dry:
-            response = ec2.request_spot_instances(**spot_args)
-            print(response)
-            spot_request_id = response['SpotInstanceRequests'][
-                0]['SpotInstanceRequestId']
-            for _ in range(10):
-                try:
-                    ec2.create_tags(
-                        Resources=[spot_request_id],
-                        Tags=[
-                            {'Key': 'Name', 'Value': params_list[0]["exp_name"]}],
-                    )
-                    break
-                except botocore.exceptions.ClientError:
-                    continue
-    else:
-        import pprint
-        pprint.pprint(instance_args)
-        ec2.create_instances(
-            DryRun=dry,
-            **instance_args
-        )
-
-
 S3_CODE_PATH = None
 
 
@@ -900,8 +701,8 @@ def to_lab_kube_pod(
         "echo \"aws_access_key_id = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_KEY)
     pre_commands.append(
         "echo \"aws_secret_access_key = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_SECRET)
-    pre_commands.append('mkdir -p %s' %
-                        (log_dir))
+    pre_commands.append('cd %s' % '/root/code/')
+    pre_commands.append('mkdir -p %s' % log_dir)
     pre_commands.append("""
         while /bin/true; do
             aws s3 sync {log_dir} {remote_log_dir} --region {aws_region}
@@ -910,13 +711,7 @@ def to_lab_kube_pod(
                                              aws_region=config.AWS_REGION_NAME))
     # copy the file to s3 after execution
     post_commands = list()
-    post_commands.append('aws s3 cp --recursive %s %s' %
-                         (log_dir,
-                          remote_log_dir))
-    post_commands.append('sleep 60')
-    # command = to_docker_command(params, docker_image=docker_image, script=script,
-    #                             pre_commands=pre_commands,
-    #                             post_commands=post_commands)
+    post_commands.append('aws s3 cp --recursive %s %s' % (log_dir, remote_log_dir))
     command_list = list()
     if pre_commands is not None:
         command_list.extend(pre_commands)

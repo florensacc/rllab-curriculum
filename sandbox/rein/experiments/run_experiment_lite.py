@@ -22,7 +22,7 @@ import base64
 
 
 def run_experiment(argv):
-    print("RUN_EXPERIMENT")
+
     default_log_dir = config.LOG_DIR
     now = datetime.datetime.now(dateutil.tz.tzlocal())
 

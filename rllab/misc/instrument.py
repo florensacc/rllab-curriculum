@@ -949,8 +949,7 @@ def to_lab_kube_pod(
     else:
         pre_commands.append('aws s3 cp --recursive %s %s' %
                             (code_full_path, config.DOCKER_CODE_DIR))
-    pre_commands.append('cd %s' %
-                        ('/root/code/'))#config.DOCKER_CODE_DIR))
+    pre_commands.append('cd %s' % config.DOCKER_CODE_DIR)
     pre_commands.append('mkdir -p %s' %
                         (log_dir))
     pre_commands.append("""
