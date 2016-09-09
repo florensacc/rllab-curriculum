@@ -327,10 +327,6 @@ class BatchPolopt(RLAlgorithm):
 
                 kl_factor *= self.replay_kl_schedule
 
-            # At this point, the dynamics model has been updated
-            # according to new data, either from the replay pool
-            # or from the current batch, using coarse- or fine-grained
-            # posterior chaining.
             logger.log('Dynamics model updated.')
 
             logger.record_tabular('SurprFactor', kl_factor)
@@ -412,7 +408,7 @@ class BatchPolopt(RLAlgorithm):
     def process_samples(self, itr, paths):
 
         kls = []
-        for i in xrange(len(paths)):
+        for i in range(len(paths)):
             # We divide the KL by the number of weights in the network, to
             # get a more normalized surprise measure accross models.
             kls.append(paths[i]['KL'])
@@ -432,21 +428,21 @@ class BatchPolopt(RLAlgorithm):
         # Transform intrinsic rewards.
         if self.surprise_transform == BatchPolopt.SurpriseTransform.LOG:
             # Transform surprise into (positive) log space.
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 kls[i] = np.log(1 + kls[i])
         elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP90PERC:
             perc90 = np.percentile(np.hstack(kls), 90)
             # Cap max KL for stabilization.
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 kls[i] = np.minimum(kls[i], perc90)
         elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP99PERC:
             perc99 = np.percentile(np.hstack(kls), 99)
             # Cap max KL for stabilization.
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 kls[i] = np.minimum(kls[i], perc99)
         elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP1000:
             # Cap max KL for stabilization.
-            for i in xrange(len(paths)):
+            for i in range(len(paths)):
                 kls[i] = np.minimum(kls[i], 1000)
         elif self.surprise_transform == BatchPolopt.SurpriseTransform.ZERO100:
             cap = np.percentile(kls_flat, 100)
@@ -458,7 +454,7 @@ class BatchPolopt(RLAlgorithm):
         kls_flat = np.hstack(kls)
 
         # Add Surpr as intrinsic reward to external reward
-        for i in xrange(len(paths)):
+        for i in range(len(paths)):
             paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
 
         baselines = []

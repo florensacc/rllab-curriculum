@@ -2,20 +2,22 @@ import numpy as np
 import os
 import pickle
 
+from collections import deque
+
 from rllab.algos.base import RLAlgorithm
-from sandbox.rein.sampler import parallel_sampler_vime as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup
-from scipy import stats
-from sandbox.rein.dynamics_models.utils import enum
 
-from collections import deque
+from sandbox.rein.sampler import parallel_sampler_vime as parallel_sampler
+from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup
+from sandbox.rein.dynamics_models.utils import enum
 from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
 from sandbox.rein.algos.replay_pool import ReplayPool
+
+from scipy import stats
 
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
@@ -53,9 +55,7 @@ class BatchPolopt(RLAlgorithm):
             whole_paths=True,
             center_adv=True,
             positive_adv=False,
-            record_states=False,
             store_paths=False,
-            algorithm_parallelized=False,
             # exploration params
             eta=1.,
             use_kl_ratio=False,
@@ -120,8 +120,6 @@ class BatchPolopt(RLAlgorithm):
         # ----------------------
         if dyn_pool_args is None:
             dyn_pool_args = dict(enable=False, size=100000, min_size=10, batch_size=32)
-        else:
-            self.pool = None
 
         self.eta = eta
         self.use_kl_ratio = use_kl_ratio
@@ -159,6 +157,17 @@ class BatchPolopt(RLAlgorithm):
             # over them and divide current kl values by it. This counters the
             # exploding kl value problem.
             self.kl_previous = deque(maxlen=self.kl_q_len)
+
+        if self._dyn_pool_args['enable']:
+            observation_dtype = "uint8"
+            self.pool = ReplayPool(
+                max_pool_size=self._dyn_pool_args['size'],
+                observation_shape=(self.env.observation_space.flat_dim,),
+                action_dim=self.env.action_dim,
+                observation_dtype=observation_dtype,
+                num_seq_frames=self._num_seq_frames,
+                **self._dyn_pool_args
+            )
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy, self.bnn)
@@ -325,17 +334,6 @@ class BatchPolopt(RLAlgorithm):
 
     def train(self):
 
-        if self._dyn_pool_args['enable']:
-            observation_dtype = "uint8"
-            self.pool = ReplayPool(
-                max_pool_size=self._dyn_pool_args['size'],
-                observation_shape=(self.env.observation_space.flat_dim,),
-                action_dim=self.env.action_dim,
-                observation_dtype=observation_dtype,
-                num_seq_frames=self._num_seq_frames,
-                **self._dyn_pool_args
-            )
-
         self.start_worker()
         self.init_opt()
         episode_rewards, episode_lengths = [], []
@@ -392,6 +390,8 @@ class BatchPolopt(RLAlgorithm):
                             _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
 
                         _tl = self.bnn.train_fn(_x, _y, 0 * kl_factor)
+                        assert not np.isnan(_tl)
+                        assert not np.isinf(_tl)
                         train_loss += _tl
                         if i % int(np.ceil(itr_tot / 3.)) == 0:
                             self.plot_pred_imgs(_x, _y, itr, i)
@@ -678,11 +678,9 @@ class BatchPolopt(RLAlgorithm):
                     for i in range(len(kls)):
                         kls[i] = kls[i] / (previous_mean_kl + 1.)
                 else:
-                    median_KL_current_batch = np.median(np.hstack(kls))
+                    median_kl_current_batch = np.median(np.hstack(kls))
                     for i in range(len(kls)):
-                        kls[i] = kls[i] / median_KL_current_batch
-                        # FIXME: inserted clip for stabilization.
-                        kls[i] = np.minimum(kls[i], 100)
+                        kls[i] = kls[i] / median_kl_current_batch
 
             kls_flat = np.hstack(kls)
 
@@ -698,7 +696,7 @@ class BatchPolopt(RLAlgorithm):
 
             # Add Surpr as intrinsic reward to external reward
             for i in range(len(paths)):
-                paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
+                paths[i]['rewards'] = paths[i]['rewards'] + np.minimum(self.eta * kls[i], 10.)
 
         else:
             logger.record_tabular('S_avg', 0.)

@@ -7,7 +7,7 @@ from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.core.network import ConvNetwork
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
-
+from rllab.baselines.zero_baseline import ZeroBaseline
 
 from sandbox.rein.envs.atari import AtariEnvX
 from sandbox.rein.algos.trpo_count import TRPO
@@ -21,6 +21,7 @@ stub(globals())
 num_seq_frames = 4
 batch_norm = True
 dropout = False
+baseline = False
 
 # Param ranges
 seeds = list(range(5))
@@ -28,10 +29,9 @@ etas = [1., 0.01]
 lst_factor = [1]
 lst_pred_delta = [False]
 kl_ratios = [False]
-mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=4),
-        AtariEnvX(game='breakout', obs_type="image", frame_skip=4),
-        AtariEnvX(game='frostbite', obs_type="image", frame_skip=4),
-        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=4)]
+mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8),
+        AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
+        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]
 
 param_cart_product = itertools.product(
     lst_pred_delta, lst_factor, kl_ratios, mdps, etas, seeds
@@ -53,29 +53,34 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         prob_network=network,
     )
 
-    network = ConvNetwork(
-        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
-        output_dim=1,
-        hidden_sizes=(64,),
-        conv_filters=(16, 16, 16),
-        conv_filter_sizes=(6, 6, 6),
-        conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
-    )
-    baseline = GaussianMLPBaseline(
-        env_spec=mdp.spec,
-        num_seq_inputs=num_seq_frames,
-        regressor_args=dict(
-            mean_network=network,
-            batchsize=None,
-            subsample_factor=0.1,
-            optimizer=FirstOrderOptimizer(
-                max_epochs=100,
-                verbose=True,
+    if baseline:
+        network = ConvNetwork(
+            input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
+            output_dim=1,
+            hidden_sizes=(32,),
+            conv_filters=(16, 16),
+            conv_filter_sizes=(6, 6),
+            conv_strides=(2, 2),
+            conv_pads=(0, 2),
+        )
+        baseline = GaussianMLPBaseline(
+            env_spec=mdp.spec,
+            num_seq_inputs=num_seq_frames,
+            regressor_args=dict(
+                mean_network=network,
+                batchsize=None,
+                subsample_factor=0.1,
+                optimizer=FirstOrderOptimizer(
+                    max_epochs=100,
+                    verbose=True,
+                ),
+                use_trust_region=False,
             ),
-            use_trust_region=False,
-        ),
-    )
+        )
+    else:
+        baseline = ZeroBaseline(
+            env_spec=mdp.spec
+        )
 
     # If we don't use a replay pool, we could have correct values here, as
     # it is purely Bayesian. We then divide the KL divergence term by the

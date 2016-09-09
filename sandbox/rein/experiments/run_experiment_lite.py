@@ -1,6 +1,6 @@
-
 # matplotlib without x-server.
 import matplotlib as mpl
+
 mpl.use('Agg')
 
 import sys
@@ -8,7 +8,7 @@ import sys
 sys.path.append(".")
 
 from rllab.misc.ext import is_iterable, set_seed
-from rllab.misc.instrument import concretize
+from rllab.misc.instrument2 import concretize
 from rllab import config
 import rllab.misc.logger as logger
 import argparse
@@ -20,8 +20,9 @@ import uuid
 import pickle as pickle
 import base64
 
-def run_experiment(argv):
 
+def run_experiment(argv):
+    print("RUN_EXPERIMENT")
     default_log_dir = config.LOG_DIR
     now = datetime.datetime.now(dateutil.tz.tzlocal())
 

@@ -6,14 +6,14 @@ import os.path as osp
 import pickle as pickle
 import inspect
 import sys
-from contextlib import contextmanager
+from rllab.misc import docker
 
 import errno
+import uuid
 
 from rllab.core.serializable import Serializable
 from rllab import config
 from rllab.misc.console import mkdir_p
-from rllab.misc import ext
 from io import StringIO
 import datetime
 import dateutil.tz
@@ -327,6 +327,18 @@ def query_yes_no(question, default="yes"):
                              "(or 'y' or 'n').\n")
 
 
+made_docker_image = False
+
+
+def make_docker_image(docker_image=None, push=True):
+    global made_docker_image
+    if not made_docker_image:
+        docker.docker_build(docker_image)
+        if push:
+            docker.docker_push(docker_image)
+        made_docker_image = True
+
+
 exp_count = 0
 now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
@@ -466,11 +478,14 @@ def run_experiment_lite(
                    code_full_path=s3_code_path,
                    sync_s3_pkl=sync_s3_pkl)
     elif mode == "lab_kube":
+
         assert env is None
-        # first send code folder to s3
-        s3_code_path = s3_sync_code(config, dry=dry)
         if docker_image is None:
-            docker_image = config.DOCKER_IMAGE
+            image_id = uuid.uuid4()
+            docker_image = "{}:{}".format(config.DOCKER_IMAGE, str(image_id))
+
+        make_docker_image(docker_image, push=True)
+
         for task in batch_tasks:
             if 'env' in task:
                 assert task.pop('env') is None
@@ -480,7 +495,7 @@ def run_experiment_lite(
                 "node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
             task["exp_prefix"] = exp_prefix
             pod_dict = to_lab_kube_pod(
-                task, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu)
+                task, code_full_path="", docker_image=docker_image, script=script, is_gpu=use_gpu)
             pod_str = json.dumps(pod_dict, indent=1)
             if dry:
                 print(pod_str)
@@ -870,7 +885,6 @@ def to_lab_kube_pod(
     :param script: script command for running experiment
     :return:
     """
-    print("DEPRECATED! use instrument2.py")
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
     resources = params.pop("resources")
@@ -886,13 +900,6 @@ def to_lab_kube_pod(
         "echo \"aws_access_key_id = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_KEY)
     pre_commands.append(
         "echo \"aws_secret_access_key = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_SECRET)
-    s3_mujoco_key_path = config.AWS_CODE_SYNC_S3_PATH + '/.mujoco/'
-    pre_commands.append(
-        'aws s3 cp --recursive {} {}'.format(s3_mujoco_key_path, '~/.mujoco'))
-    pre_commands.append('aws s3 cp --recursive %s %s' %
-                        (code_full_path, config.DOCKER_CODE_DIR))
-    pre_commands.append('cd %s' %
-                        ('/root/code/'))#config.DOCKER_CODE_DIR))
     pre_commands.append('mkdir -p %s' %
                         (log_dir))
     pre_commands.append("""
@@ -906,7 +913,7 @@ def to_lab_kube_pod(
     post_commands.append('aws s3 cp --recursive %s %s' %
                          (log_dir,
                           remote_log_dir))
-    # post_commands.append('sleep 500000')
+    post_commands.append('sleep 60')
     # command = to_docker_command(params, docker_image=docker_image, script=script,
     #                             pre_commands=pre_commands,
     #                             post_commands=post_commands)

@@ -60,3 +60,10 @@ WORKDIR /root/code
 
 # gpu theanno
 ENV THEANO_FLAGS mode=FAST_RUN,device=gpu,floatX=float32
+
+# Add code.
+ADD vendor /root/code/vendor
+ADD scripts /root/code/scripts
+ADD rllab /root/code/rllab
+ADD sandbox /root/code/sandbox
+
