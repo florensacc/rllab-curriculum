@@ -69,7 +69,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             import matplotlib.pyplot as plt
 
             ys = []
-            for i in xrange(100):
+            for i in range(100):
                 y = [model.pred_fn(x[None, :])[0][0] for x in X_test]
                 y = np.asarray(y)[:, None]
                 ys.append(y)
@@ -109,7 +109,7 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             rnd_indices = np.random.random_integers(
                 low=0, high=(100 - 1), size=ys.shape[0])
             axarr[0].plot(np.array(X_test)[:, 0][:, None], np.array(
-                ys[range(ys.shape[0]), rnd_indices]), 'o', label="y", color=(0, 0.7, 0, 0.2))
+                ys[list(range(ys.shape[0])), rnd_indices]), 'o', label="y", color=(0, 0.7, 0, 0.2))
             axarr[0].set_xlim([-8.5, 9.5])
             axarr[0].set_ylim([-5, 5])
             axarr[1].set_xlim([-8.5, 9.5])
@@ -118,11 +118,11 @@ def train(model, num_epochs=500, X_train=None, T_train=None, X_test=None, T_test
             plt.show()
 
         # Then we print the results for this epoch:
-        print("Epoch {} of {} took {:.3f}s".format(
-            epoch + 1, num_epochs, time.time() - start_time))
-        print("  training loss:\t\t{:.6f}".format(
-            train_err / train_batches))
-        print(model.likelihood_sd.eval())
+        print(("Epoch {} of {} took {:.3f}s".format(
+            epoch + 1, num_epochs, time.time() - start_time)))
+        print(("  training loss:\t\t{:.6f}".format(
+            train_err / train_batches)))
+        print((model.likelihood_sd.eval()))
 
     print("Done training.")
 

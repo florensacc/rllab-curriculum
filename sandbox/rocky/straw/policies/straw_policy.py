@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.policies.base import StochasticPolicy
 import numpy as np
 from rllab.core.network import ConvNetwork, MLP
@@ -366,8 +366,8 @@ class STRAWPolicy(StochasticPolicy, LasagnePowered, Serializable):
                     self.l_g_in: custom_grad(g, c[:, :, 0])
                 }
             )
-            return TT.unbroadcast(next_A_var, *range(next_A_var.ndim)), TT.unbroadcast(next_c_var,
-                                                                                       *range(next_c_var.ndim))
+            return TT.unbroadcast(next_A_var, *list(range(next_A_var.ndim))), TT.unbroadcast(next_c_var,
+                                                                                       *list(range(next_c_var.ndim)))
 
         (all_A, all_c), _ = theano.scan(
             step,

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.algos.base import RLAlgorithm
 import numpy as np
 import theano.tensor as TT
@@ -185,7 +185,7 @@ class WrappedILQR(RLAlgorithm):
         policy_wrapper = PolicyWrapper(algo.cur[0].traj_distr)
         parallel_sampler.populate_task(NonstopEnv(self.env), policy_wrapper)
 
-        for itr in xrange(self.n_itr):
+        for itr in range(self.n_itr):
             policy = algo.cur[0].traj_distr
             paths = parallel_sampler.sample_paths(
                 policy,

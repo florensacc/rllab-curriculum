@@ -15,12 +15,12 @@ __all__ = [
 def backward_pass(x, u, f_forward, f_cost, f_final_cost, grad_hints, reg):
     Dx = x.shape[1]
     N, Du = u.shape
-    print 'convexifying...'
+    print('convexifying...')
     fx, fu, cx, cu, cxx, cxu, cuu = extract(
         convexify(x, u, f_forward, f_cost, f_final_cost),
         "fx", "fu", "cx", "cu", "cxx", "cxu", "cuu"
     )
-    print 'convexified'
+    print('convexified')
 
     Vx = np.zeros((N+1, Dx))
     Vxx = np.zeros((N+1, Dx, Dx))
@@ -50,7 +50,7 @@ def backward_pass(x, u, f_forward, f_cost, f_final_cost, grad_hints, reg):
             k[t] = -sp.linalg.solve_triangular(U_Quu, sp.linalg.solve_triangular(L_Quu, Qu, lower=True))
             K[t] = -sp.linalg.solve_triangular(U_Quu, sp.linalg.solve_triangular(L_Quu, Qux, lower=True))
         except LinAlgError as e:#Exception as e:
-            print 'error in %d' % t
+            print('error in %d' % t)
             raise 
         
         Vx[t] = Qx + Qux.T.dot(k[t])
@@ -98,7 +98,7 @@ def solve(
         bwd_succeeded = False
         while not bwd_succeeded:
             try:
-                print 'backward pass...'
+                print('backward pass...')
                 Vx, Vxx, k, K, dVx, dVxx, Quu = extract(
                     backward_pass(x, u, f_forward, f_cost, f_final_cost, grad_hints, reg=lambda_),
                     "Vx", "Vxx", "k", "K", "dVx", "dVxx", "Quu"
@@ -134,14 +134,14 @@ def solve(
                 break
             else:
                 alpha = alpha * 0.5
-                print 'expected decrease is less than min reduction: decreasing alpha to %f' % alpha
+                print('expected decrease is less than min reduction: decreasing alpha to %f' % alpha)
         if fwd_succeeded:
             lambda_ = min(lambda_, 1) / lambda_scale_factor#, lambda_min)
             if lambda_ < lambda_min:
                 lambda_ = lambda_min#0
             u = unew
             if abs(cost - cnew) / abs(cost) < rel_tol or abs(cost - cnew) < abs_tol:
-                print 'no cost improvement'
+                print('no cost improvement')
                 break
             cost = cnew
         else:
@@ -150,5 +150,5 @@ def solve(
                 print("Cannot improve objective even with large regularization")
                 break
         yield dict(u=u, K=K, k=k, x=x, Quu=Quu, cost=cost)
-        print 'lambda:', lambda_
+        print('lambda:', lambda_)
     yield dict(u=u, K=K, k=k, x=x, Quu=Quu, cost=cost)

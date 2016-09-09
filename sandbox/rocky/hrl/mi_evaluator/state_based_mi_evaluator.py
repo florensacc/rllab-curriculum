@@ -168,7 +168,7 @@ class StateBasedMIEvaluator(LasagnePowered, Serializable):
                 p_sprime_given_s = 0.
                 unflat_obs = self.env_spec.observation_space.unflatten_n(flat_obs)
                 # if subgoals are continuous, we'd need to sample instead of marginalize
-                for _ in xrange(self.n_subgoal_samples):
+                for _ in range(self.n_subgoal_samples):
                     goals, _ = self.policy.high_policy.get_actions(unflat_obs)
                     xs_goal = np.concatenate([flat_obs, self.subgoal_space.flatten_n(goals)], axis=1)
                     p_sprime_given_s += np.exp(self.regressor.predict_log_likelihood(xs_goal, ys))

@@ -9,11 +9,12 @@ import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import operator
 import matplotlib.pyplot as plt
+from functools import reduce
 
 
 def optimize_network(loss, network, maxiter=100):
     grads = theano.grad(loss, network.get_params())
-    flat_grad = TT.concatenate(map(TT.flatten, grads))
+    flat_grad = TT.concatenate(list(map(TT.flatten, grads)))
     flat_params = TT.vector('flat_params')
     unflat_params = unflatten_tensor_variables(
         flat_params, network.get_param_shapes(), network.get_params())
@@ -21,7 +22,7 @@ def optimize_network(loss, network, maxiter=100):
         inputs=[flat_params],
         outputs=theano.clone(
             [loss.astype('float64'), flat_grad.astype('float64')],
-            replace=zip(network.get_params(), unflat_params)
+            replace=list(zip(network.get_params(), unflat_params))
         ),
         allow_input_downcast=True
     )

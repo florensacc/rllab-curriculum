@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.hrl.mi_evaluator.state_based_value_mi_evaluator import downsampled_discount_cumsum
 
@@ -20,7 +20,7 @@ def fast_discount_cumsum(x, discount):
 def slow_discount_cumsum(x, discount):
     ret = []
     discount_exps = np.arange(len(x))
-    for t in xrange(len(x)):
+    for t in range(len(x)):
         offset_discount_exps = discount_exps[t:] - discount_exps[t]
         offset_x = x[t:]
         discount_return = np.sum((discount ** offset_discount_exps) * offset_x)
@@ -32,7 +32,7 @@ def slow_discount_cumsum(x, discount):
 def numba_discount_cumsum(x, discount):
     result = np.empty_like(x)
     cur_sum = 0
-    for t in xrange(len(x) - 1, -1, -1):
+    for t in range(len(x) - 1, -1, -1):
         cur_sum = cur_sum * discount + x[t]
         result[t] = cur_sum
     return result
@@ -41,7 +41,7 @@ def numba_discount_cumsum(x, discount):
 def slow_downsampled_discount_cumsum(x, discount, subgoal_interval):
     result = []
     discount_exps = np.cast['int'](np.floor(np.arange(len(x)) * 1.0 / subgoal_interval))
-    for t in xrange(len(x)):
+    for t in range(len(x)):
         offset_discount_exps = discount_exps[t:] - discount_exps[t]
         offset_rewards = x[t:]
         discount_return = np.sum((discount ** offset_discount_exps) * offset_rewards)
@@ -54,7 +54,7 @@ def numba_downsampled_discount_cumsum(x, discount, subgoal_interval):
     result = np.empty_like(x)
     cur_sum = 0
     terminal = len(x) - 1
-    for t in xrange(terminal, -1, -1):
+    for t in range(terminal, -1, -1):
         multiplier = discount if (t % subgoal_interval == subgoal_interval - 1) else 1.
         cur_sum = cur_sum * multiplier + x[t]
         result[t] = cur_sum
@@ -69,17 +69,17 @@ with such.A("State-based value MI evaluator") as it:
         np.testing.assert_array_almost_equal(fast_discount_cumsum(x, discount), numba_discount_cumsum(x, discount))
         np.testing.assert_array_almost_equal(fast_discount_cumsum(x, discount), slow_discount_cumsum(x, discount))
         start_time = time.time()
-        for _ in xrange(10000):
+        for _ in range(10000):
             fast_discount_cumsum(x, discount)
         time1 = time.time() - start_time
         start_time = time.time()
-        for _ in xrange(1000):
+        for _ in range(1000):
             slow_discount_cumsum(x, discount)
         time2 = time.time() - start_time
 
         # allow compilation
         start_time = time.time()
-        for _ in xrange(10000):
+        for _ in range(10000):
             numba_discount_cumsum(x, discount)
         time3 = time.time() - start_time
 
@@ -98,11 +98,11 @@ with such.A("State-based value MI evaluator") as it:
         np.testing.assert_array_almost_equal(downsampled_discount_cumsum(x, discount, subgoal_interval),
                                              slow_downsampled_discount_cumsum(x, discount, subgoal_interval))
         start_time = time.time()
-        for _ in xrange(1000):
+        for _ in range(1000):
             slow_downsampled_discount_cumsum(x, discount, subgoal_interval)
         time1 = time.time() - start_time
         start_time = time.time()
-        for _ in xrange(100):
+        for _ in range(100):
             numba_downsampled_discount_cumsum(x, discount, subgoal_interval)
         time2 = time.time() - start_time
         print("Slow downsampled_discount_cumsum took %fms" % (time1 / 1000 * 1000))

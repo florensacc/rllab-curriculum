@@ -57,7 +57,7 @@ def compute_approximate_value_gradient(env,policy,path,gamma,fd_step):
 
 
 def compute_analytic_value_gradient(env,policy,path,gamma):
-    precomputed_env_jacobians = "r_a" in path.keys()
+    precomputed_env_jacobians = "r_a" in list(path.keys())
 
     T = len(path["rewards"]) # path length
     states = path["observations"]

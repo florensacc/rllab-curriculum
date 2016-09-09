@@ -1,6 +1,6 @@
-from __future__ import print_function
 
-import cPickle as pickle
+
+import pickle as pickle
 from collections import OrderedDict
 
 import numpy as np
@@ -205,7 +205,7 @@ class Policy(object):
             return np.concatenate([x.get_value().flatten() for x in self.params])
 
         def set_param_values(flat_val):
-            flat_dims = map(np.prod, param_shapes)
+            flat_dims = list(map(np.prod, param_shapes))
             split_ids = np.cumsum(flat_dims)[:-1]
             new_vals = np.split(flat_val, split_ids)
             for p, val, shape in zip(self.params, new_vals, param_shapes):
@@ -291,7 +291,7 @@ class QFunction(object):
             return np.concatenate([x.get_value().flatten() for x in self.params])
 
         def set_param_values(flat_val):
-            flat_dims = map(np.prod, param_shapes)
+            flat_dims = list(map(np.prod, param_shapes))
             split_ids = np.cumsum(flat_dims)[:-1]
             new_vals = np.split(flat_val, split_ids)
             for p, val, shape in zip(self.params, new_vals, param_shapes):
@@ -545,11 +545,11 @@ class DPGExperiment(object):
         obs = None
         t = 0
 
-        for epoch in xrange(self.n_epochs):
+        for epoch in range(self.n_epochs):
             target_qs = []
             q_losses = []
             policy_losses = []
-            for epoch_itr in xrange(self.n_epoch_itrs):
+            for epoch_itr in range(self.n_epoch_itrs):
                 if terminal:# or t > self.max_path_length:
                     es.reset()
                     obs = env.reset()
@@ -587,7 +587,7 @@ class DPGExperiment(object):
             paths = []
             eval_env = pickle.loads(pickle.dumps(env))
             # eval_env._normalize_reward = False
-            for _ in xrange(self.n_eval_trajs):
+            for _ in range(self.n_eval_trajs):
                 path = rollout(
                     eval_env,
                     policy,

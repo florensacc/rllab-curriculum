@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
 from sandbox.rocky.tf.core.network import GRUNetwork, MLP, ConvMergeNetwork
 from sandbox.rocky.tf.spaces.product import Product

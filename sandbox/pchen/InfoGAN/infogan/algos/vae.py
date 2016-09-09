@@ -40,6 +40,7 @@ class VAE(object):
                  l2_reg=None,
                  img_on=True,
                  kl_coeff=1.,
+                 noise=True,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -48,7 +49,11 @@ class VAE(object):
         :type use_recog_reg: bool
         :type recog_reg_coeff: float
         :type learning_rate: float
+
+        Parameters
+        ----------
         """
+        self.noise = noise
         self.kl_coeff = kl_coeff
         self.anneal_factor = anneal_factor
         self.anneal_every = anneal_every
@@ -73,7 +78,7 @@ class VAE(object):
         self.checkpoint_dir = logger.get_snapshot_dir()
         self.snapshot_interval = snapshot_interval
         if updates_per_epoch:
-            print "should not set updates_per_epoch"
+            print("should not set updates_per_epoch")
         self.updates_per_epoch = dataset.train.images.shape[0] / batch_size
         self.summary_interval = summary_interval
         # self.learning_rate = learning_rate
@@ -121,6 +126,9 @@ class VAE(object):
         # with pt.defaults_scope(phase=phase):
         z_var, log_p_z_given_x, z_dist_info = \
             self.model.encode(input_tensor, k=self.k if eval else 1)
+        if not self.noise:
+            z_var = z_dist_info["mean"]
+            log_p_x_given_z = 1.
         x_var, x_dist_info = self.model.decode(z_var)
 
         log_p_x_given_z = self.model.output_dist.logli(
@@ -305,9 +313,9 @@ class VAE(object):
                     img_var = img_var[:rows * rows, :, :, :]
                     imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))
                     stacked_img = []
-                    for row in xrange(rows):
+                    for row in range(rows):
                         row_img = []
-                        for col in xrange(rows):
+                        for col in range(rows):
                             row_img.append(imgs[row, col, :, :, :])
                         stacked_img.append(tf.concat(1, row_img))
                     imgs = tf.concat(0, stacked_img)
@@ -338,9 +346,9 @@ class VAE(object):
                             img_var = img_var[:rows * rows, :, :, :]
                             imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))
                             stacked_img = []
-                            for row in xrange(rows):
+                            for row in range(rows):
                                 row_img = []
-                                for col in xrange(rows):
+                                for col in range(rows):
                                     row_img.append(imgs[row, col, :, :, :])
                                 stacked_img.append(tf.concat(1, row_img))
                             imgs = tf.concat(0, stacked_img)
@@ -363,9 +371,9 @@ class VAE(object):
                         img_var = img_var[:rows * rows, :, :, :]
                         imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))
                         stacked_img = []
-                        for row in xrange(rows):
+                        for row in range(rows):
                             row_img = []
-                            for col in xrange(rows):
+                            for col in range(rows):
                                 row_img.append(imgs[row, col, :, :, :])
                             stacked_img.append(tf.concat(1, row_img))
                         imgs = tf.concat(0, stacked_img)
@@ -445,11 +453,11 @@ class VAE(object):
                         print("vars initd")
 
                         log_dict = dict(self.log_vars)
-                        log_keys = log_dict.keys()
-                        log_vars = log_dict.values()
+                        log_keys = list(log_dict.keys())
+                        log_vars = list(log_dict.values())
                         eval_log_dict = dict(self.eval_log_vars)
-                        eval_log_keys = eval_log_dict.keys()
-                        eval_log_vars = eval_log_dict.values()
+                        eval_log_keys = list(eval_log_dict.keys())
+                        eval_log_vars = list(eval_log_dict.values())
 
                         summary_op = tf.merge_all_summaries()
                         summary_writer = tf.train.SummaryWriter(self.log_dir, sess.graph)
@@ -457,7 +465,7 @@ class VAE(object):
                         feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
                         log_vals = sess.run([] + log_vars, feed)[:]
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
-                        print("Initial: " + log_line)
+                        print(("Initial: " + log_line))
                         # import ipdb; ipdb.set_trace()
 
                     # go = dict(locals())
@@ -477,7 +485,7 @@ class VAE(object):
                     if counter % self.snapshot_interval == 0:
                         snapshot_name = "%s_%s" % (self.exp_name, str(counter))
                         fn = saver.save(sess, "%s/%s.ckpt" % (self.checkpoint_dir, snapshot_name))
-                        print("Model saved in file: %s" % fn)
+                        print(("Model saved in file: %s" % fn))
 
                     if counter % self.summary_interval == 0:
                         summary = tf.Summary()
@@ -486,7 +494,7 @@ class VAE(object):
                         if counter % self.vali_eval_interval == 0:
                             ds = self.dataset.validation
                             all_test_log_vals = []
-                            for ti in xrange(ds.images.shape[0] / self.eval_batch_size):
+                            for ti in range(ds.images.shape[0] / self.eval_batch_size):
                                 # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
                                 # test_x = np.tile(test_x, [self.weight_redundancy, 1])
                                 eval_feed = self.prepare_eval_feed(

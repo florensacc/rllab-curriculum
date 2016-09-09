@@ -16,9 +16,9 @@ keys = []
 finished = False
 for i in range(1000):
     objects = client.list_objects_v2(Bucket=bucket,Prefix=prefix)
-    if 'Contents' not in objects.keys():
-        print "No files starting with prefix %s."%(prefix)
-        print "Terminate."
+    if 'Contents' not in list(objects.keys()):
+        print("No files starting with prefix %s."%(prefix))
+        print("Terminate.")
         sys.exit(1)
     for obj in objects['Contents']:
         if obj['Key'] in keys:
@@ -30,13 +30,13 @@ for i in range(1000):
         break
     
 
-print "Ready to delete keys:"
+print("Ready to delete keys:")
 for key in keys:
-    print key
-answer = raw_input("Are you sure to delete {n_file} files? (y/n)".format(n_file=len(keys)))
+    print(key)
+answer = input("Are you sure to delete {n_file} files? (y/n)".format(n_file=len(keys)))
 while answer not in ['y','Y','n','N']:
-    print "Please input y(Y) or n(N)"
-    answer = raw_input("Are you sure? (y/n)")
+    print("Please input y(Y) or n(N)")
+    answer = input("Are you sure? (y/n)")
 if answer in ['y','Y']: 
     client.delete_objects( 
         Bucket=bucket,
@@ -46,7 +46,7 @@ if answer in ['y','Y']:
             ]
         }
     )
-    print "Deletion complete."
+    print("Deletion complete.")
 else:
-    print "Abort deletion."
+    print("Abort deletion.")
 

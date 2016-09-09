@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.tf.policies.base import StochasticPolicy
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
@@ -138,7 +138,7 @@ class FixedClockPolicy(StochasticPolicy, Serializable):
 
     def get_action(self, observation):
         actions, infos = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in infos.iteritems()}
+        return actions[0], {k: v[0] for k, v in infos.items()}
 
     def reset(self, dones=None):
         if dones is None:

@@ -7,7 +7,7 @@ import numpy as np
 n_components = 2
 _X1 = np.load('/home/rein/workspace_python/rllab/data/mc_obs_act_trpo.npy')
 _X2 = np.load('/home/rein/workspace_python/rllab/data/mc_obs_act_trpo_ex.npy')
-print(_X1.shape, _X2.shape)
+print((_X1.shape, _X2.shape))
 
 batch_size = 5000
 start_itr = 0
@@ -17,8 +17,8 @@ X1 = _X1[batch_size * start_itr:batch_size * end_itr, :2]
 X2 = _X2[batch_size * start_itr:batch_size * end_itr, :2]
 
 n_samples = 25000
-rand_ind1 = np.random.choice(range(X1.shape[0]), n_samples)
-rand_ind2 = np.random.choice(range(X2.shape[0]), n_samples)
+rand_ind1 = np.random.choice(list(range(X1.shape[0])), n_samples)
+rand_ind2 = np.random.choice(list(range(X2.shape[0])), n_samples)
 
 X1 = X1[rand_ind1, :]
 X2 = X2[rand_ind2, :]
@@ -60,8 +60,8 @@ def animate(i):
     X2 = _X2[batch_size * start_itr:batch_size * end_itr, :]
  
     n_samples = 25000
-    rand_ind1 = np.random.choice(range(X1.shape[0]), n_samples)
-    rand_ind2 = np.random.choice(range(X2.shape[0]), n_samples)
+    rand_ind1 = np.random.choice(list(range(X1.shape[0])), n_samples)
+    rand_ind2 = np.random.choice(list(range(X2.shape[0])), n_samples)
  
     X1 = X1[rand_ind1, :]
     X2 = X2[rand_ind2, :]

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -23,8 +23,8 @@ class GridPlot(object):
         if title:
             plt.title(title)
 
-        ax.set_xticks(range(n_cols + 1))
-        ax.set_yticks(range(n_rows + 1))
+        ax.set_xticks(list(range(n_cols + 1)))
+        ax.set_yticks(list(range(n_rows + 1)))
         ax.grid(True, linestyle='-', color=(0, 0, 0), alpha=1, linewidth=1)
         self.n_rows = n_rows
         self.n_cols = n_cols
@@ -98,7 +98,7 @@ class HrlAnalyzer(object):
 
     def print_state_visitation_frequency(self):
         paths = []
-        for _ in xrange(50):
+        for _ in range(50):
             paths.append(rollout(env=self.env, agent=self.policy, max_path_length=100))
         observations = np.vstack([p["observations"] for p in paths])
         self.print_total_frequency(observations)
@@ -116,8 +116,8 @@ class HrlAnalyzer(object):
                                  self.env.total_n_row)
 
     def print_total_frequency(self, observations):
-        total_obs = map(self.observation_space.unflatten, observations)
-        total_onehots = map(self.to_total_onehot, total_obs)
+        total_obs = list(map(self.observation_space.unflatten, observations))
+        total_onehots = list(map(self.to_total_onehot, total_obs))
         mean_onehots = np.mean(total_onehots, axis=0).reshape(
             (self.env.total_n_row, self.env.total_n_col)
         )

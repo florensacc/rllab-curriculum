@@ -7,7 +7,7 @@ from rllab.plotter import plotter
 from functools import partial
 import rllab.misc.logger as logger
 import theano.tensor as TT
-import cPickle as pickle
+import pickle as pickle
 import numpy as np
 import pyprind
 import lasagne
@@ -209,10 +209,10 @@ class DDPG(RLAlgorithm):
 
         sample_policy = pickle.loads(pickle.dumps(self.policy))
 
-        for epoch in xrange(self.n_epochs):
+        for epoch in range(self.n_epochs):
             logger.push_prefix('epoch #%d | ' % epoch)
             logger.log("Training started")
-            for epoch_itr in pyprind.prog_bar(xrange(self.epoch_length)):
+            for epoch_itr in pyprind.prog_bar(range(self.epoch_length)):
                 # Execute policy
                 if terminal:  # or path_length > self.max_path_length:
                     # Note that if the last time step ends an episode, the very
@@ -241,7 +241,7 @@ class DDPG(RLAlgorithm):
                 observation = next_observation
 
                 if pool.size >= self.min_pool_size:
-                    for update_itr in xrange(self.n_updates_per_sample):
+                    for update_itr in range(self.n_updates_per_sample):
                         # Train policy
                         batch = pool.random_batch(self.batch_size)
                         self.do_training(itr, batch)
@@ -259,7 +259,7 @@ class DDPG(RLAlgorithm):
             if self.plot:
                 self.update_plot()
                 if self.pause_for_plot:
-                    raw_input("Plotting evaluation run: Press Enter to "
+                    input("Plotting evaluation run: Press Enter to "
                               "continue...")
         self.env.terminate()
         self.policy.terminate()

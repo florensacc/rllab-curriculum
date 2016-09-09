@@ -1,36 +1,28 @@
 import numpy as np
-import os
-import pickle
-
 from rllab.algos.base import RLAlgorithm
-from sandbox.rein.sampler import parallel_sampler_vime as parallel_sampler
+from sandbox.rein.sampler import parallel_sampler_count as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup, \
-    plot_mnist_digit
+from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup
 from scipy import stats, misc
-from sandbox.rein.dynamics_models.utils import enum, atari_format_image, atari_unformat_image
+from sandbox.rein.dynamics_models.utils import enum
 from sandbox.rein.algos.replay_pool import ReplayPool
+from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
 
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
-
-# exploration imports
-# -------------------
-import theano
-from collections import deque
-from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
 
 
 class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
-    This one is specifically created for using discrete embedding-based counts.
+    This one is specifically created for using discrete embedding-based counts. This means autoencoding from #n frames
+    to last frame, to also capture some of the motion.
     """
 
     # Enums
@@ -58,23 +50,17 @@ class BatchPolopt(RLAlgorithm):
             whole_paths=True,
             center_adv=True,
             positive_adv=False,
-            record_states=False,
             store_paths=False,
-            algorithm_parallelized=False,
             # exploration params
             eta=1.,
             use_kl_ratio=False,
-            kl_q_len=10,
             num_sample_updates=1,
             n_itr_update=5,
             reward_alpha=0.001,
             kl_alpha=0.001,
-            normalize_reward=False,
             kl_batch_size=1,
-            use_kl_ratio_q=False,
             surprise_transform=None,
             replay_kl_schedule=1.0,
-            predict_reward=False,
             predict_delta=False,
             dyn_pool_args=None,
             num_seq_frames=1,
@@ -122,30 +108,25 @@ class BatchPolopt(RLAlgorithm):
         self.store_paths = store_paths
 
         if dyn_pool_args is None:
-            dyn_pool_args = dict(enable=True, size=100000, min_size=10, batch_size=32)
-        else:
-            assert dyn_pool_args['enable'] is True
+            dyn_pool_args = dict(size=100000, min_size=10, batch_size=32)
 
         self.eta = eta
         self.use_kl_ratio = use_kl_ratio
-        self.kl_q_len = kl_q_len
         self.num_sample_updates = num_sample_updates
         self.n_itr_update = n_itr_update
         self.reward_alpha = reward_alpha
         self.kl_alpha = kl_alpha
-        self.normalize_reward = normalize_reward
         self.kl_batch_size = kl_batch_size
         self.surprise_transform = surprise_transform
         self.replay_kl_schedule = replay_kl_schedule
-        self.predict_reward = predict_reward
         self._predict_delta = predict_delta
         self._dyn_pool_args = dyn_pool_args
         self._num_seq_frames = num_seq_frames
 
+        # Specific for Atar
         observation_dtype = "uint8"
         self.pool = ReplayPool(
             max_pool_size=self._dyn_pool_args['size'],
-            # self.env.observation_space.shape,
             observation_shape=(self.env.observation_space.flat_dim,),
             action_dim=self.env.action_dim,
             observation_dtype=observation_dtype,
@@ -165,13 +146,12 @@ class BatchPolopt(RLAlgorithm):
         acc = 0.
         for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
             _i, _t, _ = batch
-            _o = self.bnn.pred_fn(_i)
-            if self.bnn.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
-                _o_s = _o[:, :-1]
-                _o_r = _o[:, -1]
-                _o_s = _o_s.reshape((-1, np.prod(self.bnn.state_dim), self.bnn.num_classes))
+            _o = self.autoenc.pred_fn(_i)
+            if self.autoenc.output_type == conv_bnn_vime.ConvBNNVIME.OutputType.CLASSIFICATION:
+                _o_s = _o
+                _o_s = _o_s.reshape((-1, np.prod(self.autoenc.state_dim), self.autoenc.num_classes))
                 _o_s = np.argmax(_o_s, axis=2)
-                acc += np.sum(np.abs(_o_s - _t[:, :-1])) + np.sum(np.abs(_o_r - _t[:, -1]))
+                acc += np.sum(np.abs(_o_s - _t))
             else:
                 acc += np.sum(np.square(_o - _t))
         return acc / _inputs.shape[0]
@@ -211,19 +191,19 @@ class BatchPolopt(RLAlgorithm):
 
         idx = np.random.randint(0, inputs.shape[0], 1)
         sanity_pred = self.autoenc.pred_fn(inputs)
-        input_im = inputs[:, :-self.env.spec.action_space.flat_dim]
+        input_im = inputs
         lst_input_im = [
             input_im[idx, i * np.prod(self.autoenc.state_dim):(i + 1) * np.prod(self.autoenc.state_dim)].reshape(
                 self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
-            xrange(self._num_seq_frames)]
+            range(self._num_seq_frames)]
         input_im = input_im[:, -np.prod(self.autoenc.state_dim):]
         input_im = input_im[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
-        sanity_pred_im = sanity_pred[idx, :-1]
+        sanity_pred_im = sanity_pred[idx, :]
         if self.autoenc.output_type == self.autoenc.OutputType.CLASSIFICATION:
             sanity_pred_im = sanity_pred_im.reshape((-1, self.autoenc.num_classes))
             sanity_pred_im = np.argmax(sanity_pred_im, axis=1)
         sanity_pred_im = sanity_pred_im.reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
-        target_im = targets[idx, :-1].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
+        target_im = targets[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
 
         if self._predict_delta:
             sanity_pred_im += input_im
@@ -233,7 +213,7 @@ class BatchPolopt(RLAlgorithm):
             sanity_pred_im = sanity_pred_im.astype(float) / float(self.autoenc.num_classes)
             target_im = target_im.astype(float) / float(self.autoenc.num_classes)
             input_im = input_im.astype(float) / float(self.autoenc.num_classes)
-            for i in xrange(len(lst_input_im)):
+            for i in range(len(lst_input_im)):
                 lst_input_im[i] = lst_input_im[i].astype(float) / float(self.autoenc.num_classes)
 
         sanity_pred_im *= 256.
@@ -289,18 +269,18 @@ class BatchPolopt(RLAlgorithm):
 
         # ATTENTION: important to know when 'rewards' and 'rewards_orig' needs
         # to be used!
-        for itr in xrange(self.start_itr, self.n_itr):
+        for itr in range(self.start_itr, self.n_itr):
             logger.push_prefix('itr #%d | ' % itr)
 
             # Sample trajectories.
-            paths = self.obtain_samples(itr)
+            paths = self.obtain_samples()
 
             # Fill replay pool with samples of current batch. Exclude the
             # last one.
             logger.log("Fitting dynamics model using replay pool ...")
             for path in paths:
                 path_len = len(path['rewards'])
-                for i in xrange(path_len):
+                for i in range(path_len):
                     obs = (path['observations'][i] * self.autoenc.num_classes).astype(int)
                     act = path['actions'][i]
                     rew_orig = path['rewards_orig'][i]
@@ -314,33 +294,32 @@ class BatchPolopt(RLAlgorithm):
                 itr_tot = int(
                     np.ceil(self.num_sample_updates * float(self.batch_size) / self._dyn_pool_args['batch_size']))
 
-                for _ in xrange(20):
+                for _ in range(20):
                     batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-                    _x = np.hstack([batch['observations'], batch['actions']])
-                    _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
+                    _x = batch['observations']
+                    _y = batch['next_observations']
                     acc_before += self.accuracy(_x, _y)
                 acc_before /= 20.
 
-                for i in xrange(itr_tot):
+                for i in range(itr_tot):
 
                     batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
 
-                    _x = np.hstack([batch['observations'], batch['actions']])
+                    _x = batch['observations']
                     if self._predict_delta:
-                        _y = np.hstack(
-                            [(batch['next_observations'] - batch['observations']), batch['rewards'][:, np.newaxis]])
+                        _y = batch['next_observations'] - batch['observations']
                     else:
-                        _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
+                        _y = batch['next_observations']
 
                     _tl = self.autoenc.train_fn(_x, _y, 0 * kl_factor)
                     train_loss += _tl
                     if i % int(np.ceil(itr_tot / 3.)) == 0:
                         self.plot_pred_imgs(_x, _y, itr, i)
 
-                for _ in xrange(20):
+                for _ in range(20):
                     batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-                    _x = np.hstack([batch['observations'], batch['actions']])
-                    _y = np.hstack([batch['next_observations'], batch['rewards'][:, np.newaxis]])
+                    _x = batch['observations']
+                    _y = batch['next_observations']
                     acc_after += self.accuracy(_x, _y)
                 acc_after /= 20.
 
@@ -359,6 +338,7 @@ class BatchPolopt(RLAlgorithm):
             logger.record_tabular('DynModel_SqErrAfter', acc_after)
             logger.record_tabular('DynModel_TrainLoss', train_loss)
 
+            # Here we should extract discrete embedding from samples and use it for updating count table.
             # Postprocess trajectory data.
             samples_data = self.process_samples(itr, paths)
 
@@ -383,7 +363,7 @@ class BatchPolopt(RLAlgorithm):
             if self.plot:
                 self.update_plot()
                 if self.pause_for_plot:
-                    raw_input("Plotting evaluation run: Press Enter to "
+                    input("Plotting evaluation run: Press Enter to "
                               "continue...")
 
         # Training complete: terminate environment.
@@ -412,39 +392,13 @@ class BatchPolopt(RLAlgorithm):
         if self.plot:
             plotter.update_plot(self.policy, self.max_path_length)
 
-    def obtain_samples(self, itr):
+    def obtain_samples(self):
         cur_params = self.policy.get_param_values()
-        cur_dynamics_params = self.autoenc.get_param_values()
-
-        reward_mean = None
-        reward_std = None
-        if self.normalize_reward:
-            # Compute running mean/std.
-            reward_mean = np.mean(np.asarray(self._reward_mean))
-            reward_std = np.mean(np.asarray(self._reward_std))
-
-        # FIXME: this should be updated
-        obs_mean, obs_std, act_mean, act_std = 0, 1, 0, 1
 
         paths = parallel_sampler.sample_paths(
             policy_params=cur_params,
-            dynamics_params=cur_dynamics_params,
             max_samples=self.batch_size,
             max_path_length=self.max_path_length,
-            itr=itr,
-            normalize_reward=self.normalize_reward,
-            reward_mean=reward_mean,
-            reward_std=reward_std,
-            kl_batch_size=self.kl_batch_size,
-            n_itr_update=self.n_itr_update,
-            use_replay_pool=self._dyn_pool_args['enable'],
-            obs_mean=obs_mean,
-            obs_std=obs_std,
-            act_mean=act_mean,
-            act_std=act_std,
-            second_order_update=self.autoenc.second_order_update,
-            predict_reward=self.predict_reward,
-            surprise_type=self.autoenc.surprise_type,
             num_seq_frames=self._num_seq_frames
         )
 
@@ -457,117 +411,55 @@ class BatchPolopt(RLAlgorithm):
 
     def process_samples(self, itr, paths):
 
-        if self.normalize_reward:
-            # Update reward mean/std Q.
-            rewards = []
+        kls = []
+        for i in xrange(len(paths)):
+            # We divide the KL by the number of weights in the network, to
+            # get a more normalized surprise measure accross models.
+            kls.append(paths[i]['KL'])
+
+        kls_flat = np.hstack(kls)
+
+        logger.record_tabular('S_avg', np.mean(kls_flat))
+        logger.record_tabular('S_std', np.std(kls_flat))
+        logger.record_tabular('S_min', np.min(kls_flat))
+        logger.record_tabular('S_max', np.max(kls_flat))
+        logger.record_tabular('S_25p', np.percentile(kls_flat, 25))
+        logger.record_tabular('S_med', np.median(kls_flat))
+        logger.record_tabular('S_75p', np.percentile(kls_flat, 75))
+        logger.record_tabular('S_90p', np.percentile(kls_flat, 90))
+        logger.record_tabular('S_99p', np.percentile(kls_flat, 99))
+
+        # Transform intrinsic rewards.
+        if self.surprise_transform == BatchPolopt.SurpriseTransform.LOG:
+            # Transform surprise into (positive) log space.
             for i in xrange(len(paths)):
-                rewards.append(paths[i]['rewards'])
-            rewards_flat = np.hstack(rewards)
-            self._reward_mean.append(np.mean(rewards_flat))
-            self._reward_std.append(np.std(rewards_flat))
-
-            # Normalize rewards.
-            reward_mean = np.mean(np.asarray(self._reward_mean))
-            reward_std = np.mean(np.asarray(self._reward_std))
+                kls[i] = np.log(1 + kls[i])
+        elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP90PERC:
+            perc90 = np.percentile(np.hstack(kls), 90)
+            # Cap max KL for stabilization.
             for i in xrange(len(paths)):
-                paths[i]['rewards'] = (paths[i]['rewards'] - reward_mean) / (reward_std + 1e-8)
-
-        if itr > -1:
-            kls = []
+                kls[i] = np.minimum(kls[i], perc90)
+        elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP99PERC:
+            perc99 = np.percentile(np.hstack(kls), 99)
+            # Cap max KL for stabilization.
             for i in xrange(len(paths)):
-                # We divide the KL by the number of weights in the network, to
-                # get a more normalized surprise measure accross models.
-                kls.append(paths[i]['KL'])
-
-            kls_flat = np.hstack(kls)
-
-            logger.record_tabular('S_avg', np.mean(kls_flat))
-            logger.record_tabular('S_std', np.std(kls_flat))
-            logger.record_tabular('S_min', np.min(kls_flat))
-            logger.record_tabular('S_max', np.max(kls_flat))
-            logger.record_tabular('S_25p', np.percentile(kls_flat, 25))
-            logger.record_tabular('S_med', np.median(kls_flat))
-            logger.record_tabular('S_75p', np.percentile(kls_flat, 75))
-            logger.record_tabular('S_90p', np.percentile(kls_flat, 90))
-            logger.record_tabular('S_99p', np.percentile(kls_flat, 99))
-
-            # Transform intrinsic rewards.
-            if self.surprise_transform == BatchPolopt.SurpriseTransform.LOG:
-                # Transform surprise into (positive) log space.
-                for i in xrange(len(paths)):
-                    kls[i] = np.log(1 + kls[i])
-            elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP90PERC:
-                perc90 = np.percentile(np.hstack(kls), 90)
-                # Cap max KL for stabilization.
-                for i in xrange(len(paths)):
-                    kls[i] = np.minimum(kls[i], perc90)
-            elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP99PERC:
-                perc99 = np.percentile(np.hstack(kls), 99)
-                # Cap max KL for stabilization.
-                for i in xrange(len(paths)):
-                    kls[i] = np.minimum(kls[i], perc99)
-            elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP1000:
-                # Cap max KL for stabilization.
-                for i in xrange(len(paths)):
-                    kls[i] = np.minimum(kls[i], 1000)
-            elif self.surprise_transform == BatchPolopt.SurpriseTransform.ZERO100:
-                cap = np.percentile(kls_flat, 100)
-                kls = [np.minimum(kl, cap) for kl in kls]
-                kls_flat, lens = ungroup(kls)
-                zerohunderd = stats.rankdata(kls_flat, "average") / len(kls_flat)
-                kls = group(zerohunderd, lens)
-
-            # Normalize intrinsic rewards.
-            if self.use_kl_ratio:
-                if self.use_kl_ratio_q:
-                    # Update kl Q
-                    self.kl_previous.append(np.median(np.hstack(kls)))
-                    previous_mean_kl = np.mean(np.asarray(self.kl_previous))
-                    for i in xrange(len(kls)):
-                        kls[i] = kls[i] / (previous_mean_kl + 1.)
-                else:
-                    median_KL_current_batch = np.median(np.hstack(kls))
-                    for i in xrange(len(kls)):
-                        kls[i] = kls[i] / median_KL_current_batch
-                        # FIXME: inserted clip for stabilization.
-                        kls[i] = np.minimum(kls[i], 100)
-
-            kls_flat = np.hstack(kls)
-
-            if self.use_kl_ratio:
-                logger.record_tabular('VIME_MeanSurpr_norm', np.mean(kls_flat))
-                logger.record_tabular('VIME_StdSurpr_norm', np.std(kls_flat))
-                logger.record_tabular('VIME_MinSurpr_norm', np.min(kls_flat))
-                logger.record_tabular('VIME_MaxSurpr_norm', np.max(kls_flat))
-                logger.record_tabular('VIME_MedianSurpr_norm', np.median(kls_flat))
-                logger.record_tabular('VIME_25percSurpr_norm', np.percentile(kls_flat, 25))
-                logger.record_tabular('VIME_75percSurpr_norm', np.percentile(kls_flat, 75))
-                logger.record_tabular('VIME_90percSurpr_norm', np.percentile(kls_flat, 90))
-
-            # Add Surpr as intrinsic reward to external reward
+                kls[i] = np.minimum(kls[i], perc99)
+        elif self.surprise_transform == BatchPolopt.SurpriseTransform.CAP1000:
+            # Cap max KL for stabilization.
             for i in xrange(len(paths)):
-                paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
+                kls[i] = np.minimum(kls[i], 1000)
+        elif self.surprise_transform == BatchPolopt.SurpriseTransform.ZERO100:
+            cap = np.percentile(kls_flat, 100)
+            kls = [np.minimum(kl, cap) for kl in kls]
+            kls_flat, lens = ungroup(kls)
+            zerohunderd = stats.rankdata(kls_flat, "average") / len(kls_flat)
+            kls = group(zerohunderd, lens)
 
-        else:
-            logger.record_tabular('S_avg', 0.)
-            logger.record_tabular('S_std', 0.)
-            logger.record_tabular('S_min', 0.)
-            logger.record_tabular('S_max', 0.)
-            logger.record_tabular('S_25p', 0.)
-            logger.record_tabular('S_med', 0.)
-            logger.record_tabular('S_75p', 0.)
-            logger.record_tabular('S_90p', 0.)
-            logger.record_tabular('S_99p', 0.)
+        kls_flat = np.hstack(kls)
 
-            if self.use_kl_ratio:
-                logger.record_tabular('VIME_MeanSurpr_norm', 0.)
-                logger.record_tabular('VIME_StdSurpr_norm', 0.)
-                logger.record_tabular('VIME_MinSurpr_norm', 0.)
-                logger.record_tabular('VIME_MaxSurpr_norm', 0.)
-                logger.record_tabular('VIME_MedianSurpr_norm', 0.)
-                logger.record_tabular('VIME_25percSurpr_norm', 0.)
-                logger.record_tabular('VIME_75percSurpr_norm', 0.)
-                logger.record_tabular('VIME_90percSurpr_norm', 0.)
+        # Add Surpr as intrinsic reward to external reward
+        for i in xrange(len(paths)):
+            paths[i]['rewards'] = paths[i]['rewards'] + self.eta * kls[i]
 
         baselines = []
         returns = []

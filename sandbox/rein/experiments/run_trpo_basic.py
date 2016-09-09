@@ -23,7 +23,7 @@ os.environ["THEANO_FLAGS"] = "device=cpu"
 stub(globals())
 
 # Param ranges
-seeds = range(10)
+seeds = list(range(10))
 etas = [0, 0.001]
 # seeds = [0]
 # etas = [0.1]

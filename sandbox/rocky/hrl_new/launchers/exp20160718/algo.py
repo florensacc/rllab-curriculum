@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 import numpy as np
 
@@ -118,7 +118,7 @@ class CategoricalLookbackPolicy(StochasticPolicy, LayersPowered, Serializable):
     @overrides
     def get_action(self, observation):
         actions, agent_infos = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in agent_infos.iteritems()}
+        return actions[0], {k: v[0] for k, v in agent_infos.items()}
 
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)

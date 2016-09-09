@@ -13,7 +13,7 @@ import lasagne
 import lasagne.updates
 import theano.tensor as TT
 import numpy as np
-import cPickle as pickle
+import pickle as pickle
 import time
 import contextlib
 
@@ -320,7 +320,7 @@ class AsyncDDPG(RLAlgorithm, Serializable):
         # if self.n_workers == 1:
         #     start_worker(self, 0, shared_T, pipe)
         # else:
-        for id in xrange(self.n_workers):
+        for id in range(self.n_workers):
             pipe = mp.Pipe()
             p = mp.Process(target=start_worker, args=(self, id, shared_T, pipe))
             p.start()

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.policies.base import StochasticPolicy
 from rllab.core.parameterized import Parameterized
@@ -144,10 +144,10 @@ class BayesianNNPolicy(StochasticPolicy, Serializable):
         param_var = self.mean_var + TT.maximum(0, std_var) * self.param_epsilon_var
         origi_params = self.wrapped_policy.get_params()
         unflat_params = ext.unflatten_tensor_variables(param_var, self.wrapped_policy.get_param_shapes(), origi_params)
-        dict_items = wrapped_dist_info_sym.items()
-        cloned = theano.clone([x[1] for x in dict_items], replace=zip(origi_params, unflat_params))
+        dict_items = list(wrapped_dist_info_sym.items())
+        cloned = theano.clone([x[1] for x in dict_items], replace=list(zip(origi_params, unflat_params)))
         keys = [x[0] for x in dict_items]
-        return dict(zip(keys, cloned))
+        return dict(list(zip(keys, cloned)))
 
     def dist_info(self, obs, state_infos):
         # TODO

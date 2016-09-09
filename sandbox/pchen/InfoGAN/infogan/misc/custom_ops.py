@@ -76,7 +76,7 @@ class custom_conv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_dim,
                  k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02, in_dim=None, padding='SAME', activation_fn=None,
                  name="conv2d", residual=False, custom_phase=CustomPhase.train):
-        print("ignoring data init : %s" % custom_phase)
+        print(("ignoring data init : %s" % custom_phase))
         with tf.variable_scope(name):
             w = self.variable('w', [k_h, k_w, in_dim or input_layer.shape[-1], output_dim],
                               init=tf.truncated_normal_initializer(stddev=stddev))
@@ -378,7 +378,7 @@ def get_linear_ar_mask_by_groups(n_in, n_out, ngroups, zerodiagonal=True):
     j = n_in / ngroups
     k = n_out / ngroups
 
-    for i in xrange(ngroups):
+    for i in range(ngroups):
         mask[(i+1)*j:, i*k:(i+1)*k] = 0
         if zerodiagonal:
             mask[i*j:(i+1)*j, i*k:(i+1)*k] = 0
@@ -1025,7 +1025,7 @@ class AdamaxOptimizer(optimizer.Optimizer):
         raise NotImplementedError("Sparse gradient updates are not supported.")
 
 def resize_nearest_neighbor(x, scale):
-    input_shape = map(int, x.get_shape().as_list())
+    input_shape = list(map(int, x.get_shape().as_list()))
     import math
     size = [int(math.ceil(input_shape[1] * scale)), int(math.ceil(input_shape[2] * scale))]
     x = tf.image.resize_nearest_neighbor(x, size)
@@ -1142,7 +1142,7 @@ def custom_dropout(
         return input_layer
     # print("dropout called with phase: %s" % custom_phase)
     if custom_phase == CustomPhase.test and model_avg:
-        print("Using model averaging %s" % keep_prob)
+        print(("Using model averaging %s" % keep_prob))
         return input_layer * keep_prob
     else:
         return tf.nn.dropout(input_layer, keep_prob, name=name)

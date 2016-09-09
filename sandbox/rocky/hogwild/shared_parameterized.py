@@ -1,6 +1,6 @@
 import multiprocessing as mp
 import numpy as np
-import cPickle as pickle
+import pickle as pickle
 from rllab.core.parameterized import Parameterized
 from rllab.misc.tensor_utils import unflatten_tensors
 
@@ -56,7 +56,7 @@ class SharedParameterized(object):
             np.copyto(param_val, value.astype(dtype))
             # param.set_value(value.astype(dtype))
             if debug:
-                print "setting value of %s" % param.name
+                print("setting value of %s" % param.name)
 
     def new_mem_copy(self):
         """

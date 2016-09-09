@@ -1,4 +1,4 @@
-import cPickle as pickle
+import pickle as pickle
 
 import numpy as np
 from rllab.regressors.product_regressor import ProductRegressor

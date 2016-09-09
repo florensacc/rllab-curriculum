@@ -10,12 +10,12 @@ plot_filters.py PICKLED_NN_FILE
 
 import sys
 import matplotlib.pyplot as plt
-import cPickle
+import pickle
 import lasagne.layers
 
 net_file = open(sys.argv[1], 'r')
-network = cPickle.load(net_file)
-print network
+network = pickle.load(net_file)
+print(network)
 q_layers = lasagne.layers.get_all_layers(network.l_out)
 w = q_layers[1].W.get_value()
 count = 1

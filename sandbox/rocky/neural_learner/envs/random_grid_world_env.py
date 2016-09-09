@@ -4,39 +4,27 @@ from rllab.spaces import Discrete
 from rllab.envs.base import Env, Step
 from rllab.core.serializable import Serializable
 import numpy as np
+import contextlib
+import random
 
 
-MAPS = {
-    [
-        "Sx...",
-        ".x.x.",
-        ".x.x.",
-        "...xG"
-    ],
-    [
-        "S.x..",
-        "x.x..",
-        "x.x..",
-        "x...G"
-    ],
-    [
-        "S...",
-        ".x.x",
-        "...x",
-        "x..G"
-    ],
-    "8x8": [
-        "SFFFFFFF",
-        "FFFFFFFF",
-        "FFFHFFFF",
-        "FFFFFHFF",
-        "FFFHFFFF",
-        "FHHFFFHF",
-        "FHFFHFHF",
-        "FFFHFFFG"
-    ],
-}
+@contextlib.contextmanager
+def set_seed_tmp(seed=None):
+    if seed is None:
+        yield
+    else:
+        state = random.getstate()
+        np_state = np.random.get_state()
+        random.seed(seed)
+        np.random.seed(seed)
+        yield
+        np.random.set_state(np_state)
+        random.setstate(state)
 
+
+def generate_maze(n_rows, n_cols, seed=None):
+    with set_seed_tmp(seed):
+        pass
 
 
 class RandomGridWorldEnv(Env, Serializable):
@@ -48,13 +36,9 @@ class RandomGridWorldEnv(Env, Serializable):
     'G' : goal
     """
 
-    def __init__(self):
-        self.desc = None
-        self.n_row = None
-        self.n_col = None
-        self.start_state = None
-        self.state = None
-        self.domain_fig = None
+    def __init__(self, shape):
+        self.shape = shape
+        self.map = None
 
     def set_map(self, desc):
         desc = np.array(map(list, desc))
@@ -68,8 +52,13 @@ class RandomGridWorldEnv(Env, Serializable):
         self.state = None
         self.domain_fig = None
 
+    def regenerate_map(self):
+        pass
+
     def reset_trial(self):
         # Reinitialize the map
+        self.regenerate_map()
+        return self.reset()
 
     def reset(self):
         self.state = self.start_state

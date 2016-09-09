@@ -105,7 +105,7 @@ class DiagonalNaturalGradientOptimizer(Serializable):
         xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
         def Hx_plain():
             Hx_plain_splits = TT.grad(
-                TT.sum([TT.sum(g * x) for g, x in itertools.izip(constraint_grads, xs)]),
+                TT.sum([TT.sum(g * x) for g, x in zip(constraint_grads, xs)]),
                 wrt=params,
                 disconnected_inputs='ignore'
             )
@@ -187,7 +187,7 @@ class DiagonalNaturalGradientOptimizer(Serializable):
             N = inputs[0].shape[0]
             log_prob_grads = []
 
-            for idx in xrange(N):
+            for idx in range(N):
                 sliced = tuple([x[idx:idx+1] for x in inputs]) + extra_inputs
                 log_prob_grad = self._opt_fun["f_log_prob_grad"](*sliced)
                 log_prob_grads.append(log_prob_grad)
@@ -264,7 +264,7 @@ class DiagonalNaturalGradientOptimizer(Serializable):
             log_prob_grads = []
             fim_slices = []
             fim = np.zeros((len(flat_grad),)*2)
-            for idx in xrange(N):
+            for idx in range(N):
                 sliced = tuple([x[idx:idx+1] for x in inputs]) + extra_inputs
                 log_prob_grad = self._opt_fun["f_log_prob_grad"](*sliced)
                 # log_prob_grads.append(log_prob_grad)
@@ -286,7 +286,7 @@ class DiagonalNaturalGradientOptimizer(Serializable):
             log_prob_grads = []
             fim_slices = []
             fim = np.zeros((len(flat_grad),)*2)
-            for idx in xrange(N):
+            for idx in range(N):
                 sliced = tuple([x[idx:idx+1] for x in inputs]) + extra_inputs
                 log_prob_grad = self._opt_fun["f_log_prob_grad"](*sliced)
                 # log_prob_grads.append(log_prob_grad)

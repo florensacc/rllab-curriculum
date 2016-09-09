@@ -2,8 +2,8 @@ from rllab.misc import special
 from rllab.envs.gym_env import GymEnv
 from rllab import spaces
 import numpy as np
-from vpg import VPG
-import tf_util as U
+from .vpg import VPG
+from . import tf_util as U
 import tensorflow as tf
 
 alg = 3
@@ -63,7 +63,7 @@ elif alg == 3:
     # from sandbox.john.dummy_vec_env import DummyVecEnv as VecEnv
     from sandbox.john.rpc_vec_env import RpcVecEnv as VecEnv        
 
-    from trpo import TRPO, LinearBaseline
+    from .trpo import TRPO, LinearBaseline
     env = GymEnv("Breakout-ram-v0")
     ve = VecEnv(env, 4, 64, max_path_length=10000)
     n_actions = env.action_space.n

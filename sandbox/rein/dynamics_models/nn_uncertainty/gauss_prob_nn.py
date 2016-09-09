@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import time
 import numpy as np
 import theano
@@ -322,7 +322,7 @@ class VBNN:
     def get_log_p_D_given_w(self, input, target):
         log_p_D_given_w,sum_lqw = 0.,0.
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             if self.type == 'regression':
                 lqw = self._log_prob_normal_sym(
                     target, self.pred_mean(input), self.pred_stdn(input))
@@ -346,7 +346,7 @@ class VBNN:
         log_q_w = 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Calculate variational posterior log(q(w)) and prior log(p(w)).
             layers_mean = lasagne.layers.get_all_layers(self.network_mean)[1:]
             layers_stdn = lasagne.layers.get_all_layers(self.network_stdn)[1:]
@@ -365,7 +365,7 @@ class VBNN:
         log_p_w = 0.
 
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             layers_mean = lasagne.layers.get_all_layers(self.network_mean)[1:]
             layers_stdn = lasagne.layers.get_all_layers(self.network_stdn)[1:]
             layers = layers_mean + layers_stdn
@@ -380,7 +380,7 @@ class VBNN:
     def get_kl_div(self):
         kl_div = 0.
         # MC samples.
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Calculate variational posterior log(q(w)) and prior log(p(w)).
             layers_mean = lasagne.layers.get_all_layers(self.network_mean)[1:]
             layers_stdn = lasagne.layers.get_all_layers(self.network_stdn)[1:]
@@ -430,7 +430,7 @@ class VBNN:
         ### Mean network ###
         network = input
         # Hidden layers
-        for i in xrange(len(self.n_hidden)):
+        for i in range(len(self.n_hidden)):
             # Probabilistic layer (1) or deterministic layer (0).
             if self.layers_type[i] == 1:
                 network = VBNNLayer(
@@ -540,8 +540,8 @@ class VBNN:
             _f, axarr = plt.subplots(
                 n_plots_v, n_plots_h, sharex=True, sharey=True)
             painter = []
-            for i in xrange(n_plots_v):
-                for j in xrange(n_plots_h):
+            for i in range(n_plots_v):
+                for j in range(n_plots_h):
                     hl, = axarr[i][j].plot(x, x)
                     axarr[i][j].set_ylim(ymin=0, ymax=2)
                     painter.append(hl)
@@ -608,7 +608,7 @@ class VBNN:
 
             elif PLOT_WEIGHTS_INDIVIDUAL:
                 if epoch % 1 == 0:
-                    for i in xrange(n_plots):
+                    for i in range(n_plots):
                         w_mu = layer.mu.eval()[i, 0]
                         w_rho = layer.rho.eval()[i, 0]
                         w_sigma = np.log(1 + np.exp(w_rho))

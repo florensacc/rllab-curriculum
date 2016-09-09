@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.algos.base import RLAlgorithm
 from sandbox.rocky.hrl.envs.compound_action_sequence_env import CompoundActionSequenceEnv
@@ -35,7 +35,7 @@ import numpy as np
 import theano.tensor as TT
 import theano
 # import tensorflow as tf
-import cPickle as pickle
+import pickle as pickle
 
 UP = GridWorldEnv.action_from_direction("up")
 DOWN = GridWorldEnv.action_from_direction("down")
@@ -264,7 +264,7 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializab
 
         prob_networks = []
 
-        for subgoal in xrange(subgoal_dim):
+        for subgoal in range(subgoal_dim):
             prob_network = MLP(
                 input_layer=l_bottleneck,
                 output_dim=env_spec.action_space.n,
@@ -357,7 +357,7 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializab
         bottleneck_epsilon = np.random.normal(size=(self.bottleneck_dim,))
         flat_obs = self.observation_space.flatten(observation)
         dist_info = self.dist_info([flat_obs], dict(bottleneck_epsilon=[bottleneck_epsilon]))
-        act = special.weighted_sample(dist_info["prob"], range(self.action_space.n))
+        act = special.weighted_sample(dist_info["prob"], list(range(self.action_space.n)))
         return act, dist_info
 
     def get_actions(self, observations):
@@ -365,7 +365,7 @@ class BranchingCategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializab
         bottleneck_epsilon = np.random.normal(size=(N, self.bottleneck_dim))
         flat_obses = self.observation_space.flatten_n(observations)
         dist_info = self.dist_info(flat_obses, dict(bottleneck_epsilon=bottleneck_epsilon))
-        act = [special.weighted_sample(p, range(self.action_space.n)) for p in dist_info["prob"]]
+        act = [special.weighted_sample(p, list(range(self.action_space.n))) for p in dist_info["prob"]]
         return act, dist_info
 
     @property
@@ -416,21 +416,21 @@ class FixedClockPolicy(StochasticPolicy):
 
     def get_action(self, observation):
         actions, infos = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in infos.iteritems()}
+        return actions[0], {k: v[0] for k, v in infos.items()}
 
     def get_actions(self, observations):
         self.ts += 1
         subgoals, _ = self.high_policy.get_actions(observations)
         update_mask = self.ts % self.subgoal_interval == 0
         self.subgoals[update_mask] = np.asarray(subgoals)[update_mask]
-        act, _ = self.low_policy.get_actions(zip(observations, self.subgoals))
+        act, _ = self.low_policy.get_actions(list(zip(observations, self.subgoals)))
         return act, dict()
 
 
 class DummyVecEnv(object):
     def __init__(self, env, n, max_path_length=np.inf, envs=None):
         if envs is None:
-            envs = [pickle.loads(pickle.dumps(env)) for _ in xrange(n)]
+            envs = [pickle.loads(pickle.dumps(env)) for _ in range(n)]
         self.envs = envs
         self._action_space = env.action_space
         self._observation_space = env.observation_space
@@ -439,7 +439,7 @@ class DummyVecEnv(object):
 
     def step(self, action_n):
         results = [env.step(a)[:3] for (a, env) in zip(action_n, self.envs)]
-        obs, rews, dones = map(np.asarray, zip(*results))
+        obs, rews, dones = list(map(np.asarray, list(zip(*results))))
         self.ts += 1
         dones[self.ts >= self.max_path_length] = True
         for (i, done) in enumerate(dones):
@@ -467,7 +467,7 @@ class DummyVecEnv(object):
 
 class ImitationAlgo(RLAlgorithm):
     def __init__(self, **kwargs):
-        for k, v in kwargs.iteritems():
+        for k, v in kwargs.items():
             setattr(SPEC, k, v)
         print(SPEC.learning_rate)
         print(SPEC.bottleneck_coeff)
@@ -492,7 +492,7 @@ class ImitationAlgo(RLAlgorithm):
 
         all_low_probs = []
 
-        for g in xrange(SPEC.subgoal_dim):
+        for g in range(SPEC.subgoal_dim):
             subgoals = np.tile(
                 high_policy.action_space.flatten(g).reshape((1, -1)),
                 (N, 1)
@@ -531,7 +531,7 @@ class ImitationAlgo(RLAlgorithm):
         path_discount_rewards = [None] * len(envs)
         obses = train_venv.reset()
         dones = np.asarray([True] * len(envs))
-        for t in xrange(SPEC.max_path_length):
+        for t in range(SPEC.max_path_length):
             trained_policy.reset(dones)
             acts, _ = trained_policy.get_actions(obses)
             next_obses, rewards, dones, _ = train_venv.step(acts)
@@ -552,7 +552,7 @@ class ImitationAlgo(RLAlgorithm):
         dones = np.asarray([True] * 100)
         all_obses = []
         all_obses.extend(obses)
-        for t in xrange(SPEC.max_path_length):
+        for t in range(SPEC.max_path_length):
             test_policy.reset(dones)
             acts, _ = test_policy.get_actions(obses)
             next_obses, rewards, dones, _ = test_venv.step(acts)
@@ -738,7 +738,7 @@ class ImitationAlgo(RLAlgorithm):
 
             # alt_high_policy.set_param_values(high_policy.get_param_values())
 
-        for epoch_id in xrange(SPEC.n_epochs):
+        for epoch_id in range(SPEC.n_epochs):
 
             losses = []
             vlbs = []
@@ -746,7 +746,7 @@ class ImitationAlgo(RLAlgorithm):
 
             logger.log("Start epoch %d..." % epoch_id)
 
-            for _ in xrange(SPEC.n_sweep_per_epoch):
+            for _ in range(SPEC.n_sweep_per_epoch):
 
                 for batch_obs, batch_actions in dataset.iterate():
                     # Sample minibatch and train

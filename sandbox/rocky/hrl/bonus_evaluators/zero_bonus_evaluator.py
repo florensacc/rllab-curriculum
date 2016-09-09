@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.rocky.hrl.bonus_evaluators.base import BonusEvaluator
 from rllab.core.serializable import Serializable
 import numpy as np

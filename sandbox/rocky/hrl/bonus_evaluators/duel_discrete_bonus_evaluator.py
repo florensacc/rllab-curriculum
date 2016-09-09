@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.hrl.bonus_evaluators.base import BonusEvaluator
 from rllab.envs.base import EnvSpec
@@ -15,7 +15,7 @@ from rllab.spaces.discrete import Discrete
 from rllab.misc import tensor_utils
 import theano.tensor as TT
 import lasagne.layers as L
-import cPickle as pickle
+import pickle as pickle
 
 
 class modes(object):

@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import numpy as np
 import theano
 import theano.tensor as TT
@@ -36,7 +36,7 @@ def main():
     x = np.zeros(10)
     x = new_shared_mem_array(x)
     with closing(mp.Pool(initializer=init_worker, initargs=(x,))) as p:
-        p.map(update_x, xrange(10000))
+        p.map(update_x, range(10000))
     print(x)
 
 main()

@@ -160,7 +160,7 @@ class BakePPO(BatchPolopt):
             def evaluate(params):
                 policy.set_param_values(params, trainable=True)
                 grad = f_grads(*(all_input_values + [penalty]))
-                flattened_grad = flatten_tensors(map(np.asarray, grad))
+                flattened_grad = flatten_tensors(list(map(np.asarray, grad)))
                 return flattened_grad.astype(np.float64)
             return evaluate
 

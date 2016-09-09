@@ -51,7 +51,7 @@ class ALEECAgent(object):
     def __getstate__(self):
         return dict(
                 (k, v)
-                for (k, v) in self.__dict__.iteritems()
+                for (k, v) in self.__dict__.items()
                 if k not in self.unpicklable_list
             )
 
@@ -151,7 +151,7 @@ class ALEECAgent(object):
                     modified_q_values = q_values + bonus_values
                     max_actions = np.argwhere(modified_q_values == np.amax(modified_q_values)).ravel()
                     action = np.random.choice(max_actions)
-            print q_values, action
+            print(q_values, action)
 
         return action
 

@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from rllab.misc import tensor_utils
 import numpy as np
 import random
@@ -13,7 +13,7 @@ def downsample_tensor_dict(tensor_dict, interval):
     :return: a dictionary with downsampled tensors
     """
     ret = dict()
-    for k, v in tensor_dict.iteritems():
+    for k, v in tensor_dict.items():
         if isinstance(v, dict):
             ret[k] = downsample_tensor_dict(v, interval=interval)
         else:
@@ -35,7 +35,7 @@ def downsample_path(path, downsample_interval):
     new_dict = dict()
     new_dict["rewards"] = chunked_rewards
 
-    for k, val in path.iteritems():
+    for k, val in path.items():
         if k == "rewards":
             pass
         elif isinstance(val, dict):

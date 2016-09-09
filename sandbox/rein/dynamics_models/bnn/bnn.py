@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import numpy as np
 import theano.tensor as T
 import lasagne
@@ -489,16 +489,14 @@ class BNN(LasagnePowered, Serializable):
         self.build_model()
 
     def save_params(self):
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianDenseLayer)]
         for layer in layers:
             layer.save_params()
         if self.update_likelihood_sd:
             self.old_likelihood_sd.set_value(self.likelihood_sd.get_value())
 
     def load_prev_params(self):
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianDenseLayer)]
         for layer in layers:
             layer.load_prev_params()
         if self.update_likelihood_sd:
@@ -506,14 +504,12 @@ class BNN(LasagnePowered, Serializable):
 
     def compr_impr(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianDenseLayer)]
         return sum(l.kl_div_old_new() for l in layers)
 
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianDenseLayer)]
         return sum(l.kl_div_new_old() for l in layers)
 
     def num_weights(self):
@@ -524,7 +520,7 @@ class BNN(LasagnePowered, Serializable):
     def ent(self, input):
         # FIXME: work in progress
         mtrx_pred = np.zeros((self.n_samples, self.n_out))
-        for i in xrange(self.n_samples):
+        for i in range(self.n_samples):
             # Make prediction.
             mtrx_pred[i] = self.pred_fn(input)
         cov = np.cov(mtrx_pred, rowvar=0)
@@ -539,10 +535,10 @@ class BNN(LasagnePowered, Serializable):
 
         # MC samples.
         _log_p_D_given_w = []
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
-            for _ in xrange(self.n_samples):
+            for _ in range(self.n_samples):
                 sampled_mean = self.pred_sym(input)
                 # Calculate model likelihood log(P(D|w)).
                 if self.output_type == BNN.OutputType.CLASSIFICATION:
@@ -572,20 +568,17 @@ class BNN(LasagnePowered, Serializable):
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianDenseLayer)]
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianDenseLayer)]
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = filter(lambda l: isinstance(l, BayesianDenseLayer),
-                        lasagne.layers.get_all_layers(self.network)[1:])
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianDenseLayer)]
         return sum(l.kl_div_prior_new() for l in layers)
 
     def _log_prob_normal(self, input, mu=0., sigma=1.):
@@ -621,7 +614,7 @@ class BNN(LasagnePowered, Serializable):
 
         # MC samples.
         _log_p_D_given_w = []
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(D|w)).
@@ -651,7 +644,7 @@ class BNN(LasagnePowered, Serializable):
         # Fix sampled noise.
         # MC samples.
         _log_p_D_given_w = []
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(sample|w)).
@@ -671,7 +664,7 @@ class BNN(LasagnePowered, Serializable):
     def dbg_nll(self, input, target, likelihood_sd):
         # MC samples.
         _log_p_D_given_w = []
-        for _ in xrange(self.n_samples):
+        for _ in range(self.n_samples):
             # Make prediction.
             prediction = self.pred_sym(input)
             # Calculate model likelihood log(P(sample|w)).
@@ -686,7 +679,7 @@ class BNN(LasagnePowered, Serializable):
         network = lasagne.layers.InputLayer(shape=(1, self.n_in))
 
         # Hidden layers
-        for i in xrange(len(self.n_hidden)):
+        for i in range(len(self.n_hidden)):
             if self.layers_type[i] == 'gaussian':
                 network = BayesianDenseLayer(
                     network, self.n_hidden[
@@ -791,7 +784,7 @@ class BNN(LasagnePowered, Serializable):
                     grads = theano.grad(loss, params)
                     updates = OrderedDict()
 
-                    for i in xrange(len(params)):
+                    for i in range(len(params)):
                         param = params[i]
                         grad = grads[i]
 
@@ -817,7 +810,7 @@ class BNN(LasagnePowered, Serializable):
                         updates = OrderedDict()
 
                         invHs = []
-                        for i in xrange(len(params)):
+                        for i in range(len(params)):
                             param = params[i]
                             grad = grads[i]
 
@@ -841,7 +834,7 @@ class BNN(LasagnePowered, Serializable):
                         updates = OrderedDict()
 
                         invHs = []
-                        for i in xrange(len(params)):
+                        for i in range(len(params)):
                             param = params[i]
                             grad = grads[i]
 
@@ -866,7 +859,7 @@ class BNN(LasagnePowered, Serializable):
                     grads = T.grad(loss, params)
 
                     kl_component = []
-                    for i in xrange(len(params)):
+                    for i in range(len(params)):
                         param = params[i]
                         grad = grads[i]
 

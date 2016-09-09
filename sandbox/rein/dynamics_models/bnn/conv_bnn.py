@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import numpy as np
 import theano.tensor as T
 import lasagne
@@ -350,7 +350,7 @@ class BayesianLayer(lasagne.layers.Layer):
         # import ipdb; ipdb.set_trace()
 
         def extract_uv(std, lst_su, lst_sv):
-            for i in xrange(self.mvg_rank):
+            for i in range(self.mvg_rank):
                 su = std[
                      i * (self.num_inputs + self.num_units) + self.num_inputs:(i + 1) * (
                          self.num_inputs + self.num_units)]
@@ -365,7 +365,7 @@ class BayesianLayer(lasagne.layers.Layer):
 
         def construct_matrix(lst_s):
             s = T.zeros((lst_s[0].shape[0], lst_s[0].shape[0]))
-            for i in xrange(self.mvg_rank):
+            for i in range(self.mvg_rank):
                 _a = T.dot(lst_s[i].dimshuffle(0, 'x'), lst_s[i].dimshuffle('x', 0))
                 s += _a
             return s
@@ -382,7 +382,7 @@ class BayesianLayer(lasagne.layers.Layer):
         def sherman_morrison(lst_s):
             A_inv = T.eye(lst_s[0].shape[0])
             lst_A_inv = [A_inv]
-            for i in xrange(self.mvg_rank):
+            for i in range(self.mvg_rank):
                 _a = T.dot(A_inv, lst_s[i].dimshuffle(0, 'x'))
                 _b = T.dot(_a, lst_s[i].dimshuffle('x', 0))
                 _c = T.dot(_b, A_inv)
@@ -401,7 +401,7 @@ class BayesianLayer(lasagne.layers.Layer):
         # Calculate log determinant for rank1 updates.
         def log_determinant(lst_s, lst_s_inv):
             A_logdet = 1.
-            for i in xrange(self.mvg_rank):
+            for i in range(self.mvg_rank):
                 _a = T.dot(lst_s[i].dimshuffle('x', 0), lst_s_inv[i])
                 _b = T.dot(_a, lst_s[i].dimshuffle(0, 'x'))
                 _c = 1 + _b

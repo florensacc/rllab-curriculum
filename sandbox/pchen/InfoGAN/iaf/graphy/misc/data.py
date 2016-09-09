@@ -46,7 +46,7 @@ def mnist_binarized(validset=False, flattened=True):
         for data in [train,valid,test]:
             data['x'] = data['x'].reshape((-1,1,28,28))
     if not validset:
-        print "Full training set"
+        print("Full training set")
         train['x'] = np.concatenate((train['x'], valid['x']))
         return train, test
     return train, valid, test
@@ -92,9 +92,9 @@ def create_semisupervised(x, key_y, n_labeled, shuffle=True):
 def cifar10(with_y=True, binarize_y=False):
     # Load the original images into numpy arrays
     def unpickle(file):
-        import cPickle
+        import pickle
         fo = open(file, 'rb')
-        result = cPickle.load(fo)
+        result = pickle.load(fo)
         fo.close()
         return result
     path = os.environ['CIFAR10_PATH']

@@ -64,7 +64,7 @@ class CVVAE(VAE):
             return \
                 tf.concat(
                     0,
-                    [tf.reshape(p, [-1,1]) for p in self.alpha_var_dict.values()]
+                    [tf.reshape(p, [-1,1]) for p in list(self.alpha_var_dict.values())]
                 )
 
         else:
@@ -75,7 +75,7 @@ class CVVAE(VAE):
 
     def get_alpha_list(self, ):
         if self.per_dim:
-            return self.alpha_var_dict.values()
+            return list(self.alpha_var_dict.values())
         else:
             return [self.alpha_var]
 
@@ -104,7 +104,7 @@ class CVVAE(VAE):
             z_var,
             dict([
                 (k, v if self.no_stop else tf.stop_gradient(v))
-                for k, v in z_dist_info.items()
+                for k, v in list(z_dist_info.items())
             ])
         )
         ent_vlb = tf.reduce_mean(ent_vlbs) / ndim

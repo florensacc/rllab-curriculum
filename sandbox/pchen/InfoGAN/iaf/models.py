@@ -310,7 +310,7 @@ def cvae_layer(name, prior, posterior, n_h1, n_h2, n_z, depth_ar, downsample, nl
             logsd_prior = h[:,n_h2+n_z:n_h2+2*n_z,:,:]
             z = mean_prior + eps * T.exp(logsd_prior)
         elif prior == 'made':
-            print "TODO: SAMPLES FROM MADE PRIOR"
+            print("TODO: SAMPLES FROM MADE PRIOR")
             z = eps
         elif prior == 'bernoulli':
             assert posterior == 'down_bernoulli'
@@ -318,7 +318,7 @@ def cvae_layer(name, prior, posterior, n_h1, n_h2, n_z, depth_ar, downsample, nl
             if False:
                 z = N.rand.bernoulli(pz_p).sample
             else:
-                print "Alert: Sampling using Gaussian approximation"
+                print("Alert: Sampling using Gaussian approximation")
                 z = pz_p + T.sqrt(pz_p * (1-pz_p)) * eps
             z = prior_conv1(2*z-1, w)
         
@@ -346,7 +346,7 @@ def cvae_layer(name, prior, posterior, n_h1, n_h2, n_z, depth_ar, downsample, nl
 def cvae1(shape_x, depths, depth_ar, n_h1, n_h2, n_z, prior='diag', posterior='down_diag', px='logistic', nl='softplus', kernel_x=(5,5), kernel_h=(3,3), kl_min=0, optim='adamax', alpha=0.002, beta1=0.1, beta3=0.01, weightsharing=None, pad_x = 0, data_init=None):
     _locals = locals()
     _locals.pop('data_init')
-    print 'CVAE1 with ', _locals
+    print('CVAE1 with ', _locals)
     #assert posterior in ['diag1','diag2','iaf_linear','iaf_nonlinear']
     assert px in ['logistic','bernoulli']
     w = {} # model params
@@ -411,8 +411,8 @@ def cvae1(shape_x, depths, depth_ar, n_h1, n_h2, n_z, prior='diag', posterior='d
         h = T.tile(w['h_top'].dimshuffle('x',0,'x','x'), (_x.shape[0],1,shape_x[1]/2**len(depths), shape_x[2]/2**len(depths)))
         
         # top-down priors, posteriors and decoders
-        for i in list(reversed(range(len(depths)))):
-            for j in list(reversed(range(depths[i]))):
+        for i in list(reversed(list(range(len(depths))))):
+            for j in list(reversed(list(range(depths[i])))):
                 h, kl = layers[i][j].down_q(h, train, w)
                 kl_sum = kl.sum(axis=(1,2,3))
                 results['cost_z'+str(i).zfill(3)+'_'+str(j).zfill(3)] = kl_sum
@@ -466,8 +466,8 @@ def cvae1(shape_x, depths, depth_ar, n_h1, n_h2, n_z, prior='diag', posterior='d
         h = T.tile(w['h_top'].dimshuffle('x',0,'x','x'), (eps['eps_0_0'].shape[0],1,shape_x[1]/2**len(depths), shape_x[2]/2**len(depths)))
         
         # top-down priors, posteriors and decoders
-        for i in list(reversed(range(len(depths)))):
-            for j in list(reversed(range(depths[i]))):
+        for i in list(reversed(list(range(len(depths))))):
+            for j in list(reversed(list(range(depths[i])))):
                 h = layers[i][j].down_p(h, eps['eps_'+str(i)+'_'+str(j)], w)
         
         output = x_dec(x_dec_nl(h, w), w)
@@ -578,7 +578,7 @@ def cvae1(shape_x, depths, depth_ar, n_h1, n_h2, n_z, prior='diag', posterior='d
 def fcvae(shape_x, depth_model, depth_ar, n_h1, n_h2, n_z, posterior, px='logistic', nl='softplus', alpha=0.002, beta1=0.1, beta3=0.01, share_w=False, data_init=None):
     _locals = locals()
     _locals.pop('data_init')
-    print 'CVAE9 with ', _locals
+    print('CVAE9 with ', _locals)
     #assert posterior in ['diag1','diag2','iaf_linear','iaf_nonlinear']
     assert px in ['logistic','bernoulli']
     w = {} # model params
@@ -630,7 +630,7 @@ def fcvae(shape_x, depth_model, depth_ar, n_h1, n_h2, n_z, posterior, px='logist
         h = T.tile(w['h_top'].dimshuffle('x',0,'x','x'), (_x.shape[0],1,1,1))
         
         # top-down priors, posteriors and decoders
-        for i in list(reversed(range(depth_model))):
+        for i in list(reversed(list(range(depth_model)))):
             h, _obj_logqz, _obj_logpz = layers[i].down_q(h, train, w)
             obj_logqz += _obj_logqz
             obj_logpz += _obj_logpz
@@ -682,7 +682,7 @@ def fcvae(shape_x, depth_model, depth_ar, n_h1, n_h2, n_z, posterior, px='logist
         h = T.tile(w['h_top'].dimshuffle('x',0,'x','x'), (eps['eps_0'].shape[0],1,1,1))
         
         # top-down priors, posteriors and decoders
-        for i in list(reversed(range(depth_model))):
+        for i in list(reversed(list(range(depth_model)))):
             h = layers[i].down_p(h, eps['eps_'+str(i)], w)
         
         output = x_dec(x_dec_nl(h, w), w).reshape((-1,shape_x[0],shape_x[1],shape_x[2]))

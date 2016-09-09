@@ -1,6 +1,5 @@
-import numpy as np
-
 import theano
+import numpy as np
 
 
 class ReplayPool(object):
@@ -45,6 +44,7 @@ class ReplayPool(object):
         return ', '.join(sb)
 
     def add_sample(self, observation, action, reward, terminal):
+        """Add sample to replay pool."""
         # Select last frame, which is the 'true' frame. Only add this one, to save replay pool memory. When
         # the samples are fetched, we rebuild the sequence.
         self._observations[self._top] = observation[-self._observation_shape[0]:]
@@ -58,6 +58,7 @@ class ReplayPool(object):
             self._size += 1
 
     def random_batch(self, batch_size):
+        """Retrieve random batch from replay pool."""
         # Here, based on the num_seq_frames, we will construct a batch of elements that comform num_seq_frames.
         assert self._size > batch_size
         indices = np.zeros(batch_size, dtype='uint64')
@@ -78,7 +79,7 @@ class ReplayPool(object):
             # case we add black frames.
             lst_obs = [None] * self._num_seq_frames
             insert_empty = np.zeros(batch_size, dtype='bool')
-            for i in xrange(self._num_seq_frames):
+            for i in range(self._num_seq_frames):
                 obs = self._observations[indices - i]
                 insert_empty = np.maximum(self._terminals[indices - i].astype('bool'), insert_empty)
                 if insert_empty.any():

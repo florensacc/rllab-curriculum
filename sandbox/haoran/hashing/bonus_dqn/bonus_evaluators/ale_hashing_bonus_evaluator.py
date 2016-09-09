@@ -46,7 +46,7 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
             assert len(hash_list) == 1
         elif count_mode == "sa":
             if len(hash_list) == 0:
-                for i in xrange(num_actions):
+                for i in range(num_actions):
                     hash = SimHash(state_dim,**sim_hash_args)
                     hash.reset()
                     hash_list.append(hash)

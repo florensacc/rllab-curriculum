@@ -149,7 +149,7 @@ class DiagonalNaturalGradientOptimizer(Serializable):
 
         log_prob_grads = []
 
-        for idx in xrange(N):
+        for idx in range(N):
             sliced = tuple([x[idx:idx+1] for x in inputs]) + extra_inputs
             log_prob_grad = self._opt_fun["f_log_prob_grad"](*sliced)
             log_prob_grads.append(log_prob_grad)

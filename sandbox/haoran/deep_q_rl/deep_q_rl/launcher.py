@@ -9,14 +9,14 @@ import argparse
 sys.path.append('.')
 from rllab.misc import logger
 import time
-import ale_python_interface
-import cPickle as pickle
+from . import ale_python_interface
+import pickle as pickle
 import numpy as np
 import theano
 
-import ale_experiment
-import ale_agent
-import q_network
+from . import ale_experiment
+from . import ale_agent
+from . import q_network
 
 
 class Launcher(object):

@@ -82,7 +82,7 @@ if args.network == None:
     Q_train_function = theano.function(Q_loss_args, Q_loss, updates=Q_updates)
 elif args.network == "hier_platonic":
     att0_filters, att1_filters, use_softmax, rescale, use_final = \
-        map(int, (args.network_args or "4,4,1,3,1").split(","))
+        list(map(int, (args.network_args or "4,4,1,3,1").split(",")))
     use_softmax = bool(use_softmax)
     rescale = float(rescale)
     use_final = bool(use_final)
@@ -178,7 +178,7 @@ if algo == "double":
             return lasagne.init.GlorotNormal().sample(shape)
         else:
             return lasagne.init.Uniform().sample(shape)
-    alternative_param_vals = map(init_like, alternative_param_vals)
+    alternative_param_vals = list(map(init_like, alternative_param_vals))
     prev_alternative_param_vals = alternative_param_vals
 
 if load_expert_params:
@@ -208,7 +208,7 @@ def vec_from_action(action):
 
 
 def sample_actions(N):
-    return [random.choice(action_set) for _ in xrange(N)]
+    return [random.choice(action_set) for _ in range(N)]
 
 
 def greedy_actions(q_func, obs):
@@ -226,7 +226,7 @@ def convert_reward(r):
 def prepare_inputX(memory, idx):
     bs = len(idx)
     bnX = np.zeros((bs,) + network_input_dim, dtype='float32')
-    for i, ind in zip(xrange(bs), idx):
+    for i, ind in zip(range(bs), idx):
         bnX[i] = memory[(ind - temporal_frames + 1):(ind + 1), observation_mask].reshape(network_input_dim)
     return bnX
 
@@ -296,7 +296,7 @@ def evaluate(max_len=evaluation_len):
     play_rewards = []
 
     states, obs = mdp_test.sample_initial_states(N)
-    for step_i in xrange(1, 10000000000):
+    for step_i in range(1, 10000000000):
         temp_memory[temp_memory_i, observation_mask] = preprocess(obs[0]).ravel()
         if temp_memory_i < (temporal_frames - 1) or random.random() <= 0.05:
             actions = sample_actions(1)
@@ -306,7 +306,7 @@ def evaluate(max_len=evaluation_len):
             actions = greedy_actions(Q_vals_fn, bX)
 
         next_states, next_obs, rewards_n, done_n = mdp_test.step(states, actions, span=4)
-        for i, action, reward, done, ob in zip(*([xrange(N), actions, rewards_n, done_n, obs])):
+        for i, action, reward, done, ob in zip(*([range(N), actions, rewards_n, done_n, obs])):
             play_reward += reward
             if done:
                 period_plays += 1
@@ -348,7 +348,7 @@ if __name__ == '__main__':
             actions = greedy_actions(Q_vals_fn, bX)
 
         next_states, next_obs, rewards_n, done_n = mdp.step(states, actions, span=4)
-        for i, action, reward, done, ob in zip(*([xrange(N), actions, rewards_n, done_n, obs])):
+        for i, action, reward, done, ob in zip(*([range(N), actions, rewards_n, done_n, obs])):
             memory[memory_i, action_mask] = vec_from_action(actions[0])
             memory[memory_i, terminal_mask] = int(done)
             memory[memory_i, reward_mask] = 0 if reward == 0 else (1 if reward > 0 else -1)
@@ -359,7 +359,7 @@ if __name__ == '__main__':
         states, obs = next_states, next_obs
 
         if step_i >= replay_min:
-            for _ in xrange(dup_factor):
+            for _ in range(dup_factor):
                 to_train_inds.append(np.random.randint(temporal_frames - 1, min(step_i, memory_size - 1) - 1, batch_size))
             if (step_i % network_update_freq) == 0:
                 this_stat['sampling_time'] = time.time() - t

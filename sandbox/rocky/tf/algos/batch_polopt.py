@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from rllab.algos.base import RLAlgorithm
 import rllab.misc.logger as logger
@@ -105,7 +105,7 @@ class BatchPolopt(RLAlgorithm):
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
             self.start_worker()
-            for itr in xrange(self.start_itr, self.n_itr):
+            for itr in range(self.start_itr, self.n_itr):
                 with logger.prefix('itr #%d | ' % itr):
                     paths = self.obtain_samples(itr)
                     samples_data = self.process_samples(itr, paths)
@@ -121,7 +121,7 @@ class BatchPolopt(RLAlgorithm):
                     if self.plot:
                         self.update_plot()
                         if self.pause_for_plot:
-                            raw_input("Plotting evaluation run: Press Enter to "
+                            input("Plotting evaluation run: Press Enter to "
                                       "continue...")
         self.shutdown_worker()
 

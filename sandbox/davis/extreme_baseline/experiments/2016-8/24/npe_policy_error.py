@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 info = """Logging the norms of the actions for noisy point environment. In this simple environment,
 since the optimal policy is always taking zero actions, this is equivalent to the distance from the

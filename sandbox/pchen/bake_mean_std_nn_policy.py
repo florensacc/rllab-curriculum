@@ -181,7 +181,7 @@ class BakeMeanStdNNPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 else:
                     logger.log("Skipping %s" % new)
             for tags, trainable in zip(
-                flatten([l.params.values() for l in L.get_all_layers(self._output_layers)[1:]]),
+                flatten([list(l.params.values()) for l in L.get_all_layers(self._output_layers)[1:]]),
                 trainable_masks
             ):
                 if not trainable:

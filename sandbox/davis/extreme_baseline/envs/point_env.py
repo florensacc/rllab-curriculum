@@ -31,7 +31,7 @@ class PointEnv(Env):
         return Step(observation=next_observation, reward=reward, done=done)
 
     def render(self):
-        print 'current state:', self._state
+        print('current state:', self._state)
 
     def sim_vectorized(self, state, actions):
         """

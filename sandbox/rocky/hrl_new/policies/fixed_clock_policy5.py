@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 from sandbox.rocky.tf.policies.base import StochasticPolicy
 from rllab.core.serializable import Serializable
@@ -145,7 +145,7 @@ class FixedClockPolicy(StochasticPolicy, Serializable):
 
     def get_action(self, observation):
         actions, infos = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in infos.iteritems()}
+        return actions[0], {k: v[0] for k, v in infos.items()}
 
     def reset(self, dones=None):
         if dones is None:
@@ -275,7 +275,7 @@ class FixedClockPolicy(StochasticPolicy, Serializable):
         subgoal_dim = tf.shape(input_probs)[2]
         static_subgoal_dim = input_probs.get_shape().as_list()[2]
 
-        for next_idx in xrange(1, self.subgoal_interval):
+        for next_idx in range(1, self.subgoal_interval):
             next_prob = input_probs[:, next_idx, :, :]
 
             reshaped_prob = tf.reshape(prob, tf.pack([N, subgoal_dim, -1]))
@@ -430,7 +430,7 @@ class FixedClockPolicy(StochasticPolicy, Serializable):
             state_info_vars_list = [
                 tf.placeholder(tf.float32, (None,) + shape, name=k) for k, shape in self.state_info_specs
                 ]
-            state_info_vars = dict(zip(self.state_info_keys, state_info_vars_list))
+            state_info_vars = dict(list(zip(self.state_info_keys, state_info_vars_list)))
             self.f_dist = tensor_utils.compile_function(
                 inputs=[obs_var] + state_info_vars_list,
                 outputs=self.dist_info_sym(obs_var, state_info_vars)

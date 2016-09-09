@@ -67,15 +67,15 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @overrides
     def get_action(self, observation):
         flat_obs = self.observation_space.flatten(observation)
-        dist_info = dict((k, val[0]) for k, val in self.dist_info([flat_obs]).iteritems()) # removing extra dim
+        dist_info = dict((k, val[0]) for k, val in self.dist_info([flat_obs]).items()) # removing extra dim
         action = self._dist.sample(dist_info)
-        print "Hier observes {}, acts {} with info {}".format(observation, action, dist_info)
+        print("Hier observes {}, acts {} with info {}".format(observation, action, dist_info))
         return action, dist_info
 
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)
         dist_infos = self.dist_info(flat_obs)
-        actions = map(self._dist.sample, dist_infos)
+        actions = list(map(self._dist.sample, dist_infos))
         return actions, dist_infos
 
     @property

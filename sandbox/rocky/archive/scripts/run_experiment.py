@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 
 import sys
 
@@ -128,7 +128,7 @@ def run_experiment(argv):
             classes['algo'] = load_class(
                 args.algo, Algorithm, ["rllab", "algo"])
 
-        for cls in classes.values():
+        for cls in list(classes.values()):
             cls.add_args(parser)
 
         if args.more_help:

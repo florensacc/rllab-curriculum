@@ -40,7 +40,7 @@ class VG(VariantGenerator):
 vg = VG()
 
 variants = vg.variants()
-print("#Experiments:", len(variants))
+print(("#Experiments:", len(variants)))
 
 for v in variants:
     env = normalize(TorcsEnv())

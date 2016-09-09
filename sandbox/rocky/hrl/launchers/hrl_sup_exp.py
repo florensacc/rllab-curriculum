@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 
 # from rllab.sampler.stateful_pool import singleton_pool
 from rllab.sampler import parallel_sampler
@@ -119,7 +119,7 @@ def gen_sup_trajectory():
 if __name__ == "__main__":
     logger.log("Generating training data...")
     with joblib.Parallel(n_jobs=-1) as parallel:
-        paths = parallel(joblib.delayed(gen_sup_trajectory)() for _ in xrange(n_training_paths))
+        paths = parallel(joblib.delayed(gen_sup_trajectory)() for _ in range(n_training_paths))
     logger.log("Generated")
 
     all_obs = np.concatenate([p["observations"] for p in paths])

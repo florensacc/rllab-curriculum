@@ -43,7 +43,7 @@ class Experiment(object):
 
         idx = np.random.randint(0, inputs.shape[0], 1)
         pred = []
-        for _ in xrange(10):
+        for _ in range(10):
             pred.append(model.pred_fn(inputs))
         sanity_pred = np.mean(np.array(pred), axis=0)
         input_im = inputs[:, :-3]
@@ -102,7 +102,7 @@ class Experiment(object):
 
             if not model.disable_variance:
                 try:
-                    print('KL[post||prior]: {}'.format(model.log_p_w_q_w_kl().eval()))
+                    print(('KL[post||prior]: {}'.format(model.log_p_w_q_w_kl().eval())))
                 except Exception:
                     pass
 
@@ -123,7 +123,7 @@ class Experiment(object):
                 train_batches += 1
 
             pred = []
-            for _ in xrange(10):
+            for _ in range(10):
                 pred.append(model.pred_fn(X))
             pred = np.mean(np.array(pred), axis=0)
 
