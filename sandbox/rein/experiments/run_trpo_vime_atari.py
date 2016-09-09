@@ -3,9 +3,10 @@ import lasagne
 import itertools
 
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from rllab.baselines.zero_baseline import ZeroBaseline
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.core.network import ConvNetwork
-from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.misc.instrument2 import stub, run_experiment_lite
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 
 from sandbox.rein.envs.atari import AtariEnvX
@@ -17,21 +18,36 @@ os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
-# global params
+TEST_RUN = True
+
 num_seq_frames = 4
 dyn_pool_enable = True
-batch_norm = True
 dropout = False
+baseline = False
 
-# Param ranges
-seeds = range(5)
-etas = [1.0, 0.1, 0.01]
-lst_factor = [1]
+if TEST_RUN:
+    exp_prefix = 'test-vime'
+    seeds = [0]
+    etas = [0.1]
+    mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
+    lst_factor = [1]
+    batch_size = 200
+    max_path_length = 50
+    batch_norm = False
+else:
+    exp_prefix = 'trpo-vime-atari-42x52-inf-a'
+    seeds = range(5)
+    etas = [0, 10.0, 1.0, 0.1]
+    mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
+            AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
+            AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
+    lst_factor = [2]
+    batch_size = 20000
+    max_path_length = 4500
+    batch_norm = True
+
 lst_pred_delta = [False]
 kl_ratios = [False]
-mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
-        AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
 
 param_cart_product = itertools.product(
     lst_pred_delta, lst_factor, kl_ratios, mdps, etas, seeds
@@ -53,29 +69,34 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         prob_network=network,
     )
 
-    network = ConvNetwork(
-        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
-        output_dim=1,
-        hidden_sizes=(64,),
-        conv_filters=(16, 16, 16),
-        conv_filter_sizes=(6, 6, 6),
-        conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
-    )
-    baseline = GaussianMLPBaseline(
-        env_spec=mdp.spec,
-        num_seq_inputs=num_seq_frames,
-        regressor_args=dict(
-            mean_network=network,
-            batchsize=None,
-            subsample_factor=0.1,
-            optimizer=FirstOrderOptimizer(
-                max_epochs=100,
-                verbose=True,
+    if baseline:
+        network = ConvNetwork(
+            input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
+            output_dim=1,
+            hidden_sizes=(32,),
+            conv_filters=(16, 16),
+            conv_filter_sizes=(6, 6),
+            conv_strides=(2, 2),
+            conv_pads=(0, 2),
+        )
+        baseline = GaussianMLPBaseline(
+            env_spec=mdp.spec,
+            num_seq_inputs=num_seq_frames,
+            regressor_args=dict(
+                mean_network=network,
+                batchsize=None,
+                subsample_factor=0.1,
+                optimizer=FirstOrderOptimizer(
+                    max_epochs=100,
+                    verbose=True,
+                ),
+                use_trust_region=False,
             ),
-            use_trust_region=False,
-        ),
-    )
+        )
+    else:
+        baseline = ZeroBaseline(
+            env_spec=mdp.spec
+        )
 
     # If we don't use a replay pool, we could have correct values here, as
     # it is purely Bayesian. We then divide the KL divergence term by the
@@ -94,7 +115,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         reward_dim=(1,),
         layers_disc=[
             dict(name='convolution',
-                 n_filters=64 * factor,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 0),
@@ -103,7 +124,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=False),
             dict(name='convolution',
-                 n_filters=64 * factor,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -112,7 +133,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=False),
             dict(name='convolution',
-                 n_filters=64 * factor,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -151,16 +172,16 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=dropout,
                  deterministic=False),
             dict(name='gaussian',
-                 n_units=1536 * factor,
+                 n_units=1536,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
                  deterministic=False),
             dict(name='reshape',
-                 shape=([0], 64 * factor, 6, 4)),
+                 shape=([0], 64, 6, 4)),
             dict(name='deconvolution',
-                 n_filters=64 * factor,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -169,7 +190,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=False),
             dict(name='deconvolution',
-                 n_filters=64 * factor,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 0),
@@ -178,7 +199,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=False),
             dict(name='deconvolution',
-                 n_filters=64 * factor,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 1),
@@ -195,7 +216,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         num_train_samples=1,
         prior_sd=0.05,
         second_order_update=True,
-        learning_rate=0.001,
+        learning_rate=0.0001,
         surprise_type=ConvBNNVIME.SurpriseType.INFGAIN,
         update_prior=(not dyn_pool_enable),
         update_likelihood_sd=False,
@@ -218,9 +239,9 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         policy=policy,
         baseline=baseline,
         dyn_mdl=dyn_mdl,
-        batch_size=250,
+        batch_size=batch_size,
         whole_paths=True,
-        max_path_length=45,
+        max_path_length=max_path_length,
         n_itr=400,
         step_size=0.01,
         optimizer_args=dict(
@@ -239,11 +260,11 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         n_itr_update=1,  # Fake itr updates in sampler
         dyn_pool_args=dict(
             enable=dyn_pool_enable,
-            size=200000,
+            size=300000,
             min_size=10,
             batch_size=32
         ),
-        surprise_transform=BatchPolopt.SurpriseTransform.CAP90PERC,  # BatchPolopt.SurpriseTransform.ZERO100,
+        surprise_transform=BatchPolopt.SurpriseTransform.LOG,  # BatchPolopt.SurpriseTransform.ZERO100,
         predict_delta=pred_delta,
         num_seq_frames=num_seq_frames,
         predict_reward=True,
@@ -251,11 +272,11 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-vime-atari-42x52-inf-c",
+        exp_prefix=exp_prefix,
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

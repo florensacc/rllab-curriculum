@@ -5,17 +5,15 @@ import base64
 import os.path as osp
 import pickle as pickle
 import inspect
-import hashlib
 import sys
-from contextlib import contextmanager
+from rllab.misc import docker
 
 import errno
+import uuid
 
 from rllab.core.serializable import Serializable
 from rllab import config
 from rllab.misc.console import mkdir_p
-from rllab.misc import ext
-from io import StringIO
 import datetime
 import dateutil.tz
 import json
@@ -328,6 +326,22 @@ def query_yes_no(question, default="yes"):
                              "(or 'y' or 'n').\n")
 
 
+made_docker_image = False
+docker_image = None
+
+
+def make_docker_image(push=True):
+    global made_docker_image
+    global docker_image
+    if not made_docker_image:
+        docker_image = "{}:{}".format(config.DOCKER_IMAGE, str(uuid.uuid4()))
+        docker.docker_build(docker_image)
+        if push:
+            docker.docker_push(docker_image)
+        made_docker_image = True
+    return docker_image
+
+
 exp_count = 0
 now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
@@ -452,26 +466,13 @@ def run_experiment_lite(
             except Exception as e:
                 if isinstance(e, KeyboardInterrupt):
                     raise
-    elif mode == "ec2":
-        if docker_image is None:
-            docker_image = config.DOCKER_IMAGE
-        s3_code_path = s3_sync_code(config, dry=dry)
-        launch_ec2(batch_tasks,
-                   exp_prefix=exp_prefix,
-                   docker_image=docker_image,
-                   script=script,
-                   aws_config=aws_config,
-                   dry=dry,
-                   terminate_machine=terminate_machine,
-                   use_gpu=use_gpu,
-                   code_full_path=s3_code_path,
-                   sync_s3_pkl=sync_s3_pkl)
+
     elif mode == "lab_kube":
+
         assert env is None
-        # first send code folder to s3
-        s3_code_path = s3_sync_code(config, dry=dry)
-        if docker_image is None:
-            docker_image = config.DOCKER_IMAGE
+
+        docker_image = make_docker_image(push=True)
+
         for task in batch_tasks:
             if 'env' in task:
                 assert task.pop('env') is None
@@ -481,7 +482,7 @@ def run_experiment_lite(
                 "node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
             task["exp_prefix"] = exp_prefix
             pod_dict = to_lab_kube_pod(
-                task, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu)
+                task, code_full_path="", docker_image=docker_image, script=script, is_gpu=use_gpu)
             pod_str = json.dumps(pod_dict, indent=1)
             if dry:
                 print(pod_str)
@@ -615,206 +616,6 @@ def dedent(s):
     return '\n'.join(lines)
 
 
-def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
-               script='scripts/run_experiment.py',
-               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False,
-               periodic_sync=True, periodic_sync_interval=15):
-    if len(params_list) == 0:
-        return
-
-    default_config = dict(
-        image_id=config.AWS_IMAGE_ID,
-        instance_type=config.AWS_INSTANCE_TYPE,
-        key_name=config.AWS_KEY_NAME,
-        spot=config.AWS_SPOT,
-        spot_price=config.AWS_SPOT_PRICE,
-        iam_instance_profile_name=config.AWS_IAM_INSTANCE_PROFILE_NAME,
-        security_groups=config.AWS_SECURITY_GROUPS,
-        security_group_ids=config.AWS_SECURITY_GROUP_IDS,
-        network_interfaces=config.AWS_NETWORK_INTERFACES,
-    )
-
-    if aws_config is None:
-        aws_config = dict()
-    aws_config = dict(default_config, **aws_config)
-
-    sio = StringIO()
-    sio.write("#!/bin/bash\n")
-    sio.write("{\n")
-    sio.write("""
-        die() { status=$1; shift; echo "FATAL: $*"; exit $status; }
-    """)
-    sio.write("""
-        EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
-    """)
-    sio.write("""
-        aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={exp_name} --region {aws_region}
-    """.format(exp_name=params_list[0].get("exp_name"), aws_region=config.AWS_REGION_NAME))
-    sio.write("""
-        service docker start
-    """)
-    sio.write("""
-        docker --config /home/ubuntu/.docker pull {docker_image}
-    """.format(docker_image=docker_image))
-    if config.FAST_CODE_SYNC:
-        sio.write("""
-            aws s3 cp {code_full_path} /tmp/rllab_code.tar.gz --region {aws_region}
-        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
-                   aws_region=config.AWS_REGION_NAME))
-        sio.write("""
-            mkdir -p {local_code_path}
-        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
-                   aws_region=config.AWS_REGION_NAME))
-        sio.write("""
-            tar -zxvf /tmp/rllab_code.tar.gz -C {local_code_path}
-        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
-                   aws_region=config.AWS_REGION_NAME))
-    else:
-        sio.write("""
-            aws s3 cp --recursive {code_full_path} {local_code_path} --region {aws_region}
-        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
-                   aws_region=config.AWS_REGION_NAME))
-    sio.write("""
-        cd {local_code_path}
-    """.format(local_code_path=config.DOCKER_CODE_DIR))
-
-    for params in params_list:
-        log_dir = params.get("log_dir")
-        remote_log_dir = params.pop("remote_log_dir")
-        env = params.pop("env", None)
-
-        sio.write("""
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={exp_name} --region {aws_region}
-        """.format(exp_name=params.get("exp_name"), aws_region=config.AWS_REGION_NAME))
-        sio.write("""
-            mkdir -p {log_dir}
-        """.format(log_dir=log_dir))
-        if periodic_sync:
-            if sync_s3_pkl:
-                sio.write("""
-                    while /bin/true; do
-                        aws s3 sync --exclude '*' --include '*.csv' --include '*.json' --include '*.pkl' {log_dir} {remote_log_dir} --region {aws_region}
-                        sleep {periodic_sync_interval}
-                    done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                         aws_region=config.AWS_REGION_NAME,
-                                                         periodic_sync_interval=periodic_sync_interval))
-            else:
-                sio.write("""
-                    while /bin/true; do
-                        aws s3 sync --exclude '*' --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
-                        sleep {periodic_sync_interval}
-                    done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                         aws_region=config.AWS_REGION_NAME,
-                                                         periodic_sync_interval=periodic_sync_interval))
-        sio.write("""
-            {command}
-        """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu, env=env,
-                                             local_code_dir=config.DOCKER_CODE_DIR)))
-        sio.write("""
-            aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
-        """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
-        sio.write("""
-            aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
-        """.format(remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
-
-    if terminate_machine:
-        sio.write("""
-            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id || die \"wget instance-id has failed: $?\"`"
-            aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {aws_region}
-        """.format(aws_region=config.AWS_REGION_NAME))
-    sio.write("} >> /home/ubuntu/user_data.log 2>&1\n")
-
-    full_script = dedent(sio.getvalue())
-
-    import boto3
-    import botocore
-    if aws_config["spot"]:
-        ec2 = boto3.client(
-            "ec2",
-            region_name=config.AWS_REGION_NAME,
-            aws_access_key_id=config.AWS_ACCESS_KEY,
-            aws_secret_access_key=config.AWS_ACCESS_SECRET,
-        )
-    else:
-        ec2 = boto3.resource(
-            "ec2",
-            region_name=config.AWS_REGION_NAME,
-            aws_access_key_id=config.AWS_ACCESS_KEY,
-            aws_secret_access_key=config.AWS_ACCESS_SECRET,
-        )
-
-    if len(full_script) > 10000 or len(base64.b64encode(full_script.encode()).decode("utf-8")) > 10000:
-        # Script too long; need to upload script to s3 first.
-        # We're being conservative here since the actual limit is 16384 bytes
-        s3_path = upload_file_to_s3(full_script)
-        sio = StringIO()
-        sio.write("#!/bin/bash\n")
-        sio.write("""
-        aws s3 cp {s3_path} /home/ubuntu/remote_script.sh --region {aws_region} && \\
-        chmod +x /home/ubuntu/remote_script.sh && \\
-        bash /home/ubuntu/remote_script.sh
-        """.format(s3_path=s3_path, aws_region=config.AWS_REGION_NAME))
-        user_data = dedent(sio.getvalue())
-    else:
-        user_data = full_script
-
-    instance_args = dict(
-        ImageId=aws_config["image_id"],
-        KeyName=aws_config["key_name"],
-        UserData=user_data,
-        InstanceType=aws_config["instance_type"],
-        EbsOptimized=True,
-        SecurityGroups=aws_config["security_groups"],
-        SecurityGroupIds=aws_config["security_group_ids"],
-        NetworkInterfaces=aws_config["network_interfaces"],
-        IamInstanceProfile=dict(
-            Name=aws_config["iam_instance_profile_name"],
-        ),
-    )
-    if aws_config.get("placement", None) is not None:
-        instance_args["Placement"] = aws_config["placement"]
-    if not aws_config["spot"]:
-        instance_args["MinCount"] = 1
-        instance_args["MaxCount"] = 1
-    print("************************************************************")
-    print(instance_args["UserData"])
-    print("************************************************************")
-    if aws_config["spot"]:
-        instance_args["UserData"] = base64.b64encode(instance_args["UserData"].encode()).decode("utf-8")
-        spot_args = dict(
-            DryRun=dry,
-            InstanceCount=1,
-            LaunchSpecification=instance_args,
-            SpotPrice=aws_config["spot_price"],
-            # ClientToken=params_list[0]["exp_name"],
-        )
-        import pprint
-        pprint.pprint(spot_args)
-        if not dry:
-            response = ec2.request_spot_instances(**spot_args)
-            print(response)
-            spot_request_id = response['SpotInstanceRequests'][
-                0]['SpotInstanceRequestId']
-            for _ in range(10):
-                try:
-                    ec2.create_tags(
-                        Resources=[spot_request_id],
-                        Tags=[
-                            {'Key': 'Name', 'Value': params_list[0]["exp_name"]}
-                        ],
-                    )
-                    break
-                except botocore.exceptions.ClientError:
-                    continue
-    else:
-        import pprint
-        pprint.pprint(instance_args)
-        ec2.create_instances(
-            DryRun=dry,
-            **instance_args
-        )
-
-
 S3_CODE_PATH = None
 
 
@@ -824,78 +625,42 @@ def s3_sync_code(config, dry=False):
         return S3_CODE_PATH
     base = config.AWS_CODE_SYNC_S3_PATH
     has_git = True
-
-    if config.FAST_CODE_SYNC:
+    try:
+        current_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"]).strip()
+        clean_state = len(
+            subprocess.check_output(["git", "status", "--porcelain"])) == 0
+    except subprocess.CalledProcessError as _:
+        print("Warning: failed to execute git commands")
+        has_git = False
+    dir_hash = base64.b64encode(subprocess.check_output(["pwd"])).decode("utf-8")
+    code_path = "%s_%s" % (
+        dir_hash,
+        (current_commit if clean_state else "%s_dirty_%s" % (current_commit, timestamp)) if
+        has_git else timestamp
+    )
+    full_path = "%s/%s" % (base, code_path)
+    cache_path = "%s/%s" % (base, dir_hash)
+    cache_cmds = ["aws", "s3", "sync"] + \
+                 [cache_path, full_path]
+    cmds = ["aws", "s3", "sync"] + \
+           flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
+           [".", full_path]
+    caching_cmds = ["aws", "s3", "sync"] + \
+                   [full_path, cache_path]
+    mujoco_key_cmd = [
+        "aws", "s3", "sync", config.MUJOCO_KEY_PATH, "{}/.mujoco/".format(base)]
+    print(cache_cmds, cmds, caching_cmds, mujoco_key_cmd)
+    if not dry:
+        subprocess.check_call(cache_cmds)
+        subprocess.check_call(cmds)
+        subprocess.check_call(caching_cmds)
         try:
-            current_commit = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"]).strip().decode("utf-8")
-        except subprocess.CalledProcessError as _:
-            print("Warning: failed to execute git commands")
-            current_commit = None
-
-        file_name = str(timestamp) + "_" + hashlib.sha224(
-            subprocess.check_output(["pwd"]) + str(current_commit).encode() + str(timestamp).encode()
-        ).hexdigest() + ".tar.gz"
-
-        file_path = "/tmp/" + file_name
-
-        tar_cmd = ["tar", "-zcvf", file_path, "-C", config.PROJECT_PATH]
-        for pattern in config.FAST_CODE_SYNC_IGNORES:
-            tar_cmd += ["--exclude", pattern]
-        tar_cmd += "."
-
-        remote_path = "%s/%s" % (base, file_name)
-
-        upload_cmd = ["aws", "s3", "cp", file_path, remote_path]
-
-        print(tar_cmd)
-        print(upload_cmd)
-
-        if not dry:
-            subprocess.check_call(tar_cmd)
-            subprocess.check_call(upload_cmd)
-
-        S3_CODE_PATH = remote_path
-        return remote_path
-    else:
-        try:
-            current_commit = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"]).strip().decode("utf-8")
-            clean_state = len(
-                subprocess.check_output(["git", "status", "--porcelain"])) == 0
-        except subprocess.CalledProcessError as _:
-            print("Warning: failed to execute git commands")
-            has_git = False
-        dir_hash = base64.b64encode(subprocess.check_output(["pwd"])).decode("utf-8")
-        code_path = "%s_%s" % (
-            dir_hash,
-            (current_commit if clean_state else "%s_dirty_%s" % (current_commit, timestamp)) if
-            has_git else timestamp
-        )
-        full_path = "%s/%s" % (base, code_path)
-        cache_path = "%s/%s" % (base, dir_hash)
-        cache_cmds = ["aws", "s3", "cp", "--recursive"] + \
-                     flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
-                     [cache_path, full_path]
-        cmds = ["aws", "s3", "cp", "--recursive"] + \
-               flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
-               [".", full_path]
-        caching_cmds = ["aws", "s3", "cp", "--recursive"] + \
-                       flatten(["--exclude", "%s" % pattern] for pattern in config.CODE_SYNC_IGNORES) + \
-                       [full_path, cache_path]
-        mujoco_key_cmd = [
-            "aws", "s3", "sync", config.MUJOCO_KEY_PATH, "{}/.mujoco/".format(base)]
-        print(cache_cmds, cmds, caching_cmds, mujoco_key_cmd)
-        if not dry:
-            subprocess.check_call(cache_cmds)
-            subprocess.check_call(cmds)
-            subprocess.check_call(caching_cmds)
-            try:
-                subprocess.check_call(mujoco_key_cmd)
-            except Exception:
-                print('Unable to sync mujoco keys!')
-        S3_CODE_PATH = full_path
-        return full_path
+            subprocess.check_call(mujoco_key_cmd)
+        except Exception:
+            print('Unable to sync mujoco keys!')
+    S3_CODE_PATH = full_path
+    return full_path
 
 
 def upload_file_to_s3(script_content):
@@ -922,7 +687,6 @@ def to_lab_kube_pod(
     :param script: script command for running experiment
     :return:
     """
-    print("DEPRECATED! use instrument2.py")
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
     resources = params.pop("resources")
@@ -938,20 +702,8 @@ def to_lab_kube_pod(
         "echo \"aws_access_key_id = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_KEY)
     pre_commands.append(
         "echo \"aws_secret_access_key = %s\" >> ~/.aws/credentials" % config.AWS_ACCESS_SECRET)
-    s3_mujoco_key_path = config.AWS_CODE_SYNC_S3_PATH + '/.mujoco/'
-    pre_commands.append(
-        'aws s3 cp --recursive {} {}'.format(s3_mujoco_key_path, '~/.mujoco'))
-
-    if config.FAST_CODE_SYNC:
-        pre_commands.append('aws s3 cp %s /tmp/rllab_code.tar.gz' % code_full_path)
-        pre_commands.append('mkdir -p %s' % code_full_path)
-        pre_commands.append('tar -zxvf /tmp/rllab_code.tar.gz -C %s' % config.DOCKER_CODE_DIR)
-    else:
-        pre_commands.append('aws s3 cp --recursive %s %s' %
-                            (code_full_path, config.DOCKER_CODE_DIR))
-    pre_commands.append('cd %s' % config.DOCKER_CODE_DIR)
-    pre_commands.append('mkdir -p %s' %
-                        (log_dir))
+    pre_commands.append('cd %s' % '/root/code/')
+    pre_commands.append('mkdir -p %s' % log_dir)
     pre_commands.append("""
         while /bin/true; do
             aws s3 sync {log_dir} {remote_log_dir} --region {aws_region}
@@ -960,13 +712,7 @@ def to_lab_kube_pod(
                                              aws_region=config.AWS_REGION_NAME))
     # copy the file to s3 after execution
     post_commands = list()
-    post_commands.append('aws s3 cp --recursive %s %s' %
-                         (log_dir,
-                          remote_log_dir))
-    # post_commands.append('sleep 500000')
-    # command = to_docker_command(params, docker_image=docker_image, script=script,
-    #                             pre_commands=pre_commands,
-    #                             post_commands=post_commands)
+    post_commands.append('aws s3 cp --recursive %s %s' % (log_dir, remote_log_dir))
     command_list = list()
     if pre_commands is not None:
         command_list.extend(pre_commands)

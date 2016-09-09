@@ -16,7 +16,7 @@ def _worker_init(G, id):
 def initialize(n_parallel):
     singleton_pool.initialize(n_parallel)
     singleton_pool.run_each(
-        _worker_init, [(id,) for id in xrange(singleton_pool.n_parallel)])
+        _worker_init, [(id,) for id in range(singleton_pool.n_parallel)])
 
 
 def _worker_populate_task(G, env, policy, dynamics):
@@ -41,7 +41,7 @@ def _worker_set_seed(_, seed):
 def set_seed(seed):
     singleton_pool.run_each(
         _worker_set_seed,
-        [(seed + i,) for i in xrange(singleton_pool.n_parallel)]
+        [(seed + i,) for i in range(singleton_pool.n_parallel)]
     )
 
 

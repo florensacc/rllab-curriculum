@@ -36,12 +36,11 @@ RUN apt-get -y install libxrandr2 libxinerama-dev libxi6 libxcursor-dev
 RUN apt-get install -y vim ack-grep
 RUN pip install --upgrade pip
 # usual pip install pygame will fail
-#RUN conda install --yes -c https://conda.anaconda.org/kne pybox2d
-#RUN conda install --yes -c https://conda.binstar.org/tlatorre pygame
 RUN apt-get build-dep -y python-pygame
 RUN pip install Pillow
 
 # ========== OpenAI Gym ==========
+RUN apt-get -y install libgtk2.0-0
 RUN pip install gym
 RUN apt-get -y install ffmpeg
 RUN apt-get -y install libav-tools
@@ -52,7 +51,13 @@ ADD environment.yml /root/code/environment.yml
 RUN conda env create -f /root/code/environment.yml
 
 ENV PYTHONPATH /root/code/rllab:$PYTHONPATH
-ENV PATH /opt/conda/envs/rllab3/bin:$PATH
+ENV PATH /opt/conda/envs/rllab/bin:$PATH
 RUN echo "source activate rllab3" >> /root/.bashrc
 ENV BASH_ENV /root/.bashrc
 WORKDIR /root/code
+
+# Add code.
+ADD vendor /root/code/vendor
+ADD scripts /root/code/scripts
+ADD rllab /root/code/rllab
+ADD sandbox /root/code/sandbox

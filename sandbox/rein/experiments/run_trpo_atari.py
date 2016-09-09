@@ -7,6 +7,7 @@ from sandbox.rein.envs.gym_env_downscaled import GymEnv
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
 from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from rllab.baselines.zero_baseline import ZeroBaseline
 from rllab.core.network import ConvNetwork
 
 os.environ["THEANO_FLAGS"] = "device=gpu"
@@ -17,13 +18,15 @@ from rllab.envs.normalized_env import NormalizedEnv
 
 from sandbox.rein.algos.trpo import TRPO
 # from sandbox.john.instrument import stub, run_experiment_lite
-from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.misc.instrument2 import stub, run_experiment_lite
+from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 from sandbox.rein.envs.atari import AtariEnvX
 
 import itertools
 
 RECORD_VIDEO = True
 num_seq_frames = 4
+baseline = False
 
 stub(globals())
 
@@ -53,23 +56,34 @@ for mdp, seed in param_cart_product:
         prob_network=network,
     )
 
-    network = ConvNetwork(
-        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
-        output_dim=1,
-        hidden_sizes=(64,),
-        conv_filters=(16, 16, 16),
-        conv_filter_sizes=(6, 6, 6),
-        conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
-    )
-    baseline = GaussianMLPBaseline(
-        mdp.spec,
-        num_seq_inputs=num_seq_frames,
-        regressor_args=dict(
-            mean_network=network,
-            batchsize=30000,
-            subsample_factor=0.1),
-    )
+    if baseline:
+        network = ConvNetwork(
+            input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
+            output_dim=1,
+            hidden_sizes=(32,),
+            conv_filters=(16, 16),
+            conv_filter_sizes=(6, 6),
+            conv_strides=(2, 2),
+            conv_pads=(0, 2),
+        )
+        baseline = GaussianMLPBaseline(
+            env_spec=mdp.spec,
+            num_seq_inputs=num_seq_frames,
+            regressor_args=dict(
+                mean_network=network,
+                batchsize=None,
+                subsample_factor=0.1,
+                optimizer=FirstOrderOptimizer(
+                    max_epochs=100,
+                    verbose=True,
+                ),
+                use_trust_region=False,
+            ),
+        )
+    else:
+        baseline = ZeroBaseline(
+            env_spec=mdp.spec
+        )
 
     algo = TRPO(
         discount=0.995,
@@ -89,11 +103,11 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-atari-42x52-c",
+        exp_prefix="trpo-atari-42x52-a",
         n_parallel=4,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",
-        use_gpu=False,
+        use_gpu=True,
         dry=False,
     )

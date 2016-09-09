@@ -1,5 +1,5 @@
 from rllab.misc.tabulate import tabulate
-from rllab.misc.console import mkdir_p,colorize
+from rllab.misc.console import mkdir_p, colorize
 from rllab.misc.autoargs import get_all_parameters
 from contextlib import contextmanager
 import numpy as np
@@ -101,7 +101,7 @@ def get_log_tabular_only():
     return _log_tabular_only
 
 
-def log(s, with_prefix=True, with_timestamp=True,color=None):
+def log(s, with_prefix=True, with_timestamp=True, color=None):
     out = s
     if with_prefix:
         out = _prefix_str + out
@@ -110,7 +110,7 @@ def log(s, with_prefix=True, with_timestamp=True,color=None):
         timestamp = now.strftime('%Y-%m-%d %H:%M:%S.%f %Z')
         out = "%s | %s" % (timestamp, out)
     if color is not None:
-        out = colorize(out,color)
+        out = colorize(out, color)
     if not _log_tabular_only:
         # Also log to stdout
         print(out)
@@ -239,28 +239,29 @@ def log_parameters(log_file, args, classes):
 
 def stub_to_json(stub_sth):
     from rllab.misc import instrument
-    if isinstance(stub_sth, instrument.StubObject):
+    from rllab.misc import instrument2
+    if isinstance(stub_sth, instrument.StubObject) or isinstance(stub_sth, instrument2.StubObject):
         assert len(stub_sth.args) == 0
         data = dict()
         for k, v in stub_sth.kwargs.items():
             data[k] = stub_to_json(v)
         data["_name"] = stub_sth.proxy_class.__module__ + "." + stub_sth.proxy_class.__name__
         return data
-    elif isinstance(stub_sth, instrument.StubAttr):
+    elif isinstance(stub_sth, instrument.StubAttr) or isinstance(stub_sth, instrument2.StubAttr):
         return dict(
             obj=stub_to_json(stub_sth.obj),
             attr=stub_to_json(stub_sth.attr_name)
         )
-    elif isinstance(stub_sth, instrument.StubMethodCall):
+    elif isinstance(stub_sth, instrument.StubMethodCall) or isinstance(stub_sth, instrument2.StubMethodCall):
         return dict(
             obj=stub_to_json(stub_sth.obj),
             method_name=stub_to_json(stub_sth.method_name),
             args=stub_to_json(stub_sth.args),
             kwargs=stub_to_json(stub_sth.kwargs),
         )
-    elif isinstance(stub_sth, instrument.BinaryOp):
+    elif isinstance(stub_sth, instrument.BinaryOp) or isinstance(stub_sth, instrument2.BinaryOp):
         return "binary_op"
-    elif isinstance(stub_sth, instrument.StubClass):
+    elif isinstance(stub_sth, instrument.StubClass) or isinstance(stub_sth, instrument2.StubClass):
         return stub_sth.proxy_class.__module__ + "." + stub_sth.proxy_class.__name__
     elif isinstance(stub_sth, dict):
         return {stub_to_json(k): stub_to_json(v) for k, v in stub_sth.items()}
@@ -301,7 +302,8 @@ def log_variant(log_file, variant_data):
     with open(log_file, "w") as f:
         json.dump(variant_json, f, indent=2, sort_keys=True)
 
-def record_tabular_misc_stat(key,values):
+
+def record_tabular_misc_stat(key, values):
     record_tabular(key + "Average", np.average(values))
     record_tabular(key + "Std", np.std(values))
     record_tabular(key + "Median", np.median(values))
