@@ -327,15 +327,19 @@ def query_yes_no(question, default="yes"):
 
 
 made_docker_image = False
+docker_image = None
 
 
-def make_docker_image(docker_image=None, push=True):
+def make_docker_image(push=True):
     global made_docker_image
+    global docker_image
     if not made_docker_image:
+        docker_image = "{}:{}".format(config.DOCKER_IMAGE, str(uuid.uuid4()))
         docker.docker_build(docker_image)
         if push:
             docker.docker_push(docker_image)
         made_docker_image = True
+    return docker_image
 
 
 exp_count = 0
@@ -466,11 +470,8 @@ def run_experiment_lite(
     elif mode == "lab_kube":
 
         assert env is None
-        if docker_image is None:
-            image_id = uuid.uuid4()
-            docker_image = "{}:{}".format(config.DOCKER_IMAGE, str(image_id))
 
-        make_docker_image(docker_image, push=True)
+        docker_image = make_docker_image(push=True)
 
         for task in batch_tasks:
             if 'env' in task:
