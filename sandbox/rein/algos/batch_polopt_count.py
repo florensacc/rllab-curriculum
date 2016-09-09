@@ -335,6 +335,8 @@ class BatchPolopt(RLAlgorithm):
             logger.record_tabular('DynModel_TrainLoss', train_loss)
 
             # Here we should extract discrete embedding from samples and use it for updating count table.
+            self.count(paths)
+
             # Postprocess trajectory data.
             samples_data = self.process_samples(itr, paths)
 
@@ -360,7 +362,7 @@ class BatchPolopt(RLAlgorithm):
                 self.update_plot()
                 if self.pause_for_plot:
                     input("Plotting evaluation run: Press Enter to "
-                              "continue...")
+                          "continue...")
 
         # Training complete: terminate environment.
         self.shutdown_worker()
@@ -387,6 +389,10 @@ class BatchPolopt(RLAlgorithm):
     def update_plot(self):
         if self.plot:
             plotter.update_plot(self.policy, self.max_path_length)
+
+    def count(self, paths):
+        for idx, path in enumerate(paths):
+            counts = np.cast['int'](np.round(self.autoenc.discrete_emb(path['observations'])))
 
     def obtain_samples(self):
         cur_params = self.policy.get_param_values()

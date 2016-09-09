@@ -5,7 +5,7 @@ import itertools
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.core.network import ConvNetwork
-from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.misc.instrument2 import stub, run_experiment_lite
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 from rllab.baselines.zero_baseline import ZeroBaseline
 
@@ -17,6 +17,8 @@ os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
+TEST_RUN = True
+
 # global params
 num_seq_frames = 4
 batch_norm = True
@@ -24,14 +26,27 @@ dropout = False
 baseline = False
 
 # Param ranges
-seeds = list(range(5))
-etas = [1., 0.01]
-lst_factor = [1]
+if TEST_RUN:
+    exp_prefix = 'test'
+    seeds = [0]
+    etas = [0.1]
+    mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
+    lst_factor = [1]
+    batch_size = 200
+    max_path_length = 50
+else:
+    exp_prefix = 'trpo-vime-atari-42x52-inf-a'
+    seeds = range(5)
+    etas = [0, 10.0, 1.0, 0.1]
+    mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
+            AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
+            AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
+    lst_factor = [2]
+    batch_size = 20000
+    max_path_length = 4500
+
 lst_pred_delta = [False]
 kl_ratios = [False]
-mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8),
-        AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]
 
 param_cart_product = itertools.product(
     lst_pred_delta, lst_factor, kl_ratios, mdps, etas, seeds
@@ -102,7 +117,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
-                 deterministic=False),
+                 deterministic=True),
             dict(name='convolution',
                  n_filters=64 * factor,
                  filter_size=(6, 6),
@@ -111,7 +126,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
-                 deterministic=False),
+                 deterministic=True),
             dict(name='convolution',
                  n_filters=64 * factor,
                  filter_size=(6, 6),
@@ -120,7 +135,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
-                 deterministic=False),
+                 deterministic=True),
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
@@ -129,21 +144,17 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=dropout,
-                 deterministic=False),
-            # dict(name='discrete_embedding',
-            #      n_units=128 * factor,
-            #      matrix_variate_gaussian=False,
-            #      nonlinearity=lasagne.nonlinearities.rectify,
-            #      batch_norm=batch_norm,
-            #      dropout=dropout,
-            #      deterministic=False),
+                 deterministic=True),
+            dict(name='discrete_embedding',
+                 n_units=128 * factor,
+                 deterministic=True),
             dict(name='gaussian',
                  n_units=1536 * factor,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
-                 deterministic=False),
+                 deterministic=True),
             dict(name='reshape',
                  shape=([0], 64 * factor, 6, 4)),
             dict(name='deconvolution',
@@ -154,7 +165,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
-                 deterministic=False),
+                 deterministic=True),
             dict(name='deconvolution',
                  n_filters=64 * factor,
                  filter_size=(6, 6),
@@ -163,7 +174,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
-                 deterministic=False),
+                 deterministic=True),
             dict(name='deconvolution',
                  n_filters=64 * factor,
                  filter_size=(6, 6),
@@ -172,7 +183,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  nonlinearity=lasagne.nonlinearities.linear,
                  batch_norm=True,
                  dropout=False,
-                 deterministic=False),
+                 deterministic=True),
         ],
         n_batches=n_batches,
         trans_func=lasagne.nonlinearities.rectify,

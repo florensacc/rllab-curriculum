@@ -1,4 +1,3 @@
-
 import numpy as np
 import theano.tensor as T
 import lasagne
@@ -20,11 +19,11 @@ from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, Bayesia
 
 class DiscreteEmbeddingLayer(lasagne.layers.Layer):
     """
-    Discrete embedding layer for counting
+    Discrete embedding layer for counting: binary units.
     """
 
     def __init__(self, incoming, num_units, W=lasagne.init.GlorotUniform(),
-                 b=lasagne.init.Constant(0.), nonlinearity=lasagne.nonlinearities.rectify,
+                 b=lasagne.init.Constant(0.), nonlinearity=lasagne.nonlinearities.sigmoid,
                  **kwargs):
         super(DiscreteEmbeddingLayer, self).__init__(incoming, **kwargs)
         self.nonlinearity = (lasagne.nonlinearities.identity if nonlinearity is None
@@ -42,9 +41,6 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layer):
 
         self._srng = RandomStreams()
 
-    def get_embedding(self, input):
-        return T.cast(T.round(self.get_output_for(input)), 'int32')
-
     def get_output_shape_for(self, input_shape):
         return input_shape[0], self.num_units
 
@@ -58,7 +54,7 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layer):
         if self.b is not None:
             activation = activation + self.b.dimshuffle('x', 0)
         # Add noise to activation for discretization
-        return self.nonlinearity(activation) + self._srng.uniform(size=activation.shape, low=-0.5, high=0.5)
+        return self.nonlinearity(activation) + self._srng.uniform(size=activation.shape, low=-0.49, high=0.49)
 
 
 class IndependentSoftmaxLayer(lasagne.layers.Layer):
@@ -273,7 +269,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             self.likelihood_sd.set_value(self.old_likelihood_sd.get_value())
 
     def get_bayesian_layers(self):
-        return [l for l in lasagne.layers.get_all_layers(self.network) if isinstance(l, BayesianLayer) and not l.disable_variance]
+        return [l for l in lasagne.layers.get_all_layers(self.network) if
+                isinstance(l, BayesianLayer) and not l.disable_variance]
 
     def l1(self):
         layers = [l for l in lasagne.layers.get_all_layers(self.network) if isinstance(l, BayesianLayer)]
@@ -288,12 +285,14 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def compr_impr(self):
         """KL divergence KL[old_param||new_param]"""
-        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianLayer) and not l.disable_variance]
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if
+                  isinstance(l, BayesianLayer) and not l.disable_variance]
         return sum(l.kl_div_old_new() for l in layers)
 
     def inf_gain(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianLayer) and not l.disable_variance]
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if
+                  isinstance(l, BayesianLayer) and not l.disable_variance]
         return sum(l.kl_div_new_old() for l in layers)
 
     def num_weights(self):
@@ -368,17 +367,20 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
     def kl_div(self):
         """KL divergence KL[new_param||old_param]"""
-        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianLayer) and not l.disable_variance]
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if
+                  isinstance(l, BayesianLayer) and not l.disable_variance]
         return sum(l.kl_div_new_old() for l in layers)
 
     def log_p_w_q_w_kl(self):
         """KL divergence KL[q_\phi(w)||p(w)]"""
-        layers = [l for l in lasagne.layers.get_all_layers(self.network) if isinstance(l, BayesianLayer) and not l.disable_variance]
+        layers = [l for l in lasagne.layers.get_all_layers(self.network) if
+                  isinstance(l, BayesianLayer) and not l.disable_variance]
         return sum(l.kl_div_new_prior() for l in layers)
 
     def reverse_log_p_w_q_w_kl(self):
         """KL divergence KL[p(w)||q_\phi(w)]"""
-        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if isinstance(l, BayesianLayer) and not l.disable_variance]
+        layers = [l for l in lasagne.layers.get_all_layers(self.network)[1:] if
+                  isinstance(l, BayesianLayer) and not l.disable_variance]
         return sum(l.kl_div_prior_new() for l in layers)
 
     def _log_prob_normal(self, input, mu=0., sigma=1.):
@@ -582,12 +584,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     layer_disc['nonlinearity'] = lasagne.nonlinearities.rectify
                 s_net = DiscreteEmbeddingLayer(
                     s_net,
-                    num_units=layer_disc['n_units'],
-                    nonlinearity=layer_disc['nonlinearity'])
-                if layer_disc['dropout'] is True:
-                    s_net = dropout(s_net, p=dropout_p)
-                if layer_disc['batch_norm'] is True:
-                    s_net = batch_norm(s_net)
+                    num_units=layer_disc['n_units'])
+                # Pull out discrete embedding layer.
+                self.discrete_emb_sym = s_net
             elif layer_disc['name'] == 'deterministic':
                 s_net = lasagne.layers.DenseLayer(
                     s_net,
@@ -910,6 +909,11 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 self.train_update_fn = ext.compile_function(
                     [input_var, target_var, step_size], loss_only_last_sample, updates=updates_bayesian,
                     log_name='fn_surprise_2nd', no_default_updates=False)
+
+        # Discrete embedding layer for counting.
+        self.discrete_emb = ext.compile_function(
+            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, deterministic=False),
+            log_name='fn_discrete_emb')
 
 
 if __name__ == '__main__':
