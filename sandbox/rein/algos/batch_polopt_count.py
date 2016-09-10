@@ -10,7 +10,7 @@ import rllab.plotter as plotter
 from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup
 from sandbox.rein.sampler import parallel_sampler_count as parallel_sampler
 from sandbox.rein.dynamics_models.utils import enum
-from sandbox.rein.algos.replay_pool import ReplayPool
+from sandbox.rein.algos.replay_pool import SingleStateReplayPool
 from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
 
 from scipy import stats, misc
@@ -128,17 +128,15 @@ class BatchPolopt(RLAlgorithm):
 
         # Specific for Atari
         observation_dtype = "uint8"
-        self.pool = ReplayPool(
+        self.pool = SingleStateReplayPool(
             max_pool_size=self._dyn_pool_args['size'],
             observation_shape=(self.env.observation_space.flat_dim,),
-            action_dim=self.env.action_dim,
             observation_dtype=observation_dtype,
-            num_seq_frames=self._num_seq_frames,
             **self._dyn_pool_args
         )
 
         # Counting table
-        self.counting_table = np.zeros(shape=(2 ** 32, 1))
+        self.counting_table = np.zeros(shape=(2 ** 32, 1), dtype=int)
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy, self.autoenc)
@@ -244,11 +242,8 @@ class BatchPolopt(RLAlgorithm):
         for path in paths:
             path_len = len(path['rewards'])
             for i in range(path_len):
-                obs = (path['observations'][i] * self.autoenc.num_classes).astype(int)
-                act = path['actions'][i]
-                rew_orig = path['rewards_orig'][i]
-                term = (i == path_len - 1)
-                self.pool.add_sample(obs, act, rew_orig, term)
+                obs = (path['observations'][i] * self.autoenc.num_classes).astype("uint8")
+                self.pool.add_sample(obs)
 
     def train_autoenc(self, itr):
         logger.log('Updating autoencoder using replay pool ...')
@@ -389,7 +384,7 @@ class BatchPolopt(RLAlgorithm):
                 lst_key_as_int[idy] = key_as_int
                 self.counting_table[key_as_int] += 1
                 counts[idy] = self.counting_table[key_as_int]
-                print('{}\t{}'.format(int(counts[idy]), key))
+                # print('{}\t{}'.format(int(counts[idy]), key))
             num_unique = len(set(lst_key_as_int))
             print('unique values: {}/{}'.format(num_unique, len(lst_key_as_int)))
             # TODO: change name 'KL' to surprise.

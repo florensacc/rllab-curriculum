@@ -36,7 +36,7 @@ if TEST_RUN:
     max_path_length = 50
     batch_norm = False
 else:
-    exp_prefix = 'trpo-count-atari-42x52-a'
+    exp_prefix = 'trpo-count-atari-42x52-c'
     seeds = range(5)
     etas = [0, 10.0, 1.0, 0.1]
     mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
@@ -235,9 +235,10 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         replay_kl_schedule=0.98,
         n_itr_update=1,  # Fake itr updates in sampler
         dyn_pool_args=dict(
-            size=300000,
-            min_size=10,
-            batch_size=32
+            size=100000,
+            min_size=32,
+            batch_size=32,
+            subsample_factor=0.1,
         ),
         surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP99PERC,
         predict_delta=pred_delta,
@@ -246,11 +247,11 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-count-atari-42x52-b",
+        exp_prefix=exp_prefix,
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",
