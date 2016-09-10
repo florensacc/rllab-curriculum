@@ -4,6 +4,7 @@ import sys
 import numpy as np
 import cv2
 import copy
+import atari_py
 
 from rllab import spaces
 from rllab.core.serializable import Serializable
@@ -12,7 +13,7 @@ from sandbox.haoran.ale_python_interface import ALEInterface
 
 class AtariEnv(Env,Serializable):
     def __init__(self,
-            rom_filename,
+            game,
             seed=None,
             plot=False, # live demo
             max_start_nullops=0,
@@ -28,7 +29,7 @@ class AtariEnv(Env,Serializable):
         """
         Serializable.quick_init(self,locals())
         assert not plot
-        self.rom_filename = rom_filename
+        self.rom_filename = atari_py.get_game_path(game)
         self.seed = seed
         self.plot = plot
         self.max_start_nullops = max_start_nullops

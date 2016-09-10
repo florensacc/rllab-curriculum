@@ -1,6 +1,7 @@
-# Tune for Montezuma's Revenge
-# Try prioritized reset
-# Use the Bellamre's ALE python interface, instead of OpenAI's
+"""
+Try prioritized reset on Freeway and Breakout
+Use the Bellamre's ALE python interface, instead of OpenAI's
+"""
 
 from __future__ import print_function
 from __future__ import absolute_import
@@ -32,64 +33,57 @@ Fix to counting scheme. Fix config...
 """
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_test"
+mode = "ec2"
 ec2_instance = "c4.8xlarge"
-subnet = "us-west-1c"
+subnet = "us-west-1a"
 
 n_parallel = 4
 snapshot_mode = "last"
 plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
-rom_folder = "sandbox/haoran/ale_python_interface/roms"
 
 
 # params ---------------------------------------
-batch_size = 5000
+batch_size = 100000
 max_path_length = 4500
 discount = 0.99
 n_itr = 1000
 restored_state_folder = None
 
+dim_key = 64
+bonus_form="1/sqrt(n)"
+
 clip_reward = True
 extra_dim_key = 1024
 extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
 
-resetter_p = 0.5
-resetter_exponent = 100 # only reset to new state
-
-
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [111, 211, 311]
+        return [111, 211]
 
     @variant
     def bonus_coeff(self):
-        return [0]
-
-    @variant
-    def dim_key(self):
-        return [64]
+        return [0.1]
 
     @variant
     def game(self):
-        return ["frostbite"]
+        return ["breakout","freeway"]
 
     @variant
-    def bonus_form(self):
-        return ["1/sqrt(n)"]
+    def resetter_p(self):
+        return [0.5,0.1]
 
     @variant
-    def death_ends_episode(self):
-        return [False]
-
+    def resetter_exponent(self):
+        return [2,100]
 variants = VG().variants()
 
 
 print("#Experiments: %d" % len(variants))
 for v in variants:
-    exp_name = "alex_{time}_{game}".format(
+    exp_name = "alex_{time}_{game}_reset".format(
         time=get_time_stamp(),
         game=v["game"],
     )
@@ -98,13 +92,13 @@ for v in variants:
         sys.exit(1)
 
     resetter = AtariCountResetter(
-        p=resetter_p,
-        exponent=resetter_exponent,
+        p=v["resetter_p"],
+        exponent=v["resetter_exponent"],
         restored_state_folder=restored_state_folder,
     )
     env = TfEnv(
         AtariEnv(
-            rom_filename=os.path.join(rom_folder,v["game"]+".bin"),
+            game=v["game"],
             seed=v["seed"],
             obs_type="ram",
             record_image=False,
@@ -130,8 +124,8 @@ for v in variants:
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     bonus_evaluator = HashingBonusEvaluator(
         env_spec=env.spec,
-        dim_key=v["dim_key"],
-        bonus_form=v["bonus_form"],
+        dim_key=dim_key,
+        bonus_form=bonus_form,
         log_prefix="",
     )
     extra_bonus_evaluator = HashingBonusEvaluator(
