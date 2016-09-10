@@ -432,15 +432,26 @@ class DiscretizedLogistic(Distribution):
         scale = dist_info["scale"]
         return tf.nn.sigmoid((x_var - mu)/scale)
 
-    def logli(self, x_var, dist_info):
-        # mu = dist_info["mu"]
-        # scale = dist_info["scale"]
+    def floor(self, x_var):
         floored = tf.floor(x_var*self._bins) / self._bins
+        return floored
+
+    def logli(self, x_var, dist_info):
+        floored = self.floor(x_var)
+        cdf_hi = self.cdf(floored + 1./self._bins, dist_info)
+        cdf_lo = self.cdf(floored, dist_info)
+        cdf_diff = tf.select(
+            floored <= -0.5 + 1./self._bins - 1e-5,
+            cdf_hi,
+            tf.select(
+                floored >= 0.5 - 1./self._bins,
+                1 - cdf_lo,
+                cdf_hi - cdf_lo
+            )
+        )
         return tf.reduce_sum(
             tf.log(
-                self.cdf(floored + 1./self._bins, dist_info) -
-                    self.cdf(floored, dist_info) +
-                    TINY
+                cdf_diff + 1e-7
             ),
             reduction_indices=[1],
         )
@@ -458,24 +469,133 @@ class DiscretizedLogistic(Distribution):
             scale=tf.exp(flat_dist[:, self.dim:]) * self._init_scale,
         )
 
-    def sample_logli(self, dist_info):
+    def sample(self, dist_info):
         mu = dist_info["mu"]
         scale = dist_info["scale"]
-        # import ipdb; ipdb.set_trace()
         p = tf.random_uniform(shape=mu.get_shape())
         real_logit = mu + scale*(tf.log(p) - tf.log(1-p)) # inverse cdf according to wiki
         clipped = tf.clip_by_value(real_logit, -0.5, 0.5-1./self._bins)
-        return clipped, tf.reduce_sum(
-            tf.log(
-                self.cdf(p + 1./self._bins, dist_info) - self.cdf(p, dist_info)
-            ),
-            reduction_indices=[1],
-        )
+        return self.floor(clipped)
 
     def prior_dist_info(self, batch_size):
         return dict(
             mu=0.0*np.ones([batch_size, self._dim]),
-            scale=np.ones([batch_size, self._dim]),
+            scale=np.ones([batch_size, self._dim]) * self._init_scale,
+        )
+
+class DiscretizedLogistic2(Distribution):
+
+    # assume to be -0.5 ~ 0.5
+    def __init__(self, dim, bins=256., init_scale=0.1):
+        self._dim = dim
+        self._bins = bins
+        self._init_scale = init_scale
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def dist_flat_dim(self):
+        return self._dim * 2
+
+    @property
+    def effective_dim(self):
+        return self._dim
+
+    @property
+    def dist_info_keys(self):
+        return ["mu", "scale"]
+
+    def raw(self, x_var, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        raw = ((x_var - mu)/scale)
+        return raw
+
+    def cdf(self, x_var, dist_info):
+        return tf.nn.sigmoid(self.raw(x_var, dist_info))
+
+    def log_cdf(self, x_var, dist_info):
+        raw = self.raw(x_var, dist_info)
+        return raw - tf.nn.softplus(raw)
+
+    # centered_x = x - means
+    # inv_stdv = tf.exp(-log_scales)
+    # plus_in = inv_stdv * (centered_x + 1./255.)
+    # cdf_plus = tf.nn.sigmoid(plus_in)
+    # min_in = inv_stdv * (centered_x - 1./255.)
+    # cdf_min = tf.nn.sigmoid(min_in)
+    # log_cdf_plus = plus_in - tf.nn.softplus(plus_in)
+    # log_one_minus_cdf_min = -tf.nn.softplus(min_in)
+    # cdf_delta = cdf_plus - cdf_min
+    # mid_in = inv_stdv * centered_x
+    # log_pdf_mid = -mid_in - log_scales - 2.*tf.nn.softplus(-mid_in)
+    # log_probs = tf.select(
+    #     x < -0.999,
+    #     log_cdf_plus,
+    #     tf.select(
+    #         x > 0.999,
+    #         log_one_minus_cdf_min,
+    #         tf.select(
+    #             cdf_delta > 1e-3,
+    #             tf.log(cdf_delta + 1e-7),
+    #             log_pdf_mid - np.log(127.5)
+    #         )
+    #     )
+    # )
+
+    def logli(self, x_var, dist_info):
+        x_lo = x_var - .5/self._bins
+        x_hi = x_var + .5/self._bins
+        cdf_diff = self.cdf(x_hi, dist_info) - \
+                   self.cdf(x_lo, dist_info)
+        log_cdf_x_hi= self.log_cdf(x_hi, dist_info)
+        log_one_minus_cdf_x_lo = -tf.nn.softplus(self.raw(x_lo, dist_info))
+        log_probs = tf.select(
+            x_var < -0.5 + 1./self._bins - 1e-5,
+            log_cdf_x_hi,
+            tf.select(
+                x_var > 0.5 - 1./self._bins,
+                log_one_minus_cdf_x_lo,
+                tf.select(
+                    cdf_diff > 1e-3,
+                    tf.log(cdf_diff + 1e-7),
+                    tf.log(cdf_diff + 1e-7),
+                    # log_pdf_mid - np.log(127.5)
+                )
+            )
+        )
+        return tf.reduce_sum(
+            log_probs,
+            reduction_indices=[1],
+        )
+
+    def entropy(self, dist_info):
+        # XXX fixme
+        return 0.
+
+    def nonreparam_logli(self, x_var, dist_info):
+        return self.logli(x_var, dist_info)
+
+    def activate_dist(self, flat_dist):
+        return dict(
+            mu=(flat_dist[:, :self.dim]),
+            scale=tf.exp(flat_dist[:, self.dim:]) * self._init_scale,
+        )
+
+    def sample(self, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        p = tf.random_uniform(shape=mu.get_shape())
+        real_logit = mu + scale*(tf.log(p) - tf.log(1-p)) # inverse cdf according to wiki
+        clipped = tf.clip_by_value(real_logit, -0.5, 0.5-1./self._bins)
+        return (clipped)
+
+    def prior_dist_info(self, batch_size):
+        return dict(
+            mu=0.0*np.ones([batch_size, self._dim]),
+            scale=np.ones([batch_size, self._dim]) * self._init_scale,
         )
 
 class MeanBernoulli(Bernoulli):

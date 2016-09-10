@@ -38,7 +38,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.0002] #0.001]
+        return [0.002] #0.001]
 
     @variant
     def seed(self):
@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [128]#[12, 32]
+        return [512]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -62,14 +62,14 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4, ]
+        return [0, ]
 
     @variant
     def nr(self, nar):
         if nar == 0:
             return [1]
         else:
-            return [2, ]
+            return [5, ]
 
     # @variant
     # def nm(self):
@@ -93,7 +93,8 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_cifar"
         # yield "resv1_k3_pixel_bias_cifar_spatial_scale"
         # yield "cifar_id"
-        yield "resv1_k3_pixel_bias_cifar"
+        # yield "resv1_k3_pixel_bias_cifar"
+        yield "resv1_k3_pixel_bias_cifar_pred_scale"
 
     @variant(hide=False)
     def wnorm(self):
@@ -109,11 +110,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [4, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [2, ]
+        return [10, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -201,7 +202,7 @@ for v in variants[:]:
         #     ]
         # )
         out_dist = (DiscretizedLogistic(dataset.image_dim,
-                                        init_scale=0.1))#, 1./mol)
+                                        init_scale=0.005))#, 1./mol)
 
         model = RegularizedHelmholtzMachine(
             # output_dist=MeanBernoulli(dataset.image_dim),
@@ -222,21 +223,20 @@ for v in variants[:]:
             exp_name=exp_name,
             max_epoch=max_epoch,
             updates_per_epoch=updates_per_epoch,
-            # optimizer_cls=AdamaxOptimizer,
-            optimizer_cls="tf.train.AdagradOptimizer",
+            optimizer_cls=AdamaxOptimizer,
             optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
             # anneal_after=v["anneal_after"],
             vali_eval_interval=60000/batch_size*3,
-            # kl_coeff=0.,
-            # noise=False,
+            kl_coeff=0.,
+            noise=False,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0907_cifar",
+            exp_prefix="0907_cifar_det_id_tail",
             seed=v["seed"],
             mode="local",
             # mode="lab_kube",
@@ -244,4 +244,5 @@ for v in variants[:]:
             # n_parallel=0,
             # use_gpu=True,
         )
+
 

@@ -4,7 +4,7 @@ from __future__ import absolute_import
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
-    DiscretizedLogistic, IAR
+    DiscretizedLogistic, IAR, DiscretizedLogistic2
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
@@ -62,7 +62,7 @@ class VG(VariantGenerator):
         # return [0,]#2,4]
         # return [2,]#2,4]
         # return [0,1,]#4]
-        return [4, ]
+        return [2, ]
 
     @variant
     def nr(self, nar):
@@ -93,7 +93,8 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_cifar"
         # yield "resv1_k3_pixel_bias_cifar_spatial_scale"
         # yield "cifar_id"
-        yield "resv1_k3_pixel_bias_cifar"
+        # yield "resv1_k3_pixel_bias_cifar"
+        yield "resv1_k3_pixel_bias_cifar_pred_scale"
 
     @variant(hide=False)
     def wnorm(self):
@@ -109,7 +110,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [4, ]
+        return [2, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -154,7 +155,7 @@ for v in variants[:]:
 
         dist = Gaussian(zdim)
         for _ in xrange(v["nar"]):
-            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"])
+            dist = AR(zdim, dist, neuron_ratio=v["nr"], data_init_wnorm=v["ar_wnorm"], data_init_scale=0.1)
 
         latent_spec = [
             # (Gaussian(128), False),
@@ -201,7 +202,7 @@ for v in variants[:]:
         #     ]
         # )
         out_dist = (DiscretizedLogistic(dataset.image_dim,
-                                        init_scale=0.1))#, 1./mol)
+                                        init_scale=0.01))#, 1./mol)
 
         model = RegularizedHelmholtzMachine(
             # output_dist=MeanBernoulli(dataset.image_dim),
@@ -222,21 +223,21 @@ for v in variants[:]:
             exp_name=exp_name,
             max_epoch=max_epoch,
             updates_per_epoch=updates_per_epoch,
-            # optimizer_cls=AdamaxOptimizer,
-            optimizer_cls="tf.train.AdagradOptimizer",
+            optimizer_cls=AdamaxOptimizer,
             optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
             # anneal_after=v["anneal_after"],
             vali_eval_interval=60000/batch_size*3,
+            exp_avg=0.99,
             # kl_coeff=0.,
             # noise=False,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0907_cifar",
+            exp_prefix="0907_cifar_128_hybrid",
             seed=v["seed"],
             mode="local",
             # mode="lab_kube",
