@@ -3,6 +3,7 @@ import os
 import sys
 import numpy as np
 import cv2
+import copy
 
 from rllab import spaces
 from rllab.core.serializable import Serializable
@@ -16,7 +17,8 @@ class AtariEnv(Env,Serializable):
             plot=False, # live demo
             max_start_nullops=0,
             obs_type="image",
-            record_image=True,
+            record_image=True, # image for training and counting
+            record_rgb_image=False, # for visualization and debugging
             record_ram=False,
             record_internal_state=True,
             resetter=None,
@@ -32,6 +34,7 @@ class AtariEnv(Env,Serializable):
         self.max_start_nullops = max_start_nullops
         self.obs_type = obs_type
         self.record_image = record_image
+        self.record_rgb_image = record_rgb_image
         self.record_ram = record_ram
         self.record_internal_state = record_internal_state
         self.resetter = resetter
@@ -168,18 +171,27 @@ class AtariEnv(Env,Serializable):
             env_info["ram_states"] = np.copy(self.ram_state)
 
         if self.record_image and self.obs_type != "image":
-            env_info["images"] = np.asarray(list(self.last_screens))
+            env_info["images"] = np.copy(np.asarray(list(self.last_screens)))
+
+        if self.record_rgb_image:
+            env_info["rgb_images"] = self.ale.getScreenRGB()
 
         if self.record_internal_state:
-            env_info["internal_states"] = self.internal_state
+            env_info["internal_states"] = self.ale.cloneState()
 
         env_info["is_terminals"] = self.is_terminal
+        env_info["ale_ids"] = hex(id(self.ale))
+        env_info["use_default_reset"] = self.cur_path_use_default_reset
 
         return env_info
 
 
     def step(self, action):
-        assert not self.is_terminal
+        cur_env_info = copy.deepcopy(self.env_info)
+        # a legal observation should not be terminal; but to make the program run without interruption, we allow it to reset
+        # assert not self.is_terminal
+        # if self.is_terminal:
+        #     self.reset()
 
         # Accumulate rewards for repeating this action
         rewards = []
@@ -192,27 +204,26 @@ class AtariEnv(Env,Serializable):
             # note that legal actions are integers, but not necessarily consecutive
             # for example, Breakout's minimal action set is [0,1,3,4]
             rewards.append(self.ale.act(self.legal_actions[action]))
-
             if self.is_terminal:
                 break
+        self._reward = sum(rewards)
 
-        # We must have last screen here unless it's terminal
+        # Record next step env info
         if not self.is_terminal:
             if self.record_image:
                 self.last_screens.append(self.current_screen())
             if self.record_ram:
                 self.ale.getRAM(self.ram_state)
-            if self.record_internal_state:
-                self.internal_state = self.ale.cloneState()
-        self._reward = sum(rewards)
 
-        return self.observation, self.reward, self.is_terminal, self.env_info
+        # cur_obs, cur_reward, next_state_is_terminal, cur_env_info
+        return self.observation, self.reward, self.is_terminal, cur_env_info
 
     def reset(self):
         if self.resetter is None:
             self.ale.reset_game()
+            self.cur_path_use_default_reset = True
         else:
-            self.resetter.reset(self)
+            self.cur_path_use_default_reset = self.resetter.reset(self)
 
         # insert randomness to the initial state
         # for example, in Frostbite, the agent waits for a random number of time steps, and the temperature will decrease
