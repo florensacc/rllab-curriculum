@@ -1,6 +1,3 @@
-from __future__ import print_function
-from __future__ import absolute_import
-
 from sandbox.haoran.tf.misc import tensor_utils
 from rllab.misc import logger
 from rllab.misc import ext

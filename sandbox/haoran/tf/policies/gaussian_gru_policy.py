@@ -1,11 +1,11 @@
 import numpy as np
-import sandbox.rocky.tf.core.layers as L
+import sandbox.haoran.tf.core.layers as L
 import tensorflow as tf
-from sandbox.rocky.tf.core.layers_powered import LayersPowered
-from sandbox.rocky.tf.core.network import GRUNetwork
-from sandbox.rocky.tf.distributions.recurrent_diagonal_gaussian import RecurrentDiagonalGaussian
-from sandbox.rocky.tf.misc import tensor_utils
-from sandbox.rocky.tf.policies.base import StochasticPolicy
+from sandbox.haoran.tf.core.layers_powered import LayersPowered
+from sandbox.haoran.tf.core.network import GRUNetwork
+from sandbox.haoran.tf.distributions.recurrent_diagonal_gaussian import RecurrentDiagonalGaussian
+from sandbox.haoran.tf.misc import tensor_utils
+from sandbox.haoran.tf.policies.base import StochasticPolicy
 
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
@@ -176,7 +176,7 @@ class GaussianGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
     @overrides
     def get_action(self, observation):
         actions, agent_infos = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in agent_infos.iteritems()}
+        return actions[0], {k: v[0] for k, v in agent_infos.items()}
 
     @overrides
     def get_actions(self, observations):

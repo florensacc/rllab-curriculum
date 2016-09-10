@@ -84,6 +84,9 @@ def _worker_set_policy_params(G, params, scope=None):
     G = _get_scoped_G(G, scope)
     G.policy.set_param_values(params)
 
+def _worker_set_env_params(G,params,scope=None):
+    G = _get_scoped_G(G, scope)
+    G.env.set_param_values(params)
 
 def _worker_collect_one_path(G, max_path_length, scope=None):
     G = _get_scoped_G(G, scope)
@@ -95,6 +98,7 @@ def sample_paths(
         policy_params,
         max_samples,
         max_path_length=np.inf,
+        env_params=None,
         scope=None):
     """
     :param policy_params: parameters for the policy. This will be updated on each worker process
@@ -108,6 +112,11 @@ def sample_paths(
         _worker_set_policy_params,
         [(policy_params, scope)] * singleton_pool.n_parallel
     )
+    if env_params is not None:
+        singleton_pool.run_each(
+            _worker_set_env_params,
+            [(env_params, scope)] * singleton_pool.n_parallel
+        )
     return singleton_pool.run_collect(
         _worker_collect_one_path,
         threshold=max_samples,

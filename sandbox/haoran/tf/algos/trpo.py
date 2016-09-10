@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.haoran.tf.algos.npo import NPO
 from sandbox.haoran.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 

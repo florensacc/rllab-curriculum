@@ -1,3 +1,5 @@
+from pip._vendor.distlib.locators import locate
+
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 import prettytensor as pt
 import tensorflow as tf
@@ -53,6 +55,8 @@ class VAE(object):
         Parameters
         ----------
         """
+        if isinstance(optimizer_cls, str):
+            optimizer_cls = eval(optimizer_cls)
         self.noise = noise
         self.kl_coeff = kl_coeff
         self.anneal_factor = anneal_factor
@@ -480,6 +484,16 @@ class VAE(object):
                         feed
                     )[1:]
                     all_log_vals.append(log_vals)
+                    if any(np.any(np.isnan(val)) for val in log_vals):
+                        print("NaN detected! ")
+                        if self.ema:
+                            print("restoring from ema")
+                            ema_out = sess.run(
+                                [tf.assign(var, avg) for var, avg in self.ema._averages.items()]
+                            )
+                        else:
+                            print("aborting")
+                            exit(1)
 
 
                     if counter % self.snapshot_interval == 0:
@@ -489,7 +503,11 @@ class VAE(object):
 
                     if counter % self.summary_interval == 0:
                         summary = tf.Summary()
-                        summary_str = sess.run(summary_op, feed)
+                        try:
+                            summary_str = sess.run(summary_op, feed)
+                        except tf.python.framework.errors.InvalidArgumentError as e:
+                            # sometimes there are transient errors
+                            print("Ignoring %s"%e)
                         summary.MergeFromString(summary_str)
                         if counter % self.vali_eval_interval == 0:
                             ds = self.dataset.validation
@@ -506,11 +524,16 @@ class VAE(object):
                                     eval_feed,
                                 )
                                 all_test_log_vals.append(test_log_vals)
+                                # fast eval for the first itr
+                                if counter == 0:
+                                    if ti >= 4:
+                                        break
+
                             avg_test_log_vals = np.mean(np.array(all_test_log_vals), axis=0)
                             log_line = "EVAL" + "; ".join("%s: %s" % (str(k), str(v))
                                                       for k, v in zip(eval_log_keys, avg_test_log_vals))
                             logger.log(log_line)
-                            for k,v in zip(log_keys, avg_test_log_vals):
+                            for k, v in zip(log_keys, avg_test_log_vals):
                                 summary.value.add(
                                     tag="vali_%s"%k,
                                     simple_value=float(v),

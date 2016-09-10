@@ -51,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [512]#[12, 32]
+        return [128]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -201,7 +201,7 @@ for v in variants[:]:
         #     ]
         # )
         out_dist = (DiscretizedLogistic(dataset.image_dim,
-                                        init_scale=0.005))#, 1./mol)
+                                        init_scale=0.1))#, 1./mol)
 
         model = RegularizedHelmholtzMachine(
             # output_dist=MeanBernoulli(dataset.image_dim),
@@ -222,7 +222,8 @@ for v in variants[:]:
             exp_name=exp_name,
             max_epoch=max_epoch,
             updates_per_epoch=updates_per_epoch,
-            optimizer_cls=AdamaxOptimizer,
+            # optimizer_cls=AdamaxOptimizer,
+            optimizer_cls="tf.train.AdagradOptimizer",
             optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],

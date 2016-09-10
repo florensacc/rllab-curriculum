@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
+
+
 from sandbox.haoran.tf.core.parameterized import Parameterized
 import sandbox.haoran.tf.core.layers as L
 import itertools
