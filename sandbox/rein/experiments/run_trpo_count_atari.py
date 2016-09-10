@@ -17,7 +17,7 @@ os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
-TEST_RUN = True
+TEST_RUN = False
 
 # global params
 num_seq_frames = 1
@@ -32,7 +32,7 @@ if TEST_RUN:
     etas = [0.1]
     mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
     lst_factor = [1]
-    batch_size = 200
+    trpo_batch_size = 200
     max_path_length = 50
     batch_norm = False
 else:
@@ -43,7 +43,7 @@ else:
             AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
             AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
     lst_factor = [2]
-    batch_size = 20000
+    trpo_batch_size = 20000
     max_path_length = 4500
     batch_norm = True
 
@@ -195,7 +195,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         num_train_samples=1,
         prior_sd=0.05,
         second_order_update=False,
-        learning_rate=0.001,
+        learning_rate=0.0003,
         surprise_type=ConvBNNVIME.SurpriseType.VAR,
         update_prior=False,
         update_likelihood_sd=False,
@@ -218,9 +218,9 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         policy=policy,
         baseline=baseline,
         autoenc=autoenc,
-        batch_size=500,
+        batch_size=trpo_batch_size,
         whole_paths=True,
-        max_path_length=45,
+        max_path_length=max_path_length,
         n_itr=400,
         step_size=0.01,
         optimizer_args=dict(
@@ -235,7 +235,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         replay_kl_schedule=0.98,
         n_itr_update=1,  # Fake itr updates in sampler
         dyn_pool_args=dict(
-            size=100000,
+            size=300000,
             min_size=10,
             batch_size=32
         ),
@@ -246,11 +246,11 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-count-atari-42x52-a",
+        exp_prefix="trpo-count-atari-42x52-b",
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

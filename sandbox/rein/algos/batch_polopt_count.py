@@ -1,16 +1,19 @@
 import numpy as np
+
 from rllab.algos.base import RLAlgorithm
-from sandbox.rein.sampler import parallel_sampler_count as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
+
 from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup
-from scipy import stats, misc
+from sandbox.rein.sampler import parallel_sampler_count as parallel_sampler
 from sandbox.rein.dynamics_models.utils import enum
 from sandbox.rein.algos.replay_pool import ReplayPool
 from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
+
+from scipy import stats, misc
 
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
@@ -304,6 +307,8 @@ class BatchPolopt(RLAlgorithm):
             self.fill_replay_pool(paths)
 
             # Train autoencoder using replay pool.
+            # TODO: train model BEFORE counting
+            # TODO: mix replay pool with training on current batch: to make sure novel samples are mapped to novel binary codes.
             self.train_autoenc(itr)
 
             # Here we should extract discrete embedding from samples and use it for updating count table.
@@ -364,12 +369,13 @@ class BatchPolopt(RLAlgorithm):
             plotter.update_plot(self.policy, self.max_path_length)
 
     def count(self, paths):
+        """Retrieve binary code and increase count of each sample in batch."""
 
-        def bin_to_int(bitlist):
-            out = 0
-            for bit in bitlist:
-                out = (out << 1) | bit
-            return out
+        def bin_to_int(binary):
+            integer = 0
+            for bit in binary:
+                integer = (integer << 1) | bit
+            return integer
 
         def count_to_ir(count):
             return 1. / np.sqrt(count)
@@ -377,10 +383,16 @@ class BatchPolopt(RLAlgorithm):
         for idx, path in enumerate(paths):
             keys = np.cast['int'](np.round(self.autoenc.discrete_emb(path['observations'])))
             counts = np.zeros(len(keys))
+            lst_key_as_int = np.zeros(len(keys))
             for idy, key in enumerate(keys):
-                count_as_int = bin_to_int(key)
-                self.counting_table[count_as_int] += 1
-                counts[idy] = self.counting_table[count_as_int]
+                key_as_int = bin_to_int(key)
+                lst_key_as_int[idy] = key_as_int
+                self.counting_table[key_as_int] += 1
+                counts[idy] = self.counting_table[key_as_int]
+                print('{}\t{}'.format(int(counts[idy]), key))
+            num_unique = len(set(lst_key_as_int))
+            print('unique values: {}/{}'.format(num_unique, len(lst_key_as_int)))
+            # TODO: change name 'KL' to surprise.
             path['KL'] = count_to_ir(counts)
 
     def obtain_samples(self):

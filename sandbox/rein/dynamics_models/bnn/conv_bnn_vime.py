@@ -44,7 +44,7 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layer):
     def get_output_shape_for(self, input_shape):
         return input_shape[0], self.num_units
 
-    def get_output_for(self, input, **kwargs):
+    def get_output_for(self, input, noise_mask=1, **kwargs):
         if input.ndim > 2:
             # if the input has more than two dimensions, flatten it into a
             # batch of feature vectors.
@@ -54,7 +54,8 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layer):
         if self.b is not None:
             activation = activation + self.b.dimshuffle('x', 0)
         # Add noise to activation for discretization
-        return self.nonlinearity(activation) + self._srng.uniform(size=activation.shape, low=-0.49, high=0.49)
+        return self.nonlinearity(
+            activation) + noise_mask * self._srng.uniform(size=activation.shape, low=-0.49, high=0.49)
 
 
 class IndependentSoftmaxLayer(lasagne.layers.Layer):
@@ -586,6 +587,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     s_net,
                     num_units=layer_disc['n_units'])
                 # Pull out discrete embedding layer.
+                s_net = batch_norm(s_net)
                 self.discrete_emb_sym = s_net
             elif layer_disc['name'] == 'deterministic':
                 s_net = lasagne.layers.DenseLayer(
@@ -593,7 +595,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     num_units=layer_disc['n_units'],
                     nonlinearity=self.transf)
                 if layer_disc['batch_norm'] is True:
-                    s_net = batch_norm(s_net, p=dropout_p)
+                    s_net = batch_norm(s_net)
             elif layer_disc['name'] == 'deconvolution':
                 s_net = BayesianDeConvLayer(
                     s_net, num_filters=layer_disc['n_filters'],
@@ -912,7 +914,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # Discrete embedding layer for counting.
         self.discrete_emb = ext.compile_function(
-            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, deterministic=False),
+            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, deterministic=False, noise_mask=0),
             log_name='fn_discrete_emb')
 
 
