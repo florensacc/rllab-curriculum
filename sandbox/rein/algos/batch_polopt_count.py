@@ -1,16 +1,19 @@
 import numpy as np
+
 from rllab.algos.base import RLAlgorithm
-from sandbox.rein.sampler import parallel_sampler_count as parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
+
 from sandbox.rein.dynamics_models.utils import iterate_minibatches, group, ungroup
-from scipy import stats, misc
+from sandbox.rein.sampler import parallel_sampler_count as parallel_sampler
 from sandbox.rein.dynamics_models.utils import enum
-from sandbox.rein.algos.replay_pool import ReplayPool
+from sandbox.rein.algos.replay_pool import SingleStateReplayPool
 from sandbox.rein.dynamics_models.bnn import conv_bnn_vime
+
+from scipy import stats, misc
 
 # Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
@@ -125,17 +128,15 @@ class BatchPolopt(RLAlgorithm):
 
         # Specific for Atari
         observation_dtype = "uint8"
-        self.pool = ReplayPool(
+        self.pool = SingleStateReplayPool(
             max_pool_size=self._dyn_pool_args['size'],
             observation_shape=(self.env.observation_space.flat_dim,),
-            action_dim=self.env.action_dim,
             observation_dtype=observation_dtype,
-            num_seq_frames=self._num_seq_frames,
             **self._dyn_pool_args
         )
 
         # Counting table
-        self.counting_table = np.zeros(shape=(2 ** 32, 1))
+        self.counting_table = np.zeros(shape=(2 ** 32, 1), dtype=int)
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy, self.autoenc)
@@ -241,11 +242,8 @@ class BatchPolopt(RLAlgorithm):
         for path in paths:
             path_len = len(path['rewards'])
             for i in range(path_len):
-                obs = (path['observations'][i] * self.autoenc.num_classes).astype(int)
-                act = path['actions'][i]
-                rew_orig = path['rewards_orig'][i]
-                term = (i == path_len - 1)
-                self.pool.add_sample(obs, act, rew_orig, term)
+                obs = (path['observations'][i] * self.autoenc.num_classes).astype("uint8")
+                self.pool.add_sample(obs)
 
     def train_autoenc(self, itr):
         logger.log('Updating autoencoder using replay pool ...')
@@ -304,6 +302,8 @@ class BatchPolopt(RLAlgorithm):
             self.fill_replay_pool(paths)
 
             # Train autoencoder using replay pool.
+            # TODO: train model BEFORE counting
+            # TODO: mix replay pool with training on current batch: to make sure novel samples are mapped to novel binary codes.
             self.train_autoenc(itr)
 
             # Here we should extract discrete embedding from samples and use it for updating count table.
@@ -364,12 +364,13 @@ class BatchPolopt(RLAlgorithm):
             plotter.update_plot(self.policy, self.max_path_length)
 
     def count(self, paths):
+        """Retrieve binary code and increase count of each sample in batch."""
 
-        def bin_to_int(bitlist):
-            out = 0
-            for bit in bitlist:
-                out = (out << 1) | bit
-            return out
+        def bin_to_int(binary):
+            integer = 0
+            for bit in binary:
+                integer = (integer << 1) | bit
+            return integer
 
         def count_to_ir(count):
             return 1. / np.sqrt(count)
@@ -377,10 +378,16 @@ class BatchPolopt(RLAlgorithm):
         for idx, path in enumerate(paths):
             keys = np.cast['int'](np.round(self.autoenc.discrete_emb(path['observations'])))
             counts = np.zeros(len(keys))
+            lst_key_as_int = np.zeros(len(keys))
             for idy, key in enumerate(keys):
-                count_as_int = bin_to_int(key)
-                self.counting_table[count_as_int] += 1
-                counts[idy] = self.counting_table[count_as_int]
+                key_as_int = bin_to_int(key)
+                lst_key_as_int[idy] = key_as_int
+                self.counting_table[key_as_int] += 1
+                counts[idy] = self.counting_table[key_as_int]
+                # print('{}\t{}'.format(int(counts[idy]), key))
+            num_unique = len(set(lst_key_as_int))
+            print('unique values: {}/{}'.format(num_unique, len(lst_key_as_int)))
+            # TODO: change name 'KL' to surprise.
             path['KL'] = count_to_ir(counts)
 
     def obtain_samples(self):

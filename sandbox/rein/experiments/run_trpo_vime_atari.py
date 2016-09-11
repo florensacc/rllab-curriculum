@@ -18,12 +18,12 @@ os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
-TEST_RUN = True
+TEST_RUN = False
 
 num_seq_frames = 4
 dyn_pool_enable = True
 dropout = False
-baseline = False
+baseline = True
 
 if TEST_RUN:
     exp_prefix = 'test-vime'
@@ -31,18 +31,18 @@ if TEST_RUN:
     etas = [0.1]
     mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
     lst_factor = [1]
-    batch_size = 200
+    trpo_batch_size = 200
     max_path_length = 50
     batch_norm = False
 else:
-    exp_prefix = 'trpo-vime-atari-42x52-inf-a'
+    exp_prefix = 'trpo-vime-atari-42x52-inf-b'
     seeds = range(5)
     etas = [0, 10.0, 1.0, 0.1]
     mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
             AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
             AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
     lst_factor = [2]
-    batch_size = 20000
+    trpo_batch_size = 20000
     max_path_length = 4500
     batch_norm = True
 
@@ -216,7 +216,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         num_train_samples=1,
         prior_sd=0.05,
         second_order_update=True,
-        learning_rate=0.0001,
+        learning_rate=0.0003,
         surprise_type=ConvBNNVIME.SurpriseType.INFGAIN,
         update_prior=(not dyn_pool_enable),
         update_likelihood_sd=False,
@@ -239,7 +239,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         policy=policy,
         baseline=baseline,
         dyn_mdl=dyn_mdl,
-        batch_size=batch_size,
+        batch_size=trpo_batch_size,
         whole_paths=True,
         max_path_length=max_path_length,
         n_itr=400,
