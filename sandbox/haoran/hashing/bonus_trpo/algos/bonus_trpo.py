@@ -1,7 +1,7 @@
 from __future__ import print_function
 from __future__ import absolute_import
-from sandbox.haoran.tf.algos.trpo import TRPO
-from sandbox.haoran.tf.misc import tensor_utils
+from sandbox.rocky.tf.algos.trpo import TRPO
+from sandbox.rocky.tf.misc import tensor_utils
 from rllab.misc import logger
 from rllab.misc import special
 from rllab.algos import util
@@ -182,11 +182,11 @@ class BonusTRPO(TRPO):
         logger.record_tabular_misc_stat("PathLen",path_lens)
 
         # Log info for trajs whose initial states are not modified by the resetter
-        if self.env.wrapped_env.resetter is not None:
-            test_paths = [
-                path for path in paths
-                if path["env_infos"]["use_default_reset"][0] == True
-            ]
+        test_paths = [
+            path for path in paths
+            if path["env_infos"]["use_default_reset"][0] == True
+        ]
+        if self.env.wrapped_env.resetter is not None and len(test_paths) > 0:
             test_average_discounted_return = \
                 np.mean([path["returns"][0] for path in test_paths])
 
