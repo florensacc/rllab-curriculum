@@ -37,8 +37,6 @@ class BatchPolopt(RLAlgorithm):
             fixed_horizon=False,
             sampler_cls=None,
             sampler_args=None,
-            flat_obs=True,
-            flat_action=True,
             force_batch_sampler=False,
             **kwargs
     ):
@@ -88,8 +86,6 @@ class BatchPolopt(RLAlgorithm):
         if sampler_args is None:
             sampler_args = dict()
         self.sampler = sampler_cls(self, **sampler_args)
-        self.flat_obs = flat_obs
-        self.flat_action = flat_action
         self.init_opt()
 
     def start_worker(self):

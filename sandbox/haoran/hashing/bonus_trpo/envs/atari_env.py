@@ -6,7 +6,7 @@ import cv2
 import copy
 import atari_py
 
-from sandbox.haoran.tf.spaces.box import Box
+from sandbox.rocky.tf.spaces.box import Box
 from rllab.spaces.discrete import Discrete
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Env

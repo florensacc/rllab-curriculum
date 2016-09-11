@@ -38,8 +38,6 @@ class BatchSampler(BaseSampler):
             env_params=cur_env_params,
             max_samples=self.algo.batch_size,
             max_path_length=self.algo.max_path_length,
-            flat_obs=self.algo.flat_obs,
-            flat_action=self.algo.flat_action,
             scope=self.algo.scope,
         )
         if self.algo.whole_paths:
