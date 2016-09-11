@@ -474,7 +474,7 @@ class BaseConvLayer(Layer):
 
 
 class Conv2DLayer(BaseConvLayer):
-    def __init__(self, incoming, num_filters, filter_size, name, stride=(1, 1),
+    def __init__(self, incoming, num_filters, filter_size, stride=(1, 1),
                  pad="VALID", untie_biases=False,
                  W=xavier_init, b=tf.zeros_initializer,
                  nonlinearity=tf.nn.relu,

@@ -100,3 +100,71 @@ class ReplayPool(object):
     @property
     def size(self):
         return self._size
+
+
+class SingleStateReplayPool(object):
+    """Single state replay pool: Like replay pool, but only record a single states, no transitions.
+    This allows random addition of states, and thus subsampling. (This is more difficult in the standard
+    replay pool as the transitions need to be valid)
+    """
+
+    def __init__(
+            self,
+            max_pool_size,
+            observation_shape,
+            observation_dtype=theano.config.floatX,
+            subsample_factor=1.0,
+            **kwargs
+    ):
+        self._observation_shape = observation_shape
+        self._observation_dtype = observation_dtype
+        self._max_pool_size = max_pool_size
+        self._subsample_factor = subsample_factor
+
+        self._observations = np.zeros(
+            (max_pool_size,) + observation_shape,
+            dtype=observation_dtype
+        )
+        self._bottom = 0
+        self._top = 0
+        self._size = 0
+
+    def __str__(self):
+        sb = []
+        for key in self.__dict__:
+            sb.append(
+                "{key}='{value}'".format(key=key, value=self.__dict__[key]))
+        return ', '.join(sb)
+
+    def add_sample(self, observation):
+        """Add sample to replay pool."""
+        rnd = np.random.rand()
+        if rnd < self._subsample_factor:
+            # Select last frame, which is the 'true' frame. Only add this one, to save replay pool memory. When
+            # the samples are fetched, we rebuild the sequence.
+            self._observations[self._top] = observation[-self._observation_shape[0]:]
+            self._top = (self._top + 1) % self._max_pool_size
+            if self._size >= self._max_pool_size:
+                self._bottom = (self._bottom + 1) % self._max_pool_size
+            else:
+                self._size += 1
+
+    def random_batch(self, batch_size):
+        """Retrieve random batch from replay pool."""
+        # Here, based on the num_seq_frames, we will construct a batch of elements that comform num_seq_frames.
+        assert self._size > batch_size
+        indices = np.zeros(batch_size, dtype='uint64')
+        count, arr_obs = 0, None
+        while count < batch_size:
+            # We don't want to hit the bottom when using num_seq_frames in history.
+            index = np.random.randint(
+                self._bottom, self._bottom + self._size) % self._max_pool_size
+            indices[count] = index
+            count += 1
+        return dict(
+            observations=self._observations[indices],
+        )
+
+    @property
+    def size(self):
+        return self._size

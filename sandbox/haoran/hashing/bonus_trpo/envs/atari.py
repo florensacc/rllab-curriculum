@@ -160,7 +160,6 @@ class AtariEnv(Env, Serializable):
         return self._get_obs()
 
     def render(self, return_array=False):
-        import pdb; pdb.set_trace()
         img = self._get_image()
         cv2.imshow("atarigame", img)
         cv2.waitKey(10)

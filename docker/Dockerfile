@@ -46,6 +46,9 @@ RUN pip install gym
 RUN apt-get -y install ffmpeg
 RUN apt-get -y install libav-tools
 
+# Dependencies of OpenCV
+RUN apt-get -y install libgtk2.0-0
+
 # ========== Add codebase stub ==========
 CMD mkdir /root/code
 ADD environment.yml /root/code/environment.yml

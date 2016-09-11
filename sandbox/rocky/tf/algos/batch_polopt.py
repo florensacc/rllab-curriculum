@@ -37,6 +37,7 @@ class BatchPolopt(RLAlgorithm):
             fixed_horizon=False,
             sampler_cls=None,
             sampler_args=None,
+            force_batch_sampler=False,
             **kwargs
     ):
         """
@@ -78,7 +79,7 @@ class BatchPolopt(RLAlgorithm):
         self.whole_paths = whole_paths
         self.fixed_horizon = fixed_horizon
         if sampler_cls is None:
-            if self.policy.vectorized:
+            if self.policy.vectorized and not force_batch_sampler:
                 sampler_cls = VectorizedSampler
             else:
                 sampler_cls = BatchSampler

@@ -1,7 +1,7 @@
 from __future__ import print_function
 from __future__ import absolute_import
-from sandbox.haoran.tf.algos.trpo import TRPO
-from sandbox.haoran.tf.misc import tensor_utils
+from sandbox.rocky.tf.algos.trpo import TRPO
+from sandbox.rocky.tf.misc import tensor_utils
 from rllab.misc import logger
 from rllab.misc import special
 from rllab.algos import util
@@ -15,6 +15,16 @@ class BonusTRPO(TRPO):
         self.bonus_coeff = bonus_coeff
         self.clip_reward= clip_reward
         super(BonusTRPO, self).__init__(*args, **kwargs)
+
+    def get_itr_snapshot(self, itr, samples_data):
+        return dict(
+            itr=itr,
+            policy=self.policy,
+            baseline=self.baseline,
+            env=self.env,
+            bonus_evaluator=self.bonus_evaluator,
+        )
+
 
     def log_diagnostics(self, paths):
         super(BonusTRPO, self).log_diagnostics(paths)
@@ -171,4 +181,27 @@ class BonusTRPO(TRPO):
         path_lens = [len(path["rewards"]) for path in paths]
         logger.record_tabular_misc_stat("PathLen",path_lens)
 
+        # Log info for trajs whose initial states are not modified by the resetter
+        test_paths = [
+            path for path in paths
+            if path["env_infos"]["use_default_reset"][0] == True
+        ]
+        if self.env.wrapped_env.resetter is not None and len(test_paths) > 0:
+            test_average_discounted_return = \
+                np.mean([path["returns"][0] for path in test_paths])
+
+            test_undiscounted_returns = [sum(path["raw_rewards"]) for path in test_paths]
+            test_undiscounted_bonus_returns = [sum(path["rewards"]) for path in test_paths]
+
+            logger.record_tabular('TestAverageDiscountedReturn',
+                      test_average_discounted_return)
+            logger.record_tabular('TestAverageBonusReturn', np.mean(test_undiscounted_bonus_returns))
+            logger.record_tabular('TestNumTrajs', len(test_paths))
+            logger.record_tabular_misc_stat('TestReturn',test_undiscounted_returns)
+
+            test_all_bonus_rewards = np.concatenate([path["bonus_rewards"] for path in test_paths])
+            logger.record_tabular_misc_stat('TestBonusReward',test_all_bonus_rewards)
+
+            test_path_lens = [len(path["rewards"]) for path in test_paths]
+            logger.record_tabular_misc_stat("TestPathLen",test_path_lens)
         return samples_data
