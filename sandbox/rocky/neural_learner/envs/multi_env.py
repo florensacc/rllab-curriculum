@@ -1,5 +1,3 @@
-
-
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.envs.base import Step
 from rllab.spaces.product import Product
@@ -13,12 +11,13 @@ BIG = 50000
 
 
 class MultiEnv(ProxyEnv, Serializable):
-    def __init__(self, wrapped_env, n_episodes, episode_horizon):
+    def __init__(self, wrapped_env, n_episodes, episode_horizon, discount):
         assert hasattr(wrapped_env, "reset_trial"), "The environment must implement #reset_trial()"
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, wrapped_env)
         self.n_episodes = n_episodes
         self.episode_horizon = episode_horizon
+        self.discount = discount
         self.last_action = None
         self.last_reward = None
         self.last_terminal = None
@@ -43,7 +42,7 @@ class MultiEnv(ProxyEnv, Serializable):
 
     def reset(self):
         self.last_reward = 0
-        self.last_action = np.zeros((self.wrapped_env.action_space.flat_dim,))
+        self.last_action = self.wrapped_env.action_space.default_value
         self.last_terminal = 1
         self.cnt_episodes = 0
         self.episode_t = 0
@@ -69,21 +68,23 @@ class MultiEnv(ProxyEnv, Serializable):
 
         return Step(self.convert_obs(next_obs), reward, trial_done, **dict(info, episode_done=self.last_terminal))
 
+    def discount_sum(self, rewards):
+        return np.sum(self.discount ** np.arange(len(rewards)) * rewards)
+
     def log_diagnostics(self, paths):
         # Log the avg reward for each episode
-        all_episode_rewards = None
+        episode_rewards = []
+        discount_episode_rewards = []
         for path in paths:
-            episode_rewards = np.asarray(list(map(
-                np.sum,
-                np.split(
-                    path['rewards'],
-                    np.where(path['env_infos']['episode_done'])[0][:-1] + 1
-                )
-            )))
-            if all_episode_rewards is None:
-                all_episode_rewards = episode_rewards
-            else:
-                all_episode_rewards += episode_rewards
-        for idx, tot_reward in enumerate(all_episode_rewards / len(paths)):
-            logger.record_tabular('AverageEpisodeReturn(%d)' % (idx+1), tot_reward)
-
+            rewards = path['rewards']
+            splitter = np.where(path['env_infos']['episode_done'])[0][:-1] + 1
+            episode_rewards.append(
+                np.asarray(list(map(np.sum, np.split(rewards, splitter))))
+            )
+            discount_episode_rewards.append(
+                np.asarray(list(map(self.discount_sum, np.split(rewards, splitter))))
+            )
+        for idx, tot_reward in enumerate(np.asarray(episode_rewards, dtype=np.float32).mean(axis=0)):
+            logger.record_tabular('AverageEpisodeReturn(%d)' % (idx + 1), tot_reward)
+        for idx, tot_reward in enumerate(np.asarray(discount_episode_rewards, dtype=np.float32).mean(axis=0)):
+            logger.record_tabular('AverageDiscountEpisodeReturn(%d)' % (idx + 1), tot_reward)

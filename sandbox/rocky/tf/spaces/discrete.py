@@ -1,6 +1,3 @@
-
-
-
 from rllab.spaces.base import Space
 import numpy as np
 from rllab.misc import special
@@ -47,6 +44,10 @@ class Discrete(Space):
 
     def unflatten_n(self, x):
         return special.from_onehot_n(x)
+
+    @property
+    def default_value(self):
+        return 0
 
     @property
     def flat_dim(self):

@@ -48,6 +48,7 @@ class VectorizedSampler(BaseSampler):
             t = time.time()
             self.algo.policy.reset(dones)
             actions, agent_infos = self.algo.policy.get_actions(obses)
+
             policy_time += time.time() - t
             t = time.time()
             next_obses, rewards, dones, env_infos = self.vec_env.step(actions)

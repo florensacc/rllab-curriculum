@@ -816,7 +816,7 @@ class GRULayer(Layer):
 
     def __init__(self, incoming, num_units, hidden_nonlinearity,
                  gate_nonlinearity=tf.nn.sigmoid, W_init=xavier_init, b_init=tf.zeros_initializer,
-                 hidden_init=tf.zeros_initializer, hidden_init_trainable=True):
+                 hidden_init=tf.zeros_initializer, hidden_init_trainable=True, **kwargs):
 
         if hidden_nonlinearity is None:
             hidden_nonlinearity = tf.identity
@@ -824,7 +824,7 @@ class GRULayer(Layer):
         if gate_nonlinearity is None:
             gate_nonlinearity = tf.identity
 
-        super(GRULayer, self).__init__(incoming)
+        super(GRULayer, self).__init__(incoming, **kwargs)
 
         input_shape = self.input_shape[2:]
 
@@ -899,7 +899,7 @@ class GRUStepLayer(MergeLayer):
         return self._gru_layer.get_params(**tags)
 
     def get_output_shape_for(self, input_shapes):
-        n_batch = input_shapes[0]
+        n_batch = input_shapes[0][0]
         return n_batch, self._gru_layer.num_units
 
     def get_output_for(self, inputs, **kwargs):
