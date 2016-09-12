@@ -64,9 +64,7 @@ class BatchPolopt(RLAlgorithm):
             kl_batch_size=1,
             surprise_transform=None,
             replay_kl_schedule=1.0,
-            predict_delta=False,
             dyn_pool_args=None,
-            num_seq_frames=1,
             **kwargs
     ):
         """
@@ -111,7 +109,7 @@ class BatchPolopt(RLAlgorithm):
         self.store_paths = store_paths
 
         if dyn_pool_args is None:
-            dyn_pool_args = dict(size=100000, min_size=10, batch_size=32)
+            dyn_pool_args = dict(size=10000, min_size=32, batch_size=32)
 
         self.eta = eta
         self.use_kl_ratio = use_kl_ratio
@@ -122,9 +120,7 @@ class BatchPolopt(RLAlgorithm):
         self.kl_batch_size = kl_batch_size
         self.surprise_transform = surprise_transform
         self.replay_kl_schedule = replay_kl_schedule
-        self._predict_delta = predict_delta
         self._dyn_pool_args = dyn_pool_args
-        self._num_seq_frames = num_seq_frames
 
         # Specific for Atari
         observation_dtype = "uint8"
@@ -136,7 +132,7 @@ class BatchPolopt(RLAlgorithm):
         )
 
         # Counting table
-        self.counting_table = np.zeros(shape=(2 ** 32, 1), dtype=int)
+        self.counting_table = np.zeros(shape=(2 ** 16, 1), dtype=int)
 
     def start_worker(self):
         parallel_sampler.populate_task(self.env, self.policy, self.autoenc)
@@ -187,7 +183,7 @@ class BatchPolopt(RLAlgorithm):
         lst_input_im = [
             input_im[idx, i * np.prod(self.autoenc.state_dim):(i + 1) * np.prod(self.autoenc.state_dim)].reshape(
                 self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
-            range(self._num_seq_frames)]
+            range(0)]
         input_im = input_im[:, -np.prod(self.autoenc.state_dim):]
         input_im = input_im[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
         sanity_pred_im = sanity_pred[idx, :]
@@ -196,10 +192,6 @@ class BatchPolopt(RLAlgorithm):
             sanity_pred_im = np.argmax(sanity_pred_im, axis=1)
         sanity_pred_im = sanity_pred_im.reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
         target_im = targets[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
-
-        if self._predict_delta:
-            sanity_pred_im += input_im
-            target_im += input_im
 
         if self.autoenc.output_type == self.autoenc.OutputType.CLASSIFICATION:
             sanity_pred_im = sanity_pred_im.astype(float) / float(self.autoenc.num_classes)
@@ -247,7 +239,7 @@ class BatchPolopt(RLAlgorithm):
 
     def train_autoenc(self, itr):
         logger.log('Updating autoencoder using replay pool ...')
-        acc_before, acc_after, train_loss = 0., 0., 0.
+        acc_before, acc_after, train_loss = 0., 0., np.inf
         if self.pool.size >= self._dyn_pool_args['min_size']:
             itr_tot = int(
                 np.ceil(self.num_sample_updates * float(self.batch_size) / self._dyn_pool_args['batch_size']))
@@ -259,17 +251,27 @@ class BatchPolopt(RLAlgorithm):
                 acc_before += self.accuracy(_x, _y)
             acc_before /= 20.
 
-            for i in range(itr_tot):
-
-                batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-
-                _x = batch['observations']
-                _y = batch['observations'][:, -np.prod(self.autoenc.state_dim):]
-
-                _tl = self.autoenc.train_fn(_x, _y, 0)
-                train_loss += _tl
-                if i % int(np.ceil(itr_tot / 3.)) == 0:
-                    self.plot_pred_imgs(_x, _y, itr, i)
+            done = False
+            old_train_loss = np.inf
+            outer_loop_count = 0
+            while not done:
+                train_loss = 0.
+                for i in range(itr_tot):
+                    batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                    _x = batch['observations']
+                    _y = batch['observations'][:, -np.prod(self.autoenc.state_dim):]
+                    _tl = self.autoenc.train_fn(_x, _y, 0)
+                    assert not np.isinf(_tl)
+                    assert not np.isnan(_tl)
+                    train_loss += _tl
+                    if i % int(np.ceil(itr_tot / 3.)) == 0:
+                        self.plot_pred_imgs(_x, _y, itr, (i % int(np.ceil(itr_tot / 3.))) + 3 * outer_loop_count)
+                train_loss /= itr_tot
+                print('Autoencoder train loss={}, D={}'.format(train_loss, old_train_loss - train_loss))
+                if old_train_loss - train_loss < 1e-6:
+                    done = True
+                old_train_loss = train_loss
+                outer_loop_count += 1
 
             for _ in range(20):
                 batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
@@ -277,8 +279,6 @@ class BatchPolopt(RLAlgorithm):
                 _y = batch['observations'][:, -np.prod(self.autoenc.state_dim):]
                 acc_after += self.accuracy(_x, _y)
             acc_after /= 20.
-
-            train_loss /= itr_tot
 
         logger.record_tabular('DynModel_SqErrBefore', acc_before)
         logger.record_tabular('DynModel_SqErrAfter', acc_after)
@@ -307,12 +307,16 @@ class BatchPolopt(RLAlgorithm):
             self.train_autoenc(itr)
 
             # Here we should extract discrete embedding from samples and use it for updating count table.
+            # TODO: work with a hashtable, making it easy to find all counts with a key within a particular Hamming distance.
             self.count(paths)
 
             # Postprocess trajectory data.
             samples_data = self.process_samples(itr, paths)
 
             # Diagnostics
+            import sys
+            import gc
+            print('{} GB used.'.format(sum([sys.getsizeof(o) for o in gc.get_objects()]) / 1e9))
             self.env.log_diagnostics(paths)
             self.policy.log_diagnostics(paths)
             self.baseline.log_diagnostics(paths)
@@ -376,7 +380,8 @@ class BatchPolopt(RLAlgorithm):
             return 1. / np.sqrt(count)
 
         for idx, path in enumerate(paths):
-            keys = np.cast['int'](np.round(self.autoenc.discrete_emb(path['observations'])))
+            obs = (path['observations'] * self.autoenc.num_classes).astype("uint8")
+            keys = np.cast['int'](np.round(self.autoenc.discrete_emb(obs)))
             counts = np.zeros(len(keys))
             lst_key_as_int = np.zeros(len(keys))
             for idy, key in enumerate(keys):
@@ -384,7 +389,9 @@ class BatchPolopt(RLAlgorithm):
                 lst_key_as_int[idy] = key_as_int
                 self.counting_table[key_as_int] += 1
                 counts[idy] = self.counting_table[key_as_int]
-                # print('{}\t{}'.format(int(counts[idy]), key))
+                print('{}\t{}'.format(int(counts[idy]), key))
+                self.plot_pred_imgs(obs[idy][None, :], obs[idy][None, :], counts[idy],
+                                    ''.join([str(k) for k in key]))
             num_unique = len(set(lst_key_as_int))
             print('unique values: {}/{}'.format(num_unique, len(lst_key_as_int)))
             # TODO: change name 'KL' to surprise.
@@ -397,7 +404,7 @@ class BatchPolopt(RLAlgorithm):
             policy_params=cur_params,
             max_samples=self.batch_size,
             max_path_length=self.max_path_length,
-            num_seq_frames=self._num_seq_frames
+            num_seq_frames=1
         )
 
         if self.whole_paths:
