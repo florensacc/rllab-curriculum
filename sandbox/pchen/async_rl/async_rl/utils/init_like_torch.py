@@ -10,14 +10,15 @@ def init_like_torch(link):
         if isinstance(l, L.Linear):
             out_channels, in_channels = l.W.data.shape
             stdv = 1 / np.sqrt(in_channels)
-            l.W.data[:] = np.random.uniform(-stdv, stdv, size=l.W.data.shape)
+            l.W.data[:] = np.random.uniform(-stdv, stdv, size=l.W.data.shape).astype(np.float32)
             if l.b is not None:
                 l.b.data[:] = np.random.uniform(-stdv, stdv,
-                                                size=l.b.data.shape)
+                                                size=l.b.data.shape).astype(np.float32)
         elif isinstance(l, L.Convolution2D):
             out_channels, in_channels, kh, kw = l.W.data.shape
             stdv = 1 / np.sqrt(in_channels * kh * kw)
-            l.W.data[:] = np.random.uniform(-stdv, stdv, size=l.W.data.shape)
+            l.W.data[:] = np.random.uniform(-stdv, stdv, size=l.W.data.shape).astype(np.float32)
             if l.b is not None:
                 l.b.data[:] = np.random.uniform(-stdv, stdv,
-                                                size=l.b.data.shape)
+                                                size=l.b.data.shape).astype(np.float32)
+

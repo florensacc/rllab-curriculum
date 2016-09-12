@@ -5,11 +5,12 @@ import os
 import sys
 import statistics
 import time
+import pickle
 sys.path.append('.')
 
 import numpy as np
 import logging
-from rllab.misc import logger
+from rllab.misc import logger, ext
 from sandbox.pchen.async_rl.async_rl.utils.random_seed import set_random_seed
 from sandbox.pchen.async_rl.async_rl.utils.picklable import Picklable
 
@@ -60,7 +61,8 @@ class AsyncAlgo(Picklable):
 
         os.environ['OMP_NUM_THREADS'] = '1'
         logging.basicConfig(level=self.logging_level)
-        self.env.prepare_sharing()
+        # we will assume the env doesn't share anything
+        # self.env.prepare_sharing()
         self.agent.prepare_sharing()
 
         if self.profile:
@@ -69,7 +71,7 @@ class AsyncAlgo(Picklable):
             train_func = self.train_one_process
 
         if self.n_processes == 1:
-            train_func(0,global_vars,self.training_args)
+            train_func(0, global_vars, self.training_args)
         else:
             # Train each process
             processes = []
@@ -88,6 +90,21 @@ class AsyncAlgo(Picklable):
             for p in processes:
                 p.join()
 
+    def child_process_setup(self, process_id, global_vars, args):
+        logger.log("Process %d: setup."%(process_id),color="yellow")
+
+        # Set seed
+        seed = self.seeds[process_id]
+        ext.set_seed(seed)
+
+    def child_fresh_env_agent(self):
+        # Copy from the mother env, agent
+        env = pickle.loads(pickle.dumps(self.env))
+        agent = self.agent.process_copy()
+        agent.phase = "Train"
+        return (env, agent)
+
+
     def train_one_process(self, process_id, global_vars, args):
         """
         Set seed
@@ -96,19 +113,8 @@ class AsyncAlgo(Picklable):
         Set process-specific parameters.
         """
 
-        # Copy from the mother env, agent
-        logger.log("Process %d: copying environment and agent for training."%(process_id),color="yellow")
-        env = self.env.process_copy()
-        env.phase = "Train"
-        agent = self.agent.process_copy()
-        agent.phase = "Train"
-        self.cur_env = env
-        self.cur_agent = agent
-
-        # Set seed
-        seed = self.seeds[process_id]
-        set_random_seed(seed)
-        env.set_seed(seed)
+        self.child_process_setup(process_id, global_vars, args)
+        env, agent = self.child_fresh_env_agent()
 
         try:
             self.prev_global_t = 0
@@ -124,71 +130,74 @@ class AsyncAlgo(Picklable):
                 training_args=args,
             )
 
+            obs, reward, terminal, extra = env.reset(), 0., False, {}
+
             # each following loop is one time step
             while global_t < args["total_steps"]:
                 # Training ------------------------------------------------------
                 # Update time step counters
+                print("8")
                 with global_vars["global_t"].get_lock():
                     global_vars["global_t"].value += 1
                     global_t = global_vars["global_t"].value
 
-                local_t += 1
-                episode_t += 1
-
-                # Update reward stats
-                episode_r += env.reward
-
-                # Update agent, env
-                env.update_params(
-                    global_vars=global_vars,
-                    training_args=args,
-                )
+                print("9")
                 agent.update_params(
                     global_vars=global_vars,
                     training_args=args,
                 )
 
-                # take actions
-                action = agent.act(
-                    env.state, env.reward, env.is_terminal, env.extra_infos,
-                    global_vars=global_vars,
-                    training_args=args,
-                )
+                local_t += 1
+                episode_t += 1
 
-                if env.is_terminal or (episode_t > args["horizon"]):
+                # Update reward stats
+                # episode_r += env.reward
+
+                # Update agent, env
+                # take actions
+                # action = agent.act(
+                #     env.state, env.reward, env.is_terminal, env.extra_infos,
+                #     global_vars=global_vars,
+                #     training_args=args,
+                # )
+                action = agent.act(
+                    obs, reward, terminal, extra,
+                    global_vars=global_vars,
+                )
+                print("10")
+                obs, reward, terminal, extra = env.step(action)
+                print("11")
+
+                episode_r += reward
+
+                logger.log('global_t:{} local_t:{} episode_t:{} episode_r:{}'.format(
+                    global_t, local_t, episode_t, episode_r))
+
+                if terminal or (episode_t > args["horizon"]):
                     # log info for each episode
                     if process_id == 0:
                         logger.log('global_t:{} local_t:{} episode_t:{} episode_r:{}'.format(
                             global_t, local_t, episode_t, episode_r))
                     episode_r = 0
                     episode_t = 0
-                    env.initialize()
+                    obs, reward, terminal, extra = env.reset(), 0., False, {}
 
                     if episode_t > args["horizon"]:
                         logger.log(
                             "WARNING: horizon %d exceeded."%(args["horizon"]),
                             color="yellow",
                         )
-                else:
-                    env.receive_action(action)
 
                 self.epoch = global_t // args["eval_frequency"]
                 test_t = self.epoch * args["eval_frequency"]
+
                 # Testing  -------------------------------------------------------
                 # only the process that hits exactly the evaluation time will do testing
                 if global_t == test_t:
-                    # Test env may change; test recurrent agents need initialized hidden states
-                    logger.log("Process %d: copying env and agent for testing."%(process_id),color="yellow")
-                    self.test_env = env.process_copy()
-                    # need to copy the env, in case that the current traj does not finish
-                    self.test_agent = agent.process_copy()
-                    # if using recurrent agents, beware to not change the hidden states
-
                     scores = self.evaluate_performance(
                         n_runs=args["eval_n_runs"],
                         horizon=args["eval_horizon"]
                     )
-                    agent.phase = "Train"
 
                     # Notice that only one thread can report.
                     elapsed_time = time.time() - global_vars["start_time"]
@@ -234,20 +243,19 @@ class AsyncAlgo(Picklable):
                 logger.save_itr_params(self.epoch,params)
             raise
 
-    def evaluate_performance(self,n_runs,horizon):
+    def evaluate_performance(self, n_runs, horizon):
+        env, agent = self.child_fresh_env_agent()
+
         logger.log("Evaluating test performance",color="yellow")
-        self.test_env.phase = "Test"
-        self.test_agent.phase = "Test"
-        env = self.test_env
-        agent = self.test_agent
+        agent.phase = "Test"
 
         scores = np.zeros(n_runs)
         for i in range(n_runs):
-            env.initialize()
+            obs, reward, terminal, extra = env.reset(), 0., False, {}
             t = 0
-            while not env.is_terminal:
-                action = agent.act(env.state, env.reward, env.is_terminal, env.extra_infos)
-                reward = env.receive_action(action)
+            while not terminal:
+                action = agent.act(obs, reward, terminal, extra)
+                obs, reward, terminal, extra = env.step(action)
                 scores[i] += reward
                 t += 1
                 if t > horizon:
@@ -283,3 +291,4 @@ class AsyncAlgo(Picklable):
 
     def get_snapshot(self,env,agent):
         raise NotImplementedError
+

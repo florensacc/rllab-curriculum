@@ -61,7 +61,7 @@ class DQNAgent(Agent,Shareable,Picklable):
     """
 
     def __init__(self,
-            n_actions,
+            env,
             model_type="nips",
             optimizer_type="rmsprop_async",
             optimizer_args=dict(lr=7e-4,eps=1e-1,alpha=0.99),
@@ -82,11 +82,15 @@ class DQNAgent(Agent,Shareable,Picklable):
         self.init_params = locals()
         self.init_params.pop('self')
 
+        self.env = env
+        action_space = env.action_space
+
         # Globally shared model
         if model_type == "nips":
-            self.shared_model = DQNNIPSModel(n_actions)
+            self.shared_model = DQNNIPSModel(action_space.n)
         elif model_type == "nature":
-            self.shared_model = DQNNIPSModel(n_actions)
+            raise Exception("not implement")
+            self.shared_model = DQNNIPSModel(action_space.n)
         else:
             raise NotImplementedError
 
@@ -178,9 +182,8 @@ class DQNAgent(Agent,Shareable,Picklable):
         )
 
     def preprocess(self,state):
-        assert state[0].dtype == np.uint8
-        processed_state = np.asarray(state, dtype=np.float32) / 255.0
-        return processed_state
+        # delegate this to env wrapper
+        return state
 
     def update_params(self, global_vars, training_args):
         if self.phase == "Train":
@@ -207,7 +210,7 @@ class DQNAgent(Agent,Shareable,Picklable):
 
 
     def act(self, state, reward, is_state_terminal,extra_infos=dict(),
-        global_vars=dict(),training_args=dict()
+        global_vars=dict(),
     ):
         if self.clip_reward:
             reward = np.clip(reward, -1, 1)
@@ -231,6 +234,7 @@ class DQNAgent(Agent,Shareable,Picklable):
         if ready_to_commit:
             assert self.t_start < self.t
 
+            print("1")
 
             # assign bonus rewards
             if self.bonus_evaluator is not None:
@@ -253,6 +257,7 @@ class DQNAgent(Agent,Shareable,Picklable):
                 self.past_rewards[i] for i in range(self.t_start, self.t)
             ])
 
+            print("2")
             if is_state_terminal:
                 R = 0
             else:
@@ -285,6 +290,7 @@ class DQNAgent(Agent,Shareable,Picklable):
             #     logger.debug('td_loss:%s', loss.data)
 
             if not_delayed:
+                print("3")
                 # Compute gradients using thread-specific model
                 self.model.zerograds()
                 loss.backward()
@@ -295,6 +301,7 @@ class DQNAgent(Agent,Shareable,Picklable):
                     source_link=self.model
                 )
                 self.optimizer.update()
+                print("4")
             else:
                 mylogger.log("Process %d banned from commiting gradient update from %d time steps ago."%(self.process_id,sync_t_gap))
 
@@ -310,6 +317,7 @@ class DQNAgent(Agent,Shareable,Picklable):
 
             self.t_start = self.t
 
+            print("5")
 
         # store traj info and return action
         if not is_state_terminal:
@@ -326,6 +334,7 @@ class DQNAgent(Agent,Shareable,Picklable):
             else:
                 a = np.argmax(qs.data)
 
+            print("6")
             # update info for training; doing this in testing will lead to insufficient memory
             if self.phase == "Train":
                 # record the state to allow bonus computation
@@ -338,6 +347,7 @@ class DQNAgent(Agent,Shareable,Picklable):
                 if self.process_id == 0:
                     logger.debug('t:%s qs:%s',
                                  self.t, qs.data)
+            print("7")
             return a
         else:
             self.epoch_path_len_list.append(self.cur_path_len)
