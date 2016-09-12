@@ -4,15 +4,17 @@ import sys
 import numpy as np
 import cv2
 import copy
+import atari_py
 
-from rllab import spaces
+from sandbox.rocky.tf.spaces.box import Box
+from rllab.spaces.discrete import Discrete
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Env
 from sandbox.haoran.ale_python_interface import ALEInterface
 
 class AtariEnv(Env,Serializable):
     def __init__(self,
-            rom_filename,
+            game,
             seed=None,
             plot=False, # live demo
             max_start_nullops=0,
@@ -28,7 +30,7 @@ class AtariEnv(Env,Serializable):
         """
         Serializable.quick_init(self,locals())
         assert not plot
-        self.rom_filename = rom_filename
+        self.rom_filename = atari_py.get_game_path(game)
         self.seed = seed
         self.plot = plot
         self.max_start_nullops = max_start_nullops
@@ -40,7 +42,7 @@ class AtariEnv(Env,Serializable):
         self.resetter = resetter
         if resetter is not None:
             assert max_start_nullops == 0 # doing nothing when reset to a non-initial state can be dangerous in Montezuma's Revenge
-
+        self._prior_reward = 0
         self.frame_skip = 4
         self.n_last_screens = 4
         self.crop_or_scale = 'scale'
@@ -148,13 +150,14 @@ class AtariEnv(Env,Serializable):
     @property
     def observation_space(self):
         if self.obs_type == "ram":
-            return spaces.Box(low=-1, high=1, shape=(self.ale.getRAMSize(),))#np.zeros(128), high=np.ones(128))# + 255)
+            return Box(low=-1, high=1, shape=(self.ale.getRAMSize(),))#np.zeros(128), high=np.ones(128))# + 255)
         elif self.obs_type == "image":
-            return spaces.Box(low=-1, high=1, shape=(self.n_last_screens, 84,84))
+            return Box(low=-1, high=1, shape=(84,84,self.n_last_screens))
+            # see sandbox.haoran.tf.core.layers.BaseConvLayer for a reason why channel is at the last dimension
 
     @property
     def action_space(self):
-        return spaces.Discrete(len(self.legal_actions))
+        return Discrete(len(self.legal_actions))
 
     @property
     def is_terminal(self):
@@ -179,9 +182,10 @@ class AtariEnv(Env,Serializable):
         if self.record_internal_state:
             env_info["internal_states"] = self.ale.cloneState()
 
-        env_info["is_terminals"] = self.is_terminal
-        env_info["ale_ids"] = hex(id(self.ale))
-        env_info["use_default_reset"] = self.cur_path_use_default_reset
+        if self.resetter is not None:
+            env_info["is_terminals"] = self.is_terminal
+            env_info["ale_ids"] = hex(id(self.ale))
+            env_info["use_default_reset"] = self.cur_path_use_default_reset
 
         return env_info
 
@@ -207,12 +211,15 @@ class AtariEnv(Env,Serializable):
             if self.is_terminal:
                 break
         self._reward = sum(rewards)
+        if self._prior_reward > 0:
+            self._reward += self._prior_reward
+            self._prior_reward = 0
 
         # Record next step env info
         if not self.is_terminal:
-            if self.record_image:
+            if self.record_image or self.obs_type == "image":
                 self.last_screens.append(self.current_screen())
-            if self.record_ram:
+            if self.record_ram or self.obs_type == "ram":
                 self.ale.getRAM(self.ram_state)
 
         # cur_obs, cur_reward, next_state_is_terminal, cur_env_info

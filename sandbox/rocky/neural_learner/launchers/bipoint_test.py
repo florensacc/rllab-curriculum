@@ -1,6 +1,3 @@
-
-
-
 from sandbox.rocky.neural_learner.envs.multi_env import MultiEnv
 from sandbox.rocky.neural_learner.envs.bimodal_point_env import BimodalPointEnv
 from rllab.envs.normalized_env import normalize

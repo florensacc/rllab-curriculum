@@ -944,7 +944,7 @@ def to_lab_kube_pod(
 
     if config.FAST_CODE_SYNC:
         pre_commands.append('aws s3 cp %s /tmp/rllab_code.tar.gz' % code_full_path)
-        pre_commands.append('mkdir -p %s' % code_full_path)
+        pre_commands.append('mkdir -p %s' % config.DOCKER_CODE_DIR)
         pre_commands.append('tar -zxvf /tmp/rllab_code.tar.gz -C %s' % config.DOCKER_CODE_DIR)
     else:
         pre_commands.append('aws s3 cp --recursive %s %s' %

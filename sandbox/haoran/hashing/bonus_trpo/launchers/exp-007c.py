@@ -1,6 +1,5 @@
 """
-Try prioritized reset on Freeway and Breakout
-Use the Bellamre's ALE python interface, instead of OpenAI's
+Try reset on Montezuma's Revenge
 """
 
 from __future__ import print_function
@@ -8,8 +7,8 @@ from __future__ import absolute_import
 
 from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo import BonusTRPO
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
-from sandbox.haoran.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
-# from sandbox.haoran.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+# from sandbox.haoran.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
+from sandbox.haoran.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.haoran.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
 # from sandbox.haoran.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
 from sandbox.haoran.tf.envs.base import TfEnv
@@ -61,7 +60,7 @@ extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [111, 211]
+        return [111, 211, 311,411,511]
 
     @variant
     def bonus_coeff(self):
@@ -69,15 +68,15 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["breakout","freeway"]
+        return ["montezuma_revenge"]
 
     @variant
     def resetter_p(self):
-        return [0.5,0.1]
+        return [0.5,0.1,0]
 
     @variant
     def resetter_exponent(self):
-        return [2,100]
+        return [100]
 variants = VG().variants()
 
 
@@ -120,8 +119,8 @@ for v in variants:
         normalize_inputs=True,
         normalize_outputs=True,
     )
-    # baseline = GaussianMLPBaseline(env_spec=env.spec,regressor_args=regressor_args)
-    baseline = LinearFeatureBaseline(env_spec=env.spec)
+    baseline = GaussianMLPBaseline(env_spec=env.spec,regressor_args=regressor_args)
+    # baseline = LinearFeatureBaseline(env_spec=env.spec)
     bonus_evaluator = HashingBonusEvaluator(
         env_spec=env.spec,
         dim_key=dim_key,

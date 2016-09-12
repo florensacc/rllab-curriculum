@@ -358,13 +358,13 @@ def get_linear_ar_mask(n_in, n_out, zerodiagonal=False):
 
     mask = np.ones([n_in, n_out], dtype=np.float32)
     if n_out >= n_in:
-        k = n_out / n_in
+        k = n_out // n_in
         for i in range(n_in):
             mask[i + 1:, i * k:(i + 1) * k] = 0
             if zerodiagonal:
                 mask[i:i + 1, i * k:(i + 1) * k] = 0
     else:
-        k = n_in / n_out
+        k = n_in // n_out
         for i in range(n_out):
             mask[(i + 1) * k:, i:i + 1] = 0
             if zerodiagonal:
@@ -375,8 +375,8 @@ def get_linear_ar_mask_by_groups(n_in, n_out, ngroups, zerodiagonal=True):
     assert n_in % ngroups == 0 and n_out % ngroups == 0
 
     mask = np.ones([n_in, n_out], dtype=np.float32)
-    j = n_in / ngroups
-    k = n_out / ngroups
+    j = n_in // ngroups
+    k = n_out // ngroups
 
     for i in range(ngroups):
         mask[(i+1)*j:, i*k:(i+1)*k] = 0
@@ -1042,7 +1042,7 @@ def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=Fals
         blk.apply(lambda x: x*add_coeff)
         if nn:
             origin.apply(resize_nearest_neighbor, 1./stride)
-            origin.apply(lambda o: tf.tile(o, [1,1,1,nch/int(o.get_shape()[3])]))
+            origin.apply(lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])]))
         else:
             if stride != 1:
                 origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)

@@ -73,11 +73,23 @@ class MLP(LayersPowered, Serializable):
 
 
 class ConvNetwork(object):
-    def __init__(self, name, input_shape, output_dim, hidden_sizes,
-                 conv_filters, conv_filter_sizes, conv_strides, conv_pads, hidden_nonlinearity, output_nonlinearity,
+    def __init__(self, name, input_shape, output_dim,
+                 conv_filters, conv_filter_sizes, conv_strides, conv_pads,
+                 hidden_sizes, hidden_nonlinearity, output_nonlinearity,
                  hidden_W_init=L.xavier_init, hidden_b_init=tf.zeros_initializer,
                  output_W_init=L.xavier_init, output_b_init=tf.zeros_initializer,
                  input_var=None, input_layer=None):
+        """
+        A network composed of several convolution layers followed by some fc layers.
+        input_shape: (width,height,channel)
+            HOWEVER, network inputs are assumed flattened. This network will first unflatten the inputs and then apply the standard convolutions and so on.
+        conv_filters: a list of numbers of convolution kernel
+        conv_filter_sizes: a list of sizes (int) of the convolution kernels
+        conv_strides: a list of strides (int) of the conv kernels
+        conv_pads: a list of pad formats (either 'SAME' or 'VALID')
+        hidden_nonlinearity: a nonlinearity from tf.nn, shared by all conv and fc layers
+        hidden_sizes: a list of numbers of hidden units for all fc layers
+        """
         with tf.variable_scope(name):
             if input_layer is not None:
                 l_in = input_layer
