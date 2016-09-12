@@ -1,6 +1,3 @@
-from __future__ import print_function
-from __future__ import absolute_import
-
 # Code by Erik Sweet and Bill Basener
 
 import random
@@ -15,9 +12,9 @@ from rllab import config
 import os.path as osp
 
 
-NUM_ROWS = 14
-NUM_COLS = 14
-N_MAPS = 45000
+NUM_ROWS = 3#14#4#3
+NUM_COLS = 3#14#4#3
+N_MAPS = 1000#45000
 STATE_BATCH_SIZE = 10
 SEED = 11
 
@@ -37,7 +34,8 @@ all_actions = []
 
 print("Generating data...")
 
-for _ in pyprind.prog_bar(xrange(N_MAPS)):
+for idx in pyprind.prog_bar(range(N_MAPS)):
+    print(idx)
 
     num_rows = NUM_ROWS
     num_cols = NUM_COLS
@@ -53,7 +51,7 @@ for _ in pyprind.prog_bar(xrange(N_MAPS)):
     # Set starting row and column
     r = 0
     c = 0
-    history = [(r, c)]  # The history is the
+    history = [(r, c)]#, (0, 0), (0, c), (r, 0)]  # The history is the
 
     # Trace a path though the cells of the maze and open walls along the path.
     # We do this with a while loop, repeating the loop until there is no history,
@@ -97,7 +95,9 @@ for _ in pyprind.prog_bar(xrange(N_MAPS)):
 
     # Open the walls at the start and finish
     M[0, 0, 0] = 1
+    # M[0, num_cols - 1, 1] = 1
     M[num_rows - 1, num_cols - 1, 2] = 1
+    # M[num_rows - 1, 0, 3] = 1
 
     grid = np.zeros((num_rows * 2 + 1, num_cols * 2 + 1))
 
@@ -114,28 +114,28 @@ for _ in pyprind.prog_bar(xrange(N_MAPS)):
                 grid[row * 2 + 1, col * 2 + 2] = 1
             if cell_data[3] == 1:
                 grid[row * 2 + 2, col * 2 + 1] = 1
-                # for i in range(10 * row + 1, 10 * row + 9):
-                #     image[i, range(10 * col + 1, 10 * col + 9)] = 255
-                #     if cell_data[0] == 1:
-                #         image[range(10 * row + 1, 10 * row + 9), 10 * col] = 255
-                #     if cell_data[1] == 1:
-                #         image[10 * row, range(10 * col + 1, 10 * col + 9)] = 255
-                #     if cell_data[2] == 1:
-                #         image[range(10 * row + 1, 10 * row + 9), 10 * col + 9] = 255
-                #     if cell_data[3] == 1:
-                #         image[10 * row + 9, range(10 * col + 1, 10 * col + 9)] = 255
+            # for i in range(10 * row + 1, 10 * row + 9):
+            #     image[i, range(10 * col + 1, 10 * col + 9)] = 255
+            #     if cell_data[0] == 1:
+            #         image[range(10 * row + 1, 10 * row + 9), 10 * col] = 255
+            #     if cell_data[1] == 1:
+            #         image[10 * row, range(10 * col + 1, 10 * col + 9)] = 255
+            #     if cell_data[2] == 1:
+            #         image[range(10 * row + 1, 10 * row + 9), 10 * col + 9] = 255
+            #     if cell_data[3] == 1:
+            #         image[10 * row + 9, range(10 * col + 1, 10 * col + 9)] = 255
 
-                # Display the image
-                # plt.imshow(image, cmap=cm.Greys_r, interpolation='none')
-                # plt.imshow(grid, cmap=cm.Greys_r, interpolation='none')
-                # plt.show()
+    # Display the image
+    # plt.imshow(image, cmap=cm.Greys_r, interpolation='none')
+    plt.imshow(grid, cmap=cm.Greys_r, interpolation='nearest')
+    plt.show()
 
     maps.append(grid)
 
     grid = 1 - grid
 
     graph = to_sparse_adj_graph(grid)
-    to_x, to_y = random.choice(zip(*np.where(grid == 0)))
+    to_x, to_y = random.choice(list(zip(*np.where(grid == 0))))
     to_id = to_x * SHAPE[1] + to_y
     # sample random reachable point on the map
     sps, preds = scipy.sparse.csgraph.dijkstra(graph, directed=False, indices=[to_id], return_predecessors=True)
@@ -144,7 +144,7 @@ for _ in pyprind.prog_bar(xrange(N_MAPS)):
         continue
 
     from_ids = np.cast['int'](np.random.choice(from_ids, size=STATE_BATCH_SIZE, replace=False))
-    from_xs = from_ids / SHAPE[1]
+    from_xs = from_ids // SHAPE[1]
     from_ys = from_ids % SHAPE[1]
 
     next_ids = np.cast['int'](preds[0, from_ids])

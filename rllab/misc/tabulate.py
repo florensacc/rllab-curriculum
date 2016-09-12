@@ -11,7 +11,7 @@ import re
 
 
 if python_version_tuple()[0] < "3":
-    from itertools import zip_longest
+    from itertools import izip_longest
     from functools import partial
     _none_type = type(None)
     _int_type = int
