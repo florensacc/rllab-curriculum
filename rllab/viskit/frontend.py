@@ -323,6 +323,7 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                                 '{}\t{}\t{}'.format(regret, len(progresses), distinct_params_kv_string))
                             if regret > best_regret:
                                 best_regret = regret
+                                best_progress = progresses
                                 data_best_regret = data
                                 kv_string_best_regret = distinct_params_kv_string
 
@@ -338,8 +339,8 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
                         max_size = max(sizes)
                         progresses = [
                             np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
-                        legend = '{} ({:.3f})'.format(
-                            group_legend, best_regret)
+                        legend = '{} (mu: {:.3f}, std: {:.5f})'.format(
+                            group_legend, best_regret, np.std(best_progress))
                         window_size = np.maximum(
                             int(np.round(max_size / float(1000))), 1)
                         if use_median:
