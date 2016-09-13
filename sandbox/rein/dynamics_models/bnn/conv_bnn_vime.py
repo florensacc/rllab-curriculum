@@ -2,7 +2,8 @@ import numpy as np
 import theano.tensor as T
 import lasagne
 from lasagne.layers.noise import dropout
-from lasagne.layers.normalization import batch_norm
+from lasagne.layers.normalization import batch_norm, BatchNormLayer
+from lasagne.layers.special import NonlinearityLayer
 
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
@@ -17,7 +18,21 @@ from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, Bayesia
     BayesianLayer
 
 
-class DiscreteEmbeddingLayer(lasagne.layers.Layer):
+class DiscreteEmbeddingNonlinearityLayer(lasagne.layers.Layer):
+    def __init__(self, incoming,
+                 **kwargs):
+        super(DiscreteEmbeddingNonlinearityLayer, self).__init__(incoming, **kwargs)
+        self._srng = RandomStreams()
+
+    def nonlinearity(self, x, noise_mask=1):
+        # Force outputs to be binary through noise.
+        return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(size=x.shape, low=-0.3, high=0.3)
+
+    def get_output_for(self, input, noise_mask=1, **kwargs):
+        return self.nonlinearity(input, noise_mask)
+
+
+class DiscreteEmbeddingLinearLayer(lasagne.layers.Layer):
     """
     Discrete embedding layer for counting: binary units.
     """
@@ -25,7 +40,7 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layer):
     def __init__(self, incoming, num_units, W=lasagne.init.GlorotUniform(),
                  b=lasagne.init.Constant(0.),
                  **kwargs):
-        super(DiscreteEmbeddingLayer, self).__init__(incoming, **kwargs)
+        super(DiscreteEmbeddingLinearLayer, self).__init__(incoming, **kwargs)
 
         self.num_units = num_units
         self.num_inputs = int(np.prod(self.input_shape[1:]))
@@ -35,12 +50,6 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layer):
             self.b = None
         else:
             self.b = self.add_param(b, (num_units,), name="b", regularizable=False)
-
-        self._srng = RandomStreams()
-
-    def nonlinearity(self, x):
-        # Force outputs to be binary through noise.
-        return lasagne.nonlinearities.sigmoid(x) + self._srng.uniform(size=(self.num_units,), low=-0.49, high=0.49)
 
     def get_output_shape_for(self, input_shape):
         return input_shape[0], self.num_units
@@ -54,8 +63,7 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layer):
         activation = T.dot(input, self.W)
         if self.b is not None:
             activation = activation + self.b.dimshuffle('x', 0)
-        # Add noise to activation for discretization
-        return self.nonlinearity(activation)
+        return activation
 
 
 class IndependentSoftmaxLayer(lasagne.layers.Layer):
@@ -583,12 +591,12 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             elif layer_disc['name'] == 'discrete_embedding':
                 if 'nonlinearity' not in layer_disc.keys():
                     layer_disc['nonlinearity'] = lasagne.nonlinearities.rectify
-                s_net = DiscreteEmbeddingLayer(
+                s_net = DiscreteEmbeddingLinearLayer(
                     s_net,
                     num_units=layer_disc['n_units'])
+                s_net = BatchNormLayer(s_net)
+                s_net = DiscreteEmbeddingNonlinearityLayer(s_net)
                 # Pull out discrete embedding layer.
-                # TODO: add new nonlinearity with sampling in it
-                s_net = batch_norm(s_net)
                 self.discrete_emb_sym = s_net
             elif layer_disc['name'] == 'deterministic':
                 s_net = lasagne.layers.DenseLayer(
@@ -915,7 +923,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # Discrete embedding layer for counting.
         self.discrete_emb = ext.compile_function(
-            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, deterministic=False),
+            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, noise_mask=0, deterministic=False),
             log_name='fn_discrete_emb')
 
 
