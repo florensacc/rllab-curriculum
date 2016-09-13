@@ -23,28 +23,29 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layer):
     """
 
     def __init__(self, incoming, num_units, W=lasagne.init.GlorotUniform(),
-                 b=lasagne.init.Constant(0.), nonlinearity=lasagne.nonlinearities.sigmoid,
+                 b=lasagne.init.Constant(0.),
                  **kwargs):
         super(DiscreteEmbeddingLayer, self).__init__(incoming, **kwargs)
-        self.nonlinearity = (lasagne.nonlinearities.identity if nonlinearity is None
-                             else nonlinearity)
 
         self.num_units = num_units
-        num_inputs = int(np.prod(self.input_shape[1:]))
+        self.num_inputs = int(np.prod(self.input_shape[1:]))
 
-        self.W = self.add_param(W, (num_inputs, num_units), name="W")
+        self.W = self.add_param(W, (self.num_inputs, num_units), name="W")
         if b is None:
             self.b = None
         else:
-            self.b = self.add_param(b, (num_units,), name="b",
-                                    regularizable=False)
+            self.b = self.add_param(b, (num_units,), name="b", regularizable=False)
 
         self._srng = RandomStreams()
+
+    def nonlinearity(self, x):
+        # Force outputs to be binary through noise.
+        return lasagne.nonlinearities.sigmoid(x) + self._srng.uniform(size=(self.num_units,), low=-0.49, high=0.49)
 
     def get_output_shape_for(self, input_shape):
         return input_shape[0], self.num_units
 
-    def get_output_for(self, input, noise_mask=1, **kwargs):
+    def get_output_for(self, input, **kwargs):
         if input.ndim > 2:
             # if the input has more than two dimensions, flatten it into a
             # batch of feature vectors.
@@ -54,8 +55,7 @@ class DiscreteEmbeddingLayer(lasagne.layers.Layer):
         if self.b is not None:
             activation = activation + self.b.dimshuffle('x', 0)
         # Add noise to activation for discretization
-        return self.nonlinearity(
-            activation) + noise_mask * self._srng.uniform(size=activation.shape, low=-0.49, high=0.49)
+        return self.nonlinearity(activation)
 
 
 class IndependentSoftmaxLayer(lasagne.layers.Layer):
@@ -587,6 +587,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     s_net,
                     num_units=layer_disc['n_units'])
                 # Pull out discrete embedding layer.
+                # TODO: add new nonlinearity with sampling in it
                 s_net = batch_norm(s_net)
                 self.discrete_emb_sym = s_net
             elif layer_disc['name'] == 'deterministic':
@@ -914,7 +915,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # Discrete embedding layer for counting.
         self.discrete_emb = ext.compile_function(
-            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, deterministic=False, noise_mask=0),
+            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, deterministic=False),
             log_name='fn_discrete_emb')
 
 
