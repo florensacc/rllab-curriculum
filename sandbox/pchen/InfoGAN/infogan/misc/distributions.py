@@ -6,7 +6,7 @@ import numpy as np
 import prettytensor as pt
 
 from rllab.misc.overrides import overrides
-from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv
 
 TINY = 1e-8
 
@@ -1315,18 +1315,28 @@ class ConvAR(Distribution):
                 custom_phase=UnboundVariable('custom_phase'),
                 init_scale=0.1,
                 ar_channels=False,
-                zerodiagonal=False,
         ):
             for di in range(depth):
-                self._iaf_template = \
-                    self._iaf_template.ar_conv2d_mod(
-                        filter_size,
-                        nr_channels
-                    )
+                if di == 0:
+                    self._iaf_template = \
+                        self._iaf_template.ar_conv2d_mod(
+                            filter_size,
+                            nr_channels,
+                            zerodiagonal=di == 0,
+                        )
+                else:
+                    self._iaf_template = \
+                        resconv_v1_customconv(
+                            "ar_conv2d_mod",
+                            dict(zerodiagonal=False),
+                            self._iaf_template,
+                            filter_size,
+                            nr_channels
+                        )
             self._iaf_template = \
                 self._iaf_template.ar_conv2d_mod(
                     filter_size,
-                    tgt_dist.flat_dim,
+                    tgt_dist.dist_flat_dim,
                     activation_fn=None,
                 )
 
@@ -1355,12 +1365,15 @@ class ConvAR(Distribution):
             **in_dict
         ).tensor
         return self._tgt_dist.activate_dist(
-            tf.reshape(conv_iaf, [-1, self._tgt_dist.flat_dim])
+            tf.reshape(conv_iaf, [-1, self._tgt_dist.dist_flat_dim])
         )
 
-    def logli(self, x_var, _):
+    def logli(self, x_var, _=None):
         tgt_dict = self.infer(x_var)
-        return self._tgt_dist.logli(x_var, tgt_dict)
+        return self._tgt_dist.logli(
+            tf.reshape(x_var, [-1, self._tgt_dist.dist_flat_dim]),
+            tgt_dict
+        )
 
     def logli_init_prior(self, x_var):
         return self._base_dist.logli_init_prior(x_var)

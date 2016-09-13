@@ -721,6 +721,8 @@ def get_conv_ar_mask(h, w, n_in, n_out, ar_channels=False, zerodiagonal=False):
     mask = np.zeros([h, w, n_in, n_out], dtype=np.float32)
     mask[:l, :, :, :] = 1.
     mask[l, :m, :, :] = 1.
+    if not zerodiagonal:
+        mask[l, m, :, :] = 1.
     if ar_channels:
         mask[l, m, :, :] = get_linear_ar_mask(n_in, n_out, zerodiagonal)
     return mask
@@ -734,27 +736,28 @@ def get_conv_ar_mask(h, w, n_in, n_out, ar_channels=False, zerodiagonal=False):
 )
 class ar_conv2d_mod(prettytensor.VarStoreMethod):
 
-    def __call__(self,
-                 input_layer,
-                 kernel,
-                 depth,
-                 activation_fn=None,
-                 stride=None,
-                 l2loss=None,
-                 init=None,
-                 edges=PAD_SAME,
-                 batch_normalize=False,
-                 residual=False,
-                 custom_phase=CustomPhase.train,
-                 wnorm=False,
-                 pixel_bias=False,
-                 scale_init=0.1,
-                 var_scope=None,
-                 prefix="",
-                 name=PROVIDED,
-                 ar_channels=False,
-                 zerodiagonal=False,
-                 ):
+    def __call__(
+            self,
+            input_layer,
+            kernel,
+            depth,
+            activation_fn=None,
+            stride=None,
+            l2loss=None,
+            init=None,
+            edges=PAD_SAME,
+            batch_normalize=False,
+            residual=False,
+            custom_phase=CustomPhase.train,
+            wnorm=False,
+            pixel_bias=False,
+            scale_init=0.1,
+            var_scope=None,
+            prefix="",
+            name=PROVIDED,
+            ar_channels=False,
+            zerodiagonal=False,
+    ):
         """Adds a convolution to the stack of operations.
         The current head must be a rank 4 Tensor.
         Args:
@@ -1208,6 +1211,56 @@ def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=Fals
                 origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
     return seq.as_layer().nl()
 
+def resconv_v1_customconv(
+        conv_method,
+        conv_args,
+        l_in,
+        kernel,
+        nch,
+        stride=1,
+        add_coeff=0.1,
+        keep_prob=1.,
+        nn=False,
+        context=None,
+):
+    blk = origin = l_in
+    blk = blk.sequential()
+    getattr(blk, conv_method)(
+        **{
+            **conv_args,
+            **dict(
+                kernel=kernel,
+                depth=nch,
+                stride=stride,
+                prefix="pre",
+            )
+        }
+    )
+    blk.custom_dropout(
+        keep_prob
+    )
+    getattr(blk, conv_method)(
+        **{
+            **conv_args,
+            **dict(
+                kernel=kernel,
+                depth=nch,
+                stride=stride,
+                activation_fn=None,
+                prefix="post",
+            )
+        }
+    )
+    if nn:
+        origin = origin.apply(resize_nearest_neighbor, 1./stride)
+        origin = origin.apply(lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])]))
+    else:
+        if stride != 1:
+            origin = origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
+
+    mix = add_coeff * blk.as_layer() + origin
+    return mix.nl()
+
 def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
@@ -1310,4 +1363,26 @@ def custom_dropout(
         return input_layer * keep_prob
     else:
         return tf.nn.dropout(input_layer, keep_prob, name=name)
+
+def init_optim():
+    with tf.variable_scope("optim"):
+        yield
+    vs = tf.all_variables()
+    yield tf.initialize_variables(
+        [
+            v for v in vs if
+            "optim" in v.name or "global_step" in v.name
+        ]
+    )
+
+def partial(obj, name, default=None):
+    def go(*args, **kwargs):
+        return getattr(obj, name)(
+            *args,
+            **{
+                **(default if default is not None else {}),
+                **kwargs
+            }
+        )
+    return go
 
