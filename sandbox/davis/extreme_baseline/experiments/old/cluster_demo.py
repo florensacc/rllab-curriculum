@@ -8,8 +8,6 @@ from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-import sys
-
 stub(globals())
 
 for step_size in [0.01, 0.05, 0.1]:
@@ -36,7 +34,7 @@ for step_size in [0.01, 0.05, 0.1]:
             discount=0.99,
             step_size=step_size,
             # Uncomment both lines (this and the plot parameter below) to enable plotting
-            plot=True,
+            # plot=True,
         )
 
         run_experiment_lite(
@@ -48,7 +46,7 @@ for step_size in [0.01, 0.05, 0.1]:
             # Specifies the seed for the experiment. If this is not provided, a random seed
             # will be used
             seed=seed,
-            plot=True,
-            # mode="ec2",
-            # exp_prefix="davis-experiment"
+            plot=False,
+            mode="lab_kube",
+            exp_prefix="kube-fourth-test"
         )
