@@ -21,6 +21,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             hidden_dim=32,
             feature_network=None,
             state_include_action=True,
+            gru_layer_cls=L.GRULayer,
             hidden_nonlinearity=tf.tanh):
         """
         :param env_spec: A spec for the env.
@@ -71,6 +72,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
                 hidden_dim=hidden_dim,
                 hidden_nonlinearity=hidden_nonlinearity,
                 output_nonlinearity=tf.nn.softmax,
+                gru_layer_cls=gru_layer_cls,
                 name="prob_network"
             )
 

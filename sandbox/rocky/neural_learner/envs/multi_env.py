@@ -73,18 +73,46 @@ class MultiEnv(ProxyEnv, Serializable):
 
     def log_diagnostics(self, paths):
         # Log the avg reward for each episode
-        episode_rewards = []
-        discount_episode_rewards = []
+        episode_rewards = [[] for _ in range(self.n_episodes)]
+        discount_episode_rewards = [[] for _ in range(self.n_episodes)]
+        episode_success = [[] for _ in range(self.n_episodes)]
+        episode_lens = [[] for _ in range(self.n_episodes)]
         for path in paths:
             rewards = path['rewards']
             splitter = np.where(path['env_infos']['episode_done'])[0][:-1] + 1
-            episode_rewards.append(
-                np.asarray(list(map(np.sum, np.split(rewards, splitter))))
-            )
-            discount_episode_rewards.append(
-                np.asarray(list(map(self.discount_sum, np.split(rewards, splitter))))
-            )
-        for idx, tot_reward in enumerate(np.asarray(episode_rewards, dtype=np.float32).mean(axis=0)):
-            logger.record_tabular('AverageEpisodeReturn(%d)' % (idx + 1), tot_reward)
-        for idx, tot_reward in enumerate(np.asarray(discount_episode_rewards, dtype=np.float32).mean(axis=0)):
-            logger.record_tabular('AverageDiscountEpisodeReturn(%d)' % (idx + 1), tot_reward)
+            split_rewards = np.split(rewards, splitter)
+            split_success = [x[-1] for x in np.split(path['env_infos']['success'], splitter)]
+            # episode_rewards.append(
+            #     np.asarray(list(map(np.sum, split_rewards)))
+            # )
+            # discount_episode_rewards.append(
+            #     np.asarray(list(map(self.discount_sum, split_rewards)))
+            # )
+            for epi, (rews, success) in enumerate(zip(split_rewards, split_success)):
+                if success:
+                    episode_lens[epi].append(len(rews))
+                episode_success[epi].append(success)
+                episode_rewards[epi].append(np.sum(rews))
+                discount_episode_rewards[epi].append(self.discount_sum(rews))
+
+        def log_stat(name, data):
+            avg_data = list(map(np.mean, data))
+            for idx, entry in enumerate(avg_data):
+                logger.record_tabular('Average%s(%d)' % (name, idx + 1), entry)
+            for idx, (entry, next_entry) in enumerate(zip(avg_data, avg_data[1:])):
+                logger.record_tabular('Delta%s(%d)' % (name, idx + 1), next_entry - entry)
+
+        log_stat('EpisodeReturn', episode_rewards)
+        log_stat('DiscountEpisodeReturn', discount_episode_rewards)
+        log_stat('SuccessEpisodeLength', episode_lens)
+        log_stat('SuccessRate', episode_success)
+        # for idx, tot_reward in enumerate(map(np.mean, episode_rewards)):
+        #     logger.record_tabular('AverageEpisodeReturn(%d)' % (idx + 1), tot_reward)
+        # for idx, tot_reward in enumerate(map(np.mean, episode_rewards)):
+        #     logger.record_tabular('AverageEpisodeReturn(%d)' % (idx + 1), tot_reward)
+        # for idx, tot_reward in enumerate(map(np.mean, discount_episode_rewards)):
+        #     logger.record_tabular('AverageDiscountEpisodeReturn(%d)' % (idx + 1), tot_reward)
+        # for idx, lens in enumerate(map(np.mean, episode_lens)):
+        #     logger.record_tabular('AverageSuccessEpisodeLength(%d)' % (idx + 1), lens)
+        # for idx, success in enumerate(map(np.mean, episode_success)):
+        #     logger.record_tabular('AverageSuccessRate(%d)' % (idx + 1), success)

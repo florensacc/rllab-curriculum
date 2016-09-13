@@ -156,7 +156,7 @@ class BatchPolopt(RLAlgorithm):
                 acc += np.sum(np.square(_o - _t))
         return acc / _inputs.shape[0]
 
-    def plot_pred_imgs(self, inputs, targets, itr, count):
+    def plot_pred_imgs(self, inputs, targets, itr, count, title='title'):
         # try:
         # This is specific to Atari.
         import matplotlib.pyplot as plt
@@ -176,6 +176,7 @@ class BatchPolopt(RLAlgorithm):
             plt.tick_params(axis='both', which='both', bottom='off', top='off',
                             labelbottom='off', right='off', left='off', labelleft='off')
             self._im1, self._im2, self._im3, self._im4 = None, None, None, None
+        plt.suptitle(title)
 
         idx = np.random.randint(0, inputs.shape[0], 1)
         sanity_pred = self.autoenc.pred_fn(inputs)
@@ -234,8 +235,11 @@ class BatchPolopt(RLAlgorithm):
         for path in paths:
             path_len = len(path['rewards'])
             for i in range(path_len):
-                obs = (path['observations'][i] * self.autoenc.num_classes).astype("uint8")
-                self.pool.add_sample(obs)
+                self.pool.add_sample(path['observations'][i])
+
+    def preprocess_obs(self, paths):
+        for path in paths:
+            path['observations'] = (path['observations'] * self.autoenc.num_classes).astype("uint8")
 
     def train_autoenc(self, itr):
         logger.log('Updating autoencoder using replay pool ...')
@@ -273,7 +277,7 @@ class BatchPolopt(RLAlgorithm):
                 old_train_loss = train_loss
                 outer_loop_count += 1
 
-            for _ in range(20):
+            for i in range(20):
                 batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
                 _x = batch['observations']
                 _y = batch['observations'][:, -np.prod(self.autoenc.state_dim):]
@@ -297,6 +301,9 @@ class BatchPolopt(RLAlgorithm):
 
             # Sample trajectories.
             paths = self.obtain_samples()
+
+            # Preprocess observations.
+            self.preprocess_obs(paths)
 
             # Add sampled trajectories to the replay pool.
             self.fill_replay_pool(paths)
@@ -380,8 +387,7 @@ class BatchPolopt(RLAlgorithm):
             return 1. / np.sqrt(count)
 
         for idx, path in enumerate(paths):
-            obs = (path['observations'] * self.autoenc.num_classes).astype("uint8")
-            keys = np.cast['int'](np.round(self.autoenc.discrete_emb(obs)))
+            keys = np.cast['int'](np.round(self.autoenc.discrete_emb(path['observations'])))
             counts = np.zeros(len(keys))
             lst_key_as_int = np.zeros(len(keys))
             for idy, key in enumerate(keys):
@@ -390,8 +396,8 @@ class BatchPolopt(RLAlgorithm):
                 self.counting_table[key_as_int] += 1
                 counts[idy] = self.counting_table[key_as_int]
                 print('{}\t{}'.format(int(counts[idy]), key))
-                self.plot_pred_imgs(obs[idy][None, :], obs[idy][None, :], counts[idy],
-                                    ''.join([str(k) for k in key]))
+                self.plot_pred_imgs(path['observations'][idy][None, :], path['observations'][idy][None, :], -idy, 0,
+                                    title=''.join([str(k) for k in key]))
             num_unique = len(set(lst_key_as_int))
             print('unique values: {}/{}'.format(num_unique, len(lst_key_as_int)))
             # TODO: change name 'KL' to surprise.

@@ -5,6 +5,7 @@ import uuid
 import os
 import random
 import numpy as np
+import tensorflow as tf
 
 filename = str(uuid.uuid4())
 
@@ -31,31 +32,36 @@ if __name__ == "__main__":
     # with tf.Session():
     #     [rest of the code]
     while True:
-        if ':' in args.file:
-            # fetch file using ssh
-            os.system("rsync -avrz %s /tmp/%s.pkl" % (args.file, filename))
-            data = joblib.load("/tmp/%s.pkl" % filename)
-            if parser.seed is not None:
-                random.seed(parser.seed)
-                np.random.seed(parser.seed)
-            if policy:
-                new_policy = data['policy']
-                policy.set_param_values(new_policy.get_param_values())
-                path = rollout(env, policy, max_path_length=args.max_length,
-                               animated=True, speedup=args.speedup)
+        with tf.Session() as sess:
+            # tf.reset_default_graph()
+            if ':' in args.file:
+                # fetch file using ssh
+                os.system("rsync -avrz %s /tmp/%s.pkl" % (args.file, filename))
+                data = joblib.load("/tmp/%s.pkl" % filename)
+                if parser.seed is not None:
+                    random.seed(parser.seed)
+                    np.random.seed(parser.seed)
+                if policy:
+                    new_policy = data['policy']
+                    policy.set_param_values(new_policy.get_param_values())
+                    path = rollout(env, policy, max_path_length=args.max_length,
+                                   animated=True, speedup=args.speedup)
+                else:
+                    policy = data['policy']
+                    env = data['env']
+                    path = rollout(env, policy, max_path_length=args.max_length,
+                                   animated=True, speedup=args.speedup)
             else:
+                data = joblib.load(args.file)
                 policy = data['policy']
                 env = data['env']
                 path = rollout(env, policy, max_path_length=args.max_length,
                                animated=True, speedup=args.speedup)
-        else:
-            data = joblib.load(args.file)
-            policy = data['policy']
-            env = data['env']
-            path = rollout(env, policy, max_path_length=args.max_length,
-                           animated=True, speedup=args.speedup)
-        # print 'Total reward: ', sum(path["rewards"])
-        args.loop -= 1
-        if ':' not in args.file:
-            if args.loop <= 0:
-                break
+            #     import ipdb; ipdb.set_trace()
+            # import ipdb; ipdb.set_trace()
+
+            # print 'Total reward: ', sum(path["rewards"])
+            args.loop -= 1
+            if ':' not in args.file:
+                if args.loop <= 0:
+                    break
