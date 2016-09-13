@@ -1,5 +1,3 @@
-
-
 import numpy as np
 import math
 import tensorflow as tf
@@ -14,6 +12,7 @@ from warnings import warn
 
 class G(object):
     pass
+
 
 G._n_layers = 0
 
@@ -120,7 +119,7 @@ class Layer(object):
         self.params = OrderedDict()
 
         if name is None:
-            name = "layer_%d" % G._n_layers
+            name = "%s_%d" % (type(self).__name__, G._n_layers)
             G._n_layers += 1
 
         self.name = name
@@ -359,7 +358,6 @@ class DenseLayer(Layer):
             # if the input has more than two dimensions, flatten it into a
             # batch of feature vectors.
             input = tf.reshape(input, tf.pack([tf.shape(input)[0], -1]))
-
         activation = tf.matmul(input, self.W)
         if self.b is not None:
             activation = activation + tf.expand_dims(self.b, 0)
@@ -906,7 +904,81 @@ class GRUStepLayer(MergeLayer):
         x, hprev = inputs
         n_batch = tf.shape(x)[0]
         x = tf.reshape(x, tf.pack([n_batch, -1]))
+        x.set_shape((None, self.input_shapes[0][1]))
         return self._gru_layer.step(hprev, x)
+
+
+class TfGRULayer(Layer):
+    """
+    Use TensorFlow's built-in GRU implementation
+    """
+
+    def __init__(self, incoming, num_units, hidden_nonlinearity, horizon=None, hidden_init_trainable=False,
+                 **kwargs):
+        assert len(incoming.output_shape) == 3
+        input_dim = incoming.shape[2]
+        gru = tf.nn.rnn_cell.GRUCell(num_units=num_units, activation=hidden_nonlinearity)
+        self.num_units = num_units
+        self.horizon = horizon
+        self.gru = gru
+        self.hidden_nonlinearity = hidden_nonlinearity
+        Layer.__init__(self, incoming=incoming, **kwargs)
+        # dummy input variable
+        input_dummy = tf.placeholder(tf.float32, (None, input_dim), "input_dummy")
+        hidden_dummy = tf.placeholder(tf.float32, (None, num_units), "hidden_dummy")
+
+        with tf.variable_scope(self.name) as vs:
+            gru(input_dummy, hidden_dummy, scope=vs)
+            vs.reuse_variables()
+            self.scope = vs
+        tf.trainable_variables()
+        all_vars = [v for v in tf.all_variables() if v.name.startswith(self.name)]
+        trainable_vars = [v for v in tf.trainable_variables() if v.name.startswith(self.name)]
+        for var in trainable_vars:
+            self.add_param(spec=var, shape=None, name=None, trainable=True)
+        for var in set(all_vars) - set(trainable_vars):
+            self.add_param(spec=var, shape=None, name=None, trainable=False)
+        self.h0 = self.add_param(tf.zeros_initializer, (num_units,), name="h0", trainable=hidden_init_trainable,
+                                 regularizable=False)
+
+    def step(self, hprev, x):
+        return self.gru(x, hprev, scope=self.scope)[1]
+
+    def get_output_for(self, input, **kwargs):
+        input_shape = tf.shape(input)
+        n_batches = input_shape[0]
+        state = tf.tile(
+            tf.reshape(self.h0, (1, self.num_units)),
+            (n_batches, 1)
+        )
+        state.set_shape((None, self.num_units))
+        if self.horizon is not None:
+            outputs = []
+            for idx in range(self.horizon):
+                output, state = self.gru(input[:, idx, :], state, scope=self.scope)  # self.name)
+                outputs.append(tf.expand_dims(output, 1))
+            outputs = tf.concat(1, outputs)
+            return outputs
+        else:
+            n_steps = input_shape[1]
+            input = tf.reshape(input, tf.pack([n_batches, n_steps, -1]))
+            # flatten extra dimensions
+            shuffled_input = tf.transpose(input, (1, 0, 2))
+            shuffled_input.set_shape((None, None, self.input_shape[-1]))
+            hs = tf.scan(
+                self.step,
+                elems=shuffled_input,
+                initializer=state
+            )
+            shuffled_hs = tf.transpose(hs, (1, 0, 2))
+            return shuffled_hs
+
+    def get_output_shape_for(self, input_shape):
+        n_batch, n_steps = input_shape[:2]
+        return n_batch, n_steps, self.num_units
+
+    def get_step_layer(self, l_in, l_prev_hidden, name=None):
+        return GRUStepLayer(incomings=[l_in, l_prev_hidden], gru_layer=self, name=name)
 
 
 class LSTMLayer(Layer):
@@ -922,7 +994,7 @@ class LSTMLayer(Layer):
     Note that the incoming, forget, cell, and out vectors must have the same dimension as the hidden state
     """
 
-    def __init__(self, incoming, num_units, hidden_nonlinearity,
+    def __init__(self, incoming, num_units, hidden_nonlinearity=tf.tanh,
                  gate_nonlinearity=tf.nn.sigmoid, W_init=xavier_init, forget_bias=1.0,
                  use_peepholes=False,
                  w_init=tf.random_normal_initializer(stddev=0.1),
@@ -1057,7 +1129,7 @@ class LSTMStepLayer(MergeLayer):
         return self._lstm_layer.get_params(**tags)
 
     def get_output_shape_for(self, input_shapes):
-        n_batch = input_shapes[0]
+        n_batch = input_shapes[0][0]
         return n_batch, 2 * self._lstm_layer.num_units
 
     def get_output_for(self, inputs, **kwargs):
@@ -1067,6 +1139,100 @@ class LSTMStepLayer(MergeLayer):
         hcprev = tf.concat(1, [hprev, cprev])
         hc = self._lstm_layer.step(hcprev, x)
         return hc
+
+
+class TfBasicLSTMLayer(Layer):
+    """
+    Use TensorFlow's built-in (basic) LSTM implementation
+    """
+
+    def __init__(self, incoming, num_units, hidden_nonlinearity, horizon=None, hidden_init_trainable=False,
+                 forget_bias=1.0, use_peepholes=False, **kwargs):
+        assert not use_peepholes, "Basic LSTM does not support peepholes!"
+        assert len(incoming.output_shape) == 3
+        input_dim = incoming.shape[2]
+        lstm = tf.nn.rnn_cell.BasicLSTMCell(
+            num_units=num_units,
+            activation=hidden_nonlinearity,
+            state_is_tuple=True,
+            forget_bias=forget_bias
+        )
+        self.num_units = num_units
+        self.horizon = horizon
+        self.lstm = lstm
+        self.hidden_nonlinearity = hidden_nonlinearity
+        Layer.__init__(self, incoming=incoming, **kwargs)
+        # dummy input variable
+        input_dummy = tf.placeholder(tf.float32, (None, input_dim), "input_dummy")
+        hidden_dummy = tf.placeholder(tf.float32, (None, num_units), "hidden_dummy")
+        cell_dummy = tf.placeholder(tf.float32, (None, num_units), "cell_dummy")
+
+        with tf.variable_scope(self.name) as vs:
+            lstm(input_dummy, (cell_dummy, hidden_dummy), scope=vs)
+            vs.reuse_variables()
+            self.scope = vs
+        tf.trainable_variables()
+        all_vars = [v for v in tf.all_variables() if v.name.startswith(self.name)]
+        trainable_vars = [v for v in tf.trainable_variables() if v.name.startswith(self.name)]
+        for var in trainable_vars:
+            self.add_param(spec=var, shape=None, name=None, trainable=True)
+        for var in set(all_vars) - set(trainable_vars):
+            self.add_param(spec=var, shape=None, name=None, trainable=False)
+        self.h0 = self.add_param(tf.zeros_initializer, (num_units,), name="h0", trainable=hidden_init_trainable,
+                                 regularizable=False)
+        self.c0 = self.add_param(tf.zeros_initializer, (num_units,), name="c0", trainable=hidden_init_trainable,
+                                 regularizable=False)
+
+    def step(self, hcprev, x):
+        hprev = hcprev[:, :self.num_units]
+        cprev = hcprev[:, self.num_units:]
+        x.set_shape((None, self.input_shape[-1]))
+        c, h = self.lstm(x, (cprev, hprev), scope=self.scope)[1]
+        return tf.concat(1, [h, c])
+
+    def get_output_for(self, input, **kwargs):
+        input_shape = tf.shape(input)
+        n_batches = input_shape[0]
+        h0s = tf.tile(
+            tf.reshape(self.h0, (1, self.num_units)),
+            (n_batches, 1)
+        )
+        h0s.set_shape((None, self.num_units))
+        c0s = tf.tile(
+            tf.reshape(self.c0, (1, self.num_units)),
+            (n_batches, 1)
+        )
+        c0s.set_shape((None, self.num_units))
+        state = (c0s, h0s)
+        if self.horizon is not None:
+            outputs = []
+            for idx in range(self.horizon):
+                output, state = self.lstm(input[:, idx, :], state, scope=self.scope)  # self.name)
+                outputs.append(tf.expand_dims(output, 1))
+            outputs = tf.concat(1, outputs)
+            return outputs
+        else:
+            n_steps = input_shape[1]
+            input = tf.reshape(input, tf.pack([n_batches, n_steps, -1]))
+            # flatten extra dimensions
+            shuffled_input = tf.transpose(input, (1, 0, 2))
+            shuffled_input.set_shape((None, None, self.input_shape[-1]))
+            hcs = tf.scan(
+                self.step,
+                elems=shuffled_input,
+                initializer=tf.concat(1, [h0s, c0s]),
+            )
+            shuffled_hcs = tf.transpose(hcs, (1, 0, 2))
+            shuffled_hs = shuffled_hcs[:, :, :self.num_units]
+            shuffled_cs = shuffled_hcs[:, :, self.num_units:]
+            return shuffled_hs
+
+    def get_output_shape_for(self, input_shape):
+        n_batch, n_steps = input_shape[:2]
+        return n_batch, n_steps, self.num_units
+
+    def get_step_layer(self, l_in, l_prev_hidden, l_prev_cell, name=None):
+        return LSTMStepLayer(incomings=[l_in, l_prev_hidden, l_prev_cell], lstm_layer=self, name=name)
 
 
 def get_all_layers(layer, treat_as_input=None):

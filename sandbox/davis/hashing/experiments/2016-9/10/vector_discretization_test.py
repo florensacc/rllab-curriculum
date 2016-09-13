@@ -1,13 +1,13 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-info = """Testing discretizing state space by rounding observations."""
+info = """Trying out one-hot hashing bonus evaluator."""
 
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from sandbox.rocky.hashing.algos.bonus_trpo import BonusTRPO
-from sandbox.davis.hashing.bonus_evaluators.discretizing_hashing_bonus_evaluator import DiscretizingHashingBonusEvaluator
+from sandbox.davis.hashing.bonus_evaluators.one_hot_hashing_bonus_evaluator import OneHotHashingBonusEvaluator
 from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
 from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
@@ -26,41 +26,38 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator
 from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv as SGE
 
-# horizon 500
-# batch size 5000
-# swimmergather batch size 50000
-# discretize state
-# lower dimension (higher? 256, 512)
-# Try a built-in hash function instead of simhash
+# lower dimension
 # robustness to noise (in simpler tasks)?
 # count state-action pairs?
-# log state count
-
-# baselines for comparison:
-#   prediction error
-#   just add constant value (encourage to be alive)
 
 N_ITR = 1000
 N_ITR_DEBUG = 5
 
-envs = [HalfCheetahEnvX()]
+envs = [CartpoleSwingupEnvX(),
+        DoublePendulumEnvX(),
+        MountainCarEnvX(),
+        HalfCheetahEnvX(),
+        SwimmerEnvX(),
+        Walker2DEnvX(),
+        normalize(SwimmerGatherEnv())]
 
 
 def experiment_variant_generator():
     vg = VariantGenerator()
-    vg.add("env", map(TfEnv, map(normalize, envs)), hide=True)
+    vg.add("env", map(TfEnv, envs), hide=True)
     vg.add("batch_size",
            lambda env: [50000 if isinstance(env.wrapped_env.wrapped_env, SGE) else 5000],
            hide=True)
     vg.add("step_size", [0.01], hide=True)
     vg.add("max_path_length", [500], hide=True)
     vg.add("discount", [0.99], hide=True)
-    vg.add("seed", range(4), hide=True)
+    vg.add("seed", range(5), hide=True)
     vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1])
-    vg.add("granularity", [0.01, 0.1, 1])
-    vg.add("dim_key", [32, 64, 128])
+    vg.add("dim_key", [128])
     vg.add("bonus_evaluator",
-           lambda env, granularity: [DiscretizingHashingBonusEvaluator(env.spec, granularity)],
+           lambda env, dim_key: [OneHotHashingBonusEvaluator(env.spec,
+                                                             num_buckets=10,
+                                                             dim_key=dim_key)],
            hide=True)
     vg.add("baseline",
            lambda env: [LinearFeatureBaseline(env.spec)],

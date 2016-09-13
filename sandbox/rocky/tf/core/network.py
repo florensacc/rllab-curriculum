@@ -1,6 +1,3 @@
-
-
-
 import sandbox.rocky.tf.core.layers as L
 import tensorflow as tf
 import numpy as np
@@ -157,6 +154,7 @@ class ConvNetwork(object):
 
 class GRUNetwork(object):
     def __init__(self, name, input_shape, output_dim, hidden_dim, hidden_nonlinearity=tf.nn.relu,
+                 gru_layer_cls=L.GRULayer,
                  output_nonlinearity=None, input_var=None, input_layer=None):
         with tf.variable_scope(name):
             if input_layer is None:
@@ -165,8 +163,8 @@ class GRUNetwork(object):
                 l_in = input_layer
             l_step_input = L.InputLayer(shape=(None,) + input_shape, name="step_input")
             l_step_prev_hidden = L.InputLayer(shape=(None, hidden_dim), name="step_prev_hidden")
-            l_gru = L.GRULayer(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity,
-                               hidden_init_trainable=False, name="gru")
+            l_gru = gru_layer_cls(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity,
+                                  hidden_init_trainable=False, name="gru")
             l_gru_flat = L.ReshapeLayer(
                 l_gru, shape=(-1, hidden_dim),
                 name="gru_flat"
@@ -240,6 +238,7 @@ class GRUNetwork(object):
 
 class LSTMNetwork(object):
     def __init__(self, name, input_shape, output_dim, hidden_dim, hidden_nonlinearity=tf.nn.relu,
+                 lstm_layer_cls=L.LSTMLayer,
                  output_nonlinearity=None, input_var=None, input_layer=None, forget_bias=1.0, use_peepholes=False):
         with tf.variable_scope(name):
             if input_layer is None:
@@ -249,9 +248,9 @@ class LSTMNetwork(object):
             l_step_input = L.InputLayer(shape=(None,) + input_shape, name="step_input")
             l_step_prev_hidden = L.InputLayer(shape=(None, hidden_dim), name="step_prev_hidden")
             l_step_prev_cell = L.InputLayer(shape=(None, hidden_dim), name="step_prev_cell")
-            l_lstm = L.LSTMLayer(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity,
-                                 hidden_init_trainable=False, name="lstm", forget_bias=forget_bias,
-                                 use_peepholes=use_peepholes)
+            l_lstm = lstm_layer_cls(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity,
+                                    hidden_init_trainable=False, name="lstm", forget_bias=forget_bias,
+                                    use_peepholes=use_peepholes)
             l_lstm_flat = L.ReshapeLayer(
                 l_lstm, shape=(-1, hidden_dim),
                 name="lstm_flat"

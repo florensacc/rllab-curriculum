@@ -21,6 +21,7 @@ class GaussianGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             feature_network=None,
             state_include_action=True,
             hidden_nonlinearity=tf.tanh,
+            gru_layer_cls=L.GRULayer,
             learn_std=True,
             init_std=1.0,
             output_nonlinearity=None,
@@ -73,6 +74,7 @@ class GaussianGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
                 hidden_dim=hidden_dim,
                 hidden_nonlinearity=hidden_nonlinearity,
                 output_nonlinearity=output_nonlinearity,
+                gru_layer_cls=gru_layer_cls,
                 name="mean_network"
             )
 

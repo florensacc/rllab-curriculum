@@ -274,6 +274,13 @@ def stub_to_json(stub_sth):
     return stub_sth
 
 
+class MyEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, type):
+            return {'$class': o.__module__ + "." + o.__name__}
+        return json.JSONEncoder.default(self, o)
+
+
 def log_parameters_lite(log_file, args):
     log_params = {}
     for param_name, param_value in args.__dict__.items():
@@ -291,7 +298,7 @@ def log_parameters_lite(log_file, args):
         log_params["json_args"]["algo"] = stub_to_json(stub_method.obj)
     mkdir_p(os.path.dirname(log_file))
     with open(log_file, "w") as f:
-        json.dump(log_params, f, indent=2, sort_keys=True)
+        json.dump(log_params, f, indent=2, sort_keys=True, cls=MyEncoder)
 
 
 def log_variant(log_file, variant_data):
