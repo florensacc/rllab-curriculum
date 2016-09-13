@@ -178,9 +178,11 @@ class BatchPolopt(RLAlgorithm):
         # Plotting all images
         for idx in range(inputs.shape[0]):
             sanity_pred = self.autoenc.pred_fn(inputs)
-            keys = np.cast['int'](np.round(self.autoenc.discrete_emb(inputs)))
+            cont_emb = self.autoenc.discrete_emb(inputs)
+            keys = np.cast['int'](np.round(cont_emb))
             key = keys[idx]
             title = ''.join([str(k) for k in key])
+            title += '\n' + ''.join(['{:.1f}'.format(c) for c in cont_emb])
             plt.suptitle(title)
             input_im = inputs
             input_im = input_im[:, -np.prod(self.autoenc.state_dim):]
@@ -274,7 +276,7 @@ class BatchPolopt(RLAlgorithm):
                     running_avg = running_avg_alpha * running_avg + (1. - running_avg_alpha) * train_loss
                 print('Autoencoder train loss={:.5f}\trunning_avg={:.5f}\tD={:.5f}'.format(
                     train_loss, running_avg, old_running_avg - running_avg))
-                if old_running_avg - running_avg < 1e-4:
+                if old_running_avg - running_avg < 1e4:
                     done = True
                     outer_loop_count += 1
                 else:

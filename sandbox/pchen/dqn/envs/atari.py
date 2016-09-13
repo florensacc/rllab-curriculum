@@ -134,7 +134,6 @@ class AtariEnvCX(Env, Serializable):
             next_obs = next_obs[np.newaxis, :, :]
             return next_obs
 
-    # return: (states, observations)
     def reset(self):
         self.ale.reset_game()
         return self._get_obs()

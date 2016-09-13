@@ -715,6 +715,166 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     books.add_histogram_summary(y, '%s/activations' % y.op.name)
     return input_layer.with_tensor(y, parameters=self.vars)
 
+def get_conv_ar_mask(h, w, n_in, n_out, ar_channels=False, zerodiagonal=False):
+    l = (h - 1) // 2
+    m = (w - 1) // 2
+    mask = np.zeros([h, w, n_in, n_out], dtype=np.float32)
+    mask[:l, :, :, :] = 1.
+    mask[l, :m, :, :] = 1.
+    if ar_channels:
+        mask[l, m, :, :] = get_linear_ar_mask(n_in, n_out, zerodiagonal)
+    return mask
+
+@prettytensor.Register(
+    assign_defaults=(
+            'activation_fn', 'l2loss', 'stddev', 'batch_normalize',
+            'custom_phase', 'wnorm', 'pixel_bias', 'var_scope',
+            'ar_channels', 'zerodiagonal'
+    )
+)
+class ar_conv2d_mod(prettytensor.VarStoreMethod):
+
+    def __call__(self,
+                 input_layer,
+                 kernel,
+                 depth,
+                 activation_fn=None,
+                 stride=None,
+                 l2loss=None,
+                 init=None,
+                 edges=PAD_SAME,
+                 batch_normalize=False,
+                 residual=False,
+                 custom_phase=CustomPhase.train,
+                 wnorm=False,
+                 pixel_bias=False,
+                 scale_init=0.1,
+                 var_scope=None,
+                 prefix="",
+                 name=PROVIDED,
+                 ar_channels=False,
+                 zerodiagonal=False,
+                 ):
+        """Adds a convolution to the stack of operations.
+        The current head must be a rank 4 Tensor.
+        Args:
+          input_layer: The chainable object, supplied.
+          kernel: The size of the patch for the pool, either an int or a length 1 or
+            2 sequence (if length 1 or int, it is expanded).
+          depth: The depth of the new Tensor.
+          activation_fn: A tuple of (activation_function, extra_parameters). Any
+            function that takes a tensor as its first argument can be used. More
+            common functions will have summaries added (e.g. relu).
+          stride: The strides as a length 1, 2 or 4 sequence or an integer. If an
+            int, length 1 or 2, the stride in the first and last dimensions are 1.
+          l2loss: Set to a value greater than 0 to use L2 regularization to decay
+            the weights.
+          init: An optional initialization. If not specified, uses Xavier
+            initialization.
+          stddev: A standard deviation to use in parameter initialization.
+          bias: Set to False to not have a bias.
+          bias_init: An initializer for the bias or a Tensor.
+          edges: Either SAME to use 0s for the out of bounds area or VALID to shrink
+            the output size and only uses valid input pixels.
+          batch_normalize: Supply a BatchNormalizationArguments to set the
+            parameters for batch normalization.
+          name: The name for this operation is also used to create/find the
+            parameter variables.
+        Returns:
+          Handle to the generated layer.
+        Raises:
+          ValueError: If head is not a rank 4 tensor or the  depth of the input
+            (4th dim) is not known.
+        """
+        # print "data init: ", custom_phase
+        if input_layer.get_shape().ndims != 4:
+            raise ValueError('conv2d requires a rank 4 Tensor with a known depth %s' %
+                             input_layer.get_shape())
+        if input_layer.shape[3] is None:
+            raise ValueError('Input depth must be known')
+        from prettytensor.pretty_tensor_image_methods import _kernel
+        kernel = _kernel(kernel)
+        from prettytensor.pretty_tensor_image_methods import _stride
+        stride = _stride(stride)
+        size = [kernel[0], kernel[1], input_layer.shape[3], depth]
+
+        books = input_layer.bookkeeper
+
+        if var_scope:
+            old_vars = self.vars
+            new_vars = books.var_mapping[var_scope]
+            self.vars = new_vars
+        assert init is None
+        init = tf.random_normal_initializer(stddev=0.02)
+        dtype = input_layer.tensor.dtype
+        params = self.variable(prefix + 'weights', size, init, dt=dtype)
+        masks = self.variable(
+            prefix + 'masks',
+            size,
+            get_conv_ar_mask(*size, ar_channels=ar_channels, zerodiagonal=zerodiagonal),
+            dt=np.float32
+        )
+        # only the linear operator is shared
+        if var_scope:
+            self.vars = old_vars
+        if custom_phase == CustomPhase.init:
+            params = params.initialized_value()
+        params = params * masks
+        params_norm = tf.nn.l2_normalize(params, [0,1,2]) if wnorm else params
+        y = tf.nn.conv2d(input_layer, params_norm, stride, edges)
+        layers.add_l2loss(books, params, l2loss)
+
+        out_w = int(y.get_shape()[1])
+        out_h = int(y.get_shape()[2])
+        bias_shp = [1, out_w, out_h, depth] if pixel_bias else [1, 1, 1, depth]
+        if wnorm:
+            m_init, v_init = tf.nn.moments(y, [0, 1, 2], keep_dims=True)
+            p_s_init = scale_init / tf.sqrt(v_init + 1e-9)
+            params_scale = self.variable(
+                'weights_scale',
+                [1, 1, 1, depth],
+                lambda *_,**__: p_s_init,
+                dt=dtype
+            )
+            b = self.variable(
+                'bias',
+                bias_shp,
+                lambda *_,**__: tf.ones(bias_shp)*-m_init*p_s_init,
+                dt=dtype
+            )
+            if custom_phase == CustomPhase.init:
+                b = b.initialized_value()
+                params_scale = params_scale.initialized_value()
+            y *= params_scale
+            y += b
+        else:
+            b = self.variable(
+                'bias',
+                bias_shp,
+                tf.constant_initializer(0.),
+                dt=dtype
+            )
+            if custom_phase == CustomPhase.init:
+                b = b.initialized_value()
+            y += b
+
+        books.add_scalar_summary(
+            tf.reduce_mean(layers.spatial_slice_zeros(y)),
+            '%s/zeros_spatial' % y.op.name)
+        y = pretty_tensor_normalization_methods.batch_normalize_with_arguments(
+            y, batch_normalize)
+        if residual:
+            y += input_layer
+        if activation_fn is not None:
+            if not isinstance(activation_fn, collections.Sequence):
+                activation_fn = (activation_fn,)
+            y = layers.apply_activation(books,
+                                        y,
+                                        activation_fn[0],
+                                        activation_args=activation_fn[1:])
+        books.add_histogram_summary(y, '%s/activations' % y.op.name)
+        return input_layer.with_tensor(y, parameters=self.vars)
+
 # @prettytensor.Register(
 #     assign_defaults=('activation_fn', 'l2loss', 'stddev', 'batch_normalize'))
 # class deconv2d_mod(prettytensor.VarStoreMethod):

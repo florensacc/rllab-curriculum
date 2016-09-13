@@ -1287,3 +1287,118 @@ class DistAR(Distribution):
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
 
+class ConvAR(Distribution):
+    """Basic masked conv ar"""
+
+    def __init__(
+            self,
+            tgt_dist,
+            shape=(32,32,3),
+            filter_size=3,
+            depth=5,
+            nr_channels=32,
+    ):
+        self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
+        global G_IDX
+        G_IDX += 1
+
+        self._tgt_dist = tgt_dist
+        self._shape = shape
+        self._dim = np.prod(shape)
+        self._iaf_template = pt.template("y", books=dist_book)
+        self._custom_phase = CustomPhase.init
+
+        from prettytensor import UnboundVariable
+        with pt.defaults_scope(
+                activation_fn=tf.nn.elu,
+                wnorm=True,
+                custom_phase=UnboundVariable('custom_phase'),
+                init_scale=0.1,
+                ar_channels=False,
+                zerodiagonal=False,
+        ):
+            for di in range(depth):
+                self._iaf_template = \
+                    self._iaf_template.ar_conv2d_mod(
+                        filter_size,
+                        nr_channels
+                    )
+            self._iaf_template = \
+                self._iaf_template.ar_conv2d_mod(
+                    filter_size,
+                    tgt_dist.flat_dim,
+                    activation_fn=None,
+                )
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def effective_dim(self):
+        return self.dim
+
+    def infer(self, x_var):
+        in_dict = dict(
+            y=x_var,
+            custom_phase=self._custom_phase,
+        )
+        conv_iaf = self._iaf_template.construct(
+            **in_dict
+        ).tensor
+        return self._tgt_dist.activate_dist(
+            tf.reshape(conv_iaf, [-1, self._tgt_dist.flat_dim])
+        )
+
+    def logli(self, x_var, _):
+        tgt_dict = self.infer(x_var)
+        return self._tgt_dist.logli(x_var, tgt_dict)
+
+    def logli_init_prior(self, x_var):
+        return self._base_dist.logli_init_prior(x_var)
+
+    def prior_dist_info(self, batch_size):
+        return self._base_dist.prior_dist_info(batch_size)
+
+    def sample_logli(self, info):
+        return self.sample_n(info=info)
+
+    def reshaped_sample_logli(self, info):
+        go, logpz = self._tgt_dist.sample_logli(info)
+        go = tf.reshape(
+            go,
+            [-1] + self._shape
+        )
+        return go, logpz
+
+    def sample_n(self, n=100, info=None):
+        print("warning, ar sample invoked")
+        if info is None:
+            info = self._tgt_dist.prior_dist_info(n * self._shape[0] * self._shape[1])
+        go, logpz = self.reshaped_sample_logli(info)
+        for i in range(self._dim):
+            tgt_dict = self.infer(go)
+            go, logpz = self.reshaped_sample_logli(tgt_dict)
+        return go, logpz
+
+    @property
+    def dist_info_keys(self):
+        return []
+
+    @property
+    def dist_flat_dim(self):
+        return 0
+
+    def activate_dist(self, flat):
+        return {}
+
+    def nonreparam_logli(self, x_var, dist_info):
+        raise "not defined"

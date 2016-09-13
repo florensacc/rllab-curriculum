@@ -19,6 +19,11 @@ from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, Bayesia
 
 
 class DiscreteEmbeddingNonlinearityLayer(lasagne.layers.Layer):
+    """
+    Discrete embedding layer, the nonlinear part
+    This has to be put after the batch norm layer.
+    """
+
     def __init__(self, incoming,
                  **kwargs):
         super(DiscreteEmbeddingNonlinearityLayer, self).__init__(incoming, **kwargs)
@@ -34,7 +39,8 @@ class DiscreteEmbeddingNonlinearityLayer(lasagne.layers.Layer):
 
 class DiscreteEmbeddingLinearLayer(lasagne.layers.Layer):
     """
-    Discrete embedding layer for counting: binary units.
+    Discrete embedding layer, the linear part
+    This has to be put before the batch norm layer.
     """
 
     def __init__(self, incoming, num_units, W=lasagne.init.GlorotUniform(),

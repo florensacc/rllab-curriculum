@@ -1,0 +1,6 @@
+*.pyc
+data/
+*.ipynb
+rllab/config_personal.py
+outdated/
+.DS_Store
