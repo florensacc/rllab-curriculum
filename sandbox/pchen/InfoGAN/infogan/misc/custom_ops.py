@@ -1195,21 +1195,27 @@ def resize_nearest_neighbor(x, scale):
     return x
 
 def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None):
-    seq = l_in.sequential()
-    with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
-        if context is not None:
-            blk.join([context], lambda lst: tf.concat(3, lst))
-        blk.conv2d_mod(kernel, nch, stride=stride, prefix="pre")
-        blk.custom_dropout(keep_prob)
-        blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
-        blk.apply(lambda x: x*add_coeff)
-        if nn:
-            origin.apply(resize_nearest_neighbor, 1./stride)
-            origin.apply(lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])]))
-        else:
-            if stride != 1:
-                origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
-    return seq.as_layer().nl()
+    return resconv_v1_customconv(
+        "conv2d_mod",
+        None,
+        l_in=l_in, kernel=kernel, nch=nch, stride=stride, add_coeff=add_coeff,
+        keep_prob=keep_prob, nn=nn, context=context
+    )
+    # seq = l_in.sequential()
+    # with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
+    #     if context is not None:
+    #         blk.join([context], lambda lst: tf.concat(3, lst))
+    #     blk.conv2d_mod(kernel, nch, stride=stride, prefix="pre")
+    #     blk.custom_dropout(keep_prob)
+    #     blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
+    #     blk.apply(lambda x: x*add_coeff)
+    #     if nn:
+    #         origin.apply(resize_nearest_neighbor, 1./stride)
+    #         origin.apply(lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])]))
+    #     else:
+    #         if stride != 1:
+    #             origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
+    # return seq.as_layer().nl()
 
 def resconv_v1_customconv(
         conv_method,
@@ -1225,31 +1231,21 @@ def resconv_v1_customconv(
 ):
     blk = origin = l_in
     blk = blk.sequential()
-    getattr(blk, conv_method)(
-        **{
-            **conv_args,
-            **dict(
-                kernel=kernel,
-                depth=nch,
-                stride=stride,
-                prefix="pre",
-            )
-        }
+    partial(blk, conv_method, conv_args)(
+        kernel=kernel,
+        depth=nch,
+        stride=stride,
+        prefix="pre",
     )
     blk.custom_dropout(
         keep_prob
     )
-    getattr(blk, conv_method)(
-        **{
-            **conv_args,
-            **dict(
-                kernel=kernel,
-                depth=nch,
-                stride=stride,
-                activation_fn=None,
-                prefix="post",
-            )
-        }
+    partial(blk, conv_method, conv_args)(
+        kernel=kernel,
+        depth=nch,
+        stride=stride,
+        activation_fn=None,
+        prefix="post",
     )
     if nn:
         origin = origin.apply(resize_nearest_neighbor, 1./stride)
@@ -1302,28 +1298,26 @@ def gruconv_v1(l_in, kernel, nch, inp=None):
         ).nl(activation_fn=tf.nn.tanh)
     return l_in*update_gate + proposal*(1.-update_gate)
 
-def plstmconv_v1(l_in, inp, kernel, nch, ):
+def plstmconv_v1(l_in, inp, kernel, nch, op="conv2d_mod", args=None):
     squashed_h = l_in.nl(activation_fn=tf.nn.tanh)
+    op_from_inp = partial(
+        inp, op, args
+    )(kernel, nch*4, activation_fn=None, prefix="from_inp")
     with pt.defaults_scope(
             activation_fn=tf.nn.sigmoid,
     ):
-        input_gate = (
-            squashed_h.conv2d_mod(kernel, nch, activation_fn=None, prefix="input_gate_from_hidden") +
-            inp.conv2d_mod(kernel, nch, activation_fn=None, prefix="input_gate_from_input")
-        ).nl()
-        output_gate = (
-            squashed_h.conv2d_mod(kernel, nch, activation_fn=None, prefix="output_gate_from_hidden") +
-            inp.conv2d_mod(kernel, nch, activation_fn=None, prefix="output_gate_from_input")
-        ).nl()
-        remember_gate = (
-            squashed_h.conv2d_mod(kernel, nch, activation_fn=None, prefix="rem_gate_from_hidden") +
-            inp.conv2d_mod(kernel, nch, activation_fn=None, prefix="rem_gate_from_input") +
-            2
-        ).nl()
+        gates = (
+            partial(squashed_h, op, args)(kernel, nch*3, activation_fn=None, prefix="input_gate_from_hidden") +
+            op_from_inp[:, :, :, :nch*3]
+        )
+        input_gate = gates[:, :, :, :nch].nl()
+        output_gate = gates[:, :, :, nch:nch*2].nl()
+        remember_gate = (gates[:, :, :, nch*2:nch*3]+1.).nl()
     proposal = (
-        (squashed_h * output_gate).
-            conv2d_mod(kernel, nch, activation_fn=None, prefix="proposal_from_hidden") +
-        inp.conv2d_mod(kernel, nch, activation_fn=None, prefix="proposal_from_input")
+        partial(
+            squashed_h * output_gate, op, args
+        )(kernel, nch, activation_fn=None, prefix="proposal_from_hidden") +
+        op_from_inp[:, :, :, nch*3:]
     ).nl(activation_fn=tf.nn.tanh)
 
     next = remember_gate*l_in + input_gate*proposal

@@ -4,6 +4,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDatase
     ResamplingBinarizedMnistDataset
 import numpy as np
 import tensorflow as tf
+import time
 
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import ConvAR, MeanBernoulli
 
@@ -12,10 +13,10 @@ ar_conv_dist = ConvAR(
     tgt_dist=MeanBernoulli(1),
     shape=(28, 28, 1),
     filter_size=3,
-    depth=3,
-    nr_channels=16,
+    depth=12,
+    nr_channels=4,
+    pixel_bias=True,
 )
-
 
 # init
 sess = tf.Session()
@@ -44,9 +45,14 @@ for init_opt in init_optim():
         trainer = opt.minimize(loss)
     else:
         sess.run(init_opt)
+
+last_t = time.time()
 for itr in range(100000):
     x, _ = dataset.train.next_batch(bs)
     x = x.reshape([bs] + list(ar_conv_dist._shape))
     _, cur_loss = sess.run([trainer, loss], {input_tensor: x})
     if itr % 50 == 0:
-        print(-cur_loss  * 28*28)
+        print("itr: %s, time: %s"  % (itr, time.time() - last_t))
+        print(-cur_loss * 28*28)
+        last_t = time.time()
+

@@ -6,7 +6,7 @@ import numpy as np
 import prettytensor as pt
 
 from rllab.misc.overrides import overrides
-from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1
 
 TINY = 1e-8
 
@@ -1287,6 +1287,7 @@ class DistAR(Distribution):
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
 
+
 class ConvAR(Distribution):
     """Basic masked conv ar"""
 
@@ -1297,6 +1298,8 @@ class ConvAR(Distribution):
             filter_size=3,
             depth=5,
             nr_channels=32,
+            block="resnet",
+            pixel_bias=False,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1305,36 +1308,46 @@ class ConvAR(Distribution):
         self._tgt_dist = tgt_dist
         self._shape = shape
         self._dim = np.prod(shape)
-        self._iaf_template = pt.template("y", books=dist_book)
+        inp = pt.template("y", books=dist_book)
+        cur = inp
         self._custom_phase = CustomPhase.init
 
         from prettytensor import UnboundVariable
         with pt.defaults_scope(
-                activation_fn=tf.nn.elu,
-                wnorm=True,
-                custom_phase=UnboundVariable('custom_phase'),
-                init_scale=0.1,
-                ar_channels=False,
+            activation_fn=tf.nn.elu,
+            wnorm=True,
+            custom_phase=UnboundVariable('custom_phase'),
+            init_scale=0.1,
+            ar_channels=False,
+            pixel_bias=pixel_bias,
         ):
             for di in range(depth):
                 if di == 0:
-                    self._iaf_template = \
-                        self._iaf_template.ar_conv2d_mod(
+                    cur = \
+                        cur.ar_conv2d_mod(
                             filter_size,
                             nr_channels,
                             zerodiagonal=di == 0,
                         )
                 else:
-                    self._iaf_template = \
-                        resconv_v1_customconv(
-                            "ar_conv2d_mod",
-                            dict(zerodiagonal=False),
-                            self._iaf_template,
-                            filter_size,
-                            nr_channels
+                    if block == "resnet":
+                        cur = \
+                            resconv_v1_customconv(
+                                "ar_conv2d_mod",
+                                dict(zerodiagonal=False),
+                                cur,
+                                filter_size,
+                                nr_channels
+                            )
+                    elif block == "plstm":
+                        cur, cur_nl = plstmconv_v1(
+                            cur, inp, filter_size, nr_channels,
+                            op="ar_conv2d_mod", args=dict(zerodiagonal=True)
                         )
+                    else:
+                        raise Exception("what")
             self._iaf_template = \
-                self._iaf_template.ar_conv2d_mod(
+                cur.ar_conv2d_mod(
                     filter_size,
                     tgt_dist.dist_flat_dim,
                     activation_fn=None,
@@ -1415,3 +1428,4 @@ class ConvAR(Distribution):
 
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
+
