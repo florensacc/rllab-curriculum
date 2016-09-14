@@ -490,8 +490,9 @@ def run_experiment_lite(
         for task in batch_tasks:
             if 'env' in task:
                 assert task.pop('env') is None
+            # TODO: dangerous when there are multiple tasks?
             task["resources"] = params.pop(
-                "resouces", config.KUBE_DEFAULT_RESOURCES)
+                "resources", config.KUBE_DEFAULT_RESOURCES)
             task["node_selector"] = params.pop(
                 "node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
             task["exp_prefix"] = exp_prefix
@@ -1060,6 +1061,7 @@ def to_lab_kube_pod(
                 ],
                 "restartPolicy": "Never",
                 "nodeSelector": node_selector,
+                "dnsPolicy": "Default",
             }
         }
     return {
@@ -1110,6 +1112,7 @@ def to_lab_kube_pod(
             ],
             "restartPolicy": "Never",
             "nodeSelector": node_selector,
+            "dnsPolicy": "Default",
         }
     }
 

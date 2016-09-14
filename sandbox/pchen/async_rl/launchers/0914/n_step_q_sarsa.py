@@ -58,8 +58,15 @@ class VG(VariantGenerator):
     def game(self, ):
         return ["pong"]
 
-vg = VG()
+    @variant
+    def n_step(self, ):
+        return [5, 1]
 
+    @variant
+    def bellman(self, ):
+        return ["q"]
+
+vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
@@ -87,6 +94,7 @@ for v in variants[:1]:
         env=env,
         target_update_frequency=target_update_frequency,
         eps_test=eps_test,
+        t_max=n_step,
     )
     algo = DQNALE(
         n_processes=n_processes,
@@ -97,7 +105,7 @@ for v in variants[:1]:
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="0914_n_step_dqn_sarsa_test",
+        exp_prefix="0914_n_step_dqn_sarsa_test1",
         seed=v["seed"],
         variant=v,
         # mode="local",

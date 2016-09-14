@@ -60,14 +60,14 @@ class DQNAgent(Agent,Shareable,Picklable):
     Notice that the target network is globally shared. To reduce computation time we may try keeping local copies instead.
     """
 
-    def __init__(self,
+    def __init__(
+            self,
             env,
+            bellman="q",
             model_type="nips",
             optimizer_type="rmsprop_async",
-            optimizer_args=dict(lr=7e-4,eps=1e-1,alpha=0.99),
-            optimizer_hook_args=dict(
-                gradient_clipping=40,
-            ),
+            optimizer_args=None,
+            optimizer_hook_args=None,
             t_max=5, gamma=0.99, beta=1e-2,
             eps_start=1.0, eps_end=0.1, eps_anneal_time=4 * 10 ** 6,
             eps_test=None, # eps used for testing regardless of training eps
@@ -78,11 +78,18 @@ class DQNAgent(Agent,Shareable,Picklable):
             bonus_count_target="image",
             phase="Train",
             sync_t_gap_limit=np.inf,
-            ):
+    ):
+        if optimizer_args is None:
+            optimizer_args = dict(lr=7e-4, eps=1e-1, alpha=0.99)
+        if optimizer_hook_args is None:
+            optimizer_hook_args = dict(
+                gradient_clipping=40,
+            )
         self.init_params = locals()
         self.init_params.pop('self')
 
         self.env = env
+        self.bellman = bellman
         action_space = env.action_space
 
         # Globally shared model
@@ -234,28 +241,7 @@ class DQNAgent(Agent,Shareable,Picklable):
         if ready_to_commit:
             assert self.t_start < self.t
 
-
             # assign bonus rewards
-            if self.bonus_evaluator is not None:
-                if self.bonus_count_target == "image":
-                    count_targets = np.asarray([
-                        self.past_states[i].data[0]
-                        for i in range(self.t_start, self.t)
-                    ])
-                elif self.bonus_count_target == "ram":
-                    count_targets = np.asarray([
-                        self.past_extra_infos[i]["ram_state"]
-                        for i in range(self.t_start, self.t)
-                    ])
-                else:
-                    raise NotImplementedError
-                bonus_rewards = self.bonus_evaluator.update_and_evaluate(count_targets)
-                for i in range(self.t_start, self.t):
-                    self.past_rewards[i] += bonus_rewards[i - self.t_start]
-            self.cur_path_effective_return += np.sum([
-                self.past_rewards[i] for i in range(self.t_start, self.t)
-            ])
-
             if is_state_terminal:
                 R = 0
             else:
