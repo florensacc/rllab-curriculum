@@ -56,9 +56,9 @@ class MLP(LayersPowered, Serializable):
     def output_layer(self):
         return self._l_out
 
-    # @property
-    # def input_var(self):
-    #     return self._l_in.input_var
+    @property
+    def input_var(self):
+        return self._l_in.input_var
 
     @property
     def layers(self):
@@ -216,6 +216,10 @@ class GRUNetwork(object):
         return self._l_out
 
     @property
+    def recurrent_layer(self):
+        return self._l_gru
+
+    @property
     def step_input_layer(self):
         return self._l_step_input
 
@@ -306,6 +310,10 @@ class LSTMNetwork(object):
     @property
     def output_layer(self):
         return self._l_out
+
+    @property
+    def recurrent_layer(self):
+        return self._l_lstm
 
     @property
     def step_input_layer(self):
