@@ -234,7 +234,6 @@ class DQNAgent(Agent,Shareable,Picklable):
         if ready_to_commit:
             assert self.t_start < self.t
 
-            print("1")
 
             # assign bonus rewards
             if self.bonus_evaluator is not None:
@@ -257,7 +256,6 @@ class DQNAgent(Agent,Shareable,Picklable):
                 self.past_rewards[i] for i in range(self.t_start, self.t)
             ])
 
-            print("2")
             if is_state_terminal:
                 R = 0
             else:
@@ -290,7 +288,6 @@ class DQNAgent(Agent,Shareable,Picklable):
             #     logger.debug('td_loss:%s', loss.data)
 
             if not_delayed:
-                print("3")
                 # Compute gradients using thread-specific model
                 self.model.zerograds()
                 loss.backward()
@@ -301,7 +298,6 @@ class DQNAgent(Agent,Shareable,Picklable):
                     source_link=self.model
                 )
                 self.optimizer.update()
-                print("4")
             else:
                 mylogger.log("Process %d banned from commiting gradient update from %d time steps ago."%(self.process_id,sync_t_gap))
 
@@ -316,8 +312,6 @@ class DQNAgent(Agent,Shareable,Picklable):
             self.past_extra_infos = {}
 
             self.t_start = self.t
-
-            print("5")
 
         # store traj info and return action
         if not is_state_terminal:
@@ -334,7 +328,6 @@ class DQNAgent(Agent,Shareable,Picklable):
             else:
                 a = np.argmax(qs.data)
 
-            print("6")
             # update info for training; doing this in testing will lead to insufficient memory
             if self.phase == "Train":
                 # record the state to allow bonus computation
@@ -347,7 +340,6 @@ class DQNAgent(Agent,Shareable,Picklable):
                 if self.process_id == 0:
                     logger.debug('t:%s qs:%s',
                                  self.t, qs.data)
-            print("7")
             return a
         else:
             self.epoch_path_len_list.append(self.cur_path_len)

@@ -16,7 +16,8 @@ ar_conv_dist = ConvAR(
     depth=8,
     nr_channels=32,
     pixel_bias=True,
-    block="plstm",
+    # block="plstm",
+    block="resnet",
 )
 
 # init

@@ -6,7 +6,7 @@ channels:
     - https://conda.anaconda.org/menpo
     - jjhelmus
 dependencies:
-    - python==3.5
+    - python==3.5.2
     - numpy==1.10.4
     - scipy
     - path.py
@@ -44,4 +44,4 @@ dependencies:
         - git+https://github.com/neocxi/prettytensor.git
         - jupyter
         - progressbar2
-        - chainer==1.14.0
+        - chainer==1.15.0

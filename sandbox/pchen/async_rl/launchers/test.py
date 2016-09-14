@@ -28,13 +28,10 @@ from rllab import config
 
 # stub(globals())
 
-# Running platform
 mode = "local"
 # mode = "local_docker"
 
 ec2_instance = "c4.8xlarge"
-subnet = "us-west-1a"
-repetitions = 1 # each repetition uses a different set of random seeds
 logging_level = logging.INFO
 
 
@@ -44,7 +41,7 @@ exp_prefix = "async-rl/" + os.path.basename(__file__).split('.')[0]
 snapshot_mode = "last"
 plot = False
 seeds = None
-n_processes = 1
+n_processes = 2
 
 # Problem setting
 game = "frostbite"

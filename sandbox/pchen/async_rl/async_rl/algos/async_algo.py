@@ -136,12 +136,10 @@ class AsyncAlgo(Picklable):
             while global_t < args["total_steps"]:
                 # Training ------------------------------------------------------
                 # Update time step counters
-                print("8")
                 with global_vars["global_t"].get_lock():
                     global_vars["global_t"].value += 1
                     global_t = global_vars["global_t"].value
 
-                print("9")
                 agent.update_params(
                     global_vars=global_vars,
                     training_args=args,
@@ -164,14 +162,9 @@ class AsyncAlgo(Picklable):
                     obs, reward, terminal, extra,
                     global_vars=global_vars,
                 )
-                print("10")
                 obs, reward, terminal, extra = env.step(action)
-                print("11")
 
                 episode_r += reward
-
-                logger.log('global_t:{} local_t:{} episode_t:{} episode_r:{}'.format(
-                    global_t, local_t, episode_t, episode_r))
 
                 if terminal or (episode_t > args["horizon"]):
                     # log info for each episode
