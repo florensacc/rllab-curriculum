@@ -229,6 +229,7 @@ class ConjugateGradientOptimizer(Serializable):
         return self._opt_fun["f_constraint"](*(inputs + extra_inputs))
 
     def optimize(self, inputs, extra_inputs=None, subsample_grouped_inputs=None):
+        prev_param = np.copy(self._target.get_param_values(trainable=True))
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()
@@ -245,13 +246,17 @@ class ConjugateGradientOptimizer(Serializable):
         else:
             subsample_inputs = inputs
 
+        logger.log("Start CG optimization: #parameters: %d, #inputs: %d, #subsample_inputs: %d"%(len(prev_param),len(inputs[0]), len(subsample_inputs[0])))
+
         logger.log("computing loss before")
         loss_before = self._opt_fun["f_loss"](*(inputs + extra_inputs))
         logger.log("performing update")
-        logger.log("computing descent direction")
 
+        logger.log("computing gradient")
         flat_g = self._opt_fun["f_grad"](*(inputs + extra_inputs))
+        logger.log("gradient computed")
 
+        logger.log("computing descent direction")
         Hx = self._hvp_approach.build_eval(subsample_inputs + extra_inputs)
 
         descent_direction = krylov.cg(Hx, flat_g, cg_iters=self._cg_iters)
@@ -265,7 +270,6 @@ class ConjugateGradientOptimizer(Serializable):
 
         logger.log("descent direction computed")
 
-        prev_param = np.copy(self._target.get_param_values(trainable=True))
         n_iter = 0
         for n_iter, ratio in enumerate(self._backtrack_ratio ** np.arange(self._max_backtracks)):
             cur_step = ratio * flat_descent_step

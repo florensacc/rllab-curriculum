@@ -332,7 +332,12 @@ def unflatten_tensor_variables(flatarr, shapes, symb_arrs):
     return arrs
 
 
-# assuming that the result could be averaged
+"""
+Devide function f's inputs into several slices. Evaluate f on those slices, and then average the result. It is useful when memory is not enough to process all data at once.
+Assume:
+1. each of f's inputs is iterable and composed of multiple "samples"
+2. outputs can be averaged over "samples"
+"""
 def sliced_fun(f, n_slices):
     def sliced_f(sliced_inputs, non_sliced_inputs=None):
         if non_sliced_inputs is None:

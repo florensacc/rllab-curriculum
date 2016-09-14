@@ -18,3 +18,12 @@ nips_dqn_args=dict(
     hidden_nonlinearity=tf.nn.relu,
     output_nonlinearity=tf.nn.softmax,
 )
+trpo_dqn_args=dict(
+    conv_filters=[16,16],
+    conv_filter_sizes=[4,4],
+    conv_strides=[2,2],
+    conv_pads=['VALID']*2,
+    hidden_sizes=[20],
+    hidden_nonlinearity=tf.nn.relu,
+    output_nonlinearity=tf.nn.softmax,
+)

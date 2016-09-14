@@ -18,12 +18,16 @@ class AtariEnv(Env,Serializable):
             seed=None,
             plot=False, # live demo
             max_start_nullops=0,
+            img_width=84,
+            img_height=84,
+            crop_or_scale = 'scale',
             obs_type="image",
             record_image=True, # image for training and counting
             record_rgb_image=False, # for visualization and debugging
             record_ram=False,
             record_internal_state=True,
             resetter=None,
+            avoid_life_lost=False,
         ):
         """
         plot: not compatible with rllab yet
@@ -42,10 +46,13 @@ class AtariEnv(Env,Serializable):
         self.resetter = resetter
         if resetter is not None:
             assert max_start_nullops == 0 # doing nothing when reset to a non-initial state can be dangerous in Montezuma's Revenge
+        self.crop_or_scale = crop_or_scale
+        self.img_width = img_width
+        self.img_height = img_height
         self._prior_reward = 0
         self.frame_skip = 4
         self.n_last_screens = 4
-        self.crop_or_scale = 'scale'
+        self.avoid_life_lost = avoid_life_lost
 
         self.configure_ale()
         self.reset()
@@ -122,12 +129,12 @@ class AtariEnv(Env,Serializable):
             bottom_crop = 8
             top_crop = unused_height - bottom_crop
             img = img[top_crop: 110 - bottom_crop, :]
+            img = cv2.resize(img,(self.img_width,self.img_height))
         elif self.crop_or_scale == 'scale':
-            img = cv2.resize(img, (84, 84),
+            img = cv2.resize(img, (self.img_width, self.img_height),
                              interpolation=cv2.INTER_LINEAR)
         else:
             raise RuntimeError('crop_or_scale must be either crop or scale')
-        assert img.shape == (84, 84)
         return img
 
     @property
@@ -152,7 +159,7 @@ class AtariEnv(Env,Serializable):
         if self.obs_type == "ram":
             return Box(low=-1, high=1, shape=(self.ale.getRAMSize(),))#np.zeros(128), high=np.ones(128))# + 255)
         elif self.obs_type == "image":
-            return Box(low=-1, high=1, shape=(84,84,self.n_last_screens))
+            return Box(low=-1, high=1, shape=(self.img_width,self.img_height,self.n_last_screens))
             # see sandbox.haoran.tf.core.layers.BaseConvLayer for a reason why channel is at the last dimension
 
     @property
@@ -161,7 +168,10 @@ class AtariEnv(Env,Serializable):
 
     @property
     def is_terminal(self):
-        return self.ale.game_over()
+        if self.avoid_life_lost:
+            return self.ale.game_over() or self.lives_lost
+        else:
+            return self.ale.game_over()
 
     @property
     def reward(self):
@@ -186,6 +196,7 @@ class AtariEnv(Env,Serializable):
             env_info["is_terminals"] = self.is_terminal
             env_info["ale_ids"] = hex(id(self.ale))
             env_info["use_default_reset"] = self.cur_path_use_default_reset
+        env_info["lives_lost"] = self.lives_lost
 
         return env_info
 
@@ -208,12 +219,20 @@ class AtariEnv(Env,Serializable):
             # note that legal actions are integers, but not necessarily consecutive
             # for example, Breakout's minimal action set is [0,1,3,4]
             rewards.append(self.ale.act(self.legal_actions[action]))
+
+            if self.start_lives > self.ale.lives():
+                self.lives_lost = True
+            else:
+                self.lives_lost = False
+
             if self.is_terminal:
                 break
         self._reward = sum(rewards)
         if self._prior_reward > 0:
-            self._reward += self._prior_reward
+            cur_env_info["prior_reward"] = self._prior_reward
             self._prior_reward = 0
+        else:
+            cur_env_info["prior_reward"] = 0
 
         # Record next step env info
         if not self.is_terminal:
@@ -221,6 +240,7 @@ class AtariEnv(Env,Serializable):
                 self.last_screens.append(self.current_screen())
             if self.record_ram or self.obs_type == "ram":
                 self.ale.getRAM(self.ram_state)
+
 
         # cur_obs, cur_reward, next_state_is_terminal, cur_env_info
         return self.observation, self.reward, self.is_terminal, cur_env_info
@@ -244,13 +264,17 @@ class AtariEnv(Env,Serializable):
         self.last_raw_screen = self.ale.getScreenRGB()
 
         self.last_screens = collections.deque(
-            [np.zeros((84, 84), dtype=np.uint8)] * (self.n_last_screens - 1) +
+            [np.zeros((self.img_width, self.img_height), dtype=np.uint8)] * (self.n_last_screens - 1) +
             [self.current_screen()],
             maxlen=self.n_last_screens)
+        if self.record_ram:
+            self.ale.getRAM(self.ram_state)
+        self.start_lives = self.ale.lives()
+        self.lives_lost = False
         return self.observation
 
     def render(self,return_array=False):
-        img = self.last_screens[-1]
+        img = self.ale.getScreenRGB()
         cv2.imshow(self.game_name, img)
         cv2.waitKey(10)
         if return_array:
