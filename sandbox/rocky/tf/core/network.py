@@ -258,7 +258,8 @@ class GRUNetwork(object):
 class LSTMNetwork(object):
     def __init__(self, name, input_shape, output_dim, hidden_dim, hidden_nonlinearity=tf.nn.relu,
                  lstm_layer_cls=L.LSTMLayer,
-                 output_nonlinearity=None, input_var=None, input_layer=None, forget_bias=1.0, use_peepholes=False):
+                 output_nonlinearity=None, input_var=None, input_layer=None, forget_bias=1.0, use_peepholes=False,
+                 layer_args=None):
         with tf.variable_scope(name):
             if input_layer is None:
                 l_in = L.InputLayer(shape=(None, None) + input_shape, input_var=input_var, name="input")
@@ -267,9 +268,11 @@ class LSTMNetwork(object):
             l_step_input = L.InputLayer(shape=(None,) + input_shape, name="step_input")
             # contains previous hidden and cell state
             l_step_prev_state = L.InputLayer(shape=(None, hidden_dim * 2), name="step_prev_state")
+            if layer_args is None:
+                layer_args = dict()
             l_lstm = lstm_layer_cls(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity,
                                     hidden_init_trainable=False, name="lstm", forget_bias=forget_bias,
-                                    use_peepholes=use_peepholes)
+                                    cell_init_trainable=False, use_peepholes=use_peepholes, **layer_args)
             l_lstm_flat = L.ReshapeLayer(
                 l_lstm, shape=(-1, hidden_dim),
                 name="lstm_flat"
