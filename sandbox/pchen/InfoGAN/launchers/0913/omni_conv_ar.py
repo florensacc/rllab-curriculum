@@ -1,6 +1,3 @@
-
-
-
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -29,7 +26,6 @@ stub(globals())
 
 from rllab.misc.instrument import VariantGenerator, variant
 
-# pa_mnist_lr_0.0001_min_kl_0.05_mix_std_0.8_monte_carlo_kl_True_nm_10_seed_42_zdim_64
 class VG(VariantGenerator):
     @variant
     def lr(self):
@@ -164,7 +160,7 @@ variants = vg.variants(randomized=False)
 
 print(len(variants))
 
-for v in variants[:1]:
+for v in variants[:]:
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]

@@ -957,7 +957,6 @@ def to_lab_kube_pod(
     :param script: script command for running experiment
     :return:
     """
-    print("DEPRECATED! use instrument2.py")
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
     resources = params.pop("resources")

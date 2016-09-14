@@ -52,7 +52,7 @@ AWS_CODE_SYNC_S3_PATH = "s3://to/be/overriden/in/personal"
 # whether to use fast code sync
 FAST_CODE_SYNC = True
 
-FAST_CODE_SYNC_IGNORES = [".git", "data", ".pod"]
+FAST_CODE_SYNC_IGNORES = [".git", "data", ".pods"]
 
 KUBE_DEFAULT_RESOURCES = {
     "requests": {
