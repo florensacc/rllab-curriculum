@@ -41,10 +41,9 @@ exp_prefix = "async-rl/" + os.path.basename(__file__).split('.')[0]
 snapshot_mode = "last"
 plot = False
 seeds = None
-n_processes = 2
+n_processes = 3
 
 # Problem setting
-game = "frostbite"
 agent_type = "dqn"
 entropy_bonus = 0.01
 bonus_coeff = 0.05

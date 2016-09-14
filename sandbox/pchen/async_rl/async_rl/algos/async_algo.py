@@ -133,6 +133,8 @@ class AsyncAlgo(Picklable):
             obs, reward, terminal, extra = env.reset(), 0., False, {}
 
             # each following loop is one time step
+
+            start_time = time.time()
             while global_t < args["total_steps"]:
                 # Training ------------------------------------------------------
                 # Update time step counters
@@ -169,8 +171,8 @@ class AsyncAlgo(Picklable):
                 if terminal or (episode_t > args["horizon"]):
                     # log info for each episode
                     if process_id == 0:
-                        logger.log('global_t:{} local_t:{} episode_t:{} episode_r:{}'.format(
-                            global_t, local_t, episode_t, episode_r))
+                        logger.log('global_t:{} local_t:{} episode_t:{} episode_r:{} t_per_sec:{}'.format(
+                            global_t, local_t, episode_t, episode_r, global_t / (time.time()-start_time)))
                     episode_r = 0
                     episode_t = 0
                     obs, reward, terminal, extra = env.reset(), 0., False, {}
