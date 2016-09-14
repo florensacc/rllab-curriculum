@@ -167,7 +167,12 @@ class RandomMazeEnv(Env):
     def observation_space(self):
         return Discrete(self.n_row * self.n_col)
 
-    def render(self):
+    def render(self, close=False):
+        if close:
+            if self.viewer is not None:
+                self.viewer.close()
+                self.viewer = None
+            return
         from sandbox.rocky.hrl.envs.gym_renderer import Viewer
         if self.viewer is None:
             self.viewer = Viewer(500, 500)

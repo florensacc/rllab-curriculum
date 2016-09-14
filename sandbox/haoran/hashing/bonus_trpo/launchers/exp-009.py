@@ -8,6 +8,7 @@ from sandbox.rocky.tf.baselines.zero_baseline import ZeroBaseline
 # from sandbox.rocky.tf.policies.categorical_conv_policy import CategoricalConvPolicy
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
 # from sandbox.rocky.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
+from sandbox.rocky.tf.policies.categorical_ramdom_policy import CategoricalRandomPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
 from sandbox.rocky.tf.core.network import ConvNetwork
@@ -38,7 +39,7 @@ mode = "local_test"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 
-n_parallel = 1
+n_parallel = 4
 snapshot_mode = "last"
 plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
@@ -46,7 +47,7 @@ sync_s3_pkl = True
 
 
 # params ---------------------------------------
-batch_size = 1000
+batch_size = 10000
 max_path_length = 4500
 discount = 0.99
 n_itr = 1000
@@ -63,11 +64,20 @@ bonus_form="1/sqrt(n)"
 extra_dim_key = 1024
 extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
 
+restored_state_folder = '/tmp/restored_state'
+# restored_state_folder = None
+avoid_life_lost = True
+
 
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [111, 211, 311]
+        return [1, 111, 211, 311]
+
+    # The environment seed does affect Atari games. For example, the result of breaking two blocks or one block with one hit at their intersection depends on the ramdom seed.
+    @variant
+    def env_seed(self):
+        return [1]
 
     @variant
     def bonus_coeff(self):
@@ -75,7 +85,7 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["breakout"]
+        return ["space_invaders"]
 variants = VG().variants()
 
 
@@ -90,18 +100,21 @@ for v in variants:
         print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
         sys.exit(1)
 
-    # resetter = AtariSaveLoadResetter(restored_state_folder=None)
-    resetter = AtariSaveLoadResetter()
+    resetter = AtariSaveLoadResetter(
+        restored_state_folder=restored_state_folder,
+        avoid_life_lost=avoid_life_lost,
+    )
     env = TfEnv(
         AtariEnv(
             game=v["game"],
-            seed=v["seed"],
+            seed=v["env_seed"],
             obs_type=obs_type,
             record_ram=record_ram,
             record_image=record_image,
             record_rgb_image=record_rgb_image,
             record_internal_state=record_internal_state,
             resetter=resetter,
+            avoid_life_lost=avoid_life_lost,
         )
     )
     # policy = CategoricalConvPolicy(
@@ -109,8 +122,8 @@ for v in variants:
     #     name="policy",
     #     **nips_dqn_args
     # )
-    policy = CategoricalMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32), name="policy")
-    policy.vectorized = False
+    # policy = CategoricalMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32), name="policy")
+    policy = CategoricalRandomPolicy(env=env.spec)
 
     # nips_dqn_args_for_vf = copy.deepcopy(nips_dqn_args)
     # nips_dqn_args_for_vf.pop("output_nonlinearity")
@@ -131,12 +144,6 @@ for v in variants:
     baseline = LinearFeatureBaseline(env_spec=env.spec)
 
 
-    # bonus_evaluator = HashingBonusEvaluator(
-    #     env_spec=env.spec,
-    #     dim_key=dim_key,
-    #     bonus_form=bonus_form,
-    #     log_prefix="",
-    # )
     bonus_evaluator = ZeroBonusEvaluator()
     # extra_bonus_evaluator = HashingBonusEvaluator(
     #     env_spec=env.spec,

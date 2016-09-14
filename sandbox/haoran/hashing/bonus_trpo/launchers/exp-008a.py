@@ -6,20 +6,22 @@ This is a test run on Breakout and Frostbite
 # from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.rocky.tf.baselines.gaussian_conv_baseline import GaussianConvBaseline
 from sandbox.rocky.tf.baselines.zero_baseline import ZeroBaseline
+
 from sandbox.rocky.tf.policies.categorical_conv_policy import CategoricalConvPolicy
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
 # from sandbox.rocky.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
+
 from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
-from sandbox.rocky.tf.core.network import ConvNetwork
 from sandbox.rocky.tf.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+from sandbox.rocky.tf.optimizers.first_order_optimizer import FirstOrderOptimizer
 
 from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo import BonusTRPO
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.zero_bonus_evaluator import ZeroBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 # from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
-from sandbox.haoran.hashing.bonus_trpo.misc.dqn import nips_dqn_args
+from sandbox.haoran.hashing.bonus_trpo.misc.dqn import nips_dqn_args, trpo_dqn_args
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from sandbox.haoran.ec2_info import instance_info, subnet_info
 
@@ -34,9 +36,9 @@ import tensorflow as tf
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "ec2_test"
+mode = "ec2"
 ec2_instance = "c4.8xlarge"
-subnet = "us-west-1a"
+subnet = "us-west-1c"
 
 n_parallel = 4
 snapshot_mode = "last"
@@ -46,11 +48,25 @@ sync_s3_pkl = True
 
 
 # params ---------------------------------------
-batch_size = 100000
+batch_size = 50000
 max_path_length = 4500
 discount = 0.99
 n_itr = 1000
+force_batch_sampler = True
+cg_args = dict(
+    cg_iters=10,
+    reg_coeff=1e-3,
+    subsample_factor=0.1,
+    max_backtracks=15,
+    backtrack_ratio=0.8,
+    accept_violation=False,
+    hvp_approach=FiniteDifferenceHvp(base_eps=1e-5),
+)
+step_size = 0.01
+network_args = trpo_dqn_args
 
+img_width=42
+img_height=42
 clip_reward = True
 obs_type = "image"
 record_image=False
@@ -75,7 +91,7 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["qbert","breakout"]
+        return ["qbert","breakout","beam_rider"]
 variants = VG().variants()
 
 
@@ -95,6 +111,8 @@ for v in variants:
         AtariEnv(
             game=v["game"],
             seed=v["seed"],
+            img_width=img_width,
+            img_height=img_height,
             obs_type=obs_type,
             record_ram=record_ram,
             record_image=record_image,
@@ -106,26 +124,31 @@ for v in variants:
     policy = CategoricalConvPolicy(
         env_spec=env.spec,
         name="policy",
-        **nips_dqn_args
+        **network_args
     )
 
     nips_dqn_args_for_vf = copy.deepcopy(nips_dqn_args)
     nips_dqn_args_for_vf.pop("output_nonlinearity")
-    baseline = GaussianConvBaseline(
-        env_spec=env.spec,
-        regressor_args = dict(
-            optimizer=PenaltyLbfgsOptimizer(
-                name="vf_optimizer",
-                max_opt_itr=2,
-                max_penalty_itr=2,
-            ),
-            use_trust_region=True,
-            step_size=0.01,
-            init_std=1.0,
-            **nips_dqn_args_for_vf
-        )
-    )
-    # baseline = ZeroBaseline(env_spec=env.spec)
+    # baseline = GaussianConvBaseline(
+    #     env_spec=env.spec,
+    #     regressor_args = dict(
+    #         # optimizer=PenaltyLbfgsOptimizer(
+    #         #     name="vf_optimizer",
+    #         #     max_opt_itr=20,
+    #         #     max_penalty_itr=2,
+    #         # ),
+    #         optimizer=FirstOrderOptimizer(
+    #             max_epochs=10,
+    #             batch_size=1000,
+    #             tf_optimizer_args=dict(learning_rate=1e-3),
+    #         ),
+    #         use_trust_region=False,
+    #         step_size=0.01,
+    #         init_std=1.0,
+    #         **nips_dqn_args_for_vf
+    #     )
+    # )
+    baseline = ZeroBaseline(env_spec=env.spec)
 
 
     # bonus_evaluator = HashingBonusEvaluator(
@@ -155,9 +178,9 @@ for v in variants:
         n_itr=n_itr,
         clip_reward=clip_reward,
         plot=plot,
-        optimizer=ConjugateGradientOptimizer(hvp_approach=FiniteDifferenceHvp(base_eps=1e-5)),
-        flat_obs=True,
-        flat_action=True,
+        optimizer=ConjugateGradientOptimizer(**cg_args),
+        step_size=step_size,
+        force_batch_sampler=force_batch_sampler,
     )
 
     # run --------------------------------------------------
@@ -182,6 +205,20 @@ for v in variants:
                 AssociatePublicIpAddress=True,
             )
         ]
+    elif "kube" in mode:
+        actual_mode = "lab_kube"
+        info = instance_info[ec2_instance]
+        n_parallel = int(info["vCPU"] /2)
+
+        config.KUBE_DEFAULT_RESOURCES = {
+            "requests": {
+                "cpu": n_parallel
+            }
+        }
+        config.KUBE_DEFAULT_NODE_SELECTOR = {
+            "aws/type": ec2_instance
+        }
+        exp_prefix = exp_prefix.replace('/','-')
     else:
         raise NotImplementedError
 

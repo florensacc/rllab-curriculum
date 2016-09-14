@@ -1,6 +1,4 @@
-
-
-
+import time
 from rllab.algos.base import RLAlgorithm
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
@@ -106,6 +104,7 @@ class BatchPolopt(RLAlgorithm):
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
             self.start_worker()
+            start_time = time.time()
             for itr in range(self.start_itr, self.n_itr):
                 with logger.prefix('itr #%d | ' % itr):
                     paths = self.obtain_samples(itr)
@@ -118,6 +117,7 @@ class BatchPolopt(RLAlgorithm):
                         params["paths"] = samples_data["paths"]
                     logger.save_itr_params(itr, params)
                     logger.log("saved")
+                    logger.record_tabular('Time',time.time()-start_time)
                     logger.dump_tabular(with_prefix=False)
                     if self.plot:
                         self.update_plot()

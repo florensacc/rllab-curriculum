@@ -30,7 +30,6 @@ class HashingBonusEvaluator(object):
 
 
     def compute_keys(self, observations):
-        import pdb; pdb.set_trace()
         observations = np.cast['int']((observations + 1) * 0.5 * 255.0)
         binaries = np.sign(np.asarray(observations).dot(self.projection_matrix))
         keys = np.cast['int'](binaries.dot(self.mods_list)) % self.bucket_sizes

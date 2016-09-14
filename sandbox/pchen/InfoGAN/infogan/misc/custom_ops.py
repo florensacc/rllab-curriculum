@@ -721,6 +721,8 @@ def get_conv_ar_mask(h, w, n_in, n_out, ar_channels=False, zerodiagonal=False):
     mask = np.zeros([h, w, n_in, n_out], dtype=np.float32)
     mask[:l, :, :, :] = 1.
     mask[l, :m, :, :] = 1.
+    if not zerodiagonal:
+        mask[l, m, :, :] = 1.
     if ar_channels:
         mask[l, m, :, :] = get_linear_ar_mask(n_in, n_out, zerodiagonal)
     return mask
@@ -734,27 +736,28 @@ def get_conv_ar_mask(h, w, n_in, n_out, ar_channels=False, zerodiagonal=False):
 )
 class ar_conv2d_mod(prettytensor.VarStoreMethod):
 
-    def __call__(self,
-                 input_layer,
-                 kernel,
-                 depth,
-                 activation_fn=None,
-                 stride=None,
-                 l2loss=None,
-                 init=None,
-                 edges=PAD_SAME,
-                 batch_normalize=False,
-                 residual=False,
-                 custom_phase=CustomPhase.train,
-                 wnorm=False,
-                 pixel_bias=False,
-                 scale_init=0.1,
-                 var_scope=None,
-                 prefix="",
-                 name=PROVIDED,
-                 ar_channels=False,
-                 zerodiagonal=False,
-                 ):
+    def __call__(
+            self,
+            input_layer,
+            kernel,
+            depth,
+            activation_fn=None,
+            stride=None,
+            l2loss=None,
+            init=None,
+            edges=PAD_SAME,
+            batch_normalize=False,
+            residual=False,
+            custom_phase=CustomPhase.train,
+            wnorm=False,
+            pixel_bias=False,
+            scale_init=0.1,
+            var_scope=None,
+            prefix="",
+            name=PROVIDED,
+            ar_channels=False,
+            zerodiagonal=False,
+    ):
         """Adds a convolution to the stack of operations.
         The current head must be a rank 4 Tensor.
         Args:
@@ -1192,21 +1195,67 @@ def resize_nearest_neighbor(x, scale):
     return x
 
 def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None):
-    seq = l_in.sequential()
-    with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
-        if context is not None:
-            blk.join([context], lambda lst: tf.concat(3, lst))
-        blk.conv2d_mod(kernel, nch, stride=stride, prefix="pre")
-        blk.custom_dropout(keep_prob)
-        blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
-        blk.apply(lambda x: x*add_coeff)
-        if nn:
-            origin.apply(resize_nearest_neighbor, 1./stride)
-            origin.apply(lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])]))
-        else:
-            if stride != 1:
-                origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
-    return seq.as_layer().nl()
+    return resconv_v1_customconv(
+        "conv2d_mod",
+        None,
+        l_in=l_in, kernel=kernel, nch=nch, stride=stride, add_coeff=add_coeff,
+        keep_prob=keep_prob, nn=nn, context=context
+    )
+    # seq = l_in.sequential()
+    # with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
+    #     if context is not None:
+    #         blk.join([context], lambda lst: tf.concat(3, lst))
+    #     blk.conv2d_mod(kernel, nch, stride=stride, prefix="pre")
+    #     blk.custom_dropout(keep_prob)
+    #     blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
+    #     blk.apply(lambda x: x*add_coeff)
+    #     if nn:
+    #         origin.apply(resize_nearest_neighbor, 1./stride)
+    #         origin.apply(lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])]))
+    #     else:
+    #         if stride != 1:
+    #             origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
+    # return seq.as_layer().nl()
+
+def resconv_v1_customconv(
+        conv_method,
+        conv_args,
+        l_in,
+        kernel,
+        nch,
+        stride=1,
+        add_coeff=0.1,
+        keep_prob=1.,
+        nn=False,
+        context=None,
+):
+    blk = origin = l_in
+    blk = blk.sequential()
+    partial(blk, conv_method, conv_args)(
+        kernel=kernel,
+        depth=nch,
+        stride=stride,
+        prefix="pre",
+    )
+    blk.custom_dropout(
+        keep_prob
+    )
+    partial(blk, conv_method, conv_args)(
+        kernel=kernel,
+        depth=nch,
+        stride=1,
+        activation_fn=None,
+        prefix="post",
+    )
+    if nn:
+        origin = origin.apply(resize_nearest_neighbor, 1./stride)
+        origin = origin.apply(lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])]))
+    else:
+        if stride != 1:
+            origin = partial(origin, conv_method, conv_args)(kernel, nch, stride=stride, activation_fn=None)
+
+    mix = add_coeff * blk.as_layer() + origin
+    return mix.nl()
 
 def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None):
     seq = l_in.sequential()
@@ -1249,28 +1298,32 @@ def gruconv_v1(l_in, kernel, nch, inp=None):
         ).nl(activation_fn=tf.nn.tanh)
     return l_in*update_gate + proposal*(1.-update_gate)
 
-def plstmconv_v1(l_in, inp, kernel, nch, ):
+def plstmconv_v1(l_in, inp, kernel, nch, op="conv2d_mod", args=None, args1=None, args2=None, args3=None):
+    for id in ["args1", "args2", "args3"]:
+        if locals()[id] is None:
+            locals()[id] = args
+
     squashed_h = l_in.nl(activation_fn=tf.nn.tanh)
+    op_from_inp = partial(
+        inp, op, args1
+    )(kernel, nch*4, activation_fn=None, prefix="from_inp")
     with pt.defaults_scope(
             activation_fn=tf.nn.sigmoid,
     ):
-        input_gate = (
-            squashed_h.conv2d_mod(kernel, nch, activation_fn=None, prefix="input_gate_from_hidden") +
-            inp.conv2d_mod(kernel, nch, activation_fn=None, prefix="input_gate_from_input")
-        ).nl()
-        output_gate = (
-            squashed_h.conv2d_mod(kernel, nch, activation_fn=None, prefix="output_gate_from_hidden") +
-            inp.conv2d_mod(kernel, nch, activation_fn=None, prefix="output_gate_from_input")
-        ).nl()
-        remember_gate = (
-            squashed_h.conv2d_mod(kernel, nch, activation_fn=None, prefix="rem_gate_from_hidden") +
-            inp.conv2d_mod(kernel, nch, activation_fn=None, prefix="rem_gate_from_input") +
-            2
-        ).nl()
+        gates = (
+            partial(
+                squashed_h, op, args2
+            )(kernel, nch*3, activation_fn=None, prefix="input_gate_from_hidden") +
+            op_from_inp[:, :, :, :nch*3]
+        )
+        input_gate = gates[:, :, :, :nch].nl()
+        output_gate = gates[:, :, :, nch:nch*2].nl()
+        remember_gate = (gates[:, :, :, nch*2:nch*3]+1.).nl()
     proposal = (
-        (squashed_h * output_gate).
-            conv2d_mod(kernel, nch, activation_fn=None, prefix="proposal_from_hidden") +
-        inp.conv2d_mod(kernel, nch, activation_fn=None, prefix="proposal_from_input")
+        partial(
+            squashed_h * output_gate, op, args3
+        )(kernel, nch, activation_fn=None, prefix="proposal_from_hidden") +
+        op_from_inp[:, :, :, nch*3:]
     ).nl(activation_fn=tf.nn.tanh)
 
     next = remember_gate*l_in + input_gate*proposal
@@ -1310,4 +1363,64 @@ def custom_dropout(
         return input_layer * keep_prob
     else:
         return tf.nn.dropout(input_layer, keep_prob, name=name)
+
+def init_optim():
+    with tf.variable_scope("optim"):
+        yield
+    vs = tf.all_variables()
+    yield tf.initialize_variables(
+        [
+            v for v in vs if
+            "optim" in v.name or "global_step" in v.name
+        ]
+    )
+
+def partial(obj, name, default=None):
+    def go(*args, **kwargs):
+        return getattr(obj, name)(
+            *args,
+            **{
+                **(default if default is not None else {}),
+                **kwargs
+            }
+        )
+    return go
+
+def int_shape(x):
+    s = x.get_shape()
+    return [int(si) for si in s]
+
+@prettytensor.Register
+def left_shift(
+        input_layer,
+        size=1,
+        name=PROVIDED
+):
+    x = input_layer.tensor
+    xs = int_shape(x)
+    y = tf.concat(
+        2,
+        [
+            x[:, :, :xs[2]-size, :],
+            tf.zeros([xs[0], xs[1], size, xs[3]]),
+        ]
+    )
+    return input_layer.with_tensor(y)
+
+@prettytensor.Register
+def down_shift(
+        input_layer,
+        size=1,
+        name=PROVIDED
+):
+    x = input_layer.tensor
+    xs = int_shape(x)
+    y = tf.concat(
+        1,
+        [
+            tf.zeros([xs[0], size, xs[2], xs[3]]),
+            x[:, :xs[1]-size, :, :],
+        ]
+    )
+    return input_layer.with_tensor(y)
 

@@ -8,6 +8,7 @@ from sandbox.rocky.tf.spaces.discrete import Discrete
 
 from rllab.core.serializable import Serializable
 from rllab.misc import ext
+from rllab.misc import logger
 from rllab.misc.overrides import overrides
 import tensorflow as tf
 import numpy as np

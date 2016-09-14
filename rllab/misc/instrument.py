@@ -349,6 +349,7 @@ def run_experiment_lite(
         variant=None,
         use_gpu=False,
         sync_s3_pkl=False,
+        sync_log_on_termination=True,
         confirm_remote=True,
         terminate_machine=True,
         periodic_sync=True,
@@ -477,6 +478,7 @@ def run_experiment_lite(
                    use_gpu=use_gpu,
                    code_full_path=s3_code_path,
                    sync_s3_pkl=sync_s3_pkl,
+                   sync_log_on_termination=sync_log_on_termination,
                    periodic_sync=periodic_sync,
                    periodic_sync_interval=periodic_sync_interval)
     elif mode == "lab_kube":
@@ -631,7 +633,7 @@ def dedent(s):
 
 def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                script='scripts/run_experiment.py',
-               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False,
+               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False, sync_log_on_termination=True,
                periodic_sync=True, periodic_sync_interval=15):
     if len(params_list) == 0:
         return
@@ -720,6 +722,21 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                     done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
                                                          aws_region=config.AWS_REGION_NAME,
                                                          periodic_sync_interval=periodic_sync_interval))
+            if sync_log_on_termination:
+                sio.write("""
+                    while /bin/true; do
+                        if [ -z $(curl -Is http://169.254.169.254/latest/meta-data/spot/termination-time | head -1 | grep 404 | cut -d \  -f 2) ]
+                          then
+                            logger "Running shutdown hook."
+                            aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
+                            aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
+                            break
+                          else
+                            # Spot instance not yet marked for termination.
+                            sleep 5
+                        fi
+                    done & echo log sync initiated
+                """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
         sio.write("""
             {command}
         """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu, env=env,

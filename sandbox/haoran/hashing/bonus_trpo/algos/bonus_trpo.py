@@ -79,6 +79,12 @@ class BonusTRPO(TRPO):
                 np.mean([path["raw_returns"][0] for path in paths])
 
             undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
+            if "prior_reward" in paths[0]["env_infos"]:
+                undiscounted_returns = [
+                    R + sum(path["env_infos"]["prior_reward"])
+                    for R,path in zip(undiscounted_returns, paths)
+                ]
+
             undiscounted_bonus_returns = [sum(path["rewards"]) for path in paths]
 
             ent = np.mean(self.policy.distribution.entropy(agent_infos))
@@ -137,6 +143,11 @@ class BonusTRPO(TRPO):
                 np.mean([path["returns"][0] for path in paths])
 
             undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
+            if "prior_reward" in paths[0]["env_infos"]:
+                undiscounted_returns = [
+                    R + sum(path["env_infos"]["prior_reward"])
+                    for R,path in zip(undiscounted_returns, paths)
+                ]
             undiscounted_bonus_returns = [sum(path["rewards"]) for path in paths]
 
             ent = np.sum(self.policy.distribution.entropy(agent_infos) * valids) / np.sum(valids)
@@ -182,26 +193,27 @@ class BonusTRPO(TRPO):
         logger.record_tabular_misc_stat("PathLen",path_lens)
 
         # Log info for trajs whose initial states are not modified by the resetter
-        test_paths = [
-            path for path in paths
-            if path["env_infos"]["use_default_reset"][0] == True
-        ]
-        if self.env.wrapped_env.resetter is not None and len(test_paths) > 0:
-            test_average_discounted_return = \
-                np.mean([path["returns"][0] for path in test_paths])
+        if self.env.wrapped_env.resetter is not None:
+            test_paths = [
+                path for path in paths
+                if path["env_infos"]["use_default_reset"][0] == True
+            ]
+            if len(test_paths) > 0 and type(self.env.wrapped_env.resetter).__name__ != "AtariSaveLoadResetter":
+                test_average_discounted_return = \
+                    np.mean([path["returns"][0] for path in test_paths])
 
-            test_undiscounted_returns = [sum(path["raw_rewards"]) for path in test_paths]
-            test_undiscounted_bonus_returns = [sum(path["rewards"]) for path in test_paths]
+                test_undiscounted_returns = [sum(path["raw_rewards"]) for path in test_paths]
+                test_undiscounted_bonus_returns = [sum(path["rewards"]) for path in test_paths]
 
-            logger.record_tabular('TestAverageDiscountedReturn',
-                      test_average_discounted_return)
-            logger.record_tabular('TestAverageBonusReturn', np.mean(test_undiscounted_bonus_returns))
-            logger.record_tabular('TestNumTrajs', len(test_paths))
-            logger.record_tabular_misc_stat('TestReturn',test_undiscounted_returns)
+                logger.record_tabular('TestAverageDiscountedReturn',
+                          test_average_discounted_return)
+                logger.record_tabular('TestAverageBonusReturn', np.mean(test_undiscounted_bonus_returns))
+                logger.record_tabular('TestNumTrajs', len(test_paths))
+                logger.record_tabular_misc_stat('TestReturn',test_undiscounted_returns)
 
-            test_all_bonus_rewards = np.concatenate([path["bonus_rewards"] for path in test_paths])
-            logger.record_tabular_misc_stat('TestBonusReward',test_all_bonus_rewards)
+                test_all_bonus_rewards = np.concatenate([path["bonus_rewards"] for path in test_paths])
+                logger.record_tabular_misc_stat('TestBonusReward',test_all_bonus_rewards)
 
-            test_path_lens = [len(path["rewards"]) for path in test_paths]
-            logger.record_tabular_misc_stat("TestPathLen",test_path_lens)
+                test_path_lens = [len(path["rewards"]) for path in test_paths]
+                logger.record_tabular_misc_stat("TestPathLen",test_path_lens)
         return samples_data

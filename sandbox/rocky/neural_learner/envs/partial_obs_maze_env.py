@@ -54,5 +54,5 @@ class PartialObsMazeEnv(Env):
         self.env.reset_trial()
         return self.reset()
 
-    def render(self):
-        self.env.render()
+    def render(self, *args, **kwargs):
+        self.env.render(*args, **kwargs)
