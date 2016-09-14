@@ -156,9 +156,7 @@ class BatchPolopt(RLAlgorithm):
                 acc += np.sum(np.square(_o - _t))
         return acc / _inputs.shape[0]
 
-    def plot_pred_imgs(self, inputs, targets, itr, count, title='title'):
-        # try:
-        # This is specific to Atari.
+    def plot_pred_imgs(self, inputs, targets, itr, count):
         import matplotlib.pyplot as plt
         if not hasattr(self, '_fig'):
             self._fig = plt.figure()
@@ -176,58 +174,56 @@ class BatchPolopt(RLAlgorithm):
             plt.tick_params(axis='both', which='both', bottom='off', top='off',
                             labelbottom='off', right='off', left='off', labelleft='off')
             self._im1, self._im2, self._im3, self._im4 = None, None, None, None
-        plt.suptitle(title)
 
-        idx = np.random.randint(0, inputs.shape[0], 1)
-        sanity_pred = self.autoenc.pred_fn(inputs)
-        input_im = inputs
-        lst_input_im = [
-            input_im[idx, i * np.prod(self.autoenc.state_dim):(i + 1) * np.prod(self.autoenc.state_dim)].reshape(
-                self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0] * 256. for i in
-            range(0)]
-        input_im = input_im[:, -np.prod(self.autoenc.state_dim):]
-        input_im = input_im[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
-        sanity_pred_im = sanity_pred[idx, :]
-        if self.autoenc.output_type == self.autoenc.OutputType.CLASSIFICATION:
-            sanity_pred_im = sanity_pred_im.reshape((-1, self.autoenc.num_classes))
-            sanity_pred_im = np.argmax(sanity_pred_im, axis=1)
-        sanity_pred_im = sanity_pred_im.reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
-        target_im = targets[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
+        # Plotting all images
+        for idx in range(inputs.shape[0]):
+            sanity_pred = self.autoenc.pred_fn(inputs)
+            cont_emb = self.autoenc.discrete_emb(inputs)
+            keys = np.cast['int'](np.round(cont_emb))
+            key = keys[idx]
+            title = ''.join([str(k) for k in key])
+            title += '\n' + ''.join(['{:.1f}'.format(c) for c in cont_emb])
+            plt.suptitle(title)
+            input_im = inputs
+            input_im = input_im[:, -np.prod(self.autoenc.state_dim):]
+            input_im = input_im[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
+            sanity_pred_im = sanity_pred[idx, :]
+            if self.autoenc.output_type == self.autoenc.OutputType.CLASSIFICATION:
+                sanity_pred_im = sanity_pred_im.reshape((-1, self.autoenc.num_classes))
+                sanity_pred_im = np.argmax(sanity_pred_im, axis=1)
+            sanity_pred_im = sanity_pred_im.reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
+            target_im = targets[idx, :].reshape(self.autoenc.state_dim).transpose(1, 2, 0)[:, :, 0]
 
-        if self.autoenc.output_type == self.autoenc.OutputType.CLASSIFICATION:
-            sanity_pred_im = sanity_pred_im.astype(float) / float(self.autoenc.num_classes)
-            target_im = target_im.astype(float) / float(self.autoenc.num_classes)
-            input_im = input_im.astype(float) / float(self.autoenc.num_classes)
-            for i in range(len(lst_input_im)):
-                lst_input_im[i] = lst_input_im[i].astype(float) / float(self.autoenc.num_classes)
+            if self.autoenc.output_type == self.autoenc.OutputType.CLASSIFICATION:
+                sanity_pred_im = sanity_pred_im.astype(float) / float(self.autoenc.num_classes)
+                target_im = target_im.astype(float) / float(self.autoenc.num_classes)
+                input_im = input_im.astype(float) / float(self.autoenc.num_classes)
 
-        sanity_pred_im *= 256.
-        sanity_pred_im = np.around(sanity_pred_im).astype(int)
-        target_im *= 256.
-        target_im = np.around(target_im).astype(int)
-        err = (256 - np.abs(target_im - sanity_pred_im) * 100.)
-        input_im *= 256.
-        input_im = np.around(input_im).astype(int)
+            sanity_pred_im *= 256.
+            sanity_pred_im = np.around(sanity_pred_im).astype(int)
+            target_im *= 256.
+            target_im = np.around(target_im).astype(int)
+            err = (256 - np.abs(target_im - sanity_pred_im) * 100.)
+            input_im *= 256.
+            input_im = np.around(input_im).astype(int)
 
-        if self._im1 is None or self._im2 is None:
-            self._im1 = self._fig_1.imshow(
-                input_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im2 = self._fig_2.imshow(
-                target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im3 = self._fig_3.imshow(
-                sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
-            self._im4 = self._fig_4.imshow(
-                err, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+            if self._im1 is None or self._im2 is None:
+                self._im1 = self._fig_1.imshow(
+                    input_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im2 = self._fig_2.imshow(
+                    target_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im3 = self._fig_3.imshow(
+                    sanity_pred_im, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
+                self._im4 = self._fig_4.imshow(
+                    err, interpolation='none', cmap='Greys_r', vmin=0, vmax=255)
 
-        else:
-            self._im1.set_data(input_im)
-            self._im2.set_data(target_im)
-            self._im3.set_data(sanity_pred_im)
-            self._im4.set_data(err)
-        plt.savefig(
-            logger._snapshot_dir + '/dynpred_img_{}_{}.png'.format(itr, count), bbox_inches='tight')
-        # except Exception:
-        #     pass
+            else:
+                self._im1.set_data(input_im)
+                self._im2.set_data(target_im)
+                self._im3.set_data(sanity_pred_im)
+                self._im4.set_data(err)
+            plt.savefig(
+                logger._snapshot_dir + '/autoenc_{}_{}_{}.png'.format(itr, count, idx), bbox_inches='tight')
 
     def fill_replay_pool(self, paths):
         # Fill replay pool with samples of current batch. Exclude the
@@ -241,24 +237,25 @@ class BatchPolopt(RLAlgorithm):
         for path in paths:
             path['observations'] = (path['observations'] * self.autoenc.num_classes).astype("uint8")
 
-    def train_autoenc(self, itr):
+    def train_autoenc(self, itr, paths):
         logger.log('Updating autoencoder using replay pool ...')
         acc_before, acc_after, train_loss = 0., 0., np.inf
         if self.pool.size >= self._dyn_pool_args['min_size']:
             itr_tot = int(
                 np.ceil(self.num_sample_updates * float(self.batch_size) / self._dyn_pool_args['batch_size']))
 
-            for _ in range(20):
-                batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-                _x = batch['observations']
-                _y = batch['observations'][:, -np.prod(self.autoenc.state_dim):]
+            for path in paths:
+                _x = path['observations']
+                _y = path['observations']
                 acc_before += self.accuracy(_x, _y)
-            acc_before /= 20.
+            acc_before /= len(paths)
 
             done = False
-            old_train_loss = np.inf
-            outer_loop_count = 0
-            while not done:
+            outer_loop_count, count = 0, 0
+            running_avg = np.nan
+            old_running_avg = np.inf
+            running_avg_alpha = 0.9
+            while not (done and outer_loop_count >= 3):
                 train_loss = 0.
                 for i in range(itr_tot):
                     batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
@@ -268,26 +265,42 @@ class BatchPolopt(RLAlgorithm):
                     assert not np.isinf(_tl)
                     assert not np.isnan(_tl)
                     train_loss += _tl
-                    if i % int(np.ceil(itr_tot / 3.)) == 0:
-                        self.plot_pred_imgs(_x, _y, itr, (i % int(np.ceil(itr_tot / 3.))) + 3 * outer_loop_count)
+                    if i == 0:
+                        _x = paths[0]['observations'][::10]
+                        _y = paths[0]['observations'][::10]
+                        self.plot_pred_imgs(_x, _y, itr, i + count * itr_tot)
                 train_loss /= itr_tot
-                print('Autoencoder train loss={}, D={}'.format(train_loss, old_train_loss - train_loss))
-                if old_train_loss - train_loss < 1e-6:
+                if np.isnan(running_avg):
+                    running_avg = train_loss
+                else:
+                    running_avg = running_avg_alpha * running_avg + (1. - running_avg_alpha) * train_loss
+                print('Autoencoder train loss={:.5f}\trunning_avg={:.5f}\tD={:.5f}'.format(
+                    train_loss, running_avg, old_running_avg - running_avg))
+                if old_running_avg - running_avg < 1e4:
                     done = True
-                old_train_loss = train_loss
-                outer_loop_count += 1
+                    outer_loop_count += 1
+                else:
+                    outer_loop_count = 0
+                count += 1
+                old_running_avg = running_avg
 
-            for i in range(20):
-                batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-                _x = batch['observations']
-                _y = batch['observations'][:, -np.prod(self.autoenc.state_dim):]
+            for path in paths:
+                _x = path['observations']
+                _y = path['observations']
                 acc_after += self.accuracy(_x, _y)
-            acc_after /= 20.
+            acc_after /= len(paths)
+            logger.log('Autoeoder updated.')
+        else:
+            logger.log('Autoeoder not updated: minimum replay pool size ({:.3f}) not met ({}).'.format(
+                self._dyn_pool_args['min_size'], self.pool.size
+            ))
 
         logger.record_tabular('DynModel_SqErrBefore', acc_before)
         logger.record_tabular('DynModel_SqErrAfter', acc_after)
         logger.record_tabular('DynModel_TrainLoss', train_loss)
-        logger.log('Autoencoder updated.')
+
+    def generate_samples(self):
+        pass
 
     def train(self):
 
@@ -311,11 +324,13 @@ class BatchPolopt(RLAlgorithm):
             # Train autoencoder using replay pool.
             # TODO: train model BEFORE counting
             # TODO: mix replay pool with training on current batch: to make sure novel samples are mapped to novel binary codes.
-            self.train_autoenc(itr)
+            self.train_autoenc(itr, paths)
 
             # Here we should extract discrete embedding from samples and use it for updating count table.
             # TODO: work with a hashtable, making it easy to find all counts with a key within a particular Hamming distance.
             self.count(paths)
+
+            self.generate_samples()
 
             # Postprocess trajectory data.
             samples_data = self.process_samples(itr, paths)
@@ -396,12 +411,15 @@ class BatchPolopt(RLAlgorithm):
                 self.counting_table[key_as_int] += 1
                 counts[idy] = self.counting_table[key_as_int]
                 print('{}\t{}'.format(int(counts[idy]), key))
-                self.plot_pred_imgs(path['observations'][idy][None, :], path['observations'][idy][None, :], -idy, 0,
-                                    title=''.join([str(k) for k in key]))
+
             num_unique = len(set(lst_key_as_int))
             print('unique values: {}/{}'.format(num_unique, len(lst_key_as_int)))
             # TODO: change name 'KL' to surprise.
             path['KL'] = count_to_ir(counts)
+
+        # Plot
+        key = np.cast['int'](np.round(self.autoenc.discrete_emb(paths[0]['observations'])))
+        self.plot_pred_imgs(paths[0]['observations'], paths[0]['observations'], -idy - 1, 0)
 
     def obtain_samples(self):
         cur_params = self.policy.get_param_values()

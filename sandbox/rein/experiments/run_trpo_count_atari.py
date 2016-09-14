@@ -32,7 +32,7 @@ if TEST_RUN:
     etas = [0.1]
     mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
     lst_factor = [1]
-    trpo_batch_size = 200
+    trpo_batch_size = 100
     max_path_length = 50
     batch_norm = False
 else:
@@ -235,7 +235,7 @@ for factor, mdp, eta, seed in param_cart_product:
             size=10000,
             min_size=32,
             batch_size=32,
-            subsample_factor=0.1,
+            subsample_factor=1.0,
         ),
         surprise_transform=None,
     )

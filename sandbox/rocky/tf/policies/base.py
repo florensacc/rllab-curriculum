@@ -37,6 +37,10 @@ class Policy(Parameterized):
         return self._env_spec.action_space
 
     @property
+    def env_spec(self):
+        return self._env_spec
+
+    @property
     def recurrent(self):
         """
         Indicates whether the policy is recurrent.

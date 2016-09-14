@@ -21,8 +21,9 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             hidden_dim=32,
             feature_network=None,
             state_include_action=True,
+            hidden_nonlinearity=tf.tanh,
             gru_layer_cls=L.GRULayer,
-            hidden_nonlinearity=tf.tanh):
+    ):
         """
         :param env_spec: A spec for the env.
         :param hidden_dim: dimension of hidden layer

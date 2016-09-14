@@ -91,6 +91,13 @@ class StatefulPool(object):
                 ret.append(runner(self.G, *args))
             return ret
 
+    def run_imap_unordered(self, runner, args_list):
+        if self.n_parallel > 1:
+            yield from self.pool.imap_unordered(_worker_run_map, [(runner, args) for args in args_list])
+        else:
+            for args in args_list:
+                yield runner(self.G, *args)
+
     def run_collect(self, collect_once, threshold, args=None, show_prog_bar=True):
         """
         Run the collector method using the worker pool. The collect_once method will receive 'G' as
