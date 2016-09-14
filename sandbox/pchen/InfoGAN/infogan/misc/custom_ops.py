@@ -1243,7 +1243,7 @@ def resconv_v1_customconv(
     partial(blk, conv_method, conv_args)(
         kernel=kernel,
         depth=nch,
-        stride=stride,
+        stride=1,
         activation_fn=None,
         prefix="post",
     )
@@ -1252,7 +1252,7 @@ def resconv_v1_customconv(
         origin = origin.apply(lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])]))
     else:
         if stride != 1:
-            origin = origin.conv2d_mod(kernel, nch, stride=stride, activation_fn=None)
+            origin = partial(origin, conv_method, conv_args)(kernel, nch, stride=stride, activation_fn=None)
 
     mix = add_coeff * blk.as_layer() + origin
     return mix.nl()
@@ -1298,16 +1298,22 @@ def gruconv_v1(l_in, kernel, nch, inp=None):
         ).nl(activation_fn=tf.nn.tanh)
     return l_in*update_gate + proposal*(1.-update_gate)
 
-def plstmconv_v1(l_in, inp, kernel, nch, op="conv2d_mod", args=None):
+def plstmconv_v1(l_in, inp, kernel, nch, op="conv2d_mod", args=None, args1=None, args2=None, args3=None):
+    for id in ["args1", "args2", "args3"]:
+        if locals()[id] is None:
+            locals()[id] = args
+
     squashed_h = l_in.nl(activation_fn=tf.nn.tanh)
     op_from_inp = partial(
-        inp, op, args
+        inp, op, args1
     )(kernel, nch*4, activation_fn=None, prefix="from_inp")
     with pt.defaults_scope(
             activation_fn=tf.nn.sigmoid,
     ):
         gates = (
-            partial(squashed_h, op, args)(kernel, nch*3, activation_fn=None, prefix="input_gate_from_hidden") +
+            partial(
+                squashed_h, op, args2
+            )(kernel, nch*3, activation_fn=None, prefix="input_gate_from_hidden") +
             op_from_inp[:, :, :, :nch*3]
         )
         input_gate = gates[:, :, :, :nch].nl()
@@ -1315,7 +1321,7 @@ def plstmconv_v1(l_in, inp, kernel, nch, op="conv2d_mod", args=None):
         remember_gate = (gates[:, :, :, nch*2:nch*3]+1.).nl()
     proposal = (
         partial(
-            squashed_h * output_gate, op, args
+            squashed_h * output_gate, op, args3
         )(kernel, nch, activation_fn=None, prefix="proposal_from_hidden") +
         op_from_inp[:, :, :, nch*3:]
     ).nl(activation_fn=tf.nn.tanh)
@@ -1379,4 +1385,42 @@ def partial(obj, name, default=None):
             }
         )
     return go
+
+def int_shape(x):
+    s = x.get_shape()
+    return [int(si) for si in s]
+
+@prettytensor.Register
+def left_shift(
+        input_layer,
+        size=1,
+        name=PROVIDED
+):
+    x = input_layer.tensor
+    xs = int_shape(x)
+    y = tf.concat(
+        2,
+        [
+            x[:, :, :xs[2]-size, :],
+            tf.zeros([xs[0], xs[1], size, xs[3]]),
+        ]
+    )
+    return input_layer.with_tensor(y)
+
+@prettytensor.Register
+def down_shift(
+        input_layer,
+        size=1,
+        name=PROVIDED
+):
+    x = input_layer.tensor
+    xs = int_shape(x)
+    y = tf.concat(
+        1,
+        [
+            tf.zeros([xs[0], size, xs[2], xs[3]]),
+            x[:, :xs[1]-size, :, :],
+        ]
+    )
+    return input_layer.with_tensor(y)
 

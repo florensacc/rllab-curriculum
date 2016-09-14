@@ -12,10 +12,11 @@ dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
 ar_conv_dist = ConvAR(
     tgt_dist=MeanBernoulli(1),
     shape=(28, 28, 1),
-    filter_size=3,
-    depth=12,
-    nr_channels=4,
+    filter_size=5,
+    depth=8,
+    nr_channels=32,
     pixel_bias=True,
+    block="plstm",
 )
 
 # init
@@ -41,18 +42,23 @@ logli = ar_conv_dist.logli(input_tensor)
 loss = -tf.reduce_mean(logli)
 for init_opt in init_optim():
     if init_opt is None:
-        opt = AdamaxOptimizer()
+        opt = AdamaxOptimizer(
+            learning_rate=0.0001
+        )
         trainer = opt.minimize(loss)
     else:
         sess.run(init_opt)
 
+eval_every = 50
 last_t = time.time()
+cur_loss = 0.
 for itr in range(100000):
     x, _ = dataset.train.next_batch(bs)
     x = x.reshape([bs] + list(ar_conv_dist._shape))
-    _, cur_loss = sess.run([trainer, loss], {input_tensor: x})
-    if itr % 50 == 0:
+    cur_loss += sess.run([trainer, loss], {input_tensor: x})[1]
+    if itr % eval_every == 0:
         print("itr: %s, time: %s"  % (itr, time.time() - last_t))
-        print(-cur_loss * 28*28)
+        print(-cur_loss / eval_every)
+        cur_loss = 0.
         last_t = time.time()
 

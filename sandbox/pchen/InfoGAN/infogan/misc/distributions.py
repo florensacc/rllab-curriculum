@@ -1307,10 +1307,12 @@ class ConvAR(Distribution):
 
         self._tgt_dist = tgt_dist
         self._shape = shape
-        self._dim = np.prod(shape)
-        inp = pt.template("y", books=dist_book)
+        self._dim = int(np.prod(shape))
+        inp = pt.template("y", books=dist_book).reshape([-1,] + list(shape))
         cur = inp
         self._custom_phase = CustomPhase.init
+
+        peep_inp = inp.left_shift(filter_size-1).down_shift()
 
         from prettytensor import UnboundVariable
         with pt.defaults_scope(
@@ -1340,9 +1342,14 @@ class ConvAR(Distribution):
                                 nr_channels
                             )
                     elif block == "plstm":
+                        use_peep = di % 2 == 1
                         cur, cur_nl = plstmconv_v1(
-                            cur, inp, filter_size, nr_channels,
-                            op="ar_conv2d_mod", args=dict(zerodiagonal=True)
+                            cur,
+                            peep_inp if use_peep else inp,
+                            filter_size, nr_channels,
+                            op="ar_conv2d_mod",
+                            args=dict(zerodiagonal=False),
+                            args1=dict(zerodiagonal=not use_peep),
                         )
                     else:
                         raise Exception("what")
@@ -1383,16 +1390,17 @@ class ConvAR(Distribution):
 
     def logli(self, x_var, _=None):
         tgt_dict = self.infer(x_var)
-        return self._tgt_dist.logli(
-            tf.reshape(x_var, [-1, self._tgt_dist.dist_flat_dim]),
+        flatten_loglis = self._tgt_dist.logli(
+            tf.reshape(x_var, [-1, self._tgt_dist.dim]),
             tgt_dict
         )
-
-    def logli_init_prior(self, x_var):
-        return self._base_dist.logli_init_prior(x_var)
+        return tf.reduce_sum(
+            tf.reshape(flatten_loglis, [-1, self._shape[0] * self._shape[1]]),
+            reduction_indices=1
+        )
 
     def prior_dist_info(self, batch_size):
-        return self._base_dist.prior_dist_info(batch_size)
+        return {}
 
     def sample_logli(self, info):
         return self.sample_n(info=info)
