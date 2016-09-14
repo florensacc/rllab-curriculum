@@ -10,7 +10,8 @@ from sandbox.rocky.tf.spaces.box import Box
 from rllab.spaces.discrete import Discrete
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Env
-from sandbox.haoran.ale_python_interface import ALEInterface
+# from sandbox.haoran.ale_python_interface import ALEInterface
+# from sandbox.pchen.async_rl.ale_python_interface import ALEInterface
 
 class AtariEnv(Env,Serializable):
     def __init__(self,

@@ -352,6 +352,8 @@ def run_experiment_lite(
         sync_log_on_termination=True,
         confirm_remote=True,
         terminate_machine=True,
+        periodic_sync=True,
+        periodic_sync_interval=15,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -366,6 +368,15 @@ def run_experiment_lite(
     :param env: extra environment variables
     :param kwargs: All other parameters will be passed directly to the entrance python script.
     :param variant: If provided, should be a dictionary of parameters
+    :param use_gpu: Whether the launched task is running on GPU. This triggers a few configuration changes including
+    certain environment flags
+    :param sync_s3_pkl: Whether to sync pkl files during execution of the experiment (they will always be synced at
+    the end of the experiment)
+    :param confirm_remote: Whether to confirm before launching experiments remotely
+    :param terminate_machine: Whether to terminate machine after experiment finishes. Only used when using
+    mode="ec2". This is useful when one wants to debug after an experiment finishes abnormally.
+    :param periodic_sync: Whether to synchronize certain experiment files periodically during execution.
+    :param periodic_sync_interval: Time interval between each periodic sync, in seconds.
     """
     assert stub_method_call is not None or batch_tasks is not None, "Must provide at least either stub_method_call or batch_tasks"
     if batch_tasks is None:
@@ -468,7 +479,8 @@ def run_experiment_lite(
                    code_full_path=s3_code_path,
                    sync_s3_pkl=sync_s3_pkl,
                    sync_log_on_termination=sync_log_on_termination,
-                   )
+                   periodic_sync=periodic_sync,
+                   periodic_sync_interval=periodic_sync_interval)
     elif mode == "lab_kube":
         assert env is None
         # first send code folder to s3
@@ -484,7 +496,8 @@ def run_experiment_lite(
                 "node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
             task["exp_prefix"] = exp_prefix
             pod_dict = to_lab_kube_pod(
-                task, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu)
+                task, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu,
+                sync_s3_pkl=sync_s3_pkl, periodic_sync=periodic_sync, periodic_sync_interval=periodic_sync_interval)
             pod_str = json.dumps(pod_dict, indent=1)
             if dry:
                 print(pod_str)
@@ -931,7 +944,11 @@ def upload_file_to_s3(script_content):
 
 def to_lab_kube_pod(
         params, docker_image, code_full_path,
-        script='scripts/run_experiment.py', is_gpu=False
+        script='scripts/run_experiment.py',
+        is_gpu=False,
+        sync_s3_pkl=False,
+        periodic_sync=True,
+        periodic_sync_interval=15,
 ):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
@@ -962,7 +979,7 @@ def to_lab_kube_pod(
 
     if config.FAST_CODE_SYNC:
         pre_commands.append('aws s3 cp %s /tmp/rllab_code.tar.gz' % code_full_path)
-        pre_commands.append('mkdir -p %s' % code_full_path)
+        pre_commands.append('mkdir -p %s' % config.DOCKER_CODE_DIR)
         pre_commands.append('tar -zxvf /tmp/rllab_code.tar.gz -C %s' % config.DOCKER_CODE_DIR)
     else:
         pre_commands.append('aws s3 cp --recursive %s %s' %
@@ -970,12 +987,24 @@ def to_lab_kube_pod(
     pre_commands.append('cd %s' % config.DOCKER_CODE_DIR)
     pre_commands.append('mkdir -p %s' %
                         (log_dir))
-    pre_commands.append("""
-        while /bin/true; do
-            aws s3 sync {log_dir} {remote_log_dir} --region {aws_region}
-            sleep 15
-        done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                             aws_region=config.AWS_REGION_NAME))
+
+    if periodic_sync:
+        if sync_s3_pkl:
+            pre_commands.append("""
+                while /bin/true; do
+                    aws s3 sync --exclude '*' --include '*.csv' --include '*.json' --include '*.pkl' {log_dir} {remote_log_dir} --region {aws_region}
+                    sleep {periodic_sync_interval}
+                done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                     aws_region=config.AWS_REGION_NAME,
+                                                     periodic_sync_interval=periodic_sync_interval))
+        else:
+            pre_commands.append("""
+                while /bin/true; do
+                    aws s3 sync --exclude '*' --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
+                    sleep {periodic_sync_interval}
+                done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                     aws_region=config.AWS_REGION_NAME,
+                                                     periodic_sync_interval=periodic_sync_interval))
     # copy the file to s3 after execution
     post_commands = list()
     post_commands.append('aws s3 cp --recursive %s %s' %

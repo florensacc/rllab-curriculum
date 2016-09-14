@@ -30,7 +30,8 @@ from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv as SGE
 # batch size 5000
 # swimmergather batch size 50000
 # discretize state
-# lower dimension
+# lower dimension (higher? 256, 512)
+# Try a built-in hash function instead of simhash
 # robustness to noise (in simpler tasks)?
 # count state-action pairs?
 # log state count
@@ -42,10 +43,7 @@ from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv as SGE
 N_ITR = 1000
 N_ITR_DEBUG = 5
 
-envs = [HalfCheetahEnvX(),
-        SwimmerEnvX(),
-        Walker2DEnvX(),
-        SwimmerGatherEnv()]
+envs = [HalfCheetahEnvX()]
 
 
 def experiment_variant_generator():
@@ -60,6 +58,7 @@ def experiment_variant_generator():
     vg.add("seed", range(4), hide=True)
     vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1])
     vg.add("granularity", [0.01, 0.1, 1])
+    vg.add("dim_key", [32, 64, 128])
     vg.add("bonus_evaluator",
            lambda env, granularity: [DiscretizingHashingBonusEvaluator(env.spec, granularity)],
            hide=True)

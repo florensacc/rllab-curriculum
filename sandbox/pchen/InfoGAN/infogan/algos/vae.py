@@ -83,7 +83,7 @@ class VAE(object):
         self.snapshot_interval = snapshot_interval
         if updates_per_epoch:
             print("should not set updates_per_epoch")
-        self.updates_per_epoch = dataset.train.images.shape[0] / batch_size
+        self.updates_per_epoch = dataset.train.images.shape[0] // batch_size
         self.summary_interval = summary_interval
         # self.learning_rate = learning_rate
         self.trainer = None
@@ -100,7 +100,7 @@ class VAE(object):
         self.saved_prior_mean = None
         self.saved_prior_std = None
         self.k = k
-        self.eval_batch_size = self.batch_size / k
+        self.eval_batch_size = self.batch_size // k
         self.eval_input_tensor = None
         self.eval_log_vars = []
 
@@ -512,7 +512,7 @@ class VAE(object):
                         if counter % self.vali_eval_interval == 0:
                             ds = self.dataset.validation
                             all_test_log_vals = []
-                            for ti in range(ds.images.shape[0] / self.eval_batch_size):
+                            for ti in range(ds.images.shape[0] // self.eval_batch_size):
                                 # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
                                 # test_x = np.tile(test_x, [self.weight_redundancy, 1])
                                 eval_feed = self.prepare_eval_feed(

@@ -63,9 +63,12 @@ class PenaltyLbfgsOptimizer(Serializable):
         self._constraint_name = constraint_name
 
         def get_opt_output():
-            flat_grad = tensor_utils.flatten_tensor_variables(tf.gradients(
-                penalized_loss, target.get_params(trainable=True),
-            ))
+            params = target.get_params(trainable=True)
+            grads = tf.gradients(penalized_loss, params)
+            for idx, (grad, param) in enumerate(zip(grads, params)):
+                if grad is None:
+                    grads[idx] = tf.zeros_like(param)
+            flat_grad = tensor_utils.flatten_tensor_variables(grads)
             return [
                 tf.cast(penalized_loss, tf.float64),
                 tf.cast(flat_grad, tf.float64),

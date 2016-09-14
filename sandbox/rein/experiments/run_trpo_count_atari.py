@@ -17,13 +17,13 @@ os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
-TEST_RUN = False
+TEST_RUN = True
 
 # global params
 num_seq_frames = 1
 batch_norm = True
 dropout = False
-baseline = False
+baseline = True
 
 # Param ranges
 if TEST_RUN:
@@ -32,29 +32,26 @@ if TEST_RUN:
     etas = [0.1]
     mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
     lst_factor = [1]
-    trpo_batch_size = 200
+    trpo_batch_size = 100
     max_path_length = 50
     batch_norm = False
 else:
-    exp_prefix = 'trpo-count-atari-42x52-c'
+    exp_prefix = 'trpo-count-atari-42x52-e'
     seeds = range(5)
-    etas = [0, 10.0, 1.0, 0.1]
-    mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-            AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
-            AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
+    etas = [0, 1.0, 0.1, 0.01]
+    mdps = [  # AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
+        # AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
+        AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
     lst_factor = [2]
     trpo_batch_size = 20000
     max_path_length = 4500
     batch_norm = True
 
-lst_pred_delta = [False]
-kl_ratios = [False]
-
 param_cart_product = itertools.product(
-    lst_pred_delta, lst_factor, kl_ratios, mdps, etas, seeds
+    lst_factor, mdps, etas, seeds
 )
 
-for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
+for factor, mdp, eta, seed in param_cart_product:
     network = ConvNetwork(
         input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
         output_dim=mdp.spec.action_space.flat_dim,
@@ -148,7 +145,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
                  dropout=dropout,
                  deterministic=True),
             dict(name='discrete_embedding',
-                 n_units=32,
+                 n_units=16,
                  deterministic=True),
             dict(name='gaussian',
                  n_units=1536,
@@ -230,19 +227,17 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        num_sample_updates=1,  # Every sample in traj batch will be used in `num_sample_updates' updates.
+        num_sample_updates=3,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=False,
         replay_kl_schedule=0.98,
         n_itr_update=1,  # Fake itr updates in sampler
         dyn_pool_args=dict(
-            size=100000,
+            size=10000,
             min_size=32,
             batch_size=32,
-            subsample_factor=0.1,
+            subsample_factor=1.0,
         ),
-        surprise_transform=None,  # BatchPolopt.SurpriseTransform.CAP99PERC,
-        predict_delta=pred_delta,
-        num_seq_frames=num_seq_frames,
+        surprise_transform=None,
     )
 
     run_experiment_lite(
@@ -251,7 +246,7 @@ for pred_delta, factor, kl_ratio, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

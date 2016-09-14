@@ -436,16 +436,16 @@ def load_cifar10(
 
     train_x, train_y = [],[]
     for i in ['1','2','3','4','5']:
-        with open(batch_folder + 'data_batch_'+ i,'r') as f:
-            data = cPkl.load(f)
+        with open(batch_folder + 'data_batch_'+ i,'rb') as f:
+            data = cPkl.load(f, encoding='latin1')
             train_x += [data['data']]
             train_y += [data['labels']]
     train_x = np.concatenate(train_x)
     train_y = np.concatenate(train_y)
 
 
-    with open(batch_folder + 'test_batch','r') as f:
-        data = cPkl.load(f)
+    with open(batch_folder + 'test_batch','rb') as f:
+        data = cPkl.load(f, encoding='latin1')
         test_x = data['data']
         test_y = np.asarray(data['labels'])
 

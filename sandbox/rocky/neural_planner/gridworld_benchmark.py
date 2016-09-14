@@ -1,6 +1,3 @@
-
-
-
 import numpy as np
 import random
 import scipy.sparse
@@ -96,7 +93,7 @@ def new_map(shape, n_obstacles):
     nrow, ncol = shape
 
     obs_types = ['circ', 'rect']
-    max_obstacle_size = max(nrow, ncol) / 4
+    max_obstacle_size = max(nrow, ncol) // 4
 
     for _ in range(n_obstacles):
         rand_type = random.choice(obs_types)
@@ -124,7 +121,7 @@ def to_sparse_adj_graph(map):
 
     ids = np.where(1 - map.flatten())[0]
     nrow, ncol = map.shape
-    xs, ys = ids / ncol, ids % ncol
+    xs, ys = ids // ncol, ids % ncol
 
     row_ids = []
     col_ids = []
@@ -228,8 +225,8 @@ def gen_demos(shape, max_n_obstacles, n_maps):
 
         sps, preds = scipy.sparse.csgraph.dijkstra(graph, directed=False, indices=[from_id], return_predecessors=True)
 
-        from_x, from_y = from_id / ncol, from_id % ncol
-        to_x, to_y = to_id / ncol, to_id % ncol
+        from_x, from_y = from_id // ncol, from_id % ncol
+        to_x, to_y = to_id // ncol, to_id % ncol
 
         if np.isinf(sps[0, to_id]):
             continue
@@ -244,7 +241,7 @@ def gen_demos(shape, max_n_obstacles, n_maps):
 
         flat_maps = np.tile(map.reshape((1, nrow, ncol)), (len(traj), 1, 1))
         flat_state = np.zeros((len(traj), nrow, ncol))
-        flat_state[np.arange(len(traj)), traj / ncol, traj % ncol] = 1
+        flat_state[np.arange(len(traj)), traj // ncol, traj % ncol] = 1
         flat_goal = np.zeros((len(traj), nrow, ncol))
         flat_goal[:, to_x, to_y] = 1
 
@@ -806,7 +803,7 @@ class MatlabData(object):
         matlab_data = sio.loadmat(file_path)
 
         im_data = matlab_data["batch_im_data"]
-        im_data = (im_data - 1) / 255
+        im_data = (im_data - 1) // 255
         # Note: the value at the goal is 10 instead of 1. Worth investigating whether this matters
         value_data = matlab_data["batch_value_data"]
         state1_data = matlab_data["state_x_data"]
