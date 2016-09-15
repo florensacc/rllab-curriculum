@@ -1,4 +1,5 @@
 import copy
+from enum import Enum
 from logging import getLogger
 import os
 import time
@@ -50,7 +51,9 @@ class DQNNatureModel(chainer.ChainList, DQNModel):
     def compute_qs(self, state):
         return self.head_to_q(self.head(state))
 
-
+class Bellman(Enum):
+    q = 1
+    sarsa = 2
 
 
 class DQNAgent(Agent,Shareable,Picklable):
@@ -63,7 +66,7 @@ class DQNAgent(Agent,Shareable,Picklable):
     def __init__(
             self,
             env,
-            bellman="q",
+            bellman=Bellman.q,
             model_type="nips",
             optimizer_type="rmsprop_async",
             optimizer_args=None,
@@ -151,6 +154,7 @@ class DQNAgent(Agent,Shareable,Picklable):
         self.past_action_log_prob = {}
         self.past_action_entropy = {}
         self.past_states = {}
+        self.past_actions = {}
         self.past_rewards = {}
         self.past_qvalues = {}
         self.past_extra_infos = {}
@@ -179,18 +183,19 @@ class DQNAgent(Agent,Shareable,Picklable):
             new_agent.shared_target_model,
             self.shared_params["target_model_params"],
         )
-        new_agent.sync_parameters()
+        new_agent.sync_parameters(init=True)
         new_agent.shared_params = self.shared_params
         new_agent.eps = self.eps # important for testing!
 
         return new_agent
 
-    def sync_parameters(self):
-        chainer_utils.copy_link_param(
-            source_link=self.shared_model,
-            target_link=self.model,
-            deep=not self.share_model,
-        )
+    def sync_parameters(self, init=False):
+        if (init) or (not self.share_model):
+            chainer_utils.copy_link_param(
+                source_link=self.shared_model,
+                target_link=self.model,
+                deep=not self.share_model,
+            )
 
     def preprocess(self,state):
         # delegate this to env wrapper
@@ -251,7 +256,12 @@ class DQNAgent(Agent,Shareable,Picklable):
             else:
                 # bootstrap from target network
                 qs = self.shared_target_model.compute_qs(statevar)[0] # fixed [0]
-                R = float(np.amax(qs.data))
+                if self.bellman == Bellman.q:
+                    R = float(np.amax(qs.data))
+                elif self.bellman == Bellman.sarsa:
+                    R = float(qs.data[self.past_actions[self.t - 1]])
+                else:
+                    raise NotImplementedError
 
             loss = 0
             for i in reversed(range(self.t_start, self.t)):
@@ -276,12 +286,13 @@ class DQNAgent(Agent,Shareable,Picklable):
                 # Compute gradients using thread-specific model
                 self.model.zerograds()
                 loss.backward()
-                # Copy the gradients to the globally shared model
-                self.shared_model.zerograds()
-                chainer_utils.copy_link_grad(
-                    target_link=self.shared_model,
-                    source_link=self.model
-                )
+                if not self.share_model:
+                    # Copy the gradients to the globally shared model
+                    self.shared_model.zerograds()
+                    chainer_utils.copy_link_grad(
+                        target_link=self.shared_model,
+                        source_link=self.model
+                    )
                 self.optimizer.update()
             else:
                 mylogger.log("Process %d banned from commiting gradient update from %d time steps ago."%(self.process_id,sync_t_gap))
@@ -292,6 +303,7 @@ class DQNAgent(Agent,Shareable,Picklable):
 
             # initialize stats for a new traj
             self.past_states = {}
+            self.past_actions = {}
             self.past_rewards = {}
             self.past_qvalues = {}
             self.past_extra_infos = {}
@@ -316,6 +328,7 @@ class DQNAgent(Agent,Shareable,Picklable):
             if self.phase == "Train":
                 # record the state to allow bonus computation
                 self.past_states[self.t] = statevar
+                self.past_actions[self.t] = a
                 self.past_qvalues[self.t] = qs[a] # beware to record the variable (not just its data) to allow gradient computation
                 self.past_extra_infos[self.t] = extra_infos
                 self.epoch_q_list.append(float(qs[a].data))

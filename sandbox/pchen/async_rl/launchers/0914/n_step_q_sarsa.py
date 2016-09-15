@@ -13,7 +13,7 @@ from sandbox.pchen.dqn.envs.atari import AtariEnvCX
 sys.path.append('.')
 
 from sandbox.pchen.async_rl.async_rl.agents.a3c_agent import A3CAgent
-from sandbox.pchen.async_rl.async_rl.agents.dqn_agent import DQNAgent
+from sandbox.pchen.async_rl.async_rl.agents.dqn_agent import DQNAgent, Bellman
 from sandbox.pchen.async_rl.async_rl.algos.a3c_ale import A3CALE
 from sandbox.pchen.async_rl.async_rl.algos.dqn_ale import DQNALE
 from sandbox.pchen.async_rl.async_rl.utils.get_time_stamp import get_time_stamp
@@ -57,19 +57,25 @@ class VG(VariantGenerator):
     @variant
     def eval_frequency(self, target_update_frequency):
         # yield target_update_frequency * 1
-        yield target_update_frequency * 9
+        yield target_update_frequency * 7
 
     @variant
     def game(self, ):
-        return ["pong", "beam_rider", "breakout", "qbert", "space_invaders"]
+        # return ["pong", "beam_rider", "breakout", "qbert", "space_invaders"]
+        return ["pong", "breakout", ]
 
     @variant
     def n_step(self, ):
         return [5,]
 
     @variant
+    def share_model(self, n_step):
+        return [n_step == 1]
+
+    @variant
     def bellman(self, ):
-        return ["q"]
+        # return ["q"]
+        return [Bellman.sarsa]
 
 vg = VG()
 variants = vg.variants(randomized=False)
@@ -100,6 +106,7 @@ for v in variants[:]:
         target_update_frequency=target_update_frequency,
         eps_test=eps_test,
         t_max=n_step,
+        share_model=share_model,
     )
     algo = DQNALE(
         total_steps=total_t,
@@ -119,12 +126,13 @@ for v in variants[:]:
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="0914_n_step_dqn_sarsa_go",
+        exp_prefix="0914_n_step_dqn_sarsa_fixed",
         seed=v["seed"],
         variant=v,
         # mode="local",
         #
         # mode="local_docker",
+
         mode="lab_kube",
         n_parallel=0,
         use_gpu=False,
