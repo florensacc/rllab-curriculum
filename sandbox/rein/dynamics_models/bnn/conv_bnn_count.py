@@ -31,7 +31,7 @@ class DiscreteEmbeddingNonlinearityLayer(lasagne.layers.Layer):
 
     def nonlinearity(self, x, noise_mask=1):
         # Force outputs to be binary through noise.
-        return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(size=x.shape, low=-0.3, high=0.3)
+        return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(size=x.shape, low=-0.2, high=0.2)
 
     def get_output_for(self, input, noise_mask=1, **kwargs):
         return self.nonlinearity(input, noise_mask)

@@ -5,7 +5,7 @@ import itertools
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.core.network import ConvNetwork
-from rllab.misc.instrument2 import stub, run_experiment_lite
+from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 from rllab.baselines.zero_baseline import ZeroBaseline
 
@@ -27,13 +27,14 @@ baseline = True
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'test-trpo-count-e'
+    exp_prefix = 'bin-count-a'
     seeds = range(1)
-    etas = [0, 0.1]
+    etas = [0.1]
     mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-            AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
+            AtariEnvX(game='freeway', obs_type="image", frame_skip=8),
+            AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]
     lst_factor = [1]
-    trpo_batch_size = 20000
+    trpo_batch_size = 100000
     max_path_length = 4500
     batch_norm = True
 else:
@@ -84,7 +85,7 @@ for factor, mdp, eta, seed in param_cart_product:
             regressor_args=dict(
                 mean_network=network,
                 batchsize=None,
-                subsample_factor=1.0,
+                subsample_factor=0.1,
                 # optimizer=FirstOrderOptimizer(
                 #     max_epochs=100,
                 #     verbose=True,
@@ -230,14 +231,16 @@ for factor, mdp, eta, seed in param_cart_product:
         # -------------
         eta=eta,
         dyn_pool_args=dict(
-            size=50000,
-            min_size=32,
-            batch_size=32,
+            size=100000,
+            min_size=64,
+            batch_size=64,
             subsample_factor=0.1,
         ),
         surprise_transform=None,
-        hamming_distance=1
+        hamming_distance=0
     )
+
+    # TODO: split AE from CONVBNNVIME
 
     run_experiment_lite(
         algo.train(),
@@ -248,5 +251,5 @@ for factor, mdp, eta, seed in param_cart_product:
         mode="lab_kube",
         dry=False,
         use_gpu=True,
-        script="sandbox/rein/experiments/run_experiment_lite.py",
+        script="sandbox/rein/experiments/run_experiment_lite_count.py",
     )

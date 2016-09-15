@@ -238,6 +238,7 @@ class BatchPolopt(RLAlgorithm):
         :param obs:
         :return:
         """
+        assert np.max(obs) <= 1.0
         return (obs * self.autoenc.num_classes).astype("uint8")
 
     def decode_obs(self, obs):
@@ -260,30 +261,22 @@ class BatchPolopt(RLAlgorithm):
                 acc_before += self.accuracy(_x, _y) / 10.
 
             done = False
-            outer_loop_count, count = 0, 0
-            running_avg = np.nan
             old_running_avg = np.inf
-            running_avg_alpha = 0.999
-            while not (done and outer_loop_count >= 5):
-                # Replay pool return uint8 target format, so decode _x.
-                batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
-                _x = self.decode_obs(batch['observations'])
-                _y = batch['observations']
-                train_loss = float(self.autoenc.train_fn(_x, _y, 0))
-                assert not np.isinf(train_loss)
-                assert not np.isnan(train_loss)
-                if np.isnan(running_avg):
-                    running_avg = train_loss * 1.05
-                else:
-                    running_avg = running_avg_alpha * running_avg + (1. - running_avg_alpha) * train_loss
-                logger.log('Autoencoder loss= {:.5f}\tmean= {:.5f}\tD= {:.5f}'.format(
-                    train_loss, running_avg, old_running_avg - running_avg))
+            while not done:
+                running_avg = 0.
+                for _ in range(500):
+                    # Replay pool return uint8 target format, so decode _x.
+                    batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                    _x = self.decode_obs(batch['observations'])
+                    _y = batch['observations']
+                    train_loss = float(self.autoenc.train_fn(_x, _y, 0))
+                    assert not np.isinf(train_loss)
+                    assert not np.isnan(train_loss)
+                    running_avg += train_loss / 500.
                 if old_running_avg - running_avg < 1e-4:
                     done = True
-                    outer_loop_count += 1
-                else:
-                    outer_loop_count = 0
-                count += 1
+                logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
+                    running_avg, old_running_avg - running_avg))
                 old_running_avg = running_avg
 
             for i in range(10):
