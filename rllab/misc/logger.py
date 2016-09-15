@@ -178,6 +178,7 @@ table_printer = TerminalTablePrinter()
 
 
 def dump_tabular(*args, **kwargs):
+    wh = kwargs.pop("write_header", None)
     if len(_tabular) > 0:
         if _log_tabular_only:
             table_printer.print_tabular(_tabular)
@@ -189,7 +190,7 @@ def dump_tabular(*args, **kwargs):
         # This assumes that the keys in each iteration won't change!
         for tabular_fd in list(_tabular_fds.values()):
             writer = csv.DictWriter(tabular_fd, fieldnames=list(tabular_dict.keys()))
-            if tabular_fd not in _tabular_header_written:
+            if wh and (tabular_fd not in _tabular_header_written):
                 writer.writeheader()
                 _tabular_header_written.add(tabular_fd)
             writer.writerow(tabular_dict)

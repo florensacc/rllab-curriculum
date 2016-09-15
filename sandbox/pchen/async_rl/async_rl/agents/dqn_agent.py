@@ -161,8 +161,6 @@ class DQNAgent(Agent,Shareable,Picklable):
             model_params=chainer_utils.extract_link_params(self.shared_model),
             target_model_params=chainer_utils.extract_link_params(self.shared_target_model),
         )
-        if self.bonus_evaluator is not None:
-            self.bonus_evaluator.prepare_sharing()
 
     def process_copy(self):
         new_agent = DQNAgent(**self.init_params)
@@ -216,9 +214,14 @@ class DQNAgent(Agent,Shareable,Picklable):
                 )
 
 
-    def act(self, state, reward, is_state_terminal,extra_infos=dict(),
-        global_vars=dict(),
+    def act(
+            self, state, reward, is_state_terminal,
+            extra_infos=None, global_vars=None,
     ):
+        if extra_infos is None:
+            extra_infos = dict()
+        if global_vars is None:
+            global_vars = dict()
         if self.clip_reward:
             reward = np.clip(reward, -1, 1)
         self.past_rewards[self.t - 1] = reward

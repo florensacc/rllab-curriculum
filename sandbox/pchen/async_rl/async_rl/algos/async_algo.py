@@ -23,7 +23,7 @@ class AsyncAlgo(Picklable):
         seeds=None,
         profile=False,
         logging_level=logging.INFO,
-        total_steps=10**6,
+        total_steps=10**7,
         eval_frequency=10**6,
         eval_n_runs=10,
         horizon=np.inf,
@@ -199,9 +199,9 @@ class AsyncAlgo(Picklable):
                     logger.record_tabular('Epoch',self.epoch)
                     logger.record_tabular('GlobalT',global_t)
                     logger.record_tabular('ElapsedTime',elapsed_time)
-                    logger.record_tabular_misc_stat('Return',scores)
+                    logger.record_tabular_misc_stat('EvalReturn',scores)
 
-                    agent.finish_epoch(epoch=self.epoch,log=True)
+                    agent.finish_epoch(epoch=self.epoch, log=True)
 
                     # Update max score
                     mean = np.average(scores)
@@ -221,6 +221,7 @@ class AsyncAlgo(Picklable):
                             header_written.value = 1
                         else:
                             logger.dump_tabular(write_header=False)
+                        logger.log("Dumping table")
 
                     # Save snapshots
                     params = self.get_snapshot(env,agent)

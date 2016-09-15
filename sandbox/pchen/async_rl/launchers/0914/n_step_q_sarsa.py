@@ -32,15 +32,15 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [42, 2222]
+        return [42, 2222, 333333333333333]
 
     @variant
     def total_t(self):
-        return [35 * 10**6]
+        return [7 * 3*10**6]
 
     @variant
     def n_processes(self):
-        return [9, 18]
+        return [18, 9]
 
     # @variant
     # def entropy_bonus(self):
@@ -56,7 +56,8 @@ class VG(VariantGenerator):
 
     @variant
     def eval_frequency(self, target_update_frequency):
-        yield target_update_frequency * 6
+        # yield target_update_frequency * 1
+        yield target_update_frequency * 9
 
     @variant
     def game(self, ):
@@ -64,7 +65,7 @@ class VG(VariantGenerator):
 
     @variant
     def n_step(self, ):
-        return [5, 1]
+        return [5,]
 
     @variant
     def bellman(self, ):
@@ -75,7 +76,7 @@ variants = vg.variants(randomized=False)
 
 print(len(variants))
 
-for v in variants[:1]:
+for v in variants[:]:
     locals().update(v)
 
     # Problem setting
@@ -101,6 +102,7 @@ for v in variants[:1]:
         t_max=n_step,
     )
     algo = DQNALE(
+        total_steps=total_t,
         n_processes=n_processes,
         env=env,
         agent=agent,
@@ -117,25 +119,25 @@ for v in variants[:1]:
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="0914_n_step_dqn_sarsa_test1",
+        exp_prefix="0914_n_step_dqn_sarsa_go",
         seed=v["seed"],
         variant=v,
         # mode="local",
         #
-        mode="local_docker",
-        # mode="lab_kube",
-        # n_parallel=0,
-        # use_gpu=False,
-        # node_selector={
-        #     "aws/type": "c4.8xlarge",
-        # },
-        # resources=dict(
-        #     requests=dict(
-        #         cpu=17.1,
-        #     ),
-        #     limits=dict(
-        #         cpu=17.1,
-        #     )
-        # )
+        # mode="local_docker",
+        mode="lab_kube",
+        n_parallel=0,
+        use_gpu=False,
+        node_selector={
+            "aws/type": "c4.8xlarge",
+        },
+        resources=dict(
+            requests=dict(
+                cpu=17.1,
+            ),
+            limits=dict(
+                cpu=17.1,
+            )
+        )
     )
 
