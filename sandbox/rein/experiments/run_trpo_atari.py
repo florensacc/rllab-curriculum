@@ -26,15 +26,15 @@ import itertools
 
 RECORD_VIDEO = True
 num_seq_frames = 4
-baseline = False
+baseline = True
 
 stub(globals())
 
 # Param ranges
-seeds = list(range(10))
+seeds = list(range(1))
 
 mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]
+        AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
 
 param_cart_product = itertools.product(
     mdps, seeds
@@ -72,12 +72,12 @@ for mdp, seed in param_cart_product:
             regressor_args=dict(
                 mean_network=network,
                 batchsize=None,
-                subsample_factor=0.1,
-                optimizer=FirstOrderOptimizer(
-                    max_epochs=100,
-                    verbose=True,
-                ),
-                use_trust_region=False,
+                subsample_factor=1.0,
+                # optimizer=FirstOrderOptimizer(
+                #     max_epochs=100,
+                #     verbose=True,
+                # ),
+                # use_trust_region=False,
             ),
         )
     else:
@@ -90,7 +90,7 @@ for mdp, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=25000,
+        batch_size=10000,
         whole_paths=True,
         max_path_length=4500,
         n_itr=400,
@@ -103,11 +103,12 @@ for mdp, seed in param_cart_product:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="trpo-atari-42x52-a",
-        n_parallel=4,
+        exp_prefix="trpo-atari-42x52-b",
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",
         use_gpu=True,
         dry=False,
+        script="sandbox/rein/experiments/run_experiment_lite.py",
     )

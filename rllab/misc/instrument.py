@@ -995,7 +995,7 @@ def to_lab_kube_pod(
         if sync_s3_pkl:
             pre_commands.append("""
                 while /bin/true; do
-                    aws s3 sync --exclude '*' --include '*.csv' --include '*.json' --include '*.pkl' {log_dir} {remote_log_dir} --region {aws_region}
+                    aws s3 sync --exclude '*' --include '*.csv' --include '*.json' --include '*.pkl' {log_dir} {remote_log_dir} --region {aws_region} --quiet
                     sleep {periodic_sync_interval}
                 done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
                                                      aws_region=config.AWS_REGION_NAME,
@@ -1003,7 +1003,7 @@ def to_lab_kube_pod(
         else:
             pre_commands.append("""
                 while /bin/true; do
-                    aws s3 sync --exclude '*' --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
+                    aws s3 sync --exclude '*' --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region} --quiet
                     sleep {periodic_sync_interval}
                 done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
                                                      aws_region=config.AWS_REGION_NAME,
@@ -1013,10 +1013,6 @@ def to_lab_kube_pod(
     post_commands.append('aws s3 cp --recursive %s %s' %
                          (log_dir,
                           remote_log_dir))
-    # post_commands.append('sleep 500000')
-    # command = to_docker_command(params, docker_image=docker_image, script=script,
-    #                             pre_commands=pre_commands,
-    #                             post_commands=post_commands)
     command_list = list()
     if pre_commands is not None:
         command_list.extend(pre_commands)

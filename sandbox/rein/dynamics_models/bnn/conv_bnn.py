@@ -103,7 +103,6 @@ class BayesianLayer(lasagne.layers.Layer):
         self.num_units = num_units
         self.num_inputs = int(np.prod(self.input_shape[1:]))
         self.prior_rho = self.inv_softplus(self.prior_sd)
-        print('prior_rho: {}'.format(self.prior_rho))
         self.disable_variance = disable_variance
         self._matrix_variate_gaussian = matrix_variate_gaussian
         self.mvg_rank = mvg_rank

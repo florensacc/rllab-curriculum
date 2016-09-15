@@ -5,13 +5,13 @@ import itertools
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.core.network import ConvNetwork
-from rllab.misc.instrument2 import stub, run_experiment_lite
+from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 from rllab.baselines.zero_baseline import ZeroBaseline
 
 from sandbox.rein.envs.atari import AtariEnvX
 from sandbox.rein.algos.trpo_count import TRPO
-from sandbox.rein.dynamics_models.bnn.conv_bnn_vime import ConvBNNVIME
+from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
@@ -27,16 +27,18 @@ baseline = True
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'test-count-a'
-    seeds = [0]
-    etas = [0, 0.01]
-    mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
+    exp_prefix = 'bin-count-a'
+    seeds = range(1)
+    etas = [0.1]
+    mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
+            AtariEnvX(game='freeway', obs_type="image", frame_skip=8),
+            AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]
     lst_factor = [1]
-    trpo_batch_size = 10000
+    trpo_batch_size = 100000
     max_path_length = 4500
     batch_norm = True
 else:
-    exp_prefix = 'trpo-count-atari-42x52-f'
+    exp_prefix = 'trpo-count-atari-42x52-a'
     seeds = range(5)
     etas = [0, 1.0, 0.1, 0.01]
     mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
@@ -83,12 +85,12 @@ for factor, mdp, eta, seed in param_cart_product:
             regressor_args=dict(
                 mean_network=network,
                 batchsize=None,
-                subsample_factor=1.0,
-                optimizer=FirstOrderOptimizer(
-                    max_epochs=100,
-                    verbose=True,
-                ),
-                use_trust_region=False,
+                subsample_factor=0.1,
+                # optimizer=FirstOrderOptimizer(
+                #     max_epochs=100,
+                #     verbose=True,
+                # ),
+                # use_trust_region=False,
             ),
         )
     else:
@@ -222,23 +224,23 @@ for factor, mdp, eta, seed in param_cart_product:
         step_size=0.01,
         optimizer_args=dict(
             num_slices=30,
-            subsample_factor=0.1),
+            subsample_factor=0.1,
+        ),
 
-        # VIME settings
+        # COUNT settings
         # -------------
         eta=eta,
-        num_sample_updates=1,  # Every sample in traj batch will be used in `num_sample_updates' updates.
-        normalize_reward=False,
-        replay_kl_schedule=0.98,
-        n_itr_update=1,  # Fake itr updates in sampler
         dyn_pool_args=dict(
-            size=50000,
-            min_size=32,
-            batch_size=32,
+            size=100000,
+            min_size=64,
+            batch_size=64,
             subsample_factor=0.1,
         ),
         surprise_transform=None,
+        hamming_distance=0
     )
+
+    # TODO: split AE from CONVBNNVIME
 
     run_experiment_lite(
         algo.train(),
@@ -249,5 +251,5 @@ for factor, mdp, eta, seed in param_cart_product:
         mode="lab_kube",
         dry=False,
         use_gpu=True,
-        script="sandbox/rein/experiments/run_experiment_lite.py",
+        script="sandbox/rein/experiments/run_experiment_lite_count.py",
     )
