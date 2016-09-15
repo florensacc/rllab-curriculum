@@ -26,7 +26,8 @@ def set_link_params(target_link, params): # model params
         if param_name in params:
             shared_param = params[param_name]
             param.data = np.frombuffer(
-                shared_param, dtype=param.data.dtype).reshape(param.data.shape)
+                shared_param, dtype=param.data.dtype
+            ).reshape(param.data.shape)
 
 
 def set_optimizer_params(target_optimizer, params): # optimizer state
@@ -53,12 +54,15 @@ def extract_optimizer_params(optimizer):
                 param_name] = mp.RawArray('f', param.ravel())
     return shared_arrays
 
-def copy_link_param(target_link, source_link):
+def copy_link_param(target_link, source_link, deep=True):
     """Copy parameters of a link to another link.
     """
     target_params = dict(target_link.namedparams())
     for param_name, param in source_link.namedparams():
-        target_params[param_name].data[:] = param.data
+        if deep:
+            target_params[param_name].data[:] = param.data
+        else:
+            target_params[param_name].data = param.data
 
 
 def copy_link_grad(target_link, source_link):

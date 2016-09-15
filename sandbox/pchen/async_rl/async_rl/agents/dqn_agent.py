@@ -1,4 +1,5 @@
 import copy
+from enum import Enum
 from logging import getLogger
 import os
 import time
@@ -50,7 +51,9 @@ class DQNNatureModel(chainer.ChainList, DQNModel):
     def compute_qs(self, state):
         return self.head_to_q(self.head(state))
 
-
+class Bellman(Enum):
+    q = 1
+    sarsa = 2
 
 
 class DQNAgent(Agent,Shareable,Picklable):
@@ -60,16 +63,20 @@ class DQNAgent(Agent,Shareable,Picklable):
     Notice that the target network is globally shared. To reduce computation time we may try keeping local copies instead.
     """
 
-    def __init__(self,
+    def __init__(
+            self,
             env,
+            bellman=Bellman.q,
             model_type="nips",
             optimizer_type="rmsprop_async",
-            optimizer_args=dict(lr=7e-4,eps=1e-1,alpha=0.99),
-            optimizer_hook_args=dict(
-                gradient_clipping=40,
-            ),
-            t_max=5, gamma=0.99, beta=1e-2,
-            eps_start=1.0, eps_end=0.1, eps_anneal_time=4 * 10 ** 6,
+            optimizer_args=None,
+            optimizer_hook_args=None,
+            t_max=5,
+            gamma=0.99,
+            beta=1e-2,
+            eps_start=1.0,
+            eps_end=0.1,
+            eps_anneal_time=4 * 10 ** 6,
             eps_test=None, # eps used for testing regardless of training eps
             target_update_frequency=40000,
             process_id=0, clip_reward=True,
@@ -78,11 +85,21 @@ class DQNAgent(Agent,Shareable,Picklable):
             bonus_count_target="image",
             phase="Train",
             sync_t_gap_limit=np.inf,
-            ):
+            share_model=False,
+    ):
+        if optimizer_args is None:
+            optimizer_args = dict(lr=7e-4, eps=1e-1, alpha=0.99)
+        if optimizer_hook_args is None:
+            optimizer_hook_args = dict(
+                gradient_clipping=40,
+            )
         self.init_params = locals()
         self.init_params.pop('self')
 
         self.env = env
+        self.bellman = bellman
+        self.share_model = share_model
+
         action_space = env.action_space
 
         # Globally shared model
@@ -137,6 +154,7 @@ class DQNAgent(Agent,Shareable,Picklable):
         self.past_action_log_prob = {}
         self.past_action_entropy = {}
         self.past_states = {}
+        self.past_actions = {}
         self.past_rewards = {}
         self.past_qvalues = {}
         self.past_extra_infos = {}
@@ -154,8 +172,6 @@ class DQNAgent(Agent,Shareable,Picklable):
             model_params=chainer_utils.extract_link_params(self.shared_model),
             target_model_params=chainer_utils.extract_link_params(self.shared_target_model),
         )
-        if self.bonus_evaluator is not None:
-            self.bonus_evaluator.prepare_sharing()
 
     def process_copy(self):
         new_agent = DQNAgent(**self.init_params)
@@ -167,19 +183,19 @@ class DQNAgent(Agent,Shareable,Picklable):
             new_agent.shared_target_model,
             self.shared_params["target_model_params"],
         )
-        new_agent.sync_parameters()
-        if self.bonus_evaluator is not None:
-            new_agent.bonus_evaluator = self.bonus_evaluator.process_copy()
+        new_agent.sync_parameters(init=True)
         new_agent.shared_params = self.shared_params
         new_agent.eps = self.eps # important for testing!
 
         return new_agent
 
-    def sync_parameters(self):
-        chainer_utils.copy_link_param(
-            target_link=self.model,
-            source_link=self.shared_model,
-        )
+    def sync_parameters(self, init=False):
+        if (init) or (not self.share_model):
+            chainer_utils.copy_link_param(
+                source_link=self.shared_model,
+                target_link=self.model,
+                deep=not self.share_model,
+            )
 
     def preprocess(self,state):
         # delegate this to env wrapper
@@ -209,9 +225,14 @@ class DQNAgent(Agent,Shareable,Picklable):
                 )
 
 
-    def act(self, state, reward, is_state_terminal,extra_infos=dict(),
-        global_vars=dict(),
+    def act(
+            self, state, reward, is_state_terminal,
+            extra_infos=None, global_vars=None,
     ):
+        if extra_infos is None:
+            extra_infos = dict()
+        if global_vars is None:
+            global_vars = dict()
         if self.clip_reward:
             reward = np.clip(reward, -1, 1)
         self.past_rewards[self.t - 1] = reward
@@ -219,63 +240,34 @@ class DQNAgent(Agent,Shareable,Picklable):
         if not is_state_terminal:
             statevar = chainer.Variable(np.expand_dims(self.preprocess(state), 0))
 
-        # record the time elapsed since last model synchroization
-        # if the time is too long, we may discard the current update and synchronize instead
-        if self.phase == "Train":
-            sync_t_gap = global_vars["global_t"].value - self.last_sync_t
-            not_delayed = sync_t_gap < self.sync_t_gap_limit
-
         ready_to_commit = self.phase == "Train" and (
-            (is_state_terminal and self.t_start < self.t) \
-                or self.t - self.t_start == self.t_max)
+            (is_state_terminal and self.t_start < self.t) or
+            (self.t - self.t_start == self.t_max)
+        )
 
         # start computing gradient and synchronize model params
         # avoid updating model params during testing
         if ready_to_commit:
             assert self.t_start < self.t
 
-            print("1")
-
             # assign bonus rewards
-            if self.bonus_evaluator is not None:
-                if self.bonus_count_target == "image":
-                    count_targets = np.asarray([
-                        self.past_states[i].data[0]
-                        for i in range(self.t_start, self.t)
-                    ])
-                elif self.bonus_count_target == "ram":
-                    count_targets = np.asarray([
-                        self.past_extra_infos[i]["ram_state"]
-                        for i in range(self.t_start, self.t)
-                    ])
-                else:
-                    raise NotImplementedError
-                bonus_rewards = self.bonus_evaluator.update_and_evaluate(count_targets)
-                for i in range(self.t_start, self.t):
-                    self.past_rewards[i] += bonus_rewards[i - self.t_start]
-            self.cur_path_effective_return += np.sum([
-                self.past_rewards[i] for i in range(self.t_start, self.t)
-            ])
-
-            print("2")
             if is_state_terminal:
                 R = 0
             else:
                 # bootstrap from target network
                 qs = self.shared_target_model.compute_qs(statevar)[0] # fixed [0]
-                R = float(np.amax(qs.data))
-                # if self.process_id == 0:
-                #     logger.debug('target qs:%s',qs.data)
-                #     logger.debug('R:%s',R)
+                if self.bellman == Bellman.q:
+                    R = float(np.amax(qs.data))
+                elif self.bellman == Bellman.sarsa:
+                    R = float(qs.data[self.past_actions[self.t - 1]])
+                else:
+                    raise NotImplementedError
 
             loss = 0
             for i in reversed(range(self.t_start, self.t)):
                 R *= self.gamma
                 R += self.past_rewards[i]
                 q = self.past_qvalues[i]
-                # if self.process_id == 0:
-                #     logger.debug('s:%s q:%s R:%s',
-                #                  self.past_states[i].data.sum(), q.data, R)
                 cur_loss = 0.5 * (q - R) ** 2
                 loss += cur_loss
                 self.epoch_td_loss_list.append(cur_loss.data)
@@ -286,22 +278,22 @@ class DQNAgent(Agent,Shareable,Picklable):
                 factor = self.t_max / (self.t - self.t_start)
                 loss *= factor
 
-            # if self.process_id == 0:
-            #     logger.debug('td_loss:%s', loss.data)
-
+            # record the time elapsed since last model synchroization
+            # if the time is too long, we may discard the current update and synchronize instead
+            sync_t_gap = global_vars["global_t"].value - self.last_sync_t
+            not_delayed = sync_t_gap < self.sync_t_gap_limit
             if not_delayed:
-                print("3")
                 # Compute gradients using thread-specific model
                 self.model.zerograds()
                 loss.backward()
-                # Copy the gradients to the globally shared model
-                self.shared_model.zerograds()
-                chainer_utils.copy_link_grad(
-                    target_link=self.shared_model,
-                    source_link=self.model
-                )
+                if not self.share_model:
+                    # Copy the gradients to the globally shared model
+                    self.shared_model.zerograds()
+                    chainer_utils.copy_link_grad(
+                        target_link=self.shared_model,
+                        source_link=self.model
+                    )
                 self.optimizer.update()
-                print("4")
             else:
                 mylogger.log("Process %d banned from commiting gradient update from %d time steps ago."%(self.process_id,sync_t_gap))
 
@@ -311,43 +303,37 @@ class DQNAgent(Agent,Shareable,Picklable):
 
             # initialize stats for a new traj
             self.past_states = {}
+            self.past_actions = {}
             self.past_rewards = {}
             self.past_qvalues = {}
             self.past_extra_infos = {}
 
             self.t_start = self.t
 
-            print("5")
-
         # store traj info and return action
         if not is_state_terminal:
             # choose an action
             qs = self.model.compute_qs(statevar)[0]
-            # print(qs.data)
             # WARN: even when testing, do not just use argmax; it may get stuck at the beginning of Breakout (doing no_op)
             if self.phase == "Test" and self.eps_test is not None:
                 eps = self.eps_test
             else:
                 eps = self.eps
             if np.random.uniform() < eps:
-                a = np.random.randint(low=0,high=len(qs.data))
+                a = np.random.randint(low=0, high=len(qs.data))
             else:
                 a = np.argmax(qs.data)
 
-            print("6")
             # update info for training; doing this in testing will lead to insufficient memory
             if self.phase == "Train":
                 # record the state to allow bonus computation
                 self.past_states[self.t] = statevar
+                self.past_actions[self.t] = a
                 self.past_qvalues[self.t] = qs[a] # beware to record the variable (not just its data) to allow gradient computation
                 self.past_extra_infos[self.t] = extra_infos
                 self.epoch_q_list.append(float(qs[a].data))
                 self.cur_path_len += 1
                 self.t += 1
-                if self.process_id == 0:
-                    logger.debug('t:%s qs:%s',
-                                 self.t, qs.data)
-            print("7")
             return a
         else:
             self.epoch_path_len_list.append(self.cur_path_len)
@@ -358,7 +344,7 @@ class DQNAgent(Agent,Shareable,Picklable):
             return None
 
 
-    def finish_epoch(self, epoch,log):
+    def finish_epoch(self, epoch, log):
         if self.bonus_evaluator is not None:
             self.bonus_evaluator.finish_epoch(epoch=epoch,log=log)
         if log:

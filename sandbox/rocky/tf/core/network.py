@@ -162,7 +162,7 @@ class GRUNetwork(object):
             else:
                 l_in = input_layer
             l_step_input = L.InputLayer(shape=(None,) + input_shape, name="step_input")
-            l_step_prev_hidden = L.InputLayer(shape=(None, hidden_dim), name="step_prev_hidden")
+            l_step_prev_state = L.InputLayer(shape=(None, hidden_dim), name="step_prev_state")
             l_gru = gru_layer_cls(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity,
                                   hidden_init_trainable=False, name="gru")
             l_gru_flat = L.ReshapeLayer(
@@ -184,7 +184,8 @@ class GRUNetwork(object):
                 extras=[l_in],
                 name="output"
             )
-            l_step_hidden = l_gru.get_step_layer(l_step_input, l_step_prev_hidden, name="step_hidden")
+            l_step_state = l_gru.get_step_layer(l_step_input, l_step_prev_state, name="step_state")
+            l_step_hidden = l_step_state
             l_step_output = L.DenseLayer(
                 l_step_hidden,
                 num_units=output_dim,
@@ -199,9 +200,15 @@ class GRUNetwork(object):
             self._l_gru = l_gru
             self._l_out = l_output
             self._l_step_input = l_step_input
-            self._l_step_prev_hidden = l_step_prev_hidden
+            self._l_step_prev_state = l_step_prev_state
             self._l_step_hidden = l_step_hidden
+            self._l_step_state = l_step_state
             self._l_step_output = l_step_output
+            self._hidden_dim = hidden_dim
+
+    @property
+    def state_dim(self):
+        return self._hidden_dim
 
     @property
     def input_layer(self):
@@ -224,12 +231,16 @@ class GRUNetwork(object):
         return self._l_step_input
 
     @property
-    def step_prev_hidden_layer(self):
-        return self._l_step_prev_hidden
+    def step_prev_state_layer(self):
+        return self._l_step_prev_state
 
     @property
     def step_hidden_layer(self):
         return self._l_step_hidden
+
+    @property
+    def step_state_layer(self):
+        return self._l_step_state
 
     @property
     def step_output_layer(self):
@@ -237,6 +248,10 @@ class GRUNetwork(object):
 
     @property
     def hid_init_param(self):
+        return self._hid_init_param
+
+    @property
+    def state_init_param(self):
         return self._hid_init_param
 
 
@@ -250,8 +265,8 @@ class LSTMNetwork(object):
             else:
                 l_in = input_layer
             l_step_input = L.InputLayer(shape=(None,) + input_shape, name="step_input")
-            l_step_prev_hidden = L.InputLayer(shape=(None, hidden_dim), name="step_prev_hidden")
-            l_step_prev_cell = L.InputLayer(shape=(None, hidden_dim), name="step_prev_cell")
+            # contains previous hidden and cell state
+            l_step_prev_state = L.InputLayer(shape=(None, hidden_dim * 2), name="step_prev_state")
             l_lstm = lstm_layer_cls(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity,
                                     hidden_init_trainable=False, name="lstm", forget_bias=forget_bias,
                                     use_peepholes=use_peepholes)
@@ -274,10 +289,9 @@ class LSTMNetwork(object):
                 extras=[l_in],
                 name="output"
             )
-            l_step_hidden_cell = l_lstm.get_step_layer(l_step_input, l_step_prev_hidden, l_step_prev_cell,
-                                                       name="step_hidden_cell")
-            l_step_hidden = L.SliceLayer(l_step_hidden_cell, indices=slice(hidden_dim), name="step_hidden")
-            l_step_cell = L.SliceLayer(l_step_hidden_cell, indices=slice(hidden_dim, None), name="step_cell")
+            l_step_state = l_lstm.get_step_layer(l_step_input, l_step_prev_state, name="step_state")
+            l_step_hidden = L.SliceLayer(l_step_state, indices=slice(hidden_dim), name="step_hidden")
+            l_step_cell = L.SliceLayer(l_step_state, indices=slice(hidden_dim, None), name="step_cell")
             l_step_output = L.DenseLayer(
                 l_step_hidden,
                 num_units=output_dim,
@@ -293,11 +307,16 @@ class LSTMNetwork(object):
             self._l_lstm = l_lstm
             self._l_out = l_output
             self._l_step_input = l_step_input
-            self._l_step_prev_hidden = l_step_prev_hidden
-            self._l_step_prev_cell = l_step_prev_cell
+            self._l_step_prev_state = l_step_prev_state
             self._l_step_hidden = l_step_hidden
             self._l_step_cell = l_step_cell
+            self._l_step_state = l_step_state
             self._l_step_output = l_step_output
+            self._hidden_dim = hidden_dim
+
+    @property
+    def state_dim(self):
+        return self._hidden_dim * 2
 
     @property
     def input_layer(self):
@@ -320,16 +339,16 @@ class LSTMNetwork(object):
         return self._l_step_input
 
     @property
-    def step_prev_hidden_layer(self):
-        return self._l_step_prev_hidden
-
-    @property
-    def step_prev_cell_layer(self):
-        return self._l_step_prev_cell
+    def step_prev_state_layer(self):
+        return self._l_step_prev_state
 
     @property
     def step_hidden_layer(self):
         return self._l_step_hidden
+
+    @property
+    def step_state_layer(self):
+        return self._l_step_state
 
     @property
     def step_cell_layer(self):
@@ -346,6 +365,10 @@ class LSTMNetwork(object):
     @property
     def cell_init_param(self):
         return self._cell_init_param
+
+    @property
+    def state_init_param(self):
+        return tf.concat(0, [self._hid_init_param, self._cell_init_param])
 
 
 class ConvMergeNetwork(LayersPowered, Serializable):

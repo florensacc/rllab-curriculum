@@ -490,8 +490,9 @@ def run_experiment_lite(
         for task in batch_tasks:
             if 'env' in task:
                 assert task.pop('env') is None
+            # TODO: dangerous when there are multiple tasks?
             task["resources"] = params.pop(
-                "resouces", config.KUBE_DEFAULT_RESOURCES)
+                "resources", config.KUBE_DEFAULT_RESOURCES)
             task["node_selector"] = params.pop(
                 "node_selector", config.KUBE_DEFAULT_NODE_SELECTOR)
             task["exp_prefix"] = exp_prefix
@@ -564,6 +565,9 @@ def to_local_command(params, script=osp.join(config.PROJECT_PATH, 'scripts/run_e
     command = "python " + script
     if use_gpu and not config.USE_TF:
         command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto' " + command
+    for k, v in config.ENV.items():
+        command = ("%s=%s " % (k, v)) + command
+
     for k, v in params.items():
         if isinstance(v, dict):
             for nk, nv in v.items():
@@ -957,7 +961,6 @@ def to_lab_kube_pod(
     :param script: script command for running experiment
     :return:
     """
-    print("DEPRECATED! use instrument2.py")
     log_dir = params.get("log_dir")
     remote_log_dir = params.pop("remote_log_dir")
     resources = params.pop("resources")
@@ -1061,6 +1064,7 @@ def to_lab_kube_pod(
                 ],
                 "restartPolicy": "Never",
                 "nodeSelector": node_selector,
+                "dnsPolicy": "Default",
             }
         }
     return {
@@ -1111,6 +1115,7 @@ def to_lab_kube_pod(
             ],
             "restartPolicy": "Never",
             "nodeSelector": node_selector,
+            "dnsPolicy": "Default",
         }
     }
 

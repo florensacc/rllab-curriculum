@@ -23,7 +23,7 @@ class AsyncAlgo(Picklable):
         seeds=None,
         profile=False,
         logging_level=logging.INFO,
-        total_steps=8*10**7,
+        total_steps=10**7,
         eval_frequency=10**6,
         eval_n_runs=10,
         horizon=np.inf,
@@ -133,15 +133,15 @@ class AsyncAlgo(Picklable):
             obs, reward, terminal, extra = env.reset(), 0., False, {}
 
             # each following loop is one time step
+
+            start_time = time.time()
             while global_t < args["total_steps"]:
                 # Training ------------------------------------------------------
                 # Update time step counters
-                print("8")
                 with global_vars["global_t"].get_lock():
                     global_vars["global_t"].value += 1
                     global_t = global_vars["global_t"].value
 
-                print("9")
                 agent.update_params(
                     global_vars=global_vars,
                     training_args=args,
@@ -151,40 +151,33 @@ class AsyncAlgo(Picklable):
                 episode_t += 1
 
                 # Update reward stats
-                # episode_r += env.reward
-
-                # Update agent, env
-                # take actions
-                # action = agent.act(
-                #     env.state, env.reward, env.is_terminal, env.extra_infos,
-                #     global_vars=global_vars,
-                #     training_args=args,
-                # )
                 action = agent.act(
                     obs, reward, terminal, extra,
                     global_vars=global_vars,
                 )
-                print("10")
                 obs, reward, terminal, extra = env.step(action)
-                print("11")
 
                 episode_r += reward
 
-                logger.log('global_t:{} local_t:{} episode_t:{} episode_r:{}'.format(
-                    global_t, local_t, episode_t, episode_r))
+                terminal = terminal or (episode_t > args["horizon"])
+                if terminal:
+                    # notify agent of termination
+                    _ = agent.act(
+                        obs, reward, terminal, extra,
+                        global_vars=global_vars,
+                    )
 
-                if terminal or (episode_t > args["horizon"]):
                     # log info for each episode
                     if process_id == 0:
-                        logger.log('global_t:{} local_t:{} episode_t:{} episode_r:{}'.format(
-                            global_t, local_t, episode_t, episode_r))
+                        logger.log('global_t:{} local_t:{} episode_t:{} episode_r:{} t_per_sec:{}'.format(
+                            global_t, local_t, episode_t, episode_r, global_t / (time.time()-start_time)))
                     episode_r = 0
                     episode_t = 0
                     obs, reward, terminal, extra = env.reset(), 0., False, {}
 
                     if episode_t > args["horizon"]:
                         logger.log(
-                            "WARNING: horizon %d exceeded."%(args["horizon"]),
+                            "WARNING: horizon %d exceeded." % (args["horizon"]),
                             color="yellow",
                         )
 
@@ -204,9 +197,9 @@ class AsyncAlgo(Picklable):
                     logger.record_tabular('Epoch',self.epoch)
                     logger.record_tabular('GlobalT',global_t)
                     logger.record_tabular('ElapsedTime',elapsed_time)
-                    logger.record_tabular_misc_stat('Return',scores)
+                    logger.record_tabular_misc_stat('EvalReturn',scores)
 
-                    agent.finish_epoch(epoch=self.epoch,log=True)
+                    agent.finish_epoch(epoch=self.epoch, log=True)
 
                     # Update max score
                     mean = np.average(scores)
@@ -226,6 +219,7 @@ class AsyncAlgo(Picklable):
                             header_written.value = 1
                         else:
                             logger.dump_tabular(write_header=False)
+                        logger.log("Dumping table")
 
                     # Save snapshots
                     params = self.get_snapshot(env,agent)

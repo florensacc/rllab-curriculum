@@ -133,7 +133,7 @@ class VAE(object):
         if not self.noise:
             z_var = z_dist_info["mean"]
             log_p_x_given_z = 1.
-        x_var, x_dist_info = self.model.decode(z_var)
+        x_var, x_dist_info = self.model.decode(z_var, sample=self.img_on)
 
         log_p_x_given_z = self.model.output_dist.logli(
             tf.reshape(
@@ -211,10 +211,10 @@ class VAE(object):
         # loss = - vlb
         # surr_loss = - surr_vlb
 
-        log_vars.append((
-            "ent_x_given_z",
-            tf.reduce_mean(self.model.output_dist.entropy(x_dist_info)) / ndim
-        ))
+        # log_vars.append((
+        #     "ent_x_given_z",
+        #     tf.reduce_mean(self.model.output_dist.entropy(x_dist_info)) / ndim
+        # ))
         log_vars.append(("vlb", vlb))
         log_vars.append(("kl", kl))
         log_vars.append(("true_vlb", true_vlb))

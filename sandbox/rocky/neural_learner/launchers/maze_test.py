@@ -1,7 +1,8 @@
 from rllab.misc.instrument import stub, run_experiment_lite
 # from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from sandbox.rocky.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
-from sandbox.rocky.tf.policies.categorical_lstm_policy import CategoricalLSTMPolicy
+# from sandbox.rocky.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
+# from sandbox.rocky.tf.policies.categorical_lstm_policy import CategoricalLSTMPolicy
+from sandbox.rocky.tf.policies.categorical_rnn_policy import CategoricalRNNPolicy
 from sandbox.rocky.neural_learner.envs.random_maze_env import RandomMazeEnv
 from sandbox.rocky.neural_learner.envs.multi_env import MultiEnv
 from sandbox.rocky.neural_learner.envs.partial_obs_maze_env import PartialObsMazeEnv
@@ -29,28 +30,39 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [11, 21, 31]#, 41, 51]
+        return [11, 21, 31]  # , 41, 51]
 
     @variant
     def size(self):
         return [11]
 
     @variant
+    def horizon(self, n_episodes):
+        if n_episodes == 2:
+            yield 100
+        elif n_episodes == 10:
+            yield 30
+        else:
+            raise NotImplementedError
+
+    @variant
     def n_episodes(self):
-        return [2]#, 4]
+        return [2, 10]
 
     @variant
     def network_type(self):
         return [
+            "pseudo_lstm",
             "lstm",
-            "tf_basic_lstm",
+            "lstm_peephole",
             "gru",
+            "tf_basic_lstm",
             "tf_gru",
         ]
 
     @variant
     def batch_size(self):
-        return [10000, 30000]#, 50000, 100000]
+        return [1000]  # , 30000]#, 50000, 100000]
 
     @variant
     def discount(self):
@@ -58,10 +70,10 @@ class VG(VariantGenerator):
 
     @variant
     def hidden_dim(self):
-        return [32]#, 100]
+        return [32, 100]
 
     @variant(hide=True)
-    def env(self, size, n_episodes, discount):
+    def env(self, size, n_episodes, discount, horizon):
         episode_env = PartialObsMazeEnv(
             RandomMazeEnv(
                 n_row=size,
@@ -70,45 +82,13 @@ class VG(VariantGenerator):
             )
         )
         yield TfEnv(MultiEnv(
-            wrapped_env=episode_env, n_episodes=n_episodes, episode_horizon=100, discount=discount,
+            wrapped_env=episode_env, n_episodes=n_episodes, episode_horizon=horizon, discount=discount,
         ))
 
     @variant
     def algo_type(self):
-        return ["ppo"]#"trpo", "pposgd", "ppo"]
+        return ["ppo"]  # "trpo", "pposgd", "ppo"]
 
-    @variant(hide=True)
-    def policy(self, env, hidden_dim, network_type):
-        if network_type == "lstm":
-            yield CategoricalLSTMPolicy(
-                name="policy",
-                env_spec=env.spec,
-                hidden_dim=hidden_dim,
-                lstm_layer_cls=L.LSTMLayer,
-            )
-        elif network_type == "tf_basic_lstm":
-            yield CategoricalLSTMPolicy(
-                name="policy",
-                env_spec=env.spec,
-                hidden_dim=hidden_dim,
-                lstm_layer_cls=L.TfBasicLSTMLayer,
-            )
-        elif network_type == "tf_gru":
-            yield CategoricalGRUPolicy(
-                name="policy",
-                env_spec=env.spec,
-                hidden_dim=hidden_dim,
-                gru_layer_cls=L.TfGRULayer,
-            )
-        elif network_type == "gru":
-            yield CategoricalGRUPolicy(
-                name="policy",
-                env_spec=env.spec,
-                hidden_dim=hidden_dim,
-                gru_layer_cls=L.GRULayer,
-            )
-        else:
-            raise NotImplementedError
 
 vg = VG()
 
@@ -119,12 +99,19 @@ print("#Experiments: %d" % len(variants))
 for v in variants:
     baseline = LinearFeatureBaseline(env_spec=v["env"].spec)
 
+    policy = CategoricalRNNPolicy(
+        name="policy",
+        env_spec=v["env"].spec,
+        hidden_dim=v["hidden_dim"],
+        network_type=v["network_type"]
+    )
+
     if v["algo_type"] == "trpo":
-         algo = TRPO(
+        algo = TRPO(
             env=v["env"],
-            policy=v["policy"],
+            policy=policy,
             baseline=baseline,
-            max_path_length=100 * v["n_episodes"],
+            max_path_length=v["horizon"] * v["n_episodes"],
             batch_size=v["batch_size"],
             discount=v["discount"],
             n_itr=1000,
@@ -134,9 +121,9 @@ for v in variants:
     elif v["algo_type"] == "pposgd":
         algo = PPO(
             env=v["env"],
-            policy=v["policy"],
+            policy=policy,
             baseline=baseline,
-            max_path_length=100 * v["n_episodes"],
+            max_path_length=v["horizon"] * v["n_episodes"],
             batch_size=v["batch_size"],
             discount=v["discount"],
             n_itr=1000,
@@ -149,12 +136,12 @@ for v in variants:
                     batch_size=10,
                 ),
                 initial_penalty=1.,
-                data_split=0.9,#None,#0.5,
+                data_split=0.9,  # None,#0.5,
                 max_penalty=1e4,
                 adapt_penalty=True,
                 max_penalty_itr=3,
                 increase_penalty_factor=1.5,
-                decrease_penalty_factor=1./1.5,
+                decrease_penalty_factor=1. / 1.5,
                 barrier_coeff=1e2,
             )
             # optimizer=ConjugateGradientOptimizer(hvp_approach=FiniteDifferenceHvp(base_eps=1e-5))
@@ -162,9 +149,9 @@ for v in variants:
     elif v["algo_type"] == "ppo":
         algo = PPO(
             env=v["env"],
-            policy=v["policy"],
+            policy=policy,
             baseline=baseline,
-            max_path_length=100 * v["n_episodes"],
+            max_path_length=v["horizon"] * v["n_episodes"],
             batch_size=v["batch_size"],
             discount=v["discount"],
             n_itr=1000,
@@ -192,7 +179,7 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="rlrl-maze-10",
+        exp_prefix="rlrl-maze-11",
         mode="lab_kube",
         n_parallel=0,
         seed=v["seed"],

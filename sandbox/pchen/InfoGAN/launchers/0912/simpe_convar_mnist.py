@@ -12,11 +12,12 @@ dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
 ar_conv_dist = ConvAR(
     tgt_dist=MeanBernoulli(1),
     shape=(28, 28, 1),
-    filter_size=5,
+    filter_size=3,
     depth=8,
     nr_channels=32,
     pixel_bias=True,
     block="plstm",
+    # block="resnet",
 )
 
 # init

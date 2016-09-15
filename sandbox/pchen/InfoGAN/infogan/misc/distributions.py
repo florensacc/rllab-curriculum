@@ -396,9 +396,10 @@ class Bernoulli(Distribution):
     def activate_dist(self, flat_dist):
         return dict(p=tf.nn.sigmoid(flat_dist))
 
-    def sample(self, dist_info):
+    def sample_logli(self, dist_info):
         p = dist_info["p"]
-        return tf.cast(tf.less(tf.random_uniform(p.get_shape()), p), tf.float32)
+        out = tf.cast(tf.less(tf.random_uniform(p.get_shape()), p), tf.float32)
+        return out, self.logli(out, dist_info)
 
     def prior_dist_info(self, batch_size):
         return dict(p=0.5 * tf.ones([batch_size, self.dim]))
@@ -1300,6 +1301,7 @@ class ConvAR(Distribution):
             nr_channels=32,
             block="resnet",
             pixel_bias=False,
+            context_dim=None,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1308,8 +1310,17 @@ class ConvAR(Distribution):
         self._tgt_dist = tgt_dist
         self._shape = shape
         self._dim = int(np.prod(shape))
+        context = context_dim is not None
+        self._context = context
+        self._context_dim = context_dim
         inp = pt.template("y", books=dist_book).reshape([-1,] + list(shape))
         cur = inp
+        if context:
+            context_inp = \
+                pt.template("context", books=dist_book).reshape([-1,] + list(shape[:-1]) + [context_dim])
+            inp = inp.join(
+                [context_inp],
+            )
         self._custom_phase = CustomPhase.init
 
         peep_inp = inp.left_shift(filter_size-1).down_shift()
@@ -1376,11 +1387,13 @@ class ConvAR(Distribution):
     def effective_dim(self):
         return self.dim
 
-    def infer(self, x_var):
+    def infer(self, x_var, context=None):
         in_dict = dict(
             y=x_var,
             custom_phase=self._custom_phase,
         )
+        if self._context:
+            in_dict["context"] = context
         conv_iaf = self._iaf_template.construct(
             **in_dict
         ).tensor
@@ -1388,8 +1401,8 @@ class ConvAR(Distribution):
             tf.reshape(conv_iaf, [-1, self._tgt_dist.dist_flat_dim])
         )
 
-    def logli(self, x_var, _=None):
-        tgt_dict = self.infer(x_var)
+    def logli(self, x_var, info):
+        tgt_dict = self.infer(x_var, info.get("context"))
         flatten_loglis = self._tgt_dist.logli(
             tf.reshape(x_var, [-1, self._tgt_dist.dim]),
             tgt_dict
@@ -1409,30 +1422,30 @@ class ConvAR(Distribution):
         go, logpz = self._tgt_dist.sample_logli(info)
         go = tf.reshape(
             go,
-            [-1] + self._shape
+            [-1] + list(self._shape)
         )
         return go, logpz
 
     def sample_n(self, n=100, info=None):
         print("warning, ar sample invoked")
-        if info is None:
-            info = self._tgt_dist.prior_dist_info(n * self._shape[0] * self._shape[1])
-        go, logpz = self.reshaped_sample_logli(info)
+        # if info is None:
+        tgt_info = self._tgt_dist.prior_dist_info(n * self._shape[0] * self._shape[1])
+        go, logpz = self.reshaped_sample_logli(tgt_info)
         for i in range(self._dim):
-            tgt_dict = self.infer(go)
+            tgt_dict = self.infer(go, info)
             go, logpz = self.reshaped_sample_logli(tgt_dict)
         return go, logpz
 
     @property
     def dist_info_keys(self):
-        return []
+        return ["context"] if self._context else []
 
     @property
     def dist_flat_dim(self):
-        return 0
+        return self._shape[0] * self._shape[1] * self._context_dim
 
     def activate_dist(self, flat):
-        return {}
+        return dict(context=flat)
 
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
