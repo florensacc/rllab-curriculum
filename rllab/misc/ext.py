@@ -187,6 +187,7 @@ seed_ = None
 
 
 def set_seed(seed):
+    seed %= 4294967294
     global seed_
     seed_ = seed
     import lasagne

@@ -1150,6 +1150,7 @@ class RegularizedHelmholtzMachine(object):
                     res_keep_prob = network_args.get("enc_res_keep_prob", 1.)
                     nn = network_args.get("enc_nn", False)
                     rep = network_args.get("enc_rep", 1)
+                    cond_rep = network_args.get("cond_rep", 1)
                     print("encoder nn %s" % nn)
                     print("encoder fs %s" % fs)
                     encoder = resconv_v1(
@@ -1238,7 +1239,7 @@ class RegularizedHelmholtzMachine(object):
                         decoder = resconv_v1(decoder, fs, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     self.decoder_template = (
                         decoder.
-                            conv2d_mod(fs, 1, activation_fn=None).
+                            conv2d_mod(fs, cond_rep, activation_fn=None).
                             flatten()
                     )
                     self.reg_encoder_template = \
@@ -1931,7 +1932,7 @@ class RegularizedHelmholtzMachine(object):
         reg_z_dist_info = self.reg_latent_dist.activate_dist(reg_z_dist_flat)
         return self.reg_latent_dist.sample(reg_z_dist_info), reg_z_dist_info
 
-    def decode(self, z_var):
+    def decode(self, z_var, sample=True):
         args = dict(
             input=z_var, custom_phase=self.custom_phase
         )
@@ -1945,7 +1946,10 @@ class RegularizedHelmholtzMachine(object):
             x_dist_flat = self.decoder_template.construct(**args).tensor
         # x_dist_flat = self.decoder_template.construct(input=z_var, custom_phase=self.custom_phase).tensor
         x_dist_info = self.output_dist.activate_dist(x_dist_flat)
-        return self.output_dist.sample(x_dist_info), x_dist_info
+        return (
+            self.output_dist.sample(x_dist_info) if sample else None,
+            x_dist_info
+        )
 
     def reg_z(self, z_var):
         ret = []
