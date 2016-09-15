@@ -27,22 +27,22 @@ baseline = True
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'test-count'
+    exp_prefix = 'test-count-a'
     seeds = [0]
-    etas = [0.1]
+    etas = [0, 0.01]
     mdps = [AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
     lst_factor = [1]
-    trpo_batch_size = 100
-    max_path_length = 50
-    batch_norm = False
+    trpo_batch_size = 10000
+    max_path_length = 4500
+    batch_norm = True
 else:
-    exp_prefix = 'trpo-count-atari-42x52-e'
+    exp_prefix = 'trpo-count-atari-42x52-f'
     seeds = range(5)
     etas = [0, 1.0, 0.1, 0.01]
-    mdps = [  # AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-        # AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
-        AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
-    lst_factor = [2]
+    mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
+            AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
+            AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
+    lst_factor = [1]
     trpo_batch_size = 20000
     max_path_length = 4500
     batch_norm = True
@@ -83,7 +83,7 @@ for factor, mdp, eta, seed in param_cart_product:
             regressor_args=dict(
                 mean_network=network,
                 batchsize=None,
-                subsample_factor=0.1,
+                subsample_factor=1.0,
                 optimizer=FirstOrderOptimizer(
                     max_epochs=100,
                     verbose=True,
@@ -145,7 +145,7 @@ for factor, mdp, eta, seed in param_cart_product:
                  dropout=dropout,
                  deterministic=True),
             dict(name='discrete_embedding',
-                 n_units=16,
+                 n_units=32,
                  deterministic=True),
             dict(name='gaussian',
                  n_units=1536,
@@ -227,15 +227,15 @@ for factor, mdp, eta, seed in param_cart_product:
         # VIME settings
         # -------------
         eta=eta,
-        num_sample_updates=3,  # Every sample in traj batch will be used in `num_sample_updates' updates.
+        num_sample_updates=1,  # Every sample in traj batch will be used in `num_sample_updates' updates.
         normalize_reward=False,
         replay_kl_schedule=0.98,
         n_itr_update=1,  # Fake itr updates in sampler
         dyn_pool_args=dict(
-            size=10000,
+            size=50000,
             min_size=32,
             batch_size=32,
-            subsample_factor=1.0,
+            subsample_factor=0.1,
         ),
         surprise_transform=None,
     )
@@ -246,7 +246,7 @@ for factor, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",

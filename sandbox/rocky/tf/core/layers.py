@@ -867,7 +867,7 @@ class GRULayer(Layer):
         return h
 
     def get_step_layer(self, l_in, l_prev_hidden, name=None):
-        return GRUStepLayer(incomings=[l_in, l_prev_hidden], gru_layer=self, name=name)
+        return GRUStepLayer(incomings=[l_in, l_prev_hidden], recurrent_layer=self, name=name)
 
     def get_output_shape_for(self, input_shape):
         n_batch, n_steps = input_shape[:2]
@@ -894,9 +894,9 @@ class GRULayer(Layer):
 
 
 class GRUStepLayer(MergeLayer):
-    def __init__(self, incomings, gru_layer, **kwargs):
+    def __init__(self, incomings, recurrent_layer, **kwargs):
         super(GRUStepLayer, self).__init__(incomings, **kwargs)
-        self._gru_layer = gru_layer
+        self._gru_layer = recurrent_layer
 
     def get_params(self, **tags):
         return self._gru_layer.get_params(**tags)
@@ -983,7 +983,156 @@ class TfGRULayer(Layer):
         return n_batch, n_steps, self.num_units
 
     def get_step_layer(self, l_in, l_prev_hidden, name=None):
-        return GRUStepLayer(incomings=[l_in, l_prev_hidden], gru_layer=self, name=name)
+        return GRUStepLayer(incomings=[l_in, l_prev_hidden], recurrent_layer=self, name=name)
+
+
+class PseudoLSTMLayer(Layer):
+    """
+    A Pseudo LSTM unit implements the following update mechanism:
+
+    Incoming gate:     i(t) = σ(W_hi @ ϕ(h(t-1)) + W_xi @ x(t) + b_i)
+    Forget gate:       f(t) = σ(W_hf @ ϕ(h(t-1)) + W_xf @ x(t) + b_f)
+    Out gate:          o(t) = σ(W_ho @ ϕ(h(t-1)) + W_xo @ x(t) + b_o)
+    Cell gate:         c(t) = ϕ(W_hc @ (o(t) * ϕ(h(t-1))) + W_xc @ x(t) + b_c)
+    New hidden state:  h(t) = f(t) * h(t-1) + i(t) * c(t)
+    Output:            out  = ϕ(h(t))
+
+    If gate_squash_inputs is set to True, we have the following updates instead:
+
+    Out gate:          o(t) = σ(W_ho @ ϕ(h(t-1)) + W_xo @ x(t) + b_o)
+    Incoming gate:     i(t) = σ(W_hi @ (o(t) * ϕ(h(t-1))) + W_xi @ x(t) + b_i)
+    Forget gate:       f(t) = σ(W_hf @ (o(t) * ϕ(h(t-1))) + W_xf @ x(t) + b_f)
+    Cell gate:         c(t) = ϕ(W_hc @ (o(t) * ϕ(h(t-1))) + W_xc @ x(t) + b_c)
+    New hidden state:  h(t) = f(t) * h(t-1) + i(t) * c(t)
+    Output:            out  = ϕ(h(t))
+
+    Note that the incoming, forget, cell, and out vectors must have the same dimension as the hidden state
+    """
+
+    def __init__(self, incoming, num_units, hidden_nonlinearity=tf.tanh,
+                 gate_nonlinearity=tf.nn.sigmoid, W_init=xavier_init, forget_bias=1.0,
+                 b_init=tf.zeros_initializer, hidden_init=tf.zeros_initializer, hidden_init_trainable=True,
+                 gate_squash_inputs=False, **kwargs):
+
+        if hidden_nonlinearity is None:
+            hidden_nonlinearity = tf.identity
+
+        if gate_nonlinearity is None:
+            gate_nonlinearity = tf.identity
+
+        super(PseudoLSTMLayer, self).__init__(incoming, **kwargs)
+
+        input_shape = self.input_shape[2:]
+
+        input_dim = np.prod(input_shape)
+        # Weights for the initial hidden state
+        self.h0 = self.add_param(hidden_init, (num_units,), name="h0", trainable=hidden_init_trainable,
+                                 regularizable=False)
+        # Weights for the incoming gate
+        self.W_xi = self.add_param(W_init, (input_dim, num_units), name="W_xi")
+        self.W_hi = self.add_param(W_init, (num_units, num_units), name="W_hi")
+        self.b_i = self.add_param(b_init, (num_units,), name="b_i", regularizable=False)
+        # Weights for the forget gate
+        self.W_xf = self.add_param(W_init, (input_dim, num_units), name="W_xf")
+        self.W_hf = self.add_param(W_init, (num_units, num_units), name="W_hf")
+        self.b_f = self.add_param(b_init, (num_units,), name="b_f", regularizable=False)
+        # Weights for the out gate
+        self.W_xo = self.add_param(W_init, (input_dim, num_units), name="W_xo")
+        self.W_ho = self.add_param(W_init, (num_units, num_units), name="W_ho")
+        self.b_o = self.add_param(b_init, (num_units,), name="b_o", regularizable=False)
+        # Weights for the cell gate
+        self.W_xc = self.add_param(W_init, (input_dim, num_units), name="W_xc")
+        self.W_hc = self.add_param(W_init, (num_units, num_units), name="W_hc")
+        self.b_c = self.add_param(b_init, (num_units,), name="b_c", regularizable=False)
+
+        self.gate_nonlinearity = gate_nonlinearity
+        self.num_units = num_units
+        self.nonlinearity = hidden_nonlinearity
+        self.forget_bias = forget_bias
+        self.gate_squash_inputs = gate_squash_inputs
+
+        self.W_x_ifo = tf.concat(1, [self.W_xi, self.W_xf, self.W_xo])
+        self.W_h_ifo = tf.concat(1, [self.W_hi, self.W_hf, self.W_ho])
+        self.W_x_ifc = tf.concat(1, [self.W_xi, self.W_xf, self.W_xc])
+        self.W_h_ifc = tf.concat(1, [self.W_hi, self.W_hf, self.W_hc])
+
+    def step(self, hprev, x):
+        if self.gate_squash_inputs:
+            """
+                Out gate:          o(t) = σ(W_ho @ ϕ(h(t-1)) + W_xo @ x(t) + b_o)
+                Incoming gate:     i(t) = σ(W_hi @ (o(t) * ϕ(h(t-1))) + W_xi @ x(t) + b_i)
+                Forget gate:       f(t) = σ(W_hf @ (o(t) * ϕ(h(t-1))) + W_xf @ x(t) + b_f)
+                Cell gate:         c(t) = ϕ(W_hc @ (o(t) * ϕ(h(t-1))) + W_xc @ x(t) + b_c)
+                New hidden state:  h(t) = f(t) * h(t-1) + i(t) * c(t)
+                Output:            out  = ϕ(h(t))
+            """
+            squashed_hprev = self.nonlinearity(hprev)
+
+            o = self.nonlinearity(tf.matmul(squashed_hprev, self.W_ho) + tf.matmul(x, self.W_xo) + self.b_o)
+
+            x_ifc = tf.matmul(x, self.W_x_ifc)
+            h_ifc = tf.matmul(o * squashed_hprev, self.W_h_ifc)
+
+            x_i, x_f, x_c = tf.split(split_dim=1, num_split=4, value=x_ifc)
+            h_i, h_f, h_c = tf.split(split_dim=1, num_split=4, value=h_ifc)
+
+            i = self.gate_nonlinearity(x_i + h_i + self.b_i)
+            f = self.gate_nonlinearity(x_f + h_f + self.b_f + self.forget_bias)
+            c = self.nonlinearity(x_c + h_c + self.b_c)
+            h = f * hprev + i * c
+            return h
+        else:
+            """
+                Incoming gate:     i(t) = σ(W_hi @ ϕ(h(t-1)) + W_xi @ x(t) + b_i)
+                Forget gate:       f(t) = σ(W_hf @ ϕ(h(t-1)) + W_xf @ x(t) + b_f)
+                Out gate:          o(t) = σ(W_ho @ ϕ(h(t-1)) + W_xo @ x(t) + b_o)
+                Cell gate:         c(t) = ϕ(W_hc @ (o(t) * ϕ(h(t-1))) + W_xc @ x(t) + b_c)
+                New hidden state:  h(t) = f(t) * h(t-1) + i(t) * c(t)
+                Output:            out  = ϕ(h(t))
+            """
+
+            squashed_hprev = self.nonlinearity(hprev)
+
+            x_ifo = tf.matmul(x, self.W_x_ifo)
+            h_ifo = tf.matmul(squashed_hprev, self.W_h_ifo)
+
+            x_i, x_f, x_o = tf.split(split_dim=1, num_split=3, value=x_ifo)
+            h_i, h_f, h_o = tf.split(split_dim=1, num_split=3, value=h_ifo)
+
+            i = self.gate_nonlinearity(x_i + h_i + self.b_i)
+            f = self.gate_nonlinearity(x_f + h_f + self.b_f + self.forget_bias)
+            o = self.gate_nonlinearity(x_o + h_o + self.b_o)
+            c = self.nonlinearity(tf.matmul(o * squashed_hprev, self.W_hc) + tf.matmul(x, self.W_xc) + self.b_c)
+            h = f * hprev + i * c
+
+            return h
+
+    def get_step_layer(self, l_in, l_prev_hidden, name=None):
+        return GRUStepLayer(incomings=[l_in, l_prev_hidden], recurrent_layer=self, name=name)
+
+    def get_output_shape_for(self, input_shape):
+        n_batch, n_steps = input_shape[:2]
+        return n_batch, n_steps, self.num_units
+
+    def get_output_for(self, input, **kwargs):
+        input_shape = tf.shape(input)
+        n_batches = input_shape[0]
+        n_steps = input_shape[1]
+        input = tf.reshape(input, tf.pack([n_batches, n_steps, -1]))
+        h0s = tf.tile(
+            tf.reshape(self.h0, (1, self.num_units)),
+            (n_batches, 1)
+        )
+        # flatten extra dimensions
+        shuffled_input = tf.transpose(input, (1, 0, 2))
+        hs = tf.scan(
+            self.step,
+            elems=shuffled_input,
+            initializer=h0s,
+        )
+        shuffled_hs = tf.transpose(hs, (1, 0, 2))
+        # The output needs to be squashed too
+        return self.nonlinearity(shuffled_hs)
 
 
 class LSTMLayer(Layer):
@@ -1055,8 +1204,9 @@ class LSTMLayer(Layer):
         self.forget_bias = forget_bias
         self.use_peepholes = use_peepholes
 
-        self.W_x_ifco = tf.concat(1, [self.W_xi, self.W_xf, self.W_xo, self.W_xi])
-        self.W_h_ifco = tf.concat(1, [self.W_hi, self.W_hf, self.W_ho, self.W_hi])
+        self.W_x_ifco = tf.concat(1, [self.W_xi, self.W_xf, self.W_xc, self.W_xo])
+        self.W_h_ifco = tf.concat(1, [self.W_hi, self.W_hf, self.W_hc, self.W_ho])
+
         if use_peepholes:
             self.w_c_ifo = tf.concat(0, [self.w_ci, self.w_cf, self.w_co])
 
@@ -1092,8 +1242,8 @@ class LSTMLayer(Layer):
 
         return tf.concat(1, [h, c])
 
-    def get_step_layer(self, l_in, l_prev_hidden, l_prev_cell, name=None):
-        return LSTMStepLayer(incomings=[l_in, l_prev_hidden, l_prev_cell], lstm_layer=self, name=name)
+    def get_step_layer(self, l_in, l_prev_state, name=None):
+        return LSTMStepLayer(incomings=[l_in, l_prev_state], recurrent_layer=self, name=name)
 
     def get_output_shape_for(self, input_shape):
         n_batch, n_steps = input_shape[:2]
@@ -1126,23 +1276,22 @@ class LSTMLayer(Layer):
 
 
 class LSTMStepLayer(MergeLayer):
-    def __init__(self, incomings, lstm_layer, **kwargs):
+    def __init__(self, incomings, recurrent_layer, **kwargs):
         super(LSTMStepLayer, self).__init__(incomings, **kwargs)
-        self._lstm_layer = lstm_layer
+        self._recurrent_layer = recurrent_layer
 
     def get_params(self, **tags):
-        return self._lstm_layer.get_params(**tags)
+        return self._recurrent_layer.get_params(**tags)
 
     def get_output_shape_for(self, input_shapes):
         n_batch = input_shapes[0][0]
-        return n_batch, 2 * self._lstm_layer.num_units
+        return n_batch, 2 * self._recurrent_layer.num_units
 
     def get_output_for(self, inputs, **kwargs):
-        x, hprev, cprev = inputs
+        x, hcprev = inputs
         n_batch = tf.shape(x)[0]
         x = tf.reshape(x, tf.pack([n_batch, -1]))
-        hcprev = tf.concat(1, [hprev, cprev])
-        hc = self._lstm_layer.step(hcprev, x)
+        hc = self._recurrent_layer.step(hcprev, x)
         return hc
 
 
@@ -1236,8 +1385,8 @@ class TfBasicLSTMLayer(Layer):
         n_batch, n_steps = input_shape[:2]
         return n_batch, n_steps, self.num_units
 
-    def get_step_layer(self, l_in, l_prev_hidden, l_prev_cell, name=None):
-        return LSTMStepLayer(incomings=[l_in, l_prev_hidden, l_prev_cell], lstm_layer=self, name=name)
+    def get_step_layer(self, l_in, l_prev_state, name=None):
+        return LSTMStepLayer(incomings=[l_in, l_prev_state], recurrent_layer=self, name=name)
 
 
 def get_all_layers(layer, treat_as_input=None):
