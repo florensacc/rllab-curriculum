@@ -23,7 +23,7 @@ class AsyncAlgo(Picklable):
         seeds=None,
         profile=False,
         logging_level=logging.INFO,
-        total_steps=8*10**7,
+        total_steps=10**6,
         eval_frequency=10**6,
         eval_n_runs=10,
         horizon=np.inf,

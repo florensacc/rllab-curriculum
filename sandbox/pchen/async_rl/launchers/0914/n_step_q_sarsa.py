@@ -35,8 +35,12 @@ class VG(VariantGenerator):
         return [42, 2222]
 
     @variant
+    def total_t(self):
+        return [35 * 10**6]
+
+    @variant
     def n_processes(self):
-        return [18, 9]
+        return [9, 18]
 
     # @variant
     # def entropy_bonus(self):
@@ -118,19 +122,20 @@ for v in variants[:1]:
         variant=v,
         # mode="local",
         #
-        mode="lab_kube",
-        n_parallel=0,
-        use_gpu=False,
-        node_selector={
-            "aws/type": "c4.8xlarge",
-        },
-        resources=dict(
-            requests=dict(
-                cpu=17.1,
-            ),
-            limits=dict(
-                cpu=17.1,
-            )
-        )
+        mode="local_docker",
+        # mode="lab_kube",
+        # n_parallel=0,
+        # use_gpu=False,
+        # node_selector={
+        #     "aws/type": "c4.8xlarge",
+        # },
+        # resources=dict(
+        #     requests=dict(
+        #         cpu=17.1,
+        #     ),
+        #     limits=dict(
+        #         cpu=17.1,
+        #     )
+        # )
     )
 
