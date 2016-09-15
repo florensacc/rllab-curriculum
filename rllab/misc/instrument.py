@@ -565,6 +565,9 @@ def to_local_command(params, script=osp.join(config.PROJECT_PATH, 'scripts/run_e
     command = "python " + script
     if use_gpu and not config.USE_TF:
         command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto' " + command
+    for k, v in config.ENV.items():
+        command = ("%s=%s " % (k, v)) + command
+
     for k, v in params.items():
         if isinstance(v, dict):
             for nk, nv in v.items():

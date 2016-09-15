@@ -36,7 +36,7 @@ class VG(VariantGenerator):
 
     @variant
     def n_processes(self):
-        return [18, 10]
+        return [18, 9]
 
     # @variant
     # def entropy_bonus(self):
@@ -56,7 +56,7 @@ class VG(VariantGenerator):
 
     @variant
     def game(self, ):
-        return ["pong"]
+        return ["pong", "beam_rider", "breakout", "qbert", "space_invaders"]
 
     @variant
     def n_step(self, ):
@@ -103,12 +103,21 @@ for v in variants[:1]:
         eval_frequency=eval_frequency,
         eval_n_runs=eval_n_runs,
     )
+
+    # sys stuff
+    comp_cores = int(18 / n_processes)
+    config.ENV = dict(
+        MKL_NUM_THREADS=comp_cores,
+        NUMEXPR_NUM_THREADS=comp_cores,
+        OMP_NUM_THREADS=comp_cores,
+    )
     run_experiment_lite(
         algo.train(),
         exp_prefix="0914_n_step_dqn_sarsa_test1",
         seed=v["seed"],
         variant=v,
         # mode="local",
+        #
         mode="lab_kube",
         n_parallel=0,
         use_gpu=False,
