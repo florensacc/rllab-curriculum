@@ -494,7 +494,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             log_p_D_given_w += lh
 
         cont_emb = lasagne.layers.get_output(self.discrete_emb_sym, input, noise_mask=0, deterministic=False)
-        binary_penalty = 0#- np.square(cont_emb - 0.5) * 0.01
+        binary_penalty = T.mean(T.minimum(T.square(cont_emb - 0), T.square(cont_emb - 1)))
 
         if disable_kl:
             return (- log_p_D_given_w / self.num_train_samples) / np.prod(self.state_dim) + binary_penalty

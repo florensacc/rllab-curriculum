@@ -230,8 +230,7 @@ class BatchPolopt(RLAlgorithm):
         for path in paths:
             path_len = len(path['rewards'])
             for i in range(path_len):
-                # Encode into uint8 format and add to pool.
-                self.pool.add_sample(self.encode_obs(path['observations'][i, -np.prod(self.autoenc.state_dim):]))
+                self.pool.add_sample(path['observations'][i, -np.prod(self.autoenc.state_dim):])
 
     def encode_obs(self, obs):
         """
@@ -279,7 +278,7 @@ class BatchPolopt(RLAlgorithm):
                     running_avg = running_avg_alpha * running_avg + (1. - running_avg_alpha) * train_loss
                 logger.log('Autoencoder loss= {:.5f}\tmean= {:.5f}\tD= {:.5f}'.format(
                     train_loss, running_avg, old_running_avg - running_avg))
-                if old_running_avg - running_avg < 1e4:
+                if old_running_avg - running_avg < 1e-4:
                     done = True
                     outer_loop_count += 1
                 else:
@@ -320,6 +319,10 @@ class BatchPolopt(RLAlgorithm):
             # Sample trajectories.
             paths = self.obtain_samples()
 
+            # Encode all observations into uint8 format
+            for path in paths:
+                path['observations'] = self.encode_obs(path['observations'])
+
             # Add sampled trajectories to the replay pool.
             self.fill_replay_pool(paths)
 
@@ -334,9 +337,9 @@ class BatchPolopt(RLAlgorithm):
                 # Select 5 random images form the first path, evaluate them at every iteration to inspect emb.
                 rnd = np.random.randint(0, len(paths[0]['observations']), 5)
                 self._test_obs = paths[0]['observations'][rnd]
-            self.plot_pred_imgs(self._test_obs, self.encode_obs(self._test_obs), -itr - 1, 0, dir='/consistency_check')
+            self.plot_pred_imgs(self.decode_obs(self._test_obs), self._test_obs, -itr - 1, 0, dir='/consistency_check')
             obs = paths[0]['observations'][-50:, -np.prod(self.autoenc.state_dim):]
-            self.plot_pred_imgs(obs, self.encode_obs(obs), 0, 0, dir='/uniqueness_check')
+            self.plot_pred_imgs(self.decode_obs(obs), obs, 0, 0, dir='/uniqueness_check')
 
             self.generate_samples()
 
@@ -409,7 +412,7 @@ class BatchPolopt(RLAlgorithm):
 
         for idx, path in enumerate(paths):
             # When using num_seq_frames > 1, we need to extract the last one.
-            obs = path['observations'][:, -np.prod(self.autoenc.state_dim):]
+            obs = self.decode_obs(path['observations'][:, -np.prod(self.autoenc.state_dim):])
             keys = np.cast['int'](np.round(self.autoenc.discrete_emb(obs)))
             counts = np.zeros(len(keys))
             lst_key_as_int = np.zeros(len(keys), dtype=int)
@@ -422,16 +425,17 @@ class BatchPolopt(RLAlgorithm):
                     for i in range(len(key)):
                         key_trans = np.array(key)
                         key_trans[i] = 1 - key_trans[i]
-                        counts[idy] += self.counting_table[bin_to_int(key_trans)]
+                        key_trans_int = bin_to_int(key_trans)
+                        # If you access the counting table directly, it puts a 0, which inflates the size.
+                        if key_trans_int in self.counting_table.keys():
+                            counts[idy] += self.counting_table[bin_to_int(key_trans)]
 
             path['surprise'] = count_to_ir(counts)
 
             num_unique = len(set(lst_key_as_int))
             logger.log('unique values: {}/{}'.format(num_unique, len(lst_key_as_int)))
-        if self.hamming_distance == 1:
-            num_encountered_unique_keys = len(self.counting_table) / float(len(key))
-        else:
-            num_encountered_unique_keys = len(self.counting_table)
+
+        num_encountered_unique_keys = len(self.counting_table)
         logger.log('Counting table contains {} entries.'.format(num_encountered_unique_keys))
 
     def obtain_samples(self):

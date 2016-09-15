@@ -33,8 +33,8 @@ if TEST_RUN:
     mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
             AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
     lst_factor = [1]
-    trpo_batch_size = 1000
-    max_path_length = 450
+    trpo_batch_size = 20000
+    max_path_length = 4500
     batch_norm = True
 else:
     exp_prefix = 'trpo-count-atari-42x52-a'
@@ -245,7 +245,7 @@ for factor, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite.py",
