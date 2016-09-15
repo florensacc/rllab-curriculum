@@ -202,6 +202,7 @@ class VAE(object):
         log_vars.append(("vlb_sum", vlb))
         log_vars.append(("kl_sum", kl))
         log_vars.append(("true_vlb_sum", true_vlb))
+        log_vars.append(("cond_logp", true_vlb + kl))
 
         true_vlb /= ndim
         vlb /= ndim

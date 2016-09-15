@@ -278,10 +278,10 @@ for v in variants[:]:
             exp_prefix="0915_%s_cc_fl_fa" % v["ds"],
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 
