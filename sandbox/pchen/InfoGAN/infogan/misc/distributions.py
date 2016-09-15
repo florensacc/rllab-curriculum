@@ -1314,13 +1314,14 @@ class ConvAR(Distribution):
         self._context = context
         self._context_dim = context_dim
         inp = pt.template("y", books=dist_book).reshape([-1,] + list(shape))
-        cur = inp
         if context:
             context_inp = \
-                pt.template("context", books=dist_book).reshape([-1,] + list(shape[:-1]) + [context_dim])
+                pt.template("context", books=dist_book).\
+                    reshape([-1,] + list(shape[:-1]) + [context_dim])
             inp = inp.join(
                 [context_inp],
             )
+        cur = inp
         self._custom_phase = CustomPhase.init
 
         peep_inp = inp.left_shift(filter_size-1).down_shift()
