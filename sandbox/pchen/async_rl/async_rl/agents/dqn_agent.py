@@ -68,8 +68,12 @@ class DQNAgent(Agent,Shareable,Picklable):
             optimizer_type="rmsprop_async",
             optimizer_args=None,
             optimizer_hook_args=None,
-            t_max=5, gamma=0.99, beta=1e-2,
-            eps_start=1.0, eps_end=0.1, eps_anneal_time=4 * 10 ** 6,
+            t_max=5,
+            gamma=0.99,
+            beta=1e-2,
+            eps_start=1.0,
+            eps_end=0.1,
+            eps_anneal_time=4 * 10 ** 6,
             eps_test=None, # eps used for testing regardless of training eps
             target_update_frequency=40000,
             process_id=0, clip_reward=True,
@@ -78,6 +82,7 @@ class DQNAgent(Agent,Shareable,Picklable):
             bonus_count_target="image",
             phase="Train",
             sync_t_gap_limit=np.inf,
+            share_model=False,
     ):
         if optimizer_args is None:
             optimizer_args = dict(lr=7e-4, eps=1e-1, alpha=0.99)
@@ -90,6 +95,8 @@ class DQNAgent(Agent,Shareable,Picklable):
 
         self.env = env
         self.bellman = bellman
+        self.share_model = share_model
+
         action_space = env.action_space
 
         # Globally shared model
@@ -173,8 +180,6 @@ class DQNAgent(Agent,Shareable,Picklable):
             self.shared_params["target_model_params"],
         )
         new_agent.sync_parameters()
-        if self.bonus_evaluator is not None:
-            new_agent.bonus_evaluator = self.bonus_evaluator.process_copy()
         new_agent.shared_params = self.shared_params
         new_agent.eps = self.eps # important for testing!
 
@@ -182,8 +187,9 @@ class DQNAgent(Agent,Shareable,Picklable):
 
     def sync_parameters(self):
         chainer_utils.copy_link_param(
-            target_link=self.model,
             source_link=self.shared_model,
+            target_link=self.model,
+            deep=not self.share_model,
         )
 
     def preprocess(self,state):
@@ -229,15 +235,10 @@ class DQNAgent(Agent,Shareable,Picklable):
         if not is_state_terminal:
             statevar = chainer.Variable(np.expand_dims(self.preprocess(state), 0))
 
-        # record the time elapsed since last model synchroization
-        # if the time is too long, we may discard the current update and synchronize instead
-        if self.phase == "Train":
-            sync_t_gap = global_vars["global_t"].value - self.last_sync_t
-            not_delayed = sync_t_gap < self.sync_t_gap_limit
-
         ready_to_commit = self.phase == "Train" and (
-            (is_state_terminal and self.t_start < self.t) \
-                or self.t - self.t_start == self.t_max)
+            (is_state_terminal and self.t_start < self.t) or
+            (self.t - self.t_start == self.t_max)
+        )
 
         # start computing gradient and synchronize model params
         # avoid updating model params during testing
@@ -251,18 +252,12 @@ class DQNAgent(Agent,Shareable,Picklable):
                 # bootstrap from target network
                 qs = self.shared_target_model.compute_qs(statevar)[0] # fixed [0]
                 R = float(np.amax(qs.data))
-                # if self.process_id == 0:
-                #     logger.debug('target qs:%s',qs.data)
-                #     logger.debug('R:%s',R)
 
             loss = 0
             for i in reversed(range(self.t_start, self.t)):
                 R *= self.gamma
                 R += self.past_rewards[i]
                 q = self.past_qvalues[i]
-                # if self.process_id == 0:
-                #     logger.debug('s:%s q:%s R:%s',
-                #                  self.past_states[i].data.sum(), q.data, R)
                 cur_loss = 0.5 * (q - R) ** 2
                 loss += cur_loss
                 self.epoch_td_loss_list.append(cur_loss.data)
@@ -273,9 +268,10 @@ class DQNAgent(Agent,Shareable,Picklable):
                 factor = self.t_max / (self.t - self.t_start)
                 loss *= factor
 
-            # if self.process_id == 0:
-            #     logger.debug('td_loss:%s', loss.data)
-
+            # record the time elapsed since last model synchroization
+            # if the time is too long, we may discard the current update and synchronize instead
+            sync_t_gap = global_vars["global_t"].value - self.last_sync_t
+            not_delayed = sync_t_gap < self.sync_t_gap_limit
             if not_delayed:
                 # Compute gradients using thread-specific model
                 self.model.zerograds()
@@ -306,14 +302,13 @@ class DQNAgent(Agent,Shareable,Picklable):
         if not is_state_terminal:
             # choose an action
             qs = self.model.compute_qs(statevar)[0]
-            # print(qs.data)
             # WARN: even when testing, do not just use argmax; it may get stuck at the beginning of Breakout (doing no_op)
             if self.phase == "Test" and self.eps_test is not None:
                 eps = self.eps_test
             else:
                 eps = self.eps
             if np.random.uniform() < eps:
-                a = np.random.randint(low=0,high=len(qs.data))
+                a = np.random.randint(low=0, high=len(qs.data))
             else:
                 a = np.argmax(qs.data)
 
@@ -326,9 +321,6 @@ class DQNAgent(Agent,Shareable,Picklable):
                 self.epoch_q_list.append(float(qs[a].data))
                 self.cur_path_len += 1
                 self.t += 1
-                if self.process_id == 0:
-                    logger.debug('t:%s qs:%s',
-                                 self.t, qs.data)
             return a
         else:
             self.epoch_path_len_list.append(self.cur_path_len)
@@ -339,7 +331,7 @@ class DQNAgent(Agent,Shareable,Picklable):
             return None
 
 
-    def finish_epoch(self, epoch,log):
+    def finish_epoch(self, epoch, log):
         if self.bonus_evaluator is not None:
             self.bonus_evaluator.finish_epoch(epoch=epoch,log=log)
         if log:

@@ -151,15 +151,6 @@ class AsyncAlgo(Picklable):
                 episode_t += 1
 
                 # Update reward stats
-                # episode_r += env.reward
-
-                # Update agent, env
-                # take actions
-                # action = agent.act(
-                #     env.state, env.reward, env.is_terminal, env.extra_infos,
-                #     global_vars=global_vars,
-                #     training_args=args,
-                # )
                 action = agent.act(
                     obs, reward, terminal, extra,
                     global_vars=global_vars,
@@ -168,7 +159,14 @@ class AsyncAlgo(Picklable):
 
                 episode_r += reward
 
-                if terminal or (episode_t > args["horizon"]):
+                terminal = terminal or (episode_t > args["horizon"])
+                if terminal:
+                    # notify agent of termination
+                    _ = agent.act(
+                        obs, reward, terminal, extra,
+                        global_vars=global_vars,
+                    )
+
                     # log info for each episode
                     if process_id == 0:
                         logger.log('global_t:{} local_t:{} episode_t:{} episode_r:{} t_per_sec:{}'.format(
@@ -179,7 +177,7 @@ class AsyncAlgo(Picklable):
 
                     if episode_t > args["horizon"]:
                         logger.log(
-                            "WARNING: horizon %d exceeded."%(args["horizon"]),
+                            "WARNING: horizon %d exceeded." % (args["horizon"]),
                             color="yellow",
                         )
 
