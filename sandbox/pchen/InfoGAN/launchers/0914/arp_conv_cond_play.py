@@ -98,7 +98,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nr(self):
-        return [5,]
+        return [10,]
 
     @variant(hide=False)
     def i_nar(self):
@@ -106,7 +106,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nr(self):
-        return [5,]
+        return [10,]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -136,12 +136,15 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ds(self):
-        return ["mnist", "omni"]
+        return [
+            "mnist",
+            # "omni",
+        ]
 
     @variant(hide=True)
     def max_epoch(self, ds):
         if ds == "omni":
-            yield 2200
+            yield 3000
         else:
             yield 600
 
@@ -151,7 +154,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def context_dim(self, ):
-        return [1, 4]
+        return [7]
 
     @variant(hide=False)
     def cond_rep(self, context_dim):
@@ -159,7 +162,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [1, 3, 8]
+        return [4]
 
 
 
@@ -275,13 +278,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0914_%s_hybrid_conv_cond_fixed" % v["ds"],
+            exp_prefix="play_0914_%s_hybrid_conv_cond" % v["ds"],
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 
