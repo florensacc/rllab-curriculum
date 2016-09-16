@@ -65,13 +65,13 @@ class ParallelLinearFeatureBaseline(Baseline):
         target_vec = np.zeros([1, self._vec_dim])
         path_vec = np.zeros([1, self._vec_dim])
         max_len = max([len(path["rewards"]) for path in paths])
-        times = np.arange(max_len) / 100.0
+        times = np.arange(max_len).reshape(-1, 1) / 100.0
         times_2 = times ** 2
         times_3 = times ** 3
         for path in paths:
             obs = np.clip(path["observations"], -10, 10)
             for o, al, al_2, al_3, r in zip(obs, times, times_2, times_3, path["rewards"]):
-                path_vec[:] = [o, o ** 2, al, al_2, al_3, 1]
+                path_vec[:] = np.concatenate([o, o ** 2, al, al_2, al_3, [1.]])
                 feat_mat += path_vec.T.dot(path_vec)
                 target_vec += path_vec * r
         return feat_mat, target_vec.T
@@ -83,7 +83,7 @@ class ParallelLinearFeatureBaseline(Baseline):
         return np.concatenate([o, o ** 2, al, al ** 2, al ** 3, np.ones((h, 1))], axis=1)
 
     @overrides
-    def fit(self, paths, par_objs):
+    def fit(self, paths):
         """
         This method is parallelized.
         """

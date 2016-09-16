@@ -24,12 +24,12 @@ algo = ParallelTRPO(
     env=env,
     policy=policy,
     baseline=baseline,
-    batch_size=40000,
+    batch_size=4000,
     max_path_length=100,
     n_itr=5,
     discount=0.99,
     step_size=0.01,
-    n_parallel=8,
+    n_parallel=2,
     # Uncomment both lines (this and the plot parameter below) to enable plotting
     # plot=True,
 )

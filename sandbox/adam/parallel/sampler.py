@@ -165,12 +165,9 @@ class WorkerBatchSampler(object):
                 paths=paths,
             )
 
-        # TODO: provide centralized diagnostics logging.
-        # TODO: fit the baseline in parallel fashion.
-        # logger.log("fitting baseline...")
-        # self.algo.baseline.fit(paths)
-        # logger.log("fitted")
+        # NOTE: Removed baseline fitting, so this file has nothing parallel.
 
+        # TODO: provide centralized diagnostics logging.
         # logger.record_tabular('Iteration', itr)
         # logger.record_tabular('AverageDiscountedReturn',
         #                       average_discounted_return)

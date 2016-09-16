@@ -122,9 +122,14 @@ class ParallelBatchPolopt(RLAlgorithm):
                 paths, _ = self.sampler.obtain_samples(itr)
                 samples_data = self.sampler.process_samples(itr, paths)
                 # TODO: self.log_diagnostics(paths)
-                self.optimize_policy(rank, itr, samples_data)
+                self.optimize_policy(rank, itr, samples_data)  # (parallel)
                 # logger.log("saving snapshot...")
                 # params = self.get_itr_snapshot(itr, samples_data)
+                if rank == 0:
+                    logger.log("fitting baseline...")
+                self.baseline.fit(paths)  # (parallel)
+                if rank == 0:
+                    logger.log("fitted")
                 self.current_itr = itr + 1
                 # params["algo"] = self
                 # if self.store_paths:
