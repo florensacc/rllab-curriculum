@@ -27,7 +27,7 @@ baseline = True
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'bin-count-a'
+    exp_prefix = 'bin-count-nonoise-c'
     seeds = range(1)
     etas = [0.1]
     mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
@@ -194,7 +194,7 @@ for factor, mdp, eta, seed in param_cart_product:
         num_train_samples=1,
         prior_sd=0.05,
         second_order_update=False,
-        learning_rate=0.0003,
+        learning_rate=0.003,
         surprise_type=ConvBNNVIME.SurpriseType.VAR,
         update_prior=False,
         update_likelihood_sd=False,
@@ -252,4 +252,5 @@ for factor, mdp, eta, seed in param_cart_product:
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite_count.py",
+        sync_all_data_node_to_s3=True
     )

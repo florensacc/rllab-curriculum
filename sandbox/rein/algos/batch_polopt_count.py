@@ -296,9 +296,6 @@ class BatchPolopt(RLAlgorithm):
         logger.record_tabular('AE_SqErrAfter', acc_after)
         logger.record_tabular('AE_TrainLoss', running_avg)
 
-    def generate_samples(self):
-        pass
-
     def train(self):
 
         self.start_worker()
@@ -333,8 +330,6 @@ class BatchPolopt(RLAlgorithm):
             self.plot_pred_imgs(self.decode_obs(self._test_obs), self._test_obs, -itr - 1, 0, dir='/consistency_check')
             obs = paths[0]['observations'][-50:, -np.prod(self.autoenc.state_dim):]
             self.plot_pred_imgs(self.decode_obs(obs), obs, 0, 0, dir='/uniqueness_check')
-
-            self.generate_samples()
 
             # Postprocess trajectory data.
             samples_data = self.process_samples(itr, paths)
