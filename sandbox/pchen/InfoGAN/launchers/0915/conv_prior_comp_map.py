@@ -51,6 +51,14 @@ class VG(VariantGenerator):
     @variant
     def min_kl(self):
         return [0.01, ] #0.05, 0.1]
+
+    @variant(hide=True)
+    def wnorm(self):
+        return [True, ]
+
+    @variant(hide=True)
+    def ar_wnorm(self):
+        return [True, ]
     #
     @variant(hide=False)
     def network(self):
@@ -77,25 +85,9 @@ class VG(VariantGenerator):
     def dec_init_size(self, ):
         return [4]
 
-    @variant(hide=True)
-    def wnorm(self):
-        return [True, ]
-
-    @variant(hide=True)
-    def ar_wnorm(self):
-        return [True, ]
-
     @variant(hide=False)
     def k(self):
         return [128, ]
-
-    @variant(hide=False)
-    def nar(self):
-        return [4, ]
-
-    @variant(hide=False)
-    def nr(self):
-        return [5,]
 
     @variant(hide=False)
     def i_nar(self):
@@ -103,7 +95,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nr(self):
-        return [5,]
+        return [10,]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -118,6 +110,7 @@ class VG(VariantGenerator):
             # ["gating"],
             # ["linear", "gating"]
         ]
+
     @variant(hide=False)
     def exp_avg(self):
         return [0.999, ]
@@ -128,15 +121,20 @@ class VG(VariantGenerator):
         # return [True, False]
 
     @variant(hide=False)
-    def dec_context(self):
-        return [True, ]
+    def ar_depth(self):
+        return [4, 6]
+
+    @variant(hide=False)
+    def ar_block(self):
+        return ["resnet", ]
+
+    @variant(hide=False)
+    def nm(self):
+        return [1]
 
     @variant(hide=False)
     def ds(self):
-        return [
-            "mnist",
-            # "omni"
-        ]
+        return ["mnist", "omni"]
 
     @variant(hide=True)
     def max_epoch(self, ds):
@@ -148,19 +146,6 @@ class VG(VariantGenerator):
     @variant(hide=True)
     def anneal_after(self, max_epoch):
         return [int(max_epoch * 0.7)]
-
-    @variant(hide=False)
-    def context_dim(self, ):
-        return [1, 4]
-
-    @variant(hide=False)
-    def cond_rep(self, context_dim):
-        return [context_dim]
-
-    @variant(hide=False)
-    def ar_depth(self):
-        return [1, 3, 8]
-
 
 
 vg = VG()
@@ -187,29 +172,20 @@ for v in variants[:]:
         else:
             dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
 
-        # init_size = v["dec_init_size"]
-        # ch_size = zdim // init_size // init_size
-        # tgt_dist = Mixture([
-        #     (Gaussian(ch_size), 1./v["nm"])
-        #     for _ in range(v["nm"])
-        # ])
-        # dist = ConvAR(
-        #     tgt_dist,
-        #     shape=(init_size, init_size, ch_size),
-        #     depth=v["ar_depth"],
-        #     block=v["ar_block"],
-        #     nr_channels=ch_size*3,
-        #     pixel_bias=True,
-        # )
-        dist = Gaussian(zdim)
-        for _ in range(v["nar"]):
-            dist = AR(
-                zdim,
-                dist,
-                neuron_ratio=v["nr"],
-                data_init_wnorm=v["ar_wnorm"],
-                var_scope="AR_scope" if v["tiear"] else None,
-            )
+        init_size = v["dec_init_size"]
+        ch_size = zdim // init_size // init_size
+        tgt_dist = Mixture([
+            (Gaussian(ch_size), 1./v["nm"])
+            for _ in range(v["nm"])
+        ])
+        dist = ConvAR(
+            tgt_dist,
+            shape=(init_size, init_size, ch_size),
+            depth=v["ar_depth"],
+            block=v["ar_block"],
+            nr_channels=ch_size*3,
+            pixel_bias=True,
+        )
 
         latent_spec = [
             (
@@ -232,19 +208,8 @@ for v in variants[:]:
                 var_scope="IAR_scope" if v["tiear"] else None,
             )
 
-        ar_conv_dist = ConvAR(
-            tgt_dist=MeanBernoulli(1),
-            shape=(28, 28, 1),
-            filter_size=3,
-            depth=v["ar_depth"],
-            nr_channels=12,
-            pixel_bias=True,
-            block="plstm",
-            context_dim=v["context_dim"],
-            # block="resnet",
-        )
         model = RegularizedHelmholtzMachine(
-            output_dist=ar_conv_dist,
+            output_dist=MeanBernoulli(dataset.image_dim),
             latent_spec=latent_spec,
             batch_size=batch_size,
             image_shape=dataset.image_shape,
@@ -252,7 +217,10 @@ for v in variants[:]:
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
             network_args=dict(
-                cond_rep=v["cond_rep"],
+                base_filters=v["base_filters"],
+                dec_init_size=v["dec_init_size"],
+                # enc_nn=v["enc_nn"],
+                # dec_nn=v["dec_nn"],
             ),
         )
 
@@ -275,13 +243,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0914_%s_hybrid_conv_cond_f" % v["ds"],
+            exp_prefix="0915_%s_cpcm" % v["ds"],
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 
