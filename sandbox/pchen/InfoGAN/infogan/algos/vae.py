@@ -8,7 +8,7 @@ from progressbar import ETA, Bar, Percentage, ProgressBar
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture, DiscretizedLogistic
 import rllab.misc.logger as logger
 import sys
-from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten
 
 
 class VAE(object):
@@ -313,7 +313,7 @@ class VAE(object):
                         img_var = x_var
                         # raise NotImplementedError
                     # rows = 10  # int(np.sqrt(FLAGS.batch_size))
-                    img_var = tf.concat(1, [input_tensor, img_var])
+                    img_var = tf.concat(1, map(flatten, [input_tensor, img_var]))
                     img_var = tf.reshape(img_var, [self.batch_size*2] + list(self.dataset.image_shape))
                     img_var = img_var[:rows * rows, :, :, :]
                     imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))

@@ -6,7 +6,7 @@ import numpy as np
 import prettytensor as pt
 
 from rllab.misc.overrides import overrides
-from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1, int_shape
 
 TINY = 1e-8
 
@@ -1428,12 +1428,15 @@ class ConvAR(Distribution):
         return go, logpz
 
     def sample_n(self, n=100, info=None):
-        print("warning, ar sample invoked")
+        print("warning, conv ar sample invoked")
         # if info is None:
+        context = info.get("context")
+        if context is not None:
+            n = int_shape(context)[0]
         tgt_info = self._tgt_dist.prior_dist_info(n * self._shape[0] * self._shape[1])
         go, logpz = self.reshaped_sample_logli(tgt_info)
         for i in range(self._dim):
-            tgt_dict = self.infer(go, info)
+            tgt_dict = self.infer(go, context)
             go, logpz = self.reshaped_sample_logli(tgt_dict)
         return go, logpz
 

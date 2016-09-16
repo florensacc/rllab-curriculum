@@ -1390,6 +1390,10 @@ def int_shape(x):
     s = x.get_shape()
     return [int(si) for si in s]
 
+def flatten(x):
+    bs = int_shape(x)[0]
+    return tf.reshape(x, [bs, -1])
+
 @prettytensor.Register
 def left_shift(
         input_layer,
