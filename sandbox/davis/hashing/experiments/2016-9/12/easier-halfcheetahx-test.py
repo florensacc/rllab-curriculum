@@ -1,22 +1,17 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-info = """Testing discretizing state space by rounding observations."""
+info = """Matching hyperparams to VIME paper for comparison."""
 
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from sandbox.rocky.hashing.algos.bonus_trpo import BonusTRPO
-from sandbox.davis.hashing.bonus_evaluators.discretizing_hashing_bonus_evaluator import DiscretizingHashingBonusEvaluator
-from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
-from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
-from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
-from sandbox.rein.envs.half_cheetah_env_x import HalfCheetahEnvX
-from sandbox.rein.envs.swimmer_env_x import SwimmerEnvX
-from sandbox.rein.envs.walker2d_env_x import Walker2DEnvX
-from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
+from sandbox.davis.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
+from sandbox.davis.envs.half_cheetah_env_x import HalfCheetahEnvX
 from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
+from rllab import config
 
 import sys
 import argparse
@@ -24,33 +19,20 @@ import argparse
 stub(globals())
 
 from rllab.misc.instrument import VariantGenerator
-from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv as SGE
 
 N_ITR = 1000
 N_ITR_DEBUG = 5
 
-envs = [HalfCheetahEnvX()]
+config.AWS_INSTANCE_TYPE = "c4.large"
 
 
 def experiment_variant_generator():
     vg = VariantGenerator()
-    vg.add("env", map(TfEnv, map(normalize, envs)), hide=True)
-    vg.add("batch_size",
-           lambda env: [50000 if isinstance(env.wrapped_env.wrapped_env, SGE) else 5000],
-           hide=True)
-    vg.add("step_size", [0.01], hide=True)
-    vg.add("max_path_length", [500], hide=True)
+    vg.add("min_reward_dist", [2.0])
     vg.add("discount", [0.99], hide=True)
-    vg.add("seed", range(4), hide=True)
+    vg.add("seed", range(5), hide=True)
     vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1])
-    vg.add("granularity", [0.01, 0.1, 1])
     vg.add("dim_key", [32, 64, 128])
-    vg.add("bonus_evaluator",
-           lambda env, granularity: [DiscretizingHashingBonusEvaluator(env.spec, granularity)],
-           hide=True)
-    vg.add("baseline",
-           lambda env: [LinearFeatureBaseline(env.spec)],
-           hide=True)
     return vg
 
 
@@ -91,23 +73,27 @@ if __name__ == '__main__':
         if exp_name == '':
             exp_name = None
 
+        env = TfEnv(normalize(HalfCheetahEnvX(variant["min_reward_dist"])))
+        baseline = LinearFeatureBaseline(env.spec)
+        bonus_evaluator = HashingBonusEvaluator(env.spec, dim_key=variant["dim_key"])
+
         policy = GaussianMLPPolicy(
             name="policy",
-            env_spec=variant["env"].spec,
+            env_spec=env.spec,
         )
 
         algo = BonusTRPO(
-            bonus_evaluator=variant["bonus_evaluator"],
+            bonus_evaluator=bonus_evaluator,
             bonus_coeff=variant["bonus_coeff"],
-            env=variant["env"],
+            env=env,
             policy=policy,
-            baseline=variant["baseline"],
-            batch_size=variant["batch_size"],
+            baseline=baseline,
+            batch_size=5000,
             whole_paths=True,
-            max_path_length=variant["max_path_length"],
+            max_path_length=500,
             n_itr=N_ITR,
             discount=variant["discount"],
-            step_size=variant["step_size"],
+            step_size=0.01,
             plot=args.visualize and args.local,
         )
 
