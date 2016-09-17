@@ -354,6 +354,7 @@ def run_experiment_lite(
         terminate_machine=True,
         periodic_sync=True,
         periodic_sync_interval=15,
+        sync_all_data_node_to_s3=False,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -498,7 +499,8 @@ def run_experiment_lite(
             task["exp_prefix"] = exp_prefix
             pod_dict = to_lab_kube_pod(
                 task, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu,
-                sync_s3_pkl=sync_s3_pkl, periodic_sync=periodic_sync, periodic_sync_interval=periodic_sync_interval)
+                sync_s3_pkl=sync_s3_pkl, periodic_sync=periodic_sync, periodic_sync_interval=periodic_sync_interval,
+                sync_all_data_node_to_s3=sync_all_data_node_to_s3)
             pod_str = json.dumps(pod_dict, indent=1)
             if dry:
                 print(pod_str)
@@ -637,7 +639,8 @@ def dedent(s):
 
 def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                script='scripts/run_experiment.py',
-               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False, sync_log_on_termination=True,
+               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False,
+               sync_log_on_termination=True,
                periodic_sync=True, periodic_sync_interval=15):
     if len(params_list) == 0:
         return
@@ -953,6 +956,7 @@ def to_lab_kube_pod(
         sync_s3_pkl=False,
         periodic_sync=True,
         periodic_sync_interval=15,
+        sync_all_data_node_to_s3=False
 ):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
@@ -991,23 +995,43 @@ def to_lab_kube_pod(
     pre_commands.append('mkdir -p %s' %
                         (log_dir))
 
-    if periodic_sync:
-        if sync_s3_pkl:
-            pre_commands.append("""
-                while /bin/true; do
-                    aws s3 sync --exclude '*' --include '*.csv' --include '*.json' --include '*.pkl' {log_dir} {remote_log_dir} --region {aws_region} --quiet
-                    sleep {periodic_sync_interval}
-                done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                     aws_region=config.AWS_REGION_NAME,
-                                                     periodic_sync_interval=periodic_sync_interval))
-        else:
-            pre_commands.append("""
-                while /bin/true; do
-                    aws s3 sync --exclude '*' --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region} --quiet
-                    sleep {periodic_sync_interval}
-                done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                     aws_region=config.AWS_REGION_NAME,
-                                                     periodic_sync_interval=periodic_sync_interval))
+    if sync_all_data_node_to_s3:
+        print('Syncing all data from node to s3.')
+        if periodic_sync:
+            if sync_s3_pkl:
+                pre_commands.append("""
+                            while /bin/true; do
+                                aws s3 sync {log_dir} {remote_log_dir} --region {aws_region} --quiet
+                                sleep {periodic_sync_interval}
+                            done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                                 aws_region=config.AWS_REGION_NAME,
+                                                                 periodic_sync_interval=periodic_sync_interval))
+            else:
+                pre_commands.append("""
+                            while /bin/true; do
+                                aws s3 sync {log_dir} {remote_log_dir} --region {aws_region} --quiet
+                                sleep {periodic_sync_interval}
+                            done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                                 aws_region=config.AWS_REGION_NAME,
+                                                                 periodic_sync_interval=periodic_sync_interval))
+    else:
+        if periodic_sync:
+            if sync_s3_pkl:
+                pre_commands.append("""
+                    while /bin/true; do
+                        aws s3 sync --exclude '*' --include '*.csv' --include '*.json' --include '*.pkl' {log_dir} {remote_log_dir} --region {aws_region} --quiet
+                        sleep {periodic_sync_interval}
+                    done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                         aws_region=config.AWS_REGION_NAME,
+                                                         periodic_sync_interval=periodic_sync_interval))
+            else:
+                pre_commands.append("""
+                    while /bin/true; do
+                        aws s3 sync --exclude '*' --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region} --quiet
+                        sleep {periodic_sync_interval}
+                    done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                         aws_region=config.AWS_REGION_NAME,
+                                                         periodic_sync_interval=periodic_sync_interval))
     # copy the file to s3 after execution
     post_commands = list()
     post_commands.append('aws s3 cp --recursive %s %s' %
