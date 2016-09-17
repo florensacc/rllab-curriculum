@@ -1405,8 +1405,7 @@ def left_shift(
     y = tf.concat(
         2,
         [
-            # BUG??
-            x[:, :, :xs[2]-size, :],
+            x[:, :, size:, :],
             tf.zeros([xs[0], xs[1], size, xs[3]]),
         ]
     )
