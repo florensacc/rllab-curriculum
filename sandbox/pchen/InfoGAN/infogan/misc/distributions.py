@@ -1374,21 +1374,29 @@ class ConvAR(Distribution):
                         activation_fn=None,
                     )
             else:
+                u_filter = (filter_size-1) // 2
                 upper = cur
                 row = cur
-                u_filter = (filter_size-1) // 2
                 for di in range(depth):
                     upper = upper.conv2d_mod(
                         [u_filter, filter_size],
                         nr_channels,
                     ).down_shift(
                         size=u_filter
-                    )
-                    row = (row + upper).conv2d_mod(
+                    ) + upper
+                    row = (
+                        row + upper
+                    ).conv2d_mod(
                         [1, u_filter],
                         nr_channels,
                     ).right_shift(
                         size=u_filter
+                    )
+                self._iaf_template = \
+                    row.conv2d_mod(
+                        1,
+                        tgt_dist.dist_flat_dim,
+                        activation_fn=None,
                     )
 
 

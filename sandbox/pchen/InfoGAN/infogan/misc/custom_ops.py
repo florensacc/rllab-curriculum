@@ -1423,7 +1423,7 @@ def right_shift(
         2,
         [
             tf.zeros([xs[0], xs[1], size, xs[3]]),
-            x[:, :, xs[2]-size:, :],
+            x[:, :, :xs[2]-size, :],
         ]
     )
     return input_layer.with_tensor(y)
