@@ -1303,6 +1303,7 @@ class ConvAR(Distribution):
             pixel_bias=False,
             context_dim=None,
             masked=True,
+            nin=False,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1367,6 +1368,8 @@ class ConvAR(Distribution):
                             )
                         else:
                             raise Exception("what")
+                        if nin:
+                            cur = cur + 0.1 * cur.conv2d_mod(1, nr_channels)
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,

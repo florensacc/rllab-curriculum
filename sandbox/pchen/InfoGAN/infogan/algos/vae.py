@@ -20,7 +20,7 @@ class VAE(object):
                  optimizer_cls=AdamaxOptimizer,
                  optimizer_args={},
                  # log_dir="logs",
-                 # checkpoint_dir="ckt",
+                 checkpoint_dir=None,
                  max_epoch=100,
                  updates_per_epoch=None,
                  snapshot_interval=10000,
@@ -55,6 +55,7 @@ class VAE(object):
         Parameters
         ----------
         """
+        self.checkpoint_dir = checkpoint_dir
         if isinstance(optimizer_cls, str):
             optimizer_cls = eval(optimizer_cls)
         self.noise = noise
