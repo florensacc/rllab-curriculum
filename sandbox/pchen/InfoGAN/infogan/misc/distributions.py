@@ -1302,6 +1302,7 @@ class ConvAR(Distribution):
             block="resnet",
             pixel_bias=False,
             context_dim=None,
+            masked=True,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1335,42 +1336,61 @@ class ConvAR(Distribution):
             ar_channels=False,
             pixel_bias=pixel_bias,
         ):
-            for di in range(depth):
-                if di == 0:
-                    cur = \
-                        cur.ar_conv2d_mod(
-                            filter_size,
-                            nr_channels,
-                            zerodiagonal=di == 0,
-                        )
-                else:
-                    if block == "resnet":
+            if masked:
+                for di in range(depth):
+                    if di == 0:
                         cur = \
-                            resconv_v1_customconv(
-                                "ar_conv2d_mod",
-                                dict(zerodiagonal=False),
-                                cur,
+                            cur.ar_conv2d_mod(
                                 filter_size,
-                                nr_channels
+                                nr_channels,
+                                zerodiagonal=di == 0,
                             )
-                    elif block == "plstm":
-                        use_peep = di % 2 == 1
-                        cur, cur_nl = plstmconv_v1(
-                            cur,
-                            peep_inp if use_peep else inp,
-                            filter_size, nr_channels,
-                            op="ar_conv2d_mod",
-                            args=dict(zerodiagonal=False),
-                            args1=dict(zerodiagonal=not use_peep),
-                        )
                     else:
-                        raise Exception("what")
-            self._iaf_template = \
-                cur.ar_conv2d_mod(
-                    filter_size,
-                    tgt_dist.dist_flat_dim,
-                    activation_fn=None,
-                )
+                        if block == "resnet":
+                            cur = \
+                                resconv_v1_customconv(
+                                    "ar_conv2d_mod",
+                                    dict(zerodiagonal=False),
+                                    cur,
+                                    filter_size,
+                                    nr_channels
+                                )
+                        elif block == "plstm":
+                            use_peep = di % 2 == 1
+                            cur, cur_nl = plstmconv_v1(
+                                cur,
+                                peep_inp if use_peep else inp,
+                                filter_size, nr_channels,
+                                op="ar_conv2d_mod",
+                                args=dict(zerodiagonal=False),
+                                args1=dict(zerodiagonal=not use_peep),
+                            )
+                        else:
+                            raise Exception("what")
+                self._iaf_template = \
+                    cur.ar_conv2d_mod(
+                        filter_size,
+                        tgt_dist.dist_flat_dim,
+                        activation_fn=None,
+                    )
+            else:
+                upper = cur
+                row = cur
+                u_filter = (filter_size-1) // 2
+                for di in range(depth):
+                    upper = upper.conv2d_mod(
+                        [u_filter, filter_size],
+                        nr_channels,
+                    ).down_shift(
+                        size=u_filter
+                    )
+                    row = (row + upper).conv2d_mod(
+                        [1, u_filter],
+                        nr_channels,
+                    ).right_shift(
+                        size=u_filter
+                    )
+
 
     @overrides
     def init_mode(self):

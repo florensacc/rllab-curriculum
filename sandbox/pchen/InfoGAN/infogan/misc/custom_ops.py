@@ -1405,8 +1405,26 @@ def left_shift(
     y = tf.concat(
         2,
         [
+            # BUG??
             x[:, :, :xs[2]-size, :],
             tf.zeros([xs[0], xs[1], size, xs[3]]),
+        ]
+    )
+    return input_layer.with_tensor(y)
+
+@prettytensor.Register
+def right_shift(
+        input_layer,
+        size=1,
+        name=PROVIDED
+):
+    x = input_layer.tensor
+    xs = int_shape(x)
+    y = tf.concat(
+        2,
+        [
+            tf.zeros([xs[0], xs[1], size, xs[3]]),
+            x[:, :, xs[2]-size:, :],
         ]
     )
     return input_layer.with_tensor(y)

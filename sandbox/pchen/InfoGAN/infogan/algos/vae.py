@@ -313,7 +313,10 @@ class VAE(object):
                         img_var = x_var
                         # raise NotImplementedError
                     # rows = 10  # int(np.sqrt(FLAGS.batch_size))
-                    img_var = tf.concat(1, map(flatten, [input_tensor, img_var]))
+                    img_var = tf.concat(
+                        1,
+                        list(map(flatten, [input_tensor, img_var]))
+                    )
                     img_var = tf.reshape(img_var, [self.batch_size*2] + list(self.dataset.image_shape))
                     img_var = img_var[:rows * rows, :, :, :]
                     imgs = tf.reshape(img_var, [rows, rows] + list(self.dataset.image_shape))
