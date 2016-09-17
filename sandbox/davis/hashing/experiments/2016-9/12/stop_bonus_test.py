@@ -1,22 +1,17 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-info = """Testing discretizing state space by rounding observations."""
+info = """Trying out bonus that shuts down upon first reward in half cheetah."""
 
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from sandbox.rocky.hashing.algos.bonus_trpo import BonusTRPO
-from sandbox.davis.hashing.bonus_evaluators.discretizing_hashing_bonus_evaluator import DiscretizingHashingBonusEvaluator
-from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
-from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
-from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
+from sandbox.davis.hashing.bonus_evaluators.stop_bonus_evaluator import StopBonusEvaluator
 from sandbox.rein.envs.half_cheetah_env_x import HalfCheetahEnvX
-from sandbox.rein.envs.swimmer_env_x import SwimmerEnvX
-from sandbox.rein.envs.walker2d_env_x import Walker2DEnvX
-from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
 from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
+from rllab import config
 
 import sys
 import argparse
@@ -24,29 +19,33 @@ import argparse
 stub(globals())
 
 from rllab.misc.instrument import VariantGenerator
-from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv as SGE
+
+# lower dimension
+# robustness to noise (in simpler tasks)?
+# count state-action pairs?
 
 N_ITR = 1000
 N_ITR_DEBUG = 5
 
-envs = [HalfCheetahEnvX()]
+envs = [HalfCheetahEnvX(), normalize(HalfCheetahEnvX())]
+
+config.AWS_INSTANCE_TYPE = "c4.large"
 
 
 def experiment_variant_generator():
     vg = VariantGenerator()
-    vg.add("env", map(TfEnv, map(normalize, envs)), hide=True)
+    vg.add("env", map(TfEnv, envs), hide=True)
     vg.add("batch_size",
-           lambda env: [50000 if isinstance(env.wrapped_env.wrapped_env, SGE) else 5000],
+           lambda env: [5000],
            hide=True)
     vg.add("step_size", [0.01], hide=True)
     vg.add("max_path_length", [500], hide=True)
-    vg.add("discount", [0.99], hide=True)
-    vg.add("seed", range(4), hide=True)
-    vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1])
-    vg.add("granularity", [0.01, 0.1, 1])
-    vg.add("dim_key", [32, 64, 128])
+    vg.add("discount", [0.99, 1], hide=True)
+    vg.add("seed", range(5), hide=True)
+    vg.add("bonus_coeff", [0.00001])
+    vg.add("dim_key", [128])
     vg.add("bonus_evaluator",
-           lambda env, granularity: [DiscretizingHashingBonusEvaluator(env.spec, granularity)],
+           lambda env, dim_key: [StopBonusEvaluator(env.spec, dim_key=dim_key)],
            hide=True)
     vg.add("baseline",
            lambda env: [LinearFeatureBaseline(env.spec)],

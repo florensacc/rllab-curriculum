@@ -5,16 +5,9 @@ info = """Reconciling CartpoleSwingupEnvX experiments with VIME results."""
 
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from rllab.envs.normalized_env import normalize
 from sandbox.rocky.hashing.algos.bonus_trpo import BonusTRPO
 from sandbox.rocky.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
-from sandbox.rein.envs.mountain_car_env_x import MountainCarEnvX
 from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
-from sandbox.rein.envs.double_pendulum_env_x import DoublePendulumEnvX
-from sandbox.rein.envs.half_cheetah_env_x import HalfCheetahEnvX
-from sandbox.rein.envs.swimmer_env_x import SwimmerEnvX
-from sandbox.rein.envs.walker2d_env_x import Walker2DEnvX
-from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
 from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 
@@ -24,20 +17,6 @@ import argparse
 stub(globals())
 
 from rllab.misc.instrument import VariantGenerator
-from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv as SGE
-
-# horizon 500
-# batch size 5000
-# swimmergather batch size 50000
-# discretize state
-# lower dimension
-# robustness to noise (in simpler tasks)?
-# count state-action pairs?
-# log state count
-
-# baselines for comparison:
-#   prediction error
-#   just add constant value (encourage to be alive)
 
 N_ITR = 1000
 N_ITR_DEBUG = 5
@@ -48,12 +27,14 @@ envs = [CartpoleSwingupEnvX()]
 def experiment_variant_generator():
     vg = VariantGenerator()
     vg.add("env", map(TfEnv, envs), hide=True)
-    vg.add("batch_size", [1000, 5000], hide=True)
+    vg.add("batch_size", [5000], hide=True)
+    # vg.add("batch_size", [1000, 5000], hide=True)
     vg.add("step_size", [0.01], hide=True)
     vg.add("max_path_length", [500], hide=True)
     vg.add("discount", [0.995], hide=True)
     vg.add("seed", range(10), hide=True)
-    vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1])
+    vg.add("bonus_coeff", [0.1])
+    # vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1])
     vg.add("bonus_evaluator",
            lambda env: [HashingBonusEvaluator(env.spec)],
            hide=True)
