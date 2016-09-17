@@ -59,19 +59,17 @@ class ParallelPerlmutterHvp(Serializable):
             par_data, shareds, mgr_objs = self._par_objs
 
             xs = tuple(self.target.flat_to_params(x, trainable=True))
+
             shareds.grads_2d[:, par_data.rank] = \
                 sliced_fun(self.opt_fun["f_Hx_plain"], self._num_slices)(inputs, xs)
-
-            mgr_objs.barriers_Hx[0].wait()
+            mgr_objs.barriers_Hx[0].wait() * par_data.avg_fac
 
             shareds.flat_g[par_data.vb[0]:par_data.vb[1]] = \
-                np.sum(shareds.grads_2d[par_data.vb[0]:par_data.vb[1], :], axis=1) * par_data.avg_fac
-
+                np.sum(shareds.grads_2d[par_data.vb[0]:par_data.vb[1], :], axis=1)
             mgr_objs.barriers_Hx[1].wait()
 
             if par_data.rank == 0:
                 shareds.flat_g += self.reg_coeff * x
-
             mgr_objs.barriers_Hx[2].wait()
 
             return shareds.flat_g
@@ -246,24 +244,56 @@ class ParallelConjugateGradientOptimizer(Serializable):
         )
 
     def loss(self, inputs, extra_inputs=None):
+        """
+        Parallelized: returns the same value in all workers.
+        """
+        par_data, shareds, mgr_objs = self._par_objs
+
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()
-        return sliced_fun(self._opt_fun["f_loss"], self._num_slices)(inputs, extra_inputs)
+        loss = sliced_fun(self._opt_fun["f_loss"], self._num_slices)(inputs, extra_inputs)
+
+        if par_data.rank == 0:
+            shareds.loss.value = loss * par_data.avg_fac
+            mgr_objs.barriers_loss[0].wait()
+        else:
+            mgr_objs.barriers_loss[0].wait()
+            with mgr_objs.lock:
+                shareds.loss.value += loss * par_data.avg_fac
+        mgr_objs.barriers_loss[1].wait()
+
+        return shareds.loss.value
 
     def constraint_val(self, inputs, extra_inputs=None):
+        """
+        Parallelized: returns the same value in all workers.
+        """
+        par_data, shareds, mgr_objs = self._par_objs
+
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()
-        return sliced_fun(self._opt_fun["f_constraint"], self._num_slices)(inputs, extra_inputs)
+        constraint_val = sliced_fun(self._opt_fun["f_constraint"], self._num_slices)(inputs, extra_inputs)
+
+        if par_data.rank == 0:
+            shareds.constraint_val.value = constraint_val * par_data.avg_fac
+            mgr_objs.barriers_cnstr[0].wait()
+        else:
+            mgr_objs.barriers_cnstr[0].wait()
+            with mgr_objs.lock:
+                shareds.constraint_val.value += constraint_val * par_data.avg_fac
+        mgr_objs.barriers_cnstr[1].wait()
+
+        return shareds.constraint_val.value
 
     def init_par_objs(self, n_parallel, size_grad):
         """
         These objects will be inherited by forked subprocesses.
         (Also possible to return these and attach them explicitly within
-        subprocess--neeeded in Windows.)
+        subprocess--needed in Windows.)
         """
-        avg_fac = 1. / n_parallel
+        avg_fac = 1. / n_parallel  # later can be made different per worker.
         n_grad_elm_worker = -(-size_grad // n_parallel)  # ceiling div
         vb_idx = [n_grad_elm_worker * i for i in range(n_parallel + 1)]
         vb_idx[-1] = size_grad
@@ -272,36 +302,42 @@ class ParallelConjugateGradientOptimizer(Serializable):
         par_data = SimpleContainer(
             rank=None,  # populate once in subprocess
             avg_fac=avg_fac,
-            vb=vb)
-
+            vb=vb
+        )
         shareds = SimpleContainer(
             flat_g=np.frombuffer(mp.RawArray('d', size_grad)),
             grads_2d=np.reshape(
                 np.frombuffer(mp.RawArray('d', size_grad * n_parallel)),
                 (size_grad, n_parallel)),
-            loss_before=mp.RawValue('d'),
             loss=mp.RawValue('d'),
-            constraint_val=mp.RawValue('d')
+            constraint_val=mp.RawValue('d'),
+            loss_before=mp.RawValue('d'),
+            loss_bktrk=mp.RawValue('d'),
+            constraint_val_bktrk=mp.RawValue('d'),
         )
-
         mgr_objs = SimpleContainer(
             lock=mp.Lock(),
             barriers_grad=[mp.Barrier(n_parallel) for _ in range(2)],
             barriers_Hx=[mp.Barrier(n_parallel) for _ in range(3)],
             barriers_bktrk=[mp.Barrier(n_parallel) for _ in range(3)],
+            barriers_loss=[mp.Barrier(n_parallel) for _ in range(2)],
+            barriers_cnstr=[mp.Barrier(n_parallel) for _ in range(2)],
         )
-
         self._par_objs = (par_data, shareds, mgr_objs)
         self._hvp_approach._par_objs = self._par_objs
 
-    def update_rank(self, rank):
+    def set_rank(self, rank):
         par_data, _, _ = self._par_objs
         par_data.rank = rank
-        par_data.vb = par_data.vb[rank]
+        par_data.vb = par_data.vb[rank]  # (assign gradient vector boundaries)
+
+    def set_avg_fac(self, avg_fac):
+        par_data, _, _ = self._par_objs
+        par_data.avg_fac = avg_fac
 
     def optimize(self, inputs, extra_inputs=None, subsample_grouped_inputs=None):
         """
-        This is the function that changes for parallelization.
+        Parallelized: all workers get the same parameter update.
         """
         par_data, shareds, mgr_objs = self._par_objs
 
@@ -333,29 +369,29 @@ class ParallelConjugateGradientOptimizer(Serializable):
 
         # Each worker records result available to all.
         shareds.grads_2d[:, par_data.rank] = sliced_fun(self._opt_fun["f_grad"], self._num_slices)(
-            inputs, extra_inputs)
+            inputs, extra_inputs) * par_data.avg_fac
 
         if par_data.rank == 0:
-            shareds.loss_before.value = 0.
+            shareds.loss_before.value = loss_before * par_data.avg_fac
+            mgr_objs.barriers_grad[0].wait()
+        else:
+            mgr_objs.barriers_grad[0].wait()
+            with mgr_objs.lock:
+                shareds.loss_before.value += loss_before * par_data.avg_fac
 
-        mgr_objs.barriers_grad[0].wait()
-
-        with mgr_objs.lock:
-            shareds.loss_before.value += loss_before
-
-        # Each worker sums an equal share of the grad elements across workers.
+        # Each worker sums over an equal share of the grad elements across workers.
         shareds.flat_g[par_data.vb[0]:par_data.vb[1]] = \
-            np.sum(shareds.grads_2d[par_data.vb[0]:par_data.vb[1], :], axis=1) * par_data.avg_fac
-
+            np.sum(shareds.grads_2d[par_data.vb[0]:par_data.vb[1], :], axis=1)
         mgr_objs.barriers_grad[1].wait()
 
-        loss_before = shareds.loss_before.value * par_data.avg_fac
+        loss_before = shareds.loss_before.value
 
         # Function Hx is parallelized: every worker gets same returned value.
         Hx = self._hvp_approach.build_eval(subsample_inputs + extra_inputs)
 
         descent_direction = krylov.cg(Hx, shareds.flat_g, cg_iters=self._cg_iters)
 
+        # NOTE: can this expression be simplified?
         initial_step_size = np.sqrt(
             2.0 * self._max_constraint_val *
             (1. / (descent_direction.dot(Hx(descent_direction)) + 1e-8))
@@ -374,46 +410,42 @@ class ParallelConjugateGradientOptimizer(Serializable):
             cur_step = ratio * flat_descent_step
             cur_param = prev_param - cur_step
             self._target.set_param_values(cur_param, trainable=True)
-            loss, constraint_val = sliced_fun(
+            loss_bktrk, constraint_val_bktrk = sliced_fun(
                 self._opt_fun["f_loss_constraint"], self._num_slices)(inputs, extra_inputs)
 
             if par_data.rank == 0:
-                shareds.loss.value = 0.
-                shareds.constraint_val.value = 0.
-
-            # Wait for reset before adding to accumulator.
-            mgr_objs.barriers_bktrk[0].wait()
-
-            with mgr_objs.lock:
-                shareds.loss.value += loss
-                shareds.constraint_val.value += constraint_val
-
-            # Wait for all contributions before use.
+                shareds.loss_bktrk.value = loss_bktrk * par_data.avg_fac
+                shareds.constraint_val_bktrk.value = constraint_val_bktrk * par_data.avg_fac
+                mgr_objs.barriers_bktrk[0].wait()
+            else:
+                mgr_objs.barriers_bktrk[0].wait()
+                with mgr_objs.lock:
+                    shareds.loss_bktrk.value += loss_bktrk * par_data.avg_fac
+                    shareds.constraint_val_bktrk.value += constraint_val_bktrk * par_data.avg_fac
             mgr_objs.barriers_bktrk[1].wait()
+            loss_bktrk = shareds.loss_bktrk.value
+            constraint_val_bktrk = shareds.constraint_val_bktrk.value
 
-            loss = shareds.loss.value * par_data.avg_fac
-            constraint_val = shareds.constraint_val.value * par_data.avg_fac
-
-            if loss < loss_before and constraint_val <= self._max_constraint_val:
+            if loss_bktrk < loss_before and constraint_val_bktrk <= self._max_constraint_val:
                 break
 
             # Wait for everyone to check exit condition before repeating loop
             # (and resetting shareds).
             mgr_objs.barriers_bktrk[2].wait()
 
-        if (np.isnan(loss) or np.isnan(constraint_val) or loss >= loss_before or constraint_val >=
-                self._max_constraint_val) and not self._accept_violation:
+        if ((np.isnan(loss_bktrk) or np.isnan(constraint_val_bktrk) or loss_bktrk >= loss_before or
+                constraint_val_bktrk >= self._max_constraint_val) and not self._accept_violation):
             self._target.set_param_values(prev_param, trainable=True)
             if par_data.rank == 0:
                 logger.log("Line search condition violated. Rejecting the step!")
-                if np.isnan(loss):
+                if np.isnan(loss_bktrk):
                     logger.log("Violated because loss is NaN")
-                if np.isnan(constraint_val):
+                if np.isnan(constraint_val_bktrk):
                     logger.log("Violated because constraint %s is NaN" %
                                self._constraint_name)
-                if loss >= loss_before:
+                if loss_bktrk >= loss_before:
                     logger.log("Violated because loss not improving")
-                if constraint_val >= self._max_constraint_val:
+                if constraint_val_bktrk >= self._max_constraint_val:
                     logger.log(
                         "Violated because constraint %s is violated" % self._constraint_name)
 

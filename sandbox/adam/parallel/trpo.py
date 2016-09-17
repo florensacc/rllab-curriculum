@@ -1,3 +1,4 @@
+
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
 # from rllab.algos.batch_polopt import BatchPolopt
@@ -11,12 +12,12 @@ from sandbox.adam.parallel.conjugate_gradient_optimizer import ParallelConjugate
 
 class ParallelTRPO(ParallelBatchPolopt):
     """
-    Parallelized Trust Region Policy Optimization
+    Parallelized Trust Region Policy Optimization (Synchronous)
 
-    Parallelized is limited to mean: using multiprocessing package.
-
-    Almost no difference to serial at this level, but calls a parallelized
-    optimizer.
+    In this class definition, identical to serial case, except:
+        - Inherits from parallelized base class
+        - Holds a parallelized optimizer
+        - Has an init_par_objs() method (working on base class and optimizer)
     """
 
     def __init__(
@@ -26,9 +27,6 @@ class ParallelTRPO(ParallelBatchPolopt):
             step_size=0.01,
             truncate_local_is_ratio=None,
             **kwargs):
-        """
-        Init is same as normal NPO/TRPO but with different optimizer.
-        """
         if optimizer is None:
             if optimizer_args is None:
                 optimizer_args = dict()
@@ -110,10 +108,9 @@ class ParallelTRPO(ParallelBatchPolopt):
         return dict()
 
     @overrides
-    def optimize_policy(self, rank, itr, samples_data):
-        """
-        Same as normal NPO, except for reference to rank for logging only.
-        """
+    def optimize_policy(self, itr, samples_data):
+        par_data, _, _ = self._par_objs
+
         all_input_values = tuple(ext.extract(
             samples_data,
             "observations", "actions", "advantages"
@@ -129,22 +126,28 @@ class ParallelTRPO(ParallelBatchPolopt):
         self.optimizer.optimize(all_input_values)
         mean_kl = self.optimizer.constraint_val(all_input_values)
         loss_after = self.optimizer.loss(all_input_values)
-        if rank == 0:
+        if par_data.rank == 0:
             logger.record_tabular('LossBefore', loss_before)
             logger.record_tabular('LossAfter', loss_after)
             logger.record_tabular('MeanKLBefore', mean_kl_before)
             logger.record_tabular('MeanKL', mean_kl)
             logger.record_tabular('dLoss', loss_before - loss_after)
+
         return dict()
 
     @overrides
     def get_itr_snapshot(self, itr, samples_data):
-        """
-        Same as normal NPO.
-        """
         return dict(
             itr=itr,
             policy=self.policy,
             baseline=self.baseline,
             env=self.env,
+        )
+
+    @overrides
+    def init_par_objs(self):
+        self._init_par_objs_batchpolopt()  # (must do first)
+        self.optimizer.init_par_objs(
+            n_parallel=self.n_parallel,
+            size_grad=len(self.policy.get_param_values(trainable=True)),
         )

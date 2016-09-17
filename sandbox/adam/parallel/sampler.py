@@ -8,16 +8,17 @@ from rllab.sampler.utils import rollout
 
 class WorkerBatchSampler(object):
 
-    def __init__(self, algo, worker_batch_size):
+    def __init__(self, algo):
         """
         :type algo: ParallelBatchPolopt
         """
         self.algo = algo
-        self.worker_batch_size = worker_batch_size
+        self.worker_batch_size = algo.worker_batch_size
 
     def obtain_samples(self, itr):
         n_steps_collected = 0
         paths = []
+        # TODO: progbar for rank 0?
         while n_steps_collected < self.worker_batch_size:
             paths.append(rollout(self.algo.env, self.algo.policy, self.algo.max_path_length))
             n_steps_collected += len(paths[-1]["rewards"])
@@ -69,6 +70,8 @@ class WorkerBatchSampler(object):
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
 
+        dgnstc_data = dict(baselines=baselines, returns=returns)
+
         if not self.algo.policy.recurrent:
             observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
             actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
@@ -83,18 +86,7 @@ class WorkerBatchSampler(object):
             if self.algo.positive_adv:
                 advantages = util.shift_advantages_to_positive(advantages)
 
-            # TODO: provide centralized diagnostics calculation
-            # average_discounted_return = \
-            #     np.mean([path["returns"][0] for path in paths])
-
-            # undiscounted_returns = [sum(path["rewards"]) for path in paths]
-
-            # ent = np.mean(self.algo.policy.distribution.entropy(agent_infos))
-
-            # ev = special.explained_variance_1d(
-            #     np.concatenate(baselines),
-            #     np.concatenate(returns)
-            # )
+            # NOTE: Removed diagnostics calculation to batch_polopt.
 
             samples_data = dict(
                 observations=observations,
@@ -141,18 +133,7 @@ class WorkerBatchSampler(object):
             valids = [np.ones_like(path["returns"]) for path in paths]
             valids = np.array([tensor_utils.pad_tensor(v, max_path_length) for v in valids])
 
-            # TODO: provide centralized diagnostics calculation.
-            # average_discounted_return = \
-            #     np.mean([path["returns"][0] for path in paths])
-
-            # undiscounted_returns = [sum(path["rewards"]) for path in paths]
-
-            # ent = np.sum(self.algo.policy.distribution.entropy(agent_infos) * valids) / np.sum(valids)
-
-            # ev = special.explained_variance_1d(
-            #     np.concatenate(baselines),
-            #     np.concatenate(returns)
-            # )
+            # NOTE: Removed diagnostics calculation to batch_polopt.
 
             samples_data = dict(
                 observations=obs,
@@ -165,19 +146,5 @@ class WorkerBatchSampler(object):
                 paths=paths,
             )
 
-        # NOTE: Removed baseline fitting, so this file has nothing parallel.
-
-        # TODO: provide centralized diagnostics logging.
-        # logger.record_tabular('Iteration', itr)
-        # logger.record_tabular('AverageDiscountedReturn',
-        #                       average_discounted_return)
-        # logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
-        # logger.record_tabular('ExplainedVariance', ev)
-        # logger.record_tabular('NumTrajs', len(paths))
-        # logger.record_tabular('Entropy', ent)
-        # logger.record_tabular('Perplexity', np.exp(ent))
-        # logger.record_tabular('StdReturn', np.std(undiscounted_returns))
-        # logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
-        # logger.record_tabular('MinReturn', np.min(undiscounted_returns))
-
-        return samples_data
+        # NOTE: Removed baseline fitting to batch_polopt.
+        return samples_data, dgnstc_data
