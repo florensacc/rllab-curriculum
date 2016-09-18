@@ -83,8 +83,8 @@ class Parameterized(object):
 
     def __setstate__(self, d):
         # currently joblib.load("xxx.pkl") fails to load the policy; so use this
-        if type(self).__name__ == 'CategoricalMLPPolicy':
-            return
+        # if type(self).__name__ == 'CategoricalMLPPolicy':
+        #     return
         Serializable.__setstate__(self, d)
         tf.get_default_session().run(tf.initialize_variables(self.get_params()))
         self.set_param_values(d["params"])

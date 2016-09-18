@@ -114,11 +114,11 @@ class AtariSaveLoadResetter(object):
         # restore to the last "good state"
         if self.init_state is None:
             env.ale.reset_game()
-            logger.log("Restored to default initial state")
+            # logger.log("Restored to default initial state")
         else:
             env.ale.reset_game()
             env.ale.restoreSystemState(self.init_state)
-            logger.log("Restored to state %s"%(self.init_state))
+            # logger.log("Restored to state %s"%(self.init_state))
 
         # After each iteration, the central resetter will update new actions and broadcast them to worker resetters. While sampling the first path, the worker resetters take new actions to reach the next good state, and recrods that state for easier reset during later sampling.
         if self.new_actions is not None:
