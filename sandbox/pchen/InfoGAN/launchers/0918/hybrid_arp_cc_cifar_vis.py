@@ -1,7 +1,7 @@
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
-    IAR, ConvAR, DiscretizedLogistic, MeanDiscretizedLogistic
+    IAR, ConvAR, DiscretizedLogistic
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
@@ -91,7 +91,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self):
-        return [1, ]
+        return [batch_size, ]
 
     @variant(hide=False)
     def nar(self):
@@ -103,11 +103,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [0, ]
+        return [3, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [10,]
+        return [5,]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -163,7 +163,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [6]
+        return [3]
 
 
 
@@ -237,18 +237,17 @@ for v in variants[:1]:
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
             )
-        nml = 3
-        # tgt_dist = Mixture(
-        #    [(MeanDiscretizedLogistic(3), 1./nml) for _ in range(nml)]
-        # )
+        nml = 5
+        tgt_dist = Mixture(
+           [(DiscretizedLogistic(3), 1./nml) for _ in range(nml)]
+        )
         ar_conv_dist = ConvAR(
             # tgt_dist=Bernoulli(1),
-            tgt_dist=DiscretizedLogistic(3),
-            # tgt_dist=MeanDiscretizedLogistic(3),
+            tgt_dist=tgt_dist,
             shape=(32, 32, 3),
             filter_size=3,
             depth=v["ar_depth"],
-            nr_channels=12*2,
+            nr_channels=12*2*2,
             pixel_bias=True,
             block="plstm",
             context_dim=v["context_dim"],
@@ -279,18 +278,19 @@ for v in variants[:1]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*3,
-            exp_avg=v["exp_avg"],
+            vali_eval_interval=1500*3*4,
+            exp_avg=None,#v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
+            # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
-            # summary_interval=400,
-            resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
+            # summary_interval=200,
+            resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="play_0916_apcc_cifar_lnm_vis",
+            exp_prefix="play_0917_hybrid_cc_cifar_ml_3ldc",
             seed=v["seed"],
             variant=v,
             mode="local",

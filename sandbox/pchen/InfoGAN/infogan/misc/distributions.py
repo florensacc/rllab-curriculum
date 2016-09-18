@@ -4,6 +4,7 @@ import itertools
 import tensorflow as tf
 import numpy as np
 import prettytensor as pt
+from progressbar import ProgressBar
 
 from rllab.misc.overrides import overrides
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1, int_shape, \
@@ -485,6 +486,13 @@ class DiscretizedLogistic(Distribution):
             mu=0.0*np.ones([batch_size, self._dim]),
             scale=np.ones([batch_size, self._dim]) * self._init_scale,
         )
+
+class MeanDiscretizedLogistic(DiscretizedLogistic):
+    def sample_logli(self, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        out = mu
+        return out, self.logli(out, dist_info)
 
 class DiscretizedLogistic2(Distribution):
 
@@ -1495,6 +1503,44 @@ class ConvAR(Distribution):
         #     back_prop=False,
         # )
         # return go, 0. # fixme
+
+    import functools
+    @functools.lru_cache(maxsize=None)
+    def sample_prior_sym(self, n):
+        tgt_info = self._tgt_dist.prior_dist_info(n * self._shape[0] * self._shape[1])
+        init, logpz = self.reshaped_sample_logli(tgt_info)
+        return init
+
+    @functools.lru_cache(maxsize=None)
+    def infer_sym(self, n):
+        x_var, context_var = \
+            tf.placeholder(tf.float32, shape=[n,]+list(self._shape)), \
+            tf.placeholder(tf.float32, shape=[n, self.dist_flat_dim])
+        tgt_dict = self.infer(x_var, context_var)
+        go, logpz = self.reshaped_sample_logli(tgt_dict)
+        return x_var, context_var, go, tgt_dict
+
+    def sample_dynamic(self, sess, info):
+        print("warning, conv ar sample invoked")
+        context = info.get("context")
+        n = context.shape[0]
+        go = sess.run(self.sample_prior_sym(n))
+        x_var, context_var, go_sym, tgt_dict = self.infer_sym(n)
+
+
+        raise "problem"
+        pbar = ProgressBar(maxval=self._dim, )
+        pbar.start()
+        for i in range(self._dim):
+            go = sess.run(
+                go_sym,
+                {
+                    x_var: go,
+                    context_var: context
+                }
+            )
+            pbar.update(i)
+        return go
 
     @property
     def dist_info_keys(self):

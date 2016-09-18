@@ -105,6 +105,7 @@ class VAE(object):
         self.eval_batch_size = self.batch_size // k
         self.eval_input_tensor = None
         self.eval_log_vars = []
+        self.sym_vars = {}
 
     def init_opt(self, init=False, eval=False):
         if init:
@@ -289,6 +290,10 @@ class VAE(object):
             tf.get_collection_ref(tf.GraphKeys.SUMMARIES)[:] = []
             # no pic summary
             return
+        # save relevant sym vars
+        self.sym_vars[
+            "eval" if eval else "train"
+        ] = dict(locals())
         if eval:
             self.eval_log_vars = log_vars
             tf.get_collection_ref(tf.GraphKeys.SUMMARIES)[:] = []
@@ -479,6 +484,13 @@ class VAE(object):
                         summary_writer = tf.train.SummaryWriter(self.log_dir, sess.graph)
 
                         feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
+
+                        if self.resume_from:
+                            context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)
+                            dist = self.model.output_dist
+                            import ipdb; ipdb.set_trace()
+                            samples = dist.sample_dynamic(sess, context)
+
                         log_vals = sess.run([] + log_vars, feed)[:]
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
                         print(("Initial: " + log_line))
