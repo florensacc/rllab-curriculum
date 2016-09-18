@@ -91,7 +91,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self):
-        return [1, ]
+        return [batch_size, ]
 
     @variant(hide=False)
     def nar(self):
@@ -103,11 +103,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [0, ]
+        return [3, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [10,]
+        return [5,]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -278,18 +278,18 @@ for v in variants[:1]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*3,
+            vali_eval_interval=1500*3*4,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
-            # img_on=False,
-            img_on=True,
-            summary_interval=400,
-            resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
+            img_on=False,
+            # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
+            # img_on=True,
+            # summary_interval=200,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="play_0916_apcc_cifar_lnm_vis",
+            exp_prefix="play_0917_hybrid_cc_cifar_ml",
             seed=v["seed"],
             variant=v,
             mode="local",

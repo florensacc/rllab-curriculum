@@ -21,6 +21,7 @@ class VAE(object):
                  optimizer_args={},
                  # log_dir="logs",
                  checkpoint_dir=None,
+                 resume_from=None,
                  max_epoch=100,
                  updates_per_epoch=None,
                  snapshot_interval=10000,
@@ -55,7 +56,8 @@ class VAE(object):
         Parameters
         ----------
         """
-        self.checkpoint_dir = checkpoint_dir
+        self.resume_from = resume_from
+        self.checkpoint_dir = checkpoint_dir or logger.get_snapshot_dir()
         if isinstance(optimizer_cls, str):
             optimizer_cls = eval(optimizer_cls)
         self.noise = noise
@@ -80,7 +82,6 @@ class VAE(object):
         self.max_epoch = max_epoch
         self.exp_name = exp_name[:20] # tf doesnt like filenames that are too long
         self.log_dir = logger.get_snapshot_dir()
-        self.checkpoint_dir = logger.get_snapshot_dir()
         self.snapshot_interval = snapshot_interval
         if updates_per_epoch:
             print("should not set updates_per_epoch")
@@ -411,7 +412,6 @@ class VAE(object):
 
         with self.sess.as_default():
             sess = self.sess
-            # check = tf.add_check_numerics_ops()
             init = tf.initialize_all_variables()
             if self.bnn_decoder:
                 assert False
@@ -450,7 +450,8 @@ class VAE(object):
                     feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
 
                     if counter == 0:
-                        sess.run(init, feed)
+                        if self.resume_from is None:
+                            sess.run(init, feed)
                         self.init_opt(init=False, eval=True)
                         self.init_opt(init=False, eval=False)
                         vs = tf.all_variables()
@@ -460,6 +461,12 @@ class VAE(object):
                                 ("cv_coeff" in v.name)
                         ]))
                         print("vars initd")
+                        if self.resume_from is not None:
+                            print("resuming from %s" % self.resume_from)
+                            fn = tf.train.latest_checkpoint(self.resume_from)
+                            print("latest ckpt: %s" % fn)
+                            saver.restore(sess, fn)
+                            print("resumed")
 
                         log_dict = dict(self.log_vars)
                         log_keys = list(log_dict.keys())
@@ -530,7 +537,7 @@ class VAE(object):
                                 )
                                 all_test_log_vals.append(test_log_vals)
                                 # fast eval for the first itr
-                                if counter == 0:
+                                if counter == 0 and (self.resume_from is None):
                                     if ti >= 4:
                                         break
 

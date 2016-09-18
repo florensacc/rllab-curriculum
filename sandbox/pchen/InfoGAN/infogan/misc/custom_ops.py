@@ -1390,6 +1390,12 @@ def int_shape(x):
     s = x.get_shape()
     return [int(si) for si in s]
 
+def universal_int_shape(x):
+    try:
+        return int_shape(x)
+    except AttributeError:
+        return x.shape
+
 def flatten(x):
     bs = int_shape(x)[0]
     return tf.reshape(x, [bs, -1])
