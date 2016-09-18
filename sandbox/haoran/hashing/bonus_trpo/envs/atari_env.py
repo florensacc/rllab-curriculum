@@ -10,8 +10,7 @@ from sandbox.rocky.tf.spaces.box import Box
 from rllab.spaces.discrete import Discrete
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Env
-# from sandbox.haoran.ale_python_interface import ALEInterface
-# from sandbox.pchen.async_rl.ale_python_interface import ALEInterface
+from sandbox.haoran.ale_python_interface import ALEInterface
 
 class AtariEnv(Env,Serializable):
     def __init__(self,
@@ -29,6 +28,8 @@ class AtariEnv(Env,Serializable):
             record_internal_state=True,
             resetter=None,
             avoid_life_lost=False,
+            n_last_rams=4,
+            n_last_screens=4,
         ):
         """
         plot: not compatible with rllab yet
@@ -52,7 +53,8 @@ class AtariEnv(Env,Serializable):
         self.img_height = img_height
         self._prior_reward = 0
         self.frame_skip = 4
-        self.n_last_screens = 4
+        self.n_last_screens = n_last_screens
+        self.n_last_rams = n_last_rams
         self.avoid_life_lost = avoid_life_lost
 
         self.configure_ale()
@@ -81,8 +83,6 @@ class AtariEnv(Env,Serializable):
         assert self.ale.getFrameNumber() == 0
 
         self.legal_actions = self.ale.getMinimalActionSet()
-        if self.record_ram:
-            self.ram_state = np.zeros(self.ale.getRAMSize(), dtype=np.uint8)
 
     def prepare_plot(self,display="0.0"):
         os.environ["DISPLAY"] = display
@@ -150,15 +150,19 @@ class AtariEnv(Env,Serializable):
             imgs = (imgs / 255.0) * 2.0 - 1.0 # rescale to [-1,1]
             return imgs
         elif self.obs_type == "ram":
-            ram = (self.ram_state / 255.0) * 2.0 - 1.0 # rescale to [-1,1]
-            return ram
+            assert len(self.last_rams) == self.n_last_rams
+            rams = np.asarray(list(self.last_rams))
+            rams = (rams / 255.0) * 2.0 - 1.0
+            return rams
         else:
             raise NotImplementedError
 
     @property
     def observation_space(self):
         if self.obs_type == "ram":
-            return Box(low=-1, high=1, shape=(self.ale.getRAMSize(),))#np.zeros(128), high=np.ones(128))# + 255)
+            return Box(low=-1, high=1,
+                shape=(self.n_last_rams, self.ale.getRAMSize())
+            ) #np.zeros(128), high=np.ones(128))# + 255)
         elif self.obs_type == "image":
             return Box(low=-1, high=1, shape=(self.img_width,self.img_height,self.n_last_screens))
             # see sandbox.haoran.tf.core.layers.BaseConvLayer for a reason why channel is at the last dimension
@@ -181,8 +185,11 @@ class AtariEnv(Env,Serializable):
     @property
     def env_info(self):
         env_info = {}
-        if self.record_ram and self.obs_type != "ram":
-            env_info["ram_states"] = np.copy(self.ram_state)
+        # if self.record_ram and self.obs_type != "ram":
+        if self.record_ram:
+            ram = np.copy(self.ale.getRAM())
+            ram = ram.reshape((len(ram),1)) # make it like an image
+            env_info["ram_states"] = ram
 
         if self.record_image and self.obs_type != "image":
             env_info["images"] = np.copy(np.asarray(list(self.last_screens)))
@@ -240,7 +247,7 @@ class AtariEnv(Env,Serializable):
             if self.record_image or self.obs_type == "image":
                 self.last_screens.append(self.current_screen())
             if self.record_ram or self.obs_type == "ram":
-                self.ale.getRAM(self.ram_state)
+                self.last_rams.append(np.copy(self.ale.getRAM()))
 
 
         # cur_obs, cur_reward, next_state_is_terminal, cur_env_info
@@ -264,12 +271,17 @@ class AtariEnv(Env,Serializable):
 
         self.last_raw_screen = self.ale.getScreenRGB()
 
-        self.last_screens = collections.deque(
-            [np.zeros((self.img_width, self.img_height), dtype=np.uint8)] * (self.n_last_screens - 1) +
-            [self.current_screen()],
-            maxlen=self.n_last_screens)
-        if self.record_ram:
-            self.ale.getRAM(self.ram_state)
+        if self.obs_type == "image" or self.record_image:
+            self.last_screens = collections.deque(
+                [np.zeros((self.img_width, self.img_height), dtype=np.uint8)] * (self.n_last_screens - 1) +
+                [self.current_screen()],
+                maxlen=self.n_last_screens)
+        if self.obs_type == "ram" or self.record_ram:
+            self.last_rams = collections.deque(
+                [np.zeros(self.ale.getRAMSize(), dtype=np.uint8)] * (self.n_last_rams - 1) + [self.ale.getRAM()],
+                maxlen=self.n_last_rams
+            )
+
         self.start_lives = self.ale.lives()
         self.lives_lost = False
         return self.observation
