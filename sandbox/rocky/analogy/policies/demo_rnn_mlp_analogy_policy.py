@@ -7,10 +7,15 @@ import sandbox.rocky.tf.core.layers as L
 import tensorflow as tf
 import numpy as np
 
+from sandbox.rocky.tf.policies import rnn_utils
 
-class DemoGRUMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
-    def __init__(self, env_spec, name, gru_size=32, mlp_hidden_sizes=(32, 32), state_include_action=False,
-                 mlp_hidden_nonlinearity=tf.nn.tanh, output_nonlinearity=None):
+
+class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
+    def __init__(self, env_spec, name, rnn_hidden_size=32, rnn_hidden_nonlinearity=tf.nn.tanh,
+                 mlp_hidden_sizes=(32, 32), state_include_action=False,
+                 network_type=rnn_utils.NetworkType.GRU, mlp_hidden_nonlinearity=tf.nn.tanh,
+                 output_nonlinearity=None, network_args=None,
+                 embedding_network_cls=None, embedding_network_args=None):
         Serializable.quick_init(self, locals())
         with tf.variable_scope(name):
             AnalogyPolicy.__init__(self, env_spec=env_spec)
@@ -23,17 +28,25 @@ class DemoGRUMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             else:
                 gru_input_dim = obs_dim
 
-            summary_network = GRUNetwork(
+            if network_args is None:
+                network_args = dict()
+
+            # if embedding_network_cls is None:
+            #     l_embedding = L.InputLayer()
+
+
+            summary_network = rnn_utils.create_recurrent_network(
+                network_type,
                 input_shape=(gru_input_dim,),
-                output_dim=gru_size,
-                hidden_dim=gru_size,
-                hidden_nonlinearity=tf.nn.tanh,
+                output_dim=rnn_hidden_size,
+                hidden_dim=rnn_hidden_size,
+                hidden_nonlinearity=rnn_hidden_nonlinearity,
                 output_nonlinearity=None,
-                gru_layer_cls=L.GRULayer,
-                name="summary_network"
+                name="summary_network",
+                **network_args,
             )
 
-            summary_var = tf.Variable(initial_value=np.zeros((1, gru_size), dtype=np.float32), trainable=False,
+            summary_var = tf.Variable(initial_value=np.zeros((1, rnn_hidden_size), dtype=np.float32), trainable=False,
                                       name="summary")
 
             l_obs = L.InputLayer(
@@ -41,14 +54,14 @@ class DemoGRUMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                 name="obs"
             )
             l_summary_in = L.InputLayer(
-                shape=(None, gru_size),
+                shape=(None, rnn_hidden_size),
                 name="summary_in",
                 input_var=summary_var
             )
 
             # mlp_input_
 
-            mlp_input_dim = obs_dim + gru_size
+            mlp_input_dim = obs_dim + rnn_hidden_size
             action_network = MLP(
                 name="action_network",
                 input_shape=(mlp_input_dim,),
@@ -80,29 +93,7 @@ class DemoGRUMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                 L.get_output(action_network.output_layer),
             )
 
-            self.gru_size = gru_size
-
-            # self.f_step_prob = tensor_utils.compile_function(
-            #     [
-            #         flat_input_var,
-            #         summary_network.step_prev_hidden_layer.input_var
-            #     ],
-            #     L.get_output([
-            #         summary_network.step_hidden_layer
-            #     ], {summary_network.step_input_layer: flat_input_var})
-            # )
-
-            # self.input_dim = input_dim
-            # self.action_dim = action_dim
-            # self.hidden_dim = hidden_dim
-
-            # self.prev_actions = None
-            # self.prev_hiddens = None
-            # self.dist = RecurrentCategorical(env_spec.action_space.n)
-
-            # out_layers = [summary_network.output_layer]
-            # if feature_network is not None:
-            #     out_layers.append(feature_network.output_layer)
+            self.gru_size = rnn_hidden_size
 
             LayersPowered.__init__(self, [summary_network.output_layer, action_network.output_layer])
 
@@ -124,7 +115,6 @@ class DemoGRUMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             ),
             (-1, self.gru_size),
         )
-        # flat_summary_var = tf.tile(self.summary)
         action_var = L.get_output(
             self.action_network.output_layer, {
                 self.l_action_obs: flat_obs_var,

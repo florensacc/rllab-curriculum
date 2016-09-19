@@ -1,3 +1,4 @@
+from sandbox.rocky.analogy.utils import unwrap
 from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.rocky.tf.policies.base import Policy
 from sandbox.rocky.analogy.policies.base import AnalogyPolicy
@@ -6,9 +7,7 @@ import numpy as np
 
 class SimpleParticleTrackingPolicy(AnalogyPolicy):
     def __init__(self, env):
-        if isinstance(env, TfEnv):
-            env = env.wrapped_env
-        self.env = env
+        self.env = unwrap(env)
         Policy.__init__(self, env_spec=env.spec)
 
     def get_action(self, obs):

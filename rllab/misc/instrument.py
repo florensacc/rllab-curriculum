@@ -19,6 +19,7 @@ from io import StringIO
 import datetime
 import dateutil.tz
 import json
+import time
 import numpy as np
 
 from rllab.misc.ext import AttrDict
@@ -341,6 +342,7 @@ def run_experiment_lite(
         exp_name=None,
         log_dir=None,
         script="scripts/run_experiment_lite.py",
+        python_command="python",
         mode="local",
         dry=False,
         docker_image=None,
@@ -431,7 +433,7 @@ def run_experiment_lite(
             del task["remote_log_dir"]
             env = task.pop("env", None)
             command = to_local_command(
-                task, script=osp.join(config.PROJECT_PATH, script), use_gpu=use_gpu)
+                task, python_command=python_command, script=osp.join(config.PROJECT_PATH, script), use_gpu=use_gpu)
             print(command)
             if dry:
                 return
@@ -472,6 +474,7 @@ def run_experiment_lite(
         launch_ec2(batch_tasks,
                    exp_prefix=exp_prefix,
                    docker_image=docker_image,
+                   python_command=python_command,
                    script=script,
                    aws_config=aws_config,
                    dry=dry,
@@ -499,6 +502,7 @@ def run_experiment_lite(
             task["exp_prefix"] = exp_prefix
             pod_dict = to_lab_kube_pod(
                 task, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu,
+                python_command=python_command,
                 sync_s3_pkl=sync_s3_pkl, periodic_sync=periodic_sync, periodic_sync_interval=periodic_sync_interval,
                 sync_all_data_node_to_s3=sync_all_data_node_to_s3)
             pod_str = json.dumps(pod_dict, indent=1)
@@ -517,11 +521,20 @@ def run_experiment_lite(
             print(kubecmd)
             if dry:
                 return
-            try:
-                subprocess.call(kubecmd, shell=True)
-            except Exception as e:
-                if isinstance(e, KeyboardInterrupt):
-                    raise
+            retry_count = 0
+            wait_interval = 1
+            while retry_count <= 5:
+                try:
+                    return_code = subprocess.call(kubecmd, shell=True)
+                    if return_code == 0:
+                        break
+                    retry_count += 1
+                    print("trying again...")
+                    time.sleep(wait_interval)
+                except Exception as e:
+                    if isinstance(e, KeyboardInterrupt):
+                        raise
+                    print(e)
     else:
         raise NotImplementedError
 
@@ -563,8 +576,10 @@ def _to_param_val(v):
         return _shellquote(str(v))
 
 
-def to_local_command(params, script=osp.join(config.PROJECT_PATH, 'scripts/run_experiment.py'), use_gpu=False):
-    command = "python " + script
+def to_local_command(params, python_command="python", script=osp.join(config.PROJECT_PATH,
+                                                                      'scripts/run_experiment.py'),
+                     use_gpu=False):
+    command = python_command + " " + script
     if use_gpu and not config.USE_TF:
         command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto' " + command
     for k, v in config.ENV.items():
@@ -583,7 +598,8 @@ def to_local_command(params, script=osp.join(config.PROJECT_PATH, 'scripts/run_e
     return command
 
 
-def to_docker_command(params, docker_image, script='scripts/run_experiment.py', pre_commands=None,
+def to_docker_command(params, docker_image, python_command="python", script='scripts/run_experiment.py',
+                      pre_commands=None,
                       post_commands=None, dry=False, use_gpu=False, env=None, local_code_dir=None):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
@@ -624,7 +640,7 @@ def to_docker_command(params, docker_image, script='scripts/run_experiment.py', 
         command_list.extend(pre_commands)
     command_list.append("echo \"Running in docker\"")
     command_list.append(to_local_command(
-        params, osp.join(config.DOCKER_CODE_DIR, script), use_gpu=use_gpu))
+        params, python_command=python_command, script=osp.join(config.DOCKER_CODE_DIR, script), use_gpu=use_gpu))
     # We for 2 min sleep after termination to allow for last syncs.
     post_commands = ['sleep 120']
     if post_commands is not None:
@@ -638,6 +654,7 @@ def dedent(s):
 
 
 def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
+               python_command="python",
                script='scripts/run_experiment.py',
                aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False,
                sync_log_on_termination=True,
@@ -746,7 +763,8 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                 """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
         sio.write("""
             {command}
-        """.format(command=to_docker_command(params, docker_image, script, use_gpu=use_gpu, env=env,
+        """.format(command=to_docker_command(params, docker_image, python_command=python_command, script=script,
+                                                                                                use_gpu=use_gpu, env=env,
                                              local_code_dir=config.DOCKER_CODE_DIR)))
         sio.write("""
             aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
@@ -951,6 +969,7 @@ def upload_file_to_s3(script_content):
 
 def to_lab_kube_pod(
         params, docker_image, code_full_path,
+        python_command="python",
         script='scripts/run_experiment.py',
         is_gpu=False,
         sync_s3_pkl=False,
@@ -1043,7 +1062,7 @@ def to_lab_kube_pod(
     command_list.append("echo \"Running in docker\"")
     command_list.append(
         "%s 2>&1 | tee -a %s" % (
-            to_local_command(params, script),
+            to_local_command(params, python_command=python_command, script=script),
             "%s/stdouterr.log" % log_dir
         )
     )

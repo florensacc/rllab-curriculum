@@ -4,7 +4,8 @@ import numpy as np
 
 
 class BatchDataset(object):
-    def __init__(self, inputs, batch_size, extra_inputs=None):
+    def __init__(self, inputs, batch_size, extra_inputs=None, shuffler=None):
+        self.shuffler = shuffler
         self.inputs = list(inputs)
         if extra_inputs is None:
             extra_inputs = []
@@ -35,10 +36,12 @@ class BatchDataset(object):
 
     def update(self):
         np.random.shuffle(self.ids)
+        if self.shuffler is not None:
+            self.shuffler.shuffle(*self.inputs)
 
 
 class SupervisedDataset(object):
-    def __init__(self, inputs, train_batch_size, train_ratio, extra_inputs=None, test_batch_size=1):
+    def __init__(self, inputs, train_batch_size, train_ratio, extra_inputs=None, test_batch_size=1, shuffler=None):
         if extra_inputs is None:
             extra_inputs = []
         n_total = len(inputs[0])
@@ -47,5 +50,7 @@ class SupervisedDataset(object):
         train_inputs = [x[:n_train] for x in inputs]
         test_inputs = [x[n_train:] for x in inputs]
 
-        self.train = BatchDataset(inputs=train_inputs, batch_size=train_batch_size, extra_inputs=extra_inputs)
-        self.test = BatchDataset(inputs=test_inputs, batch_size=test_batch_size, extra_inputs=extra_inputs)
+        self.train = BatchDataset(inputs=train_inputs, batch_size=train_batch_size, extra_inputs=extra_inputs,
+                                  shuffler=shuffler)
+        self.test = BatchDataset(inputs=test_inputs, batch_size=test_batch_size, extra_inputs=extra_inputs,
+                                 shuffler=shuffler)

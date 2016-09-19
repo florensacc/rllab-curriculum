@@ -62,7 +62,7 @@ class VG(VariantGenerator):
 
     @variant
     def batch_size(self):
-        return [1000]  # , 30000]#, 50000, 100000]
+        return [10000]  # , 30000]#, 50000, 100000]
 
     @variant
     def discount(self):
@@ -179,7 +179,7 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="rlrl-maze-11",
+        exp_prefix="rlrl-maze-12",
         mode="lab_kube",
         n_parallel=0,
         seed=v["seed"],
