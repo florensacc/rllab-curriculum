@@ -246,10 +246,10 @@ for v in variants[:]:
             exp_prefix="0915_%s_cpcm" % v["ds"],
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 

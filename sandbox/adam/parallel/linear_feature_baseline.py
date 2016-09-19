@@ -52,26 +52,26 @@ class ParallelLinearFeatureBaseline(Baseline):
 
         self._par_objs = (par_data, shareds, mgr_objs)
 
-    def update_rank(self, rank):
+    def set_rank(self, rank):
         par_data, _, _ = self._par_objs
         par_data.rank = rank
 
     def _all_features_and_targets(self, paths):
         """
-        Used in parallel implementation: sum path data (in matrix form) rather
-        than concatenate, to share a small set of values for fitting.
+        Sum path data (in matrix form) rather than concatenate, to generate a
+        small set of values for fitting.
         """
         feat_mat = np.zeros([self._vec_dim, self._vec_dim])
         target_vec = np.zeros([1, self._vec_dim])
         path_vec = np.zeros([1, self._vec_dim])
         max_len = max([len(path["rewards"]) for path in paths])
-        times = np.arange(max_len) / 100.0
+        times = np.arange(max_len).reshape(-1, 1) / 100.0
         times_2 = times ** 2
         times_3 = times ** 3
         for path in paths:
             obs = np.clip(path["observations"], -10, 10)
             for o, al, al_2, al_3, r in zip(obs, times, times_2, times_3, path["rewards"]):
-                path_vec[:] = [o, o ** 2, al, al_2, al_3, 1]
+                path_vec[:] = np.concatenate([o, o ** 2, al, al_2, al_3, [1.]])
                 feat_mat += path_vec.T.dot(path_vec)
                 target_vec += path_vec * r
         return feat_mat, target_vec.T
@@ -83,24 +83,27 @@ class ParallelLinearFeatureBaseline(Baseline):
         return np.concatenate([o, o ** 2, al, al ** 2, al ** 3, np.ones((h, 1))], axis=1)
 
     @overrides
-    def fit(self, paths, par_objs):
+    def fit(self, paths):
         """
-        This method is parallelized.
+        Parallelized.
         """
         par_data, shareds, mgr_objs = self._par_objs
 
         feat_mat, target_vec = self._all_features_and_targets(paths)
         if par_data.rank == 0:
-            shareds.feat_mat.fill(0.)
-            shareds.target_vec.fill(0.)
-        mgr_objs.barriers_fit[0].wait()
-        with mgr_objs.lock:
-            shareds.feat_mat += feat_mat
-            shareds.target_vec += target_vec
+            shareds.feat_mat[:] = feat_mat
+            shareds.target_vec[:] = target_vec
+            mgr_objs.barriers_fit[0].wait()
+        else:
+            mgr_objs.barriers_fit[0].wait()
+            with mgr_objs.lock:
+                shareds.feat_mat += feat_mat
+                shareds.target_vec += target_vec
         mgr_objs.barriers_fit[1].wait()
+
         reg_coeff = self._reg_coeff
         for _ in range(5):
-            # NOTE: Could parallelize this loop, but fittin is usually fast.
+            # NOTE: Could parallelize this loop, but fitting is usually fast.
             self._coeffs = np.linalg.lstsq(
                 shareds.feat_mat + reg_coeff * np.identity(feat_mat.shape[1]),
                 target_vec

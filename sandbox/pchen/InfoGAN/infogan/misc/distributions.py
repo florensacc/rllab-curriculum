@@ -4,9 +4,11 @@ import itertools
 import tensorflow as tf
 import numpy as np
 import prettytensor as pt
+from progressbar import ProgressBar
 
 from rllab.misc.overrides import overrides
-from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1, int_shape, \
+    universal_int_shape
 
 TINY = 1e-8
 
@@ -470,19 +472,27 @@ class DiscretizedLogistic(Distribution):
             scale=tf.exp(flat_dist[:, self.dim:]) * self._init_scale,
         )
 
-    def sample(self, dist_info):
+    def sample_logli(self, dist_info):
         mu = dist_info["mu"]
         scale = dist_info["scale"]
-        p = tf.random_uniform(shape=mu.get_shape())
+        p = tf.random_uniform(shape=universal_int_shape(mu))
         real_logit = mu + scale*(tf.log(p) - tf.log(1-p)) # inverse cdf according to wiki
         clipped = tf.clip_by_value(real_logit, -0.5, 0.5-1./self._bins)
-        return self.floor(clipped)
+        out = self.floor(clipped)
+        return out, self.logli(out, dist_info)
 
     def prior_dist_info(self, batch_size):
         return dict(
             mu=0.0*np.ones([batch_size, self._dim]),
             scale=np.ones([batch_size, self._dim]) * self._init_scale,
         )
+
+class MeanDiscretizedLogistic(DiscretizedLogistic):
+    def sample_logli(self, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        out = mu
+        return out, self.logli(out, dist_info)
 
 class DiscretizedLogistic2(Distribution):
 
@@ -854,7 +864,7 @@ class Mixture(Distribution):
         # XXX
         return 0.
 
-    def sample(self, dist_info):
+    def sample_logli(self, dist_info):
         infos = dist_info["infos"]
         samples = [
            pair[0].sample(
@@ -871,10 +881,11 @@ class Mixture(Distribution):
         #     tf.reshape(onehot, [bs, len(infos), 1]) * tf.transpose(samples, [1, 0, 2]),
         #     reduction_indices=1
         # )
-        return tf.reduce_sum(
+        out = tf.reduce_sum(
             tf.reshape(onehot, [bs, len(infos), 1]) * tf.transpose(samples, [1, 0, 2]),
             reduction_indices=1
         )
+        return out, self.logli(out, dist_info)
 
     def sample_one_mode(self, dist_info, mode):
         infos = dist_info["infos"]
@@ -1053,6 +1064,17 @@ class AR(Distribution):
             iaf_mu, iaf_logstd = self.infer(go)
             go = iaf_mu + tf.exp(iaf_logstd)*z
         return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
+
+        # def accm(go, _):
+        #     iaf_mu, iaf_logstd = self.infer(go)
+        #     go = iaf_mu + tf.exp(iaf_logstd)*z
+        #     return go
+        # go = tf.foldl(
+        #     fn=accm,
+        #     elems=np.arange(self._dim, dtype=np.int32),
+        #     initializer=z,
+        # )
+        # return go, 0. # fixme
 
     @property
     def dist_info_keys(self):
@@ -1302,6 +1324,8 @@ class ConvAR(Distribution):
             block="resnet",
             pixel_bias=False,
             context_dim=None,
+            masked=True,
+            nin=False,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1314,13 +1338,14 @@ class ConvAR(Distribution):
         self._context = context
         self._context_dim = context_dim
         inp = pt.template("y", books=dist_book).reshape([-1,] + list(shape))
-        cur = inp
         if context:
             context_inp = \
-                pt.template("context", books=dist_book).reshape([-1,] + list(shape[:-1]) + [context_dim])
+                pt.template("context", books=dist_book).\
+                    reshape([-1,] + list(shape[:-1]) + [context_dim])
             inp = inp.join(
                 [context_inp],
             )
+        cur = inp
         self._custom_phase = CustomPhase.init
 
         peep_inp = inp.left_shift(filter_size-1).down_shift()
@@ -1334,42 +1359,71 @@ class ConvAR(Distribution):
             ar_channels=False,
             pixel_bias=pixel_bias,
         ):
-            for di in range(depth):
-                if di == 0:
-                    cur = \
-                        cur.ar_conv2d_mod(
-                            filter_size,
-                            nr_channels,
-                            zerodiagonal=di == 0,
-                        )
-                else:
-                    if block == "resnet":
+            if masked:
+                for di in range(depth):
+                    if di == 0:
                         cur = \
-                            resconv_v1_customconv(
-                                "ar_conv2d_mod",
-                                dict(zerodiagonal=False),
-                                cur,
+                            cur.ar_conv2d_mod(
                                 filter_size,
-                                nr_channels
+                                nr_channels,
+                                zerodiagonal=di == 0,
                             )
-                    elif block == "plstm":
-                        use_peep = di % 2 == 1
-                        cur, cur_nl = plstmconv_v1(
-                            cur,
-                            peep_inp if use_peep else inp,
-                            filter_size, nr_channels,
-                            op="ar_conv2d_mod",
-                            args=dict(zerodiagonal=False),
-                            args1=dict(zerodiagonal=not use_peep),
-                        )
                     else:
-                        raise Exception("what")
-            self._iaf_template = \
-                cur.ar_conv2d_mod(
-                    filter_size,
-                    tgt_dist.dist_flat_dim,
-                    activation_fn=None,
-                )
+                        if block == "resnet":
+                            cur = \
+                                resconv_v1_customconv(
+                                    "ar_conv2d_mod",
+                                    dict(zerodiagonal=False),
+                                    cur,
+                                    filter_size,
+                                    nr_channels
+                                )
+                        elif block == "plstm":
+                            use_peep = di % 2 == 1
+                            cur, cur_nl = plstmconv_v1(
+                                cur,
+                                peep_inp if use_peep else inp,
+                                filter_size, nr_channels,
+                                op="ar_conv2d_mod",
+                                args=dict(zerodiagonal=False),
+                                args1=dict(zerodiagonal=not use_peep),
+                            )
+                        else:
+                            raise Exception("what")
+                        if nin:
+                            cur = cur + 0.1 * cur.conv2d_mod(1, nr_channels)
+                self._iaf_template = \
+                    cur.ar_conv2d_mod(
+                        filter_size,
+                        tgt_dist.dist_flat_dim,
+                        activation_fn=None,
+                    )
+            else:
+                u_filter = (filter_size-1) // 2
+                upper = cur
+                row = cur
+                for di in range(depth):
+                    upper = upper.conv2d_mod(
+                        [u_filter, filter_size],
+                        nr_channels,
+                    ).down_shift(
+                        size=u_filter
+                    ) + upper
+                    row = (
+                        row + upper
+                    ).conv2d_mod(
+                        [1, u_filter],
+                        nr_channels,
+                    ).right_shift(
+                        size=u_filter
+                    )
+                self._iaf_template = \
+                    row.conv2d_mod(
+                        1,
+                        tgt_dist.dist_flat_dim,
+                        activation_fn=None,
+                    )
+
 
     @overrides
     def init_mode(self):
@@ -1427,14 +1481,66 @@ class ConvAR(Distribution):
         return go, logpz
 
     def sample_n(self, n=100, info=None):
-        print("warning, ar sample invoked")
+        print("warning, conv ar sample invoked")
         # if info is None:
+        context = info.get("context")
+        if context is not None:
+            n = int_shape(context)[0]
         tgt_info = self._tgt_dist.prior_dist_info(n * self._shape[0] * self._shape[1])
-        go, logpz = self.reshaped_sample_logli(tgt_info)
+        init, logpz = self.reshaped_sample_logli(tgt_info)
+        go = init
         for i in range(self._dim):
-            tgt_dict = self.infer(go, info)
+            tgt_dict = self.infer(go, context)
             go, logpz = self.reshaped_sample_logli(tgt_dict)
         return go, logpz
+
+        # go = tf.foldl(
+        #     fn=lambda go, _: self.reshaped_sample_logli(
+        #         self.infer(go, context)
+        #     )[0],
+        #     elems=np.arange(self._dim, dtype=np.int32),
+        #     initializer=init,
+        #     back_prop=False,
+        # )
+        # return go, 0. # fixme
+
+    import functools
+    @functools.lru_cache(maxsize=None)
+    def sample_prior_sym(self, n):
+        tgt_info = self._tgt_dist.prior_dist_info(n * self._shape[0] * self._shape[1])
+        init, logpz = self.reshaped_sample_logli(tgt_info)
+        return init
+
+    @functools.lru_cache(maxsize=None)
+    def infer_sym(self, n):
+        x_var, context_var = \
+            tf.placeholder(tf.float32, shape=[n,]+list(self._shape)), \
+            tf.placeholder(tf.float32, shape=[n, self.dist_flat_dim])
+        tgt_dict = self.infer(x_var, context_var)
+        go, logpz = self.reshaped_sample_logli(tgt_dict)
+        return x_var, context_var, go, tgt_dict
+
+    def sample_dynamic(self, sess, info):
+        print("warning, conv ar sample invoked")
+        context = info.get("context")
+        n = context.shape[0]
+        go = sess.run(self.sample_prior_sym(n))
+        x_var, context_var, go_sym, tgt_dict = self.infer_sym(n)
+
+
+        raise "problem"
+        pbar = ProgressBar(maxval=self._dim, )
+        pbar.start()
+        for i in range(self._dim):
+            go = sess.run(
+                go_sym,
+                {
+                    x_var: go,
+                    context_var: context
+                }
+            )
+            pbar.update(i)
+        return go
 
     @property
     def dist_info_keys(self):

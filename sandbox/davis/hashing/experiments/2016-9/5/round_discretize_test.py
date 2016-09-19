@@ -26,20 +26,6 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator
 from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv as SGE
 
-# horizon 500
-# batch size 5000
-# swimmergather batch size 50000
-# discretize state
-# lower dimension (higher? 256, 512)
-# Try a built-in hash function instead of simhash
-# robustness to noise (in simpler tasks)?
-# count state-action pairs?
-# log state count
-
-# baselines for comparison:
-#   prediction error
-#   just add constant value (encourage to be alive)
-
 N_ITR = 1000
 N_ITR_DEBUG = 5
 

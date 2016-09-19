@@ -1,7 +1,7 @@
 from __future__ import print_function
 from __future__ import absolute_import
 import numpy as np
-from sandbox.rocky.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
+from sandbox.davis.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
 
 
 class DiscretizingHashingBonusEvaluator(HashingBonusEvaluator):

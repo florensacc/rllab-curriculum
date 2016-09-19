@@ -1390,6 +1390,16 @@ def int_shape(x):
     s = x.get_shape()
     return [int(si) for si in s]
 
+def universal_int_shape(x):
+    try:
+        return int_shape(x)
+    except AttributeError:
+        return x.shape
+
+def flatten(x):
+    bs = int_shape(x)[0]
+    return tf.reshape(x, [bs, -1])
+
 @prettytensor.Register
 def left_shift(
         input_layer,
@@ -1401,8 +1411,25 @@ def left_shift(
     y = tf.concat(
         2,
         [
-            x[:, :, :xs[2]-size, :],
+            x[:, :, size:, :],
             tf.zeros([xs[0], xs[1], size, xs[3]]),
+        ]
+    )
+    return input_layer.with_tensor(y)
+
+@prettytensor.Register
+def right_shift(
+        input_layer,
+        size=1,
+        name=PROVIDED
+):
+    x = input_layer.tensor
+    xs = int_shape(x)
+    y = tf.concat(
+        2,
+        [
+            tf.zeros([xs[0], xs[1], size, xs[3]]),
+            x[:, :, :xs[2]-size, :],
         ]
     )
     return input_layer.with_tensor(y)
