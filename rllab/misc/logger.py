@@ -31,6 +31,7 @@ _tabular_header_written = set()
 
 _snapshot_dir = None
 _snapshot_mode = 'all'
+_snapshot_gap = 1
 
 _log_tabular_only = False
 _header_printed = False
@@ -91,6 +92,12 @@ def set_snapshot_mode(mode):
     global _snapshot_mode
     _snapshot_mode = mode
 
+def get_snapshot_gap():
+    return _snapshot_gap
+
+def set_snapshot_gap(gap):
+    global _snapshot_gap
+    _snapshot_gap = gap
 
 def set_log_tabular_only(log_tabular_only):
     global _log_tabular_only
@@ -213,6 +220,10 @@ def save_itr_params(itr, params):
             # override previous params
             file_name = osp.join(_snapshot_dir, 'params.pkl')
             joblib.dump(params, file_name, compress=3)
+        elif _snapshot_mode == "gap":
+            if itr % _snapshot_gap == 0:
+                file_name = osp.join(_snapshot_dir, 'itr_%d.pkl' % itr)
+                joblib.dump(params, file_name, compress=3)
         elif _snapshot_mode == 'none':
             pass
         else:

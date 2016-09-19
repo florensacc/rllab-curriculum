@@ -319,6 +319,7 @@ class NeuralAgent(object):
             None
         """
         self.episode_rewards.append(reward)
+        raise NotImplementedError # reward should be clipped first, as it contributes to supplied returns
         self.episode_reward = np.sum(self.episode_rewards)
         self.step_counter += 1
         total_time = time.time() - self.start_time

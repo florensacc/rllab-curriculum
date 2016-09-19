@@ -40,6 +40,8 @@ def run_experiment(argv):
                              '(all iterations will be saved), "last" (only '
                              'the last iteration will be saved), or "none" '
                              '(do not save snapshots)')
+    parser.add_argument('--snapshot_gap', type=int, default=1,
+                        help='Gap between snapshot iterations.')
     parser.add_argument('--tabular_log_file', type=str, default='progress.csv',
                         help='Name of the tabular log file (in csv).')
     parser.add_argument('--text_log_file', type=str, default='debug.log',
@@ -96,6 +98,7 @@ def run_experiment(argv):
     prev_mode = logger.get_snapshot_mode()
     logger.set_snapshot_dir(log_dir)
     logger.set_snapshot_mode(args.snapshot_mode)
+    logger.set_snapshot_gap(args.snapshot_gap)
     logger.set_log_tabular_only(args.log_tabular_only)
     logger.push_prefix("[%s] " % args.exp_name)
 
