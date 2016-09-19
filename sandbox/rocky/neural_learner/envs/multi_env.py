@@ -27,7 +27,7 @@ class MultiEnv(ProxyEnv, Serializable):
             wrapped_env.observation_space,
             wrapped_env.action_space,
             Box(low=-BIG, high=BIG, shape=(1,)),
-            Discrete(2),
+            Box(low=0, high=1, shape=(1,)),
         )
         self._action_space = wrapped_env.action_space
         self.reset()
@@ -97,10 +97,13 @@ class MultiEnv(ProxyEnv, Serializable):
 
         def log_stat(name, data):
             avg_data = list(map(np.mean, data))
-            for idx, entry in enumerate(avg_data):
-                logger.record_tabular('Average%s(%d)' % (name, idx + 1), entry)
-            for idx, (entry, next_entry) in enumerate(zip(avg_data, avg_data[1:])):
-                logger.record_tabular('Delta%s(%d)' % (name, idx + 1), next_entry - entry)
+            # for idx, entry in enumerate(avg_data):
+            #     logger.record_tabular('Average%s(%d)' % (name, idx + 1), entry)
+            # for idx, (entry, next_entry) in enumerate(zip(avg_data, avg_data[1:])):
+            #     logger.record_tabular('Delta%s(%d)' % (name, idx + 1), next_entry - entry)
+            logger.record_tabular('Average%s(First)' % name, avg_data[0])
+            logger.record_tabular('Average%s(Last)' % name, avg_data[-1])
+            logger.record_tabular('Delta%s(Last-First)' % name, avg_data[-1] - avg_data[0])
 
         log_stat('EpisodeReturn', episode_rewards)
         log_stat('DiscountEpisodeReturn', discount_episode_rewards)

@@ -12,7 +12,7 @@ import itertools
 import random
 import contextlib
 
-from sandbox.rocky.tf.envs.base import TfEnv
+from sandbox.rocky.analogy.utils import unwrap
 
 
 @contextlib.contextmanager
@@ -45,6 +45,7 @@ class Trainer(Serializable):
             policy,
             env_cls,
             demo_policy_cls,
+            shuffler=None,
             n_train_trajs=50,
             n_test_trajs=20,
             horizon=50,
@@ -58,6 +59,7 @@ class Trainer(Serializable):
         Serializable.quick_init(self, locals())
         self.env_cls = env_cls
         self.demo_policy_cls = demo_policy_cls
+        self.shuffler = shuffler
         self.n_train_trajs = n_train_trajs
         self.n_test_trajs = n_test_trajs
         self.horizon = horizon
@@ -109,12 +111,13 @@ class Trainer(Serializable):
             inputs=all_data_vals,
             train_batch_size=self.batch_size,
             train_ratio=self.n_train_trajs * 1.0 / (self.n_train_trajs + self.n_test_trajs),
+            shuffler=self.shuffler,
         )
 
         env = demo_envs[0]
 
         logger.log("Constructing optimization problem")
-        # policy = self.policy
+        policy = self.policy
         policy = NormalizingPolicy(
             self.policy,
             *dataset.train.inputs[:2]
@@ -142,7 +145,8 @@ class Trainer(Serializable):
 
         params = policy.get_params(trainable=True)
 
-        train_op = optimizer.minimize(loss_var, var_list=params)
+        grads_and_vars = optimizer.compute_gradients(loss_var, var_list=params)
+        train_op = optimizer.apply_gradients(grads_and_vars)
 
         # Best average return achieved by the NN policy
         best_loss = np.inf
@@ -217,6 +221,12 @@ class Trainer(Serializable):
                         animated=self.plot and idx == 0,
                     ))
 
+                if self.plot:
+                    rollout(
+                        analogy_env, ApplyDemoPolicy(policy, demo_path), max_path_length=self.horizon,
+                        animated=self.plot and idx == 0,
+                    )
+
                 returns = [np.sum(p["rewards"]) for p in eval_paths]
 
                 avg_loss = np.mean(losses)
@@ -241,14 +251,10 @@ class Trainer(Serializable):
                 logger.record_tabular('OracleAverageReturn', np.mean(
                     [np.sum(p["rewards"]) for p in test_dict["analogy_paths"]]
                 ))
-                log_env = analogy_envs[-1]
-                if isinstance(log_env, TfEnv):
-                    log_env = log_env.wrapped_env
-                    log_envs = [x.wrapped_env for x in test_dict["analogy_envs"]]
-                else:
-                    log_envs = test_dict["analogy_envs"]
-
+                log_env = unwrap(analogy_envs[-1])
+                log_envs = map(unwrap, test_dict["analogy_envs"])
                 log_env.log_analogy_diagnostics(eval_paths, log_envs)
+
                 logger.dump_tabular()
 
                 if n_no_improvement >= self.no_improvement_tolerance:

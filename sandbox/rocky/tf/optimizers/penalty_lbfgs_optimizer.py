@@ -1,6 +1,3 @@
-
-
-
 from sandbox.rocky.tf.misc import tensor_utils
 from rllab.misc import logger
 from rllab.misc import ext

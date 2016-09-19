@@ -29,12 +29,20 @@ if __name__ == "__main__":
             trainer = data['trainer']
             env_cls = trainer.env_cls
 
+            confirmed = False
+
             while True:
                 target_seed = np.random.randint(np.iinfo(np.int32).max)
                 seed = np.random.randint(np.iinfo(np.int32).max)
                 demo_env = env_cls(seed=seed, target_seed=target_seed)
                 analogy_env = env_cls(seed=seed + 10007, target_seed=target_seed)
                 demo_policy = trainer.demo_policy_cls(demo_env)
+
+                demo_env.reset()
+                demo_env.render()
+                if not confirmed:
+                    input("Press any keys to start")
+                    confirmed = True
 
                 demo_path = rollout(demo_env, demo_policy, max_path_length=trainer.horizon, animated=True,
                                     speedup=args.speedup)

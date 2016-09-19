@@ -25,8 +25,6 @@ def set_seed_tmp(seed=None):
         random.setstate(state)
 
 
-
-
 class RandomMazeEnv(Env):
     """
     'S' : starting point
@@ -120,10 +118,10 @@ class RandomMazeEnv(Env):
         success = 0
         if next_state_type in ['F', 'S']:
             done = False
-            reward = -1#0
+            reward = -1  # 0
         elif next_state_type == 'G':
             done = True
-            reward = 0#100
+            reward = 0  # 100
             success = 1
         else:
             raise NotImplementedError
@@ -192,13 +190,13 @@ class RandomMazeEnv(Env):
                             (col_idx + 1, self.n_row - row_idx - 1),
                             (col_idx + 1, self.n_row - row_idx),
                         ],
-                        color=(255, 255, 255)
+                        color=(1, 1, 1)
                     )
                     if entry in ['S', 'G']:
                         self.viewer.draw_circle(
                             radius=0.25,
                             center=(col_idx + 0.5, self.n_row - row_idx - 0.5),
-                            color=(0, 0, 255) if entry == 'S' else (255, 0, 0)
+                            color=(0, 0, 1) if entry == 'S' else (1, 0, 0)
                         )
                 elif entry == 'W':
                     self.viewer.draw_polygon(
@@ -221,48 +219,14 @@ class RandomMazeEnv(Env):
                 self.viewer.draw_line((col_idx, self.n_row - row_idx - 1), (col_idx + 1, self.n_row - row_idx - 1))
                 self.viewer.draw_line((col_idx + 1, self.n_row - row_idx - 1), (col_idx + 1, self.n_row - row_idx))
                 self.viewer.draw_line((col_idx + 1, self.n_row - row_idx), (col_idx, self.n_row - row_idx))
-                #     v=[
-                #         (col_idx, self.n_row - row_idx),
-                #         (col_idx, self.n_row - row_idx - block_size),
-                #         (col_idx + block_size, self.n_row - row_idx - block_size),
-                #         (col_idx + block_size, self.n_row - row_idx),
-                #     ],
-                #     color=(0, 0, 0)
-                # )
-                # self.viewer.draw_polygon(
-                #     v=[
-                #         (col_idx + 1 - block_size, self.n_row - row_idx),
-                #         (col_idx + 1 - block_size, self.n_row - row_idx - block_size),
-                #         (col_idx + 1, self.n_row - row_idx - block_size),
-                #         (col_idx + 1, self.n_row - row_idx),
-                #     ],
-                #     color=(0, 0, 0)
-                # )
-                # self.viewer.draw_polygon(
-                #     v=[
-                #         (col_idx + 1 - block_size, self.n_row - row_idx - 1 + block_size),
-                #         (col_idx + 1 - block_size, self.n_row - row_idx - 1),
-                #         (col_idx + 1, self.n_row - row_idx - 1),
-                #         (col_idx + 1, self.n_row - row_idx - 1 + block_size),
-                #     ],
-                #     color=(0, 0, 0)
-                # )
-                # self.viewer.draw_polygon(
-                #     v=[
-                #         (col_idx, self.n_row - row_idx - 1 + block_size),
-                #         (col_idx, self.n_row - row_idx - 1),
-                #         (col_idx + block_size, self.n_row - row_idx - 1),
-                #         (col_idx + block_size, self.n_row - row_idx - 1 + block_size),
-                #     ],
-                #     color=(0, 0, 0)
-                # )
+
         self.viewer.render()
         self.viewer.window.dispatch_events()
         self.viewer.window.flip()
 
 
 if __name__ == "__main__":
-    env = RandomMazeEnv(n_row=9, n_col=9)#, seed=0)
+    env = RandomMazeEnv(n_row=9, n_col=9)  # , seed=0)
     # env.reset_trial()
     while True:
         import time
