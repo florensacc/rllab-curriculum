@@ -106,10 +106,12 @@ class ParallelBatchPolopt(RLAlgorithm):
             num_steps=mp.RawValue('i'),
             num_valids=mp.RawValue('i'),
             sum_ent=mp.RawValue('d'),
+            n_steps_collected=mp.RawValue('i'),
         )
         mgr_objs = SimpleContainer(
             lock=mp.Lock(),
             barriers_dgnstc=[mp.Barrier(self.n_parallel) for _ in range(2)],
+            barriers_avgfac=[mp.Barrier(self.n_parallel) for _ in range(2)],
         )
         self._par_objs = (par_data, shareds, mgr_objs)
         self.baseline.init_par_objs(n_parallel=self.n_parallel)
@@ -238,7 +240,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             #     np.concatenate(dgnstc_data["returns"])
             # )
 
-            shareds.baselines[par_data.db[0]:par_data.db[1]] = dgnstc_data[:self.work]
+            # shareds.baselines[par_data.db[0]:par_data.db[1]] = dgnstc_data[:self.work]
 
             if par_data.rank == 0:
                 average_discounted_return = \
@@ -279,7 +281,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         ext.set_seed(self.seed + rank)
 
     def set_avg_fac(self, n_steps_collected):
-        par_data, shareds, mgr_objs = self._par_data
+        par_data, shareds, mgr_objs = self._par_objs
 
         if par_data.rank == 0:
             shareds.n_steps_collected.value = n_steps_collected
