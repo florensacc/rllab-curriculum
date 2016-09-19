@@ -1282,13 +1282,22 @@ class ResamplingBinarizedOmniglotDataset(object):
         return self._image_shape
 
 class Cifar10Dataset(object):
-    def __init__(self):
+    def __init__(self, scramble_vai=False, scramble_vali_ch=False):
+        self._image_shape = (32, 32, 3)
+        self._image_dim = np.prod(self._image_shape)
+
         train_x, train_y, test_x, test_y = load_cifar10(normalize=True)
         self.train = Dataset(train_x)
         # self.test = Dataset(valid)
+        if scramble_vai:
+            test_x = test_x.reshape(
+                [-1, self._image_dim]
+            )[:, np.random.permutation(self._image_dim)].reshape(
+                [-1] + list(self._image_shape)
+            )
+        if scramble_vali_ch:
+            test_x = test_x[:, :, :, np.random.permutation(3)]
         self.validation = Dataset(test_x)
-        self._image_shape = (32, 32, 3)
-        self._image_dim = np.prod(self._image_shape)
 
     def transform(self, data):
         return data

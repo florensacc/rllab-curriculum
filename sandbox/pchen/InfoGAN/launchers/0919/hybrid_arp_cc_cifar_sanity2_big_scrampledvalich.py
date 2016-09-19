@@ -191,7 +191,7 @@ for v in variants[:1]:
         # else:
         #     dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
 
-        dataset = Cifar10Dataset()
+        dataset = Cifar10Dataset(scramble_vali_ch=True, )
 
         # init_size = v["dec_init_size"]
         # ch_size = zdim // init_size // init_size
@@ -279,7 +279,7 @@ for v in variants[:1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="play_0918_hybrid_cc_cifar_ml_3ldc_resnet_sanity2_big",
+            exp_prefix="play_0918_hybrid_cc_cifar_ml_3ldc_resnet_sanity2_big_scrambled_channel",
             seed=v["seed"],
             variant=v,
             mode="local",
