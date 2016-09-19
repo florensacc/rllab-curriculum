@@ -1,5 +1,6 @@
 
 
+import functools
 import itertools
 import tensorflow as tf
 import numpy as np
@@ -111,6 +112,7 @@ class Distribution(object):
     def sample_logli(self, dist_info):
         raise NotImplementedError
 
+    @functools.lru_cache(maxsize=None)
     def sample_prior(self, batch_size):
         return self.sample(self.prior_dist_info(batch_size))
 
@@ -475,7 +477,11 @@ class DiscretizedLogistic(Distribution):
     def sample_logli(self, dist_info):
         mu = dist_info["mu"]
         scale = dist_info["scale"]
-        p = tf.random_uniform(shape=universal_int_shape(mu))
+        p = tf.random_uniform(
+            shape=universal_int_shape(mu),
+            minval=1e-5,
+            maxval=1. - 1e-5,
+        )
         real_logit = mu + scale*(tf.log(p) - tf.log(1-p)) # inverse cdf according to wiki
         clipped = tf.clip_by_value(real_logit, -0.5, 0.5-1./self._bins)
         out = self.floor(clipped)
@@ -1184,7 +1190,7 @@ class DistAR(Distribution):
         nom = len(tgt_dist._pairs)
         mode_flat_dim = tgt_dist._pairs[0][0].dist_flat_dim
         for d,p in tgt_dist._pairs:
-            assert isinstance(d, Gaussian)
+            assert isinstance(d, Gaussian) or isinstance(d, DiscretizedLogistic)
 
         self._dim = dim
         self._tgt_dist = tgt_dist
@@ -1245,14 +1251,12 @@ class DistAR(Distribution):
 
     @overrides
     def init_mode(self):
-        if self._wnorm:
-            self._custom_phase = CustomPhase.init
+        self._custom_phase = CustomPhase.init
             # self._base_dist.init_mode()
 
     @overrides
     def train_mode(self):
-        if self._wnorm:
-            self._custom_phase = CustomPhase.train
+        self._custom_phase = CustomPhase.train
             # self._base_dist.train_mode()
 
     @property
@@ -1280,7 +1284,11 @@ class DistAR(Distribution):
         return flat_iaf
 
     def logli(self, x_var, dist_info):
-        tgt_flat = self.infer(x_var)
+        tgt_flat = self.infer(
+            x_var,
+            lin_con=dist_info.get("linear_context"),
+            gating_con=dist_info.get("gating_context"),
+        )
         tgt_info = self._tgt_dist.activate_dist(tgt_flat)
         return self._tgt_dist.logli(x_var, tgt_info)
 
@@ -1289,23 +1297,51 @@ class DistAR(Distribution):
 
     def sample_logli(self, info):
         print("warning, dist_ar sample invoked")
-        go = tf.zeros([info["batch_size"], self.dim]) # place holder
+        if "batch_size" not in info:
+            bs = universal_int_shape((info["linear_context"]))[0]
+        else:
+            bs = info["batch_size"]
+        go = tf.zeros([bs, self.dim]) # place holder
+        # HACK
+        # go = tf.zeros([131072, self.dim]) # place holder
         for i in range(self._dim):
-            tgt_flat = self.infer(go)
+            tgt_flat = self.infer(
+                go,
+                lin_con=info.get("linear_context"),
+                gating_con=info.get("gating_context"),
+            )
             tgt_info = self._tgt_dist.activate_dist(tgt_flat)
-            go, logli = self._tgt_dist.sample_logli(tgt_info)
-        return go, logli
+            proposed = self._tgt_dist.sample(tgt_info)
+            go = tf.concat(
+                1,
+                [go[:, :i], proposed[:, i:]]
+            )
+        return go, self.logli(go, info)
 
     @property
     def dist_info_keys(self):
-        return []
+        keys = []
+        if self._linear_context:
+            keys = keys + ["linear_context"]
+        if self._gating_context:
+            keys = keys + ["gating_context"]
+        return keys
 
     @property
     def dist_flat_dim(self):
-        return 0
+        return self._context_dim
 
     def activate_dist(self, flat):
-        return dict()
+        out = dict()
+        if self._linear_context:
+            lin_context = flat[:, :self._linear_context_dim]
+            flat = flat[:, self._linear_context_dim:]
+            out["linear_context"] = lin_context
+        if self._gating_context:
+            lin_context = flat[:, :self._gating_context_dim]
+            flat = flat[:, self._gating_context_dim:]
+            out["gating_context"] = lin_context
+        return out
 
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
@@ -1326,6 +1362,8 @@ class ConvAR(Distribution):
             context_dim=None,
             masked=True,
             nin=False,
+            sanity=False,
+            sanity2=False,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1338,10 +1376,14 @@ class ConvAR(Distribution):
         self._context = context
         self._context_dim = context_dim
         inp = pt.template("y", books=dist_book).reshape([-1,] + list(shape))
+        if sanity:
+            inp *= 0.
         if context:
             context_inp = \
                 pt.template("context", books=dist_book).\
                     reshape([-1,] + list(shape[:-1]) + [context_dim])
+            if sanity2:
+                context_inp *= 0.
             inp = inp.join(
                 [context_inp],
             )
@@ -1427,10 +1469,12 @@ class ConvAR(Distribution):
 
     @overrides
     def init_mode(self):
+        self._tgt_dist.init_mode()
         self._custom_phase = CustomPhase.init
 
     @overrides
     def train_mode(self):
+        self._tgt_dist.train_mode()
         self._custom_phase = CustomPhase.train
 
     @property

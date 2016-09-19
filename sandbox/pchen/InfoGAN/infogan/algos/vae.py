@@ -5,7 +5,7 @@ import prettytensor as pt
 import tensorflow as tf
 import numpy as np
 from progressbar import ETA, Bar, Percentage, ProgressBar
-from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture, DiscretizedLogistic
+from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture, DiscretizedLogistic, ConvAR
 import rllab.misc.logger as logger
 import sys
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten
@@ -466,7 +466,9 @@ class VAE(object):
                                 ("cv_coeff" in v.name)
                         ]))
                         print("vars initd")
+
                         if self.resume_from is not None:
+                            # print("not resuming")
                             print("resuming from %s" % self.resume_from)
                             fn = tf.train.latest_checkpoint(self.resume_from)
                             print("latest ckpt: %s" % fn)
@@ -486,10 +488,8 @@ class VAE(object):
                         feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
 
                         if self.resume_from:
-                            context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)
-                            dist = self.model.output_dist
+                            self.ar_vis(sess, feed)
                             import ipdb; ipdb.set_trace()
-                            samples = dist.sample_dynamic(sess, context)
 
                         log_vals = sess.run([] + log_vars, feed)[:]
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
@@ -563,6 +563,9 @@ class VAE(object):
                                     simple_value=float(v),
                                 )
                         summary_writer.add_summary(summary, counter)
+                        # hijack summay interval to do ar sampling
+                        if isinstance(self.model.output_dist, ConvAR):
+                            self.ar_vis(sess, feed)
                     # need to ensure avg_test_log is always available
                     counter += 1
 
@@ -613,3 +616,128 @@ class VAE(object):
 
     def iter_hook(self, **kw):
         pass
+
+    def ar_vis(self, sess, feed):
+        import scipy
+        dist = self.model.output_dist
+        x_var, context_var, go_sym, tgt_dist = dist.infer_sym(128)
+
+        # samples
+        z_var = self.model.latent_dist.sample_prior(self.batch_size)
+        _, x_dist_info = self.model.decode(z_var, sample=False)
+        context = sess.run(x_dist_info)
+        fol = "%s/samples/" % self.checkpoint_dir
+        try:
+            import os
+            os.makedirs(fol)
+        except:
+            pass
+        # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
+        # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
+        cur_zeros = np.zeros([128, 32, 32, 3])
+        for yi in range(32):
+            for xi in range(32):
+                ind = xi + yi * 32
+                if (ind % 8 == 1):
+                    for ix in range(128):
+                        scipy.misc.imsave("%s/%s_step%s.png" % (fol, ix, ind),
+                                          (cur_zeros[ix] + 0.5) * 255)
+                proposal_zeros, tgt_dist_zeros = sess.run([go_sym, tgt_dist], {
+                    x_var: cur_zeros,
+                    context_var: context['context'],
+                })
+                cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+        os.system(
+            "tar -zcvf %s/../samples.tar.gz %s" % (fol, fol)
+        )
+
+        # decompress
+        originals = tuple(feed.items())[0][1].reshape([128, 32, 32, 3])
+        context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)
+        fol = "%s/decomp/" % self.checkpoint_dir
+        try:
+            import os
+            os.makedirs(fol)
+        except:
+            pass
+        # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
+        # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
+        for ix in range(128):
+            scipy.misc.imsave("%s/%s_step%s.png" % (fol, ix, 0),
+                              (originals[ix] + 0.5) * 255)
+        cur_zeros = np.zeros_like(originals)
+        for yi in range(32):
+            for xi in range(32):
+                ind = xi + yi * 32
+                if (ind % 8 == 1):
+                    for ix in range(128):
+                        scipy.misc.imsave("%s/%s_step%s.png" % (fol, ix, ind),
+                                          (cur_zeros[ix] + 0.5) * 255)
+                proposal_zeros, tgt_dist_zeros = sess.run([go_sym, tgt_dist], {
+                    x_var: cur_zeros,
+                    context_var: context['context'],
+                })
+                cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+        os.system(
+            "tar -zcvf %s/../decomp.tar.gz %s" % (fol, fol)
+        )
+
+        if True:
+            # inpainting
+            fol = "%s/inpaint/" % self.checkpoint_dir
+            try:
+                import os
+                os.makedirs(fol)
+            except:
+                pass
+
+            # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
+            # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
+            for ix in range(10):
+                scipy.misc.imsave("%s/%s_step%s.png" % (fol, ix, 0),
+                                  (cur_zeros[ix] + 0.5) * 255)
+            cur_zeros = np.copy(originals)
+            cur_zeros[:, 16, 16:, :] = 0.
+            cur_zeros[:, 17:, :, :] = 0.
+            for yi in range(16, 32):
+                for xi in range(16 if yi == 16 else 0, 32):
+                    ind = xi + yi * 32
+                    for ix in range(10):
+                        scipy.misc.imsave("%s/%s_step%s.png" % (fol, ix, ind),
+                                          (cur_zeros[ix] + 0.5) * 255)
+                    proposal_zeros, tgt_dist_zeros = sess.run([go_sym, tgt_dist], {
+                        x_var: cur_zeros,
+                        context_var: context['context'],
+                    }
+                                                              )
+                    cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+            os.system(
+                "tar -zcvf %s/../inpaint.tar.gz %s" % (fol, fol)
+            )
+
+        if False:
+            # inspect all leakage
+            cur_ori = originals
+            cur_zeros = np.zeros_like(originals)
+            for yi in range(32):
+                for xi in range(32):
+                    proposal_zeros, tgt_dist_zeros = sess.run([go_sym, tgt_dist], {
+                        x_var: cur_zeros,
+                        context_var: context['context'],
+                    }
+                                                              )
+                    proposal_ori, tgt_dist_ori = sess.run([go_sym, tgt_dist], {
+                        x_var: cur_ori,
+                        context_var: context['context'],
+                    }
+                                                          )
+                    cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :]
+                    cur_ori[:, yi, xi, :] = proposal_zeros[:, yi, xi, :]
+                    ind = xi + yi * 32
+                    check = np.allclose(
+                        tgt_dist_zeros['infos'][0][ind],
+                        tgt_dist_ori['infos'][0][ind],
+                        atol=2e-5,
+                    )
+                    print("step %s: check %s" % ((yi, xi), check))
+

@@ -1,3 +1,4 @@
+import functools
 
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Product, Distribution, Mixture
 import prettytensor as pt
@@ -2197,6 +2198,7 @@ class RegularizedHelmholtzMachine(object):
         reg_z_dist_info = self.reg_latent_dist.activate_dist(reg_z_dist_flat)
         return self.reg_latent_dist.sample(reg_z_dist_info), reg_z_dist_info
 
+    @functools.lru_cache(maxsize=None)
     def decode(self, z_var, sample=True):
         args = dict(
             input=z_var, custom_phase=self.custom_phase
