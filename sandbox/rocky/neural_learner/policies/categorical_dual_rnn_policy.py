@@ -2,15 +2,43 @@ import numpy as np
 import sandbox.rocky.tf.core.layers as L
 import tensorflow as tf
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
-from sandbox.rocky.tf.core.network import GRUNetwork, LSTMNetwork, MLP
 from sandbox.rocky.tf.distributions.recurrent_categorical import RecurrentCategorical
 from sandbox.rocky.tf.misc import tensor_utils
+from sandbox.rocky.tf.policies.rnn_utils import create_recurrent_network
+from sandbox.rocky.tf.spaces.box import Box
 from sandbox.rocky.tf.spaces.discrete import Discrete
 from sandbox.rocky.tf.policies.base import StochasticPolicy
 
 from rllab.core.serializable import Serializable
 from rllab.misc import special
 from rllab.misc.overrides import overrides
+from sandbox.rocky.tf.spaces.product import Product
+
+
+def filter_summary(summary_var, terminal_var, summary_dim):
+    """
+    summary_var should be of shape batch_size x n_steps x summary_dim
+    terminal_var should be of shape batch_size x n_steps x 1
+
+    Here, each trajectory actually spans over multiple episodes, and terminal_var indicates whether the current
+    episode has ended
+    """
+
+    # Bring the time dimension to the front
+    shuffled_summary_var = tf.transpose(summary_var, (1, 0, 2))
+    shuffled_terminal_var = tf.transpose(terminal_var, (1, 0, 2))
+
+    def step(prev, cur):
+        cur_summary = cur[:, :summary_dim]
+        cur_terminal = cur[:, summary_dim:]
+        return prev * (1 - cur_terminal) + cur_summary * cur_terminal
+
+    filtered = tf.scan(
+        step,
+        elems=tf.concat(2, [shuffled_summary_var, shuffled_terminal_var]),
+        initializer=shuffled_summary_var[0, :, :]
+    )
+    return tf.transpose(filtered, (1, 0, 2))
 
 
 class CategoricalDualRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
@@ -64,7 +92,7 @@ class CategoricalDualRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
                     shape_op=lambda _, input_shape: (input_shape[0], input_shape[1], feature_dim)
                 )
 
-            summary_network = self.create_recurrent_network(
+            summary_network = create_recurrent_network(
                 network_type,
                 input_shape=(feature_dim,),
                 input_layer=l_feature,
@@ -75,10 +103,17 @@ class CategoricalDualRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
                 name="summary_network"
             )
 
-            prob_network = self.create_recurrent_network(
+            l_summary_in = L.InputLayer(
+                shape=(None, None, hidden_dim),
+                name="summary_in"
+            )
+
+            # No fancy integration technique for now
+
+            prob_network = create_recurrent_network(
                 network_type,
                 input_shape=(feature_dim,),
-                input_layer=l_feature,
+                input_layer=L.concat(2, [l_feature, l_summary_in]),
                 output_dim=env_spec.action_space.n,
                 hidden_dim=hidden_dim,
                 hidden_nonlinearity=hidden_nonlinearity,
@@ -90,6 +125,8 @@ class CategoricalDualRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             self.prob_network = prob_network
             self.feature_network = feature_network
             self.l_input = l_input
+            self.l_summary_in = l_summary_in
+            self.l_feature = l_feature
             self.state_include_action = state_include_action
 
             flat_input_var = tf.placeholder(dtype=tf.float32, shape=(None, input_dim), name="flat_input")
@@ -98,65 +135,31 @@ class CategoricalDualRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             else:
                 feature_var = L.get_output(l_flat_feature, {feature_network.input_layer: flat_input_var})
 
-            self.f_step_prob = tensor_utils.compile_function(
-                [
-                    flat_input_var,
-                    prob_network.step_prev_hidden_layer.input_var
-                ],
-                L.get_output([
-                    prob_network.step_output_layer,
-                    prob_network.step_hidden_layer
-                ], {prob_network.step_input_layer: feature_var})
-            )
-
+            # self.f_step_prob = tensor_utils.compile_function(
+            #     [
+            #         flat_input_var,
+            #         prob_network.step_prev_state_layer.input_var
+            #     ],
+            #     L.get_output([
+            #         prob_network.step_output_layer,
+            #         prob_network.step_state_layer
+            #     ], {prob_network.step_input_layer: feature_var})
+            # )
+            #
             self.input_dim = input_dim
             self.action_dim = action_dim
             self.hidden_dim = hidden_dim
-
-            self.prev_actions = None
-            self.prev_hiddens = None
+            self.state_dim = summary_network.state_dim
+            #
+            # self.prev_actions = None
+            # self.prev_hiddens = None
             self.dist = RecurrentCategorical(env_spec.action_space.n)
 
-            out_layers = [prob_network.output_layer]
+            out_layers = [prob_network.output_layer, summary_network.output_layer]
             if feature_network is not None:
                 out_layers.append(feature_network.output_layer)
 
             LayersPowered.__init__(self, out_layers)
-
-    def create_recurrent_network(self, network_type, **kwargs):
-        if network_type == "gru":
-            return GRUNetwork(
-                gru_layer_cls=L.GRULayer,
-                **kwargs
-            )
-        elif network_type == "pseudo_lstm":
-            return GRUNetwork(
-                gru_layer_cls=L.PseudoLSTMLayer,
-                **kwargs
-            )
-        elif network_type == "tf_gru":
-            return GRUNetwork(
-                gru_layer_cls=L.TfGRULayer,
-                **kwargs
-            )
-        elif network_type == "tf_basic_lstm":
-            return LSTMNetwork(
-                lstm_layer_cls=L.TfBasicLSTMLayer,
-                **kwargs
-            )
-        elif network_type == "lstm":
-            return LSTMNetwork(
-                lstm_layer_cls=L.LSTMLayer,
-                **kwargs
-            )
-        elif network_type == "lstm_peephole":
-            return LSTMNetwork(
-                lstm_layer_cls=L.LSTMLayer,
-                use_peepholes=True,
-                **kwargs
-            )
-        else:
-            raise NotImplementedError
 
     @overrides
     def dist_info_sym(self, obs_var, state_info_vars):
@@ -170,20 +173,43 @@ class CategoricalDualRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
         else:
             all_input_var = obs_var
         if self.feature_network is None:
-            return dict(
-                prob=L.get_output(
-                    self.prob_network.output_layer,
-                    {self.l_input: all_input_var}
-                )
+            summary_var = L.get_output(
+                self.summary_network.output_layer,
+                {self.l_input: all_input_var}
             )
         else:
             flat_input_var = tf.reshape(all_input_var, (-1, self.input_dim))
-            return dict(
-                prob=L.get_output(
-                    self.prob_network.output_layer,
-                    {self.l_input: all_input_var, self.feature_network.input_layer: flat_input_var}
-                )
+            summary_var = L.get_output(
+                self.summary_network.output_layer,
+                {self.l_input: all_input_var, self.feature_network.input_layer: flat_input_var}
             )
+
+        summary_var.set_shape((None, None, self.hidden_dim))
+        # Only take the first vector for each episode, and repeat it for the rest
+        # How to do this in tf hmm...
+        assert isinstance(self.observation_space, Product)
+        assert isinstance(self.observation_space.components[-1], Box)
+
+
+        # Slice out the last component
+        start_idx = self.observation_space.flat_dim - self.observation_space.components[-1].flat_dim
+        end_idx = self.observation_space.flat_dim
+
+        episode_terminal_var = obs_var[:, :, start_idx:end_idx]
+
+        filtered_summary_var = filter_summary(summary_var, episode_terminal_var, self.hidden_dim)
+
+        import ipdb;
+        ipdb.set_trace()
+        # if self.feature_network is None:
+        #     return dict(
+        #         prob=L.get_output(
+        #             self.prob_network.output_layer,
+        #             {self.l_input: all_input_var}
+        #         )
+        #     )
+        # else:
+        #     return
 
     @property
     def vectorized(self):

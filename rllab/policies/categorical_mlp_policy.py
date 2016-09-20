@@ -10,6 +10,7 @@ from rllab.misc.overrides import overrides
 from rllab.policies.base import StochasticPolicy
 from rllab.spaces import Discrete
 
+import numpy as np
 
 class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def __init__(
@@ -64,10 +65,13 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     # of length N, where each entry is the density value for that action, under
     # the current policy
     @overrides
-    def get_action(self, observation):
+    def get_action(self, observation, deterministic=False):
         flat_obs = self.observation_space.flatten(observation)
         prob = self._f_prob([flat_obs])[0]
-        action = self.action_space.weighted_sample(prob)
+        if deterministic:
+            action = np.argmax(prob)
+        else:
+            action = self.action_space.weighted_sample(prob)
         return action, dict(prob=prob)
 
     def get_actions(self, observations):
@@ -79,4 +83,3 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @property
     def distribution(self):
         return self._dist
-

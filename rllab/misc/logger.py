@@ -1,3 +1,5 @@
+from enum import Enum
+
 from rllab.misc.tabulate import tabulate
 from rllab.misc.console import mkdir_p, colorize
 from rllab.misc.autoargs import get_all_parameters
@@ -11,7 +13,7 @@ import dateutil.tz
 import csv
 import joblib
 import json
-import pickle as pickle
+import pickle
 import base64
 
 _prefixes = []
@@ -31,6 +33,7 @@ _tabular_header_written = set()
 
 _snapshot_dir = None
 _snapshot_mode = 'all'
+_snapshot_gap = 1
 
 _log_tabular_only = False
 _header_printed = False
@@ -91,6 +94,12 @@ def set_snapshot_mode(mode):
     global _snapshot_mode
     _snapshot_mode = mode
 
+def get_snapshot_gap():
+    return _snapshot_gap
+
+def set_snapshot_gap(gap):
+    global _snapshot_gap
+    _snapshot_gap = gap
 
 def set_log_tabular_only(log_tabular_only):
     global _log_tabular_only
@@ -213,6 +222,10 @@ def save_itr_params(itr, params):
             # override previous params
             file_name = osp.join(_snapshot_dir, 'params.pkl')
             joblib.dump(params, file_name, compress=3)
+        elif _snapshot_mode == "gap":
+            if itr % _snapshot_gap == 0:
+                file_name = osp.join(_snapshot_dir, 'itr_%d.pkl' % itr)
+                joblib.dump(params, file_name, compress=3)
         elif _snapshot_mode == 'none':
             pass
         else:
@@ -269,7 +282,9 @@ def stub_to_json(stub_sth):
     elif isinstance(stub_sth, (list, tuple)):
         return list(map(stub_to_json, stub_sth))
     elif type(stub_sth) == type(lambda: None):
-        return stub_sth.__module__ + "." + stub_sth.__name__
+        if stub_sth.__module__ is not None:
+            return stub_sth.__module__ + "." + stub_sth.__name__
+        return stub_sth.__name__
     elif "theano" in str(type(stub_sth)):
         return repr(stub_sth)
     return stub_sth
@@ -279,6 +294,8 @@ class MyEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, type):
             return {'$class': o.__module__ + "." + o.__name__}
+        elif isinstance(o, Enum):
+            return {'$enum': o.__module__ + "." + o.__class__.__name__ + '.' + o.name}
         return json.JSONEncoder.default(self, o)
 
 
@@ -308,7 +325,7 @@ def log_variant(log_file, variant_data):
         variant_data = variant_data.dump()
     variant_json = stub_to_json(variant_data)
     with open(log_file, "w") as f:
-        json.dump(variant_json, f, indent=2, sort_keys=True)
+        json.dump(variant_json, f, indent=2, sort_keys=True, cls=MyEncoder)
 
 
 def record_tabular_misc_stat(key, values):

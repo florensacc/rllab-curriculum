@@ -18,23 +18,24 @@ from rllab.envs.normalized_env import NormalizedEnv
 
 from sandbox.rein.algos.trpo import TRPO
 # from sandbox.john.instrument import stub, run_experiment_lite
-from rllab.misc.instrument2 import stub, run_experiment_lite
+from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 from sandbox.rein.envs.atari import AtariEnvX
 
 import itertools
 
-RECORD_VIDEO = True
-num_seq_frames = 4
+RECORD_VIDEO = False
+num_seq_frames = 1
 baseline = True
 
 stub(globals())
 
 # Param ranges
-seeds = list(range(1))
+seeds = range(5)
 
 mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-        AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
+        AtariEnvX(game='freeway', obs_type="image", frame_skip=8),
+        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]
 
 param_cart_product = itertools.product(
     mdps, seeds
@@ -72,7 +73,7 @@ for mdp, seed in param_cart_product:
             regressor_args=dict(
                 mean_network=network,
                 batchsize=None,
-                subsample_factor=1.0,
+                subsample_factor=0.1,
                 # optimizer=FirstOrderOptimizer(
                 #     max_epochs=100,
                 #     verbose=True,
@@ -90,7 +91,7 @@ for mdp, seed in param_cart_product:
         env=mdp,
         policy=policy,
         baseline=baseline,
-        batch_size=10000,
+        batch_size=100000,
         whole_paths=True,
         max_path_length=4500,
         n_itr=400,

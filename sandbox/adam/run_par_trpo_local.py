@@ -17,7 +17,7 @@ if not run_parallelized:
 n_parallel = 4
 batch_size = 4000
 max_path_length = 100
-n_itr = 10
+n_itr = 1000
 whole_paths = True
 
 

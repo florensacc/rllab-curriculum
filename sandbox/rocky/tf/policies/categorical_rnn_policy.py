@@ -14,6 +14,7 @@ from rllab.misc import special
 from rllab.misc.overrides import overrides
 
 
+
 class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
     def __init__(
             self,
@@ -25,6 +26,7 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             hidden_nonlinearity=tf.tanh,
             network_type="gru",
     ):
+        Serializable.quick_init(self, locals())
         """
         :param env_spec: A spec for the env.
         :param hidden_dim: dimension of hidden layer
@@ -33,7 +35,6 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
         """
         with tf.variable_scope(name):
             assert isinstance(env_spec.action_space, Discrete)
-            Serializable.quick_init(self, locals())
             super(CategoricalRNNPolicy, self).__init__(env_spec)
 
             obs_dim = env_spec.observation_space.flat_dim
@@ -154,8 +155,9 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             self.prev_actions = np.zeros((len(dones), self.action_space.flat_dim))
             self.prev_states = np.zeros((len(dones), self.state_dim))
 
-        self.prev_actions[dones] = 0.
-        self.prev_states[dones] = self.prob_network.state_init_param.eval()  # get_value()
+        if np.any(dones):
+            self.prev_actions[dones] = 0.
+            self.prev_states[dones] = self.prob_network.state_init_param.eval()  # get_value()
 
     # The return value is a pair. The first item is a matrix (N, A), where each
     # entry corresponds to the action value taken. The second item is a vector
