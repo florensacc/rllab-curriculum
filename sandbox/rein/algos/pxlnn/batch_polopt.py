@@ -115,7 +115,7 @@ class BatchPolopt(RLAlgorithm):
                     params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
                     if self.store_paths:
                         params["paths"] = samples_data["paths"]
-                    logger.save_itr_params(itr, params)
+                    # logger.save_itr_params(itr, params)
                     logger.log("saved")
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.dump_tabular(with_prefix=False)

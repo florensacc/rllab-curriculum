@@ -6,7 +6,7 @@ from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rocky.tf.core.network import ConvNetwork
 from rllab.misc.instrument import stub, run_experiment_lite
-# from sandbox.rein.dynamics_models.tf_autoenc.autoenc import ConvAutoEncoder
+from sandbox.rein.dynamics_models.tf_autoenc.autoenc import ConvAutoEncoder
 
 from sandbox.rein.envs.tf_atari import AtariEnv
 from sandbox.rein.algos.pxlnn.trpo import TRPO
@@ -31,8 +31,8 @@ if TEST_RUN:
             AtariEnv(game='freeway', obs_type="image", frame_skip=8),
             AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=8)]
     lst_factor = [1]
-    trpo_batch_size = 100000
-    max_path_length = 4500
+    trpo_batch_size = 1000
+    max_path_length = 450
     batch_norm = True
 else:
     exp_prefix = 'trpo-count-atari-42x52-a'
@@ -54,7 +54,7 @@ for factor, mdp, eta, seed in param_cart_product:
     network = ConvNetwork(
         name='policy_network',
         hidden_nonlinearity=tf.nn.relu,
-        output_nonlinearity=tf.identity,
+        output_nonlinearity=tf.nn.softmax,
         input_shape=(mdp.spec.observation_space.shape[2], mdp.spec.observation_space.shape[1], num_seq_frames),
         output_dim=mdp.spec.action_space.flat_dim,
         hidden_sizes=(64,),
@@ -85,26 +85,22 @@ for factor, mdp, eta, seed in param_cart_product:
         env_spec=mdp.spec,
     )
 
-    # # Dynamics model f: num_seq_frames x h x w -> h x w
-    # dyn_model = ConvAutoEncoder(
-    #     input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
-    #     n_filters=[num_seq_frames, 10, 10],
-    #     filter_sizes=[6, 6, 6],
-    # )
+    # Dynamics model f: num_seq_frames x h x w -> h x w
+    dyn_model = ConvAutoEncoder(
+        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
+        n_filters=[num_seq_frames, 10, 10],
+        filter_sizes=[6, 6, 6],
+    )
 
     algo = TRPO(
         # discount=0.995,
         env=mdp,
         policy=policy,
         baseline=baseline,
-        # batch_size=100000,
-        # max_path_length=4500,
-        # n_itr=400,
-        # step_size=0.01,
-        # sampler_args=dict(num_seq_frames=num_seq_frames),
-        # optimizer_args=dict(
-        #     num_slices=30,
-        #     subsample_factor=0.1),
+        batch_size=trpo_batch_size,
+        max_path_length=max_path_length,
+        n_itr=400,
+        step_size=0.01,
     )
 
     run_experiment_lite(
