@@ -27,11 +27,11 @@ algo = ParallelTRPO(
     baseline=baseline,
     batch_size=4000,
     max_path_length=100,
-    n_itr=100,
+    n_itr=10,
     discount=0.99,
     step_size=0.01,
     n_parallel=4,
-    set_cpu_affinity=False,
+    set_cpu_affinity=False,  # (need package psutil if True)
     whole_paths=False,
     # plot=True,
 )

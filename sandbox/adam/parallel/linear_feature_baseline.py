@@ -15,6 +15,9 @@ class ParallelLinearFeatureBaseline(Baseline):
         self._shareds = None
         self._mgr_objs = None
 
+    def __getstate__(self):
+        return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
+
     @overrides
     @property
     def algorithm_parallelized(self):
