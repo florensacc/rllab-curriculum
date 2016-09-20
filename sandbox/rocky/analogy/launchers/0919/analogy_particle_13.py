@@ -19,7 +19,7 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 """
-Try training with image inputs
+Try training with image inputs and FC networks for now
 """
 
 
@@ -30,11 +30,11 @@ class VG(VariantGenerator):
 
     @variant
     def n_particles(self):
-        return [6]  # 5]#3, 4, 5, 6]
+        return [2]#6]  # 5]#3, 4, 5, 6]
 
     @variant
     def n_train_trajs(self):
-        return [5000]#, 20000]  # , 20000]#1000, 5000, 20000]
+        return [50, 500, 5000]#0]#5000]#, 20000]  # , 20000]#1000, 5000, 20000]
 
     @variant
     def hidden_dim(self):
@@ -87,8 +87,10 @@ variants = vg.variants()
 
 print("#Experiments: %d" % len(variants))
 
+OBS_SIZE = (25, 25)
+
 for v in variants:
-    env = TfEnv(SimpleParticleEnv(seed=0, n_particles=v["n_particles"]))
+    env = TfEnv(SimpleParticleEnv(seed=0, n_particles=v["n_particles"], obs_type='image', obs_size=OBS_SIZE))
     policy = DemoRNNMLPAnalogyPolicy(
         env_spec=env.spec,
         name="policy",
@@ -111,13 +113,16 @@ for v in variants:
             SimpleParticleEnv,
             n_particles=v["n_particles"],
             min_margin=(((0.8 * 2) ** 2 / v["n_particles"]) ** 0.5) / 2 if v["min_margin"] else 0,
-            min_angular_margin=math.pi / v["n_particles"] if v["min_margin"] else 0
+            min_angular_margin=math.pi / v["n_particles"] if v["min_margin"] else 0,
+            obs_type='image',
+            obs_size=OBS_SIZE,
         ),
         demo_policy_cls=SimpleParticleTrackingPolicy,
         n_train_trajs=v["n_train_trajs"],
         n_test_trajs=50,
         horizon=20,
         n_epochs=1000,
+        n_passes_per_epoch=10 if v["n_train_trajs"] < 100 else 1,
         learning_rate=1e-2,
         no_improvement_tolerance=10,
         shuffler=SimpleParticleEnv.shuffler() if v["use_shuffler"] else None,
@@ -128,10 +133,11 @@ for v in variants:
     run_experiment_lite(
         algo.train(),
         exp_prefix="analogy-particle-13",
-        mode="local",
+        mode="lab_kube",
         n_parallel=0,
         seed=v["seed"],
         variant=v,
         snapshot_mode="last",
+        # python_command="kernprof -l ",
     )
-    sys.exit()
+    # sys.exit()

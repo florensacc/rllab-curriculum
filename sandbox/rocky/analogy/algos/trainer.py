@@ -51,6 +51,7 @@ class Trainer(Serializable):
             horizon=50,
             batch_size=10,
             n_epochs=100,
+            n_passes_per_epoch=1,
             n_eval_trajs=10,
             learning_rate=1e-3,
             no_improvement_tolerance=5,
@@ -67,6 +68,7 @@ class Trainer(Serializable):
         self.plot = plot
         self.batch_size = batch_size
         self.n_epochs = n_epochs
+        self.n_passes_per_epoch = n_passes_per_epoch
         self.n_eval_trajs = n_eval_trajs
         self.learning_rate = learning_rate
         self.no_improvement_tolerance = no_improvement_tolerance
@@ -131,21 +133,30 @@ class Trainer(Serializable):
 
         lr_var = tf.placeholder(dtype=tf.float32, shape=(), name="lr")
 
-        policy_action_var = policy.action_sym(
+        train_policy_action_var = policy.action_sym(
             analogy_obs_var,
             state_info_vars=dict(
                 demo_obs=demo_obs_var,
                 demo_action=demo_action_var
-            )
+            ),
+            phase='train'
         )
-
-        loss_var = tf.reduce_mean(tf.square(analogy_action_var - policy_action_var))
+        test_policy_action_var = policy.action_sym(
+            analogy_obs_var,
+            state_info_vars=dict(
+                demo_obs=demo_obs_var,
+                demo_action=demo_action_var
+            ),
+            phase='test'
+        )
+        train_loss_var = tf.reduce_mean(tf.square(analogy_action_var - train_policy_action_var))
+        test_loss_var = tf.reduce_mean(tf.square(analogy_action_var - test_policy_action_var))
 
         optimizer = tf.train.AdamOptimizer(learning_rate=lr_var)
 
         params = policy.get_params(trainable=True)
 
-        grads_and_vars = optimizer.compute_gradients(loss_var, var_list=params)
+        grads_and_vars = optimizer.compute_gradients(train_loss_var, var_list=params)
         train_op = optimizer.apply_gradients(grads_and_vars)
 
         # Best average return achieved by the NN policy
@@ -186,14 +197,15 @@ class Trainer(Serializable):
                 # Skip training for the first epoch
                 if epoch_idx > 0:
                     logger.log("Start training...")
-                    progbar = pyprind.ProgBar(dataset.train.number_batches)
-                    for batch in dataset.train.iterate():
-                        _, loss = sess.run(
-                            [train_op, loss_var],
-                            feed_dict=to_feed(batch),
-                        )
-                        losses.append(loss)
-                        progbar.update()
+                    progbar = pyprind.ProgBar(dataset.train.number_batches * self.n_passes_per_epoch)
+                    for _ in range(self.n_passes_per_epoch):
+                        for batch in dataset.train.iterate():
+                            _, loss = sess.run(
+                                [train_op, train_loss_var],
+                                feed_dict=to_feed(batch),
+                            )
+                            losses.append(loss)
+                            progbar.update()
                     if progbar.active:
                         progbar.stop()
                     logger.log("Finished")
@@ -201,7 +213,7 @@ class Trainer(Serializable):
                     logger.log("Skipped training for the 0th epoch, to collect initial test statistics")
 
                 test_loss = sess.run(
-                    loss_var,
+                    test_loss_var,
                     feed_dict=to_feed(dataset.test.inputs),
                 )
 
@@ -220,6 +232,8 @@ class Trainer(Serializable):
                         analogy_env, ApplyDemoPolicy(policy, demo_path), max_path_length=self.horizon,
                         animated=self.plot and idx == 0,
                     ))
+
+                # import ipdb; ipdb.set_trace()
 
                 if self.plot:
                     rollout(

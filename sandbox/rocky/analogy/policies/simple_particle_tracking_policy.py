@@ -11,7 +11,8 @@ class SimpleParticleTrackingPolicy(AnalogyPolicy):
         Policy.__init__(self, env_spec=env.spec)
 
     def get_action(self, obs):
-        agent_pos, particle_pos_n = obs
+        agent_pos = self.env.agent_pos
+        particle_pos_n = self.env.particles
         particle_pos = particle_pos_n[self.env.target_id]
         action = np.clip(particle_pos - agent_pos, self.action_space.low, self.action_space.high)
         return action, dict()
