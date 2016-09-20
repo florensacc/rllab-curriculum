@@ -28,6 +28,8 @@ class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
+
+    Specifically, this implements a VIME-like exploration strategy, but with a conditional PixelCNN.
     """
 
     # Enums

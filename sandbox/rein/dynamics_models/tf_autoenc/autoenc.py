@@ -3,11 +3,11 @@ import numpy as np
 import math
 
 
-# %%
-def autoencoder(input_shape=[None, 784],
-                n_filters=[1, 10, 10, 10],
-                filter_sizes=[3, 3, 3, 3],
-                corruption=False):
+def autoencoder(
+        input_shape=[None, 784],
+        n_filters=[1, 10, 10, 10],
+        filter_sizes=[3, 3, 3, 3],
+):
     """Build a deep denoising autoencoder w/ tied weights.
 
     Parameters
@@ -18,7 +18,7 @@ def autoencoder(input_shape=[None, 784],
         Description
     filter_sizes : list, optional
         Description
-lrelu
+        
     Returns
     -------
     x : Tensor
@@ -35,12 +35,11 @@ lrelu
     ValueError
         Description
     """
-    # %%
     # input to the network
     x = tf.placeholder(
         tf.float32, input_shape, name='x')
 
-    # %%
+    # --
     # ensure 2-d is converted to square tensor.
     if len(x.get_shape()) == 2:
         x_dim = np.sqrt(x.get_shape().as_list()[1])
@@ -55,7 +54,7 @@ lrelu
         raise ValueError('Unsupported input dimensions')
     current_input = x_tensor
 
-    # %%
+    # --
     # Build the encoder
     encoder = []
     shapes = []
