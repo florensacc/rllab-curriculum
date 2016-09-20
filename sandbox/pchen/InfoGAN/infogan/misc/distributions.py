@@ -1406,6 +1406,7 @@ class ConvAR(Distribution):
             nin=False,
             sanity=False,
             sanity2=False,
+            tieweight=False,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1442,6 +1443,7 @@ class ConvAR(Distribution):
             init_scale=0.1,
             ar_channels=False,
             pixel_bias=pixel_bias,
+            var_scope="ConvAR" if tieweight else None,
         ):
             if masked:
                 for di in range(depth):
@@ -1451,6 +1453,7 @@ class ConvAR(Distribution):
                                 filter_size,
                                 nr_channels,
                                 zerodiagonal=di == 0,
+                                prefix="step0",
                             )
                     else:
                         if block == "resnet":
@@ -1475,7 +1478,7 @@ class ConvAR(Distribution):
                         else:
                             raise Exception("what")
                         if nin:
-                            cur = cur + 0.1 * cur.conv2d_mod(1, nr_channels)
+                            cur = cur + 0.1 * cur.conv2d_mod(1, nr_channels, prefix="nin")
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,
