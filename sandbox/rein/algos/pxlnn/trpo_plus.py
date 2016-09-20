@@ -1,11 +1,20 @@
 import tensorflow as tf
 import time
+
+from sandbox.rein.algos.pxlnn.plotter import Plotter
 from sandbox.rein.algos.pxlnn.trpo import TRPO
 from rllab.misc import special
 import numpy as np
 from rllab.misc import tensor_utils
 import rllab.misc.logger as logger
 from rllab.algos import util
+
+# --
+# Nonscientific printing of numpy arrays.
+from sandbox.rein.algos.replay_pool import ReplayPool
+
+np.set_printoptions(suppress=True)
+np.set_printoptions(precision=4)
 
 
 class TRPOPlus(TRPO):
@@ -15,15 +24,30 @@ class TRPOPlus(TRPO):
 
     def __init__(
             self,
-            dynamics_model=None,
+            model=None,
             eta=0.1,
+            model_pool_args=None,
             **kwargs):
         super(TRPOPlus, self).__init__(**kwargs)
 
-        assert dynamics_model is not None
+        assert model is not None
 
-        self._dynamics_model = dynamics_model
+        self._model = model
         self._eta = eta
+
+        if model_pool_args is None:
+            self._model_pool_args = dict(size=100000, min_size=32, batch_size=32)
+
+        observation_dtype = "uint8"
+        self._pool = ReplayPool(
+            max_pool_size=self._model_pool_args['size'],
+            observation_shape=(self.env.observation_space.flat_dim,),
+            action_dim=self.env.action_dim,
+            observation_dtype=observation_dtype,
+            num_seq_frames=self._n_seq_frames,
+            **self._model_pool_args
+        )
+        self._plotter = Plotter()
 
     def process_samples(self, itr, paths):
         baselines = []
@@ -153,20 +177,31 @@ class TRPOPlus(TRPO):
         pass
 
     def fill_replay_pool(self, paths):
-        pass
+        logger.log('Filling replay pool ...')
+        tot_path_len = 0
+        for path in paths:
+            path_len = len(path['rewards'])
+            tot_path_len += path_len
+            for i in range(path_len):
+                obs = (path['observations'][i] * self._model.n_classes).astype(int)
+                act = path['actions'][i]
+                rew_orig = path['ext_rewards'][i]
+                term = (i == path_len - 1)
+                self._pool.add_sample(obs, act, rew_orig, term)
+        logger.log('{} samples added to replay pool ({}).'.format(tot_path_len, self._pool.size))
 
     def encode_obs(self, obs):
         """
         Observation into uint8 encoding, also functions as target format
         """
         assert np.max(obs) <= 1.0
-        return (obs * self.autoenc.num_classes).astype("uint8")
+        return (obs * self._model.n_classes).astype("uint8")
 
     def decode_obs(self, obs):
         """
         From uint8 encoding to original observation format.
         """
-        return obs / float(self.autoenc.num_classes)
+        return obs / float(self._model.num_classes)
 
     def train(self):
         with tf.Session() as sess:
@@ -195,7 +230,7 @@ class TRPOPlus(TRPO):
                     self.fill_replay_pool(paths)
 
                     # --
-                    # Compute and add intrinisc rewards.
+                    # Compute intrinisc rewards.
                     self.comp_int_rewards(paths)
 
                     # --
@@ -203,9 +238,11 @@ class TRPOPlus(TRPO):
                     samples_data = self.process_samples(itr, paths)
 
                     # --
+                    self.optimize_policy(itr, samples_data)
+
+                    # --
                     # Diagnostics
                     self.log_diagnostics(paths)
-                    self.optimize_policy(itr, samples_data)
                     logger.log("Saving snapshot ...")
                     params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
                     if self.store_paths:

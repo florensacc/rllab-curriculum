@@ -43,7 +43,7 @@ except ImportError:
         "atari.py: Couldn't import opencv. Atari image environments will raise an error (RAM ones will still work).")
     cv2 = NoCV2()
 
-IMG_WH = (42, 52)  # width, height of images
+IMG_WH = (52, 52)  # width, height of images
 
 
 def to_rgb(ale):
@@ -98,6 +98,7 @@ class AtariEnv(Env, Serializable):
             return spaces.Box(low=-1, high=1, shape=(128,))  # np.zeros(128), high=np.ones(128))# + 255)
         elif self._obs_type == "image":
             return spaces.Box(low=-1, high=1, shape=(1,) + IMG_WH[::-1])
+            # return spaces.Box(low=-1, high=1, shape=IMG_WH + (4,))
 
     def _get_image(self):
         return to_rgb(self.ale)

@@ -9,14 +9,17 @@ class ConvAutoEncoder:
     """
 
     def __init__(self,
-                 input_shape=(None, 42, 42, 1),
+                 input_shape=(42, 42, 1),
                  n_filters=(10, 10, 10),
                  filter_sizes=(3, 3, 3),
+                 n_classes=10,
                  ):
+
+        self._n_classes = n_classes
 
         # --
         self._x = tf.placeholder(
-            tf.float32, input_shape, name='x')
+            tf.float32, (None,) + input_shape, name='x')
         current_input = self._x
 
         # --
@@ -74,6 +77,10 @@ class ConvAutoEncoder:
     @property
     def cost(self):
         return self._cost
+
+    @property
+    def n_classes(self):
+        return self._n_classes
 
 
 def test_atari():

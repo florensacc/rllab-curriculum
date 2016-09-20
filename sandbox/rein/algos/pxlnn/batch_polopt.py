@@ -4,8 +4,7 @@ import rllab.misc.logger as logger
 import rllab.plotter as plotter
 from sandbox.rocky.tf.policies.base import Policy
 import tensorflow as tf
-from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
-from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
+from sandbox.rein.algos.pxlnn.batch_sampler import BatchSampler
 
 
 class BatchPolopt(RLAlgorithm):
@@ -35,7 +34,7 @@ class BatchPolopt(RLAlgorithm):
             fixed_horizon=False,
             sampler_cls=None,
             sampler_args=None,
-            force_batch_sampler=False,
+            n_seq_frames=1,
             **kwargs
     ):
         """
@@ -76,11 +75,9 @@ class BatchPolopt(RLAlgorithm):
         self.store_paths = store_paths
         self.whole_paths = whole_paths
         self.fixed_horizon = fixed_horizon
+        self._n_seq_frames = n_seq_frames
         if sampler_cls is None:
-            if self.policy.vectorized and not force_batch_sampler:
-                sampler_cls = VectorizedSampler
-            else:
-                sampler_cls = BatchSampler
+            sampler_cls = BatchSampler
         if sampler_args is None:
             sampler_args = dict()
         self.sampler = sampler_cls(self, **sampler_args)
@@ -95,7 +92,7 @@ class BatchPolopt(RLAlgorithm):
         self.sampler.shutdown_worker()
 
     def obtain_samples(self, itr):
-        return self.sampler.obtain_samples(itr)
+        return self.sampler.obtain_samples(itr, self._n_seq_frames)
 
     def process_samples(self, itr, paths):
         return self.sampler.process_samples(itr, paths)
