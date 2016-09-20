@@ -45,7 +45,7 @@ def sliding_mean(data_array, window=5):
     new_list = []
     for i in range(len(data_array)):
         indices = list(range(max(i - window + 1, 0),
-                        min(i + window + 1, len(data_array))))
+                             min(i + window + 1, len(data_array))))
         avg = 0
         for j in indices:
             avg += data_array[j]
@@ -55,12 +55,16 @@ def sliding_mean(data_array, window=5):
     return np.array(new_list)
 
 
-def load_dataset_Atari():
+def load_dataset_atari(dataset_file):
     import pickle
+    assert dataset_file is not None
+    with open(dataset_file, 'rb') as f:
+        _dataset = pickle.load(f, encoding='latin1')
+    return {'x': _dataset['x'].transpose(0, 3, 1, 2),
+            'y': _dataset['y'].transpose(0, 3, 1, 2),
+            'a': _dataset['a'],
+            'r': _dataset['r']}
 
-    file_handler = open('sandbox/rein/datasets/dataset_42x42.pkl', 'r')
-    _dataset = pickle.load(file_handler)
-    return _dataset['x'].transpose(0, 3, 1, 2), _dataset['y'].transpose(0, 3, 1, 2), _dataset['a'], _dataset['r']
 
 def load_dataset_MNIST():
     """MNIST dataset loader"""
