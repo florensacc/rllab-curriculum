@@ -34,7 +34,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 exp_prefix = "parallel-trpo/" + os.path.basename(__file__).split('.')[0] # exp_xxx
 mode = "ec2"
 ec2_instance = "c4.8xlarge"
-subnet = "us-west-1a"
+subnet = "us-west-1c"
 
 n_parallel = 4
 snapshot_mode = "last"
@@ -59,7 +59,7 @@ class VG(VariantGenerator):
 
     @variant
     def env(self):
-        return ["swimmer","hopper","walker"]
+        return ["halfcheetah","ant","humanoid"]
     @variant
     def use_parallel(self):
         return [False,True]
