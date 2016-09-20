@@ -1,12 +1,11 @@
 
 import multiprocessing as mp
-import psutil
 import numpy as np
 
 from rllab.algos.base import RLAlgorithm
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from rllab.misc import ext, special
+from rllab.misc import ext
 from sandbox.adam.parallel.sampler import WorkerBatchSampler
 from sandbox.adam.parallel.util import SimpleContainer
 # from rllab.policies.base import Policy
@@ -39,8 +38,8 @@ class ParallelBatchPolopt(RLAlgorithm):
             store_paths=False,
             whole_paths=False,  # Different default from serial
             n_parallel=1,
+            set_cpu_affinity=False,
             cpu_assignments=None,
-            seed=1,
             **kwargs
     ):
         """
@@ -80,10 +79,13 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.store_paths = store_paths
         self.whole_paths = whole_paths
         self.n_parallel = n_parallel
+        self.set_cpu_affinity = set_cpu_affinity
         self.cpu_assignments = cpu_assignments
         self.worker_batch_size = batch_size // n_parallel
         self.sampler = WorkerBatchSampler(self)
-        self.seed = seed
+
+    def __getstate__(self):
+        return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
 
     #
     # Serial methods.
@@ -93,7 +95,7 @@ class ParallelBatchPolopt(RLAlgorithm):
 
     def _init_par_objs_batchpolopt(self):
         """
-        Any _init_par_objs() method in a derived class must call this method,
+        Any init_par_objs() method in a derived class must call this method,
         and, following that, may append() the SimpleContainer objects as needed.
         """
         par_data = SimpleContainer(rank=None, avg_fac=1. / self.n_parallel)
@@ -106,10 +108,12 @@ class ParallelBatchPolopt(RLAlgorithm):
             num_steps=mp.RawValue('i'),
             num_valids=mp.RawValue('i'),
             sum_ent=mp.RawValue('d'),
+            n_steps_collected=mp.RawValue('i'),
         )
         mgr_objs = SimpleContainer(
             lock=mp.Lock(),
             barriers_dgnstc=[mp.Barrier(self.n_parallel) for _ in range(2)],
+            barriers_avgfac=[mp.Barrier(self.n_parallel) for _ in range(2)],
         )
         self._par_objs = (par_data, shareds, mgr_objs)
         self.baseline.init_par_objs(n_parallel=self.n_parallel)
@@ -238,8 +242,6 @@ class ParallelBatchPolopt(RLAlgorithm):
             #     np.concatenate(dgnstc_data["returns"])
             # )
 
-            shareds.baselines[par_data.db[0]:par_data.db[1]] = dgnstc_data[:self.work]
-
             if par_data.rank == 0:
                 average_discounted_return = \
                     shareds.sum_discounted_return.value / shareds.num_traj.value
@@ -273,13 +275,18 @@ class ParallelBatchPolopt(RLAlgorithm):
     def set_rank(self, rank):
         par_data, _, _ = self._par_objs
         par_data.rank = rank
-        self._set_affinity(rank)
+        if self.set_cpu_affinity:
+            self._set_affinity(rank)
         self.baseline.set_rank(rank)
         self.optimizer.set_rank(rank)
-        ext.set_seed(self.seed + rank)
+        seed = ext.get_seed()
+        if seed is None:
+            # NOTE: Not sure if this is a good source for seed?
+            seed = int(1e6 * np.random.rand())
+        ext.set_seed(seed + rank)
 
     def set_avg_fac(self, n_steps_collected):
-        par_data, shareds, mgr_objs = self._par_data
+        par_data, shareds, mgr_objs = self._par_objs
 
         if par_data.rank == 0:
             shareds.n_steps_collected.value = n_steps_collected
@@ -297,6 +304,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         raise NotImplementedError
 
     def _set_affinity(self, rank, verbose=False):
+        import psutil
         if self.cpu_assignments is not None:
             n_assignments = len(self.cpu_assignments)
             assigned_affinity = [self.cpu_assignments[rank % n_assignments]]
@@ -304,6 +312,9 @@ class ParallelBatchPolopt(RLAlgorithm):
             assigned_affinity = [rank % psutil.cpu_count()]
         p = psutil.Process()
         # NOTE: let psutil raise the error if invalid cpu assignment.
-        p.cpu_affinity(assigned_affinity)
-        if verbose:
-            print("\nRank: {},  Affinity: {}".format(rank, p.cpu_affinity()))
+        try:
+            p.cpu_affinity(assigned_affinity)
+            if verbose:
+                logger.log("\nRank: {},  CPU Affinity: {}".format(rank, p.cpu_affinity()))
+        except AttributeError:
+            logger.log("Cannot set CPU affinity (maybe in a Mac OS).")

@@ -541,8 +541,9 @@ def load_lfw(
 def load_svhn(
         dataset=_get_datafolder_path()+'/svhn/',
         normalize=True,
-        dequantify=True,
-        extra=False):
+        dequantify=False,
+        extra=True,
+):
     '''
     :param dataset:
     :param normalize:
@@ -587,8 +588,8 @@ def load_svhn(
 
     if normalize:
         normalizer = train_x.max().astype('float32')
-        train_x = train_x / normalizer
-        test_x = test_x / normalizer
+        train_x = train_x / normalizer - 0.5
+        test_x = test_x / normalizer - 0.5
 
     return train_x, train_y, test_x, test_y
 
@@ -611,7 +612,7 @@ def _download_svhn(dataset, extra):
         extra_y = extra['y'].reshape((-1)) - 1
 
         print("Saving extra data")
-        with open(dataset +'svhn_extra.cpkl', 'w') as f:
+        with open(dataset +'svhn_extra.cpkl', 'wb') as f:
             pkl.dump([extra_x,extra_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
         os.remove(dataset+'extra_32x32.mat')
 
@@ -631,10 +632,10 @@ def _download_svhn(dataset, extra):
         test_y = test['y'].reshape((-1)) - 1
 
         print("Saving train data")
-        with open(dataset +'svhn_train.cpkl', 'w') as f:
+        with open(dataset +'svhn_train.cpkl', 'wb') as f:
             cPkl.dump([train_x,train_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
         print("Saving test data")
-        with open(dataset +'svhn_test.cpkl', 'w') as f:
+        with open(dataset +'svhn_test.cpkl', 'wb') as f:
             pkl.dump([test_x,test_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
         os.remove(dataset+'train_32x32.mat')
         os.remove(dataset+'test_32x32.mat')
@@ -1281,8 +1282,39 @@ class ResamplingBinarizedOmniglotDataset(object):
         return self._image_shape
 
 class Cifar10Dataset(object):
-    def __init__(self):
+    def __init__(self, scramble_vai=False, scramble_vali_ch=False):
+        self._image_shape = (32, 32, 3)
+        self._image_dim = np.prod(self._image_shape)
+
         train_x, train_y, test_x, test_y = load_cifar10(normalize=True)
+        self.train = Dataset(train_x)
+        # self.test = Dataset(valid)
+        if scramble_vai:
+            test_x = test_x.reshape(
+                [-1, self._image_dim]
+            )[:, np.random.permutation(self._image_dim)].reshape(
+                [-1] + list(self._image_shape)
+            )
+        if scramble_vali_ch:
+            test_x = test_x[:, :, :, np.random.permutation(3)]
+        self.validation = Dataset(test_x)
+
+    def transform(self, data):
+        return data
+
+    def inverse_transform(self, data):
+        return data
+
+    @property
+    def image_dim(self):
+        return self._image_dim
+    @property
+    def image_shape(self):
+        return self._image_shape
+
+class SvhnDataset(object):
+    def __init__(self):
+        train_x, train_y, test_x, test_y = load_svhn()
         self.train = Dataset(train_x)
         # self.test = Dataset(valid)
         self.validation = Dataset(test_x)

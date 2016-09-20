@@ -1,4 +1,3 @@
-
 from path import Path
 import sys
 import pickle as pickle

@@ -1,5 +1,6 @@
 
 
+import functools
 import itertools
 import tensorflow as tf
 import numpy as np
@@ -8,7 +9,7 @@ from progressbar import ProgressBar
 
 from rllab.misc.overrides import overrides
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1, int_shape, \
-    universal_int_shape
+    universal_int_shape, get_linear_ar_mask
 
 TINY = 1e-8
 
@@ -111,6 +112,7 @@ class Distribution(object):
     def sample_logli(self, dist_info):
         raise NotImplementedError
 
+    @functools.lru_cache(maxsize=None)
     def sample_prior(self, batch_size):
         return self.sample(self.prior_dist_info(batch_size))
 
@@ -475,7 +477,11 @@ class DiscretizedLogistic(Distribution):
     def sample_logli(self, dist_info):
         mu = dist_info["mu"]
         scale = dist_info["scale"]
-        p = tf.random_uniform(shape=universal_int_shape(mu))
+        p = tf.random_uniform(
+            shape=universal_int_shape(mu),
+            minval=1e-5,
+            maxval=1. - 1e-5,
+        )
         real_logit = mu + scale*(tf.log(p) - tf.log(1-p)) # inverse cdf according to wiki
         clipped = tf.clip_by_value(real_logit, -0.5, 0.5-1./self._bins)
         out = self.floor(clipped)
@@ -1172,6 +1178,7 @@ class DistAR(Distribution):
             data_init_scale=0.1,
             linear_context=False,
             gating_context=False,
+            op_context=False,
             share_context=False,
             var_scope=None,
             rank=None,
@@ -1184,7 +1191,7 @@ class DistAR(Distribution):
         nom = len(tgt_dist._pairs)
         mode_flat_dim = tgt_dist._pairs[0][0].dist_flat_dim
         for d,p in tgt_dist._pairs:
-            assert isinstance(d, Gaussian)
+            assert isinstance(d, Gaussian) or isinstance(d, DiscretizedLogistic)
 
         self._dim = dim
         self._tgt_dist = tgt_dist
@@ -1194,6 +1201,7 @@ class DistAR(Distribution):
         self._data_init_scale = data_init_scale
         self._linear_context = linear_context
         self._gating_context = gating_context
+        self._op_context = op_context
         self._context_dim = 0
         self._share_context = share_context
         self._rank = rank
@@ -1207,8 +1215,37 @@ class DistAR(Distribution):
             gate_con = pt.template("gating_context", books=dist_book)
             self._gating_context_dim = 2*dim*neuron_ratio
             self._context_dim += self._gating_context_dim
+        if op_context:
+            op_con = pt.template("op_context", books=dist_book)
+            # [bs, dim * hid_dim]
+            hid_dim = dim*2*neuron_ratio
+            self._op_context_dim = dim*hid_dim
+            self._context_dim += self._op_context_dim
+            mask = get_linear_ar_mask(dim, hid_dim, zerodiagonal=True)
+            mask = mask.reshape([1, dim, hid_dim])
+            # self._iaf_template = self._iaf_template.reshape(
+            #     [-1, 1, dim]
+            # ).join(
+            #     [op_con.reshape([-1, dim, hid_dim]).apply(tf.nn.tanh) * mask],
+            #     join_function=lambda ts: tf.batch_matmul(*ts),
+            # ).reshape(
+            #     [-1, hid_dim]
+            # )
+            self._iaf_template = (
+                # op_con.reshape([-1, dim, hid_dim]).apply(tf.nn.tanh) * mask
+                op_con.reshape([-1, dim, hid_dim]).apply(tf.nn.sigmoid) * mask
+                # op_con.reshape([-1, dim, hid_dim]) * mask
+            ).apply(
+                tf.transpose,
+                [0, 2, 1]
+            ).join(
+                [self._iaf_template.reshape([-1, dim, 1])],
+                join_function=lambda ts: tf.batch_matmul(*ts),
+            ).reshape(
+                [-1, hid_dim]
+            )
 
-        assert depth >= 1
+        assert depth >= 0
         from prettytensor import UnboundVariable
         with pt.defaults_scope(
                 activation_fn=nl,
@@ -1223,9 +1260,9 @@ class DistAR(Distribution):
                     self._iaf_template.arfc(
                         2*dim*neuron_ratio,
                         ngroups=dim,
-                        zerodiagonal=di == 0, # only blocking the first layer can stop data flow
+                        zerodiagonal=di == 0 and (not op_context), # only blocking the first layer can stop data flow
                         prefix="arfc%s" % di,
-                        )
+                    )
                 if di == 0:
                     if gating_context:
                         self._iaf_template *= (gate_con+1).apply(tf.nn.sigmoid)
@@ -1234,10 +1271,10 @@ class DistAR(Distribution):
             self._iaf_template = \
                 self._iaf_template. \
                     arfc(
-                    dim * 2 * nom,
-                    activation_fn=None,
-                    ngroups=dim,
-                    prefix="arfc_last",
+                        dim * 2 * nom,
+                        activation_fn=None,
+                        ngroups=dim,
+                        prefix="arfc_last",
                     ). \
                     reshape([-1, self._dim, 2*nom]). \
                     apply(tf.transpose, [0, 2, 1]). \
@@ -1245,14 +1282,12 @@ class DistAR(Distribution):
 
     @overrides
     def init_mode(self):
-        if self._wnorm:
-            self._custom_phase = CustomPhase.init
+        self._custom_phase = CustomPhase.init
             # self._base_dist.init_mode()
 
     @overrides
     def train_mode(self):
-        if self._wnorm:
-            self._custom_phase = CustomPhase.train
+        self._custom_phase = CustomPhase.train
             # self._base_dist.train_mode()
 
     @property
@@ -1263,7 +1298,7 @@ class DistAR(Distribution):
     def effective_dim(self):
         return self._dim
 
-    def infer(self, x_var, lin_con=None, gating_con=None):
+    def infer(self, x_var, lin_con=None, gating_con=None, op_con=None):
         in_dict = dict(
             y=x_var,
             custom_phase=self._custom_phase,
@@ -1274,13 +1309,21 @@ class DistAR(Distribution):
         if self._gating_context:
             assert gating_con is not None
             in_dict["gating_context"] = gating_con
+        if self._op_context:
+            assert op_con is not None
+            in_dict["op_context"] = op_con
         flat_iaf = self._iaf_template.construct(
             **in_dict
         ).tensor
         return flat_iaf
 
     def logli(self, x_var, dist_info):
-        tgt_flat = self.infer(x_var)
+        tgt_flat = self.infer(
+            x_var,
+            lin_con=dist_info.get("linear_context"),
+            gating_con=dist_info.get("gating_context"),
+            op_con=dist_info.get("op_context"),
+        )
         tgt_info = self._tgt_dist.activate_dist(tgt_flat)
         return self._tgt_dist.logli(x_var, tgt_info)
 
@@ -1289,23 +1332,58 @@ class DistAR(Distribution):
 
     def sample_logli(self, info):
         print("warning, dist_ar sample invoked")
-        go = tf.zeros([info["batch_size"], self.dim]) # place holder
+        if "batch_size" not in info:
+            bs = universal_int_shape((list(info.values())[0]))[0]
+        else:
+            bs = info["batch_size"]
+        go = tf.zeros([bs, self.dim]) # place holder
+        # HACK
+        # go = tf.zeros([131072, self.dim]) # place holder
         for i in range(self._dim):
-            tgt_flat = self.infer(go)
+            tgt_flat = self.infer(
+                go,
+                lin_con=info.get("linear_context"),
+                gating_con=info.get("gating_context"),
+                op_con=info.get("op_context"),
+            )
             tgt_info = self._tgt_dist.activate_dist(tgt_flat)
-            go, logli = self._tgt_dist.sample_logli(tgt_info)
-        return go, logli
+            proposed = self._tgt_dist.sample(tgt_info)
+            go = tf.concat(
+                1,
+                [go[:, :i], proposed[:, i:]]
+            )
+        return go, self.logli(go, info)
 
     @property
     def dist_info_keys(self):
-        return []
+        keys = []
+        if self._linear_context:
+            keys = keys + ["linear_context"]
+        if self._gating_context:
+            keys = keys + ["gating_context"]
+        if self._op_context:
+            keys = keys + ["op_context"]
+        return keys
 
     @property
     def dist_flat_dim(self):
-        return 0
+        return self._context_dim
 
     def activate_dist(self, flat):
-        return dict()
+        out = dict()
+        if self._linear_context:
+            lin_context = flat[:, :self._linear_context_dim]
+            flat = flat[:, self._linear_context_dim:]
+            out["linear_context"] = lin_context
+        if self._gating_context:
+            lin_context = flat[:, :self._gating_context_dim]
+            flat = flat[:, self._gating_context_dim:]
+            out["gating_context"] = lin_context
+        if self._op_context:
+            op_context = flat[:, :self._op_context_dim]
+            flat = flat[:, self._op_context_dim:]
+            out["op_context"] = op_context
+        return out
 
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
@@ -1326,6 +1404,8 @@ class ConvAR(Distribution):
             context_dim=None,
             masked=True,
             nin=False,
+            sanity=False,
+            sanity2=False,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1338,10 +1418,14 @@ class ConvAR(Distribution):
         self._context = context
         self._context_dim = context_dim
         inp = pt.template("y", books=dist_book).reshape([-1,] + list(shape))
+        if sanity:
+            inp *= 0.
         if context:
             context_inp = \
                 pt.template("context", books=dist_book).\
                     reshape([-1,] + list(shape[:-1]) + [context_dim])
+            if sanity2:
+                context_inp *= 0.
             inp = inp.join(
                 [context_inp],
             )
@@ -1427,10 +1511,12 @@ class ConvAR(Distribution):
 
     @overrides
     def init_mode(self):
+        self._tgt_dist.init_mode()
         self._custom_phase = CustomPhase.init
 
     @overrides
     def train_mode(self):
+        self._tgt_dist.train_mode()
         self._custom_phase = CustomPhase.train
 
     @property

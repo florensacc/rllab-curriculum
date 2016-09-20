@@ -6,6 +6,7 @@ class ALEHackyHash(Hash):
         """
         Hand-designed state encodings using RAM
         """
+        raise NotImplementedError # see v2 for changes to montezuma_revenge
         assert item_dim == 128 # must be RAM
         self.item_dim = item_dim
 
