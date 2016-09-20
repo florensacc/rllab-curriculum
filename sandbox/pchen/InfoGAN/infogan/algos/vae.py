@@ -222,6 +222,7 @@ class VAE(object):
         log_vars.append(("vlb", vlb))
         log_vars.append(("kl", kl))
         log_vars.append(("true_vlb", true_vlb))
+        log_vars.append(("bits/dim", true_vlb/np.log(2.)))
         final_losses = [-vlb]
 
         if self.cond_px_ent:
@@ -534,6 +535,10 @@ class VAE(object):
                             print("Ignoring %s"%e)
                         summary.MergeFromString(summary_str)
                         if counter % self.vali_eval_interval == 0:
+                            # hijack summay interval to do ar sampling
+                            if isinstance(self.model.output_dist, ConvAR):
+                                if counter != 0:
+                                    self.ar_vis(sess, feed)
                             ds = self.dataset.validation
                             all_test_log_vals = []
                             for ti in range(ds.images.shape[0] // self.eval_batch_size):
@@ -563,9 +568,6 @@ class VAE(object):
                                     simple_value=float(v),
                                 )
                         summary_writer.add_summary(summary, counter)
-                        # hijack summay interval to do ar sampling
-                        if isinstance(self.model.output_dist, ConvAR):
-                            self.ar_vis(sess, feed)
                     # need to ensure avg_test_log is always available
                     counter += 1
 
