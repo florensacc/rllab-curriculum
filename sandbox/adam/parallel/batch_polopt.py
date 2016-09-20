@@ -1,6 +1,5 @@
 
 import multiprocessing as mp
-import psutil
 import numpy as np
 
 from rllab.algos.base import RLAlgorithm
@@ -302,6 +301,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         raise NotImplementedError
 
     def _set_affinity(self, rank, verbose=False):
+        import psutil
         if self.cpu_assignments is not None:
             n_assignments = len(self.cpu_assignments)
             assigned_affinity = [self.cpu_assignments[rank % n_assignments]]
