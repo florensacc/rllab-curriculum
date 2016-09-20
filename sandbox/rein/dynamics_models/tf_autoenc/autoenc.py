@@ -9,33 +9,20 @@ class ConvAutoEncoder:
     """
 
     def __init__(self,
-                 input_shape=[None, 42, 42, 1],
-                 n_filters=[1, 10, 10, 10],
-                 filter_sizes=[3, 3, 3, 3],
+                 input_shape=(None, 42, 42, 1),
+                 n_filters=(10, 10, 10),
+                 filter_sizes=(3, 3, 3),
                  ):
 
         # --
         self._x = tf.placeholder(
             tf.float32, input_shape, name='x')
-
-        # --
-        if len(self._x.get_shape()) == 2:
-            x_dim = np.sqrt(self._x.get_shape().as_list()[1])
-            if x_dim != int(x_dim):
-                raise ValueError('Unsupported input dimensions')
-            x_dim = int(x_dim)
-            x_tensor = tf.reshape(
-                self._x, [-1, x_dim, x_dim, n_filters[0]])
-        elif len(self._x.get_shape()) == 4:
-            x_tensor = self._x
-        else:
-            raise ValueError('Unsupported input dimensions')
-        current_input = x_tensor
+        current_input = self._x
 
         # --
         encoder = []
         shapes = []
-        for layer_i, n_output in enumerate(n_filters[1:]):
+        for layer_i, n_output in enumerate(n_filters):
             n_input = current_input.get_shape().as_list()[3]
             shapes.append(current_input.get_shape().as_list())
             W = tf.Variable(
@@ -70,7 +57,7 @@ class ConvAutoEncoder:
 
         # --
         self._y = current_input
-        self._cost = tf.reduce_sum(tf.square(self._y - x_tensor))
+        self._cost = tf.reduce_sum(tf.square(self._y - self._x))
 
     @property
     def x(self):
@@ -103,7 +90,7 @@ def test_atari():
     sess = tf.Session()
     sess.run(tf.initialize_all_variables())
 
-    n_epochs = 10
+    n_epochs = 2000
     for epoch_i in range(n_epochs):
         train = atari_dataset['x']
         sess.run(optimizer, feed_dict={ae.x: train})
