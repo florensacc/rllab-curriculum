@@ -2,6 +2,7 @@ import os
 import tensorflow as tf
 import itertools
 
+from sandbox.rein.algos.pxlnn.trpo_plus import TRPOPlus
 from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rocky.tf.core.network import ConvNetwork
@@ -9,7 +10,6 @@ from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rein.dynamics_models.tf_autoenc.autoenc import ConvAutoEncoder
 
 from sandbox.rein.envs.tf_atari import AtariEnv
-from sandbox.rein.algos.pxlnn.trpo import TRPO
 
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
@@ -73,7 +73,7 @@ for factor, mdp, eta, seed in param_cart_product:
         name='baseline_network',
         hidden_nonlinearity=tf.nn.relu,
         output_nonlinearity=tf.identity,
-        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
+        input_shape=(mdp.spec.observation_space.shape[2], mdp.spec.observation_space.shape[1], num_seq_frames),
         output_dim=1,
         hidden_sizes=(32,),
         conv_filters=(16, 16),
@@ -86,14 +86,15 @@ for factor, mdp, eta, seed in param_cart_product:
     )
 
     # Dynamics model f: num_seq_frames x h x w -> h x w
-    dyn_model = ConvAutoEncoder(
-        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
+    dynamics_model = ConvAutoEncoder(
+        input_shape=(None, mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2], num_seq_frames),
         n_filters=[num_seq_frames, 10, 10],
         filter_sizes=[6, 6, 6],
     )
 
-    algo = TRPO(
-        # discount=0.995,
+    algo = TRPOPlus(
+        dynamics_model=dynamics_model,
+        discount=0.995,
         env=mdp,
         policy=policy,
         baseline=baseline,
