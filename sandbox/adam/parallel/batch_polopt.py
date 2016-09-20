@@ -1,6 +1,5 @@
 
 import multiprocessing as mp
-import psutil
 import numpy as np
 
 from rllab.algos.base import RLAlgorithm
@@ -85,6 +84,9 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.worker_batch_size = batch_size // n_parallel
         self.sampler = WorkerBatchSampler(self)
 
+    def __getstate__(self):
+        return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
+
     #
     # Serial methods.
     # (Either for calling before forking subprocesses, or subprocesses execute
@@ -93,7 +95,7 @@ class ParallelBatchPolopt(RLAlgorithm):
 
     def _init_par_objs_batchpolopt(self):
         """
-        Any _init_par_objs() method in a derived class must call this method,
+        Any init_par_objs() method in a derived class must call this method,
         and, following that, may append() the SimpleContainer objects as needed.
         """
         par_data = SimpleContainer(rank=None, avg_fac=1. / self.n_parallel)
@@ -302,6 +304,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         raise NotImplementedError
 
     def _set_affinity(self, rank, verbose=False):
+        import psutil
         if self.cpu_assignments is not None:
             n_assignments = len(self.cpu_assignments)
             assigned_affinity = [self.cpu_assignments[rank % n_assignments]]
