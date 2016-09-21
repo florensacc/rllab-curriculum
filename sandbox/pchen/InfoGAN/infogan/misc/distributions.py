@@ -1407,6 +1407,7 @@ class ConvAR(Distribution):
             sanity=False,
             sanity2=False,
             tieweight=False,
+            extra_nins=0,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1488,6 +1489,14 @@ class ConvAR(Distribution):
                                 )
                         else:
                             raise Exception("what")
+                    for ninidx in range(extra_nins):
+                        cur = cur + 0.1 * cur.conv2d_mod(
+                            1,
+                            nr_channels,
+                            prefix="nin_ex_%s"%ninidx,
+                        )
+
+
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,
