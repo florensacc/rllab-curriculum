@@ -99,6 +99,9 @@ for factor, mdp, eta, seed in param_cart_product:
         n_classes=64,
     )
 
+    # --
+    # @peter: insert model definition here
+
     algo = TRPOPlus(
         model=model,
         discount=0.995,

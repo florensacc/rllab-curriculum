@@ -173,8 +173,20 @@ class TRPOPlus(TRPO):
 
         return samples_data
 
-    def comp_int_rewards(self, paths):
-        pass
+    def comp_int_rewards(self, paths, sess=None):
+        """
+        Compute intrinsic rewards here, in this case this is the logp of the conditional pixelcnn dynamics model.
+        :param paths:
+        :return:
+        """
+        assert sess is not None
+
+        for path in paths:
+            path['S'] = np.nan
+            x = path['observations']
+            # TODO: make softmax autoencoder, get logprop here
+            logp = sess.run(self._model.y, feed_dict={self._model.x: x[0:10]})
+            path['S'] = logp
 
     def fill_replay_pool(self, paths):
         """
@@ -207,6 +219,9 @@ class TRPOPlus(TRPO):
         return obs / float(self._model.num_classes)
 
     def train_model(self, sess=None):
+        # --
+        # @peter: train model here, using self._pool.random_batch(self._model_pool_args['batch_size'])
+
         import matplotlib.pyplot as plt
 
         assert sess is not None
@@ -229,6 +244,15 @@ class TRPOPlus(TRPO):
             axs[1][example_i].get_yaxis().set_visible(False)
         tf.train.SummaryWriter('/Users/rein/programming/tensorboard/logs', sess.graph)
         plt.savefig('/Users/rein/programming/logs/plot.png')
+
+    def add_int_to_ext_rewards(self, paths):
+        """
+        Alter rewards in-place.
+        :param paths: sampled trajectories
+        :return: None
+        """
+        for path in paths:
+            path['rewards'] += self._eta * path['S']
 
     def train(self):
         with tf.Session() as sess:
@@ -262,13 +286,18 @@ class TRPOPlus(TRPO):
 
                     # --
                     # Compute intrinisc rewards.
-                    self.comp_int_rewards(paths)
+                    self.comp_int_rewards(paths, sess)
+
+                    # --
+                    # Add intrinsic reward to external: 'rewards' is what is actually used as 'true' reward.
+                    self.add_int_to_ext_rewards(paths)
 
                     # --
                     # Compute deltas, advantages, etc.
                     samples_data = self.process_samples(itr, paths)
 
                     # --
+                    # Optimize policy according to latest trajectory batch `samples_data`.
                     self.optimize_policy(itr, samples_data)
 
                     # --
