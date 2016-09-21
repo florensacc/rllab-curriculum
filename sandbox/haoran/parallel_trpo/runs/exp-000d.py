@@ -1,6 +1,5 @@
 """
-Test runs on continuous tasks
-Also compare with typical TRPO
+Run exp-000c with parallel sampler in original TRPO
 
 mode = "local": run on local machine
 mode = "ec2": run on EC2 ($$$ careful!)
@@ -32,9 +31,9 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "parallel-trpo/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "ec2"
+mode = "ec2_test"
 ec2_instance = "c4.8xlarge"
-subnet = "us-west-1a"
+subnet = "us-west-1c"
 
 n_parallel = 4
 snapshot_mode = "last"
@@ -59,13 +58,13 @@ class VG(VariantGenerator):
 
     @variant
     def env(self):
-        return ["swimmer","hopper","walker"]
+        return ["hopper"]
     @variant
     def use_parallel(self):
-        return [False,True]
+        return [False]
     @variant
     def cg_iters(self):
-        return [10,100]
+        return [10]
 
 variants = VG().variants()
 
@@ -197,6 +196,7 @@ for v in variants:
             plot=plot,
             sync_s3_pkl=sync_s3_pkl,
             terminate_machine=("test" not in mode),
+            n_parallel=n_parallel,
         )
 
 

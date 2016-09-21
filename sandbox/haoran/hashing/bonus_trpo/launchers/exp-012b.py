@@ -1,6 +1,7 @@
 """
 Use hacky hashing function for Montezuma's Revenge.
 I'm gonna kill myself if it doesn't work.
+Here we use ale_hacky_hash_v2, which fixes a bug in the previous version that room_number was incorrect.
 """
 from sandbox.rocky.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy

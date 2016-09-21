@@ -166,6 +166,8 @@ class AtariEnv(Env,Serializable):
         elif self.obs_type == "image":
             return Box(low=-1, high=1, shape=(self.img_width,self.img_height,self.n_last_screens))
             # see sandbox.haoran.tf.core.layers.BaseConvLayer for a reason why channel is at the last dimension
+        else:
+            raise NotImplementedError
 
     @property
     def action_space(self):
