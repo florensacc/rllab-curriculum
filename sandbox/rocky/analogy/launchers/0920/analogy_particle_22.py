@@ -19,7 +19,7 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 """
-Test different network archs again
+Entry point for Bradly
 """
 
 
@@ -30,11 +30,11 @@ class VG(VariantGenerator):
 
     @variant
     def n_particles(self):
-        return [6]  # 5]#3, 4, 5, 6]
+        return [2]  # 5]#3, 4, 5, 6]
 
     @variant
     def n_train_trajs(self):
-        return [5000]#, 20000]  # , 20000]#1000, 5000, 20000]
+        return [1000]#, 20000]  # , 20000]#1000, 5000, 20000]
 
     @variant
     def hidden_dim(self):
@@ -51,13 +51,13 @@ class VG(VariantGenerator):
     @variant
     def network_type(self):
         return [
-            rnn_utils.NetworkType.PSEUDO_LSTM,
-            rnn_utils.NetworkType.LSTM,
-            rnn_utils.NetworkType.LSTM_PEEPHOLE,
+            # rnn_utils.NetworkType.PSEUDO_LSTM,
+            # rnn_utils.NetworkType.LSTM,
+            # rnn_utils.NetworkType.LSTM_PEEPHOLE,
             rnn_utils.NetworkType.GRU,
             # # rnn_utils.NetworkType.TF_GRU,
             # # rnn_utils.NetworkType.TF_BASIC_LSTM,
-            rnn_utils.NetworkType.PSEUDO_LSTM_GATE_SQUASH,
+            # rnn_utils.NetworkType.PSEUDO_LSTM_GATE_SQUASH,
         ]
 
     @variant
@@ -70,11 +70,11 @@ class VG(VariantGenerator):
 
     @variant
     def layer_normalization(self):
-        return [True, False]#True, False]
+        return [False]#True, False]#True, False]
 
     @variant
     def weight_normalization(self):
-        return [True, False]
+        return [True]#, False]
 
     @variant
     def min_margin(self):
@@ -127,7 +127,7 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="analogy-particle-12",
+        exp_prefix="analogy-particle-22",
         mode="local",
         n_parallel=4,
         seed=v["seed"],

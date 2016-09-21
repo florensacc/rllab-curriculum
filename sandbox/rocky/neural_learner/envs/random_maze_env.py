@@ -2,13 +2,10 @@ from __future__ import print_function
 from __future__ import absolute_import
 from rllab.spaces import Discrete
 from rllab.envs.base import Env, Step
-from rllab.core.serializable import Serializable
 import numpy as np
 import contextlib
 import random
 from .maze.dfs_maze_generator import DFSMazeGenerator
-from matplotlib import pyplot as plt
-import matplotlib.cm as cm
 
 
 @contextlib.contextmanager

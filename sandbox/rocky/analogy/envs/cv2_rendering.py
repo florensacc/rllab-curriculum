@@ -15,8 +15,11 @@ import math
 import numpy as np
 import cv2
 import functools
+import numba
 
 RAD2DEG = 57.29577951308232
+
+ID_TRANS = np.eye(3)
 
 
 class Context(object):
@@ -33,13 +36,28 @@ class Context(object):
         for attr in geom.attrs:
             self.enable(attr)
 
+        transform_mat = ID_TRANS
+
+        r, g, b = (0, 0, 0)
+
+        for t in self.transforms:
+            if isinstance(t, Transform):
+                mat = t.to_matrix()
+                transform_mat = mat @ transform_mat
+            elif isinstance(t, Color):
+                r, g, b = t.vec4[:-1]
+            else:
+                raise NotImplementedError
+
+        color = (r * 255., g * 255., b * 255.)
+
         if isinstance(geom, FilledPolygon):
-            print(self.get_color())
-            cv2.fillConvexPoly(
-                img,
-                np.asarray(list(map(self.transform_point, geom.v)), dtype=np.int),
-                self.get_color()
-            )
+            rot_part = transform_mat[:2, :2].T
+            trans_part = transform_mat[:2, -1]
+            rot_v = geom.v.dot(rot_part)
+            points = rot_v + trans_part
+            points = points.astype(np.int)
+            cv2.fillConvexPoly(img, points, color)
         else:
             import ipdb;
             ipdb.set_trace()
@@ -47,17 +65,19 @@ class Context(object):
         for attr in geom.attrs:
             self.disable(attr)
 
-    def transform_point(self, pt):
+    def update_transform(self):
         transforms = [x.to_matrix() for x in self.transforms if isinstance(x, Transform)]
-        t_mat = functools.reduce(np.dot, transforms, np.eye(3))
-        return (t_mat @ np.append(pt, 1))[:-1]
+        self._transform_mat = functools.reduce(np.dot, transforms, np.eye(3))
+
+    def transform_point(self, pt):
+        return (self._transform_mat @ np.append(pt, 1))[:-1]
 
     def get_color(self):
         colors = [x.vec4 for x in self.transforms if isinstance(x, Color)]
         if len(colors) > 0:
             return tuple((np.asarray(colors[-1]) * 255).astype(np.float)[:-1])
         else:
-            return (0., 0., 0.)#np.asarray((0, 0, 0))
+            return (0., 0., 0.)  # np.asarray((0, 0, 0))
 
 
 class Viewer(object):
@@ -217,43 +237,55 @@ class Transform(Attr):
         self.set_translation(*translation)
         self.set_rotation(rotation)
         self.set_scale(*scale)
-
-    # def enable(self, context):
-    #     context.enable(self)
-    #     # glPushMatrix()
-    #     # glTranslatef(self.translation[0], self.translation[1], 0)  # translate to GL loc ppint
-    #     # glRotatef(RAD2DEG * self.rotation, 0, 0, 1.0)
-    #     # glScalef(self.scale[0], self.scale[1], 1)
-
-    # def disable(self):
-    #     glPopMatrix()
+        self._cached_matrix = None
 
     def set_translation(self, newx, newy):
         self.translation = (float(newx), float(newy))
+        self._cached_matrix = None
 
     def set_rotation(self, new):
         self.rotation = float(new)
+        self._cached_matrix = None
 
     def set_scale(self, newx, newy):
         self.scale = (float(newx), float(newy))
+        self._cached_matrix = None
 
     def to_matrix(self):
-        translate_mat = np.array([
-            [1, 0, self.translation[0]],
-            [0, 1, self.translation[1]],
-            [0, 0, 1]
-        ])
-        rotate_mat = np.array([
-            [np.cos(self.rotation), -np.sin(self.rotation), 0],
-            [np.sin(self.rotation), np.cos(self.rotation), 0],
-            [0, 0, 1],
-        ])
-        scale_mat = np.array([
-            [self.scale[0], 0, 0],
-            [0, self.scale[1], 0],
-            [0, 0, 1]
-        ])
-        return scale_mat @ rotate_mat @ translate_mat
+        if self._cached_matrix is None:
+            sx, sy = self.scale
+            tx, ty = self.translation
+            cosrot = np.cos(self.rotation)
+            sinrot = np.sin(self.rotation)
+
+            sxcos = sx * cosrot
+            sxsin = sx * sinrot
+            sycos = sy * cosrot
+            sysin = sy * sinrot
+
+            self._cached_matrix = np.array([
+                [sxcos, - sxsin, tx * sxcos - ty * sxsin],
+                [sysin, sycos, tx * sysin + ty * sycos],
+                [0, 0, 1]
+            ])
+            # translate_mat = np.array([
+            #     [1, 0, self.translation[0]],
+            #     [0, 1, self.translation[1]],
+            #     [0, 0, 1]
+            # ])
+            #
+            # rotate_mat = np.array([
+            #     [cosrot, -sinrot, 0],
+            #     [sinrot, cosrot, 0],
+            #     [0, 0, 1],
+            # ])
+            # scale_mat = np.array([
+            #     [self.scale[0], 0, 0],
+            #     [0, self.scale[1], 0],
+            #     [0, 0, 1]
+            # ])
+            # self._cached_matrix = scale_mat @ rotate_mat @ translate_mat
+        return self._cached_matrix
 
 
 class Color(Attr):
@@ -297,7 +329,7 @@ class Point(Geom):
 class FilledPolygon(Geom):
     def __init__(self, v):
         Geom.__init__(self)
-        self.v = v
+        self.v = np.asarray(v)
 
         # def render1(self):
         #     if len(self.v) == 4:

@@ -44,6 +44,7 @@ class VAE(object):
                  img_on=True,
                  kl_coeff=1.,
                  noise=True,
+                 vis_ar=True,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -56,6 +57,7 @@ class VAE(object):
         Parameters
         ----------
         """
+        self._vis_ar = vis_ar
         self.resume_from = resume_from
         self.checkpoint_dir = checkpoint_dir or logger.get_snapshot_dir()
         if isinstance(optimizer_cls, str):
@@ -621,6 +623,8 @@ class VAE(object):
 
     def ar_vis(self, sess, feed):
         import scipy
+        if not self._vis_ar:
+            return
         dist = self.model.output_dist
         x_var, context_var, go_sym, tgt_dist = dist.infer_sym(128)
 

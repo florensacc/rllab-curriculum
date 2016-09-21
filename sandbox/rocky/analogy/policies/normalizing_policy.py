@@ -7,7 +7,7 @@ import numpy as np
 
 class NormalizingPolicy(Policy, Serializable):
     def __init__(self, wrapped_policy, demo_paths=None, analogy_paths=None, obs_mean=None, obs_std=None,
-                 action_mean=None, action_std=None):
+                 action_mean=None, action_std=None, normalize_obs=False, normalize_actions=True):
         self.obs_dim = wrapped_policy.observation_space.flat_dim
         self.action_dim = wrapped_policy.action_space.flat_dim
 
@@ -17,15 +17,26 @@ class NormalizingPolicy(Policy, Serializable):
             obs = np.concatenate([p["observations"] for p in all_paths], axis=0)
             actions = np.concatenate([p["actions"] for p in all_paths], axis=0)
 
-            obs_mean = np.mean(obs, axis=0, keepdims=True)
-            obs_std = np.std(obs, axis=0, keepdims=True)
-            action_mean = np.mean(actions, axis=0, keepdims=True)
-            action_std = np.std(actions, axis=0, keepdims=True)
+            if normalize_obs:
+                obs_mean = np.mean(obs, axis=0, keepdims=True)
+                obs_std = np.std(obs, axis=0, keepdims=True) + 1e-5
+            else:
+                obs_mean = np.zeros_like(obs[0])
+                obs_std = np.ones_like(obs[0])
+
+            if normalize_actions:
+                action_mean = np.mean(actions, axis=0, keepdims=True)
+                action_std = np.std(actions, axis=0, keepdims=True) + 1e-5
+            else:
+                action_mean = np.zeros_like(actions[0])
+                action_std = np.ones_like(actions[0])
 
         self.obs_mean = obs_mean
         self.obs_std = obs_std
         self.action_mean = action_mean
         self.action_std = action_std
+
+        # import ipdb; ipdb.set_trace()
 
         demo_paths = None
         analogy_paths = None
@@ -39,7 +50,7 @@ class NormalizingPolicy(Policy, Serializable):
 
         Policy.__init__(self, self.wrapped_policy.env_spec)
 
-    def action_sym(self, analogy_obs_var, state_info_vars):
+    def action_sym(self, analogy_obs_var, state_info_vars, **kwargs):
         demo_obs_var = state_info_vars["demo_obs"]
         demo_action_var = state_info_vars["demo_action"]
         norm_obs_var = (analogy_obs_var - self.obs_mean_var) / self.obs_std_var
@@ -49,7 +60,7 @@ class NormalizingPolicy(Policy, Serializable):
             norm_obs_var, state_info_vars=dict(
                 demo_obs=norm_demo_obs_var,
                 demo_action=norm_demo_action_var
-            )
+            ), **kwargs
         )
         return norm_action_var * self.action_std_var + self.action_mean_var
 

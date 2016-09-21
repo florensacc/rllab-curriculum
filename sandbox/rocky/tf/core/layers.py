@@ -111,7 +111,7 @@ def conv_output_length(input_length, filter_size, stride, pad=0):
 
 
 class Layer(object):
-    def __init__(self, incoming, name=None, variable_reuse=None, **kwargs):
+    def __init__(self, incoming, name=None, variable_reuse=None, weight_normalization=False, **kwargs):
         if isinstance(incoming, tuple):
             self.input_shape = incoming
             self.input_layer = None
@@ -119,6 +119,7 @@ class Layer(object):
             self.input_shape = incoming.output_shape
             self.input_layer = incoming
         self.params = OrderedDict()
+        self.weight_normalization = weight_normalization
 
         if name is None:
             name = "%s_%d" % (type(self).__name__, G._n_layers)
@@ -151,13 +152,30 @@ class Layer(object):
     def get_output_for(self, input, **kwargs):
         raise NotImplementedError
 
-    def add_param(self, spec, shape, name, **tags):
+    def add_param_plain(self, spec, shape, name, **tags):
         with tf.variable_scope(self.name, reuse=self.variable_reuse):
             tags['trainable'] = tags.get('trainable', True)
             tags['regularizable'] = tags.get('regularizable', True)
             param = create_param(spec, shape, name, **tags)
             self.params[param] = set(tag for tag, value in list(tags.items()) if value)
             return param
+
+    def add_param(self, spec, shape, name, **kwargs):
+        param = self.add_param_plain(spec, shape, name, **kwargs)
+        if name is not None and name.startswith("W") and self.weight_normalization:
+            # Hacky: check if the parameter is a weight matrix. If so, apply weight normalization
+            if len(param.get_shape()) == 2:
+                v = param
+                g = self.add_param_plain(tf.ones_initializer, (shape[1],), name=name + "_wn/g")
+                param = v * (tf.reshape(g, (1, -1)) / tf.sqrt(tf.reduce_sum(tf.square(v), 0, keep_dims=True)))
+            elif len(param.get_shape()) == 4:
+                v = param
+                g = self.add_param_plain(tf.ones_initializer, (shape[3],), name=name + "_wn/g")
+                param = v * (tf.reshape(g, (1, 1, 1, -1)) / tf.sqrt(tf.reduce_sum(tf.square(v), [0, 1, 2],
+                                                                                  keep_dims=True)))
+            else:
+                raise NotImplementedError
+        return param
 
     def get_params(self, **tags):
         result = list(self.params.keys())
@@ -387,14 +405,14 @@ class DenseLayer(Layer):
 
 
 class BaseConvLayer(Layer):
-    def __init__(self, incoming, num_filters, filter_size, name, stride=1, pad="VALID",
+    def __init__(self, incoming, num_filters, filter_size, stride=1, pad="VALID",
                  untie_biases=False,
                  W=XavierUniformInitializer(), b=tf.zeros_initializer,
                  nonlinearity=tf.nn.relu, n=None, **kwargs):
         """
         Input is assumed to be of shape batch*height*width*channels
         """
-        super(BaseConvLayer, self).__init__(incoming, name=name, **kwargs)
+        super(BaseConvLayer, self).__init__(incoming, **kwargs)
         if nonlinearity is None:
             self.nonlinearity = tf.identity
         else:
@@ -566,6 +584,74 @@ class Pool2DLayer(Layer):
             padding=self.pad,
         )
         return pooled
+
+
+def spatial_expected_softmax(x, temp=1):
+    assert len(x.get_shape()) == 4
+    vals = []
+    for dim in [0, 1]:
+        dim_val = x.get_shape()[dim + 1].value
+        lin = tf.linspace(-1.0, 1.0, dim_val)
+        lin = tf.expand_dims(lin, 1 - dim)
+        lin = tf.expand_dims(lin, 0)
+        lin = tf.expand_dims(lin, 3)
+        m = tf.reduce_max(x, [1, 2], keep_dims=True)
+        e = tf.exp((x - m) / temp) + 1e-5
+        val = tf.reduce_sum(e * lin, [1, 2]) / (tf.reduce_sum(e, [1, 2]))
+        vals.append(tf.expand_dims(val, 2))
+
+    return tf.reshape(tf.concat(2, vals), [-1, x.get_shape()[-1].value * 2])
+
+
+class SpatialExpectedSoftmaxLayer(Layer):
+    """
+    Computes the softmax across a spatial region, separately for each channel, followed by an expectation operation.
+    """
+
+    def __init__(self, incoming, **kwargs):
+        super().__init__(incoming, **kwargs)
+        # self.temp = self.add_param(tf.ones_initializer, shape=(), name="temperature")
+
+    def get_output_shape_for(self, input_shape):
+        return (input_shape[0], input_shape[-1] * 2)
+
+    def get_output_for(self, input, **kwargs):
+        return spatial_expected_softmax(input)#, self.temp)
+        # max_ = tf.reduce_max(input, reduction_indices=[1, 2], keep_dims=True)
+        # exp = tf.exp(input - max_) + 1e-5
+
+        # vals = []
+        #
+        # for dim in [0, 1]:
+        #     dim_val = input.get_shape()[dim + 1].value
+        #     lin = tf.linspace(-1.0, 1.0, dim_val)
+        #     lin = tf.expand_dims(lin, 1 - dim)
+        #     lin = tf.expand_dims(lin, 0)
+        #     lin = tf.expand_dims(lin, 3)
+        #     m = tf.reduce_max(input, [1, 2], keep_dims=True)
+        #     e = tf.exp(input - m) + 1e-5
+        #     val = tf.reduce_sum(e * lin, [1, 2]) / (tf.reduce_sum(e, [1, 2]))
+        #     vals.append(tf.expand_dims(val, 2))
+        #
+        # return tf.reshape(tf.concat(2, vals), [-1, input.get_shape()[-1].value * 2])
+
+        # import ipdb; ipdb.set_trace()
+
+        # input.get_shape()
+        # exp / tf.reduce_sum(exp, reduction_indices=[1, 2], keep_dims=True)
+        # import ipdb;
+        # ipdb.set_trace()
+        # spatial softmax?
+
+        # for dim in range(2):
+        #     val = obs.get_shape()[dim + 1].value
+        #     lin = tf.linspace(-1.0, 1.0, val)
+        #     lin = tf.expand_dims(lin, 1 - dim)
+        #     lin = tf.expand_dims(lin, 0)
+        #     lin = tf.expand_dims(lin, 3)
+        #     m = tf.reduce_max(e, [1, 2], keep_dims=True)
+        #     e = tf.exp(e - m) + 1e-3
+        #     val = tf.reduce_sum(e * lin, [1, 2]) / (tf.reduce_sum(e, [1, 2]))
 
 
 class DropoutLayer(Layer):
@@ -846,7 +932,7 @@ def apply_ln(layer):
 
         bias = layer.norm_params[bias_name]
         scale = layer.norm_params[scale_name]
-        mean, var = tf.nn.moments(x, axes=1, keep_dims=True)
+        mean, var = tf.nn.moments(x, axes=[1], keep_dims=True)
         x_normed = (x - mean) / tf.sqrt(var + EPS)
         return x_normed * scale + bias
 
@@ -866,7 +952,7 @@ class GRULayer(Layer):
     def __init__(self, incoming, num_units, hidden_nonlinearity,
                  gate_nonlinearity=tf.nn.sigmoid, W_x_init=XavierUniformInitializer(), W_h_init=OrthogonalInitializer(),
                  b_init=tf.zeros_initializer, hidden_init=tf.zeros_initializer, hidden_init_trainable=False,
-                 layer_normalization=False, weight_normalization=False, **kwargs):
+                 layer_normalization=False, **kwargs):
 
         if hidden_nonlinearity is None:
             hidden_nonlinearity = tf.identity
@@ -881,7 +967,6 @@ class GRULayer(Layer):
         input_dim = np.prod(input_shape)
 
         self.layer_normalization = layer_normalization
-        self.weight_normalization = weight_normalization
 
         # Weights for the initial hidden state
         self.h0 = self.add_param(hidden_init, (num_units,), name="h0", trainable=hidden_init_trainable,
@@ -914,15 +999,6 @@ class GRULayer(Layer):
         h_dummy = tf.placeholder(dtype=tf.float32, shape=(None, num_units), name="h_dummy")
         x_dummy = tf.placeholder(dtype=tf.float32, shape=(None, input_dim), name="x_dummy")
         self.step(h_dummy, x_dummy)
-
-    def add_param(self, spec, shape, name, **kwargs):
-        param = Layer.add_param(self, spec, shape, name, **kwargs)
-        if name.startswith("W_") and self.weight_normalization:
-            # Hacky: check if the parameter is a weight matrix. If so, apply weight normalization
-            v = param
-            g = Layer.add_param(self, tf.ones_initializer, (shape[1],), name=name + "_wn/g")
-            param = v * (tf.reshape(g, (1, -1)) / tf.sqrt(tf.reduce_sum(tf.square(v), 0, keep_dims=True)))
-        return param
 
     def step(self, hprev, x):
         if self.layer_normalization:
@@ -1108,7 +1184,7 @@ class PseudoLSTMLayer(Layer):
                  gate_nonlinearity=tf.nn.sigmoid, W_x_init=XavierUniformInitializer(), W_h_init=OrthogonalInitializer(),
                  forget_bias=1.0, b_init=tf.zeros_initializer, hidden_init=tf.zeros_initializer,
                  hidden_init_trainable=False, cell_init=tf.zeros_initializer, cell_init_trainable=False,
-                 gate_squash_inputs=False, layer_normalization=False, weight_normalization=False, **kwargs):
+                 gate_squash_inputs=False, layer_normalization=False, **kwargs):
 
         if hidden_nonlinearity is None:
             hidden_nonlinearity = tf.identity
@@ -1119,7 +1195,6 @@ class PseudoLSTMLayer(Layer):
         super(PseudoLSTMLayer, self).__init__(incoming, **kwargs)
 
         self.layer_normalization = layer_normalization
-        self.weight_normalization = weight_normalization
 
         input_shape = self.input_shape[2:]
 
@@ -1162,15 +1237,6 @@ class PseudoLSTMLayer(Layer):
         self.W_h_if = tf.concat(1, [self.W_hi, self.W_hf])
 
         self.norm_params = dict()
-
-    def add_param(self, spec, shape, name, **kwargs):
-        param = Layer.add_param(self, spec, shape, name, **kwargs)
-        if name.startswith("W_") and self.weight_normalization:
-            # Hacky: check if the parameter is a weight matrix. If so, apply weight normalization
-            v = param
-            g = Layer.add_param(self, tf.ones_initializer, (shape[1],), name=name + "_wn/g")
-            param = v * (tf.reshape(g, (1, -1)) / tf.sqrt(tf.reduce_sum(tf.square(v), 0, keep_dims=True)))
-        return param
 
     def step(self, hcprev, x):
         hprev = hcprev[:, :self.num_units]
@@ -1290,7 +1356,7 @@ class LSTMLayer(Layer):
                  forget_bias=1.0, use_peepholes=False, w_init=tf.random_normal_initializer(stddev=0.1),
                  b_init=tf.zeros_initializer, hidden_init=tf.zeros_initializer, hidden_init_trainable=False,
                  cell_init=tf.zeros_initializer, cell_init_trainable=False, layer_normalization=False,
-                 weight_normalization=False, **kwargs):
+                 **kwargs):
 
         if hidden_nonlinearity is None:
             hidden_nonlinearity = tf.identity
@@ -1301,7 +1367,6 @@ class LSTMLayer(Layer):
         super(LSTMLayer, self).__init__(incoming, **kwargs)
 
         self.layer_normalization = layer_normalization
-        self.weight_normalization = weight_normalization
 
         input_shape = self.input_shape[2:]
 
@@ -1352,15 +1417,6 @@ class LSTMLayer(Layer):
 
         self.norm_params = dict()
 
-    def add_param(self, spec, shape, name, **kwargs):
-        param = Layer.add_param(self, spec, shape, name, **kwargs)
-        if name.startswith("W_") and self.weight_normalization:
-            # Hacky: check if the parameter is a weight matrix. If so, apply weight normalization
-            v = param
-            g = Layer.add_param(self, tf.ones_initializer, (shape[1],), name=name + "_wn/g")
-            param = v * (tf.reshape(g, (1, -1)) / tf.sqrt(tf.reduce_sum(tf.square(v), 0, keep_dims=True)))
-        return param
-
     def step(self, hcprev, x):
         """
             Incoming gate:     i(t) = f_i(x(t) @ W_xi + h(t-1) @ W_hi + w_ci * c(t-1) + b_i)
@@ -1386,7 +1442,7 @@ class LSTMLayer(Layer):
         if self.use_peepholes:
             i = self.gate_nonlinearity(x_i + h_i + self.w_ci * cprev + self.b_i)
             f = self.gate_nonlinearity(x_f + h_f + self.w_cf * cprev + self.b_f + self.forget_bias)
-            c = f * cprev + i * self.nonlinearity(x_c + h_c + self.b_c)
+
             o = self.gate_nonlinearity(x_o + h_o + self.w_co * cprev + self.b_o)
         else:
             i = self.gate_nonlinearity(x_i + h_i + self.b_i)
