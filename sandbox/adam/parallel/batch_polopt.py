@@ -167,27 +167,25 @@ class ParallelBatchPolopt(RLAlgorithm):
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 self.optimize_policy(itr, samples_data)  # (parallel)
                 if rank == 0:
-                    logger.log("saving snapshot...")
-                    params = self.get_itr_snapshot(itr, samples_data)
                     logger.log("fitting baseline...")
                 self.baseline.fit(paths)  # (parallel)
                 if rank == 0:
                     logger.log("fitted")
-                self.current_itr = itr + 1
-                if rank == 0:
+                    logger.log("saving snapshot...")
+                    params = self.get_itr_snapshot(itr, samples_data)
                     params["algo"] = self
-                    # NOTE: Only paths from rank==0 worker will be saved.
                     if self.store_paths:
+                        # NOTE: Only paths from rank==0 worker will be saved.
                         params["paths"] = samples_data["paths"]
                     logger.save_itr_params(itr, params)
                     logger.log("saved")
-                    if rank == 0:
-                        logger.dump_tabular(with_prefix=False)
-                    if self.plot and rank == 0:
+                    logger.dump_tabular(with_prefix=False)
+                    if self.plot:
                         self.update_plot()
                         if self.pause_for_plot:
                             input("Plotting evaluation run: Press Enter to "
                                       "continue...")
+                self.current_itr = itr + 1
 
     #
     # Parallelized methods.
@@ -298,7 +296,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                 shareds.n_steps_collected.value += n_steps_collected
         mgr_objs.barriers_avgfac[1].wait()
 
-        avg_fac = n_steps_collected / shareds.n_steps_collected.value
+        avg_fac = (n_steps_collected * 1.0) / shareds.n_steps_collected.value
         par_data.avg_fac = avg_fac
         self.optimizer.set_avg_fac(avg_fac)
 

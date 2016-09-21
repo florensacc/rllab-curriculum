@@ -43,9 +43,7 @@ class ParallelLinearFeatureBaseline(Baseline):
             feat_mat=np.reshape(
                 np.frombuffer(mp.RawArray('d', self._vec_dim ** 2)),
                 (self._vec_dim, self._vec_dim)),
-            target_vec=np.reshape(
-                np.frombuffer(mp.RawArray('d', self._vec_dim)),
-                (self._vec_dim, 1)),
+            target_vec=np.frombuffer(mp.RawArray('d', self._vec_dim)),
         )
 
         mgr_objs = SimpleContainer(
@@ -65,7 +63,7 @@ class ParallelLinearFeatureBaseline(Baseline):
         small set of values for fitting.
         """
         feat_mat = np.zeros([self._vec_dim, self._vec_dim])
-        target_vec = np.zeros([1, self._vec_dim])
+        target_vec = np.zeros([self._vec_dim, ])
         path_vec = np.zeros([1, self._vec_dim])
         max_len = max([len(path["rewards"]) for path in paths])
         times = np.arange(max_len).reshape(-1, 1) / 100.0
@@ -73,11 +71,11 @@ class ParallelLinearFeatureBaseline(Baseline):
         times_3 = times ** 3
         for path in paths:
             obs = np.clip(path["observations"], -10, 10)
-            for o, al, al_2, al_3, r in zip(obs, times, times_2, times_3, path["rewards"]):
+            for o, al, al_2, al_3, ret in zip(obs, times, times_2, times_3, path["returns"]):
                 path_vec[:] = np.concatenate([o, o ** 2, al, al_2, al_3, [1.]])
                 feat_mat += path_vec.T.dot(path_vec)
-                target_vec += path_vec * r
-        return feat_mat, target_vec.T
+                target_vec += path_vec.squeeze() * ret
+        return feat_mat, target_vec
 
     def _features(self, path):
         o = np.clip(path["observations"], -10, 10)

@@ -303,7 +303,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
         par_data = SimpleContainer(
             rank=None,  # populate once in subprocess
             avg_fac=avg_fac,
-            vb=vb
+            vb=vb  # select tuple once in subprocess
         )
         shareds = SimpleContainer(
             flat_g=np.frombuffer(mp.RawArray('d', size_grad)),
@@ -377,7 +377,8 @@ class ParallelConjugateGradientOptimizer(Serializable):
 
         mgr_objs.barriers_grad[0].wait()
 
-        # Each worker sums over an equal share of the grad elements across workers.
+        # Each worker sums over an equal share of the grad elements across
+        # workers (row major storage--sum along rows).
         shareds.flat_g[par_data.vb[0]:par_data.vb[1]] = \
             np.sum(shareds.grads_2d[par_data.vb[0]:par_data.vb[1], :], axis=1)
 
