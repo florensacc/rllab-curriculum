@@ -354,15 +354,7 @@ class BatchPolopt(RLAlgorithm):
                 # ---------------
                 # Fill replay pool with samples of current batch. Exclude the
                 # last one.
-                logger.log("Fitting dynamics model using replay pool ...")
-                for path in paths:
-                    path_len = len(path['rewards'])
-                    for i in range(path_len):
-                        obs = (path['observations'][i] * self.bnn.num_classes).astype(int)
-                        act = path['actions'][i]
-                        rew_orig = path['rewards_orig'][i]
-                        term = (i == path_len - 1)
-                        self.pool.add_sample(obs, act, rew_orig, term)
+
 
                 # Now we train the dynamics model using the replay self.pool; only
                 # if self.pool is large enough.

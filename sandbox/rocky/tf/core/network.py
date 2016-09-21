@@ -11,7 +11,8 @@ class MLP(LayersPowered, Serializable):
     def __init__(self, name, output_dim, hidden_sizes, hidden_nonlinearity,
                  output_nonlinearity, hidden_W_init=L.XavierUniformInitializer(), hidden_b_init=tf.zeros_initializer,
                  output_W_init=L.XavierUniformInitializer(), output_b_init=tf.zeros_initializer,
-                 input_var=None, input_layer=None, input_shape=None):
+                 input_var=None, input_layer=None, input_shape=None, batch_normalization=False, weight_normalization=False,
+                 ):
 
         Serializable.quick_init(self, locals())
 
@@ -22,6 +23,8 @@ class MLP(LayersPowered, Serializable):
                 l_in = input_layer
             self._layers = [l_in]
             l_hid = l_in
+            if batch_normalization:
+                l_hid = L.batch_norm(l_hid)
             for idx, hidden_size in enumerate(hidden_sizes):
                 l_hid = L.DenseLayer(
                     l_hid,
@@ -30,7 +33,10 @@ class MLP(LayersPowered, Serializable):
                     name="hidden_%d" % idx,
                     W=hidden_W_init,
                     b=hidden_b_init,
+                    weight_normalization=weight_normalization
                 )
+                if batch_normalization:
+                    l_hid = L.batch_norm(l_hid)
                 self._layers.append(l_hid)
             l_out = L.DenseLayer(
                 l_hid,
@@ -39,7 +45,10 @@ class MLP(LayersPowered, Serializable):
                 name="output",
                 W=output_W_init,
                 b=output_b_init,
+                weight_normalization=weight_normalization
             )
+            if batch_normalization:
+                l_out = L.batch_norm(l_out)
             self._layers.append(l_out)
             self._l_in = l_in
             self._l_out = l_out
@@ -75,7 +84,7 @@ class ConvNetwork(object):
                  hidden_sizes, hidden_nonlinearity, output_nonlinearity,
                  hidden_W_init=L.XavierUniformInitializer(), hidden_b_init=tf.zeros_initializer,
                  output_W_init=L.XavierUniformInitializer(), output_b_init=tf.zeros_initializer,
-                 input_var=None, input_layer=None):
+                 input_var=None, input_layer=None, batch_normalization=False, weight_normalization=False):
         """
         A network composed of several convolution layers followed by some fc layers.
         input_shape: (width,height,channel)
@@ -101,6 +110,9 @@ class ConvNetwork(object):
             else:
                 l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var, name="input")
                 l_hid = l_in
+
+            if batch_normalization:
+                l_hid = L.batch_norm(l_hid)
             for idx, conv_filter, filter_size, stride, pad in zip(
                     range(len(conv_filters)),
                     conv_filters,
@@ -116,28 +128,44 @@ class ConvNetwork(object):
                     pad=pad,
                     nonlinearity=hidden_nonlinearity,
                     name="conv_hidden_%d" % idx,
+                    weight_normalization=weight_normalization,
                 )
-            l_hid = L.flatten(l_hid, name="conv_flatten")
-            for idx, hidden_size in enumerate(hidden_sizes):
-                l_hid = L.DenseLayer(
+                if batch_normalization:
+                    l_hid = L.batch_norm(l_hid)
+
+            if output_nonlinearity == L.spatial_expected_softmax:
+                assert len(hidden_sizes) == 0
+                assert output_dim == conv_filters[-1] * 2
+                l_hid.nonlinearity = tf.identity
+                l_out = L.SpatialExpectedSoftmaxLayer(l_hid)
+            else:
+                l_hid = L.flatten(l_hid, name="conv_flatten")
+                for idx, hidden_size in enumerate(hidden_sizes):
+                    l_hid = L.DenseLayer(
+                        l_hid,
+                        num_units=hidden_size,
+                        nonlinearity=hidden_nonlinearity,
+                        name="hidden_%d" % idx,
+                        W=hidden_W_init,
+                        b=hidden_b_init,
+                        weight_normalization=weight_normalization,
+                    )
+                    if batch_normalization:
+                        l_hid = L.batch_norm(l_hid)
+                l_out = L.DenseLayer(
                     l_hid,
-                    num_units=hidden_size,
-                    nonlinearity=hidden_nonlinearity,
-                    name="hidden_%d" % idx,
-                    W=hidden_W_init,
-                    b=hidden_b_init,
+                    num_units=output_dim,
+                    nonlinearity=output_nonlinearity,
+                    name="output",
+                    W=output_W_init,
+                    b=output_b_init,
+                    weight_normalization=weight_normalization,
                 )
-            l_out = L.DenseLayer(
-                l_hid,
-                num_units=output_dim,
-                nonlinearity=output_nonlinearity,
-                name="output",
-                W=output_W_init,
-                b=output_b_init,
-            )
+                if batch_normalization:
+                    l_out = L.batch_norm(l_out)
             self._l_in = l_in
             self._l_out = l_out
-            self._input_var = l_in.input_var
+            # self._input_var = l_in.input_var
 
     @property
     def input_layer(self):

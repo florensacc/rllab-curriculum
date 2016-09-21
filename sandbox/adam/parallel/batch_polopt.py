@@ -85,6 +85,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.sampler = WorkerBatchSampler(self)
 
     def __getstate__(self):
+        #  (multiprocessing does not allow pickling of manager objects)
         return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
 
     #
@@ -293,7 +294,8 @@ class ParallelBatchPolopt(RLAlgorithm):
             mgr_objs.barriers_avgfac[0].wait()
         else:
             mgr_objs.barriers_avgfac[0].wait()
-            shareds.n_steps_collected.value += n_steps_collected
+            with mgr_objs.lock:
+                shareds.n_steps_collected.value += n_steps_collected
         mgr_objs.barriers_avgfac[1].wait()
 
         avg_fac = n_steps_collected / shareds.n_steps_collected.value

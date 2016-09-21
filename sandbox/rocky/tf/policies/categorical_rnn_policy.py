@@ -14,7 +14,6 @@ from rllab.misc import special
 from rllab.misc.overrides import overrides
 
 
-
 class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
     def __init__(
             self,
@@ -117,7 +116,7 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             LayersPowered.__init__(self, out_layers)
 
     @overrides
-    def dist_info_sym(self, obs_var, state_info_vars):
+    def dist_info_sym(self, obs_var, state_info_vars, **kwargs):
         n_batches = tf.shape(obs_var)[0]
         n_steps = tf.shape(obs_var)[1]
         obs_var = tf.reshape(obs_var, tf.pack([n_batches, n_steps, -1]))
@@ -131,7 +130,8 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             return dict(
                 prob=L.get_output(
                     self.prob_network.output_layer,
-                    {self.l_input: all_input_var}
+                    {self.l_input: all_input_var},
+                    **kwargs
                 )
             )
         else:
@@ -139,7 +139,8 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             return dict(
                 prob=L.get_output(
                     self.prob_network.output_layer,
-                    {self.l_input: all_input_var, self.feature_network.input_layer: flat_input_var}
+                    {self.l_input: all_input_var, self.feature_network.input_layer: flat_input_var},
+                    **kwargs
                 )
             )
 

@@ -1,5 +1,5 @@
-from sandbox.rein.algos.npo_vime import NPO
-from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from sandbox.rein.algos.pxlnn.npo import NPO
+from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 
 
 class TRPO(NPO):
