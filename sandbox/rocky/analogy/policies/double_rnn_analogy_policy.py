@@ -11,10 +11,10 @@ from sandbox.rocky.tf.policies import rnn_utils
 from sandbox.rocky.tf.spaces.box import Box
 
 
-class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
+class DoubleRNNAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
     def __init__(self, env_spec, name, rnn_hidden_size=32, rnn_hidden_nonlinearity=tf.nn.tanh,
-                 mlp_hidden_sizes=(32, 32), state_include_action=False,
-                 network_type=rnn_utils.NetworkType.GRU, mlp_hidden_nonlinearity=tf.nn.tanh,
+                 state_include_action=False,
+                 network_type=rnn_utils.NetworkType.GRU,  # mlp_hidden_nonlinearity=tf.nn.tanh,
                  weight_normalization=False, layer_normalization=False, batch_normalization=False,
                  output_nonlinearity=None, network_args=None):
         Serializable.quick_init(self, locals())
@@ -50,7 +50,7 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
 
             if use_embedding:
                 assert state_include_action
-                embedding_dim = 40#100
+                embedding_dim = 40  # 100
 
                 embedding_network = ConvNetwork(
                     name="embedding_network",
@@ -58,10 +58,10 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                     input_layer=l_flat_obs_input,
                     output_dim=embedding_dim,
                     hidden_sizes=(),
-                    conv_filters=(64, 64, embedding_dim // 2),
-                    conv_filter_sizes=(5, 5, 5),
-                    conv_strides=(1, 1, 1),
-                    conv_pads=('SAME', 'SAME', 'SAME'),
+                    conv_filters=(embedding_dim, embedding_dim // 2),
+                    conv_filter_sizes=(5, 3),
+                    conv_strides=(1, 1),
+                    conv_pads=('SAME', 'SAME'),
                     hidden_nonlinearity=tf.nn.relu,
                     output_nonlinearity=L.spatial_expected_softmax,
                     weight_normalization=weight_normalization,
@@ -114,25 +114,50 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
 
             obs_var = env_spec.observation_space.new_tensor_variable("obs", extra_dims=1)
 
-            l_summary_in = L.InputLayer(
+            l_flat_summary_in = L.InputLayer(
                 shape=(None, rnn_hidden_size),
-                name="summary_in",
+                name="flat_summary_in",
                 input_var=summary_var
             )
-
-            mlp_input_dim = embedding_dim + rnn_hidden_size
-            action_network = MLP(
-                name="action_network",
-                input_shape=(mlp_input_dim,),
-                input_layer=L.concat([l_flat_embedding, l_summary_in], axis=1),
-                hidden_sizes=mlp_hidden_sizes,
-                hidden_nonlinearity=mlp_hidden_nonlinearity,
-                output_dim=action_dim,
-                output_nonlinearity=output_nonlinearity,
-                weight_normalization=weight_normalization,
-                # layer_normalization=layer_normalization,
-                batch_normalization=batch_normalization,
+            l_summary_in = L.OpLayer(
+                l_flat_summary_in,
+                extras=[l_embedding],
+                name="summary_in",
+                op=lambda flat_summary, embedding: tf.tile(
+                    tf.expand_dims(flat_summary, 1),
+                    tf.pack([1, tf.shape(embedding)[1], 1])
+                ),
+                shape_op=lambda flat_summary_shape, embedding_shape: (flat_summary_shape[0], embedding_shape[1],
+                                                                      flat_summary_shape[1])
             )
+
+            # mlp_input_dim = embedding_dim + rnn_hidden_size
+            action_network = rnn_utils.create_recurrent_network(
+                network_type,
+                input_shape=(embedding_dim + rnn_hidden_size,),
+                input_layer=L.concat([l_embedding, l_summary_in], axis=2),
+                output_dim=action_dim,
+                hidden_dim=rnn_hidden_size,
+                hidden_nonlinearity=rnn_hidden_nonlinearity,
+                output_nonlinearity=output_nonlinearity,
+                name="action_network",
+                weight_normalization=weight_normalization,
+                layer_normalization=layer_normalization,
+                **network_args
+            )
+
+            # action_network = MLP(
+            #     name="action_network",
+            #     input_shape=(mlp_input_dim,),
+            #     input_layer=L.concat([l_flat_embedding, l_summary_in], axis=1),
+            #     hidden_sizes=mlp_hidden_sizes,
+            #     hidden_nonlinearity=mlp_hidden_nonlinearity,
+            #     output_dim=action_dim,
+            #     output_nonlinearity=output_nonlinearity,
+            #     weight_normalization=weight_normalization,
+            #     # layer_normalization=layer_normalization,
+            #     batch_normalization=batch_normalization,
+            # )
 
             l_summary = L.SliceLayer(summary_network.recurrent_layer, indices=-1, axis=1)
 
@@ -149,6 +174,9 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             self.summary_var = summary_var
             self.obs_input_shape = obs_input_shape
 
+            self.prev_actions = None
+            self.prev_state = None
+
             if state_include_action:
                 summary_inputs = [l_obs_input.input_var, l_action_input.input_var]
             else:
@@ -159,11 +187,20 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                 tf.assign(summary_var, L.get_output(l_summary, phase='test')),
             )
 
+            flat_embedding_var = L.get_output(l_flat_embedding, {l_obs_input: tf.expand_dims(obs_var, 0)})
+
+            # l_flat_embedding
+
             self.f_action = tensor_utils.compile_function(
-                [obs_var],
-                L.get_output(action_network.output_layer, {
-                    l_flat_obs_input: tf.reshape(obs_var, (-1,) + obs_input_shape),
-                }, phase='test'),
+                [obs_var, action_network.step_prev_state_layer.input_var],
+                L.get_output(
+                    [
+                        action_network.step_output_layer,
+                        action_network.step_state_layer,
+                    ],
+                    {action_network.step_input_layer: tf.concat(1, [flat_embedding_var, self.summary_var])},
+                    phase='test'
+                ),
             )
 
             self.gru_size = rnn_hidden_size
@@ -180,20 +217,19 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             summary_inputs = {self.l_obs_input: demo_obs_var}
         summary_var = L.get_output(self.l_summary, summary_inputs, **kwargs)
 
+        # import ipdb; ipdb.set_trace()
+
         batch_size = tf.shape(obs_var)[0]
         n_steps = tf.shape(obs_var)[1]
-        flat_obs_var = tf.reshape(obs_var, (-1,) + self.obs_input_shape)
-        flat_summary_var = tf.reshape(
-            tf.tile(
-                tf.expand_dims(summary_var, 1),
-                tf.pack([1, n_steps, 1]),
-            ),
-            (-1, self.gru_size),
+        # flat_obs_var = tf.reshape(obs_var, (-1,) + self.obs_input_shape)
+        summary_var = tf.tile(
+            tf.expand_dims(summary_var, 1),
+            tf.pack([1, n_steps, 1]),
         )
         action_var = L.get_output(
             self.action_network.output_layer, {
-                self.l_flat_obs_input: flat_obs_var,
-                self.l_summary_in: flat_summary_var
+                self.l_obs_input: obs_var,
+                self.l_summary_in: summary_var
             }, **kwargs
         )
 
@@ -208,7 +244,12 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             summary_inputs = [[demo_obs]]
         self.f_update_summary(*summary_inputs)
 
+    def reset(self, dones=None):
+        # self.prev_actions = None
+        self.prev_state = self.action_network.state_init_param.eval()
+
     def get_action(self, observation):
         flat_obs = self.observation_space.flatten(observation)
-        action = self.f_action([flat_obs])
-        return action[0], dict()
+        actions, new_states = self.f_action([flat_obs], [self.prev_state])
+        self.prev_state = new_states[0]
+        return actions[0], dict()

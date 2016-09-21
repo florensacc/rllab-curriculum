@@ -1,4 +1,5 @@
 """
+Re-run exp-000 after fixing bugs with parallel averaging code
 Test runs on continuous tasks
 Also compare with typical TRPO
 
@@ -34,7 +35,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 exp_prefix = "parallel-trpo/" + os.path.basename(__file__).split('.')[0] # exp_xxx
 mode = "ec2"
 ec2_instance = "c4.8xlarge"
-subnet = "us-west-1a"
+subnet = "us-west-1c"
 
 n_parallel = 4
 snapshot_mode = "last"
@@ -62,7 +63,7 @@ class VG(VariantGenerator):
         return ["swimmer","hopper","walker"]
     @variant
     def use_parallel(self):
-        return [False,True]
+        return [True]
     @variant
     def cg_iters(self):
         return [10,100]

@@ -32,13 +32,14 @@ algo = ParallelTRPO(
     step_size=0.01,
     n_parallel=4,
     set_cpu_affinity=False,  # (need package psutil if True)
-    whole_paths=False,
+    whole_paths=True,
     # plot=True,
 )
 
 run_experiment_lite(
     algo.train(),
-    script="sandbox/adam/run_experiment_lite_par.py",
+    # Do not use parallel sampler; set n_parallel in ParallelTRPO()
+    n_parallel=0,  # zero!
     # Only keep the snapshot parameters for the last iteration
     snapshot_mode="last",
     # Specifies the seed for the experiment. If this is not provided, a random seed

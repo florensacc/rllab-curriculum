@@ -1,6 +1,7 @@
 # Tune for Montezuma's Revenge
 # Try prioritized reset
 # Use the Bellamre's ALE python interface, instead of OpenAI's
+# This experiment does not use the resetter; it just tests the new environment interface
 
 from __future__ import print_function
 from __future__ import absolute_import

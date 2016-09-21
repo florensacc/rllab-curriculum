@@ -205,7 +205,8 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
 
 class PPOSGD(BatchPolopt):
     def init_opt(self):
-        is_recurrent = int(self.policy.recurrent)
+        assert self.policy.is_recurrent
+
         obs_var = self.env.observation_space.new_tensor_variable(
             'obs',
             extra_dims=2,
@@ -222,39 +223,46 @@ class PPOSGD(BatchPolopt):
         dist = self.policy.distribution
 
         old_dist_info_vars = {
-            k: tf.placeholder(tf.float32, shape=[None] * (1 + is_recurrent) + list(shape), name='old_%s' % k)
+            k: tf.placeholder(tf.float32, shape=(None, None) + shape, name='old_%s' % k)
             for k, shape in dist.dist_info_specs
             }
         old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
 
         state_info_vars = {
-            k: tf.placeholder(tf.float32, shape=[None] * (1 + is_recurrent) + list(shape), name=k)
+            k: tf.placeholder(tf.float32, shape=(None, None) + shape, name=k)
             for k, shape in self.policy.state_info_specs
             }
         state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
 
-        if is_recurrent:
-            valid_var = tf.placeholder(tf.float32, shape=[None, None], name="valid")
-        else:
-            valid_var = None
+        valid_var = tf.placeholder(tf.float32, shape=(None, None), name="valid")
 
         dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
         lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
-        if is_recurrent:
-            mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
-            surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var)
-        else:
-            mean_kl = tf.reduce_mean(kl)
-            surr_loss = - tf.reduce_mean(lr * advantage_var)
+        mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
+        surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var)
 
         input_list = [
                          obs_var,
                          action_var,
                          advantage_var,
-                     ] + state_info_vars_list + old_dist_info_vars_list
-        if is_recurrent:
-            input_list.append(valid_var)
+                     ] + state_info_vars_list + old_dist_info_vars_list + [valid_var]
+
+        rnn_network = self.policy.prob_network
+        recurrent_layer = rnn_network.recurrent_layer
+        state_var = tf.placeholder(tf.float32, (None, rnn_network.state_dim), "state")
+        recurrent_state_output = dict()
+
+        minibatch_dist_info_vars = self.policy.dist_info_sym(
+            obs_var, state_info_vars,
+            recurrent_state={recurrent_layer: state_var},
+            recurrent_state_output=recurrent_state_output,
+        )
+
+        state_output = recurrent_state_output[rnn_network.recurrent_layer]
+        final_state = tf.reverse(state_output, [False, True, False])[:, 0, :]
+
+        import ipdb; ipdb.set_trace()
 
         self.optimizer.update_opt(
             loss=surr_loss,

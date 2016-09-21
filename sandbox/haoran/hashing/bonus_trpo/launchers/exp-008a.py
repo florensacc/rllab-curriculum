@@ -1,6 +1,8 @@
 """
 Use image observations
-This is a test run on Breakout and Frostbite
+This is a test run on qbert, breakout, and beam_rider
+Network uses the TRPO version; images are downscaled to 42 x 42 for computational efficiency.
+Did not implement a baseline since it slows down training by a lot.
 """
 # from sandbox.rocky.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
 # from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline

@@ -54,23 +54,24 @@ class ParallelPerlmutterHvp(Serializable):
     def build_eval(self, inputs):
         def parallel_eval(x):
             """
-            This function is parallelized.
+            Parallelized.
             """
             par_data, shareds, mgr_objs = self._par_objs
 
             xs = tuple(self.target.flat_to_params(x, trainable=True))
 
-            shareds.grads_2d[:, par_data.rank] = \
+            shareds.grads_2d[:, par_data.rank] = par_data.avg_fac * \
                 sliced_fun(self.opt_fun["f_Hx_plain"], self._num_slices)(inputs, xs)
-            mgr_objs.barriers_Hx[0].wait() * par_data.avg_fac
+            mgr_objs.barriers_Hx[0].wait()
 
             shareds.flat_g[par_data.vb[0]:par_data.vb[1]] = \
+                self.reg_coeff * x[par_data.vb[0]:par_data.vb[1]] + \
                 np.sum(shareds.grads_2d[par_data.vb[0]:par_data.vb[1], :], axis=1)
             mgr_objs.barriers_Hx[1].wait()
 
-            if par_data.rank == 0:
-                shareds.flat_g += self.reg_coeff * x
-            mgr_objs.barriers_Hx[2].wait()
+            # if par_data.rank == 0:
+            #     shareds.flat_g += self.reg_coeff * x
+            # mgr_objs.barriers_Hx[2].wait()
 
             return shareds.flat_g
 
@@ -302,7 +303,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
         par_data = SimpleContainer(
             rank=None,  # populate once in subprocess
             avg_fac=avg_fac,
-            vb=vb
+            vb=vb  # select tuple once in subprocess
         )
         shareds = SimpleContainer(
             flat_g=np.frombuffer(mp.RawArray('d', size_grad)),
@@ -360,28 +361,31 @@ class ParallelConjugateGradientOptimizer(Serializable):
         if par_data.rank == 0:
             logger.log("computing loss before")
 
-        loss_before = sliced_fun(self._opt_fun["f_loss"], self._num_slices)(
-            inputs, extra_inputs)
+        loss_before_shared = par_data.avg_fac * \
+            sliced_fun(self._opt_fun["f_loss"], self._num_slices)(inputs, extra_inputs)
 
         if par_data.rank == 0:
             logger.log("performing update")
             logger.log("computing descent direction")
 
         # Each worker records result available to all.
-        shareds.grads_2d[:, par_data.rank] = sliced_fun(self._opt_fun["f_grad"], self._num_slices)(
-            inputs, extra_inputs) * par_data.avg_fac
+        shareds.grads_2d[:, par_data.rank] = par_data.avg_fac * \
+            sliced_fun(self._opt_fun["f_grad"], self._num_slices)(inputs, extra_inputs)
 
         if par_data.rank == 0:
-            shareds.loss_before.value = loss_before * par_data.avg_fac
-            mgr_objs.barriers_grad[0].wait()
-        else:
-            mgr_objs.barriers_grad[0].wait()
-            with mgr_objs.lock:
-                shareds.loss_before.value += loss_before * par_data.avg_fac
+            shareds.loss_before.value = loss_before_shared
 
-        # Each worker sums over an equal share of the grad elements across workers.
+        mgr_objs.barriers_grad[0].wait()
+
+        # Each worker sums over an equal share of the grad elements across
+        # workers (row major storage--sum along rows).
         shareds.flat_g[par_data.vb[0]:par_data.vb[1]] = \
             np.sum(shareds.grads_2d[par_data.vb[0]:par_data.vb[1], :], axis=1)
+
+        if par_data.rank != 0:
+            with mgr_objs.lock:
+                shareds.loss_before.value += loss_before_shared
+
         mgr_objs.barriers_grad[1].wait()
 
         loss_before = shareds.loss_before.value
@@ -410,18 +414,19 @@ class ParallelConjugateGradientOptimizer(Serializable):
             cur_step = ratio * flat_descent_step
             cur_param = prev_param - cur_step
             self._target.set_param_values(cur_param, trainable=True)
-            loss_bktrk, constraint_val_bktrk = sliced_fun(
+            loss, constraint_val = sliced_fun(
                 self._opt_fun["f_loss_constraint"], self._num_slices)(inputs, extra_inputs)
-
+            loss_shared = loss * par_data.avg_fac
+            constraint_val_shared = constraint_val * par_data.avg_fac
             if par_data.rank == 0:
-                shareds.loss_bktrk.value = loss_bktrk * par_data.avg_fac
-                shareds.constraint_val_bktrk.value = constraint_val_bktrk * par_data.avg_fac
+                shareds.loss_bktrk.value = loss_shared
+                shareds.constraint_val_bktrk.value = constraint_val_shared
                 mgr_objs.barriers_bktrk[0].wait()
             else:
                 mgr_objs.barriers_bktrk[0].wait()
                 with mgr_objs.lock:
-                    shareds.loss_bktrk.value += loss_bktrk * par_data.avg_fac
-                    shareds.constraint_val_bktrk.value += constraint_val_bktrk * par_data.avg_fac
+                    shareds.loss_bktrk.value += loss_shared
+                    shareds.constraint_val_bktrk.value += constraint_val_shared
             mgr_objs.barriers_bktrk[1].wait()
             loss_bktrk = shareds.loss_bktrk.value
             constraint_val_bktrk = shareds.constraint_val_bktrk.value
