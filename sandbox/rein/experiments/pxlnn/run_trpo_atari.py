@@ -92,6 +92,7 @@ for factor, mdp, eta, seed in param_cart_product:
     )
 
     # Dynamics model f: num_seq_frames x h x w -> h x w
+    # TODO: change into autoenc with softmax output.
     model = ConvAutoEncoder(
         input_shape=env_spec.observation_space.shape,  # mdp.spec.observation_space.shape,
         n_filters=[n_seq_frames, 10, 10],
@@ -113,7 +114,11 @@ for factor, mdp, eta, seed in param_cart_product:
         n_itr=400,
         step_size=0.01,
         n_seq_frames=n_seq_frames,
-        sampler_cls=BatchSampler,
+        model_pool_args=dict(
+            size=100000,
+            min_size=32,
+            batch_size=32
+        )
     )
 
     run_experiment_lite(

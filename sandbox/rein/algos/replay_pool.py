@@ -36,6 +36,14 @@ class ReplayPool(object):
         self._top = 0
         self._size = 0
 
+        # --
+        # For caching purposes
+        self._old_bottom = np.nan
+        self._old_top = np.nan
+        self._old_size = np.nan
+        self._old_mean = np.nan
+        self._old_std = np.nan
+
     def __str__(self):
         sb = []
         for key in self.__dict__:
@@ -100,6 +108,22 @@ class ReplayPool(object):
     @property
     def size(self):
         return self._size
+
+    def get_mean_std_obs(self):
+        return np.mean(self._observations, axis=0), np.std(self._observations, axis=0)
+
+    def get_cached_mean_std_obs(self):
+        if self._size != self._old_size or self._bottom != self._old_bottom or self._top != self._old_top:
+            self._old_size = self._size
+            self._old_bottom = self._bottom
+            self._old_top = self._top
+            if self._size >= self._max_pool_size:
+                all_obs = self._observations
+            else:
+                all_obs = self._observations[self._bottom:self._top]
+            self._old_mean = np.mean(all_obs, axis=0)
+            self._old_std = np.std(all_obs, axis=0)
+        return self._old_mean, self._old_std
 
 
 class SingleStateReplayPool(object):

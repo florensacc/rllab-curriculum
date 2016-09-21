@@ -9,17 +9,19 @@ from rllab.misc import tensor_utils
 import rllab.misc.logger as logger
 from rllab.algos import util
 
-# --
-# Nonscientific printing of numpy arrays.
 from sandbox.rein.algos.replay_pool import ReplayPool
 
+# --
+# Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
 
 
 class TRPOPlus(TRPO):
-    """TRPO+
-    Modular extension to TRPO to allow for intrinsic reward.
+    """
+    TRPO+
+
+    Extension to TRPO to allow for intrinsic reward.
     """
 
     def __init__(
@@ -37,6 +39,8 @@ class TRPOPlus(TRPO):
 
         if model_pool_args is None:
             self._model_pool_args = dict(size=100000, min_size=32, batch_size=32)
+        else:
+            self._model_pool_args = model_pool_args
 
         observation_dtype = "uint8"
         self._pool = ReplayPool(
@@ -182,15 +186,18 @@ class TRPOPlus(TRPO):
         assert sess is not None
 
         for path in paths:
-            path['S'] = np.nan
             x = path['observations']
+            x = x.reshape((-1, 52, 52, 1))
             # TODO: make softmax autoencoder, get logprop here
-            logp = sess.run(self._model.y, feed_dict={self._model.x: x[0:10]})
-            path['S'] = logp
+            # @peter: here we need pixelcnn logp
+            logp = sess.run(self._model.y, feed_dict={self._model.x: x})
+            path['S'] = np.zeros(path['rewards'].shape)
 
     def fill_replay_pool(self, paths):
         """
         Fill replay pool with current batch of trajectories.
+        :param paths: sampled trajectories
+        :return: None
         """
         logger.log('Filling replay pool ...')
         tot_path_len = 0
@@ -216,7 +223,29 @@ class TRPOPlus(TRPO):
         """
         From uint8 encoding to original observation format.
         """
-        return obs / float(self._model.num_classes)
+        return obs / float(self._model.n_classes)
+
+    def normalize_obs(self, obs):
+        """
+        Normalize observations.
+        """
+        shape = obs.shape
+        o = obs.reshape((obs.shape[0], -1))
+        mean, std = self._pool.get_cached_mean_std_obs()
+        o = (o - mean[None, :]) / (std[None, :] + 1e-8)
+        o = o.reshape(shape)
+        return o
+
+    def denormalize_obs(self, obs):
+        """
+        Denormalize observations.
+        """
+        shape = obs.shape
+        o = obs.reshape((obs.shape[0], -1))
+        mean, std = self._pool.get_cached_mean_std_obs()
+        o = o * (std[None, :] + 1e-8) + mean[None, :]
+        o = o.reshape(shape)
+        return o
 
     def train_model(self, sess=None):
         # --
@@ -227,11 +256,17 @@ class TRPOPlus(TRPO):
         assert sess is not None
         for epoch_i in range(200):
             batch = self._pool.random_batch(self._model_pool_args['batch_size'])
-            x = batch['observations'].reshape((-1, 52, 52, 1))
+            x = batch['observations']
+            x = self.normalize_obs(x)
+            x = x.reshape((-1, 52, 52, 1))
             sess.run(self._model.optimizer, feed_dict={self._model.x: x})
             print(epoch_i, sess.run(self._model.cost, feed_dict={self._model.x: x}))
 
         recon = sess.run(self._model.y, feed_dict={self._model.x: x[0:10]})
+
+        recon = self.denormalize_obs(recon)
+        x = self.denormalize_obs(x)
+
         fig, axs = plt.subplots(2, 10, figsize=(10, 2))
         for example_i in range(10):
             axs[0][example_i].imshow(
