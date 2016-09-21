@@ -62,6 +62,10 @@ class ConvAutoEncoder:
         self._y = current_input
         self._cost = tf.reduce_sum(tf.square(self._y - self._x))
 
+        # --
+        learning_rate = 0.001
+        self._optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self._cost)
+
     @property
     def x(self):
         return self._x
@@ -79,6 +83,10 @@ class ConvAutoEncoder:
         return self._cost
 
     @property
+    def optimizer(self):
+        return self._optimizer
+
+    @property
     def n_classes(self):
         return self._n_classes
 
@@ -90,22 +98,17 @@ def test_atari():
     atari_dataset['x'] = atari_dataset['x'].transpose((0, 2, 3, 1))
     ae = ConvAutoEncoder()
 
-    # --
-    learning_rate = 0.01
-    optimizer = tf.train.AdamOptimizer(learning_rate).minimize(ae.cost)
-
     sess = tf.Session()
     sess.run(tf.initialize_all_variables())
 
     n_epochs = 2000
     for epoch_i in range(n_epochs):
         train = atari_dataset['x']
-        sess.run(optimizer, feed_dict={ae.x: train})
+        sess.run(ae.optimizer, feed_dict={ae.x: train})
         print(epoch_i, sess.run(ae.cost, feed_dict={ae.x: train}))
 
     n_examples = 10
     recon = sess.run(ae.y, feed_dict={ae.x: atari_dataset['x'][0:n_examples]})
-    print(recon.shape)
     fig, axs = plt.subplots(2, n_examples, figsize=(10, 2))
     for example_i in range(n_examples):
         axs[0][example_i].imshow(

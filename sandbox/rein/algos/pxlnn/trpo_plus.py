@@ -177,13 +177,16 @@ class TRPOPlus(TRPO):
         pass
 
     def fill_replay_pool(self, paths):
+        """
+        Fill replay pool with current batch of trajectories.
+        """
         logger.log('Filling replay pool ...')
         tot_path_len = 0
         for path in paths:
-            path_len = len(path['rewards'])
+            path_len = len(path['ext_rewards'])
             tot_path_len += path_len
             for i in range(path_len):
-                obs = (path['observations'][i] * self._model.n_classes).astype(int)
+                obs = path['observations'][i]
                 act = path['actions'][i]
                 rew_orig = path['ext_rewards'][i]
                 term = (i == path_len - 1)
@@ -202,6 +205,30 @@ class TRPOPlus(TRPO):
         From uint8 encoding to original observation format.
         """
         return obs / float(self._model.num_classes)
+
+    def train_model(self, sess=None):
+        import matplotlib.pyplot as plt
+
+        assert sess is not None
+        for epoch_i in range(200):
+            batch = self._pool.random_batch(self._model_pool_args['batch_size'])
+            x = batch['observations'].reshape((-1, 52, 52, 1))
+            sess.run(self._model.optimizer, feed_dict={self._model.x: x})
+            print(epoch_i, sess.run(self._model.cost, feed_dict={self._model.x: x}))
+
+        recon = sess.run(self._model.y, feed_dict={self._model.x: x[0:10]})
+        fig, axs = plt.subplots(2, 10, figsize=(10, 2))
+        for example_i in range(10):
+            axs[0][example_i].imshow(
+                np.reshape(x[example_i], (52, 52)), cmap='Greys_r', vmin=0, vmax=64)
+            axs[1][example_i].imshow(
+                np.reshape(recon[example_i], (52, 52)), cmap='Greys_r', vmin=0, vmax=64)
+            axs[0][example_i].get_xaxis().set_visible(False)
+            axs[0][example_i].get_yaxis().set_visible(False)
+            axs[1][example_i].get_xaxis().set_visible(False)
+            axs[1][example_i].get_yaxis().set_visible(False)
+        tf.train.SummaryWriter('/Users/rein/programming/tensorboard/logs', sess.graph)
+        plt.savefig('/Users/rein/programming/logs/plot.png')
 
     def train(self):
         with tf.Session() as sess:
@@ -230,6 +257,10 @@ class TRPOPlus(TRPO):
                     self.fill_replay_pool(paths)
 
                     # --
+                    # Train model.
+                    self.train_model(sess)
+
+                    # --
                     # Compute intrinisc rewards.
                     self.comp_int_rewards(paths)
 
@@ -247,7 +278,7 @@ class TRPOPlus(TRPO):
                     params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
                     if self.store_paths:
                         params["paths"] = samples_data["paths"]
-                    # FIXME: bugged
+                    # FIXME: bugged: pickle issues
                     # logger.save_itr_params(itr, params)
                     logger.log("saved")
                     logger.record_tabular('Time', time.time() - start_time)
