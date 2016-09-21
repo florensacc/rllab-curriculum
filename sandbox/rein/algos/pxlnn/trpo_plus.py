@@ -189,6 +189,7 @@ class TRPOPlus(TRPO):
             x = path['observations']
             x = x.reshape((-1, 52, 52, 1))
             # TODO: make softmax autoencoder, get logprop here
+            # TODO: batch it
             # @peter: here we need pixelcnn logp
             logp = sess.run(self._model.y, feed_dict={self._model.x: x})
             path['S'] = np.zeros(path['rewards'].shape)
@@ -254,7 +255,7 @@ class TRPOPlus(TRPO):
         import matplotlib.pyplot as plt
 
         assert sess is not None
-        for epoch_i in range(200):
+        for epoch_i in range(2000):
             batch = self._pool.random_batch(self._model_pool_args['batch_size'])
             x = batch['observations']
             x = self.normalize_obs(x)
