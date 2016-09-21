@@ -33,7 +33,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, ] #0.001]
+        return [0.002 / 5, ] #0.001]
 
     @variant
     def seed(self):
@@ -148,10 +148,6 @@ class VG(VariantGenerator):
             yield 3000
         else:
             yield 600
-
-    @variant(hide=True)
-    def anneal_after(self, max_epoch):
-        return [int(max_epoch * 0.7)]
 
     @variant(hide=False)
     def context_dim(self, ):
@@ -288,17 +284,20 @@ for v in variants[:1]:
             k=v["k"],
             vali_eval_interval=1500*3*4,
             exp_avg=None,#v["exp_avg"],
-            anneal_after=v["anneal_after"],
+            anneal_after=100,
+            anneal_every=100,
+            anneal_factor=0.3,
             img_on=False,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
             # resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
+            resume_from="/home/peter/rllab-private/data/local/play-0918-hybrid-cc-cifar-ml-3ldc-resnet-arch-deepar/play_0918_hybrid_cc_cifar_ml_3ldc_resnet_arch_deepar_2016_09_19_22_07_16_0001"
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="play_0918_hybrid_cc_cifar_ml_3ldc_resnet_arch_deepar",
+            exp_prefix="play_0918_hybrid_cc_cifar_ml_3ldc_plstm_arch_deepar_llr_restart",
             seed=v["seed"],
             variant=v,
             mode="local",

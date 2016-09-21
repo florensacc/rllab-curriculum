@@ -1227,16 +1227,31 @@ def resconv_v1_customconv(
         add_coeff=0.1,
         keep_prob=1.,
         nn=False,
+        gating=False,
+        nin=False,
         context=None,
 ):
     blk = origin = l_in
-    blk = blk.sequential()
-    partial(blk, conv_method, conv_args)(
-        kernel=kernel,
-        depth=nch,
-        stride=stride,
-        prefix="pre",
-    )
+    if gating:
+        blk_conv = partial(blk, conv_method, conv_args)(
+            kernel=kernel,
+            depth=nch * 2,
+            stride=stride,
+            prefix="gated_pre",
+            activation_fn=None,
+        )
+        blk = (
+            blk_conv[:, :, :, :nch].apply(tf.nn.sigmoid) *
+                blk_conv[:, :, :, nch:].apply(tf.nn.tanh)
+        ).sequential()
+    else:
+        blk = blk.sequential()
+        partial(blk, conv_method, conv_args)(
+            kernel=1 if nin else kernel,
+            depth=nch,
+            stride=stride,
+            prefix="pre",
+        )
     blk.custom_dropout(
         keep_prob
     )
@@ -1298,7 +1313,11 @@ def gruconv_v1(l_in, kernel, nch, inp=None):
         ).nl(activation_fn=tf.nn.tanh)
     return l_in*update_gate + proposal*(1.-update_gate)
 
-def plstmconv_v1(l_in, inp, kernel, nch, op="conv2d_mod", args=None, args1=None, args2=None, args3=None):
+def plstmconv_v1(
+        l_in, inp, kernel, nch,
+        prefix="", op="conv2d_mod",
+        args=None, args1=None, args2=None, args3=None
+):
     for id in ["args1", "args2", "args3"]:
         if locals()[id] is None:
             locals()[id] = args
@@ -1306,14 +1325,14 @@ def plstmconv_v1(l_in, inp, kernel, nch, op="conv2d_mod", args=None, args1=None,
     squashed_h = l_in.nl(activation_fn=tf.nn.tanh)
     op_from_inp = partial(
         inp, op, args1
-    )(kernel, nch*4, activation_fn=None, prefix="from_inp")
+    )(kernel, nch*4, activation_fn=None, prefix=prefix+"from_inp")
     with pt.defaults_scope(
             activation_fn=tf.nn.sigmoid,
     ):
         gates = (
             partial(
                 squashed_h, op, args2
-            )(kernel, nch*3, activation_fn=None, prefix="input_gate_from_hidden") +
+            )(kernel, nch*3, activation_fn=None, prefix=prefix+"input_gate_from_hidden") +
             op_from_inp[:, :, :, :nch*3]
         )
         input_gate = gates[:, :, :, :nch].nl()
@@ -1322,7 +1341,7 @@ def plstmconv_v1(l_in, inp, kernel, nch, op="conv2d_mod", args=None, args1=None,
     proposal = (
         partial(
             squashed_h * output_gate, op, args3
-        )(kernel, nch, activation_fn=None, prefix="proposal_from_hidden") +
+        )(kernel, nch, activation_fn=None, prefix=prefix+"proposal_from_hidden") +
         op_from_inp[:, :, :, nch*3:]
     ).nl(activation_fn=tf.nn.tanh)
 

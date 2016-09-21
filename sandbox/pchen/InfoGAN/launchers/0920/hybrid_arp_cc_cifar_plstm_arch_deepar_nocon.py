@@ -261,6 +261,7 @@ for v in variants[:1]:
             nin=True,
             # block="resnet",
             block="plstm",
+            sanity2=True,
         )
         model = RegularizedHelmholtzMachine(
             output_dist=ar_conv_dist,

@@ -255,7 +255,7 @@ for v in variants[:1]:
             nr_channels=12*2*2,
             pixel_bias=True,
             context_dim=v["context_dim"],
-            nin=True,
+            nin=False,
             block="gated_resnet",
             # block="plstm",
         )
@@ -295,7 +295,7 @@ for v in variants[:1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="play_0920_hybrid_cc_cifar_ml_3ldc_gatedresnet_arch_deepar",
+            exp_prefix="play_0920_hybrid_cc_cifar_ml_3ldc_gatedresnet_arch_deepar_nonnin",
             seed=v["seed"],
             variant=v,
             mode="local",

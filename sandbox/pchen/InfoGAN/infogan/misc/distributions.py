@@ -1456,14 +1456,16 @@ class ConvAR(Distribution):
                                 prefix="step0",
                             )
                     else:
-                        if block == "resnet":
+                        if "resnet" in block:
                             cur = \
                                 resconv_v1_customconv(
                                     "ar_conv2d_mod",
                                     dict(zerodiagonal=False),
                                     cur,
                                     filter_size,
-                                    nr_channels
+                                    nr_channels,
+                                    nin=nin,
+                                    gating="gat" in block,
                                 )
                         elif block == "plstm":
                             use_peep = di % 2 == 1
@@ -1471,14 +1473,21 @@ class ConvAR(Distribution):
                                 cur,
                                 peep_inp if use_peep else inp,
                                 filter_size, nr_channels,
+                                prefix="peep" if use_peep else "ori",
                                 op="ar_conv2d_mod",
                                 args=dict(zerodiagonal=False),
-                                args1=dict(zerodiagonal=not use_peep),
+                                args1=dict(
+                                    zerodiagonal=not use_peep,
+                                ),
                             )
+                            if nin:
+                                cur = cur + 0.1 * cur.conv2d_mod(
+                                    1,
+                                    nr_channels,
+                                    prefix="nin",
+                                )
                         else:
                             raise Exception("what")
-                        if nin:
-                            cur = cur + 0.1 * cur.conv2d_mod(1, nr_channels, prefix="nin")
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,

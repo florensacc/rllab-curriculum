@@ -1,11 +1,11 @@
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
-    IAR, ConvAR, DiscretizedLogistic, DistAR
+    IAR, ConvAR
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset, Cifar10Dataset
+    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -46,7 +46,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [256, ]#[12, 32]
+        return [64, ]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -67,15 +67,11 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen"
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
-        yield "resv1_k3_pixel_bias_filters_ratio_32"
+        yield "resv1_k3_pixel_bias_filters_ratio_conv_ar"
 
     @variant(hide=False)
-    def steps(self, ):
-        return [3]
-    #
-    @variant(hide=False)
     def base_filters(self, ):
-        return [32, ]
+        return [4, 16, ]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -91,7 +87,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self):
-        return [batch_size, ]
+        return [128, ]
 
     @variant(hide=False)
     def nar(self):
@@ -99,15 +95,15 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nr(self):
-        return [1,]
+        return [5,]
 
     @variant(hide=False)
     def i_nar(self):
-        return [3, ]
+        return [4, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [1,]
+        return [5,]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -135,16 +131,19 @@ class VG(VariantGenerator):
     def dec_context(self):
         return [True, ]
 
-    # @variant(hide=False)
-    # def ds(self):
-    #     return [
-    #         # "mnist",
-    #         "omni",
-    #     ]
+    @variant(hide=False)
+    def ds(self):
+        return [
+            # "mnist",
+            "omni"
+        ]
 
     @variant(hide=True)
-    def max_epoch(self, ):
-        yield 3000
+    def max_epoch(self, ds):
+        if ds == "omni":
+            yield 2200
+        else:
+            yield 600
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
@@ -152,7 +151,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def context_dim(self, ):
-        return [9]
+        return [4]
 
     @variant(hide=False)
     def cond_rep(self, context_dim):
@@ -160,7 +159,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [12]
+        return [3, 8]
+
+    @variant(hide=False)
+    def ar_tie(self):
+        return [True, False]
 
 
 
@@ -170,7 +173,7 @@ variants = vg.variants(randomized=False)
 
 print(len(variants))
 
-for v in variants[:1]:
+for v in variants[:]:
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]
@@ -183,12 +186,10 @@ for v in variants[:1]:
         print("Exp name: %s" % exp_name)
 
 
-        # if v["ds"] == "omni":
-        #     dataset = ResamplingBinarizedOmniglotDataset()
-        # else:
-        #     dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
-
-        dataset = Cifar10Dataset()
+        if v["ds"] == "omni":
+            dataset = ResamplingBinarizedOmniglotDataset()
+        else:
+            dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
 
         # init_size = v["dec_init_size"]
         # ch_size = zdim // init_size // init_size
@@ -234,30 +235,18 @@ for v in variants[:1]:
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
             )
-        nml = 5
-        tgt_dist = Mixture(
-           [(DiscretizedLogistic(3), 1./nml) for _ in range(nml)]
-        )
-        tgt_ar_dist = DistAR(
-            3,
-            tgt_dist,
-            depth=2,
-            neuron_ratio=2,
-            linear_context=True,
-        )
+
         ar_conv_dist = ConvAR(
-            # tgt_dist=Bernoulli(1),
-            # tgt_dist=tgt_dist,
-            tgt_dist=tgt_ar_dist,
-            shape=(32, 32, 3),
+            tgt_dist=MeanBernoulli(1),
+            shape=(28, 28, 1),
             filter_size=3,
             depth=v["ar_depth"],
-            nr_channels=12*2,
+            nr_channels=12,
             pixel_bias=True,
+            block="plstm",
             context_dim=v["context_dim"],
-            nin=True,
-            block="gated_resnet",
-            # block="plstm",
+            tieweight=v["ar_tie"],
+            # block="resnet",
         )
         model = RegularizedHelmholtzMachine(
             output_dist=ar_conv_dist,
@@ -269,9 +258,6 @@ for v in variants[:1]:
             wnorm=v["wnorm"],
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                enc_rep=0,
-                dec_rep=0,
-                base_filters=8,
             ),
         )
 
@@ -286,25 +272,21 @@ for v in variants[:1]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*3*4,
-            exp_avg=None,#v["exp_avg"],
+            vali_eval_interval=1500*3,
+            exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
-            # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
-            # img_on=True,
-            # summary_interval=200,
-            # resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="play_0920_hybrid_cc_cifar_ml_3ldc_gatedresnet_arch_deepERar_sED",
+            exp_prefix="0920_%s_cc_reg_fixed" % v["ds"],
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 

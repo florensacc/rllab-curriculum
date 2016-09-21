@@ -143,11 +143,8 @@ class VG(VariantGenerator):
     #     ]
 
     @variant(hide=True)
-    def max_epoch(self, ds):
-        if ds == "omni":
-            yield 3000
-        else:
-            yield 600
+    def max_epoch(self, ):
+        yield 3000
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
@@ -259,8 +256,8 @@ for v in variants[:1]:
             pixel_bias=True,
             context_dim=v["context_dim"],
             nin=True,
-            # block="resnet",
-            block="plstm",
+            block="gated_resnet",
+            # block="plstm",
         )
         model = RegularizedHelmholtzMachine(
             output_dist=ar_conv_dist,
@@ -298,7 +295,7 @@ for v in variants[:1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="play_0918_hybrid_cc_cifar_ml_3ldc_resnet_arch_deepar",
+            exp_prefix="play_0920_hybrid_cc_cifar_ml_3ldc_gatedresnet_arch_deepar",
             seed=v["seed"],
             variant=v,
             mode="local",
