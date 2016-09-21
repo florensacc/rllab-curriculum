@@ -36,7 +36,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             center_adv=True,
             positive_adv=False,
             store_paths=False,
-            whole_paths=False,  # Different default from serial
+            whole_paths=True,
             n_parallel=1,
             set_cpu_affinity=False,
             cpu_assignments=None,
