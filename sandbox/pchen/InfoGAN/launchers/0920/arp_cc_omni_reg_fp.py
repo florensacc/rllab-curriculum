@@ -276,6 +276,7 @@ for v in variants[:]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
+            vis_ar=False,
         )
 
         run_experiment_lite(
