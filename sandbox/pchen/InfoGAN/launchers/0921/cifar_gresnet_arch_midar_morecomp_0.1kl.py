@@ -95,7 +95,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [4, ]
+        return [0, ]
 
     @variant(hide=False)
     def nr(self):
@@ -285,7 +285,7 @@ for v in variants[:1]:
             min_kl=v["min_kl"],
             k=v["k"],
             vali_eval_interval=1500*3*4,
-            exp_avg=None,#v["exp_avg"],
+            exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -296,7 +296,7 @@ for v in variants[:1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="play_0920_hybrid_cc_cifar_ml_3ldc_gatedresnet_arch_midarcomp_0.1kl",
+            exp_prefix="play_0920_iaf_cc_cifar_ml_3ldc_gatedresnet_arch_midarcomp_0.1kl",
             seed=v["seed"],
             variant=v,
             mode="local",

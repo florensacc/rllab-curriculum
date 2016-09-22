@@ -40,7 +40,7 @@ class VG(VariantGenerator):
 
     @variant
     def n_processes(self):
-        return [18,]
+        return [18, ]
 
     # @variant
     # def entropy_bonus(self):
@@ -57,12 +57,12 @@ class VG(VariantGenerator):
     @variant
     def eval_frequency(self, target_update_frequency):
         # yield target_update_frequency * 1
-        yield target_update_frequency * 7
+        yield 1000000
 
     @variant
     def game(self, ):
         # return ["pong", "beam_rider", "breakout", "qbert", "space_invaders"]
-        return ["pong", "beam_rider", "space_invaders"]
+        return ["pong", "space_invaders"]
 
     @variant
     def n_step(self, ):
@@ -75,13 +75,17 @@ class VG(VariantGenerator):
     @variant
     def bellman(self, ):
         # return ["q"]
-        return [Bellman.sarsa, Bellman.q]
+        return [Bellman.q]
 
     @variant
     def lr(self, ):
         yield 7e-4
-        yield 1e-4
+        # yield 1e-4
         # yield 3e-3
+
+    @variant
+    def life_terminating(self, ):
+        return [True, False]
 
 vg = VG()
 variants = vg.variants(randomized=False)
@@ -103,7 +107,8 @@ for v in variants[:]:
     env = AtariEnvCX(
         game=game,
         obs_type="image",
-        life_terminating=True,
+        life_terminating=life_terminating,
+        color_averaging=True,
     )
     env = SlidingMemEnv(env)
 
@@ -131,7 +136,7 @@ for v in variants[:]:
     )
 
     # sys stuff
-    comp_cores = int(18 / n_processes)
+    comp_cores = max(int(18 / n_processes), 1)
     config.ENV = dict(
         MKL_NUM_THREADS=comp_cores,
         NUMEXPR_NUM_THREADS=comp_cores,
@@ -139,7 +144,7 @@ for v in variants[:]:
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="0921_n_step_dqn_sarsa_fk",
+        exp_prefix="0921_n_step_dqn_sarsa_life_end",
         seed=v["seed"],
         variant=v,
         # mode="local",
