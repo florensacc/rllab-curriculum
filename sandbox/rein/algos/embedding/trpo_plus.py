@@ -17,6 +17,10 @@ from sandbox.rein.algos.replay_pool import SingleStateReplayPool
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
 
+CONSISTENCY_CHECK_DIR = '/consistency_check'
+UNIQUENESS_CHECK_DIR = '/uniqueness_check'
+RANDOM_SAMPLES_DIR = '/random_samples'
+
 
 class TRPOPlus(TRPO):
     """
@@ -58,6 +62,12 @@ class TRPOPlus(TRPO):
         self._counting_table = defaultdict(lambda: 0)
 
     def process_samples(self, itr, paths):
+        """
+        Process samples.
+        :param itr:
+        :param paths:
+        :return:
+        """
         baselines = []
         returns = []
         for path in paths:
@@ -182,7 +192,11 @@ class TRPOPlus(TRPO):
         return samples_data
 
     def comp_int_rewards(self, paths):
-        """Retrieve binary code and increase count of each sample in batch."""
+        """
+        Retrieve binary code and increase count of each sample in batch.
+        :param paths:
+        :return:
+        """
 
         def bin_to_int(binary):
             integer = 0
@@ -306,7 +320,7 @@ class TRPOPlus(TRPO):
             old_running_avg = np.inf
             while not done:
                 running_avg = 0.
-                for _ in range(5):
+                for _ in range(50):
                     # Replay pool return uint8 target format, so decode _x.
                     batch = self._pool.random_batch(self._model_pool_args['batch_size'])
                     _x = (batch['observations'])
@@ -326,7 +340,7 @@ class TRPOPlus(TRPO):
                 _x = (batch['observations'])
                 _y = batch['observations']
                 acc_after += self.accuracy(_x, _y) / 10.
-            self._plotter.plot_pred_imgs(self._model, _x, _y, 0, 0, dir='/random_samples')
+            self._plotter.plot_pred_imgs(self._model, _x, _y, 0, 0, dir=RANDOM_SAMPLES_DIR)
 
             logger.log('Autoencoder updated.')
         else:
@@ -347,7 +361,63 @@ class TRPOPlus(TRPO):
         for path in paths:
             path['rewards'] += self._eta * path['S']
 
+    def preprocess(self, paths):
+        """
+        Preprocess data.
+        :param paths:
+        :return:
+        """
+        # --
+        # Save external rewards.
+        for path in paths:
+            path['ext_rewards'] = np.array(path['rewards'])
+
+        # --
+        # Encode all observations into uint8 format
+        for path in paths:
+            path['observations'] = self.encode_obs(path['observations'])
+
+    def diagnostics(self, start_time, itr, samples_data, paths):
+        """
+        Diagnostics of each run.
+        :param start_time:
+        :param itr:
+        :param samples_data:
+        :param paths:
+        """
+        # --
+        # Analysis
+        if itr == 0:
+            # Select 5 random images form the first path, evaluate them at every iteration to inspect emb.
+            rnd = np.random.randint(0, len(paths[0]['observations']), 5)
+            self._test_obs = paths[0]['observations'][rnd]
+        self._plotter.plot_pred_imgs(self._model, self.decode_obs(self._test_obs), self._test_obs, -itr - 1,
+                                     0, dir=CONSISTENCY_CHECK_DIR)
+        obs = paths[0]['observations'][-50:, -np.prod(self._model.state_dim):]
+        self._plotter.plot_pred_imgs(self._model, (obs), obs, 0, 0, dir=UNIQUENESS_CHECK_DIR)
+
+        # --
+        # Diagnostics
+        self.log_diagnostics(paths)
+        logger.log("Saving snapshot ...")
+        params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
+        if self.store_paths:
+            params["paths"] = samples_data["paths"]
+        # FIXME: bugged: pickle issues
+        # logger.save_itr_params(itr, params)
+        logger.log("saved")
+        logger.record_tabular('Time', time.time() - start_time)
+        logger.dump_tabular(with_prefix=False)
+        if self.plot:
+            self.update_plot()
+            if self.pause_for_plot:
+                input("Plotting evaluation run: Press Enter to "
+                      "continue...")
+
     def train(self):
+        """
+        Main RL training procedure.
+        """
         # TODO: make sure normalize/decode/encode is applied correctly.
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
@@ -355,20 +425,13 @@ class TRPOPlus(TRPO):
             start_time = time.time()
             for itr in range(self.start_itr, self.n_itr):
                 with logger.prefix('itr #%d | ' % itr):
-
                     # --
                     # Sample trajectories.
                     paths = self.obtain_samples(itr)
 
                     # --
-                    # Save external rewards.
-                    for path in paths:
-                        path['ext_rewards'] = np.array(path['rewards'])
-
-                    # --
-                    # Encode all observations into uint8 format
-                    for path in paths:
-                        path['observations'] = self.encode_obs(path['observations'])
+                    # Preprocess trajectory data.
+                    self.preprocess(paths)
 
                     # --
                     # Fill replay pool.
@@ -395,31 +458,7 @@ class TRPOPlus(TRPO):
                     self.optimize_policy(itr, samples_data)
 
                     # --
-                    # Analysis
-                    if itr == 0:
-                        # Select 5 random images form the first path, evaluate them at every iteration to inspect emb.
-                        rnd = np.random.randint(0, len(paths[0]['observations']), 5)
-                        self._test_obs = paths[0]['observations'][rnd]
-                    self._plotter.plot_pred_imgs(self._model, self.decode_obs(self._test_obs), self._test_obs, -itr - 1,
-                                                 0, dir='/consistency_check')
-                    obs = paths[0]['observations'][-50:, -np.prod(self._model.state_dim):]
-                    self._plotter.plot_pred_imgs(self._model, (obs), obs, 0, 0, dir='/uniqueness_check')
+                    # Diagnosics
+                    self.diagnostics(start_time, itr, samples_data, paths)
 
-                    # --
-                    # Diagnostics
-                    self.log_diagnostics(paths)
-                    logger.log("Saving snapshot ...")
-                    params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
-                    if self.store_paths:
-                        params["paths"] = samples_data["paths"]
-                    # FIXME: bugged: pickle issues
-                    # logger.save_itr_params(itr, params)
-                    logger.log("saved")
-                    logger.record_tabular('Time', time.time() - start_time)
-                    logger.dump_tabular(with_prefix=False)
-                    if self.plot:
-                        self.update_plot()
-                        if self.pause_for_plot:
-                            input("Plotting evaluation run: Press Enter to "
-                                  "continue...")
         self.shutdown_worker()

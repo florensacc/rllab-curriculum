@@ -212,6 +212,7 @@ for factor, mdp, eta, seed in param_cart_product:
             min_size=32,
             batch_size=32,
             subsample_factor=0.1,
+            fill_before_subsampling=True,
         )
     )
 
