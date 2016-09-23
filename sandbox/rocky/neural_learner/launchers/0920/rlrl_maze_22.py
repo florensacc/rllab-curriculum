@@ -1,6 +1,6 @@
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rocky.neural_learner.algos.bonus_algos import BonusPPO
-from sandbox.rocky.neural_learner.algos.pposgd import PPOSGD
+from sandbox.rocky.neural_learner.algos.pposgd import PPOSGD, SharedWeightsBaseline
 from sandbox.rocky.neural_learner.bonus_evaluators.rnn_prediction_bonus_evaluator import RNNPredictionBonusEvaluator
 from sandbox.rocky.tf.policies.categorical_rnn_policy import CategoricalRNNPolicy
 from sandbox.rocky.neural_learner.envs.random_maze_env import RandomMazeEnv
@@ -27,7 +27,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 
 """
-First order algorithm for optimizing RNN policies
+Train a more advanced baseline predictor
 """
 
 
@@ -92,8 +92,27 @@ class VG(VariantGenerator):
 
     @variant
     def algo_type(self):
-        return ["trpo", "pposgd", "ppo"]
+        return ["pposgd"]
 
+    @variant
+    def n_steps(self):
+        return [100]#300, 20, 40, 100]
+
+    @variant
+    def layer_normalization(self):
+        return [False]#True, False]
+
+    @variant
+    def weight_normalization(self):
+        return [True]#True, False]
+
+    @variant
+    def nonlinearity(self):
+        return ["tanh"]#"relu", "tanh"]
+
+    @variant
+    def vf_loss_coeff(self):
+        return [1., 0.5, 0.1, 0.05, 0.01]
     # @variant
     # def bonus_coeff(self):
     #     return [0.1, 0., 1., 10., 0.01, 0.001]
@@ -112,8 +131,13 @@ for v in variants:
         name="policy",
         env_spec=v["env"].spec,
         hidden_dim=v["hidden_dim"],
-        network_type=v["network_type"]
+        network_type=v["network_type"],
+        weight_normalization=v["weight_normalization"],
+        layer_normalization=v["layer_normalization"],
+        hidden_nonlinearity=getattr(tf.nn, v["nonlinearity"])
     )
+
+    baseline = SharedWeightsBaseline(env_spec=v["env"].spec, policy=policy)
     if v["algo_type"] == "trpo":
         algo = TRPO(
             env=v["env"],
@@ -147,13 +171,16 @@ for v in variants:
             discount=v["discount"],
             n_itr=1000,
             sampler_args=dict(n_envs=10),
+            n_steps=v["n_steps"],
+            vf_loss_coeff=v["vf_loss_coeff"],
+            # n_epochs=20,
         )
     else:
         raise NotImplementedError
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="rlrl-maze-20",
+        exp_prefix="rlrl-maze-22",
         mode="lab_kube",
         n_parallel=0,
         seed=v["seed"],

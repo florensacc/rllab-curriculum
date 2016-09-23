@@ -31,15 +31,15 @@ class WrappedCls(object):
 
 
 class TfEnv(ProxyEnv):
-    @cached_property
+    @property
     def observation_space(self):
         return to_tf_space(self.wrapped_env.observation_space)
 
-    @cached_property
+    @property
     def action_space(self):
         return to_tf_space(self.wrapped_env.action_space)
 
-    @cached_property
+    @property
     def spec(self):
         return EnvSpec(
             observation_space=self.observation_space,

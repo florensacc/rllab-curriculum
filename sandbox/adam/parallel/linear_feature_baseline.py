@@ -33,13 +33,14 @@ class ParallelLinearFeatureBaseline(LinearFeatureBaseline):
         par_data = SimpleContainer(rank=None)
         shareds = SimpleContainer(
             feat_mat=np.reshape(
-                np.frombuffer(mp.RawArray('d', self._vec_dim ** 2)),
-                (self._vec_dim, self._vec_dim)),
-            target_vec=np.frombuffer(mp.RawArray('d', self._vec_dim)),
+                np.frombuffer(mp.RawArray('d', (self._vec_dim ** 2) * n_parallel)),
+                (self._vec_dim, self._vec_dim, n_parallel)),
+            target_vec=np.reshape(
+                np.frombuffer(mp.RawArray('d', self._vec_dim * n_parallel)),
+                (self._vec_dim, n_parallel))
         )
         mgr_objs = SimpleContainer(
-            lock=mp.Lock(),
-            barriers_fit=[mp.Barrier(n_parallel) for _ in range(2)],
+            barrier_fit=mp.Barrier(n_parallel),
         )
         self._par_objs = (par_data, shareds, mgr_objs)
 
@@ -55,30 +56,25 @@ class ParallelLinearFeatureBaseline(LinearFeatureBaseline):
         par_data, shareds, mgr_objs = self._par_objs
 
         if self._low_mem:
-            feat_mat, target_vec = self._features_and_targets(paths)
+            f_mat, t_vec = self._features_and_targets(paths)
         else:
             featmat = np.concatenate([self._features(path) for path in paths])
             returns = np.concatenate([path["returns"] for path in paths])
-            feat_mat = featmat.T.dot(featmat)
-            target_vec = featmat.T.dot(returns)
+            f_mat = featmat.T.dot(featmat)
+            t_vec = featmat.T.dot(returns)
 
-        if par_data.rank == 0:
-            shareds.feat_mat[:] = feat_mat
-            shareds.target_vec[:] = target_vec
-            mgr_objs.barriers_fit[0].wait()
-        else:
-            mgr_objs.barriers_fit[0].wait()
-            with mgr_objs.lock:
-                shareds.feat_mat += feat_mat
-                shareds.target_vec += target_vec
-        mgr_objs.barriers_fit[1].wait()
+        shareds.feat_mat[:, :, par_data.rank] = f_mat
+        shareds.target_vec[:, par_data.rank] = t_vec
+        mgr_objs.barrier_fit.wait()
+        feat_mat = np.sum(shareds.feat_mat, axis=2)
+        target_vec = np.squeeze(np.sum(shareds.target_vec, axis=1))
 
         reg_coeff = self._reg_coeff
         for _ in range(5):
             # NOTE: Could parallelize this loop, but fitting is usually fast.
             self._coeffs = np.linalg.lstsq(
-                shareds.feat_mat + reg_coeff * np.identity(feat_mat.shape[1]),
-                shareds.target_vec
+                feat_mat + reg_coeff * np.identity(feat_mat.shape[1]),
+                target_vec
             )[0]
             if not np.any(np.isnan(self._coeffs)):
                 break

@@ -5,7 +5,7 @@ from sandbox.rocky.tf.core.layers_powered import LayersPowered
 from sandbox.rocky.tf.core.network import GRUNetwork, MLP
 from sandbox.rocky.tf.distributions.recurrent_categorical import RecurrentCategorical
 from sandbox.rocky.tf.misc import tensor_utils
-from sandbox.rocky.tf.policies.rnn_utils import create_recurrent_network
+from sandbox.rocky.tf.policies.rnn_utils import create_recurrent_network, NetworkType
 from sandbox.rocky.tf.spaces.discrete import Discrete
 from sandbox.rocky.tf.policies.base import StochasticPolicy
 
@@ -23,7 +23,9 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             feature_network=None,
             state_include_action=True,
             hidden_nonlinearity=tf.tanh,
-            network_type="gru",
+            network_type=NetworkType.GRU,
+            weight_normalization=False,
+            layer_normalization=False,
     ):
         Serializable.quick_init(self, locals())
         """
@@ -75,7 +77,9 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
                 hidden_dim=hidden_dim,
                 hidden_nonlinearity=hidden_nonlinearity,
                 output_nonlinearity=tf.nn.softmax,
-                name="prob_network"
+                weight_normalization=weight_normalization,
+                layer_normalization=layer_normalization,
+                name="prob_network",
             )
 
             self.prob_network = prob_network
@@ -117,9 +121,9 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
 
     @overrides
     def dist_info_sym(self, obs_var, state_info_vars, **kwargs):
-        n_batches = tf.shape(obs_var)[0]
-        n_steps = tf.shape(obs_var)[1]
-        obs_var = tf.reshape(obs_var, tf.pack([n_batches, n_steps, -1]))
+        # n_batches = tf.shape(obs_var)[0]
+        # n_steps = tf.shape(obs_var)[1]
+        # obs_var = tf.reshape(obs_var, tf.pack([n_batches, n_steps, -1]))
         obs_var = tf.cast(obs_var, tf.float32)
         if self.state_include_action:
             prev_action_var = tf.cast(state_info_vars["prev_action"], tf.float32)

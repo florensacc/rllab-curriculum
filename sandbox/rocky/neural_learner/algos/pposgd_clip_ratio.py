@@ -15,7 +15,7 @@ import numpy as np
 class PPOSGD(BatchPolopt):
     def __init__(
             self,
-            step_size=0.01,
+            clip_lr=0.3,
             n_steps=20,
             n_epochs=10,
             increase_penalty_factor=2,
@@ -23,7 +23,7 @@ class PPOSGD(BatchPolopt):
             entropy_bonus_coeff=0.,
             **kwargs
     ):
-        self.step_size = step_size
+        self.clip_lr = clip_lr
         self.n_steps = n_steps
         self.n_epochs = n_epochs
         self.increase_penalty_factor = increase_penalty_factor
@@ -67,8 +67,6 @@ class PPOSGD(BatchPolopt):
 
         state_var = tf.placeholder(tf.float32, (None, rnn_network.state_dim), "state")
 
-        kl_penalty_var = tf.placeholder(tf.float32, shape=(), name="kl_penalty")
-
         recurrent_layer = rnn_network.recurrent_layer
         recurrent_state_output = dict()
 
@@ -85,19 +83,22 @@ class PPOSGD(BatchPolopt):
         kl = dist.kl_sym(old_dist_info_vars, minibatch_dist_info_vars)
         ent = tf.reduce_sum(dist.entropy_sym(minibatch_dist_info_vars) * valid_var) / tf.reduce_sum(valid_var)
         mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
-        surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var)
 
-        surr_pen_loss = surr_loss + kl_penalty_var * tf.maximum(0., mean_kl - self.step_size) - \
-                        self.entropy_bonus_coeff * ent
+        clipped_lr = tf.clip_by_value(lr, 1. - self.clip_lr, 1. + self.clip_lr)
+
+        surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var)
+        clipped_surr_loss = - tf.reduce_sum(
+            tf.minimum(lr * advantage_var, clipped_lr * advantage_var) * valid_var
+        ) / tf.reduce_sum(valid_var)
 
         optimizer = tf.train.AdamOptimizer(learning_rate=1e-3)
 
         params = self.policy.get_params(trainable=True)
-        train_op = optimizer.minimize(surr_pen_loss, var_list=params)
+        train_op = optimizer.minimize(clipped_surr_loss, var_list=params)
 
         self.f_train = tensor_utils.compile_function(
             inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list + \
-                   [valid_var, state_var, kl_penalty_var],
+                   [valid_var, state_var],
             outputs=[train_op, surr_loss, mean_kl, final_state],
         )
         self.f_loss_kl = tensor_utils.compile_function(
@@ -136,8 +137,6 @@ class PPOSGD(BatchPolopt):
 
         surr_loss_before, kl_before = self.f_loss_kl(*(all_inputs + [init_states]))
 
-        kl_penalty = 1.
-
         best_loss = None
         best_params = None
 
@@ -147,20 +146,16 @@ class PPOSGD(BatchPolopt):
             mean_kls = []
             for t in range(0, T, n_steps):
                 sliced_inputs = [x[:, t:t + n_steps] for x in all_inputs]
-                _, surr_loss, mean_kl, states = self.f_train(*(sliced_inputs + [states, kl_penalty]))
+                _, surr_loss, mean_kl, states = self.f_train(*(sliced_inputs + [states]))
                 surr_losses.append(surr_loss)
                 mean_kls.append(mean_kl)
             mean_kl = np.mean(mean_kls)
             surr_loss = np.mean(surr_losses)
-            logger.log("Loss: %f; Mean KL: %f; KL penalty: %f" % (surr_loss, mean_kl, kl_penalty))
-            if mean_kl > self.step_size:
-                kl_penalty *= self.increase_penalty_factor
-            else:
-                kl_penalty *= self.decrease_penalty_factor
-            if mean_kl <= self.step_size:
-                if best_loss is None or surr_loss < best_loss:
-                    best_loss = surr_loss
-                    best_params = self.policy.get_param_values()
+            logger.log("Loss: %f; Mean KL: %f" % (surr_loss, mean_kl))
+
+            if best_loss is None or surr_loss < best_loss:
+                best_loss = surr_loss
+                best_params = self.policy.get_param_values()
 
         if best_params is not None:
             self.policy.set_param_values(best_params)
