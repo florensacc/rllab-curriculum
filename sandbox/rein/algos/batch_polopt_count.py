@@ -273,7 +273,7 @@ class BatchPolopt(RLAlgorithm):
                     assert not np.isinf(train_loss)
                     assert not np.isnan(train_loss)
                     running_avg += train_loss / 500.
-                if old_running_avg - running_avg < 1e-4:
+                if old_running_avg - running_avg < 1e4:
                     done = True
                 logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
                     running_avg, old_running_avg - running_avg))

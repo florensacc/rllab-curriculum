@@ -9,7 +9,7 @@ from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.baselines.zero_baseline import ZeroBaseline
 
 from sandbox.rein.envs.atari import AtariEnvX
-from sandbox.rein.algos.trpo_count import TRPO
+from sandbox.rein.algos.embedding.trpo import TRPO
 from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 
 os.environ["THEANO_FLAGS"] = "device=gpu"
@@ -221,10 +221,6 @@ for factor, mdp, eta, seed in param_cart_product:
         max_path_length=max_path_length,
         n_itr=400,
         step_size=0.01,
-        optimizer_args=dict(
-            num_slices=30,
-            subsample_factor=0.1,
-        ),
 
         # COUNT settings
         # -------------
@@ -235,7 +231,6 @@ for factor, mdp, eta, seed in param_cart_product:
             batch_size=64,
             subsample_factor=0.1,
         ),
-        surprise_transform=None,
         hamming_distance=0
     )
 
