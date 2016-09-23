@@ -6,10 +6,9 @@ import tensorflow as tf
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
 import sandbox.rocky.tf.core.layers as L
 from sandbox.rocky.tf.core.network import MLP
+from sandbox.rocky.tf.core.parameterized import JointParameterized
 from sandbox.rocky.tf.misc import tensor_utils
 import numpy as np
-
-
 
 
 class PPOSGD(BatchPolopt):
@@ -21,6 +20,7 @@ class PPOSGD(BatchPolopt):
             increase_penalty_factor=2,
             decrease_penalty_factor=0.5,
             entropy_bonus_coeff=0.,
+            train_ratio=0.7,
             **kwargs
     ):
         self.step_size = step_size
@@ -29,6 +29,8 @@ class PPOSGD(BatchPolopt):
         self.increase_penalty_factor = increase_penalty_factor
         self.decrease_penalty_factor = decrease_penalty_factor
         self.entropy_bonus_coeff = entropy_bonus_coeff
+        self.train_ratio = train_ratio
+        self.unused_paths = []
         super().__init__(**kwargs)
 
     def init_opt(self):
@@ -47,6 +49,7 @@ class PPOSGD(BatchPolopt):
             ndim=2,
             dtype=tf.float32,
         )
+
         dist = self.policy.distribution
 
         old_dist_info_vars = {
@@ -92,7 +95,7 @@ class PPOSGD(BatchPolopt):
 
         optimizer = tf.train.AdamOptimizer(learning_rate=1e-3)
 
-        params = self.policy.get_params(trainable=True)
+        params = list(set(self.policy.get_params(trainable=True)))
         train_op = optimizer.minimize(surr_pen_loss, var_list=params)
 
         self.f_train = tensor_utils.compile_function(
@@ -105,6 +108,10 @@ class PPOSGD(BatchPolopt):
                    [valid_var, state_var],
             outputs=[surr_loss, mean_kl],
         )
+
+    def obtain_samples(self, itr):
+        paths = super().obtain_samples(itr)
+        return self.unused_paths + paths
 
     def optimize_policy(self, itr, samples_data):
 
@@ -119,9 +126,6 @@ class PPOSGD(BatchPolopt):
         dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
 
         all_inputs = [observations, actions, advantages] + state_info_list + dist_info_list + [valids]
-        # all_input_values += tuple(state_info_list) + tuple(dist_info_list)
-        # if self.policy.recurrent:
-        #     all_input_values += (samples_data["valids"],)
 
         N, T, _ = observations.shape
         if self.n_steps is None:
@@ -129,51 +133,96 @@ class PPOSGD(BatchPolopt):
         else:
             n_steps = self.n_steps
 
-        init_states = np.tile(
+
+        train_N = int(N * self.train_ratio)
+        val_N = N - train_N
+
+        train_init_states = np.tile(
             self.policy.prob_network.state_init_param.eval().reshape((1, -1)),
-            (N, 1)
+            (train_N, 1)
+        )
+        val_init_states = np.tile(
+            self.policy.prob_network.state_init_param.eval().reshape((1, -1)),
+            (val_N, 1)
         )
 
-        surr_loss_before, kl_before = self.f_loss_kl(*(all_inputs + [init_states]))
+        train_inputs = [x[:train_N] for x in all_inputs]
+        val_inputs = [x[train_N:] for x in all_inputs]
+
+        train_surr_loss_before, train_kl_before = self.f_loss_kl(*(train_inputs + [train_init_states]))
+        val_surr_loss_before, val_kl_before = self.f_loss_kl(*(val_inputs + [val_init_states]))
 
         kl_penalty = 1.
 
-        best_loss = None
-        best_params = None
+        best_params = self.policy.get_param_values()#None
+        best_val_loss = val_surr_loss_before
+        updated = False
+
+        logger.log("Val surr loss: %f; Val Mean KL: %f" % (val_surr_loss_before, val_kl_before))
 
         for epoch_id in range(self.n_epochs):
-            states = init_states
+            states = train_init_states
             surr_losses = []
             mean_kls = []
             for t in range(0, T, n_steps):
-                sliced_inputs = [x[:, t:t + n_steps] for x in all_inputs]
+                sliced_inputs = [x[:, t:t + n_steps] for x in train_inputs]
                 _, surr_loss, mean_kl, states = self.f_train(*(sliced_inputs + [states, kl_penalty]))
                 surr_losses.append(surr_loss)
                 mean_kls.append(mean_kl)
             mean_kl = np.mean(mean_kls)
             surr_loss = np.mean(surr_losses)
-            logger.log("Loss: %f; Mean KL: %f; KL penalty: %f" % (surr_loss, mean_kl, kl_penalty))
-            if mean_kl > self.step_size:
+
+            val_surr_loss, val_mean_kl = self.f_loss_kl(*(val_inputs + [val_init_states]))
+
+            logger.log("Train Loss: %f; Val Loss: %f; Train Mean KL: %f; KL penalty: %f" % (surr_loss, val_surr_loss,
+                                                                                            mean_kl, kl_penalty))
+            if val_surr_loss > best_val_loss:
                 kl_penalty *= self.increase_penalty_factor
             else:
                 kl_penalty *= self.decrease_penalty_factor
-            if mean_kl <= self.step_size:
-                if best_loss is None or surr_loss < best_loss:
-                    best_loss = surr_loss
-                    best_params = self.policy.get_param_values()
+            # Evaluate the validation loss
 
-        if best_params is not None:
-            self.policy.set_param_values(best_params)
+            # logger.log("Val surr loss: %f; Val Mean KL: %f" % (val_surr_loss, val_mean_kl))
 
-        surr_loss_after, kl_after = self.f_loss_kl(*(all_inputs + [init_states]))
+            if val_surr_loss < best_val_loss:
+                best_val_loss = val_surr_loss
+                best_params = self.policy.get_param_values()
+                updated = True
+            # else:
+
+        # If the policy is not updated, we can reuse the samples collected from last time
+        self.policy.set_param_values(best_params)
+        if updated:
+            self.unused_paths = []
+        else:
+            # reuse paths
+            self.unused_paths += samples_data["paths"]
+                # break
+
+
+            # if mean_kl <= self.step_size:
+            #     if best_loss is None or surr_loss < best_loss:
+            #         best_loss = surr_loss
+            #         best_params = self.policy.get_param_values()
+
+        # if best_params is not None:
+        #     self.policy.set_param_values(best_params)
+
+        train_surr_loss_after, train_kl_after = self.f_loss_kl(*(train_inputs + [train_init_states]))
+        val_surr_loss_after, val_kl_after = self.f_loss_kl(*(val_inputs + [val_init_states]))
 
         # perform minibatch gradient descent on the surrogate loss, while monitoring the KL divergence
 
-        logger.record_tabular('SurrLossBefore', surr_loss_before)
-        logger.record_tabular('SurrLossAfter', surr_loss_after)
-        logger.record_tabular('MeanKLBefore', kl_before)
-        logger.record_tabular('MeanKL', kl_after)
-        logger.record_tabular('dSurrLoss', surr_loss_before - surr_loss_after)
+        logger.record_tabular('TrainSurrLossBefore', train_surr_loss_before)
+        logger.record_tabular('TrainSurrLossAfter', train_surr_loss_after)
+        logger.record_tabular('TrainMeanKLBefore', train_kl_before)
+        logger.record_tabular('TrainMeanKL', train_kl_after)
+        logger.record_tabular('TrainDSurrLoss', train_surr_loss_before - train_surr_loss_after)
+        logger.record_tabular('ValSurrLossBefore', val_surr_loss_before)
+        logger.record_tabular('ValSurrLossAfter', val_surr_loss_after)
+        logger.record_tabular('ValMeanKLBefore', val_kl_before)
+        logger.record_tabular('ValMeanKL', val_kl_after)
+        logger.record_tabular('ValDSurrLoss', val_surr_loss_before - val_surr_loss_after)
         return dict()
 
     def get_itr_snapshot(self, itr, samples_data):

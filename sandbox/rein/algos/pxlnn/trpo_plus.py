@@ -9,17 +9,19 @@ from rllab.misc import tensor_utils
 import rllab.misc.logger as logger
 from rllab.algos import util
 
-# --
-# Nonscientific printing of numpy arrays.
 from sandbox.rein.algos.replay_pool import ReplayPool
 
+# --
+# Nonscientific printing of numpy arrays.
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
 
 
 class TRPOPlus(TRPO):
-    """TRPO+
-    Modular extension to TRPO to allow for intrinsic reward.
+    """
+    TRPO+
+
+    Extension to TRPO to allow for intrinsic reward.
     """
 
     def __init__(
@@ -37,6 +39,8 @@ class TRPOPlus(TRPO):
 
         if model_pool_args is None:
             self._model_pool_args = dict(size=100000, min_size=32, batch_size=32)
+        else:
+            self._model_pool_args = model_pool_args
 
         observation_dtype = "uint8"
         self._pool = ReplayPool(
@@ -173,17 +177,36 @@ class TRPOPlus(TRPO):
 
         return samples_data
 
-    def comp_int_rewards(self, paths):
-        pass
+    def comp_int_rewards(self, paths, sess=None):
+        """
+        Compute intrinsic rewards here, in this case this is the logp of the conditional pixelcnn dynamics model.
+        :param paths:
+        :return:
+        """
+        assert sess is not None
+
+        for path in paths:
+            x = path['observations']
+            x = x.reshape((-1, 52, 52, 1))
+            # TODO: make softmax autoencoder, get logprop here
+            # TODO: batch it
+            # @peter: here we need pixelcnn logp
+            logp = sess.run(self._model.y, feed_dict={self._model.x: x})
+            path['S'] = np.zeros(path['rewards'].shape)
 
     def fill_replay_pool(self, paths):
+        """
+        Fill replay pool with current batch of trajectories.
+        :param paths: sampled trajectories
+        :return: None
+        """
         logger.log('Filling replay pool ...')
         tot_path_len = 0
         for path in paths:
-            path_len = len(path['rewards'])
+            path_len = len(path['ext_rewards'])
             tot_path_len += path_len
             for i in range(path_len):
-                obs = (path['observations'][i] * self._model.n_classes).astype(int)
+                obs = path['observations'][i]
                 act = path['actions'][i]
                 rew_orig = path['ext_rewards'][i]
                 term = (i == path_len - 1)
@@ -201,7 +224,71 @@ class TRPOPlus(TRPO):
         """
         From uint8 encoding to original observation format.
         """
-        return obs / float(self._model.num_classes)
+        return obs / float(self._model.n_classes)
+
+    def normalize_obs(self, obs):
+        """
+        Normalize observations.
+        """
+        shape = obs.shape
+        o = obs.reshape((obs.shape[0], -1))
+        mean, std = self._pool.get_cached_mean_std_obs()
+        o = (o - mean[None, :]) / (std[None, :] + 1e-8)
+        o = o.reshape(shape)
+        return o
+
+    def denormalize_obs(self, obs):
+        """
+        Denormalize observations.
+        """
+        shape = obs.shape
+        o = obs.reshape((obs.shape[0], -1))
+        mean, std = self._pool.get_cached_mean_std_obs()
+        o = o * (std[None, :] + 1e-8) + mean[None, :]
+        o = o.reshape(shape)
+        return o
+
+    def train_model(self, sess=None):
+        # --
+        # @peter: train model here, using self._pool.random_batch(self._model_pool_args['batch_size'])
+
+        import matplotlib.pyplot as plt
+
+        assert sess is not None
+        for epoch_i in range(2000):
+            batch = self._pool.random_batch(self._model_pool_args['batch_size'])
+            x = batch['observations']
+            x = self.normalize_obs(x)
+            x = x.reshape((-1, 52, 52, 1))
+            sess.run(self._model.optimizer, feed_dict={self._model.x: x})
+            print(epoch_i, sess.run(self._model.cost, feed_dict={self._model.x: x}))
+
+        recon = sess.run(self._model.y, feed_dict={self._model.x: x[0:10]})
+
+        recon = self.denormalize_obs(recon)
+        x = self.denormalize_obs(x)
+
+        fig, axs = plt.subplots(2, 10, figsize=(10, 2))
+        for example_i in range(10):
+            axs[0][example_i].imshow(
+                np.reshape(x[example_i], (52, 52)), cmap='Greys_r', vmin=0, vmax=64)
+            axs[1][example_i].imshow(
+                np.reshape(recon[example_i], (52, 52)), cmap='Greys_r', vmin=0, vmax=64)
+            axs[0][example_i].get_xaxis().set_visible(False)
+            axs[0][example_i].get_yaxis().set_visible(False)
+            axs[1][example_i].get_xaxis().set_visible(False)
+            axs[1][example_i].get_yaxis().set_visible(False)
+        tf.train.SummaryWriter('/Users/rein/programming/tensorboard/logs', sess.graph)
+        plt.savefig('/Users/rein/programming/logs/plot.png')
+
+    def add_int_to_ext_rewards(self, paths):
+        """
+        Alter rewards in-place.
+        :param paths: sampled trajectories
+        :return: None
+        """
+        for path in paths:
+            path['rewards'] += self._eta * path['S']
 
     def train(self):
         with tf.Session() as sess:
@@ -230,14 +317,23 @@ class TRPOPlus(TRPO):
                     self.fill_replay_pool(paths)
 
                     # --
+                    # Train model.
+                    self.train_model(sess)
+
+                    # --
                     # Compute intrinisc rewards.
-                    self.comp_int_rewards(paths)
+                    self.comp_int_rewards(paths, sess)
+
+                    # --
+                    # Add intrinsic reward to external: 'rewards' is what is actually used as 'true' reward.
+                    self.add_int_to_ext_rewards(paths)
 
                     # --
                     # Compute deltas, advantages, etc.
                     samples_data = self.process_samples(itr, paths)
 
                     # --
+                    # Optimize policy according to latest trajectory batch `samples_data`.
                     self.optimize_policy(itr, samples_data)
 
                     # --
@@ -247,7 +343,7 @@ class TRPOPlus(TRPO):
                     params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
                     if self.store_paths:
                         params["paths"] = samples_data["paths"]
-                    # FIXME: bugged
+                    # FIXME: bugged: pickle issues
                     # logger.save_itr_params(itr, params)
                     logger.log("saved")
                     logger.record_tabular('Time', time.time() - start_time)

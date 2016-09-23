@@ -7,12 +7,34 @@ import contextlib
 import scipy
 import math
 from cached_property import cached_property
-import cv2
 
 from rllab.misc import logger
 from rllab.spaces.product import Product
 from rllab.spaces.box import Box
 from sandbox.rocky.analogy.utils import unwrap
+
+import numba
+
+
+@numba.njit
+def decompress_numba(observations, screen_width, screen_height, colors, buffer):
+    images = buffer
+    radius = 0.05
+    # scaled_diameter = int(math.ceil((radius * 2) * min(screen_width, screen_height)))
+    scaled_radius = max(1, int(math.floor(radius * min(screen_width, screen_height))))
+    for idx in range(len(observations)):
+        obs = observations[idx]
+        poses = obs.reshape((-1, 2))
+        image = images[idx]
+        for pos_idx in range(len(poses)):
+            x, y = poses[pos_idx]
+            color = colors[pos_idx]
+            scaled_x = int(np.floor((x + 1) * screen_height * 0.5))
+            scaled_y = int(np.floor((y + 1) * screen_width * 0.5))
+            for x_ in range(scaled_x - scaled_radius, scaled_x + scaled_radius):
+                for y_ in range(scaled_y - scaled_radius, scaled_y + scaled_radius):
+                    image[x_, y_] = color
+    return images
 
 
 @contextlib.contextmanager
@@ -94,6 +116,33 @@ class SimpleParticleEnv(Env):
         self.obs_type = obs_type
         self.obs_size = obs_size
         self.random_init_position = random_init_position
+        self._compressed = False
+
+    @property
+    def compressed(self):
+        return self._compressed
+
+    @compressed.setter
+    def compressed(self, val):
+        self._compressed = val
+
+    def decompress(self, observations):
+        if self.obs_type == 'state':
+            return observations
+        if len(observations.shape) == 3:
+            flat_obs = observations.reshape((-1, observations.shape[-1]))
+        else:
+            flat_obs = observations
+
+        colors = np.cast['float32'](np.concatenate([np.array([[0, 0, 0]]), np.asarray(COLORS) * 255], axis=0))
+
+        buffer = np.zeros((flat_obs.shape[0],) + self.obs_size + (3,), dtype=np.float32) + 255
+        decompressed = decompress_numba(flat_obs, self.obs_size[0], self.obs_size[1], colors, buffer)
+
+        if len(observations.shape) == 3:
+            return decompressed.reshape(observations.shape[:2] + (-1,))
+        else:
+            return decompressed.reshape((observations.shape[0], -1))
 
     def reset_trial(self):
         seed = np.random.randint(np.iinfo(np.int32).max)
@@ -107,7 +156,7 @@ class SimpleParticleEnv(Env):
             seed = self.seed
         with using_seed(seed):
             if self.random_init_position:
-                self.agent_pos = np.random.uniform(low=-0.4, high=0.4, size=(2,))#np.array([0., 0.])
+                self.agent_pos = np.random.uniform(low=-0.4, high=0.4, size=(2,))  # np.array([0., 0.])
             else:
                 self.agent_pos = np.array([0., 0.])
 
@@ -133,9 +182,7 @@ class SimpleParticleEnv(Env):
                         tweak_idx = cosine_in_conflict[0][0]
                         self.particles[tweak_idx] = np.random.uniform(low=-0.8, high=0.8, size=(2,))
                     else:
-                        # check
                         break
-                        # pairwist_dist =
             with using_seed(self.target_seed):
                 self.target_id = np.random.choice(np.arange(self.n_particles))
         return self.get_current_obs()
@@ -146,9 +193,9 @@ class SimpleParticleEnv(Env):
         reward = -dist
         return Step(self.get_current_obs(), reward, False, **self.get_env_info())
 
-    @cached_property
+    @property
     def observation_space(self):
-        if self.obs_type == 'state':
+        if self.obs_type == 'state' or self.obs_type == 'image' and self.compressed:
             return Product(
                 Box(low=-np.inf, high=np.inf, shape=(2,)),
                 Box(low=-np.inf, high=np.inf, shape=(self.n_particles, 2))
@@ -166,19 +213,10 @@ class SimpleParticleEnv(Env):
         return Box(low=-0.1, high=0.1, shape=(2,))
 
     def get_current_obs(self):
-        if self.obs_type == 'state':
+        if self.obs_type == 'state' or self.obs_type == 'image' and self.compressed:
             return np.copy(self.agent_pos), np.copy(self.particles)
         elif self.obs_type == 'image':
             img = self.render(mode='rgb_array')
-            # print((img.flatten() * np.arange(img.size)).sum())
-            # cv2.imshow('image',img)
-            # import time
-            # time.sleep(0.1)
-            # # cv2.waitKey(0)
-            # cv2.destroyAllWindows()
-            # # rescale to lie in [-1, 1]
-            # # cv2.imshow('image', img)
-            # # import ipdb; ipdb.set_trace()
             return (img / 255.0 - 0.5) * 2
         else:
             raise NotImplementedError
@@ -260,11 +298,8 @@ class SimpleParticleEnv(Env):
         return self.viewers[mode].render(return_rgb_array=mode == 'rgb_array')
 
     def log_analogy_diagnostics(self, paths, envs):
-        # import ipdb; ipdb.set_trace()
-        # last_agent_pos = np.asarray([self.observation_space.unflatten(p["observations"][-1])[0] for p in paths])
         last_agent_pos = np.asarray([p["env_infos"]["agent_pos"][-1] for p in paths])
         target_pos = np.asarray([p["env_infos"]["target_pos"][-1] for p in paths])
-        # target_pos = np.asarray([e.particles[e.target_id] for e in envs])
         dists = np.sqrt(np.sum(np.square(last_agent_pos - target_pos), axis=-1))
         logger.record_tabular('AverageFinalDistToGoal', np.mean(dists))
         logger.record_tabular('SuccessRate(Dist<0.1)', np.mean(dists < 0.1))

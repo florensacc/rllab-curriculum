@@ -1,6 +1,7 @@
 """
 Use image observations
-Continue exp-008a with a smaller batch size (10k instead of 50k)
+Continue exp-007
+Use GPU for acceleration
 """
 # from sandbox.rocky.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
 # from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
@@ -31,7 +32,6 @@ import sys,os
 import copy
 
 stub(globals())
-import tensorflow as tf
 
 from rllab.misc.instrument import VariantGenerator, variant
 
@@ -43,7 +43,7 @@ subnet = "us-west-1c"
 n_parallel = 4
 snapshot_mode = "last"
 plot = False
-use_gpu = False # should change conv_type and ~/.theanorc
+use_gpu = True # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
 
 
@@ -61,6 +61,7 @@ cg_args = dict(
     backtrack_ratio=0.8,
     accept_violation=False,
     hvp_approach=FiniteDifferenceHvp(base_eps=1e-5),
+    num_slices=10,
 )
 step_size = 0.01
 network_args = trpo_dqn_args
@@ -91,7 +92,7 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["qbert","breakout","beam_rider"]
+        return ["beam_rider"]
 variants = VG().variants()
 
 
@@ -127,9 +128,9 @@ for v in variants:
         **network_args
     )
 
-    network_args_for_vf = copy.deepcopy(network_args)
-    network_args_for_vf.pop("output_nonlinearity")
     baseline = ZeroBaseline(env_spec=env.spec)
+    # network_args_for_vf = copy.deepcopy(network_args)
+    # network_args_for_vf.pop("output_nonlinearity")
     # baseline = GaussianConvBaseline(
     #     env_spec=env.spec,
     #     regressor_args = dict(

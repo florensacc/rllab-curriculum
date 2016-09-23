@@ -1,4 +1,6 @@
 
+import os
+
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
 # from rllab.algos.batch_polopt import BatchPolopt
@@ -39,8 +41,11 @@ class ParallelTRPO(ParallelBatchPolopt):
     @overrides
     def init_opt(self):
         """
-        Same as normal NPO.
+        Same as normal NPO, except for setting MKL_NUM_THREADS.
         """
+        # Set BEFORE Theano compiling; make equal to number of cores per worker.
+        os.environ['MKL_NUM_THREADS'] = str(1)
+
         is_recurrent = int(self.policy.recurrent)
         obs_var = self.env.observation_space.new_tensor_variable(
             'obs',

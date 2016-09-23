@@ -6,7 +6,6 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.core.network import ConvNetwork
 from rllab.misc.instrument import stub, run_experiment_lite
-from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 from rllab.baselines.zero_baseline import ZeroBaseline
 
 from sandbox.rein.envs.atari import AtariEnvX
@@ -27,7 +26,7 @@ baseline = True
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'bin-count-nonoise-c'
+    exp_prefix = 'debug-bin-count-nonoise-c'
     seeds = range(1)
     etas = [0.1]
     mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),

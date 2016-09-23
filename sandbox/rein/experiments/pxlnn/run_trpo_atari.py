@@ -21,7 +21,7 @@ stub(globals())
 TEST_RUN = True
 
 # global params
-n_seq_frames = 4
+n_seq_frames = 1
 
 # Param ranges
 if TEST_RUN:
@@ -92,12 +92,16 @@ for factor, mdp, eta, seed in param_cart_product:
     )
 
     # Dynamics model f: num_seq_frames x h x w -> h x w
+    # TODO: change into autoenc with softmax output.
     model = ConvAutoEncoder(
         input_shape=env_spec.observation_space.shape,  # mdp.spec.observation_space.shape,
         n_filters=[n_seq_frames, 10, 10],
         filter_sizes=[6, 6, 6],
         n_classes=64,
     )
+
+    # --
+    # @peter: insert model definition here
 
     algo = TRPOPlus(
         model=model,
@@ -110,7 +114,11 @@ for factor, mdp, eta, seed in param_cart_product:
         n_itr=400,
         step_size=0.01,
         n_seq_frames=n_seq_frames,
-        sampler_cls=BatchSampler,
+        model_pool_args=dict(
+            size=100000,
+            min_size=32,
+            batch_size=32
+        )
     )
 
     run_experiment_lite(
@@ -122,6 +130,6 @@ for factor, mdp, eta, seed in param_cart_product:
         mode="local",
         dry=False,
         use_gpu=True,
-        script="sandbox/rein/experiments/run_experiment_lite_count.py",
+        script="sandbox/rein/experiments/run_experiment_lite.py",
         sync_all_data_node_to_s3=True
     )
