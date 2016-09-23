@@ -627,6 +627,15 @@ class MeanBernoulli(Bernoulli):
     def nonreparam_logli(self, x_var, dist_info):
         return tf.zeros_like(x_var[:, 0])
 
+class TanhMeanBernoulli(MeanBernoulli):
+    """
+    Behaves almost the same as the usual Bernoulli distribution, except that when sampling from it, directly
+    return the mean instead of sampling binary values
+    """
+
+    def activate_dist(self, flat_dist):
+        return dict(p=tf.nn.tanh(flat_dist))
+
 
 # class MeanCenteredUniform(MeanBernoulli):
 #     """

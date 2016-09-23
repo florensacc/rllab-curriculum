@@ -49,7 +49,10 @@ class EnsembleGANTrainer(object):
         self.imgs = None
 
     def init_opt(self):
-        self.input_tensor = input_tensor = tf.placeholder(tf.float32, [self.batch_size, 28 * 28])
+        self.input_tensor = input_tensor = tf.placeholder(
+            tf.float32,
+            [self.batch_size, self.dataset.image_dim]
+        )
 
         with pt.defaults_scope(phase=pt.Phase.train):
             z_var = self.model.latent_dist.sample_prior(self.batch_size)
@@ -147,10 +150,13 @@ class EnsembleGANTrainer(object):
                 # elif isinstance(self.model.output_dist, Gaussian):
                 #    img_var = x_dist_info["mean"]
 
-                rows = 10
-                img_var = tf.reshape(img_var, [self.batch_size, 28, 28, 1])
+                rows = int(np.sqrt(self.batch_size))
+                img_var = tf.reshape(
+                    img_var,
+                    [self.batch_size,] + list(self.dataset.image_shape)
+                )
                 img_var = img_var[:rows * rows, :, :, :]
-                imgs = tf.reshape(img_var, [rows, rows, 28, 28, 1])
+                imgs = tf.reshape(img_var, [rows, rows,] + list(self.dataset.image_shape))
                 stacked_img = []
                 for row in range(rows):
                     row_img = []
@@ -171,10 +177,26 @@ class EnsembleGANTrainer(object):
         with tf.Session() as sess:
             sess.run(init)
 
+
             summary_op = tf.merge_all_summaries()
             summary_writer = tf.train.SummaryWriter(self.log_dir, sess.graph)
 
             saver = tf.train.Saver()
+
+            imgs = sess.run(self.imgs, )
+            import scipy
+            import scipy.misc
+            scipy.misc.imsave(
+                "%s/init.png" % (self.log_dir),
+                imgs.reshape(
+                    list(imgs.shape[1:3]) +
+                    (
+                        []
+                        if self.model.image_shape[-1] == 1
+                        else [self.model.image_shape[-1]]
+                    )
+                ),
+            )
 
             counter = 0
 
@@ -202,7 +224,8 @@ class EnsembleGANTrainer(object):
                         print(("Model saved in file: %s" % fn))
 
                 x, _ = self.dataset.train.next_batch(self.batch_size)
-                if (epoch % (self.max_epoch // 10)) == 0:
+                # if (epoch % (self.max_epoch // 10)) == 0:
+                if (epoch % (5)) == 0:
                     summary_str, imgs = sess.run([summary_op, self.imgs], {self.input_tensor: x})
                     import scipy
                     import scipy.misc
