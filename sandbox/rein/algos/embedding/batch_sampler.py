@@ -1,5 +1,5 @@
 from rllab.sampler.base import BaseSampler
-from sandbox.rein.algos.pxlnn import parallel_sampler
+from sandbox.rein.algos.embedding import parallel_sampler
 from rllab.sampler.stateful_pool import singleton_pool
 import tensorflow as tf
 

@@ -1,4 +1,4 @@
-from sandbox.rein.algos.pxlnn.utils import rollout
+from sandbox.rein.algos.embedding.utils import rollout
 from rllab.sampler.stateful_pool import singleton_pool, SharedGlobal
 from rllab.misc import ext
 from rllab.misc import logger

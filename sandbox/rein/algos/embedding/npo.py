@@ -2,7 +2,7 @@ from rllab.misc import ext
 from rllab.misc.overrides import overrides
 import rllab.misc.logger as logger
 from sandbox.rocky.tf.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-from sandbox.rein.algos.pxlnn.batch_polopt import BatchPolopt
+from sandbox.rein.algos.embedding.batch_polopt import BatchPolopt
 from sandbox.rocky.tf.misc import tensor_utils
 import tensorflow as tf
 

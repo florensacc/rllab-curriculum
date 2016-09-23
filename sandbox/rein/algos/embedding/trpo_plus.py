@@ -2,15 +2,15 @@ import tensorflow as tf
 import time
 from collections import defaultdict
 
-from sandbox.rein.algos.pxlnn.plotter import Plotter
-from sandbox.rein.algos.pxlnn.trpo import TRPO
+from sandbox.rein.algos.embedding.plotter import Plotter
+from sandbox.rein.algos.embedding.trpo import TRPO
 from rllab.misc import special
 import numpy as np
 from rllab.misc import tensor_utils
 import rllab.misc.logger as logger
 from rllab.algos import util
-
-from sandbox.rein.algos.replay_pool import ReplayPool, SingleStateReplayPool
+from sandbox.rein.dynamics_models.utils import iterate_minibatches
+from sandbox.rein.algos.replay_pool import SingleStateReplayPool
 
 # --
 # Nonscientific printing of numpy arrays.
@@ -195,8 +195,8 @@ class TRPOPlus(TRPO):
 
         for idx, path in enumerate(paths):
             # When using num_seq_frames > 1, we need to extract the last one.
-            obs = self.decode_obs(path['observations'][:, -np.prod(self.autoenc.state_dim):])
-            keys = np.cast['int'](np.round(self.autoenc.discrete_emb(obs)))
+            obs = self.decode_obs(path['observations'][:, -np.prod(self._model.state_dim):])
+            keys = np.cast['int'](np.round(self._model.discrete_emb(obs)))
             counts = np.zeros(len(keys))
             lst_key_as_int = np.zeros(len(keys), dtype=int)
             for idy, key in enumerate(keys):
@@ -223,21 +223,16 @@ class TRPOPlus(TRPO):
 
     def fill_replay_pool(self, paths):
         """
-        Fill replay pool with current batch of trajectories.
-        :param paths: sampled trajectories
-        :return: None
+        Fill up replay pool.
+        :param paths:
+        :return:
         """
-        logger.log('Filling replay pool ...')
         tot_path_len = 0
         for path in paths:
-            path_len = len(path['ext_rewards'])
-            tot_path_len += path_len
+            path_len = len(path['rewards'])
+            tot_path_len + + path_len
             for i in range(path_len):
-                obs = path['observations'][i]
-                act = path['actions'][i]
-                rew_orig = path['ext_rewards'][i]
-                term = (i == path_len - 1)
-                self._pool.add_sample(obs, act, rew_orig, term)
+                self._pool.add_sample(path['observations'][i, -np.prod(self._model.state_dim):])
         logger.log('{} samples added to replay pool ({}).'.format(tot_path_len, self._pool.size))
 
     def encode_obs(self, obs):
@@ -245,13 +240,13 @@ class TRPOPlus(TRPO):
         Observation into uint8 encoding, also functions as target format
         """
         assert np.max(obs) <= 1.0
-        return (obs * self._model.n_classes).astype("uint8")
+        return (obs * self._model.num_classes).astype("uint8")
 
     def decode_obs(self, obs):
         """
         From uint8 encoding to original observation format.
         """
-        return obs / float(self._model.n_classes)
+        return obs / float(self._model.num_classes)
 
     def normalize_obs(self, obs):
         """
@@ -275,35 +270,73 @@ class TRPOPlus(TRPO):
         o = o.reshape(shape)
         return o
 
-    def train_model(self, sess=None):
-        import matplotlib.pyplot as plt
+    def accuracy(self, _inputs, _targets):
+        """
+        Calculate accuracy for inputs/outputs.
+        :param _inputs:
+        :param _targets:
+        :return:
+        """
+        acc = 0.
+        for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
+            _i, _t, _ = batch
+            _o = self._model.pred_fn(_i)
+            _o_s = _o
+            _o_s = _o_s.reshape((-1, np.prod(self._model.state_dim), self._model.num_classes))
+            _o_s = np.argmax(_o_s, axis=2)
+            acc += np.sum(np.abs(_o_s - _t))
+        return acc / _inputs.shape[0]
 
-        assert sess is not None
-        for epoch_i in range(2000):
-            batch = self._pool.random_batch(self._model_pool_args['batch_size'])
-            x = batch['observations']
-            x = self.normalize_obs(x)
-            x = x.reshape((-1, 52, 52, 1))
-            # TODO: insert training procedure
-            print(epoch_i, sess.run(self._model.cost, feed_dict={self._model.x: x}))
+    def train_model(self):
+        """
+        Train autoencoder model.
+        :return:
+        """
+        logger.log('Updating autoencoder using replay pool ({}) ...'.format(self._pool.size))
+        acc_before, acc_after, train_loss, running_avg = 0., 0., 0., 0.
+        if self._pool.size >= self._model_pool_args['min_size']:
 
-        recon = sess.run(self._model.y, feed_dict={self._model.x: x[0:10]})
+            for _ in range(10):
+                batch = self._pool.random_batch(32)
+                _x = self.decode_obs(batch['observations'])
+                _y = batch['observations']
+                acc_before += self.accuracy(_x, _y) / 10.
 
-        recon = self.denormalize_obs(recon)
-        x = self.denormalize_obs(x)
+            done = False
+            old_running_avg = np.inf
+            while not done:
+                running_avg = 0.
+                for _ in range(5):
+                    # Replay pool return uint8 target format, so decode _x.
+                    batch = self._pool.random_batch(self._model_pool_args['batch_size'])
+                    _x = self.decode_obs(batch['observations'])
+                    _y = batch['observations']
+                    train_loss = float(self._model.train_fn(_x, _y, 0))
+                    assert not np.isinf(train_loss)
+                    assert not np.isnan(train_loss)
+                    running_avg += train_loss / 500.
+                if old_running_avg - running_avg < 1e4:
+                    done = True
+                logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
+                    running_avg, old_running_avg - running_avg))
+                old_running_avg = running_avg
 
-        fig, axs = plt.subplots(2, 10, figsize=(10, 2))
-        for example_i in range(10):
-            axs[0][example_i].imshow(
-                np.reshape(x[example_i], (52, 52)), cmap='Greys_r', vmin=0, vmax=64)
-            axs[1][example_i].imshow(
-                np.reshape(recon[example_i], (52, 52)), cmap='Greys_r', vmin=0, vmax=64)
-            axs[0][example_i].get_xaxis().set_visible(False)
-            axs[0][example_i].get_yaxis().set_visible(False)
-            axs[1][example_i].get_xaxis().set_visible(False)
-            axs[1][example_i].get_yaxis().set_visible(False)
-        tf.train.SummaryWriter('/Users/rein/programming/tensorboard/logs', sess.graph)
-        plt.savefig('/Users/rein/programming/logs/plot.png')
+            for i in range(10):
+                batch = self._pool.random_batch(32)
+                _x = self.decode_obs(batch['observations'])
+                _y = batch['observations']
+                acc_after += self.accuracy(_x, _y) / 10.
+            self.plot_pred_imgs(_x, _y, 0, 0, dir='/random_samples')
+
+            logger.log('Autoencoder updated.')
+        else:
+            logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
+                self._model_pool_args['min_size'], self._pool.size
+            ))
+
+        logger.record_tabular('AE_SqErrBefore', acc_before)
+        logger.record_tabular('AE_SqErrAfter', acc_after)
+        logger.record_tabular('AE_TrainLoss', running_avg)
 
     def add_int_to_ext_rewards(self, paths):
         """
@@ -342,7 +375,7 @@ class TRPOPlus(TRPO):
 
                     # --
                     # Train model.
-                    self.train_model(sess)
+                    self.train_model()
 
                     # --
                     # Compute intrinisc rewards.
