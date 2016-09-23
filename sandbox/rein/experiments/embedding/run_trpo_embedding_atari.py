@@ -210,7 +210,8 @@ for factor, mdp, eta, seed in param_cart_product:
         model_pool_args=dict(
             size=100000,
             min_size=32,
-            batch_size=32
+            batch_size=32,
+            subsample_factor=0.1,
         )
     )
 

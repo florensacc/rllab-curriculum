@@ -204,7 +204,7 @@ class TRPOPlus(TRPO):
                 lst_key_as_int[idy] = key_as_int
                 self._counting_table[key_as_int] += 1
                 counts[idy] += self._counting_table[key_as_int]
-                if self.hamming_distance == 1:
+                if self._hamming_distance == 1:
                     for i in range(len(key)):
                         key_trans = np.array(key)
                         key_trans[i] = 1 - key_trans[i]
@@ -218,7 +218,7 @@ class TRPOPlus(TRPO):
             num_unique = len(set(lst_key_as_int))
             logger.log('Path {}: unique values: {}/{}'.format(idx, num_unique, len(lst_key_as_int)))
 
-        num_encountered_unique_keys = len(self.counting_table)
+        num_encountered_unique_keys = len(self._counting_table)
         logger.log('Counting table contains {} entries.'.format(num_encountered_unique_keys))
 
     def fill_replay_pool(self, paths):
@@ -230,7 +230,7 @@ class TRPOPlus(TRPO):
         tot_path_len = 0
         for path in paths:
             path_len = len(path['rewards'])
-            tot_path_len + + path_len
+            tot_path_len += path_len
             for i in range(path_len):
                 self._pool.add_sample(path['observations'][i, -np.prod(self._model.state_dim):])
         logger.log('{} samples added to replay pool ({}).'.format(tot_path_len, self._pool.size))
@@ -298,7 +298,7 @@ class TRPOPlus(TRPO):
 
             for _ in range(10):
                 batch = self._pool.random_batch(32)
-                _x = self.decode_obs(batch['observations'])
+                _x = (batch['observations'])
                 _y = batch['observations']
                 acc_before += self.accuracy(_x, _y) / 10.
 
@@ -309,7 +309,7 @@ class TRPOPlus(TRPO):
                 for _ in range(5):
                     # Replay pool return uint8 target format, so decode _x.
                     batch = self._pool.random_batch(self._model_pool_args['batch_size'])
-                    _x = self.decode_obs(batch['observations'])
+                    _x = (batch['observations'])
                     _y = batch['observations']
                     train_loss = float(self._model.train_fn(_x, _y, 0))
                     assert not np.isinf(train_loss)
@@ -323,10 +323,10 @@ class TRPOPlus(TRPO):
 
             for i in range(10):
                 batch = self._pool.random_batch(32)
-                _x = self.decode_obs(batch['observations'])
+                _x = (batch['observations'])
                 _y = batch['observations']
                 acc_after += self.accuracy(_x, _y) / 10.
-            self.plot_pred_imgs(_x, _y, 0, 0, dir='/random_samples')
+            self._plotter.plot_pred_imgs(self._model, _x, _y, 0, 0, dir='/random_samples')
 
             logger.log('Autoencoder updated.')
         else:
@@ -348,6 +348,7 @@ class TRPOPlus(TRPO):
             path['rewards'] += self._eta * path['S']
 
     def train(self):
+        # TODO: make sure normalize/decode/encode is applied correctly.
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
             self.start_worker()
@@ -379,7 +380,7 @@ class TRPOPlus(TRPO):
 
                     # --
                     # Compute intrinisc rewards.
-                    self.comp_int_rewards(paths, sess)
+                    self.comp_int_rewards(paths)
 
                     # --
                     # Add intrinsic reward to external: 'rewards' is what is actually used as 'true' reward.
@@ -392,6 +393,17 @@ class TRPOPlus(TRPO):
                     # --
                     # Optimize policy according to latest trajectory batch `samples_data`.
                     self.optimize_policy(itr, samples_data)
+
+                    # --
+                    # Analysis
+                    if itr == 0:
+                        # Select 5 random images form the first path, evaluate them at every iteration to inspect emb.
+                        rnd = np.random.randint(0, len(paths[0]['observations']), 5)
+                        self._test_obs = paths[0]['observations'][rnd]
+                    self._plotter.plot_pred_imgs(self._model, self.decode_obs(self._test_obs), self._test_obs, -itr - 1,
+                                                 0, dir='/consistency_check')
+                    obs = paths[0]['observations'][-50:, -np.prod(self._model.state_dim):]
+                    self._plotter.plot_pred_imgs(self._model, (obs), obs, 0, 0, dir='/uniqueness_check')
 
                     # --
                     # Diagnostics
