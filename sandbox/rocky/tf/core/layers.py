@@ -1679,6 +1679,7 @@ class BatchNormLayer(Layer):
         input_shape = incoming.output_shape
         axis = list(range(len(input_shape) - 1))
         params_shape = input_shape[-1:]
+
         if center:
             self.beta = self.add_param(beta, shape=params_shape, name='beta', trainable=True, regularizable=False)
         else:
@@ -1687,6 +1688,7 @@ class BatchNormLayer(Layer):
             self.gamma = self.add_param(gamma, shape=params_shape, name='gamma', trainable=True, regularizable=True)
         else:
             self.gamma = None
+
         self.moving_mean = self.add_param(moving_mean, shape=params_shape, name='moving_mean', trainable=False,
                                           regularizable=False)
         self.moving_variance = self.add_param(moving_variance, shape=params_shape, name='moving_variance',
