@@ -22,13 +22,17 @@ if __name__ == "__main__":
 
     root_log_dir = "logs/cifar"
     root_checkpoint_dir = "ckt/cifar"
-    batch_size = 32
+    batch_size = 64
     updates_per_epoch = 100
-    max_epoch = 100
+    max_epoch = 50000
 
 
     nr_model = 30
-    exp_name = "cifar2_dps_dls_%sensemble_cifar10_%s" % (nr_model, timestamp)
+    exp_name = "cifar2_dps_dls_bs_%s_%sensemble_cifar10_%s" % (
+        batch_size,
+        nr_model,
+        timestamp
+    )
     log_dir = os.path.join(root_log_dir, exp_name)
     checkpoint_dir = os.path.join(root_checkpoint_dir, exp_name)
 

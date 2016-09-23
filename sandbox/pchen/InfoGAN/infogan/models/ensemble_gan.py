@@ -101,24 +101,53 @@ class EnsembleGAN(object):
                      apply(tf.nn.relu).
                      custom_deconv2d([0] + list(image_shape), k_h=4, k_w=4).
                      flatten())
-        elif network_type == "cifar1":
+        elif network_type == "cifar2":
             with tf.variable_scope("d_net"):
                 for i in range(nr_models):
                     with tf.variable_scope("model%s"%i):
                         base_filter = [4, 6, 12, 16][i%4]
-                        # seq = [3,2,1,0]
-                        # tmp = pt.template("input").\
-                        #     reshape([-1] + list(image_shape)).\
-                        #     custom_conv2d(base_filter, k_h=4, k_w=4).\
-                        #     apply(leaky_rectify)
-                        # for _ in range(seq):
-                        #     tmp = tmp.custom_conv2d(
-                        #         base_filter,
-                        #         k_h=3, k_w=3,
-                        #         d_h=1, d_w=1,
-                        #     ).apply(
-                        #         leaky_rectify
-                        #     )
+                        seq = [3,2,1,0][i%4]
+                        tmp = pt.template("input").\
+                            reshape([-1] + list(image_shape)).\
+                            custom_conv2d(base_filter, k_h=4, k_w=4).\
+                            conv_batch_norm().\
+                            apply(leaky_rectify) # 16
+                        for _ in range(seq):
+                            tmp = tmp.custom_conv2d(
+                                base_filter,
+                                k_h=3, k_w=3,
+                                d_h=1, d_w=1,
+                            ).apply(
+                                leaky_rectify
+                            )
+                        tmp = tmp.custom_conv2d(
+                            base_filter*2,
+                            k_h=3, k_w=3,
+                        ).conv_batch_norm().apply(
+                            leaky_rectify
+                        ) # 8
+                        for _ in range(seq):
+                            tmp = tmp.custom_conv2d(
+                                base_filter,
+                                k_h=3, k_w=3,
+                                d_h=1, d_w=1,
+                            ).apply(
+                                leaky_rectify
+                            )
+                        tmp = tmp.custom_conv2d(
+                            base_filter*3,
+                            k_h=3, k_w=3,
+                        ).conv_batch_norm().apply(
+                            leaky_rectify
+                        ) # 4
+                        for _ in range(seq):
+                            tmp = tmp.custom_conv2d(
+                                base_filter,
+                                k_h=3, k_w=3,
+                                d_h=1, d_w=1,
+                            ).apply(
+                                leaky_rectify
+                            )
                         shared_template = \
                             (pt.template("input").
                              reshape([-1] + list(image_shape)).
@@ -134,7 +163,10 @@ class EnsembleGAN(object):
                              apply(leaky_rectify)
                         )
                         self.discriminator_templates.append(
-                            shared_template.custom_fully_connected(1)
+                            shared_template.
+                                custom_fully_connected(base_filter*16).
+                                apply(leaky_rectify).
+                                custom_fully_connected(1)
                         )
 
             from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
