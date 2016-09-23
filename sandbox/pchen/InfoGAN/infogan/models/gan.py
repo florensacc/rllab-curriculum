@@ -77,9 +77,10 @@ class GAN(object):
         else:
             raise NotImplementedError
 
-    def discriminate(self, x_var):
-        d_out = self.discriminator_template.construct(input=x_var)
-        d = tf.nn.sigmoid(d_out[:, 0])
+    def discriminate(self, x_var, logits=False):
+        d = self.discriminator_template.construct(input=x_var)
+        if not logits:
+            d = tf.nn.sigmoid(d[:, 0])
         return d
 
     def generate(self, z_var):

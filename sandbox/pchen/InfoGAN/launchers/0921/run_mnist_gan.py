@@ -23,7 +23,7 @@ if __name__ == "__main__":
     updates_per_epoch = 100
     max_epoch = 150
 
-    exp_name = "mnist_%s" % timestamp
+    exp_name = "logit_mnist_%s" % timestamp
 
     log_dir = os.path.join(root_log_dir, exp_name)
     checkpoint_dir = os.path.join(root_checkpoint_dir, exp_name)
