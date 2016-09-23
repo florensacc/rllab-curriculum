@@ -22,13 +22,13 @@ if __name__ == "__main__":
 
     root_log_dir = "logs/cifar"
     root_checkpoint_dir = "ckt/cifar"
-    batch_size = 32
+    batch_size = 64
     updates_per_epoch = 100
     max_epoch = 50000
 
 
-    nr_model = 50
-    exp_name = "cifar2_dps_dls_bs_%s_%sensemble_cifar10_%s" % (
+    nr_model = 30
+    exp_name = "cifar1_dps_dls_bs_%s_%sensemble_cifar10_%s" % (
         batch_size,
         nr_model,
         timestamp
@@ -56,7 +56,7 @@ if __name__ == "__main__":
         batch_size=batch_size,
         image_shape=dataset.image_shape,
         # network_type="mnist",
-        network_type="cifar2",
+        network_type="cifar1",
         nr_models=nr_model,
     )
 
