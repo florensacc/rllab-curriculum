@@ -189,22 +189,8 @@ class EnsembleGAN(object):
                             ).apply(
                                 leaky_rectify
                             )
-                        shared_template = \
-                            (pt.template("input").
-                             reshape([-1] + list(image_shape)).
-                             custom_conv2d(base_filter, k_h=4, k_w=4).
-                             apply(leaky_rectify).
-                             custom_conv2d(base_filter*2, k_h=4, k_w=4).
-                             apply(leaky_rectify).
-                             custom_conv2d(base_filter*4, k_h=4, k_w=4).
-                             # conv_batch_norm().
-                             apply(leaky_rectify).
-                             custom_fully_connected(base_filter*16).
-                             # fc_batch_norm().
-                             apply(leaky_rectify)
-                        )
                         self.discriminator_templates.append(
-                            shared_template.
+                            tmp.
                                 custom_fully_connected(base_filter*16).
                                 apply(leaky_rectify).
                                 custom_fully_connected(1)
@@ -242,6 +228,96 @@ class EnsembleGAN(object):
                 self.generator_template = (self.generator_template.
                      custom_deconv2d([0] + list(image_shape), k_h=5, k_w=5).
                      flatten())
+        elif network_type == "cifar3":
+            with tf.variable_scope("d_net"):
+                for i in range(nr_models):
+                    with tf.variable_scope("model%s"%i):
+                        base_filter = [96, 48, 24][i%3]
+                        seq = [2,1][i%2]
+                        tmp = pt.template("input"). \
+                            reshape([-1] + list(image_shape)). \
+                            custom_conv2d(base_filter, k_h=3, k_w=3). \
+                            conv_batch_norm(). \
+                            apply(leaky_rectify) # 16
+                        for _ in range(seq):
+                            tmp = tmp.custom_conv2d(
+                                base_filter,
+                                k_h=3, k_w=3,
+                                d_h=1, d_w=1,
+                            ).apply(
+                                leaky_rectify
+                            )
+                        tmp = tmp.custom_conv2d(
+                            base_filter*2,
+                            k_h=3, k_w=3,
+                            ).conv_batch_norm().apply(
+                            leaky_rectify
+                        ) # 8
+                        for _ in range(seq):
+                            tmp = tmp.custom_conv2d(
+                                base_filter,
+                                k_h=3, k_w=3,
+                                d_h=1, d_w=1,
+                            ).apply(
+                                leaky_rectify
+                            )
+                        tmp = tmp.custom_conv2d(
+                            base_filter*3,
+                            k_h=3, k_w=3,
+                            ).conv_batch_norm().apply(
+                            leaky_rectify
+                        ) # 4
+                        for _ in range(seq):
+                            tmp = tmp.custom_conv2d(
+                                base_filter,
+                                k_h=3, k_w=3,
+                                d_h=1, d_w=1,
+                            ).apply(
+                                leaky_rectify
+                            )
+                        tmp = tmp.apply(
+                            tf.reduce_mean,
+                            [1, 2]
+                        ) # spatial avg pooling
+                        self.discriminator_templates.append(
+                            tmp.
+                                custom_fully_connected(base_filter*16).
+                                apply(leaky_rectify).
+                                custom_fully_connected(1)
+                        )
+
+            from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+            with tf.variable_scope("g_net"):
+                self.generator_template = \
+                    (pt.template("input").
+                     custom_fully_connected(image_size // 8 * image_size // 8 * 512).
+                     fc_batch_norm().
+                     apply(tf.nn.relu).
+                     reshape([-1, image_size // 8, image_size // 8, 512]).
+                     custom_deconv2d([0, image_size // 4, image_size // 4, 256], k_h=5, k_w=5).
+                     conv_batch_norm().
+                     apply(tf.nn.relu))
+                # self.generator_template = resconv_v1(
+                #     self.generator_template,
+                #     4,
+                #     64,
+                #     stride=1,
+                #     add_coeff=0.3
+                # )
+                self.generator_template = (self.generator_template.
+                                           custom_deconv2d([0, image_size // 2, image_size // 2, 128], k_h=5, k_w=5).
+                                           conv_batch_norm().
+                                           apply(tf.nn.relu))
+                # self.generator_template = resconv_v1(
+                #     self.generator_template,
+                #     4,
+                #     32,
+                #     stride=1,
+                #     add_coeff=0.3
+                # )
+                self.generator_template = (self.generator_template.
+                                           custom_deconv2d([0] + list(image_shape), k_h=5, k_w=5).
+                                           flatten())
         else:
             raise NotImplementedError
 

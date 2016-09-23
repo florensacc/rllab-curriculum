@@ -25,10 +25,14 @@ class EnsembleGANTrainer(object):
             generator_learning_rate=2e-4,
             discriminator_leakage="all",  # [all, single]
             discriminator_priviledge="all",  # [all, single]
+            bootstrap_rate=1.0,
+            anneal_to=None,
+            anneal_len=None,
     ):
         """
         :type model: EnsembleGAN
         """
+        self.bootstrap_rate = bootstrap_rate
         self.discriminator_priviledge = discriminator_priviledge
         self.discriminator_leakage = discriminator_leakage
         self.model = model
@@ -47,6 +51,7 @@ class EnsembleGANTrainer(object):
         self.input_tensor = None
         self.log_vars = []
         self.imgs = None
+        self.anneal_factor = None
 
     def init_opt(self):
         self.input_tensor = input_tensor = tf.placeholder(
@@ -65,6 +70,15 @@ class EnsembleGANTrainer(object):
             if self.discriminator_priviledge == "all":
                 real_d_logits = all_d_logits[:self.batch_size]
                 fake_d_logits = all_d_logits[self.batch_size:]
+                if self.bootstrap_rate != 1.:
+                    real_d_logits = tf.nn.dropout(
+                        real_d_logits,
+                        self.bootstrap_rate
+                    ) * self.bootstrap_rate
+                    fake_d_logits = tf.nn.dropout(
+                        fake_d_logits,
+                        self.bootstrap_rate
+                    ) * self.bootstrap_rate
             elif self.discriminator_priviledge == "single":
                 real_d_logits = tf.reduce_min(
                     all_d_logits[:self.batch_size],
@@ -74,6 +88,7 @@ class EnsembleGANTrainer(object):
                     all_d_logits[self.batch_size:],
                     reduction_indices=[1],
                 )
+                assert self.bootstrap_rate == 1.
             else:
                 raise Exception("sup")
 
@@ -118,8 +133,13 @@ class EnsembleGANTrainer(object):
             # self.log_vars.append(("min_z_var", tf.reduce_min(z_var)))
             # self.log_vars.append(("max_z_var", tf.reduce_max(z_var)))
 
+            self.anneal_factor = tf.Variable(
+                initial_value=1.,
+                name="opt_anneal_factor",
+                trainable=False,
+            )
             discriminator_optimizer = tf.train.AdamOptimizer(
-                self.discriminator_learning_rate,
+                self.discriminator_learning_rate * self.anneal_factor,
                 beta1=0.5
             )
             self.discriminator_trainer = pt.apply_optimizer(
@@ -129,7 +149,7 @@ class EnsembleGANTrainer(object):
             )
 
             generator_optimizer = tf.train.AdamOptimizer(
-                self.generator_learning_rate,
+                self.generator_learning_rate * self.anneal_factor,
                 beta1=0.5
             )
             self.generator_trainer = pt.apply_optimizer(
