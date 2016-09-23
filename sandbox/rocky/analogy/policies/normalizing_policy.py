@@ -36,8 +36,6 @@ class NormalizingPolicy(Policy, Serializable):
         self.action_mean = action_mean
         self.action_std = action_std
 
-        # import ipdb; ipdb.set_trace()
-
         demo_paths = None
         analogy_paths = None
         Serializable.quick_init(self, locals())
@@ -65,14 +63,19 @@ class NormalizingPolicy(Policy, Serializable):
         return norm_action_var * self.action_std_var + self.action_mean_var
 
     def get_action(self, obs):
+        actions, agent_infos = self.get_actions([obs])
+        return actions[0], {k: v[0] for k, v in agent_infos.items()}
+
+    def get_actions(self, observations):
         obs_space = self.observation_space
         action_space = self.action_space
-        flat_obs = obs_space.flatten(obs)
-        flat_normalized_obs = (flat_obs - self.obs_mean.flatten()) / self.obs_std.flatten()
-        normalized_obs = obs_space.unflatten(flat_normalized_obs)
-        normalized_action, agent_info = action_space.flatten(self.wrapped_policy.get_action(normalized_obs))
-        action = action_space.unflatten(normalized_action * self.action_std + self.action_mean)
-        return action, agent_info
+        flat_obs = obs_space.flatten_n(observations)
+        flat_normalized_obs = (flat_obs - self.obs_mean) / self.obs_std
+        normalized_obs = obs_space.unflatten_n(flat_normalized_obs)
+        actions, agent_infos = self.wrapped_policy.get_actions(normalized_obs)
+        normalized_action = action_space.flatten_n(actions)
+        actions = action_space.unflatten_n(normalized_action * self.action_std + self.action_mean)
+        return actions, agent_infos
 
     def get_params_internal(self, **tags):
         params = list(self.wrapped_policy.get_params_internal(**tags))
@@ -90,8 +93,15 @@ class NormalizingPolicy(Policy, Serializable):
         self.wrapped_policy.reset(dones=dones)
 
     def apply_demo(self, path):
-        demo_obs = path["observations"]
-        demo_actions = path["actions"]
-        norm_demo_obs = (demo_obs - self.obs_mean) / self.obs_std
-        norm_demo_actions = (demo_actions - self.action_mean) / self.action_std
-        self.wrapped_policy.apply_demo(dict(path, observations=norm_demo_obs, actions=norm_demo_actions))
+        self.apply_demos([path])
+
+    def apply_demos(self, paths):
+        morphed_paths = []
+        for path in paths:
+            # only process it if necessary
+            demo_obs = path["observations"]
+            demo_actions = path["actions"]
+            norm_demo_obs = (demo_obs - self.obs_mean) / self.obs_std
+            norm_demo_actions = (demo_actions - self.action_mean) / self.action_std
+            morphed_paths.append(dict(path, observations=norm_demo_obs, actions=norm_demo_actions))
+        self.wrapped_policy.apply_demos(morphed_paths)

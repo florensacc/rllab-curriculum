@@ -28,11 +28,11 @@ class VG(VariantGenerator):
 
     @variant
     def n_particles(self):
-        return [2]#, 6]#6]  # 5]#3, 4, 5, 6]
+        return [6]#, 6]#6]  # 5]#3, 4, 5, 6]
 
     @variant
     def n_train_trajs(self):
-        return [100]#2000]#, 5000]#0]#5000]#, 20000]  # , 20000]#1000, 5000, 20000]
+        return [1000]#2000]#, 5000]#0]#5000]#, 20000]  # , 20000]#1000, 5000, 20000]
 
     @variant
     def hidden_dim(self):
@@ -60,10 +60,10 @@ class VG(VariantGenerator):
 
     @variant
     def obs_setup(self):
-        yield ('image', (100, 100))
+        # yield ('image', (100, 100))
         # yield ('image', (25, 25))
         # yield ('image', (50, 50))
-        # yield ('state', (25, 25))
+        yield ('state', (25, 25))
 
     @variant
     def nonlinearity(self):

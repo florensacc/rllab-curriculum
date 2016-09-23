@@ -109,8 +109,7 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                 **network_args,
             )
 
-            summary_var = tf.Variable(initial_value=np.zeros((1, rnn_hidden_size), dtype=np.float32), trainable=False,
-                                      name="summary")
+            summary_var = tf.placeholder(dtype=tf.float32, shape=(None, rnn_hidden_size), name="summary")
 
             obs_var = env_spec.observation_space.new_tensor_variable("obs", extra_dims=1)
 
@@ -119,6 +118,8 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                 name="summary_in",
                 input_var=summary_var
             )
+
+            self.summary = np.zeros((1, rnn_hidden_size), dtype=np.float32)
 
             mlp_input_dim = embedding_dim + rnn_hidden_size
             action_network = MLP(
@@ -146,7 +147,6 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             self.l_summary_in = l_summary_in
             self.l_summary_input = summary_network.input_layer
             self.state_include_action = state_include_action
-            self.summary_var = summary_var
             self.obs_input_shape = obs_input_shape
 
             if state_include_action:
@@ -154,13 +154,14 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             else:
                 summary_inputs = [l_obs_input.input_var]
 
-            self.f_update_summary = tensor_utils.compile_function(
+            self.f_compute_summary = tensor_utils.compile_function(
                 summary_inputs,
-                tf.assign(summary_var, L.get_output(l_summary, phase='test')),
+                L.get_output(l_summary, phase='test'),
+                # tf.assign(summary_var, , validate_shape=False),
             )
 
             self.f_action = tensor_utils.compile_function(
-                [obs_var],
+                [obs_var, summary_var],
                 L.get_output(action_network.output_layer, {
                     l_flat_obs_input: tf.reshape(obs_var, (-1,) + obs_input_shape),
                 }, phase='test'),
@@ -200,6 +201,7 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
         return tf.reshape(action_var, tf.pack([batch_size, n_steps, self.action_space.flat_dim]))
 
     def apply_demo(self, path):
+        self.apply_demos([True], [path])
         demo_obs = path["observations"]
         demo_actions = path["actions"]
         if self.state_include_action:
@@ -208,7 +210,48 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             summary_inputs = [[demo_obs]]
         self.f_update_summary(*summary_inputs)
 
+    def apply_demos(self, paths):
+
+        # if len(dones) != len(self.summary):
+        #     self.summary = np.zeros((len(dones), self.summary_network.hidden_dim))
+
+        # if np.any(dones):
+        #     done_paths = [p for done, p in zip(dones, paths) if done]
+
+        max_len = np.max([len(p["rewards"]) for p in paths])
+
+        demo_obs = [p["observations"] for p in paths]
+        demo_obs = np.asarray([tensor_utils.pad_tensor(o, max_len) for o in demo_obs])
+
+        demo_actions = [p["actions"] for p in paths]
+        demo_actions = np.asarray([tensor_utils.pad_tensor(a, max_len) for a in demo_actions])
+
+        demo_valids = [np.ones_like(p["rewards"]) for p in paths]
+        demo_valids = np.asarray([tensor_utils.pad_tensor(v, max_len) for v in demo_valids])
+
+        assert np.all(demo_valids)
+
+        self.summary = self.f_compute_summary(demo_obs, demo_actions)
+            # self.summary[dones] = new_summary
+
+            # import ipdb; ipdb.set_trace()
+            #
+            # # self.f_update_summary
+
+            # run through paths, but only until it's valid?
+            # how to express this?
+            # we can sum over all valids
+
+            # self.f_update_summary(demo_obs, demo_actions)
+
     def get_action(self, observation):
-        flat_obs = self.observation_space.flatten(observation)
-        action = self.f_action([flat_obs])
-        return action[0], dict()
+        actions, agent_infos = self.get_actions([observation])
+        return actions[0], {k: v[0] for k, v in agent_infos.items()}
+
+    def get_actions(self, observations):
+        flat_obs = self.observation_space.flatten_n(observations)
+        actions = self.f_action(flat_obs, self.summary)
+        return actions, dict()
+
+    def reset(self, dones=None):
+        pass
