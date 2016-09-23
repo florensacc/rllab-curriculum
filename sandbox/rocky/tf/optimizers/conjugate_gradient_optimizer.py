@@ -280,7 +280,8 @@ class ConjugateGradientOptimizer(Serializable):
             cur_step = ratio * flat_descent_step
             cur_param = prev_param - cur_step
             self._target.set_param_values(cur_param, trainable=True)
-            loss, constraint_val = sliced_fun(self._opt_fun["f_loss_constraint"], self._num_slices)(inputs + extra_inputs)
+            loss, constraint_val = sliced_fun(self._opt_fun["f_loss_constraint"], self._num_slices)(inputs,
+                                                                                                    extra_inputs)
             if self._debug_nan and np.isnan(constraint_val):
                 import ipdb;
                 ipdb.set_trace()

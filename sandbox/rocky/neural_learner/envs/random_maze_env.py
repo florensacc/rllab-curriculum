@@ -115,10 +115,10 @@ class RandomMazeEnv(Env):
         success = 0
         if next_state_type in ['F', 'S']:
             done = False
-            reward = -1  # 0
+            reward = -0.01  # 0
         elif next_state_type == 'G':
             done = True
-            reward = 0  # 100
+            reward = 1#000#0  # 100
             success = 1
         else:
             raise NotImplementedError

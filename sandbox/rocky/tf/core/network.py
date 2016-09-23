@@ -241,6 +241,10 @@ class GRUNetwork(object):
         return self._hidden_dim
 
     @property
+    def hidden_dim(self):
+        return self._hidden_dim
+
+    @property
     def input_layer(self):
         return self._l_in
 

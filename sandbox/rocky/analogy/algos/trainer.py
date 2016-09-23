@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
 import numpy as np
@@ -7,12 +9,14 @@ from rllab.sampler.utils import rollout
 from sandbox.rocky.analogy.policies.apply_demo_policy import ApplyDemoPolicy
 from sandbox.rocky.analogy.dataset import SupervisedDataset
 from sandbox.rocky.analogy.policies.normalizing_policy import NormalizingPolicy
+from sandbox.rocky.analogy.utils import unwrap
 from rllab.sampler.stateful_pool import singleton_pool
 import itertools
 import random
 import contextlib
 
-from sandbox.rocky.analogy.utils import unwrap
+from sandbox.rocky.tf.envs.vec_env_executor import VecEnvExecutor
+from sandbox.rocky.tf.misc import tensor_utils
 
 
 @contextlib.contextmanager
@@ -32,9 +36,95 @@ def set_seed_tmp(seed=None):
 def collect_demo(G, demo_seed, analogy_seed, target_seed, env_cls, demo_policy_cls, horizon):
     demo_env = env_cls(seed=demo_seed, target_seed=target_seed)
     analogy_env = env_cls(seed=analogy_seed, target_seed=target_seed)
+    # Use compressed image representation
+    unwrap(demo_env).compressed = True
+    unwrap(analogy_env).compressed = True
     demo_path = rollout(demo_env, demo_policy_cls(demo_env), max_path_length=horizon)
     analogy_path = rollout(analogy_env, demo_policy_cls(analogy_env), max_path_length=horizon)
+    # Restore to use normal image representation
+    unwrap(demo_env).compressed = False
+    unwrap(analogy_env).compressed = False
     return demo_path, analogy_path, demo_env, analogy_env
+
+
+def vectorized_rollout_analogy(policy, demo_paths, analogy_envs, max_path_length):
+    vec_env = VecEnvExecutor(envs=analogy_envs, max_path_length=max_path_length)
+    obses = vec_env.reset()
+    dones = np.asarray([True] * vec_env.num_envs)
+    running_paths = [None] * vec_env.num_envs
+    finished = np.asarray([False] * vec_env.num_envs)
+
+    env_spec = analogy_envs[0].spec
+
+    progbar = pyprind.ProgBar(vec_env.num_envs)
+
+    paths = []
+
+    policy.apply_demos(demo_paths)
+
+    while not np.all(finished):
+        policy.reset(dones)
+        # policy.apply_demos(dones, demo_paths)
+        actions, agent_infos = policy.get_actions(obses)
+
+        next_obses, rewards, dones, env_infos = vec_env.step(actions)
+
+        agent_infos = tensor_utils.split_tensor_dict_list(agent_infos)
+        env_infos = tensor_utils.split_tensor_dict_list(env_infos)
+
+        if env_infos is None:
+            env_infos = [dict() for _ in range(vec_env.num_envs)]
+        if agent_infos is None:
+            agent_infos = [dict() for _ in range(vec_env.num_envs)]
+
+        for idx, observation, action, reward, env_info, agent_info, done in zip(itertools.count(), obses, actions,
+                                                                                rewards, env_infos, agent_infos,
+                                                                                dones):
+            if running_paths[idx] is None:
+                running_paths[idx] = dict(
+                    observations=[],
+                    actions=[],
+                    rewards=[],
+                    env_infos=[],
+                    agent_infos=[],
+                )
+            running_paths[idx]["observations"].append(observation)
+            running_paths[idx]["actions"].append(action)
+            running_paths[idx]["rewards"].append(reward)
+            running_paths[idx]["env_infos"].append(env_info)
+            running_paths[idx]["agent_infos"].append(agent_info)
+            if done:
+                if not finished[idx]:
+                    finished[idx] = True
+                    progbar.update()
+                    paths.append(dict(
+                        observations=env_spec.observation_space.flatten_n(running_paths[idx]["observations"]),
+                        actions=env_spec.action_space.flatten_n(running_paths[idx]["actions"]),
+                        rewards=tensor_utils.stack_tensor_list(running_paths[idx]["rewards"]),
+                        env_infos=tensor_utils.stack_tensor_dict_list(running_paths[idx]["env_infos"]),
+                        agent_infos=tensor_utils.stack_tensor_dict_list(running_paths[idx]["agent_infos"]),
+                    ))
+                running_paths[idx] = None
+
+        obses = next_obses
+
+    if progbar.active:
+        progbar.stop()
+
+    assert(len(paths) == len(analogy_envs))
+
+    return paths
+
+
+def rollout_analogy(policy, demo_paths, analogy_envs, max_path_length):
+    paths = []
+    progbar = pyprind.ProgBar(len(demo_paths))
+    for path, env in zip(demo_paths, analogy_envs):
+        paths.append(rollout(env=env, agent=ApplyDemoPolicy(policy, demo_path=path), max_path_length=max_path_length))
+        progbar.update()
+    if progbar.active:
+        progbar.stop()
+    return paths
 
 
 # A simple example hopefully able to train a feed-forward network
@@ -73,17 +163,22 @@ class Trainer(Serializable):
         self.learning_rate = learning_rate
         self.no_improvement_tolerance = no_improvement_tolerance
 
-    def train(self):
-
-        demo_seeds, analogy_seeds, target_seeds = np.random.randint(
-            low=0, high=np.iinfo(np.int32).max, size=(3, self.n_train_trajs + self.n_test_trajs)
+    def eval_and_log(self, policy, data_dict):
+        eval_paths = vectorized_rollout_analogy(
+            policy, data_dict["demo_paths"], data_dict["analogy_envs"], max_path_length=self.horizon
         )
 
-        logger.log("Collecting trajectories")
+        returns = [np.sum(p["rewards"]) for p in eval_paths]
+        logger.record_tabular('AverageReturn', np.mean(returns))
+        logger.record_tabular('MaxReturn', np.max(returns))
+        logger.record_tabular('MinReturn', np.min(returns))
+
+        log_envs = list(map(unwrap, data_dict["analogy_envs"]))
+        log_envs[0].log_analogy_diagnostics(eval_paths, log_envs)
+
+    def collect_trajs(self, demo_seeds, analogy_seeds, target_seeds):
         progbar = pyprind.ProgBar(len(demo_seeds))
-
         data_list = []
-
         for data in singleton_pool.run_imap_unordered(
                 collect_demo,
                 [tuple(seeds) + (self.env_cls, self.demo_policy_cls, self.horizon)
@@ -91,40 +186,17 @@ class Trainer(Serializable):
         ):
             progbar.update()
             data_list.append(data)
-
-        demo_paths, analogy_paths, demo_envs, analogy_envs = zip(*data_list)
-
         if progbar.active:
             progbar.stop()
 
-        logger.log("Processing data")
+        demo_paths, analogy_paths, demo_envs, analogy_envs = zip(*data_list)
+        logger.log("Decompressing observations...")
+        for path, env in zip(demo_paths + analogy_paths, demo_envs + analogy_envs):
+            path["observations"] = unwrap(env).decompress(path["observations"])
+        logger.log("Decompressing finished")
+        return demo_paths, analogy_paths, demo_envs, analogy_envs
 
-        all_data_pairs = [
-            ("demo_paths", np.asarray(demo_paths)),
-            ("analogy_paths", np.asarray(analogy_paths)),
-            # These will be ignored during training since they appear last
-            ("demo_envs", np.array(demo_envs)),
-            ("analogy_envs", np.array(analogy_envs)),
-        ]
-        all_data_keys = [x[0] for x in all_data_pairs]
-        all_data_vals = [x[1] for x in all_data_pairs]
-
-        dataset = SupervisedDataset(
-            inputs=all_data_vals,
-            train_batch_size=self.batch_size,
-            train_ratio=self.n_train_trajs * 1.0 / (self.n_train_trajs + self.n_test_trajs),
-            shuffler=self.shuffler,
-        )
-
-        env = demo_envs[0]
-
-        logger.log("Constructing optimization problem")
-        policy = self.policy
-        policy = NormalizingPolicy(
-            self.policy,
-            *dataset.train.inputs[:2]
-        )
-
+    def init_opt(self, env, policy):
         demo_obs_var = env.observation_space.new_tensor_variable(name="demo_obs", extra_dims=2)
         demo_action_var = env.action_space.new_tensor_variable(name="demo_actions", extra_dims=2)
 
@@ -159,6 +231,73 @@ class Trainer(Serializable):
         grads_and_vars = optimizer.compute_gradients(train_loss_var, var_list=params)
         train_op = optimizer.apply_gradients(grads_and_vars)
 
+        def to_feed(batch_dict):
+            demo_obs = np.asarray([p["observations"] for p in batch_dict["demo_paths"]])
+            demo_actions = np.asarray([p["actions"] for p in batch_dict["demo_paths"]])
+            analogy_obs = np.asarray([p["observations"] for p in batch_dict["analogy_paths"]])
+            analogy_actions = np.asarray([p["actions"] for p in batch_dict["analogy_paths"]])
+            return {
+                demo_obs_var: demo_obs,
+                demo_action_var: demo_actions,
+                analogy_obs_var: analogy_obs,
+                analogy_action_var: analogy_actions,
+            }
+
+        def f_train(batch_dict, learning_rate):
+            feed = to_feed(batch_dict)
+            feed[lr_var] = learning_rate
+            _, loss = tf.get_default_session().run(
+                [train_op, train_loss_var],
+                feed_dict=feed,
+            )
+            return loss
+
+        def f_test_loss(batch_dict):
+            return tf.get_default_session().run(
+                test_loss_var,
+                feed_dict=to_feed(batch_dict),
+            )
+
+        return dict(f_train=f_train, f_test_loss=f_test_loss)
+
+    def train(self):
+
+        demo_seeds, analogy_seeds, target_seeds = np.random.randint(
+            low=0, high=np.iinfo(np.int32).max, size=(3, self.n_train_trajs + self.n_test_trajs)
+        )
+
+        demo_paths, analogy_paths, demo_envs, analogy_envs = self.collect_trajs(demo_seeds, analogy_seeds, target_seeds)
+
+        logger.log("Processing data")
+
+        data_dict = OrderedDict([
+            ("demo_paths", np.asarray(demo_paths)),
+            ("analogy_paths", np.asarray(analogy_paths)),
+            ("demo_envs", np.array(demo_envs)),
+            ("analogy_envs", np.array(analogy_envs)),
+        ])
+
+        dataset = SupervisedDataset(
+            inputs=list(data_dict.values()),
+            input_keys=list(data_dict.keys()),
+            train_batch_size=self.batch_size,
+            train_ratio=self.n_train_trajs * 1.0 / (self.n_train_trajs + self.n_test_trajs),
+            shuffler=self.shuffler,
+        )
+
+        env = demo_envs[0]
+
+        logger.log("Constructing optimization problem")
+
+        # policy = self.policy
+
+        policy = NormalizingPolicy(
+            self.policy,
+            *dataset.train.inputs[:2]
+        )
+
+        opt_info = self.init_opt(env, policy)
+
         # Best average return achieved by the NN policy
         best_loss = np.inf
         # Best parameter for the NN policy
@@ -169,19 +308,10 @@ class Trainer(Serializable):
         # Current learning rate
         learning_rate = self.learning_rate
 
-        def to_feed(batch):
-            batch_dict = dict(zip(all_data_keys, batch))
-            demo_obs = np.asarray([p["observations"] for p in batch_dict["demo_paths"]])
-            demo_actions = np.asarray([p["actions"] for p in batch_dict["demo_paths"]])
-            analogy_obs = np.asarray([p["observations"] for p in batch_dict["analogy_paths"]])
-            analogy_actions = np.asarray([p["actions"] for p in batch_dict["analogy_paths"]])
-            return {
-                demo_obs_var: demo_obs,
-                demo_action_var: demo_actions,
-                analogy_obs_var: analogy_obs,
-                analogy_action_var: analogy_actions,
-                lr_var: learning_rate,
-            }
+        train_dict = dataset.train.input_dict
+        test_dict = dataset.test.input_dict
+        n_test = len(dataset.test.inputs[0])
+        subsampled_train_dict = {k: v[:n_test] for k, v in train_dict.items()}
 
         logger.log("Launching TF session")
 
@@ -199,10 +329,10 @@ class Trainer(Serializable):
                     logger.log("Start training...")
                     progbar = pyprind.ProgBar(dataset.train.number_batches * self.n_passes_per_epoch)
                     for _ in range(self.n_passes_per_epoch):
-                        for batch in dataset.train.iterate():
-                            _, loss = sess.run(
-                                [train_op, train_loss_var],
-                                feed_dict=to_feed(batch),
+                        for batch in dataset.train.iterate(return_dict=True):
+                            loss = opt_info["f_train"](
+                                batch_dict=batch,
+                                learning_rate=learning_rate
                             )
                             losses.append(loss)
                             progbar.update()
@@ -212,62 +342,35 @@ class Trainer(Serializable):
                 else:
                     logger.log("Skipped training for the 0th epoch, to collect initial test statistics")
 
-                test_loss = sess.run(
-                    test_loss_var,
-                    feed_dict=to_feed(dataset.test.inputs),
-                )
-
-                test_dict = dict(zip(all_data_keys, dataset.test.inputs))
-
-                # Evaluate performance
-
-                eval_paths = []
-
-                for idx, demo_path, analogy_env in zip(
-                        itertools.count(),
-                        test_dict["demo_paths"],
-                        test_dict["analogy_envs"],
-                ):
-                    eval_paths.append(rollout(
-                        analogy_env, ApplyDemoPolicy(policy, demo_path), max_path_length=self.horizon,
-                        animated=self.plot and idx == 0,
-                    ))
-
-                # import ipdb; ipdb.set_trace()
-
-                if self.plot:
-                    rollout(
-                        analogy_env, ApplyDemoPolicy(policy, demo_path), max_path_length=self.horizon,
-                        animated=self.plot and idx == 0,
-                    )
-
-                returns = [np.sum(p["rewards"]) for p in eval_paths]
+                logger.log("Computing loss on test set")
+                test_loss = opt_info["f_test_loss"](batch_dict=test_dict)
+                logger.log("Computed")
 
                 avg_loss = np.mean(losses)
 
-                # avg_train_loss = np.mean(train_losses)
                 if avg_loss > best_loss:
                     n_no_improvement += 1
                 else:
                     n_no_improvement = 0
                     best_loss = avg_loss
                     # collect best params
-                    best_params = sess.run(params)
+                    best_params = policy.get_param_values(trainable=True)
 
                 logger.record_tabular('Epoch', epoch_idx)
                 logger.record_tabular("LearningRate", learning_rate)
                 logger.record_tabular("NoImprovementEpochs", n_no_improvement)
                 logger.record_tabular('AverageTrainLoss', avg_loss)
                 logger.record_tabular('AverageTestLoss', test_loss)
-                logger.record_tabular('AverageReturn', np.mean(returns))
-                logger.record_tabular('MaxReturn', np.max(returns))
-                logger.record_tabular('MinReturn', np.min(returns))
                 logger.record_tabular('OracleAverageReturn', np.mean(
                     [np.sum(p["rewards"]) for p in test_dict["analogy_paths"]]
                 ))
-                log_env = unwrap(analogy_envs[-1])
-                log_envs = map(unwrap, test_dict["analogy_envs"])
-                log_env.log_analogy_diagnostics(eval_paths, log_envs)
+
+                logger.log("Evaluating on subsampled training set...")
+                with logger.tabular_prefix('Train'):
+                    self.eval_and_log(policy=policy, data_dict=subsampled_train_dict)
+                logger.log("Evaluating on test set...")
+                with logger.tabular_prefix('Test'):
+                    self.eval_and_log(policy=policy, data_dict=test_dict)
 
                 logger.dump_tabular()
 
@@ -277,7 +380,7 @@ class Trainer(Serializable):
                                                                                                learning_rate))
                     n_no_improvement = 0
                     # restore to best params
-                    sess.run([tf.assign(p, pv) for p, pv in zip(params, best_params)])
+                    policy.set_param_values(best_params, trainable=True)
 
                 logger.log("Saving itr params..")
 

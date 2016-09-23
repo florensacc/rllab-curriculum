@@ -293,7 +293,7 @@ concat = ConcatLayer  # shortcut
 
 
 class XavierUniformInitializer(object):
-    def __call__(self, shape, dtype=tf.float32):
+    def __call__(self, shape, dtype=tf.float32, *args, **kwargs):
         if len(shape) == 2:
             n_inputs, n_outputs = shape
         else:
@@ -305,7 +305,7 @@ class XavierUniformInitializer(object):
 
 
 class HeUniformInitializer(object):
-    def __call__(self, shape, dtype=tf.float32):
+    def __call__(self, shape, dtype=tf.float32, *args, **kwargs):
         if len(shape) == 2:
             n_inputs, _ = shape
         else:
@@ -327,7 +327,7 @@ class OrthogonalInitializer(object):
     def __init__(self, scale=1.1):
         self.scale = scale
 
-    def __call__(self, shape, dtype=tf.float32):
+    def __call__(self, shape, dtype=tf.float32, *args, **kwargs):
         result, = tf.py_func(py_ortho_init(self.scale), [shape], [tf.float32])
         result.set_shape(shape)
         return result

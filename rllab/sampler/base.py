@@ -59,10 +59,16 @@ class BaseSampler(Sampler):
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
 
+        ev = special.explained_variance_1d(
+            np.concatenate(baselines),
+            np.concatenate(returns)
+        )
+
         if not self.algo.policy.recurrent:
             observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
             actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
             rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
+            returns = tensor_utils.concat_tensor_list([path["returns"] for path in paths])
             advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
             env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
             agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
@@ -80,15 +86,11 @@ class BaseSampler(Sampler):
 
             ent = np.mean(self.algo.policy.distribution.entropy(agent_infos))
 
-            ev = special.explained_variance_1d(
-                np.concatenate(baselines),
-                np.concatenate(returns)
-            )
-
             samples_data = dict(
                 observations=observations,
                 actions=actions,
                 rewards=rewards,
+                returns=returns,
                 advantages=advantages,
                 env_infos=env_infos,
                 agent_infos=agent_infos,
@@ -117,6 +119,9 @@ class BaseSampler(Sampler):
             rewards = [path["rewards"] for path in paths]
             rewards = np.array([tensor_utils.pad_tensor(r, max_path_length) for r in rewards])
 
+            returns = [path["returns"] for path in paths]
+            returns = np.array([tensor_utils.pad_tensor(r, max_path_length) for r in returns])
+
             agent_infos = [path["agent_infos"] for path in paths]
             agent_infos = tensor_utils.stack_tensor_dict_list(
                 [tensor_utils.pad_tensor_dict(p, max_path_length) for p in agent_infos]
@@ -137,16 +142,12 @@ class BaseSampler(Sampler):
 
             ent = np.sum(self.algo.policy.distribution.entropy(agent_infos) * valids) / np.sum(valids)
 
-            ev = special.explained_variance_1d(
-                np.concatenate(baselines),
-                np.concatenate(returns)
-            )
-
             samples_data = dict(
                 observations=obs,
                 actions=actions,
                 advantages=adv,
                 rewards=rewards,
+                returns=returns,
                 valids=valids,
                 agent_infos=agent_infos,
                 env_infos=env_infos,
