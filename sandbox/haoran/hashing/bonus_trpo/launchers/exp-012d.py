@@ -1,28 +1,20 @@
 """
-Use image observations
-Continue exp-008
-Use GPU for acceleration
+Continue exp-012d
+With SaveLoadResetter added.
 """
-# from sandbox.rocky.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
-# from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from sandbox.rocky.tf.baselines.gaussian_conv_baseline import GaussianConvBaseline
-from sandbox.rocky.tf.baselines.zero_baseline import ZeroBaseline
-
-from sandbox.rocky.tf.policies.categorical_conv_policy import CategoricalConvPolicy
+from sandbox.rocky.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
-# from sandbox.rocky.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
-
 from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
 from sandbox.rocky.tf.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-from sandbox.rocky.tf.optimizers.first_order_optimizer import FirstOrderOptimizer
 
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
 from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo import BonusTRPO
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.zero_bonus_evaluator import ZeroBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
-# from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
-from sandbox.haoran.hashing.bonus_trpo.misc.dqn import nips_dqn_args, trpo_dqn_args
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.ale_hacky_hash_v2 import ALEHackyHashV2
+from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import AtariSaveLoadResetter
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from sandbox.haoran.ec2_info import instance_info, subnet_info
 
@@ -32,67 +24,70 @@ import sys,os
 import copy
 
 stub(globals())
+import tensorflow as tf
 
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "kube_test"
-ec2_instance = "g2.2xlarge"
-subnet = "us-west-1c"
+mode = "ec2"
+ec2_instance = "c4.8xlarge"
+subnet = "us-west-1a"
 
 n_parallel = 4
-snapshot_mode = "last"
+snapshot_mode = "gap"
+snapshot_gap = 25
+store_paths = False
 plot = False
-use_gpu = True # should change conv_type and ~/.theanorc
+use_gpu = False # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
-config.USE_TF = True
+
 
 # params ---------------------------------------
-batch_size = 10000
+batch_size = 100000
 max_path_length = 4500
 discount = 0.99
 n_itr = 1000
-force_batch_sampler = False
-cg_args = dict(
-    cg_iters=10,
-    reg_coeff=1e-3,
-    subsample_factor=0.1,
-    max_backtracks=15,
-    backtrack_ratio=0.8,
-    accept_violation=False,
-    hvp_approach=FiniteDifferenceHvp(base_eps=1e-5),
-    num_slices=10,
-)
-step_size = 0.01
-network_args = trpo_dqn_args
 
-img_width=42
-img_height=42
+env_seed = 1
 clip_reward = True
-obs_type = "image"
+obs_type = "ram"
+n_last_rams = 1
+n_last_screens = 1
 record_image=False
 record_rgb_image=False
 record_ram=True
 record_internal_state=False
 
-dim_key = 64
+count_target = "ram_states"
 bonus_form="1/sqrt(n)"
-extra_dim_key = 1024
-extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
+bucket_sizes = None
+# extra_dim_key = 1024
+# extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
 
+step_size = 0.01
+
+avoid_life_lost = False
 
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [111, 211, 311]
+        return [0,100,200,300,400,500,600,700,800,900]
 
     @variant
     def bonus_coeff(self):
-        return [0]
+        return [0.05, 0.1, 0.5]
 
     @variant
     def game(self):
-        return ["beam_rider"]
+        return ["montezuma_revenge"]
+
+    @variant
+    def policy_type(self):
+        return ["mlp"]
+
+    @variant
+    def dim_key(self):
+        return [64]
 variants = VG().variants()
 
 
@@ -107,65 +102,62 @@ for v in variants:
         print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
         sys.exit(1)
 
-    resetter = None
+    resetter = AtariSaveLoadResetter(
+        restored_state_folder=None,
+        avoid_life_lost=False,
+    )
     env = TfEnv(
         AtariEnv(
             game=v["game"],
-            seed=v["seed"],
-            img_width=img_width,
-            img_height=img_height,
+            seed=env_seed,
             obs_type=obs_type,
+            n_last_screens=n_last_screens,
+            n_last_rams=n_last_rams,
             record_ram=record_ram,
             record_image=record_image,
             record_rgb_image=record_rgb_image,
             record_internal_state=record_internal_state,
             resetter=resetter,
+            avoid_life_lost=avoid_life_lost,
         )
     )
-    policy = CategoricalConvPolicy(
-        env_spec=env.spec,
-        name="policy",
-        **network_args
+    if v["policy_type"] == "mlp":
+        policy = CategoricalMLPPolicy(env_spec=env.spec, hidden_sizes=(32, 32), name="policy")
+    elif v["policy_type"] == "random":
+        policy = CategoricalRandomPolicy(env_spec=env.spec)
+    baseline = LinearFeatureBaseline(env_spec=env.spec)
+
+    if count_target == "images":
+        state_preprocessor = ImageVectorizePreprocessor(
+            n_channel=n_last_screens,
+            width=84,
+            height=84,
+            slices=[None,None,None],
+        )
+    elif count_target == "ram_states" or (count_target == "observations" and obs_type == "ram"):
+        # state_preprocessor = ImageVectorizePreprocessor(
+        #     n_channel=1,
+        #     width=128,
+        #     height=1,
+        # )
+        state_preprocessor = None
+    else:
+        raise NotImplementedError
+
+    _hash = ALEHackyHashV2(
+        item_dim=128,
+        game=v["game"],
     )
-
-    baseline = ZeroBaseline(env_spec=env.spec)
-    # network_args_for_vf = copy.deepcopy(network_args)
-    # network_args_for_vf.pop("output_nonlinearity")
-    # baseline = GaussianConvBaseline(
-    #     env_spec=env.spec,
-    #     regressor_args = dict(
-    #         optimizer=PenaltyLbfgsOptimizer(
-    #             name="vf_optimizer",
-    #             max_opt_itr=20,
-    #             max_penalty_itr=2,
-    #         ),
-    #         # optimizer=FirstOrderOptimizer(
-    #         #     max_epochs=10,
-    #         #     batch_size=1000,
-    #         #     tf_optimizer_args=dict(learning_rate=1e-3),
-    #         # ),
-    #         use_trust_region=True,
-    #         step_size=0.01,
-    #         init_std=1.0,
-    #         **network_args_for_vf
-    #     )
-    # )
-
-
-    # bonus_evaluator = HashingBonusEvaluator(
-    #     env_spec=env.spec,
-    #     dim_key=dim_key,
-    #     bonus_form=bonus_form,
-    #     log_prefix="",
-    # )
-    bonus_evaluator = ZeroBonusEvaluator()
-    # extra_bonus_evaluator = HashingBonusEvaluator(
-    #     env_spec=env.spec,
-    #     dim_key=extra_dim_key,
-    #     bucket_sizes=extra_bucket_sizes,
-    #     log_prefix="Extra",
-    # )
+    bonus_evaluator = ALEHashingBonusEvaluator(
+        log_prefix="",
+        state_dim=128,
+        state_preprocessor=state_preprocessor,
+        hash=_hash,
+        bonus_form=bonus_form,
+        count_target=count_target,
+    )
     extra_bonus_evaluator = ZeroBonusEvaluator()
+
     algo = BonusTRPO(
         env=env,
         policy=policy,
@@ -179,9 +171,10 @@ for v in variants:
         n_itr=n_itr,
         clip_reward=clip_reward,
         plot=plot,
-        optimizer=ConjugateGradientOptimizer(**cg_args),
+        optimizer=ConjugateGradientOptimizer(hvp_approach=FiniteDifferenceHvp(base_eps=1e-5)),
+        force_batch_sampler=True,
         step_size=step_size,
-        force_batch_sampler=force_batch_sampler,
+        store_paths=store_paths,
     )
 
     # run --------------------------------------------------
@@ -206,26 +199,10 @@ for v in variants:
                 AssociatePublicIpAddress=True,
             )
         ]
-    elif "kube" in mode:
-        actual_mode = "lab_kube"
-        info = instance_info[ec2_instance]
-        n_parallel = int(info["vCPU"] /2)
-
-        config.KUBE_DEFAULT_RESOURCES = {
-            "requests": {
-                "cpu": n_parallel
-            }
-        }
-        config.KUBE_DEFAULT_NODE_SELECTOR = {
-            "aws/type": ec2_instance
-        }
-        exp_prefix = exp_prefix.replace('/','-') # otherwise kube rejects
     else:
         raise NotImplementedError
 
-    if use_gpu:
-        config.USE_GPU = True
-        config.DOCKER_IMAGE = "dementrock/rllab3-shared-gpu"
+
 
     run_experiment_lite(
         algo.train(),
@@ -234,12 +211,13 @@ for v in variants:
         seed=v["seed"],
         n_parallel=n_parallel,
         snapshot_mode=snapshot_mode,
+        snapshot_gap=snapshot_gap,
         mode=actual_mode,
         variant=v,
         use_gpu=use_gpu,
         plot=plot,
         sync_s3_pkl=sync_s3_pkl,
-        sync_log_on_termination=True,
+        terminate_machine=("test" not in mode),
     )
 
     if "test" in mode:

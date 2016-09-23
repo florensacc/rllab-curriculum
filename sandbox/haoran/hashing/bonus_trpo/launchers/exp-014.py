@@ -1,28 +1,24 @@
 """
 Use image observations
-Continue exp-008
-Use GPU for acceleration
+Compare to exp-013
+Switch to Theano. Use GPU for acceleration
 """
-# from sandbox.rocky.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
-# from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from sandbox.rocky.tf.baselines.gaussian_conv_baseline import GaussianConvBaseline
-from sandbox.rocky.tf.baselines.zero_baseline import ZeroBaseline
+from rllab.baselines.gaussian_conv_baseline import GaussianConvBaseline
+from rllab.baselines.zero_baseline import ZeroBaseline
 
-from sandbox.rocky.tf.policies.categorical_conv_policy import CategoricalConvPolicy
-from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
-# from sandbox.rocky.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
+from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 
-from sandbox.rocky.tf.envs.base import TfEnv
-from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
-from sandbox.rocky.tf.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-from sandbox.rocky.tf.optimizers.first_order_optimizer import FirstOrderOptimizer
+from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
+from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 
 from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo import BonusTRPO
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.zero_bonus_evaluator import ZeroBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 # from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
-from sandbox.haoran.hashing.bonus_trpo.misc.dqn import nips_dqn_args, trpo_dqn_args
+from sandbox.haoran.hashing.bonus_trpo.misc.dqn import trpo_dqn_args_theano
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from sandbox.haoran.ec2_info import instance_info, subnet_info
 
@@ -36,16 +32,16 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "kube_test"
+mode = "local_test"
 ec2_instance = "g2.2xlarge"
 subnet = "us-west-1c"
 
-n_parallel = 4
+n_parallel = 1
 snapshot_mode = "last"
 plot = False
 use_gpu = True # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
-config.USE_TF = True
+config.USE_TF = False
 
 # params ---------------------------------------
 batch_size = 10000
@@ -64,7 +60,7 @@ cg_args = dict(
     num_slices=10,
 )
 step_size = 0.01
-network_args = trpo_dqn_args
+network_args = trpo_dqn_args_theano
 
 img_width=42
 img_height=42
@@ -108,8 +104,7 @@ for v in variants:
         sys.exit(1)
 
     resetter = None
-    env = TfEnv(
-        AtariEnv(
+    env = AtariEnv(
             game=v["game"],
             seed=v["seed"],
             img_width=img_width,
@@ -121,7 +116,6 @@ for v in variants:
             record_internal_state=record_internal_state,
             resetter=resetter,
         )
-    )
     policy = CategoricalConvPolicy(
         env_spec=env.spec,
         name="policy",
