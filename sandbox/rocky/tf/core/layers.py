@@ -293,7 +293,7 @@ concat = ConcatLayer  # shortcut
 
 
 class XavierUniformInitializer(object):
-    def __call__(self, shape, dtype=tf.float32):
+    def __call__(self, shape, dtype=tf.float32, *args, **kwargs):
         if len(shape) == 2:
             n_inputs, n_outputs = shape
         else:
@@ -305,7 +305,7 @@ class XavierUniformInitializer(object):
 
 
 class HeUniformInitializer(object):
-    def __call__(self, shape, dtype=tf.float32):
+    def __call__(self, shape, dtype=tf.float32, *args, **kwargs):
         if len(shape) == 2:
             n_inputs, _ = shape
         else:
@@ -327,7 +327,7 @@ class OrthogonalInitializer(object):
     def __init__(self, scale=1.1):
         self.scale = scale
 
-    def __call__(self, shape, dtype=tf.float32):
+    def __call__(self, shape, dtype=tf.float32, *args, **kwargs):
         result, = tf.py_func(py_ortho_init(self.scale), [shape], [tf.float32])
         result.set_shape(shape)
         return result
@@ -1679,6 +1679,7 @@ class BatchNormLayer(Layer):
         input_shape = incoming.output_shape
         axis = list(range(len(input_shape) - 1))
         params_shape = input_shape[-1:]
+
         if center:
             self.beta = self.add_param(beta, shape=params_shape, name='beta', trainable=True, regularizable=False)
         else:
@@ -1687,6 +1688,7 @@ class BatchNormLayer(Layer):
             self.gamma = self.add_param(gamma, shape=params_shape, name='gamma', trainable=True, regularizable=True)
         else:
             self.gamma = None
+
         self.moving_mean = self.add_param(moving_mean, shape=params_shape, name='moving_mean', trainable=False,
                                           regularizable=False)
         self.moving_variance = self.add_param(moving_variance, shape=params_shape, name='moving_variance',

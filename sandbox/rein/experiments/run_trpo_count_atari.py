@@ -26,9 +26,9 @@ baseline = True
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'debug-bin-count-nonoise-c'
-    seeds = range(1)
-    etas = [0.1]
+    exp_prefix = 'debug-bin-count-trpo-a'
+    seeds = range(10)
+    etas = [0]
     mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
             AtariEnvX(game='freeway', obs_type="image", frame_skip=8),
             AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]

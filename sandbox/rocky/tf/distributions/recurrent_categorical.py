@@ -54,6 +54,10 @@ class RecurrentCategorical(Distribution):
         probs = dist_info["prob"]
         return -np.sum(probs * np.log(probs + TINY), axis=2)
 
+    def entropy_sym(self, dist_info_vars):
+        probs = dist_info_vars["prob"]
+        return -tf.reduce_sum(probs * tf.log(probs + TINY), 2)
+
     def log_likelihood_sym(self, xs, dist_info_vars):
         probs = dist_info_vars["prob"]
         # Assume layout is N * T * A

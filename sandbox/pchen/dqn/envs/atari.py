@@ -68,13 +68,28 @@ def to_ram(ale):
 
 
 class AtariEnvCX(Env, Serializable):
-    def __init__(self, game="pong", obs_type="ram", frame_skip=4, life_terminating=False):
+    def __init__(
+            self,
+            game="pong",
+            obs_type="ram",
+            frame_skip=4,
+            life_terminating=False,
+            color_averaging=False,
+            random_seed=False,
+    ):
         Serializable.quick_init(self, locals())
         assert obs_type in ("ram", "image")
         game_path = atari_py.get_game_path(game)
         if not os.path.exists(game_path):
             raise IOError("You asked for game %s but path %s does not exist" % (game, game_path))
         self.ale = atari_py.ALEInterface()
+        if random_seed:
+            # "ALE's random seed must be represented by unsigned int"
+            seed = np.random.randint(0, 2 ** 16)
+            self.ale.setInt(b'random_seed', seed)
+        self.ale.setFloat(b'repeat_action_probability', 0.0)
+        assert not color_averaging
+        # self.ale.setBool(b'color_averaging', color_averaging)
         self.ale.loadROM(game_path)
         self._obs_type = obs_type
         self._action_set = self.ale.getMinimalActionSet()
