@@ -218,7 +218,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             #     np.concatenate(dgnstc_data["returns"])
             # )
 
-            mgr_objs.barrer_dgnstc.wait()
+            mgr_objs.barrier_dgnstc.wait()
 
             if par_data.rank == 0:
                 num_traj = sum(shareds.num_traj)
