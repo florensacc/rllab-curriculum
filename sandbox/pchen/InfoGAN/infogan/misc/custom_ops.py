@@ -183,7 +183,7 @@ class custom_fully_connected(pt.VarStoreMethod):
                                        init=tf.random_normal_initializer(stddev=stddev))
                 bias = self.variable("bias", [output_size], init=tf.constant_initializer(bias_start))
                 return input_layer.with_tensor(tf.matmul(input_, matrix) + bias, parameters=self.vars)
-        except Exception:
+        except Exception as exception:
             import ipdb;
             ipdb.set_trace()
 

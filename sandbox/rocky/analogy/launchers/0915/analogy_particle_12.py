@@ -51,13 +51,13 @@ class VG(VariantGenerator):
     @variant
     def network_type(self):
         return [
-            rnn_utils.NetworkType.PSEUDO_LSTM,
-            rnn_utils.NetworkType.LSTM,
-            rnn_utils.NetworkType.LSTM_PEEPHOLE,
+            # rnn_utils.NetworkType.PSEUDO_LSTM,
+            # rnn_utils.NetworkType.LSTM,
+            # rnn_utils.NetworkType.LSTM_PEEPHOLE,
             rnn_utils.NetworkType.GRU,
             # # rnn_utils.NetworkType.TF_GRU,
             # # rnn_utils.NetworkType.TF_BASIC_LSTM,
-            rnn_utils.NetworkType.PSEUDO_LSTM_GATE_SQUASH,
+            # rnn_utils.NetworkType.PSEUDO_LSTM_GATE_SQUASH,
         ]
 
     @variant
@@ -70,11 +70,11 @@ class VG(VariantGenerator):
 
     @variant
     def layer_normalization(self):
-        return [True, False]#True, False]
+        return [False]#True, False]#True, False]
 
     @variant
     def weight_normalization(self):
-        return [True, False]
+        return [True]#, False]
 
     @variant
     def min_margin(self):
@@ -98,10 +98,10 @@ for v in variants:
         mlp_hidden_nonlinearity=getattr(tf.nn, v["nonlinearity"]),
         state_include_action=True,
         network_type=v["network_type"],
-        layer_normalization=v["layer_normalization"],
-        weight_normalization=v["weight_normalization"],
         network_args=dict(
             W_h_init=OrthogonalInitializer() if v["ortho_init"] else XavierUniformInitializer(),
+            layer_normalization=v["layer_normalization"],
+            weight_normalization=v["weight_normalization"],
             # fixed_horizon=20,
         )
     )

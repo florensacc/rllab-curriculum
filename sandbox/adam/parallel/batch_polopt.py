@@ -143,12 +143,42 @@ class ParallelBatchPolopt(RLAlgorithm):
         if self.plot:
             plotter.update_plot(self.policy, self.max_path_length)
 
+    def force_compile(self, n_samples=100):
+        """
+        Perform a mini-iteration before spawning parallel processes;
+        they will inherit compiled functions.
+        This clobbers self._par_objs, must call self.init_par_objs() after.
+        """
+        logger.log("performing mini-iteration to force compiles...")
+        worker_batch_size = self.worker_batch_size
+        n_parallel = self.n_parallel
+        set_cpu_affinity = self.set_cpu_affinity
+
+        self.worker_batch_size = n_samples
+        self.n_parallel = 1
+        self.set_cpu_affinity = False
+        self.init_par_objs()  # clobbers all _par_objs
+        self.set_rank(0)
+        itr = -1
+        paths, _ = self.sampler.obtain_samples(itr)
+        samples_data, _ = self.sampler.process_samples(itr, paths)
+        init_params = self.policy.get_param_values()
+        self.optimize_policy(itr, samples_data)
+        logger.dump_tabular(with_prefix=False)  # if there was a way to delete
+
+        self.policy.set_param_values(init_params)  # un-do the little update
+        self.worker_batch_size = worker_batch_size
+        self.n_parallel = n_parallel
+        self.set_cpu_affinity = set_cpu_affinity
+        logger.log("all compiling complete, initialized state restored")
+
     #
     # Main external method and its target for parallel subprocesses.
     #
 
     def train(self):
         self.init_opt()
+        self.force_compile()
         self.init_par_objs()
         processes = [mp.Process(target=self._train, args=(rank,))
             for rank in range(self.n_parallel)]
@@ -218,7 +248,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             #     np.concatenate(dgnstc_data["returns"])
             # )
 
-            mgr_objs.barrer_dgnstc.wait()
+            mgr_objs.barrier_dgnstc.wait()
 
             if par_data.rank == 0:
                 num_traj = sum(shareds.num_traj)

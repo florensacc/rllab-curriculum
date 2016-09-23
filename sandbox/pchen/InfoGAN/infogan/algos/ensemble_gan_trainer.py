@@ -9,7 +9,7 @@ import sys
 TINY = 1e-8
 
 
-class GANTrainer(object):
+class EnsembleGANTrainer(object):
     def __init__(
             self,
             model,
@@ -23,10 +23,14 @@ class GANTrainer(object):
             snapshot_interval=10000,
             discriminator_learning_rate=2e-4,
             generator_learning_rate=2e-4,
+            discriminator_leakage="all",  # [all, single]
+            discriminator_priviledge="all",  # [all, single]
     ):
         """
-        :type model: GAN
+        :type model: EnsembleGAN
         """
+        self.discriminator_priviledge = discriminator_priviledge
+        self.discriminator_leakage = discriminator_leakage
         self.model = model
         self.dataset = dataset
         self.batch_size = batch_size
@@ -42,9 +46,13 @@ class GANTrainer(object):
         self.generator_trainer = None
         self.input_tensor = None
         self.log_vars = []
+        self.imgs = None
 
     def init_opt(self):
-        self.input_tensor = input_tensor = tf.placeholder(tf.float32, [self.batch_size, 28 * 28])
+        self.input_tensor = input_tensor = tf.placeholder(
+            tf.float32,
+            [self.batch_size, self.dataset.image_dim]
+        )
 
         with pt.defaults_scope(phase=pt.Phase.train):
             z_var = self.model.latent_dist.sample_prior(self.batch_size)
@@ -54,11 +62,21 @@ class GANTrainer(object):
                 logits=True,
             )
 
-            real_d_logits = all_d_logits[:self.batch_size]
-            fake_d_logits = all_d_logits[self.batch_size:]
+            if self.discriminator_priviledge == "all":
+                real_d_logits = all_d_logits[:self.batch_size]
+                fake_d_logits = all_d_logits[self.batch_size:]
+            elif self.discriminator_priviledge == "single":
+                real_d_logits = tf.reduce_min(
+                    all_d_logits[:self.batch_size],
+                    reduction_indices=[1],
+                )
+                fake_d_logits = tf.reduce_max(
+                    all_d_logits[self.batch_size:],
+                    reduction_indices=[1],
+                )
+            else:
+                raise Exception("sup")
 
-            # discriminator_loss = \
-            #     - tf.reduce_mean(tf.log(real_d + TINY) + tf.log(1. - fake_d + TINY))
             discriminator_losses = tf.nn.sigmoid_cross_entropy_with_logits(
                 real_d_logits,
                 tf.ones_like(real_d_logits)
@@ -68,12 +86,19 @@ class GANTrainer(object):
             )
             discriminator_loss = tf.reduce_mean(discriminator_losses)
 
+            if self.discriminator_leakage == "all":
+                fake_g_logits = all_d_logits[self.batch_size:]
+            elif self.discriminator_leakage == "single":
+                fake_g_logits = tf.reduce_min(
+                    all_d_logits[self.batch_size:],
+                    reduction_indices=[1],
+                )
+            else:
+                raise Exception("sup")
 
-            # generator_loss = \
-            #     - tf.reduce_mean(tf.log(fake_d + TINY))
             generator_losses = tf.nn.sigmoid_cross_entropy_with_logits(
-                fake_d_logits,
-                tf.ones_like(fake_d_logits)
+                fake_g_logits,
+                tf.ones_like(fake_g_logits)
             )
             generator_loss = tf.reduce_mean(generator_losses)
 
@@ -125,10 +150,13 @@ class GANTrainer(object):
                 # elif isinstance(self.model.output_dist, Gaussian):
                 #    img_var = x_dist_info["mean"]
 
-                rows = 10
-                img_var = tf.reshape(img_var, [self.batch_size, 28, 28, 1])
+                rows = int(np.sqrt(self.batch_size))
+                img_var = tf.reshape(
+                    img_var,
+                    [self.batch_size,] + list(self.dataset.image_shape)
+                )
                 img_var = img_var[:rows * rows, :, :, :]
-                imgs = tf.reshape(img_var, [rows, rows, 28, 28, 1])
+                imgs = tf.reshape(img_var, [rows, rows,] + list(self.dataset.image_shape))
                 stacked_img = []
                 for row in range(rows):
                     row_img = []
@@ -137,6 +165,7 @@ class GANTrainer(object):
                     stacked_img.append(tf.concat(1, row_img))
                 imgs = tf.concat(0, stacked_img)
                 imgs = tf.expand_dims(imgs, 0)
+                self.imgs = imgs
                 tf.image_summary("image", imgs, max_images=3)
 
     def train(self):
@@ -148,10 +177,26 @@ class GANTrainer(object):
         with tf.Session() as sess:
             sess.run(init)
 
+
             summary_op = tf.merge_all_summaries()
             summary_writer = tf.train.SummaryWriter(self.log_dir, sess.graph)
 
             saver = tf.train.Saver()
+
+            imgs = sess.run(self.imgs, )
+            import scipy
+            import scipy.misc
+            scipy.misc.imsave(
+                "%s/init.png" % (self.log_dir),
+                imgs.reshape(
+                    list(imgs.shape[1:3]) +
+                    (
+                        []
+                        if self.model.image_shape[-1] == 1
+                        else [self.model.image_shape[-1]]
+                    )
+                ),
+            )
 
             counter = 0
 
@@ -179,8 +224,24 @@ class GANTrainer(object):
                         print(("Model saved in file: %s" % fn))
 
                 x, _ = self.dataset.train.next_batch(self.batch_size)
-                # x = np.reshape(x, (-1, 28, 28, 1))
-                summary_str = sess.run(summary_op, {self.input_tensor: x})
+                # if (epoch % (self.max_epoch // 10)) == 0:
+                if (epoch % (5)) == 0:
+                    summary_str, imgs = sess.run([summary_op, self.imgs], {self.input_tensor: x})
+                    import scipy
+                    import scipy.misc
+                    scipy.misc.imsave(
+                        "%s/epoch_%s.png" % (self.log_dir, epoch),
+                        imgs.reshape(
+                            list(imgs.shape[1:3]) +
+                            (
+                                []
+                                if self.model.image_shape[-1] == 1
+                                else [self.model.image_shape[-1]]
+                            )
+                        ),
+                    )
+                else:
+                    summary_str = sess.run(summary_op, {self.input_tensor: x})
                 summary_writer.add_summary(summary_str, counter)
 
                 avg_log_vals = np.mean(np.array(all_log_vals), axis=0)

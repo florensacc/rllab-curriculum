@@ -5,7 +5,7 @@ import atari_py
 
 import logging
 
-from rllab import spaces
+from sandbox.rocky.tf import spaces
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Env
 import scipy
@@ -43,7 +43,7 @@ except ImportError:
         "atari.py: Couldn't import opencv. Atari image environments will raise an error (RAM ones will still work).")
     cv2 = NoCV2()
 
-IMG_WH = (84, 84)  # width, height of images
+IMG_WH = (52, 52)  # width, height of images
 
 
 def to_rgb(ale):
@@ -67,49 +67,26 @@ def to_ram(ale):
     ale.getRAM(ram)
 
 
-class AtariEnvCX(Env, Serializable):
-    def __init__(
-            self,
-            game="pong",
-            obs_type="ram",
-            frame_skip=4,
-            life_terminating=False,
-            color_averaging=False,
-            random_seed=False,
-    ):
+class AtariEnv(Env, Serializable):
+    def __init__(self, game="pong", obs_type="ram", frame_skip=4):
         Serializable.quick_init(self, locals())
         assert obs_type in ("ram", "image")
         game_path = atari_py.get_game_path(game)
         if not os.path.exists(game_path):
             raise IOError("You asked for game %s but path %s does not exist" % (game, game_path))
         self.ale = atari_py.ALEInterface()
-        if random_seed:
-            # "ALE's random seed must be represented by unsigned int"
-            seed = np.random.randint(0, 2 ** 16)
-            self.ale.setInt(b'random_seed', seed)
-        self.ale.setFloat(b'repeat_action_probability', 0.0)
-        assert not color_averaging
-        # self.ale.setBool(b'color_averaging', color_averaging)
         self.ale.loadROM(game_path)
         self._obs_type = obs_type
         self._action_set = self.ale.getMinimalActionSet()
         self.frame_skip = frame_skip
-        self.lives = self.ale.lives()
-        self.life_terminating = life_terminating
-
-    def over(self):
-        return self.ale.game_over() or (self.life_terminating and (self.lives > self.ale.lives()))
 
     def step(self, a):
         reward = 0.0
         action = self._action_set[a]
         for _ in range(self.frame_skip):
             reward += self.ale.act(action)
-            if self.over():
-                break
         ob = self._get_obs()
-
-        return ob, reward, self.over(), {}
+        return ob, reward, self.ale.game_over(), {}
 
     @property
     def action_space(self):
@@ -121,6 +98,7 @@ class AtariEnvCX(Env, Serializable):
             return spaces.Box(low=-1, high=1, shape=(128,))  # np.zeros(128), high=np.ones(128))# + 255)
         elif self._obs_type == "image":
             return spaces.Box(low=-1, high=1, shape=(1,) + IMG_WH[::-1])
+            # return spaces.Box(low=-1, high=1, shape=IMG_WH + (4,))
 
     def _get_image(self):
         return to_rgb(self.ale)
@@ -143,12 +121,13 @@ class AtariEnvCX(Env, Serializable):
         elif self._obs_type == "image":
             next_obs = self._get_image()[1:-1, :, :]
             next_obs = scipy.misc.imresize(
-                next_obs, (IMG_WH[0], IMG_WH[1], 3), interp='bilinear', mode=None)
+                next_obs, (IMG_WH[1], IMG_WH[0], 3), interp='bicubic', mode=None)
             next_obs = rgb2gray(next_obs)
             next_obs = next_obs / 256.
             next_obs = next_obs[np.newaxis, :, :]
             return next_obs
 
+    # return: (states, observations)
     def reset(self):
         self.ale.reset_game()
         return self._get_obs()
