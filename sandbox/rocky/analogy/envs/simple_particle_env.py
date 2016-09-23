@@ -13,6 +13,51 @@ from rllab.misc import logger
 from rllab.spaces.product import Product
 from rllab.spaces.box import Box
 from sandbox.rocky.analogy.utils import unwrap
+from sandbox.rocky.tf.misc import tensor_utils
+import tensorflow as tf
+from tensorflow.python.ops import gen_state_ops
+
+
+def decompress_naive(observations, screen_width, screen_height, colors, buffer):
+    images = buffer
+    radius = 0.05
+    # scaled_diameter = int(math.ceil((radius * 2) * min(screen_width, screen_height)))
+    scaled_radius = max(1, int(math.floor(radius * min(screen_width, screen_height))))
+    for idx, obs in enumerate(observations):
+        poses = obs.reshape((-1, 2))
+        image = images[idx]
+        for pos, color in zip(poses, colors):
+            scaled_center = (pos + 1) * np.array([screen_height, screen_width]) * 0.5
+            scaled_center = np.cast['int'](np.floor(scaled_center))
+            image[
+            scaled_center[0] - scaled_radius:scaled_center[0] + scaled_radius,
+            scaled_center[1] - scaled_radius:scaled_center[1] + scaled_radius,
+            ] = color
+    return images
+
+
+import numba
+
+
+@numba.njit
+def decompress_numba1(observations, screen_width, screen_height, colors, buffer):
+    images = buffer
+    radius = 0.05
+    # scaled_diameter = int(math.ceil((radius * 2) * min(screen_width, screen_height)))
+    scaled_radius = max(1, int(math.floor(radius * min(screen_width, screen_height))))
+    for idx in range(len(observations)):
+        obs = observations[idx]
+        poses = obs.reshape((-1, 2))
+        image = images[idx]
+        for pos_idx in range(len(poses)):
+            x, y = poses[pos_idx]
+            color = colors[pos_idx]
+            scaled_x = int(np.floor((x + 1) * screen_height * 0.5))
+            scaled_y = int(np.floor((y + 1) * screen_width * 0.5))
+            for x_ in range(scaled_x - scaled_radius, scaled_x + scaled_radius):
+                for y_ in range(scaled_y - scaled_radius, scaled_y + scaled_radius):
+                    image[x_, y_] = color
+    return images
 
 
 @contextlib.contextmanager
@@ -94,6 +139,163 @@ class SimpleParticleEnv(Env):
         self.obs_type = obs_type
         self.obs_size = obs_size
         self.random_init_position = random_init_position
+        self._compressed = False
+
+    @property
+    def compressed(self):
+        return self._compressed
+
+    @compressed.setter
+    def compressed(self, val):
+        self._compressed = val
+
+    def decompress(self, observations):
+        if self.obs_type == 'state':
+            return observations
+        if len(observations.shape) == 3:
+            flat_obs = observations.reshape((-1, observations.shape[-1]))
+        else:
+            flat_obs = observations
+
+        # import time
+        # @contextlib.contextmanager
+        # def time_func(msg):
+        #     start = time.time()
+        #     yield
+        #     end = time.time()
+        #     print("%s took %fs" % (msg, end - start))
+
+        # buffer = np.zeros((flat_obs.shape[0],) + self.obs_size + (3,), dtype=np.float32) + 255
+
+        colors = np.cast['float32'](np.concatenate([np.array([[0, 0, 0]]), np.asarray(COLORS) * 255], axis=0))
+
+        # result_2 = decompress_numba1(flat_obs, self.obs_size[0], self.obs_size[1], colors, buffer)
+        buffer = np.zeros((flat_obs.shape[0],) + self.obs_size + (3,), dtype=np.float32) + 255
+        # with time_func("numba1"):
+        #     result_2 = decompress_numba1(flat_obs, self.obs_size[0], self.obs_size[1], colors, buffer)
+        decompressed = decompress_numba1(flat_obs, self.obs_size[0], self.obs_size[1], colors, buffer)
+
+        if len(observations.shape) == 3:
+            return decompressed.reshape(observations.shape[:2] + (-1,))
+        else:
+            return decompressed.reshape((observations.shape[0], -1))
+
+        # cv2.imshow('image', result_2[0] / 255)
+        # cv2.waitKey()
+        # import ipdb;
+        # ipdb.set_trace()
+        # N = flat_obs.shape[0]
+        #
+        #
+        #
+        # agent_poses = flat_obs[:, :2]
+        # particle_poses = flat_obs[:, 2:].reshape((-1, self.n_particles, 2))
+        #
+        # buffer = self.build_draw_op()(agent_poses, particle_poses)
+        # create batched images from these
+        # initialize to a white canvas
+        # buffer = np.zeros((N,) + self.obs_size + (3,), dtype=np.uint8) - 1
+        #
+        #
+        #
+        # agent_pos = flat_obs[:, :2]
+        #
+        # buffer = self.batch_draw_rect(buffer, center=agent_pos, radius=0.05, color=np.cast['int']((0, 0, 0)))
+        # for idx in range(self.n_particles):
+        #     color = np.cast['int'](np.asarray(COLORS[idx]) * 255)
+        #     buffer = self.batch_draw_rect(buffer, center=flat_obs[:, (idx + 1) * 2:(idx + 2) * 2], radius=0.05,
+        #                          color=color)
+
+        # cv2.imshow('image', buffer[0] / 255)
+        # cv2.waitKey()
+
+    # def build_draw_op(self):
+    #     # we need the following vars
+    #     agent_poses = tf.placeholder(tf.float32, shape=(None, 2), name="agent_pos")
+    #     particle_poses = tf.placeholder(tf.float32, shape=(None, self.n_particles, 2), name="particle_poses")
+    #     # colors = tf.placeholder(tf.float32, shape=(self.n_particles))
+    #     radius = 0.05  # tf.placeholder(tf.float32, shape=(), name="radius")
+    #     colors = COLORS  # tf.placeholder(tf.float32, shape=(self.n_particles+1, 3), name="color")
+    #     N = tf.shape(agent_poses)[0]
+    #     buffer = tf.ones(tf.pack((N,) + self.obs_size + (3,)), dtype=tf.float32) * 255
+    #     buffer = self.build_draw_rect_op(buffer, agent_poses, radius, np.array([0, 0, 0]))  # colors[0])
+    #     for idx in range(self.n_particles):
+    #         buffer = self.build_draw_rect_op(buffer, particle_poses[:, idx, :], radius, colors[idx])
+    #     return tensor_utils.compile_function(
+    #         inputs=[agent_poses, particle_poses],
+    #         outputs=buffer,
+    #     )
+    #
+    # def build_draw_rect_op(self, buffer, centers, radius, color):
+    #     N = tf.shape(centers)[0]
+    #     screen_height, screen_width = self.obs_size
+    #     scaled_diameter = int(np.ceil((radius * 2) * min(screen_width, screen_height)))
+    #     scaled_center = (centers + 1) * np.asarray(self.obs_size) * 0.5
+    #     scaled_center = tf.cast(tf.floor(scaled_center), tf.int32)
+    #     ids_0 = tf.range(N)
+    #     ids_1 = scaled_center[:, 0]
+    #     ids_2 = scaled_center[:, 1]
+    #     flat_ids = ids_0 * screen_height * screen_width + ids_1 * screen_width + ids_2
+    #     flat_buffer = tf.reshape(buffer, (-1, len(color)))
+    #
+    #     import ipdb;
+    #     ipdb.set_trace()
+    #
+    #     diff_canvas = gen_state_ops._temporary_variable(tf.shape(flat_buffer), tf.float32)
+    #     diff_canvas = tf.assign(diff_canvas, tf.zeros_like(flat_buffer))
+    #     # ids = tf.transpose(tf.pack([ids_0, ids_1, ids_2]))
+    #     # fl
+    #     # color[None, :] - tf.gather_nd(buffer, ids)
+    #
+    #     # diff_canvas = tf.zeros_like(flat_buffer)
+    #     import ipdb;
+    #     ipdb.set_trace()
+    #     diff_canvas = tf.scatter_update(diff_canvas, flat_ids, tf.convert_to_tensor(color)[None, :])
+    #     diff_canvas = tf.scatter_sub(diff_canvas, flat_ids, flat_buffer)
+    #     diff_canvas = tf.reshape(diff_canvas, tf.shape(buffer))
+    #     # finally, ready to apply convolution!
+    #     filter = np.zeros((scaled_diameter, scaled_diameter, 3, 3))
+    #     filter[:, :] = np.eye(3)
+    #     diff_canvas = tf.nn.conv2d(diff_canvas, filter, strides=(1, 1, 1, 1), padding='SAME')
+    #     return buffer + diff_canvas
+    #
+    #     # diff_canvas = tf.zeros_like(buffer, dtype=tf.float32)
+    #     # diff_canvas = tf.scatter_update(diff_canvas, indices=flat_, )
+    #     # buffer
+    #     # return None
+    #
+    # def batch_draw_rect(self, buffer, center, radius, color):
+    #     N = buffer.shape[0]
+    #     screen_height, screen_width = self.obs_size
+    #     scaled_diameter = int(np.ceil((radius * 2) * min(screen_width, screen_height)))
+    #     scaled_center = (center + 1) * np.asarray(self.obs_size) * 0.5
+    #     # scaled_radius = np.cast['int'](np.ceil(scaled_radius))
+    #     scaled_center = np.cast['int'](np.floor(scaled_center))
+    #
+    #     diff_canvas = np.zeros_like(buffer, dtype=np.int)
+    #     diff_canvas[np.arange(N), scaled_center[:, 0], scaled_center[:, 1]] = \
+    #         color[None, :] - buffer[np.arange(N), scaled_center[:, 0], scaled_center[:, 1]]
+    #
+    #     filter = np.zeros((scaled_diameter, scaled_diameter, 3, 3))
+    #     filter[:, :] = np.eye(3)
+    #
+    #     logger.log("launching tf session")
+    #
+    #     with tf.Session() as sess:
+    #         diff_canvas_var = tf.Variable(diff_canvas, dtype=tf.float32)
+    #         filter_var = tf.Variable(filter, dtype=tf.float32)
+    #         sess.run(tf.initialize_variables([diff_canvas_var, filter_var]))
+    #         convolved = sess.run(tf.nn.conv2d(diff_canvas_var, filter_var, strides=(1, 1, 1, 1), padding='SAME'))
+    #         return buffer + convolved
+    #         #     import ipdb; ipdb.set_trace()
+    #         #     pass
+    #         #
+    #         # # xvalid_onehot = np.zeros((N, screen_height), dtype=np.uint8)
+    #         #
+    #         # # xvalid_onehot[:, scaled_center] = 1
+    #         # # xvalid_onehot[np.arange(N), scaled_center[:, 0]] = 1
+    #         #
+    #         # import ipdb; ipdb.set_trace()
 
     def reset_trial(self):
         seed = np.random.randint(np.iinfo(np.int32).max)
@@ -107,7 +309,7 @@ class SimpleParticleEnv(Env):
             seed = self.seed
         with using_seed(seed):
             if self.random_init_position:
-                self.agent_pos = np.random.uniform(low=-0.4, high=0.4, size=(2,))#np.array([0., 0.])
+                self.agent_pos = np.random.uniform(low=-0.4, high=0.4, size=(2,))  # np.array([0., 0.])
             else:
                 self.agent_pos = np.array([0., 0.])
 
@@ -146,9 +348,9 @@ class SimpleParticleEnv(Env):
         reward = -dist
         return Step(self.get_current_obs(), reward, False, **self.get_env_info())
 
-    @cached_property
+    @property
     def observation_space(self):
-        if self.obs_type == 'state':
+        if self.obs_type == 'state' or self.obs_type == 'image' and self.compressed:
             return Product(
                 Box(low=-np.inf, high=np.inf, shape=(2,)),
                 Box(low=-np.inf, high=np.inf, shape=(self.n_particles, 2))
@@ -166,7 +368,7 @@ class SimpleParticleEnv(Env):
         return Box(low=-0.1, high=0.1, shape=(2,))
 
     def get_current_obs(self):
-        if self.obs_type == 'state':
+        if self.obs_type == 'state' or self.obs_type == 'image' and self.compressed:
             return np.copy(self.agent_pos), np.copy(self.particles)
         elif self.obs_type == 'image':
             img = self.render(mode='rgb_array')

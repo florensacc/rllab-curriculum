@@ -1,18 +1,14 @@
-from sandbox.rocky.analogy.envs.simple_particle_env import SimpleParticleEnv
-from sandbox.rocky.analogy.policies.double_rnn_analogy_policy import DoubleRNNAnalogyPolicy
-from sandbox.rocky.analogy.policies.simple_particle_tracking_policy import SimpleParticleTrackingPolicy
-from sandbox.rocky.analogy.policies.double_lstm_policy import DoubleLSTMPolicy
-from sandbox.rocky.analogy.policies.demo_rnn_mlp_analogy_policy import DemoRNNMLPAnalogyPolicy
-from sandbox.rocky.analogy.policies.mlp_analogy_policy import MLPAnalogyPolicy
+from sandbox.rocky.analogy.algos.intertwined_trainer import IntertwinedTrainer
 from sandbox.rocky.analogy.algos.trainer import Trainer
+from sandbox.rocky.analogy.envs.simple_particle_env import SimpleParticleEnv
+from sandbox.rocky.analogy.policies.simple_particle_tracking_policy import SimpleParticleTrackingPolicy
+from sandbox.rocky.analogy.policies.demo_rnn_mlp_analogy_policy import DemoRNNMLPAnalogyPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
-import sandbox.rocky.tf.core.layers as L
 from sandbox.rocky.tf.core.layers import OrthogonalInitializer, XavierUniformInitializer
 import tensorflow as tf
 import math
 from rllab.misc.instrument import stub, run_experiment_lite
 import sys
-from rllab import config
 
 from sandbox.rocky.tf.policies import rnn_utils
 
@@ -21,7 +17,7 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 """
-More data on cirrascale
+Try compressed image representation
 """
 
 
@@ -32,11 +28,11 @@ class VG(VariantGenerator):
 
     @variant
     def n_particles(self):
-        return [3]#, 6]#6]  # 5]#3, 4, 5, 6]
+        return [2]#, 6]#6]  # 5]#3, 4, 5, 6]
 
     @variant
     def n_train_trajs(self):
-        return [10000]#2000]#, 5000]#0]#5000]#, 20000]  # , 20000]#1000, 5000, 20000]
+        return [100]#2000]#, 5000]#0]#5000]#, 20000]  # , 20000]#1000, 5000, 20000]
 
     @variant
     def hidden_dim(self):
@@ -164,9 +160,9 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="analogy-particle-21",
+        exp_prefix="analogy-particle-23",
         mode="local",
-        n_parallel=16,
+        n_parallel=8,
         seed=v["seed"],
         variant=v,
         snapshot_mode="last",

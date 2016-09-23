@@ -7,7 +7,6 @@ from rllab.sampler.utils import rollout
 from sandbox.rocky.analogy.policies.apply_demo_policy import ApplyDemoPolicy
 from sandbox.rocky.analogy.dataset import SupervisedDataset
 from sandbox.rocky.analogy.policies.normalizing_policy import NormalizingPolicy
-from sandbox.rocky.analogy.utils import unwrap
 from rllab.sampler.stateful_pool import singleton_pool
 import itertools
 import random
@@ -33,20 +32,14 @@ def set_seed_tmp(seed=None):
 def collect_demo(G, demo_seed, analogy_seed, target_seed, env_cls, demo_policy_cls, horizon):
     demo_env = env_cls(seed=demo_seed, target_seed=target_seed)
     analogy_env = env_cls(seed=analogy_seed, target_seed=target_seed)
-    # Use compressed image representation
-    unwrap(demo_env).compressed = True
-    unwrap(analogy_env).compressed = True
     demo_path = rollout(demo_env, demo_policy_cls(demo_env), max_path_length=horizon)
     analogy_path = rollout(analogy_env, demo_policy_cls(analogy_env), max_path_length=horizon)
-    # Restore to use normal image representation
-    unwrap(demo_env).compressed = False
-    unwrap(analogy_env).compressed = False
     return demo_path, analogy_path, demo_env, analogy_env
 
 
 # A simple example hopefully able to train a feed-forward network
 
-class Trainer(Serializable):
+class IntertwinedTrainer(Serializable):
     def __init__(
             self,
             policy,
@@ -80,29 +73,6 @@ class Trainer(Serializable):
         self.learning_rate = learning_rate
         self.no_improvement_tolerance = no_improvement_tolerance
 
-    def eval_and_log(self, policy, data_dict):
-        eval_paths = []
-        progbar = pyprind.ProgBar(len(data_dict["demo_paths"]))
-        for idx, demo_path, analogy_env in zip(
-                itertools.count(),
-                data_dict["demo_paths"],
-                data_dict["analogy_envs"],
-        ):
-            eval_paths.append(rollout(
-                analogy_env, ApplyDemoPolicy(policy, demo_path), max_path_length=self.horizon,
-                animated=self.plot and idx == 0,
-            ))
-            progbar.update()
-        if progbar.active:
-            progbar.stop()
-        returns = [np.sum(p["rewards"]) for p in eval_paths]
-        logger.record_tabular('AverageReturn', np.mean(returns))
-        logger.record_tabular('MaxReturn', np.max(returns))
-        logger.record_tabular('MinReturn', np.min(returns))
-
-        log_envs = list(map(unwrap, data_dict["analogy_envs"]))
-        log_envs[0].log_analogy_diagnostics(eval_paths, log_envs)
-
     def train(self):
 
         demo_seeds, analogy_seeds, target_seeds = np.random.randint(
@@ -123,11 +93,6 @@ class Trainer(Serializable):
             data_list.append(data)
 
         demo_paths, analogy_paths, demo_envs, analogy_envs = zip(*data_list)
-
-        logger.log("Decompressing observations...")
-        for path, env in zip(demo_paths + analogy_paths, demo_envs + analogy_envs):
-            path["observations"] = unwrap(env).decompress(path["observations"])
-        logger.log("Decompressing finished")
 
         if progbar.active:
             progbar.stop()
@@ -218,10 +183,6 @@ class Trainer(Serializable):
                 lr_var: learning_rate,
             }
 
-        train_dict = dict(zip(all_data_keys, dataset.train.inputs))
-        test_dict = dict(zip(all_data_keys, dataset.test.inputs))
-        subsampled_train_dict = {k: v[:len(dataset.test.inputs[0])] for k, v in train_dict.items()}
-
         logger.log("Launching TF session")
 
         with tf.Session() as sess:
@@ -251,55 +212,36 @@ class Trainer(Serializable):
                 else:
                     logger.log("Skipped training for the 0th epoch, to collect initial test statistics")
 
-                logger.log("Computing loss on test set")
                 test_loss = sess.run(
                     test_loss_var,
                     feed_dict=to_feed(dataset.test.inputs),
                 )
-                logger.log("Computed")
+
+                test_dict = dict(zip(all_data_keys, dataset.test.inputs))
 
                 # Evaluate performance
 
-                # train_eval_paths = []
-                # progbar = pyprind.ProgBar(len(test_dict["demo_paths"]))
-                # for idx, demo_path, analogy_env in zip(
-                #         itertools.count(),
-                #         train_dict["demo_paths"][:len(test_dict["demo_paths"])],
-                #         train_dict["analogy_envs"][:len(test_dict["analogy_envs"])],
-                # ):
-                #     train_eval_paths.append(rollout(
-                #         analogy_env, ApplyDemoPolicy(policy, demo_path), max_path_length=self.horizon,
-                #         animated=self.plot and idx == 0,
-                #     ))
-                #     progbar.update()
-                # if progbar.active:
-                #     progbar.stop()
-                #
-                # logger.log("Evaluating on test set...")
-                #
-                # test_eval_paths = []
-                # progbar = pyprind.ProgBar(len(test_dict["demo_paths"]))
-                # for idx, demo_path, analogy_env in zip(
-                #         itertools.count(),
-                #         test_dict["demo_paths"],
-                #         test_dict["analogy_envs"],
-                # ):
-                #     test_eval_paths.append(rollout(
-                #         analogy_env, ApplyDemoPolicy(policy, demo_path), max_path_length=self.horizon,
-                #         animated=self.plot and idx == 0,
-                #     ))
-                #     progbar.update()
-                # if progbar.active:
-                #     progbar.stop()
+                eval_paths = []
 
-                # if self.plot:
-                #     rollout(
-                #         analogy_env, ApplyDemoPolicy(policy, demo_path), max_path_length=self.horizon,
-                #         animated=self.plot and idx == 0,
-                #     )
+                for idx, demo_path, analogy_env in zip(
+                        itertools.count(),
+                        test_dict["demo_paths"],
+                        test_dict["analogy_envs"],
+                ):
+                    eval_paths.append(rollout(
+                        analogy_env, ApplyDemoPolicy(policy, demo_path), max_path_length=self.horizon,
+                        animated=self.plot and idx == 0,
+                    ))
 
-                # train_returns = [np.sum(p["rewards"]) for p in train_eval_paths]
-                # test_returns = [np.sum(p["rewards"]) for p in test_eval_paths]
+                # import ipdb; ipdb.set_trace()
+
+                if self.plot:
+                    rollout(
+                        analogy_env, ApplyDemoPolicy(policy, demo_path), max_path_length=self.horizon,
+                        animated=self.plot and idx == 0,
+                    )
+
+                returns = [np.sum(p["rewards"]) for p in eval_paths]
 
                 avg_loss = np.mean(losses)
 
@@ -317,27 +259,15 @@ class Trainer(Serializable):
                 logger.record_tabular("NoImprovementEpochs", n_no_improvement)
                 logger.record_tabular('AverageTrainLoss', avg_loss)
                 logger.record_tabular('AverageTestLoss', test_loss)
+                logger.record_tabular('AverageReturn', np.mean(returns))
+                logger.record_tabular('MaxReturn', np.max(returns))
+                logger.record_tabular('MinReturn', np.min(returns))
                 logger.record_tabular('OracleAverageReturn', np.mean(
                     [np.sum(p["rewards"]) for p in test_dict["analogy_paths"]]
                 ))
-
-                logger.log("Evaluating on subsampled training set...")
-                with logger.tabular_prefix('Train'):
-                    self.eval_and_log(policy=policy, data_dict=subsampled_train_dict)
-                logger.log("Evaluating on test set...")
-                with logger.tabular_prefix('Test'):
-                    self.eval_and_log(policy=policy, data_dict=test_dict)
-                # logger.record_tabular('TrainAverageReturn', np.mean(train_returns))
-                # logger.record_tabular('TrainMaxReturn', np.max(train_returns))
-                # logger.record_tabular('TrainMinReturn', np.min(train_returns))
-                # logger.record_tabular('TestAverageReturn', np.mean(test_returns))
-                # logger.record_tabular('TestMaxReturn', np.max(test_returns))
-                # logger.record_tabular('TestMinReturn', np.min(test_returns))
-
-
-                # log_env = unwrap(analogy_envs[-1])
-                # log_envs = map(unwrap, test_dict["analogy_envs"])
-                # log_env.log_analogy_diagnostics(test_eval_paths, log_envs)
+                log_env = unwrap(analogy_envs[-1])
+                log_envs = map(unwrap, test_dict["analogy_envs"])
+                log_env.log_analogy_diagnostics(eval_paths, log_envs)
 
                 logger.dump_tabular()
 
