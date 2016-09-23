@@ -1408,6 +1408,7 @@ class ConvAR(Distribution):
             sanity2=False,
             tieweight=False,
             extra_nins=0,
+            inp_keepprob=1.,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1420,6 +1421,7 @@ class ConvAR(Distribution):
         self._context = context
         self._context_dim = context_dim
         inp = pt.template("y", books=dist_book).reshape([-1,] + list(shape))
+        inp = inp.custom_dropout(inp_keepprob)
         if sanity:
             inp *= 0.
         if context:
