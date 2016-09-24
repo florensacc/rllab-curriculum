@@ -40,6 +40,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             n_parallel=1,
             set_cpu_affinity=False,
             cpu_assignments=None,
+            serial_compile=True,
             **kwargs
     ):
         """
@@ -81,11 +82,12 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.n_parallel = n_parallel
         self.set_cpu_affinity = set_cpu_affinity
         self.cpu_assignments = cpu_assignments
+        self.serial_compile = serial_compile
         self.worker_batch_size = batch_size // n_parallel
         self.sampler = WorkerBatchSampler(self)
 
     def __getstate__(self):
-        #  (multiprocessing does not allow pickling of manager objects)
+        """ Do not pickle parallel objects. """
         return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
 
     #
@@ -143,34 +145,23 @@ class ParallelBatchPolopt(RLAlgorithm):
         if self.plot:
             plotter.update_plot(self.policy, self.max_path_length)
 
+    def prep_samples(self):
+        """
+        Used to prepare output from sampler.process_samples() for input to
+        optimizer.optimize(), and used in force_compile().
+        """
+        raise NotImplementedError
+
     def force_compile(self, n_samples=100):
         """
-        Perform a mini-iteration before spawning parallel processes;
-        they will inherit compiled functions.
-        This clobbers self._par_objs, must call self.init_par_objs() after.
+        Serial - compile Theano (e.g. before spawning subprocesses, if desired)
         """
-        logger.log("performing mini-iteration to force compiles...")
-        worker_batch_size = self.worker_batch_size
-        n_parallel = self.n_parallel
-        set_cpu_affinity = self.set_cpu_affinity
-
-        self.worker_batch_size = n_samples
-        self.n_parallel = 1
-        self.set_cpu_affinity = False
-        self.init_par_objs()  # clobbers all _par_objs
-        self.set_rank(0)
-        itr = -1
-        paths, _ = self.sampler.obtain_samples(itr)
-        samples_data, _ = self.sampler.process_samples(itr, paths)
-        init_params = self.policy.get_param_values()
-        self.optimize_policy(itr, samples_data)
-        logger.dump_tabular(with_prefix=False)  # if there was a way to delete
-
-        self.policy.set_param_values(init_params)  # un-do the little update
-        self.worker_batch_size = worker_batch_size
-        self.n_parallel = n_parallel
-        self.set_cpu_affinity = set_cpu_affinity
-        logger.log("all compiling complete, initialized state restored")
+        logger.log("forcing Theano compilations...")
+        paths, _ = self.sampler.obtain_samples(n_samples)
+        samples_data, _ = self.sampler.process_samples(paths)
+        input_values = self.prep_samples(samples_data)
+        self.optimizer.force_compile(input_values)
+        logger.log("all compiling complete")
 
     #
     # Main external method and its target for parallel subprocesses.
@@ -178,7 +169,8 @@ class ParallelBatchPolopt(RLAlgorithm):
 
     def train(self):
         self.init_opt()
-        self.force_compile()
+        if self.serial_compile:
+            self.force_compile()
         self.init_par_objs()
         processes = [mp.Process(target=self._train, args=(rank,))
             for rank in range(self.n_parallel)]
@@ -191,9 +183,9 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.set_rank(rank)
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
-                paths, n_steps_collected = self.sampler.obtain_samples(itr)
+                paths, n_steps_collected = self.sampler.obtain_samples()
                 self.set_avg_fac(n_steps_collected)  # (parallel)
-                samples_data, dgnstc_data = self.sampler.process_samples(itr, paths)
+                samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 self.optimize_policy(itr, samples_data)  # (parallel)
                 if rank == 0:
@@ -218,7 +210,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                 self.current_itr = itr + 1
 
     #
-    # Parallelized methods.
+    # Parallelized methods and related.
     #
 
     def log_diagnostics(self, itr, samples_data, dgnstc_data):
@@ -308,6 +300,11 @@ class ParallelBatchPolopt(RLAlgorithm):
         raise NotImplementedError
 
     def _set_affinity(self, rank, verbose=False):
+        """
+        Check your logical cpu vs physical core configuration, use
+        cpu_assignments list to put one worker per physical core.  Default
+        behavior is to use logical cpus 0,1,2,...
+        """
         import psutil
         if self.cpu_assignments is not None:
             n_assignments = len(self.cpu_assignments)

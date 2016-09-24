@@ -1,13 +1,15 @@
 
 import os
 
+import theano
+import theano.tensor as TT
+
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
 # from rllab.algos.batch_polopt import BatchPolopt
-import rllab.misc.logger as logger
-import theano
-import theano.tensor as TT
+# import rllab.misc.logger as logger
 # from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+
 from sandbox.adam.parallel.batch_polopt import ParallelBatchPolopt
 from sandbox.adam.parallel.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
 
@@ -28,6 +30,7 @@ class ParallelTRPO(ParallelBatchPolopt):
             optimizer_args=None,
             step_size=0.01,
             truncate_local_is_ratio=None,
+            mkl_num_threads=1,
             **kwargs):
         if optimizer is None:
             if optimizer_args is None:
@@ -36,6 +39,7 @@ class ParallelTRPO(ParallelBatchPolopt):
         self.optimizer = optimizer
         self.step_size = step_size
         self.truncate_local_is_ratio = truncate_local_is_ratio
+        self.mkl_num_threads = mkl_num_threads
         super(ParallelTRPO, self).__init__(**kwargs)
 
     @overrides
@@ -44,7 +48,7 @@ class ParallelTRPO(ParallelBatchPolopt):
         Same as normal NPO, except for setting MKL_NUM_THREADS.
         """
         # Set BEFORE Theano compiling; make equal to number of cores per worker.
-        os.environ['MKL_NUM_THREADS'] = str(1)
+        os.environ['MKL_NUM_THREADS'] = str(self.mkl_num_threads)
 
         is_recurrent = int(self.policy.recurrent)
         obs_var = self.env.observation_space.new_tensor_variable(
@@ -113,9 +117,7 @@ class ParallelTRPO(ParallelBatchPolopt):
         return dict()
 
     @overrides
-    def optimize_policy(self, itr, samples_data):
-        par_data, _, _ = self._par_objs
-
+    def prep_samples(self, samples_data):
         all_input_values = tuple(ext.extract(
             samples_data,
             "observations", "actions", "advantages"
@@ -126,18 +128,12 @@ class ParallelTRPO(ParallelBatchPolopt):
         all_input_values += tuple(state_info_list) + tuple(dist_info_list)
         if self.policy.recurrent:
             all_input_values += (samples_data["valids"],)
-        loss_before = self.optimizer.loss(all_input_values)
-        mean_kl_before = self.optimizer.constraint_val(all_input_values)
-        self.optimizer.optimize(all_input_values)
-        mean_kl = self.optimizer.constraint_val(all_input_values)
-        loss_after = self.optimizer.loss(all_input_values)
-        if par_data.rank == 0:
-            logger.record_tabular('LossBefore', loss_before)
-            logger.record_tabular('LossAfter', loss_after)
-            logger.record_tabular('MeanKLBefore', mean_kl_before)
-            logger.record_tabular('MeanKL', mean_kl)
-            logger.record_tabular('dLoss', loss_before - loss_after)
+        return all_input_values
 
+    @overrides
+    def optimize_policy(self, itr, samples_data):
+        all_input_values = self.prep_samples(samples_data)
+        self.optimizer.optimize(all_input_values)  # (all logging moved in here)
         return dict()
 
     @overrides
