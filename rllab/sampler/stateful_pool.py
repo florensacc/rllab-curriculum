@@ -171,38 +171,20 @@ def _worker_run_each(all_args):
         raise Exception("".join(traceback.format_exception(*sys.exc_info())))
 
 
-# def _worker_run_collect(all_args):
-#     try:
-#         collect_once, counter, lock, threshold, args = all_args
-#         collected = []
-#         while True:
-#             with lock:
-#                 if counter.value >= threshold:
-#                     return collected
-#             result, inc = collect_once(singleton_pool.G, *args)
-#             collected.append(result)
-#             with lock:
-#                 counter.value += inc
-#                 if counter.value >= threshold:
-#                     return collected
-#     except Exception:
-#         raise Exception("".join(traceback.format_exception(*sys.exc_info())))
-
-
 def _worker_run_collect(all_args):
     try:
-        print("In modified worker_run_collect.")
-        worker_counter = 0
         collect_once, counter, lock, threshold, args = all_args
         collected = []
         while True:
+            with lock:
+                if counter.value >= threshold:
+                    return collected
             result, inc = collect_once(singleton_pool.G, *args)
             collected.append(result)
             with lock:
                 counter.value += inc
-            worker_counter += inc
-            if worker_counter >= threshold // singleton_pool.n_parallel:
-                return collected
+                if counter.value >= threshold:
+                    return collected
     except Exception:
         raise Exception("".join(traceback.format_exception(*sys.exc_info())))
 
