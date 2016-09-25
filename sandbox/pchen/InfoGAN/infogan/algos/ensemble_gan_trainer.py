@@ -32,6 +32,8 @@ class EnsembleGANTrainer(object):
         """
         :type model: EnsembleGAN
         """
+        self.anneal_len = anneal_len
+        self.anneal_to = anneal_to
         self.bootstrap_rate = bootstrap_rate
         self.discriminator_priviledge = discriminator_priviledge
         self.discriminator_leakage = discriminator_leakage
@@ -227,6 +229,15 @@ class EnsembleGANTrainer(object):
                 widgets = ["epoch #%d|" % epoch, Percentage(), Bar(), ETA()]
                 pbar = ProgressBar(maxval=self.updates_per_epoch, widgets=widgets)
                 pbar.start()
+
+                if self.anneal_len:
+                    factor = sess.run([
+                        self.anneal_factor.assign(
+                            (1-self.anneal_to) * max(0, self.anneal_len-epoch)/self.anneal_len
+                            + self.anneal_to
+                        )
+                    ])
+                    print("Factor annealed to %s" % factor)
 
                 all_log_vals = []
                 for i in range(self.updates_per_epoch):

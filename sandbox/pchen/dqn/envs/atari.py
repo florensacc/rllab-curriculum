@@ -32,8 +32,9 @@ If you don't want to install cv2, note that Atari RAM environments don't require
 
 def rgb2gray(rgb):
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
-    gray = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    return gray
+    # gray = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    # return gray
+    return (0.299 * r) + (0.587 * g) + (0.114 * b)
 
 
 try:
@@ -92,6 +93,7 @@ class AtariEnvCX(Env, Serializable):
         # self.ale.setBool(b'color_averaging', color_averaging)
         self.ale.loadROM(game_path)
         self._obs_type = obs_type
+        self._game = game
         self._action_set = self.ale.getMinimalActionSet()
         self.frame_skip = frame_skip
         self.lives = self.ale.lives()
