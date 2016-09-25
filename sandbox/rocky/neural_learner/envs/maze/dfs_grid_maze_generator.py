@@ -2,7 +2,7 @@ import numpy as np
 import random
 
 
-class DFSMazeGenerator(object):
+class DFSGridMazeGenerator(object):
 
     def __init__(self):
         pass
