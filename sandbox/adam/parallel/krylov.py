@@ -24,7 +24,7 @@ def cg(f_Ax, b, par_objs, rank, cg_iters=10, callback=None, verbose=False, resid
     if rank == 0:
         _cg_master(f_Ax, b, par_objs, cg_iters, callback, verbose, residual_tol)
     else:
-        _cg_other(f_Ax, par_objs, cg_iters)
+        _cg(f_Ax, par_objs, cg_iters)
 
 
 def _cg_master(f_Ax, b, par_objs, cg_iters, callback, verbose, residual_tol):
@@ -42,9 +42,9 @@ def _cg_master(f_Ax, b, par_objs, cg_iters, callback, verbose, residual_tol):
     rdotr = r.dot(r)
     brk.value = 0
 
-    fmtstr = "%10i %10.3g %10.3g"
-    titlestr = "%10s %10s %10s"
     if verbose:
+        fmtstr = "%10i %10.3g %10.3g"
+        titlestr = "%10s %10s %10s"
         print(titlestr % ("iter", "residual norm", "soln norm"))
 
     for i in range(cg_iters):
@@ -74,7 +74,7 @@ def _cg_master(f_Ax, b, par_objs, cg_iters, callback, verbose, residual_tol):
         print(fmtstr % (i + 1, rdotr, np.linalg.norm(x)))  # pylint: disable=W0631
 
 
-def _cg_other(f_Ax, par_objs, cg_iters):
+def _cg(f_Ax, par_objs, cg_iters):
     p = par_objs['p']
     brk = par_objs['brk']
     barrier = par_objs['barrier']

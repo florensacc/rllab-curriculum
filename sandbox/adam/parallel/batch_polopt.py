@@ -102,7 +102,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         and, following that, may append() the SimpleContainer objects as needed.
         """
         n = self.n_parallel
-        par_data = SimpleContainer(rank=None, avg_fac=1.0 / n)
+        self.rank = None
         shareds = SimpleContainer(
             sum_discounted_return=mp.RawArray('d', n),
             sum_return=mp.RawArray('d', n),
@@ -112,14 +112,13 @@ class ParallelBatchPolopt(RLAlgorithm):
             num_steps=mp.RawArray('i', n),
             num_valids=mp.RawArray('d', n),
             sum_ent=mp.RawArray('d', n),
-            n_steps_collected=mp.RawArray('i', n),
         )
         mgr_objs = SimpleContainer(
-            barrier_dgnstc=mp.Barrier(self.n_parallel),
-            barrier_avgfac=mp.Barrier(self.n_parallel),
+            barrier_dgnstc=mp.Barrier(n),
+            barrier_avgfac=mp.Barrier(n),
         )
-        self._par_objs = (par_data, shareds, mgr_objs)
-        self.baseline.init_par_objs(n_parallel=self.n_parallel)
+        self._par_objs = (shareds, mgr_objs)
+        self.baseline.init_par_objs(n_parallel=n)
 
     def init_par_objs(self):
         """
@@ -157,7 +156,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         Serial - compile Theano (e.g. before spawning subprocesses, if desired)
         """
         logger.log("forcing Theano compilations...")
-        paths, _ = self.sampler.obtain_samples(n_samples)
+        paths = self.sampler.obtain_samples(n_samples)
         samples_data, _ = self.sampler.process_samples(paths)
         input_values = self.prep_samples(samples_data)
         self.optimizer.force_compile(input_values)
@@ -180,11 +179,10 @@ class ParallelBatchPolopt(RLAlgorithm):
             p.join()
 
     def _train(self, rank):
-        self.set_rank(rank)
+        self.init_rank(rank)
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
-                paths, n_steps_collected = self.sampler.obtain_samples()
-                self.set_avg_fac(n_steps_collected)  # (parallel)
+                paths = self.sampler.obtain_samples()
                 samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 self.optimize_policy(itr, samples_data)  # (parallel)
@@ -214,9 +212,9 @@ class ParallelBatchPolopt(RLAlgorithm):
     #
 
     def log_diagnostics(self, itr, samples_data, dgnstc_data):
-            par_data, shareds, mgr_objs = self._par_objs
+            shareds, mgr_objs = self._par_objs
 
-            i = par_data.rank
+            i = self.rank
             shareds.sum_discounted_return[i] = \
                 np.sum([path["returns"][0] for path in samples_data["paths"]])
             undiscounted_returns = [sum(path["rewards"]) for path in samples_data["paths"]]
@@ -242,7 +240,7 @@ class ParallelBatchPolopt(RLAlgorithm):
 
             mgr_objs.barrier_dgnstc.wait()
 
-            if par_data.rank == 0:
+            if self.rank == 0:
                 num_traj = sum(shareds.num_traj)
                 average_discounted_return = \
                     sum(shareds.sum_discounted_return) / num_traj
@@ -275,26 +273,17 @@ class ParallelBatchPolopt(RLAlgorithm):
         # self.policy.log_diagnostics(paths)
         # self.baseline.log_diagnostics(paths)
 
-    def set_rank(self, rank):
-        par_data, _, _ = self._par_objs
-        par_data.rank = rank
+    def init_rank(self, rank):
+        self.rank = rank
         if self.set_cpu_affinity:
             self._set_affinity(rank)
-        self.baseline.set_rank(rank)
-        self.optimizer.set_rank(rank)
+        self.baseline.init_rank(rank)
+        self.optimizer.init_rank(rank)
         seed = ext.get_seed()
         if seed is None:
             # NOTE: Not sure if this is a good source for seed?
             seed = int(1e6 * np.random.rand())
         ext.set_seed(seed + rank)
-
-    def set_avg_fac(self, n_steps_collected):
-        par_data, shareds, mgr_objs = self._par_objs
-        shareds.n_steps_collected[par_data.rank] = n_steps_collected
-        mgr_objs.barrier_avgfac.wait()
-        avg_fac = 1.0 * n_steps_collected / sum(shareds.n_steps_collected)
-        par_data.avg_fac = avg_fac
-        self.optimizer.set_avg_fac(avg_fac)
 
     def optimize_policy(self, itr, samples_data):
         raise NotImplementedError
