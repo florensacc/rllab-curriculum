@@ -56,7 +56,8 @@ class TRPOPlus(TRPO):
             observation_dtype=observation_dtype,
             **self._model_pool_args
         )
-        self._plotter = Plotter()
+        self._plotter = Plotter(encode_obs=self.encode_obs, decode_obs=self.decode_obs,
+                                normalize_obs=self.normalize_obs, denormalize_obs=self.denormalize_obs)
 
         # Counting table
         self._counting_table = defaultdict(lambda: 0)
@@ -243,10 +244,13 @@ class TRPOPlus(TRPO):
         """
         tot_path_len = 0
         for path in paths:
+            # Encode observations into replay pool format. Also make sure we only add final image in case of
+            # autoencoder.
+            obs_enc = self.encode_obs(path['observations'][:, -np.prod(self._model.state_dim):])
             path_len = len(path['rewards'])
             tot_path_len += path_len
             for i in range(path_len):
-                self._pool.add_sample(path['observations'][i, -np.prod(self._model.state_dim):])
+                self._pool.add_sample(obs_enc[i])
         logger.log('{} samples added to replay pool ({}).'.format(tot_path_len, self._pool.size))
 
     def encode_obs(self, obs):
@@ -294,9 +298,10 @@ class TRPOPlus(TRPO):
         acc = 0.
         for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
             _i, _t, _ = batch
-            _o = self._model.pred_fn(_i)
-            _o_s = _o
-            _o_s = _o_s.reshape((-1, np.prod(self._model.state_dim), self._model.num_classes))
+            # Decode observations.
+            obs_dec_norm = self.normalize_obs(self.decode_obs(_i))
+            _o = self._model.pred_fn(obs_dec_norm)
+            _o_s = _o.reshape((-1, np.prod(self._model.state_dim), self._model.num_classes))
             _o_s = np.argmax(_o_s, axis=2)
             acc += np.sum(np.abs(_o_s - _t))
         return acc / _inputs.shape[0]
@@ -312,7 +317,7 @@ class TRPOPlus(TRPO):
 
             for _ in range(10):
                 batch = self._pool.random_batch(32)
-                _x = (batch['observations'])
+                _x = self.normalize_obs(self.decode_obs(batch['observations']))
                 _y = batch['observations']
                 acc_before += self.accuracy(_x, _y) / 10.
 
@@ -323,12 +328,12 @@ class TRPOPlus(TRPO):
                 for _ in range(50):
                     # Replay pool return uint8 target format, so decode _x.
                     batch = self._pool.random_batch(self._model_pool_args['batch_size'])
-                    _x = (batch['observations'])
+                    _x = self.normalize_obs(self.decode_obs(batch['observations']))
                     _y = batch['observations']
                     train_loss = float(self._model.train_fn(_x, _y, 0))
                     assert not np.isinf(train_loss)
                     assert not np.isnan(train_loss)
-                    running_avg += train_loss / 500.
+                    running_avg += train_loss / 100.
                 if old_running_avg - running_avg < 1e4:
                     done = True
                 logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
@@ -337,7 +342,7 @@ class TRPOPlus(TRPO):
 
             for i in range(10):
                 batch = self._pool.random_batch(32)
-                _x = (batch['observations'])
+                _x = self.normalize_obs(self.decode_obs(batch['observations']))
                 _y = batch['observations']
                 acc_after += self.accuracy(_x, _y) / 10.
             self._plotter.plot_pred_imgs(self._model, _x, _y, 0, 0, dir=RANDOM_SAMPLES_DIR)
@@ -371,11 +376,6 @@ class TRPOPlus(TRPO):
         # Save external rewards.
         for path in paths:
             path['ext_rewards'] = np.array(path['rewards'])
-
-        # --
-        # Encode all observations into uint8 format
-        for path in paths:
-            path['observations'] = self.encode_obs(path['observations'])
 
     def diagnostics(self, start_time, itr, samples_data, paths):
         """

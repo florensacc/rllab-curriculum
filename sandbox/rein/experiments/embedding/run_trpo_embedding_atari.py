@@ -24,15 +24,15 @@ n_seq_frames = 1
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'debug-bin'
-    seeds = range(1)
-    etas = [0.1]
+    exp_prefix = 'debug-trpo-embedding-a'
+    seeds = range(5)
+    etas = [0, 0.1]
     mdps = [AtariEnv(game='frostbite', obs_type="image", frame_skip=8),
             AtariEnv(game='freeway', obs_type="image", frame_skip=8),
             AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=8)]
     lst_factor = [1]
-    trpo_batch_size = 1000
-    max_path_length = 450
+    trpo_batch_size = 10000
+    max_path_length = 4500
     dropout = False
     batch_norm = True
 else:
@@ -222,9 +222,9 @@ for factor, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
-        script="sandbox/rein/experiments/run_experiment_lite.py",
+        script="sandbox/rein/experiments/run_experiment_embedding.py",
         sync_all_data_node_to_s3=True
     )
