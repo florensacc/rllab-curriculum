@@ -7,7 +7,7 @@ from sandbox.rocky.neural_learner.envs.random_maze_env import RandomMazeEnv
 from sandbox.rocky.neural_learner.envs.multi_env import MultiEnv
 from sandbox.rocky.neural_learner.envs.partial_obs_maze_env import PartialObsMazeEnv
 from sandbox.rocky.neural_learner.envs.maze.empty_maze_generator import EmptyMazeGenerator
-from sandbox.rocky.neural_learner.envs.maze.dfs_maze_generator import DFSMazeGenerator
+from sandbox.rocky.neural_learner.envs.maze.dfs_maze_generator import DFSGridMazeGenerator
 from sandbox.rocky.neural_learner.envs.choice_env import ChoiceEnv
 from rllab.envs.grid_world_env import GridWorldEnv
 from sandbox.rocky.tf.envs.base import TfEnv

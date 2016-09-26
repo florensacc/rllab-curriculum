@@ -5,7 +5,7 @@ from rllab.envs.base import Env, Step
 import numpy as np
 import contextlib
 import random
-from .maze.dfs_maze_generator import DFSMazeGenerator
+from .maze.dfs_maze_generator import DFSGridMazeGenerator
 
 
 @contextlib.contextmanager
@@ -39,7 +39,7 @@ class RandomMazeEnv(Env):
         self.state = None
         self.viewer = None
         if maze_gen is None:
-            maze_gen = DFSMazeGenerator()
+            maze_gen = DFSGridMazeGenerator()
         self.maze_gen = maze_gen
         self.seed_pool = seed_pool
         self.reset_trial()

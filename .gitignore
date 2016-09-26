@@ -48,3 +48,4 @@ logs/
 *.ipynb
 .remote-sync.json
 sandbox/rocky/exp_data
+__pycache__

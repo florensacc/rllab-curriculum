@@ -36,14 +36,10 @@ def set_seed_tmp(seed=None):
 def collect_demo(G, demo_seed, analogy_seed, target_seed, env_cls, demo_policy_cls, horizon):
     demo_env = env_cls(seed=demo_seed, target_seed=target_seed)
     analogy_env = env_cls(seed=analogy_seed, target_seed=target_seed)
-    # Use compressed image representation
-    unwrap(demo_env).compressed = True
-    unwrap(analogy_env).compressed = True
+
     demo_path = rollout(demo_env, demo_policy_cls(demo_env), max_path_length=horizon)
     analogy_path = rollout(analogy_env, demo_policy_cls(analogy_env), max_path_length=horizon)
-    # Restore to use normal image representation
-    unwrap(demo_env).compressed = False
-    unwrap(analogy_env).compressed = False
+
     return demo_path, analogy_path, demo_env, analogy_env
 
 
@@ -64,7 +60,6 @@ def vectorized_rollout_analogy(policy, demo_paths, analogy_envs, max_path_length
 
     while not np.all(finished):
         policy.reset(dones)
-        # policy.apply_demos(dones, demo_paths)
         actions, agent_infos = policy.get_actions(obses)
 
         next_obses, rewards, dones, env_infos = vec_env.step(actions)
@@ -111,7 +106,7 @@ def vectorized_rollout_analogy(policy, demo_paths, analogy_envs, max_path_length
     if progbar.active:
         progbar.stop()
 
-    assert(len(paths) == len(analogy_envs))
+    assert (len(paths) == len(analogy_envs))
 
     return paths
 
@@ -179,6 +174,7 @@ class Trainer(Serializable):
     def collect_trajs(self, demo_seeds, analogy_seeds, target_seeds):
         progbar = pyprind.ProgBar(len(demo_seeds))
         data_list = []
+
         for data in singleton_pool.run_imap_unordered(
                 collect_demo,
                 [tuple(seeds) + (self.env_cls, self.demo_policy_cls, self.horizon)
@@ -190,10 +186,6 @@ class Trainer(Serializable):
             progbar.stop()
 
         demo_paths, analogy_paths, demo_envs, analogy_envs = zip(*data_list)
-        logger.log("Decompressing observations...")
-        for path, env in zip(demo_paths + analogy_paths, demo_envs + analogy_envs):
-            path["observations"] = unwrap(env).decompress(path["observations"])
-        logger.log("Decompressing finished")
         return demo_paths, analogy_paths, demo_envs, analogy_envs
 
     def init_opt(self, env, policy):
@@ -290,10 +282,16 @@ class Trainer(Serializable):
         logger.log("Constructing optimization problem")
 
         # policy = self.policy
+        train_dict = dataset.train.input_dict
+        test_dict = dataset.test.input_dict
+        n_test = len(dataset.test.inputs[0])
+        subsampled_train_dict = {k: v[:n_test] for k, v in train_dict.items()}
 
         policy = NormalizingPolicy(
             self.policy,
-            *dataset.train.inputs[:2]
+            demo_paths=train_dict["demo_paths"],
+            analogy_paths=train_dict["analogy_paths"],
+            # normalize_obs=True,
         )
 
         opt_info = self.init_opt(env, policy)
@@ -307,11 +305,6 @@ class Trainer(Serializable):
 
         # Current learning rate
         learning_rate = self.learning_rate
-
-        train_dict = dataset.train.input_dict
-        test_dict = dataset.test.input_dict
-        n_test = len(dataset.test.inputs[0])
-        subsampled_train_dict = {k: v[:n_test] for k, v in train_dict.items()}
 
         logger.log("Launching TF session")
 
