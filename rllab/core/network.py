@@ -280,17 +280,17 @@ class ConvNetwork(object):
                  hidden_nonlinearity=LN.rectify,
                  output_nonlinearity=LN.softmax,
                  name=None, input_var=None):
-        if conv_type == "cuda":
-            # use GPU without cudnn
-            from L.cuda_convnet import Conv2DCCLayer as conv_layer
-            print("Using lasagne.layers.cuda_convnet.Conv2DCCLayer to build conv layers.")
-        elif conv_type == "cudnn":
-            from L.dnn import Conv2DDNNLayer as conv_layer
-            print("Using lasagne.layers.dnnConv2DNNLayer to build conv layers.")
-        else:
-            # use CPU
-            from L import Conv2DLayer as conv_layer
-            print("Using lasagne.layers.Conv2DLayer to build conv layers.")
+        # if conv_type == "cuda":
+        #     # use GPU without cudnn
+        #     from L.cuda_convnet import Conv2DCCLayer as conv_layer
+        #     print("Using lasagne.layers.cuda_convnet.Conv2DCCLayer to build conv layers.")
+        # elif conv_type == "cudnn":
+        #     from L.dnn import Conv2DDNNLayer as conv_layer
+        #     print("Using lasagne.layers.dnnConv2DNNLayer to build conv layers.")
+        # else:
+        #     # use CPU
+        #     from L import Conv2DLayer as conv_layer
+        #     print("Using lasagne.layers.Conv2DLayer to build conv layers.")
 
         if name is None:
             prefix = ""

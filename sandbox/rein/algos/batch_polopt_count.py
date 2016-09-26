@@ -230,7 +230,7 @@ class BatchPolopt(RLAlgorithm):
         for path in paths:
             path_len = len(path['rewards'])
             for i in range(path_len):
-                self.pool.add_sample(path['observations'][i, -np.prod(self.autoenc.state_dim):])
+                self.pool.add_sample(self.encode_obs(path['observations'][i, -np.prod(self.autoenc.state_dim):]))
 
     def encode_obs(self, obs):
         """
@@ -239,7 +239,7 @@ class BatchPolopt(RLAlgorithm):
         :return:
         """
         assert np.max(obs) <= 1.0
-        return (obs * self.autoenc.num_classes).astype("uint8")
+        return np.round(obs * self.autoenc.num_classes).astype("uint8")
 
     def decode_obs(self, obs):
         """
@@ -249,48 +249,49 @@ class BatchPolopt(RLAlgorithm):
         """
         return obs / float(self.autoenc.num_classes)
 
-    def train_autoenc(self):
-        logger.log('Updating autoencoder using replay pool ({}) ...'.format(self.pool.size))
+    def train_autoenc(self, itr):
         acc_before, acc_after, train_loss, running_avg = 0., 0., 0., 0.
-        if self.pool.size >= self._dyn_pool_args['min_size']:
+        if itr == 0 or itr % 5 == 0:
+            logger.log('Updating autoencoder using replay pool ({}) ...'.format(self.pool.size))
+            if self.pool.size >= self._dyn_pool_args['min_size']:
 
-            for _ in range(10):
-                batch = self.pool.random_batch(32)
-                _x = self.decode_obs(batch['observations'])
-                _y = batch['observations']
-                acc_before += self.accuracy(_x, _y) / 10.
-
-            done = False
-            old_running_avg = np.inf
-            while not done:
-                running_avg = 0.
-                for _ in range(500):
-                    # Replay pool return uint8 target format, so decode _x.
-                    batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                for _ in range(10):
+                    batch = self.pool.random_batch(32)
                     _x = self.decode_obs(batch['observations'])
                     _y = batch['observations']
-                    train_loss = float(self.autoenc.train_fn(_x, _y, 0))
-                    assert not np.isinf(train_loss)
-                    assert not np.isnan(train_loss)
-                    running_avg += train_loss / 500.
-                if old_running_avg - running_avg < 1e4:
-                    done = True
-                logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
-                    running_avg, old_running_avg - running_avg))
-                old_running_avg = running_avg
+                    acc_before += self.accuracy(_x, _y) / 10.
 
-            for i in range(10):
-                batch = self.pool.random_batch(32)
-                _x = self.decode_obs(batch['observations'])
-                _y = batch['observations']
-                acc_after += self.accuracy(_x, _y) / 10.
-            self.plot_pred_imgs(_x, _y, 0, 0, dir='/random_samples')
+                done = False
+                old_running_avg = np.inf
+                while not done:
+                    running_avg = 0.
+                    for _ in range(100):
+                        # Replay pool return uint8 target format, so decode _x.
+                        batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                        _x = self.decode_obs(batch['observations'])
+                        _y = batch['observations']
+                        train_loss = float(self.autoenc.train_fn(_x, _y, 0))
+                        assert not np.isinf(train_loss)
+                        assert not np.isnan(train_loss)
+                        running_avg += train_loss / 100.
+                    if old_running_avg - running_avg < 1e-4:
+                        done = True
+                    logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
+                        running_avg, old_running_avg - running_avg))
+                    old_running_avg = running_avg
 
-            logger.log('Autoencoder updated.')
-        else:
-            logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
-                self._dyn_pool_args['min_size'], self.pool.size
-            ))
+                for i in range(10):
+                    batch = self.pool.random_batch(32)
+                    _x = self.decode_obs(batch['observations'])
+                    _y = batch['observations']
+                    acc_after += self.accuracy(_x, _y) / 10.
+                self.plot_pred_imgs(_x, _y, 0, 0, dir='/random_samples')
+
+                logger.log('Autoencoder updated.')
+            else:
+                logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
+                    self._dyn_pool_args['min_size'], self.pool.size
+                ))
 
         logger.record_tabular('AE_SqErrBefore', acc_before)
         logger.record_tabular('AE_SqErrAfter', acc_after)
@@ -309,16 +310,12 @@ class BatchPolopt(RLAlgorithm):
             # Sample trajectories.
             paths = self.obtain_samples()
 
-            # Encode all observations into uint8 format
-            for path in paths:
-                path['observations'] = self.encode_obs(path['observations'])
-
             # Add sampled trajectories to the replay pool.
             self.fill_replay_pool(paths)
 
             # Train autoencoder using replay pool.
             # TODO: mix replay pool with training on current batch: to make sure novel samples are mapped to novel binary codes.
-            self.train_autoenc()
+            self.train_autoenc(itr)
 
             # Here we should extract discrete embedding from samples and use it for updating count table.
             self.count(paths)
@@ -326,9 +323,9 @@ class BatchPolopt(RLAlgorithm):
             if itr == 0:
                 # Select 5 random images form the first path, evaluate them at every iteration to inspect emb.
                 rnd = np.random.randint(0, len(paths[0]['observations']), 5)
-                self._test_obs = paths[0]['observations'][rnd]
+                self._test_obs = self.encode_obs(paths[0]['observations'][rnd, -np.prod(self.autoenc.state_dim):])
             self.plot_pred_imgs(self.decode_obs(self._test_obs), self._test_obs, -itr - 1, 0, dir='/consistency_check')
-            obs = paths[0]['observations'][-50:, -np.prod(self.autoenc.state_dim):]
+            obs = self.encode_obs(paths[0]['observations'][-50:, -np.prod(self.autoenc.state_dim):])
             self.plot_pred_imgs(self.decode_obs(obs), obs, 0, 0, dir='/uniqueness_check')
 
             # Postprocess trajectory data.
@@ -398,14 +395,18 @@ class BatchPolopt(RLAlgorithm):
         def count_to_ir(count):
             return 1. / np.sqrt(count)
 
+        new_state_count = 0
         for idx, path in enumerate(paths):
             # When using num_seq_frames > 1, we need to extract the last one.
-            obs = self.decode_obs(path['observations'][:, -np.prod(self.autoenc.state_dim):])
+            # Dec/Enc for rounding err.
+            obs = self.decode_obs(self.encode_obs(path['observations'][:, -np.prod(self.autoenc.state_dim):]))
             keys = np.cast['int'](np.round(self.autoenc.discrete_emb(obs)))
             counts = np.zeros(len(keys))
             lst_key_as_int = np.zeros(len(keys), dtype=int)
             for idy, key in enumerate(keys):
                 key_as_int = bin_to_int(key)
+                if key_as_int not in self.counting_table.keys():
+                    new_state_count += 1
                 lst_key_as_int[idy] = key_as_int
                 self.counting_table[key_as_int] += 1
                 counts[idy] += self.counting_table[key_as_int]
@@ -425,6 +426,7 @@ class BatchPolopt(RLAlgorithm):
 
         num_encountered_unique_keys = len(self.counting_table)
         logger.log('Counting table contains {} entries.'.format(num_encountered_unique_keys))
+        logger.record_tabular('NewStateCount', new_state_count)
 
     def obtain_samples(self):
         cur_params = self.policy.get_param_values()

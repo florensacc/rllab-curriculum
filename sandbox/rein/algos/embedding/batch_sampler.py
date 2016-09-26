@@ -31,7 +31,7 @@ class BatchSampler(BaseSampler):
             max_samples=self.algo.batch_size,
             max_path_length=self.algo.max_path_length,
             scope=self.algo.scope,
-            n_seq_frames=n_seq_frames
+            n_seq_frames = n_seq_frames
         )
         if self.algo.whole_paths:
             return paths

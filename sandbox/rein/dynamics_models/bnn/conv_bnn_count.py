@@ -3,7 +3,6 @@ import theano.tensor as T
 import lasagne
 from lasagne.layers.noise import dropout
 from lasagne.layers.normalization import batch_norm, BatchNormLayer
-from lasagne.layers.special import NonlinearityLayer
 
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
