@@ -3,7 +3,6 @@ import theano.tensor as T
 import lasagne
 from lasagne.layers.noise import dropout
 from lasagne.layers.normalization import batch_norm, BatchNormLayer
-from lasagne.layers.special import NonlinearityLayer
 
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
@@ -33,7 +32,7 @@ class DiscreteEmbeddingNonlinearityLayer(lasagne.layers.Layer):
         # Force outputs to be binary through noise.
         return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(size=x.shape, low=-0.2, high=0.2)
 
-    def get_output_for(self, input, noise_mask=0, **kwargs):
+    def get_output_for(self, input, noise_mask=1, **kwargs):
         return self.nonlinearity(input, noise_mask)
 
 

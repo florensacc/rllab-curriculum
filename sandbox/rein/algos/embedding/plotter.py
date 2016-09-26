@@ -4,23 +4,26 @@ from rllab.misc import logger
 
 
 class Plotter:
-    def __init__(self, encode_obs, decode_obs, normalize_obs, denormalize_obs):
-        self._encode_obs = encode_obs
-        self._decode_obs = decode_obs
-        self._normalize_obs = normalize_obs
-        self._denormalize_obs = denormalize_obs
+    def __init__(self):
+        pass
 
-    def plot_pred_imgs(self, model, inputs, targets, itr, count, dir='/imgs'):
+    def bin_to_int(self, binary):
+        integer = 0
+        for bit in binary:
+            integer = (integer << 1) | bit
+        return integer
+
+    def plot_pred_imgs(self, model, counting_table, inputs, targets, itr, count, dir='/imgs'):
         import matplotlib.pyplot as plt
         if not hasattr(self, '_fig'):
             self._fig = plt.figure()
-            self._fig_2 = self._fig.add_subplot(141)
+            self._fig_2 = self._fig.add_subplot(131)
             plt.tick_params(axis='both', which='both', bottom='off', top='off',
                             labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_3 = self._fig.add_subplot(142)
+            self._fig_3 = self._fig.add_subplot(132)
             plt.tick_params(axis='both', which='both', bottom='off', top='off',
                             labelbottom='off', right='off', left='off', labelleft='off')
-            self._fig_4 = self._fig.add_subplot(143)
+            self._fig_4 = self._fig.add_subplot(133)
             plt.tick_params(axis='both', which='both', bottom='off', top='off',
                             labelbottom='off', right='off', left='off', labelleft='off')
             self._im1, self._im2, self._im3, self._im4 = None, None, None, None
@@ -30,6 +33,12 @@ class Plotter:
             sanity_pred = model.pred_fn(inputs)
             cont_emb = model.discrete_emb(inputs)[idx]
             key = np.cast['int'](np.round(cont_emb))
+            key_int = self.bin_to_int(key)
+            if key_int in counting_table.keys():
+                count = counting_table[key_int]
+            else:
+                count = 0
+            # print(key_int, count)
             title_bin = ''.join([str(k) for k in key])
             title_float = ' '.join(['{:.1f}'.format(c) for c in cont_emb])
             title_float2 = ''
@@ -37,7 +46,7 @@ class Plotter:
                 title_float2 += char
                 if (idy % 101 == 0) and idy != 0:
                     title_float2 += '\n'
-            title = title_bin + '\n\n' + title_float2
+            title = title_bin + '\n\n' + title_float2 + '\n\n' + 'count: {}'.format(count)
             plt.suptitle(title)
             sanity_pred_im = sanity_pred[idx, :]
             if model.output_type == model.OutputType.CLASSIFICATION:
@@ -72,4 +81,4 @@ class Plotter:
             if not os.path.exists(logger._snapshot_dir + dir):
                 os.makedirs(logger._snapshot_dir + dir)
             plt.savefig(
-                logger._snapshot_dir + dir + '/autoenc_{}_{}_{}.png'.format(itr, count, idx), bbox_inches='tight')
+                logger._snapshot_dir + dir + '/model_{}_{}_{}.png'.format(itr, 0, idx), bbox_inches='tight')

@@ -56,8 +56,7 @@ class TRPOPlus(TRPO):
             observation_dtype=observation_dtype,
             **self._model_pool_args
         )
-        self._plotter = Plotter(encode_obs=self.encode_obs, decode_obs=self.decode_obs,
-                                normalize_obs=self.normalize_obs, denormalize_obs=self.denormalize_obs)
+        self._plotter = Plotter()
 
         # Counting table
         self._counting_table = defaultdict(lambda: 0)
@@ -208,17 +207,47 @@ class TRPOPlus(TRPO):
         def count_to_ir(count):
             return 1. / np.sqrt(count)
 
+        def obs_to_key(obs):
+            # Encode/decode to get uniform representation.
+            obs_ed = self.decode_obs(self.encode_obs(obs))
+            # Get continuous embedding.
+            cont_emb = self._model.discrete_emb(obs_ed)
+            # Cast continuous embedding into binary one.
+            return np.cast['int'](np.round(cont_emb))
+
+        # --
+        # Update counting table.
+        new_state_count, num_unique, tot_path_len = 0, 0, 0
         for idx, path in enumerate(paths):
             # When using num_seq_frames > 1, we need to extract the last one.
-            obs = self.decode_obs(path['observations'][:, -np.prod(self._model.state_dim):])
-            keys = np.cast['int'](np.round(self._model.discrete_emb(obs)))
-            counts = np.zeros(len(keys))
+            keys = obs_to_key(path['observations'][:, -np.prod(self._model.state_dim):])
             lst_key_as_int = np.zeros(len(keys), dtype=int)
             for idy, key in enumerate(keys):
                 key_as_int = bin_to_int(key)
+                if key_as_int not in self._counting_table.keys():
+                    new_state_count += 1
                 lst_key_as_int[idy] = key_as_int
                 self._counting_table[key_as_int] += 1
+
+            num_unique += len(set(lst_key_as_int))
+            tot_path_len += len(lst_key_as_int)
+
+        logger.log('Average unique values: {:.1f}/{:.1f}'.format(num_unique / float(len(paths)),
+                                                                 tot_path_len / float(len(paths))))
+        unique_perc = num_unique / float(tot_path_len) * 100
+        logger.record_tabular('UniquePerc', unique_perc)
+
+        # --
+        # Compute intrinsic rewards from counts.
+        for idx, path in enumerate(paths):
+            # When using num_seq_frames > 1, we need to extract the last one.
+            keys = obs_to_key(path['observations'][:, -np.prod(self._model.state_dim):])
+            counts = np.zeros(len(keys))
+            for idy, key in enumerate(keys):
+                key_as_int = bin_to_int(key)
                 counts[idy] += self._counting_table[key_as_int]
+                # if idx == 0:
+                #     print(key_as_int, counts[idy])
                 if self._hamming_distance == 1:
                     for i in range(len(key)):
                         key_trans = np.array(key)
@@ -230,11 +259,9 @@ class TRPOPlus(TRPO):
 
             path['S'] = count_to_ir(counts)
 
-            num_unique = len(set(lst_key_as_int))
-            logger.log('Path {}: unique values: {}/{}'.format(idx, num_unique, len(lst_key_as_int)))
-
         num_encountered_unique_keys = len(self._counting_table)
         logger.log('Counting table contains {} entries.'.format(num_encountered_unique_keys))
+        logger.record_tabular('NewStateCount', new_state_count)
 
     def fill_replay_pool(self, paths):
         """
@@ -266,28 +293,6 @@ class TRPOPlus(TRPO):
         """
         return obs / float(self._model.num_classes)
 
-    def normalize_obs(self, obs):
-        """
-        Normalize observations.
-        """
-        shape = obs.shape
-        o = obs.reshape((obs.shape[0], -1))
-        mean, std = self._pool.get_cached_mean_std_obs()
-        o = (o - mean[None, :]) / (std[None, :] + 1e-8)
-        o = o.reshape(shape)
-        return o
-
-    def denormalize_obs(self, obs):
-        """
-        Denormalize observations.
-        """
-        shape = obs.shape
-        o = obs.reshape((obs.shape[0], -1))
-        mean, std = self._pool.get_cached_mean_std_obs()
-        o = o * (std[None, :] + 1e-8) + mean[None, :]
-        o = o.reshape(shape)
-        return o
-
     def accuracy(self, _inputs, _targets):
         """
         Calculate accuracy for inputs/outputs.
@@ -299,59 +304,63 @@ class TRPOPlus(TRPO):
         for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
             _i, _t, _ = batch
             # Decode observations.
-            obs_dec_norm = self.normalize_obs(self.decode_obs(_i))
+            obs_dec_norm = self.decode_obs(_i)
             _o = self._model.pred_fn(obs_dec_norm)
             _o_s = _o.reshape((-1, np.prod(self._model.state_dim), self._model.num_classes))
             _o_s = np.argmax(_o_s, axis=2)
             acc += np.sum(np.abs(_o_s - _t))
         return acc / _inputs.shape[0]
 
-    def train_model(self):
+    def train_model(self, itr):
         """
         Train autoencoder model.
         :return:
         """
-        logger.log('Updating autoencoder using replay pool ({}) ...'.format(self._pool.size))
         acc_before, acc_after, train_loss, running_avg = 0., 0., 0., 0.
-        if self._pool.size >= self._model_pool_args['min_size']:
+        if itr == 0 or itr % 5 == 0:
+            logger.log('Updating autoencoder using replay pool ({}) ...'.format(self._pool.size))
+            if self._pool.size >= self._model_pool_args['min_size']:
 
-            for _ in range(10):
-                batch = self._pool.random_batch(32)
-                _x = self.normalize_obs(self.decode_obs(batch['observations']))
-                _y = batch['observations']
-                acc_before += self.accuracy(_x, _y) / 10.
-
-            done = False
-            old_running_avg = np.inf
-            while not done:
-                running_avg = 0.
-                for _ in range(50):
-                    # Replay pool return uint8 target format, so decode _x.
-                    batch = self._pool.random_batch(self._model_pool_args['batch_size'])
-                    _x = self.normalize_obs(self.decode_obs(batch['observations']))
+                for _ in range(10):
+                    batch = self._pool.random_batch(32)
+                    _x = self.decode_obs(batch['observations'])
                     _y = batch['observations']
-                    train_loss = float(self._model.train_fn(_x, _y, 0))
-                    assert not np.isinf(train_loss)
-                    assert not np.isnan(train_loss)
-                    running_avg += train_loss / 100.
-                if old_running_avg - running_avg < 1e4:
-                    done = True
-                logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
-                    running_avg, old_running_avg - running_avg))
-                old_running_avg = running_avg
+                    acc_before += self.accuracy(_x, _y) / 10.
 
-            for i in range(10):
-                batch = self._pool.random_batch(32)
-                _x = self.normalize_obs(self.decode_obs(batch['observations']))
-                _y = batch['observations']
-                acc_after += self.accuracy(_x, _y) / 10.
-            self._plotter.plot_pred_imgs(self._model, _x, _y, 0, 0, dir=RANDOM_SAMPLES_DIR)
+                done = False
+                old_running_avg = np.inf
+                while not done:
+                    running_avg = 0.
+                    for _ in range(500):
+                        # Replay pool return uint8 target format, so decode _x.
+                        batch = self._pool.random_batch(self._model_pool_args['batch_size'])
+                        _x = self.decode_obs(batch['observations'])
+                        _y = batch['observations']
+                        train_loss = float(self._model.train_fn(_x, _y, 0))
+                        assert not np.isinf(train_loss)
+                        assert not np.isnan(train_loss)
+                        running_avg += train_loss / 500.
+                    if old_running_avg - running_avg < 1e-4:
+                        done = True
+                    logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
+                        running_avg, old_running_avg - running_avg))
+                    old_running_avg = running_avg
 
-            logger.log('Autoencoder updated.')
-        else:
-            logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
-                self._model_pool_args['min_size'], self._pool.size
-            ))
+                for i in range(10):
+                    batch = self._pool.random_batch(32)
+                    _x = self.decode_obs(batch['observations'])
+                    _y = batch['observations']
+                    acc_after += self.accuracy(_x, _y) / 10.
+
+                logger.log('Autoencoder updated.')
+
+                logger.log('Plotting random samples ...')
+                self._plotter.plot_pred_imgs(self._model, self._counting_table, _x, _y, 0, 0, dir=RANDOM_SAMPLES_DIR)
+
+            else:
+                logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
+                    self._model_pool_args['min_size'], self._pool.size
+                ))
 
         logger.record_tabular('AE_SqErrBefore', acc_before)
         logger.record_tabular('AE_SqErrAfter', acc_after)
@@ -387,14 +396,24 @@ class TRPOPlus(TRPO):
         """
         # --
         # Analysis
+        # Get consistency images in first iteration.
         if itr == 0:
             # Select 5 random images form the first path, evaluate them at every iteration to inspect emb.
-            rnd = np.random.randint(0, len(paths[0]['observations']), 5)
-            self._test_obs = paths[0]['observations'][rnd]
-        self._plotter.plot_pred_imgs(self._model, self.decode_obs(self._test_obs), self._test_obs, -itr - 1,
-                                     0, dir=CONSISTENCY_CHECK_DIR)
-        obs = paths[0]['observations'][-50:, -np.prod(self._model.state_dim):]
-        self._plotter.plot_pred_imgs(self._model, (obs), obs, 0, 0, dir=UNIQUENESS_CHECK_DIR)
+            rnd = np.random.randint(0, len(paths[0]['observations']), 32)
+            self._test_obs = self.encode_obs(paths[0]['observations'][rnd, -np.prod(self._model.state_dim):])
+        # Consitency check tracks images over time, only every n iterations.
+        if itr % 10 == 0:
+            logger.log('Plotting consistency images ...')
+            self._plotter.plot_pred_imgs(
+                self._model, self._counting_table, self.decode_obs(self._test_obs), self._test_obs,
+                -itr - 1, 0,
+                dir=CONSISTENCY_CHECK_DIR)
+        # Run uniqueness check every iteration.
+        logger.log('Plotting uniqueness images ...')
+        obs = self.encode_obs(paths[0]['observations'][0:50, -np.prod(self._model.state_dim):])
+        self._plotter.plot_pred_imgs(
+            self._model, self._counting_table, self.decode_obs(obs), obs, 0, 0,
+            dir=UNIQUENESS_CHECK_DIR)
 
         # --
         # Diagnostics
@@ -418,7 +437,6 @@ class TRPOPlus(TRPO):
         """
         Main RL training procedure.
         """
-        # TODO: make sure normalize/decode/encode is applied correctly.
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
             self.start_worker()
@@ -439,7 +457,7 @@ class TRPOPlus(TRPO):
 
                     # --
                     # Train model.
-                    self.train_model()
+                    self.train_model(itr)
 
                     # --
                     # Compute intrinisc rewards.

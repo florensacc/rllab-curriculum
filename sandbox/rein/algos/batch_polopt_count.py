@@ -249,48 +249,49 @@ class BatchPolopt(RLAlgorithm):
         """
         return obs / float(self.autoenc.num_classes)
 
-    def train_autoenc(self):
-        logger.log('Updating autoencoder using replay pool ({}) ...'.format(self.pool.size))
+    def train_autoenc(self, itr):
         acc_before, acc_after, train_loss, running_avg = 0., 0., 0., 0.
-        if self.pool.size >= self._dyn_pool_args['min_size']:
+        if itr == 0 or itr % 5 == 0:
+            logger.log('Updating autoencoder using replay pool ({}) ...'.format(self.pool.size))
+            if self.pool.size >= self._dyn_pool_args['min_size']:
 
-            for _ in range(10):
-                batch = self.pool.random_batch(32)
-                _x = self.decode_obs(batch['observations'])
-                _y = batch['observations']
-                acc_before += self.accuracy(_x, _y) / 10.
-
-            done = False
-            old_running_avg = np.inf
-            while not done:
-                running_avg = 0.
-                for _ in range(100):
-                    # Replay pool return uint8 target format, so decode _x.
-                    batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                for _ in range(10):
+                    batch = self.pool.random_batch(32)
                     _x = self.decode_obs(batch['observations'])
                     _y = batch['observations']
-                    train_loss = float(self.autoenc.train_fn(_x, _y, 0))
-                    assert not np.isinf(train_loss)
-                    assert not np.isnan(train_loss)
-                    running_avg += train_loss / 100.
-                if old_running_avg - running_avg < 1e-4:
-                    done = True
-                logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
-                    running_avg, old_running_avg - running_avg))
-                old_running_avg = running_avg
+                    acc_before += self.accuracy(_x, _y) / 10.
 
-            for i in range(10):
-                batch = self.pool.random_batch(32)
-                _x = self.decode_obs(batch['observations'])
-                _y = batch['observations']
-                acc_after += self.accuracy(_x, _y) / 10.
-            self.plot_pred_imgs(_x, _y, 0, 0, dir='/random_samples')
+                done = False
+                old_running_avg = np.inf
+                while not done:
+                    running_avg = 0.
+                    for _ in range(100):
+                        # Replay pool return uint8 target format, so decode _x.
+                        batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
+                        _x = self.decode_obs(batch['observations'])
+                        _y = batch['observations']
+                        train_loss = float(self.autoenc.train_fn(_x, _y, 0))
+                        assert not np.isinf(train_loss)
+                        assert not np.isnan(train_loss)
+                        running_avg += train_loss / 100.
+                    if old_running_avg - running_avg < 1e-4:
+                        done = True
+                    logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
+                        running_avg, old_running_avg - running_avg))
+                    old_running_avg = running_avg
 
-            logger.log('Autoencoder updated.')
-        else:
-            logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
-                self._dyn_pool_args['min_size'], self.pool.size
-            ))
+                for i in range(10):
+                    batch = self.pool.random_batch(32)
+                    _x = self.decode_obs(batch['observations'])
+                    _y = batch['observations']
+                    acc_after += self.accuracy(_x, _y) / 10.
+                self.plot_pred_imgs(_x, _y, 0, 0, dir='/random_samples')
+
+                logger.log('Autoencoder updated.')
+            else:
+                logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
+                    self._dyn_pool_args['min_size'], self.pool.size
+                ))
 
         logger.record_tabular('AE_SqErrBefore', acc_before)
         logger.record_tabular('AE_SqErrAfter', acc_after)
@@ -314,7 +315,7 @@ class BatchPolopt(RLAlgorithm):
 
             # Train autoencoder using replay pool.
             # TODO: mix replay pool with training on current batch: to make sure novel samples are mapped to novel binary codes.
-            self.train_autoenc()
+            self.train_autoenc(itr)
 
             # Here we should extract discrete embedding from samples and use it for updating count table.
             self.count(paths)

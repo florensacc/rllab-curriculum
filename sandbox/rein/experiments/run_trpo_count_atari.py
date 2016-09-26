@@ -16,37 +16,24 @@ os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
-TEST_RUN = True
-
 # global params
 num_seq_frames = 1
 batch_norm = True
 dropout = False
 baseline = True
 
-# Param ranges
-if TEST_RUN:
-    exp_prefix = 'debug-bincount-trpo-a'
-    seeds = range(5)
-    etas = [0, 0.01, 0.1, 1.0]
-    mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-            AtariEnvX(game='freeway', obs_type="image", frame_skip=8),
-            AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8)]
-    lst_factor = [2]
-    trpo_batch_size = 10000
-    max_path_length = 4500
-    batch_norm = True
-else:
-    exp_prefix = 'trpo-count-atari-42x52-a'
-    seeds = range(5)
-    etas = [0, 1.0, 0.1, 0.01]
-    mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=8),
-            AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=8),
-            AtariEnvX(game='freeway', obs_type="image", frame_skip=8)]
-    lst_factor = [1]
-    trpo_batch_size = 20000
-    max_path_length = 4500
-    batch_norm = True
+exp_prefix = 'debug-bincount-trpo-a'
+seeds = range(5)
+etas = [0, 0.01, 0.1, 1.0]
+mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=4),
+        AtariEnvX(game='freeway', obs_type="image", frame_skip=4),
+        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=4),
+        AtariEnvX(game='breakout', obs_type="image", frame_skip=4)]
+lst_factor = [2]
+trpo_batch_size = 50000
+max_path_length = 4500
+batch_norm = True
+
 
 param_cart_product = itertools.product(
     lst_factor, mdps, etas, seeds
@@ -147,6 +134,13 @@ for factor, mdp, eta, seed in param_cart_product:
                  deterministic=True),
             dict(name='discrete_embedding',
                  n_units=32,
+                 deterministic=True),
+            dict(name='gaussian',
+                 n_units=128 * factor,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=dropout,
                  deterministic=True),
             dict(name='gaussian',
                  n_units=1536,

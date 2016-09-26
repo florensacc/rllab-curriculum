@@ -24,24 +24,25 @@ n_seq_frames = 1
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'debug-trpo-embedding-a'
+    exp_prefix = 'trpo-embedding-a'
     seeds = range(5)
     etas = [0, 0.1]
-    mdps = [AtariEnv(game='frostbite', obs_type="image", frame_skip=8),
-            AtariEnv(game='freeway', obs_type="image", frame_skip=8),
-            AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=8)]
-    lst_factor = [1]
-    trpo_batch_size = 1000
-    max_path_length = 450
+    mdps = [AtariEnv(game='freeway', obs_type="image", frame_skip=4),
+            AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
+            AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
+            AtariEnv(game='breakout', obs_type="image", frame_skip=4)]
+    lst_factor = [2]
+    trpo_batch_size = 50000
+    max_path_length = 4500
     dropout = False
     batch_norm = True
 else:
     exp_prefix = 'trpo-pxlnn-a'
     seeds = range(5)
     etas = [0, 1.0, 0.1, 0.01]
-    mdps = [AtariEnv(game='frostbite', obs_type="image", frame_skip=8),
-            AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=8),
-            AtariEnv(game='freeway', obs_type="image", frame_skip=8)]
+    mdps = [AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
+            AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
+            AtariEnv(game='freeway', obs_type="image", frame_skip=4)]
     lst_factor = [1]
     trpo_batch_size = 20000
     max_path_length = 4500
@@ -57,14 +58,13 @@ for factor, mdp, eta, seed in param_cart_product:
         observation_space=Box(low=-1, high=1, shape=(52, 52, n_seq_frames)),
         action_space=mdp.spec.action_space
     )
-    # TODO: make own env_spec, feed to policy/baseline, set tf_atari correct. Make sure sampler gets correct info.
     network = ConvNetwork(
         name='policy_network',
         hidden_nonlinearity=tf.nn.relu,
         output_nonlinearity=tf.nn.softmax,
         input_shape=env_spec.observation_space.shape,  # mdp.spec.observation_space.shape,
         output_dim=mdp.spec.action_space.flat_dim,
-        hidden_sizes=(64,),
+        hidden_sizes=(32,),
         conv_filters=(16, 16, 16),
         conv_filter_sizes=(6, 6, 6),
         conv_strides=(2, 2, 2),
@@ -82,7 +82,7 @@ for factor, mdp, eta, seed in param_cart_product:
         output_nonlinearity=tf.identity,
         input_shape=env_spec.observation_space.shape,  # mdp.spec.observation_space.shape,
         output_dim=1,
-        hidden_sizes=(64,),
+        hidden_sizes=(32,),
         conv_filters=(16, 16, 16),
         conv_filter_sizes=(6, 6, 6),
         conv_strides=(2, 2, 2),
@@ -90,6 +90,11 @@ for factor, mdp, eta, seed in param_cart_product:
     )
     baseline = GaussianMLPBaseline(
         env_spec=env_spec,  # mdp.spec,
+        regressor_args=dict(
+            mean_network=network,
+            subsample_factor=0.1,
+        ),
+
     )
 
     autoenc = ConvBNNVIME(
@@ -135,6 +140,13 @@ for factor, mdp, eta, seed in param_cart_product:
                  deterministic=True),
             dict(name='discrete_embedding',
                  n_units=32,
+                 deterministic=True),
+            dict(name='gaussian',
+                 n_units=128 * factor,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=dropout,
                  deterministic=True),
             dict(name='gaussian',
                  n_units=2304,
@@ -204,8 +216,11 @@ for factor, mdp, eta, seed in param_cart_product:
         baseline=baseline,
         batch_size=trpo_batch_size,
         max_path_length=max_path_length,
-        n_itr=400,
+        n_itr=1000,
         step_size=0.01,
+        optimizer_args=dict(
+            subsample_factor=0.1,
+        ),
         n_seq_frames=n_seq_frames,
         model_pool_args=dict(
             size=100000,
@@ -213,7 +228,8 @@ for factor, mdp, eta, seed in param_cart_product:
             batch_size=32,
             subsample_factor=0.1,
             fill_before_subsampling=True,
-        )
+        ),
+        hamming_distance=0,
     )
 
     run_experiment_lite(
@@ -222,7 +238,7 @@ for factor, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/algos/embedding/run_experiment_lite.py",
