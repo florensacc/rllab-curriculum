@@ -1,4 +1,5 @@
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
+# plt currently has consistency issue with docker 
 import numpy as np
 import joblib
 import time
