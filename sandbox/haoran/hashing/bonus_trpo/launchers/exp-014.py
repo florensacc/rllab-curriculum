@@ -1,7 +1,6 @@
 """
-Use image observations
-Compare to exp-013
-Switch to Theano. Use GPU for acceleration
+Use image observations. Can compare to exp-013.
+Switch to Theano. Run on CPU.
 """
 from rllab.baselines.gaussian_conv_baseline import GaussianConvBaseline
 from rllab.baselines.zero_baseline import ZeroBaseline
@@ -13,12 +12,12 @@ from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptim
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 
-from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo import BonusTRPO
+from sandbox.haoran.hashing.bonus_trpo.algos.bonus_trpo_theano import BonusTRPO
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.zero_bonus_evaluator import ZeroBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 # from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
-from sandbox.haoran.hashing.bonus_trpo.misc.dqn import trpo_dqn_args_theano
+from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from sandbox.haoran.ec2_info import instance_info, subnet_info
 
@@ -32,14 +31,14 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_test"
-ec2_instance = "g2.2xlarge"
-subnet = "us-west-1c"
+mode = "ec2_test"
+ec2_instance = "c4.8xlarge"
+subnet = "us-west-1a"
 
-n_parallel = 1
+n_parallel = 4
 snapshot_mode = "last"
 plot = False
-use_gpu = True # should change conv_type and ~/.theanorc
+use_gpu = False # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
 config.USE_TF = False
 
@@ -60,7 +59,7 @@ cg_args = dict(
     num_slices=10,
 )
 step_size = 0.01
-network_args = trpo_dqn_args_theano
+network_args = trpo_dqn_args
 
 img_width=42
 img_height=42
@@ -76,6 +75,7 @@ bonus_form="1/sqrt(n)"
 extra_dim_key = 1024
 extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
 
+baseline_opt_type = "sgd"
 
 class VG(VariantGenerator):
     @variant
@@ -122,28 +122,40 @@ for v in variants:
         **network_args
     )
 
+
     baseline = ZeroBaseline(env_spec=env.spec)
     # network_args_for_vf = copy.deepcopy(network_args)
     # network_args_for_vf.pop("output_nonlinearity")
-    # baseline = GaussianConvBaseline(
-    #     env_spec=env.spec,
-    #     regressor_args = dict(
-    #         optimizer=PenaltyLbfgsOptimizer(
-    #             name="vf_optimizer",
-    #             max_opt_itr=20,
-    #             max_penalty_itr=2,
-    #         ),
-    #         # optimizer=FirstOrderOptimizer(
-    #         #     max_epochs=10,
-    #         #     batch_size=1000,
-    #         #     tf_optimizer_args=dict(learning_rate=1e-3),
-    #         # ),
-    #         use_trust_region=True,
-    #         step_size=0.01,
-    #         init_std=1.0,
-    #         **network_args_for_vf
+    # if baseline_opt_type == "bfgs":
+    #     baseline = GaussianConvBaseline(
+    #         env_spec=env.spec,
+    #         regressor_args = dict(
+    #             optimizer = PenaltyLbfgsOptimizer(
+    #                 max_opt_itr=20,
+    #                 max_penalty_itr=2,
+    #             ),
+    #             use_trust_region=True,
+    #             step_size=0.01,
+    #             init_std=1.0,
+    #             **network_args_for_vf
+    #         )
     #     )
-    # )
+    # elif baseline_opt_type == "sgd":
+    #     baseline = GaussianConvBaseline(
+    #         env_spec=env.spec,
+    #         regressor_args = dict(
+    #             optimizer=FirstOrderOptimizer(
+    #                 max_epochs=1,
+    #                 batch_size=1000,
+    #                 learning_rate=1e-3,
+    #             ),
+    #             use_trust_region=False,
+    #             init_std=1.0,
+    #             **network_args_for_vf
+    #         )
+    #     )
+    # else:
+    #     raise NotImplementedError
 
 
     # bonus_evaluator = HashingBonusEvaluator(

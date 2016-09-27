@@ -31,11 +31,11 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "parallel-trpo/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "ec2"
+mode = "local_test"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1c"
 
-n_parallel = 4
+n_parallel = 1
 snapshot_mode = "last"
 store_paths = False
 plot = False
@@ -45,7 +45,7 @@ sync_s3_pkl = True
 
 # params ---------------------------------------
 step_size = 0.01
-batch_size = 50000
+batch_size = 1000
 max_path_length = 500
 discount = 0.99
 n_itr = 1000

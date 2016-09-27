@@ -1,7 +1,11 @@
 import numpy as np
-
+import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
+import theano
+import theano.tensor as TT
+from rllab.misc.ext import compile_function
+from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import ConvNetwork
 from rllab.misc import tensor_utils
@@ -9,6 +13,7 @@ from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 from rllab.core.serializable import Serializable
+from rllab.misc.ext import iterate_minibatches_generic
 from rllab.misc import logger
 
 
@@ -22,14 +27,16 @@ class GaussianConvRegressor(LasagnePowered, Serializable):
             name,
             input_shape,
             output_dim,
-            conv_filters=[],conv_filter_sizes=[],conv_strides=[],conv_pads=[],
-            hidden_sizes=(32, 32),
-            hidden_nonlinearity=NL.tanh,
+            hidden_sizes,
+            conv_filters,conv_filter_sizes,conv_strides,conv_pads,
+            hidden_nonlinearity=NL.rectify,
             mean_network=None,
 
             optimizer=None,
             use_trust_region=True,
             step_size=0.01,
+            subsample_factor=1.0,
+            batchsize=None,
 
             learn_std=True,
             init_std=1.0,
@@ -60,164 +67,190 @@ class GaussianConvRegressor(LasagnePowered, Serializable):
         """
         Serializable.quick_init(self, locals())
 
-        with tf.variable_scope(name):
 
-            if optimizer is None:
-                if use_trust_region:
-                    optimizer = PenaltyLbfgsOptimizer("optimizer")
-                else:
-                    optimizer = LbfgsOptimizer("optimizer")
-
-            self._optimizer = optimizer
-
-            if mean_network is None:
-                mean_network = ConvNetwork(
-                    name="mean_network",
-                    input_shape=input_shape,
-                    output_dim=output_dim,
-                    conv_filters=conv_filters,
-                    conv_filter_sizes=conv_filter_sizes,
-                    conv_strides=conv_strides,
-                    conv_pads=conv_pads,
-                    hidden_sizes=hidden_sizes,
-                    hidden_nonlinearity=hidden_nonlinearity,
-                    output_nonlinearity=None,
-                )
-
-            l_mean = mean_network.output_layer
-
-            if adaptive_std:
-                l_log_std = ConvNetwork(
-                    name="log_std_network",
-                    input_shape=input_shape,
-                    input_var=mean_network.input_layer.input_var,
-                    output_dim=output_dim,
-                    conv_filters=std_conv_filters,
-                    conv_filter_sizes=std_conv_filter_sizes,
-                    conv_strides=std_conv_strides,
-                    conv_pads=std_conv_pads,
-                    hidden_sizes=std_hidden_sizes,
-                    hidden_nonlinearity=std_nonlinearity,
-                    output_nonlinearity=None,
-                ).output_layer
-            else:
-                l_log_std = L.ParamLayer(
-                    mean_network.input_layer,
-                    num_units=output_dim,
-                    param=tf.constant_initializer(np.log(init_std)),
-                    name="output_log_std",
-                    trainable=learn_std,
-                )
-
-            LasagnePowered.__init__(self, [l_mean, l_log_std])
-
-            xs_var = mean_network.input_layer.input_var
-            ys_var = tf.placeholder(dtype=tf.float32, name="ys", shape=(None, output_dim))
-            old_means_var = tf.placeholder(dtype=tf.float32, name="ys", shape=(None, output_dim))
-            old_log_stds_var = tf.placeholder(dtype=tf.float32, name="old_log_stds", shape=(None, output_dim))
-
-            flat_input_shape = (np.prod(list(input_shape)),)
-            x_mean_var = tf.Variable(
-                np.zeros((1,) + flat_input_shape, dtype=np.float32),
-                name="x_mean",
-            )
-            x_std_var = tf.Variable(
-                np.ones((1,) + flat_input_shape, dtype=np.float32),
-                name="x_std",
-            )
-            y_mean_var = tf.Variable(
-                np.zeros((1, output_dim), dtype=np.float32),
-                name="y_mean",
-            )
-            y_std_var = tf.Variable(
-                np.ones((1, output_dim), dtype=np.float32),
-                name="y_std",
-            )
-
-            normalized_xs_var = (xs_var - x_mean_var) / x_std_var
-            normalized_ys_var = (ys_var - y_mean_var) / y_std_var
-
-            normalized_means_var = L.get_output(l_mean, {mean_network.input_layer: normalized_xs_var})
-            normalized_log_stds_var = L.get_output(l_log_std, {mean_network.input_layer: normalized_xs_var})
-
-            means_var = normalized_means_var * y_std_var + y_mean_var
-            log_stds_var = normalized_log_stds_var + tf.log(y_std_var)
-
-            normalized_old_means_var = (old_means_var - y_mean_var) / y_std_var
-            normalized_old_log_stds_var = old_log_stds_var - tf.log(y_std_var)
-
-            dist = self._dist = DiagonalGaussian(output_dim)
-
-            normalized_dist_info_vars = dict(mean=normalized_means_var, log_std=normalized_log_stds_var)
-
-            mean_kl = tf.reduce_mean(dist.kl_sym(
-                dict(mean=normalized_old_means_var, log_std=normalized_old_log_stds_var),
-                normalized_dist_info_vars,
-            ))
-
-            loss = - tf.reduce_mean(dist.log_likelihood_sym(normalized_ys_var, normalized_dist_info_vars))
-
-            self._f_predict = tensor_utils.compile_function([xs_var], means_var)
-            self._f_pdists = tensor_utils.compile_function([xs_var], [means_var, log_stds_var])
-            self._l_mean = l_mean
-            self._l_log_std = l_log_std
-
-            optimizer_args = dict(
-                loss=loss,
-                target=self,
-                network_outputs=[normalized_means_var, normalized_log_stds_var],
-            )
-
+        if optimizer is None:
             if use_trust_region:
-                optimizer_args["leq_constraint"] = (mean_kl, step_size)
-                optimizer_args["inputs"] = [xs_var, ys_var, old_means_var, old_log_stds_var]
+                optimizer = PenaltyLbfgsOptimizer("optimizer")
             else:
-                optimizer_args["inputs"] = [xs_var, ys_var]
+                optimizer = LbfgsOptimizer("optimizer")
 
-            self._optimizer.update_opt(**optimizer_args)
+        self._optimizer = optimizer
 
-            self._use_trust_region = use_trust_region
-            self._name = name
+        self.input_shape = input_shape
+        if mean_network is None:
+            mean_network = ConvNetwork(
+                name="mean_network",
+                input_shape=input_shape,
+                output_dim=output_dim,
+                conv_filters=conv_filters,
+                conv_filter_sizes=conv_filter_sizes,
+                conv_strides=conv_strides,
+                conv_pads=conv_pads,
+                hidden_sizes=hidden_sizes,
+                hidden_nonlinearity=hidden_nonlinearity,
+                output_nonlinearity=None,
+            )
 
-            self._normalize_inputs = normalize_inputs
-            self._normalize_outputs = normalize_outputs
-            self._mean_network = mean_network
-            self._x_mean_var = x_mean_var
-            self._x_std_var = x_std_var
-            self._y_mean_var = y_mean_var
-            self._y_std_var = y_std_var
+        l_mean = mean_network.output_layer
+
+        if adaptive_std:
+            l_log_std = ConvNetwork(
+                name="log_std_network",
+                input_shape=input_shape,
+                input_var=mean_network.input_layer.input_var,
+                output_dim=output_dim,
+                conv_filters=std_conv_filters,
+                conv_filter_sizes=std_conv_filter_sizes,
+                conv_strides=std_conv_strides,
+                conv_pads=std_conv_pads,
+                hidden_sizes=std_hidden_sizes,
+                hidden_nonlinearity=std_nonlinearity,
+                output_nonlinearity=None,
+            ).output_layer
+        else:
+            l_log_std = ParamLayer(
+                mean_network.input_layer,
+                num_units=output_dim,
+                param=lasagne.init.Constant(np.log(init_std)),
+                name="output_log_std",
+                trainable=learn_std,
+            )
+
+        LasagnePowered.__init__(self, [l_mean, l_log_std])
+
+        xs_var = mean_network.input_layer.input_var
+        ys_var = TT.matrix("ys")
+        old_means_var = TT.matrix("old_means")
+        old_log_stds_var = TT.matrix("old_log_stds")
+
+        x_mean_var = theano.shared(
+            np.zeros((1,np.prod(input_shape)), dtype=theano.config.floatX),
+            name="x_mean",
+            broadcastable=(True,False),
+        )
+        x_std_var = theano.shared(
+            np.ones((1,np.prod(input_shape)), dtype=theano.config.floatX),
+            name="x_std",
+            broadcastable=(True,False),
+        )
+        y_mean_var = theano.shared(
+            np.zeros((1, output_dim), dtype=theano.config.floatX),
+            name="y_mean",
+            broadcastable=(True, False)
+        )
+        y_std_var = theano.shared(
+            np.ones((1, output_dim), dtype=theano.config.floatX),
+            name="y_std",
+            broadcastable=(True, False)
+        )
+
+        normalized_xs_var = (xs_var - x_mean_var) / x_std_var
+        normalized_ys_var = (ys_var - y_mean_var) / y_std_var
+
+        normalized_means_var = L.get_output(
+            l_mean, {mean_network.input_layer: normalized_xs_var})
+        normalized_log_stds_var = L.get_output(
+            l_log_std, {mean_network.input_layer: normalized_xs_var})
+
+        means_var = normalized_means_var * y_std_var + y_mean_var
+        log_stds_var = normalized_log_stds_var + TT.log(y_std_var)
+
+        normalized_old_means_var = (old_means_var - y_mean_var) / y_std_var
+        normalized_old_log_stds_var = old_log_stds_var - TT.log(y_std_var)
+
+        dist = self._dist = DiagonalGaussian(output_dim)
+
+        normalized_dist_info_vars = dict(
+            mean=normalized_means_var, log_std=normalized_log_stds_var)
+
+        mean_kl = TT.mean(dist.kl_sym(
+            dict(mean=normalized_old_means_var,
+                 log_std=normalized_old_log_stds_var),
+            normalized_dist_info_vars,
+        ))
+
+        loss = - \
+            TT.mean(dist.log_likelihood_sym(
+                normalized_ys_var, normalized_dist_info_vars))
+
+        self._f_predict = compile_function([xs_var], means_var)
+        self._f_pdists = compile_function([xs_var], [means_var, log_stds_var])
+        self._l_mean = l_mean
+        self._l_log_std = l_log_std
+
+        optimizer_args = dict(
+            loss=loss,
+            target=self,
+            network_outputs=[normalized_means_var, normalized_log_stds_var],
+        )
+
+        if use_trust_region:
+            optimizer_args["leq_constraint"] = (mean_kl, step_size)
+            optimizer_args["inputs"] = [
+                xs_var, ys_var, old_means_var, old_log_stds_var]
+        else:
+            optimizer_args["inputs"] = [xs_var, ys_var]
+
+        self._optimizer.update_opt(**optimizer_args)
+
+        self._use_trust_region = use_trust_region
+        self._name = name
+
+        self._normalize_inputs = normalize_inputs
+        self._normalize_outputs = normalize_outputs
+        self._mean_network = mean_network
+        self._x_mean_var = x_mean_var
+        self._x_std_var = x_std_var
+        self._y_mean_var = y_mean_var
+        self._y_std_var = y_std_var
+        self._subsample_factor = subsample_factor
+        self._batchsize = batchsize
 
     def fit(self, xs, ys):
-        sess = tf.get_default_session()
+
+        if self._subsample_factor < 1:
+            num_samples_tot = xs.shape[0]
+            idx = np.random.randint(0, num_samples_tot, int(num_samples_tot * self._subsample_factor))
+            xs, ys = xs[idx], ys[idx]
+
         if self._normalize_inputs:
             # recompute normalizing constants for inputs
-            sess.run([
-                tf.assign(self._x_mean_var, np.mean(xs, axis=0, keepdims=True)),
-                tf.assign(self._x_std_var, np.std(xs, axis=0, keepdims=True) + 1e-8),
-            ])
+            self._x_mean_var.set_value(
+                np.mean(xs, axis=0, keepdims=True).astype(theano.config.floatX))
+            self._x_std_var.set_value(
+                (np.std(xs, axis=0, keepdims=True) + 1e-8).astype(theano.config.floatX))
         if self._normalize_outputs:
             # recompute normalizing constants for outputs
-            sess.run([
-                tf.assign(self._y_mean_var, np.mean(ys, axis=0, keepdims=True)),
-                tf.assign(self._y_std_var, np.std(ys, axis=0, keepdims=True) + 1e-8),
-            ])
-        if self._use_trust_region:
-            old_means, old_log_stds = self._f_pdists(xs)
-            inputs = [xs, ys, old_means, old_log_stds]
-        else:
-            inputs = [xs, ys]
-        loss_before = self._optimizer.loss(inputs)
+            self._y_mean_var.set_value(
+                np.mean(ys, axis=0, keepdims=True).astype(theano.config.floatX))
+            self._y_std_var.set_value(
+                (np.std(ys, axis=0, keepdims=True) + 1e-8).astype(theano.config.floatX))
         if self._name:
             prefix = self._name + "_"
         else:
             prefix = ""
-        logger.record_tabular(prefix + 'LossBefore', loss_before)
-        self._optimizer.optimize(inputs)
-        loss_after = self._optimizer.loss(inputs)
-        logger.record_tabular(prefix + 'LossAfter', loss_after)
+        # FIXME: needs batch computation to avoid OOM.
+        loss_before, loss_after, mean_kl, batch_count = 0., 0., 0., 0
+        for batch in iterate_minibatches_generic(input_lst=[xs, ys], batchsize=self._batchsize, shuffle=True):
+            batch_count += 1
+            xs, ys = batch
+            if self._use_trust_region:
+                old_means, old_log_stds = self._f_pdists(xs)
+                inputs = [xs, ys, old_means, old_log_stds]
+            else:
+                inputs = [xs, ys]
+            loss_before += self._optimizer.loss(inputs)
+
+            self._optimizer.optimize(inputs)
+            loss_after += self._optimizer.loss(inputs)
+            if self._use_trust_region:
+                mean_kl += self._optimizer.constraint_val(inputs)
+
+        logger.record_tabular(prefix + 'LossBefore', loss_before / batch_count)
+        logger.record_tabular(prefix + 'LossAfter', loss_after / batch_count)
+        logger.record_tabular(prefix + 'dLoss', loss_before - loss_after / batch_count)
         if self._use_trust_region:
-            logger.record_tabular(prefix + 'MeanKL', self._optimizer.constraint_val(inputs))
-        logger.record_tabular(prefix + 'dLoss', loss_before - loss_after)
+            logger.record_tabular(prefix + 'MeanKL', mean_kl / batch_count)
 
     def predict(self, xs):
         """
@@ -244,7 +277,8 @@ class GaussianConvRegressor(LasagnePowered, Serializable):
         normalized_xs_var = (x_var - self._x_mean_var) / self._x_std_var
 
         normalized_means_var, normalized_log_stds_var = \
-            L.get_output([self._l_mean, self._l_log_std], {self._mean_network.input_layer: normalized_xs_var})
+            L.get_output([self._l_mean, self._l_log_std], {
+                self._mean_network.input_layer: normalized_xs_var})
 
         means_var = normalized_means_var * self._y_std_var + self._y_mean_var
         log_stds_var = normalized_log_stds_var + TT.log(self._y_std_var)
@@ -252,7 +286,7 @@ class GaussianConvRegressor(LasagnePowered, Serializable):
         return self._dist.log_likelihood_sym(y_var, dict(mean=means_var, log_std=log_stds_var))
 
     def get_param_values(self, **tags):
-        return LayersPowered.get_param_values(self, **tags)
+        return LasagnePowered.get_param_values(self, **tags)
 
     def set_param_values(self, flattened_params, **tags):
-        LayersPowered.set_param_values(self, flattened_params, **tags)
+        return LasagnePowered.set_param_values(self, flattened_params, **tags)
