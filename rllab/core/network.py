@@ -273,24 +273,12 @@ class GRUNetwork(object):
 class ConvNetwork(object):
     def __init__(self, input_shape, output_dim, hidden_sizes,
                  conv_filters, conv_filter_sizes, conv_strides, conv_pads,
-                 conv_type="cudnn",
                  hidden_W_init=LI.GlorotUniform(), hidden_b_init=LI.Constant(0.),
                  output_W_init=LI.GlorotUniform(), output_b_init=LI.Constant(0.),
                  # conv_W_init=LI.GlorotUniform(), conv_b_init=LI.Constant(0.),
                  hidden_nonlinearity=LN.rectify,
                  output_nonlinearity=LN.softmax,
                  name=None, input_var=None):
-        # if conv_type == "cuda":
-        #     # use GPU without cudnn
-        #     from L.cuda_convnet import Conv2DCCLayer as conv_layer
-        #     print("Using lasagne.layers.cuda_convnet.Conv2DCCLayer to build conv layers.")
-        # elif conv_type == "cudnn":
-        #     from L.dnn import Conv2DDNNLayer as conv_layer
-        #     print("Using lasagne.layers.dnnConv2DNNLayer to build conv layers.")
-        # else:
-        #     # use CPU
-        #     from L import Conv2DLayer as conv_layer
-        #     print("Using lasagne.layers.Conv2DLayer to build conv layers.")
 
         if name is None:
             prefix = ""

@@ -64,7 +64,7 @@ record_internal_state=False
 
 count_target = "images"
 bonus_form="1/sqrt(n)"
-bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
+bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959] #90M
 
 step_size = 0.01
 
