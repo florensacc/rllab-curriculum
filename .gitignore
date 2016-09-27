@@ -49,3 +49,4 @@ logs/
 .remote-sync.json
 sandbox/rocky/exp_data
 __pycache__
+conopt

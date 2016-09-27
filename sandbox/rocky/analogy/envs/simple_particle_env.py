@@ -11,7 +11,7 @@ from cached_property import cached_property
 from rllab.misc import logger
 from rllab.spaces.product import Product
 from rllab.spaces.box import Box
-from sandbox.rocky.analogy.utils import unwrap
+from sandbox.rocky.analogy.utils import unwrap, using_seed
 
 import numba
 import cv2
@@ -37,17 +37,6 @@ def render_image(poses, screen_width, screen_height, colors, buffer):
             for y_ in range(max(0, scaled_y - cur_radius), min(screen_width, scaled_y + cur_radius)):
                 image[x_, y_] = color
     return image
-
-
-@contextlib.contextmanager
-def using_seed(seed):
-    rand_state = random.getstate()
-    np_rand_state = np.random.get_state()
-    random.seed(seed)
-    np.random.seed(seed)
-    yield
-    random.setstate(rand_state)
-    np.random.set_state(np_rand_state)
 
 
 def make_colors():
@@ -131,9 +120,8 @@ class SimpleParticleEnv(Env):
         self.target_seed = target_seed
         return self.reset()
 
-    def reset(self, seed=None):
-        if seed is None:
-            seed = self.seed
+    def reset(self):
+        seed = self.seed
         with using_seed(seed):
             if self.random_init_position:
                 self.agent_pos = np.random.uniform(low=-0.4, high=0.4, size=(2,))  # np.array([0., 0.])
@@ -195,7 +183,7 @@ class SimpleParticleEnv(Env):
     def get_state_obs(self):
         return np.copy(self.agent_pos), np.copy(self.particles)
 
-    def get_image_obs(self, rescaled=False):
+    def get_image_obs(self, rescale=False):
         colors = np.cast['float32'](np.concatenate([np.array([[0, 0, 0]]), np.asarray(COLORS) * 255], axis=0))
         poses = np.concatenate([[self.agent_pos], self.particles], axis=0)
 
@@ -205,7 +193,7 @@ class SimpleParticleEnv(Env):
         image = render_image(poses=poses, screen_width=screen_width, screen_height=screen_height, colors=colors,
                              buffer=buffer)
 
-        if rescaled:
+        if rescale:
             return ((image / 255.0) - 0.5) * 2
         else:
             return np.cast['uint8'](image)
@@ -214,7 +202,7 @@ class SimpleParticleEnv(Env):
         if self.obs_type == 'state':
             return self.get_state_obs()
         elif self.obs_type == 'image':
-            return self.get_image_obs(rescaled=True)
+            return self.get_image_obs(rescale=True)
         else:
             raise NotImplementedError
 
@@ -222,7 +210,7 @@ class SimpleParticleEnv(Env):
         assert mode == 'human'
         cv2.namedWindow('image', cv2.WINDOW_NORMAL)
         cv2.resizeWindow('image', width=400, height=400)
-        cv2.imshow('image', cv2.resize(self.get_image_obs(rescaled=False), (400, 400)))
+        cv2.imshow('image', cv2.resize(self.get_image_obs(rescale=False), (400, 400)))
         cv2.waitKey(10)
 
     def log_analogy_diagnostics(self, paths, envs):

@@ -3,8 +3,8 @@ from io import StringIO
 import numpy as np
 import random
 
-random.seed(0)
-np.random.seed(0)
+# random.seed(0)
+# np.random.seed(0)
 
 player = Thing(x=0, y=0, type=1, id=1)
 # this is the goal the player should reach
@@ -22,6 +22,13 @@ things = [player, bluecard]
 # maze_gen = DFSGridMazeGenerator()
 # maze = maze_gen.gen_maze(n_row=5, n_col=5)
 
+# maze = np.asarray([
+#     [0, 0, 0, 0, 0],
+#     [0, 1, 0, 1, 0],
+#     [0, 1, 0, 1, 0],
+#     [0, 1, 1, 1, 0],
+#     [0, 0, 0, 0, 0],
+# ])
 maze = np.asarray([
     [0, 0, 0, 0, 0],
     [0, 1, 0, 1, 0],
