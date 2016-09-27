@@ -14,7 +14,6 @@ class WorkerBatchSampler(object):
         """
         self.algo = algo
         self.worker_batch_size = algo.worker_batch_size
-        self.n_steps_collected = 0
 
     def obtain_samples(self, n_samples=None):
         if n_samples is None:
