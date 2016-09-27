@@ -113,11 +113,10 @@ class ParallelBatchPolopt(RLAlgorithm):
             num_valids=mp.RawArray('d', n),
             sum_ent=mp.RawArray('d', n),
         )
-        mgr_objs = SimpleContainer(
-            barrier_dgnstc=mp.Barrier(n),
-            barrier_avgfac=mp.Barrier(n),
+        barriers = SimpleContainer(
+            dgnstc=mp.Barrier(n),
         )
-        self._par_objs = (shareds, mgr_objs)
+        self._par_objs = (shareds, barriers)
         self.baseline.init_par_objs(n_parallel=n)
 
     def init_par_objs(self):
@@ -212,14 +211,15 @@ class ParallelBatchPolopt(RLAlgorithm):
     #
 
     def log_diagnostics(self, itr, samples_data, dgnstc_data):
-            shareds, mgr_objs = self._par_objs
+            shareds, barriers = self._par_objs
 
             i = self.rank
             shareds.sum_discounted_return[i] = \
                 np.sum([path["returns"][0] for path in samples_data["paths"]])
             undiscounted_returns = [sum(path["rewards"]) for path in samples_data["paths"]]
             shareds.num_traj[i] = len(undiscounted_returns)
-            shareds.num_steps[i] = sum([len(path["rewards"]) for path in samples_data["paths"]])
+            shareds.num_steps[i] = self.n_steps_collected
+            # shareds.num_steps[i] = sum([len(path["rewards"]) for path in samples_data["paths"]])
             shareds.sum_return[i] = np.sum(undiscounted_returns)
             shareds.min_return[i] = np.min(undiscounted_returns)
             shareds.max_return[i] = np.max(undiscounted_returns)
@@ -238,7 +238,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             #     np.concatenate(dgnstc_data["returns"])
             # )
 
-            mgr_objs.barrier_dgnstc.wait()
+            barriers.dgnstc.wait()
 
             if self.rank == 0:
                 num_traj = sum(shareds.num_traj)

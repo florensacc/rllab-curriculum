@@ -16,7 +16,7 @@ class ParallelLinearFeatureBaseline(LinearFeatureBaseline):
         if low_mem:
             self.feat_mat = np.zeros([self._vec_dim, self._vec_dim])
             self.target_vec = np.zeros([self._vec_dim, ])
-            self.path_vec = np.zeros([1, self._vec_dim]) 
+            self.path_vec = np.zeros([1, self._vec_dim])
         super().__init__(env_spec, reg_coeff)
 
     def __getstate__(self):
@@ -41,14 +41,14 @@ class ParallelLinearFeatureBaseline(LinearFeatureBaseline):
                 (self._vec_dim, self._vec_dim, n_parallel)),
             target_vec=np.reshape(
                 np.frombuffer(mp.RawArray('d', self._vec_dim * n_parallel)),
-                (self._vec_dim, n_parallel))
+                (self._vec_dim, n_parallel)),
             coeffs=np.frombuffer(mp.RawArray('d', self._vec_dim)),
         )
-        mgr_objs = SimpleContainer(
-            barriers_fit=[mp.Barrier(n_parallel) for _ in range(2)],
+        barriers = SimpleContainer(
+            fit=[mp.Barrier(n_parallel) for _ in range(2)],
         )
-        self._coeff = shareds.coeff  # (compatible with inherited predict() method)
-        self._par_objs = (shareds, mgr_objs)
+        self._coeffs = shareds.coeffs  # (compatible with inherited predict() method)
+        self._par_objs = (shareds, barriers)
 
     def init_rank(self, rank):
         self.rank = rank
@@ -58,7 +58,7 @@ class ParallelLinearFeatureBaseline(LinearFeatureBaseline):
         """
         Parallelized.
         """
-        shareds, mgr_objs = self._par_objs
+        shareds, barriers = self._par_objs
 
         if self._low_mem:
             self._features_and_targets(paths)
@@ -72,7 +72,7 @@ class ParallelLinearFeatureBaseline(LinearFeatureBaseline):
 
         shareds.feat_mat[:, :, self.rank] = f_mat
         shareds.target_vec[:, self.rank] = t_vec
-        mgr_objs.barriers_fit[0].wait()
+        barriers.fit[0].wait()
         if self.rank == 0:
             feat_mat = np.sum(shareds.feat_mat, axis=2)
             target_vec = np.squeeze(np.sum(shareds.target_vec, axis=1))
@@ -87,7 +87,7 @@ class ParallelLinearFeatureBaseline(LinearFeatureBaseline):
                 if not np.any(np.isnan(shareds.coeffs)):
                     break
                 reg_coeff *= 10
-        mgr_objs.barriers_fit[1].wait()
+        barriers.fit[1].wait()
 
     def _features_and_targets(self, paths):
         """
@@ -107,4 +107,3 @@ class ParallelLinearFeatureBaseline(LinearFeatureBaseline):
                 self.path_vec[:] = np.concatenate([o, o ** 2, al, al2, al3, [1.]])
                 self.feat_mat += self.path_vec.T.dot(self.path_vec)
                 self.target_vec += self.path_vec.squeeze() * ret
- 

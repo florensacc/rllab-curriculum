@@ -132,11 +132,9 @@ class ParallelTRPO(ParallelBatchPolopt):
 
     @overrides
     def optimize_policy(self, itr, samples_data):
-        all_input_values = self.prep_samples(samples_data)
         if self.whole_paths:
-            n_steps_collected = \
-                sum(len(path["rewards"] for path in samples_data["paths"]))
-            self.optimizer.set_avg_fac(n_steps_collected)  # (parallel)
+            self.optimizer.set_avg_fac(self.n_steps_collected)  # (parallel)
+        all_input_values = self.prep_samples(samples_data)
         self.optimizer.optimize(all_input_values)  # (parallel)
         return dict()
 
