@@ -142,6 +142,49 @@ class EnsembleGAN(object):
                 self.generator_template = (self.generator_template.
                                            custom_deconv2d([0] + list(image_shape), k_h=5, k_w=5).
                                            flatten())
+        elif network_type == "cifar1_nobn":
+            with tf.variable_scope("d_net"):
+                for i in range(nr_models):
+                    with tf.variable_scope("model%s" % i):
+                        base_filter = [4, 6, 12, 16][i % 4]
+                        shared_template = \
+                            (pt.template("input").
+                             reshape([-1] + list(image_shape)).
+                             custom_conv2d(base_filter, k_h=4, k_w=4).
+                             apply(leaky_rectify).
+                             custom_conv2d(base_filter * 2, k_h=4, k_w=4).
+                             apply(leaky_rectify).
+                             custom_conv2d(base_filter * 4, k_h=4, k_w=4).
+                             # conv_batch_norm().
+                             apply(leaky_rectify).
+                             custom_fully_connected(base_filter * 16).
+                             # fc_batch_norm().
+                             apply(leaky_rectify)
+                             )
+                        self.discriminator_templates.append(
+                            shared_template.custom_fully_connected(1)
+                        )
+
+            from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+            with tf.variable_scope("g_net"):
+                self.generator_template = \
+                    (pt.template("input").
+                     custom_fully_connected(image_size // 8 * image_size // 8 * 512).
+                     # fc_batch_norm().
+                     apply(tf.nn.relu).
+                     reshape([-1, image_size // 8, image_size // 8, 512]).
+                     custom_deconv2d([0, image_size // 4, image_size // 4, 256], k_h=5, k_w=5).
+                     # conv_batch_norm().
+                     apply(tf.nn.relu))
+                self.generator_template = (
+                    self.generator_template.
+                        custom_deconv2d([0, image_size // 2, image_size // 2, 128], k_h=5, k_w=5).
+                        # conv_batch_norm().
+                        apply(tf.nn.relu))
+                self.generator_template = (
+                    self.generator_template.
+                        custom_deconv2d([0] + list(image_shape), k_h=5, k_w=5).
+                        flatten())
         elif network_type == "cifar2":
             with tf.variable_scope("d_net"):
                 for i in range(nr_models):

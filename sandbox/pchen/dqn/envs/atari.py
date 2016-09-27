@@ -76,6 +76,7 @@ class AtariEnvCX(Env, Serializable):
             frame_skip=4,
             life_terminating=False,
             color_averaging=False,
+            color_max=False,
             random_seed=False,
     ):
         Serializable.quick_init(self, locals())
@@ -98,6 +99,7 @@ class AtariEnvCX(Env, Serializable):
         self.frame_skip = frame_skip
         self.lives = self.ale.lives()
         self.life_terminating = life_terminating
+        self.color_max = color_max
 
     def over(self):
         return self.ale.game_over() or (self.life_terminating and (self.lives > self.ale.lives()))
@@ -106,10 +108,14 @@ class AtariEnvCX(Env, Serializable):
         reward = 0.0
         action = self._action_set[a]
         for _ in range(self.frame_skip):
+            if self.color_max:
+                last_ob = self._get_obs()
             reward += self.ale.act(action)
             if self.over():
                 break
         ob = self._get_obs()
+        if self.color_max:
+            ob = np.maximum(ob, last_ob)
 
         return ob, reward, self.over(), {}
 

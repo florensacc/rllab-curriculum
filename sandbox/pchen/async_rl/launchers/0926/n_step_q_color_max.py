@@ -62,7 +62,7 @@ class VG(VariantGenerator):
     @variant
     def game(self, ):
         # return ["pong", "beam_rider", "breakout", "qbert", "space_invaders"]
-        return ["pong", "beam_rider", "space_invaders"]
+        return ["space_invaders"]
 
     @variant
     def n_step(self, ):
@@ -75,7 +75,7 @@ class VG(VariantGenerator):
     @variant
     def bellman(self, ):
         # return ["q"]
-        return [Bellman.q, Bellman.sarsa]
+        return [Bellman.q, ]
 
     @variant
     def lr(self, ):
@@ -111,6 +111,7 @@ for v in variants[:]:
         life_terminating=True,
         color_averaging=False,
         random_seed=random_seed,
+        color_max=True,
     )
     env = SlidingMemEnv(env)
     test_env = SlidingMemEnv(AtariEnvCX(
@@ -119,6 +120,7 @@ for v in variants[:]:
         life_terminating=False,
         color_averaging=False,
         random_seed=random_seed,
+        color_max=True,
     ))
 
     agent = DQNAgent(
@@ -154,12 +156,12 @@ for v in variants[:]:
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="0925_dqn_lr_search_testflife",
+        exp_prefix="0926_dqn_color_max",
         seed=v["seed"],
         variant=v,
+        # mode="local_docker",
         # mode="local",
         #
-        # mode="local_docker",
 
         mode="lab_kube",
         n_parallel=0,

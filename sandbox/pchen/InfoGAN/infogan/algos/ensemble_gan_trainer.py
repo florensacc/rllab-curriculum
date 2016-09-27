@@ -28,10 +28,20 @@ class EnsembleGANTrainer(object):
             bootstrap_rate=1.0,
             anneal_to=None,
             anneal_len=None,
+            natural_step=None,
+            natural_g_only=False,
+            fixed_sampling_noise=False,
+            d_multiples=1,
+            g_multiples=1,
     ):
         """
         :type model: EnsembleGAN
         """
+        self.g_multiples = g_multiples
+        self.d_multiples = d_multiples
+        self.natural_g_only = natural_g_only
+        self.fixed_sampling_noise = fixed_sampling_noise
+        self.natural_step = natural_step
         self.anneal_len = anneal_len
         self.anneal_to = anneal_to
         self.bootstrap_rate = bootstrap_rate
@@ -97,9 +107,19 @@ class EnsembleGANTrainer(object):
             discriminator_losses = tf.nn.sigmoid_cross_entropy_with_logits(
                 real_d_logits,
                 tf.ones_like(real_d_logits)
+                    if self.natural_step is None or self.natural_g_only else
+                    tf.minimum(
+                        tf.nn.sigmoid(real_d_logits) + self.natural_step,
+                        1.,
+                    )
             ) + tf.nn.sigmoid_cross_entropy_with_logits(
                 fake_d_logits,
                 tf.zeros_like(fake_d_logits)
+                    if self.natural_step is None or self.natural_g_only else
+                    tf.maximum(
+                        tf.nn.sigmoid(fake_d_logits) - self.natural_step,
+                        0.,
+                    )
             )
             discriminator_loss = tf.reduce_mean(discriminator_losses)
 
@@ -116,6 +136,11 @@ class EnsembleGANTrainer(object):
             generator_losses = tf.nn.sigmoid_cross_entropy_with_logits(
                 fake_g_logits,
                 tf.ones_like(fake_g_logits)
+                    if self.natural_step is None else
+                    tf.minimum(
+                        tf.nn.sigmoid(fake_g_logits) + self.natural_step,
+                        1.,
+                    )
             )
             generator_loss = tf.reduce_mean(generator_losses)
 
@@ -123,11 +148,30 @@ class EnsembleGANTrainer(object):
             d_vars = [var for var in all_vars if var.name.startswith('d_')]
             g_vars = [var for var in all_vars if var.name.startswith('g_')]
 
-            tf.scalar_summary("discriminator_loss", discriminator_loss)
-            tf.scalar_summary("generator_loss", generator_loss)
 
-            self.log_vars.append(("discriminator_loss", discriminator_loss))
-            self.log_vars.append(("generator_loss", generator_loss))
+            if self.natural_step is None:
+                self.log_vars.append(("discriminator_loss", discriminator_loss))
+                self.log_vars.append(("generator_loss", generator_loss))
+            else:
+                self.log_vars.append(("natural_discriminator_loss", discriminator_loss))
+                self.log_vars.append(("natural_generator_loss", generator_loss))
+                self.log_vars.append((
+                    "discriminator_loss",
+                    tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+                        real_d_logits,
+                        tf.ones_like(real_d_logits)
+                    ) + tf.nn.sigmoid_cross_entropy_with_logits(
+                        fake_d_logits,
+                        tf.zeros_like(fake_d_logits)
+                    ))
+                ))
+                self.log_vars.append((
+                    "generator_loss",
+                    tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+                        fake_g_logits,
+                        tf.ones_like(fake_g_logits)
+                    ))
+                ))
             self.log_vars.append(("max_real_d", tf.reduce_max(real_d_logits)))
             self.log_vars.append(("min_real_d", tf.reduce_min(real_d_logits)))
             self.log_vars.append(("max_fake_d", tf.reduce_max(fake_d_logits)))
@@ -159,26 +203,28 @@ class EnsembleGANTrainer(object):
                 losses=[generator_loss],
                 var_list=g_vars
             )
-
         with pt.defaults_scope(phase=pt.Phase.test):
+            for name, var in self.log_vars:
+                tf.scalar_summary(name, var)
+
             with tf.variable_scope("model", reuse=True) as scope:
-                # img_var = fake_x
-                z_var = self.model.latent_dist.sample_prior(self.batch_size)
+                z_var = self.model.latent_dist.sample_prior(
+                    self.batch_size
+                )
+                if self.fixed_sampling_noise:
+                    z_var = tf.Variable(
+                        initial_value=z_var,
+                        trainable=False,
+                    )
                 img_var, _ = self.model.generate(z_var)
-                # _, x_dist_info = self.model.generate(z_var)
-                #
-                # if isinstance(self.model.output_dist, Bernoulli):
-                #    img_var = x_dist_info["p"]
-                # elif isinstance(self.model.output_dist, Gaussian):
-                #    img_var = x_dist_info["mean"]
 
                 rows = int(np.sqrt(self.batch_size))
                 img_var = tf.reshape(
                     img_var,
-                    [self.batch_size,] + list(self.dataset.image_shape)
+                    [self.batch_size, ] + list(self.dataset.image_shape)
                 )
                 img_var = img_var[:rows * rows, :, :, :]
-                imgs = tf.reshape(img_var, [rows, rows,] + list(self.dataset.image_shape))
+                imgs = tf.reshape(img_var, [rows, rows, ] + list(self.dataset.image_shape))
                 stacked_img = []
                 for row in range(rows):
                     row_img = []
@@ -198,7 +244,6 @@ class EnsembleGANTrainer(object):
 
         with tf.Session() as sess:
             sess.run(init)
-
 
             summary_op = tf.merge_all_summaries()
             summary_writer = tf.train.SummaryWriter(self.log_dir, sess.graph)
@@ -233,7 +278,7 @@ class EnsembleGANTrainer(object):
                 if self.anneal_len:
                     factor = sess.run([
                         self.anneal_factor.assign(
-                            (1-self.anneal_to) * max(0, self.anneal_len-epoch)/self.anneal_len
+                            (1 - self.anneal_to) * max(0, self.anneal_len - epoch) / self.anneal_len
                             + self.anneal_to
                         )
                     ])
@@ -244,8 +289,10 @@ class EnsembleGANTrainer(object):
                     pbar.update(i)
                     x, _ = self.dataset.train.next_batch(self.batch_size)
                     # x = np.reshape(x, (-1, 28, 28, 1))
-                    log_vals = sess.run([self.discriminator_trainer] + log_vars, {self.input_tensor: x})[1:]
-                    sess.run(self.generator_trainer, {self.input_tensor: x})
+                    for _ in range(self.d_multiples):
+                        log_vals = sess.run([self.discriminator_trainer] + log_vars, {self.input_tensor: x})[1:]
+                    for _ in range(self.g_multiples):
+                        sess.run(self.generator_trainer, {self.input_tensor: x})
                     all_log_vals.append(log_vals)
                     counter += 1
 
@@ -280,4 +327,3 @@ class EnsembleGANTrainer(object):
 
                 print(log_line)
                 sys.stdout.flush()
-

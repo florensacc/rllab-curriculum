@@ -356,6 +356,32 @@ class Uniform(Gaussian):
     def sample_prior(self, batch_size):
         return tf.random_uniform([batch_size, self.dim], minval=-1., maxval=1.)
 
+class SparseUniform(Gaussian):
+    """
+    This distribution will sample prior data from a uniform distribution, but
+    the prior and posterior are still modeled as a Gaussian
+
+    except the noise is masked out 50% of the time
+    """
+
+    def kl_prior(self):
+        raise NotImplementedError
+
+
+    def sample_prior(self, batch_size):
+        shp = [batch_size, self.dim]
+        return tf.random_uniform(
+            shp,
+            minval=-1., maxval=1.
+        ) * tf.select(
+            0.5 >= tf.random_uniform(
+                shp,
+                minval=0., maxval=1.
+            ),
+            tf.zeros(shp),
+            tf.ones(shp)
+        )
+
 
 class Bernoulli(Distribution):
     def __init__(self, dim, smooth=None):
