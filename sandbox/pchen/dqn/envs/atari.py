@@ -78,6 +78,8 @@ class AtariEnvCX(Env, Serializable):
             color_averaging=False,
             color_max=False,
             random_seed=False,
+            initial_manual_activation=False,
+            max_start_nullops=0,
     ):
         Serializable.quick_init(self, locals())
         assert obs_type in ("ram", "image")
@@ -100,6 +102,8 @@ class AtariEnvCX(Env, Serializable):
         self.lives = self.ale.lives()
         self.life_terminating = life_terminating
         self.color_max = color_max
+        self.initial_manual_activation = initial_manual_activation
+        self.max_start_nullops = max_start_nullops
 
     def over(self):
         return self.ale.game_over() or (self.life_terminating and (self.lives > self.ale.lives()))
@@ -159,6 +163,17 @@ class AtariEnvCX(Env, Serializable):
 
     def reset(self):
         self.ale.reset_game()
+        # for example, in Frostbite, the agent waits for a random number of time steps, and the temperature will decrease
+        if self.max_start_nullops > 0:
+            n_nullops = np.random.randint(0, self.max_start_nullops + 1)
+            for _ in range(n_nullops):
+                self.ale.act(0)
+
+        # sometimes the game doesn't start at all without performing actions other than noop,
+        # but the agent may not learn this at all
+        if self.initial_manual_activation:
+            if self._game == "breakout":
+                self.ale.act(3) # fire button, which does nothing but start the game
         return self._get_obs()
 
     def render(self, return_array=False):

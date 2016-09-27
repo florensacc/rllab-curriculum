@@ -39,7 +39,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 2222]
+        return [42, ]
         # return [123124234]
 
     @variant
@@ -78,7 +78,7 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [32, ]
+        return [96, 48]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -172,8 +172,8 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-
-for v in variants[:1]:
+i = 3
+for v in variants[i:i+1]:
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]
@@ -274,6 +274,7 @@ for v in variants[:1]:
             network_args=dict(
                 cond_rep=v["cond_rep"],
                 old_dec=True,
+                base_filters=v["base_filters"]
             ),
         )
 
@@ -300,7 +301,7 @@ for v in variants[:1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="play_0920_iaf_cc_cifar_ml_3ldc_gatedresnet_arch_midarcomp_0.1kl",
+            exp_prefix="0927_pool_encoder_arch_on_overfit",
             seed=v["seed"],
             variant=v,
             mode="local",
