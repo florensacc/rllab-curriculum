@@ -405,8 +405,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         log_normal = - T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - T.square(input - mu) / (2 * T.square(sigma))
         return T.sum(log_normal, axis=1)
 
-    def pred_sym(self, input):
-        return lasagne.layers.get_output(self.network, input, deterministic=False)
+    def pred_sym(self, input, deterministic=False):
+        return lasagne.layers.get_output(self.network, input, deterministic=deterministic)
 
     def likelihood_regression(self, target, prediction, likelihood_sd):
         return self._log_prob_normal(target, prediction, likelihood_sd)
@@ -754,7 +754,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # Train/val fn.
         self.pred_fn = ext.compile_function(
-            [input_var], self.pred_sym(input_var), log_name='fn_pred')
+            [input_var], self.pred_sym(input_var, deterministic=True), log_name='fn_pred')
 
         updates = lasagne.updates.adam(
             loss, params, learning_rate=self.learning_rate)
@@ -931,7 +931,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # Discrete embedding layer for counting.
         self.discrete_emb = ext.compile_function(
-            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, noise_mask=0, deterministic=False),
+            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, noise_mask=0, deterministic=True),
             log_name='fn_discrete_emb')
 
 

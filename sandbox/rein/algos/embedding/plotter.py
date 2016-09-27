@@ -13,7 +13,8 @@ class Plotter:
             integer = (integer << 1) | bit
         return integer
 
-    def plot_pred_imgs(self, model, counting_table, inputs, targets, itr, count, dir='/imgs'):
+    def plot_pred_imgs(self, model, counting_table, inputs, targets, itr, count, dir='/imgs', hamming_distance=None):
+        assert hamming_distance is not None
         import matplotlib.pyplot as plt
         if not hasattr(self, '_fig'):
             self._fig = plt.figure()
@@ -36,6 +37,14 @@ class Plotter:
             key_int = self.bin_to_int(key)
             if key_int in counting_table.keys():
                 count = counting_table[key_int]
+                if hamming_distance == 1:
+                    for i in range(len(key)):
+                        key_trans = np.array(key)
+                        key_trans[i] = 1 - key_trans[i]
+                        key_trans_int = self.bin_to_int(key_trans)
+                        # If you access the counting table directly, it puts a 0, which inflates the size.
+                        if key_trans_int in counting_table.keys():
+                            count += counting_table[self.bin_to_int(key_trans)]
             else:
                 count = 0
             # print(key_int, count)

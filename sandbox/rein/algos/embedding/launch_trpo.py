@@ -31,11 +31,12 @@ if TEST_RUN:
             AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
             AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
             AtariEnv(game='breakout', obs_type="image", frame_skip=4)]
-    lst_factor = [2]
-    trpo_batch_size = 50000
+    lst_factor = [1]
+    trpo_batch_size = 30000
     max_path_length = 4500
     dropout = False
     batch_norm = True
+    train_model = True
 else:
     exp_prefix = 'trpo-pxlnn-a'
     seeds = range(5)
@@ -48,6 +49,7 @@ else:
     max_path_length = 4500
     dropout = False
     batch_norm = True
+    train_model = True
 
 param_cart_product = itertools.product(
     lst_factor, mdps, etas, seeds
@@ -230,6 +232,8 @@ for factor, mdp, eta, seed in param_cart_product:
             fill_before_subsampling=True,
         ),
         hamming_distance=0,
+        eta=eta,
+        train_model=train_model,
     )
 
     run_experiment_lite(

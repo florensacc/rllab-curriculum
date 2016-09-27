@@ -35,14 +35,21 @@ class TRPOPlus(TRPO):
             eta=0.1,
             model_pool_args=None,
             hamming_distance=0,
+            train_model=True,
             **kwargs):
         super(TRPOPlus, self).__init__(**kwargs)
 
         assert model is not None
+        assert hamming_distance == 0 or hamming_distance == 1
+        assert eta >= 0
 
         self._model = model
         self._eta = eta
         self._hamming_distance = hamming_distance
+        self._train_model = train_model
+
+        if not self._train_model:
+            logger.log('Training model disabled, using convolutional random projection.')
 
         if model_pool_args is None:
             self._model_pool_args = dict(size=100000, min_size=32, batch_size=32)
@@ -331,7 +338,7 @@ class TRPOPlus(TRPO):
                 old_running_avg = np.inf
                 while not done:
                     running_avg = 0.
-                    for _ in range(500):
+                    for _ in range(50):
                         # Replay pool return uint8 target format, so decode _x.
                         batch = self._pool.random_batch(self._model_pool_args['batch_size'])
                         _x = self.decode_obs(batch['observations'])
@@ -339,7 +346,7 @@ class TRPOPlus(TRPO):
                         train_loss = float(self._model.train_fn(_x, _y, 0))
                         assert not np.isinf(train_loss)
                         assert not np.isnan(train_loss)
-                        running_avg += train_loss / 500.
+                        running_avg += train_loss / 50.
                     if old_running_avg - running_avg < 1e-4:
                         done = True
                     logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
@@ -355,7 +362,8 @@ class TRPOPlus(TRPO):
                 logger.log('Autoencoder updated.')
 
                 logger.log('Plotting random samples ...')
-                self._plotter.plot_pred_imgs(self._model, self._counting_table, _x, _y, 0, 0, dir=RANDOM_SAMPLES_DIR)
+                self._plotter.plot_pred_imgs(self._model, self._counting_table, _x, _y, 0, 0, dir=RANDOM_SAMPLES_DIR,
+                                             hamming_distance=self._hamming_distance)
 
             else:
                 logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
@@ -400,20 +408,20 @@ class TRPOPlus(TRPO):
         if itr == 0:
             # Select 5 random images form the first path, evaluate them at every iteration to inspect emb.
             rnd = np.random.randint(0, len(paths[0]['observations']), 32)
-            self._test_obs = self.encode_obs(paths[0]['observations'][rnd, -np.prod(self._model.state_dim):])
+            self._test_obs = self.encode_obs(paths[0]['observations'][0:10, -np.prod(self._model.state_dim):])
         # Consitency check tracks images over time, only every n iterations.
         if itr % 10 == 0:
             logger.log('Plotting consistency images ...')
             self._plotter.plot_pred_imgs(
                 self._model, self._counting_table, self.decode_obs(self._test_obs), self._test_obs,
                 -itr - 1, 0,
-                dir=CONSISTENCY_CHECK_DIR)
+                dir=CONSISTENCY_CHECK_DIR, hamming_distance=self._hamming_distance)
         # Run uniqueness check every iteration.
         logger.log('Plotting uniqueness images ...')
         obs = self.encode_obs(paths[0]['observations'][0:50, -np.prod(self._model.state_dim):])
         self._plotter.plot_pred_imgs(
             self._model, self._counting_table, self.decode_obs(obs), obs, 0, 0,
-            dir=UNIQUENESS_CHECK_DIR)
+            dir=UNIQUENESS_CHECK_DIR, hamming_distance=self._hamming_distance)
 
         # --
         # Diagnostics
@@ -451,13 +459,14 @@ class TRPOPlus(TRPO):
                     # Preprocess trajectory data.
                     self.preprocess(paths)
 
-                    # --
-                    # Fill replay pool.
-                    self.fill_replay_pool(paths)
+                    if self._train_model:
+                        # --
+                        # Fill replay pool.
+                        self.fill_replay_pool(paths)
 
-                    # --
-                    # Train model.
-                    self.train_model(itr)
+                        # --
+                        # Train model.
+                        self.train_model(itr)
 
                     # --
                     # Compute intrinisc rewards.
