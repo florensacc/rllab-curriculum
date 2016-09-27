@@ -196,7 +196,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
         if self.latent_dim:
             if self.resample:
                 latents = [self.latent_dist.sample(self.latent_dist_info) for _ in observations]
-                # print 'resampling the latents'
+                print 'resampling the latents'
             else:
                 if not np.size(self.latent_fix) == self.latent_dim:  # we decide to reset based on if smthing in the fix
                     # logger.log('Reset for latents: the latent_fix {} not match latent_dim{}'.format(self.latent_fix, self.latent_dim))
@@ -216,14 +216,14 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
                                                    (observations.shape[0], -1))],
                                               axis=1)
                 # print 'Latents: {}, observations: {}'.format(latents, observations), \
-                #     'The extended obs are: ', extended_obs, \
-                #     '\ndone with the theano function it is', self._extended_obs_var(observations,latents)
+                #     'The extended obs have shape {} and are: '.format(np.shape(extended_obs)), extended_obs, \
+                #     '\ndone with the theano function it is {} and '.format(np.shape(self._extended_obs_var(observations,latents))), self._extended_obs_var(observations,latents)
             else:
                 extended_obs = np.concatenate([observations, latents], axis=1)
         else:
             latents = np.array([[]] * len(observations))
             extended_obs = observations
-        # print 'the extened_obs are:\n', extended_obs
+        # print 'the extened_obs are of size {}'.format(np.shape(extended_obs))
         # make mean, log_std also depend on the latents (as observ.)
         mean, log_std = self._f_dist(extended_obs)
 
@@ -233,7 +233,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
         else:
             rnd = np.random.normal(size=mean.shape)
             actions = rnd * np.exp(log_std) + mean
-        # print latents
+        # print "The latents are: {}".format(latents)
         return actions, dict(mean=mean, log_std=log_std, latents=latents)
 
     def set_pre_fix_latent(self, latent):

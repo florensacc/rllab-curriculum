@@ -1,5 +1,5 @@
 from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
-from rllab.envs.mujoco.swimmer_env import SwimmerEnv
+from sandbox.carlos_snn.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab.envs.normalized_env import normalize
 from rllab.core.serializable import Serializable
 
