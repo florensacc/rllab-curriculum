@@ -1,18 +1,33 @@
+"""
+Differences from normal parallel_sampler:
+1. imports modified stateful_pool
+2. tries to assign cpu_affinity in _worker_init()
+"""
+
+
 from rllab.sampler.utils import rollout
-from rllab.sampler.stateful_pool import singleton_pool, SharedGlobal
+# from rllab.sampler.stateful_pool import singleton_pool, SharedGlobal
 from rllab.misc import ext
 from rllab.misc import logger
 from rllab.misc import tensor_utils
 import pickle
 import numpy as np
 
+from sandbox.adam.modified_sampler.stateful_pool import singleton_pool, SharedGlobal
 
-def _worker_init(G, id):
+
+def _worker_init(G, worker_id):
     if singleton_pool.n_parallel > 1:
         import os
         os.environ['THEANO_FLAGS'] = 'device=cpu'
         os.environ['CUDA_VISIBLE_DEVICES'] = ""
-    G.worker_id = id
+        import psutil
+        p = psutil.Process()
+        try:
+            p.cpu_affinity([worker_id])
+        except AttributeError:
+            print("Can't set worker CPU affinity, maybe on Mac OS.")
+    G.worker_id = worker_id
 
 
 def initialize(n_parallel):

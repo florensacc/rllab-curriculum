@@ -1,12 +1,17 @@
-from rllab.algos.base import RLAlgorithm
-from rllab.sampler import parallel_sampler
+"""
+Differences from normal BatchSampler class:
+1. imports modified parallel_sampler
+"""
+
+
+# from rllab.sampler import parallel_sampler
 from rllab.sampler.base import BaseSampler
-import rllab.misc.logger as logger
-import rllab.plotter as plotter
-from rllab.policies.base import Policy
+
+from sandbox.adam.modified_sampler import parallel_sampler
 
 
 class BatchSampler(BaseSampler):
+
     def __init__(self, algo):
         """
         :type algo: BatchPolopt

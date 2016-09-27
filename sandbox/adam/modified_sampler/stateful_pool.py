@@ -1,4 +1,8 @@
-
+"""
+Differences from normal stateful_pool:
+1. _worker_run_collect() function measures the worker threshold differently (to
+   match ParallelTRPO)
+"""
 
 from joblib.pool import MemmapingPool
 import multiprocessing as mp
@@ -10,6 +14,7 @@ import sys
 
 
 class ProgBarCounter(object):
+
     def __init__(self, total_count):
         self.total_count = total_count
         self.max_progress = 1000000
@@ -170,21 +175,46 @@ def _worker_run_each(all_args):
     except Exception:
         raise Exception("".join(traceback.format_exception(*sys.exc_info())))
 
+# ORIGINAL:
+# def _worker_run_collect(all_args):
+#     try:
+#         collect_once, counter, lock, threshold, args = all_args
+#         collected = []
+#         while True:
+#             with lock:
+#                 if counter.value >= threshold:
+#                     return collected
+#             result, inc = collect_once(singleton_pool.G, *args)
+#             collected.append(result)
+#             with lock:
+#                 counter.value += inc
+#                 if counter.value >= threshold:
+#                     return collected
+#     except Exception:
+#         raise Exception("".join(traceback.format_exception(*sys.exc_info())))
 
+
+# MODIFIED:
 def _worker_run_collect(all_args):
+    """
+    Samples according to the same scheme used in Parallel TRPO, for equivalent
+    algorithm comparison. (The work is evenly divided among workers a head of
+    time, and they each work up to the same individual threshold.)
+    """
     try:
+        # print("In modified worker_run_collect.")
         collect_once, counter, lock, threshold, args = all_args
+        worker_threshold = threshold // singleton_pool.n_parallel
+        worker_counter = 0
         collected = []
         while True:
-            with lock:
-                if counter.value >= threshold:
-                    return collected
             result, inc = collect_once(singleton_pool.G, *args)
             collected.append(result)
             with lock:
                 counter.value += inc
-                if counter.value >= threshold:
-                    return collected
+            worker_counter += inc
+            if worker_counter >= worker_threshold:
+                return collected
     except Exception:
         raise Exception("".join(traceback.format_exception(*sys.exc_info())))
 
