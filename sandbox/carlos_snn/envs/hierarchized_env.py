@@ -33,9 +33,9 @@ class HierarchizedEnv(ProxyEnv, Serializable):
         assert self.low_policy._env_spec.action_space.flat_dim == env.spec.action_space.flat_dim, "the action" \
             "space of the hierarchized env and the pre-trained policy do not coincide: might be different robot!"
         if self.low_policy._env_spec.observation_space.flat_dim != env.spec.observation_space.flat_dim:
-            print "The ObsSpace of hierarchized env is {}, the pre-trained was {}".format(
+            print ("The ObsSpace of hierarchized env is {}, the pre-trained was {}".format(
                 env.spec.observation_space.flat_dim,
-                self.low_policy._env_spec.observation_space.flat_dim)
+                self.low_policy._env_spec.observation_space.flat_dim))
             assert isinstance(env, MazeEnv) or isinstance(env.wrapped_env, MazeEnv), "the obsSpaces mismatch but it's not a maze (by Carlos)!!"
             # I need to define a new hier-policy that will cope with that!
             self.low_policy = GaussianMLPPolicy_hier(
@@ -49,7 +49,7 @@ class HierarchizedEnv(ProxyEnv, Serializable):
     @property
     @overrides
     def action_space(self):
-        # print "the action space of the hierarchyzed env is: {}".format(self.low_policy.latent_dim)
+        # print ("the action space of the hierarchyzed env is: {}".format(self.low_policy.latent_dim))
         lat_dim = self.low_policy.latent_dim
         return spaces.Discrete(lat_dim)  # the action is now just a selection
 
@@ -57,7 +57,7 @@ class HierarchizedEnv(ProxyEnv, Serializable):
     def step(self, action):
         action = self.action_space.flatten(action)
         with self.low_policy.fix_latent(action):
-            print "The hier action is prefixed latent: {}".format(self.low_policy.pre_fix_latent)
+            print ("The hier action is prefixed latent: {}".format(self.low_policy.pre_fix_latent))
             frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg, animated=True, speedup=1000)
             next_obs = frac_path['observations'][-1]
             reward = np.sum(frac_path['rewards'])
@@ -65,9 +65,9 @@ class HierarchizedEnv(ProxyEnv, Serializable):
             # it would be better to add an extra flagg to this rollout to check if it was done in the last step
             agent_info = dict((k, val[-1]) for k, val in frac_path['agent_infos'].iteritems())
             env_info = dict((k, val[-1]) for k, val in frac_path['env_infos'].iteritems())
-        print "finished step of {}, with cummulated reward of: {}".format(len(frac_path['observations']), reward)
+        print ("finished step of {}, with cummulated reward of: {}".format(len(frac_path['observations']), reward))
         if done:
-            print "\n ########## \n ***** done!! *****"
+            print ("\n ########## \n ***** done!! *****")
         return Step(next_obs, reward, done, last_env_info=env_info, last_agent_info=agent_info, full_path=frac_path)
         # the last kwargs will all go to env_info
 
@@ -85,7 +85,7 @@ class HierarchizedEnv(ProxyEnv, Serializable):
                 lat = path['env_infos']['full_path']['agent_infos']['latents'][i]
                 chunk_path = {'observations': obs, 'agent_infos': {'latents': lat}}
                 expanded_paths.append(chunk_path)
-        print expanded_paths
+        print (expanded_paths)
         self.wrapped_env.log_diagnostics(expanded_paths)
 
     def __str__(self):

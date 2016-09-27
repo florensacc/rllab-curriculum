@@ -196,7 +196,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
         if self.latent_dim:
             if self.resample:
                 latents = [self.latent_dist.sample(self.latent_dist_info) for _ in observations]
-                print 'resampling the latents'
+                print ('resampling the latents')
             else:
                 if not np.size(self.latent_fix) == self.latent_dim:  # we decide to reset based on if smthing in the fix
                     # logger.log('Reset for latents: the latent_fix {} not match latent_dim{}'.format(self.latent_fix, self.latent_dim))

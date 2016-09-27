@@ -91,7 +91,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         self.old_policy = None
 
         if self.pkl_path:  # there is another one after defining all the NN to warm-start the params of the SNN
-            print "there is a pkl file so I will change the default args"
+            print ("there is a pkl file so I will change the default args")
             data = joblib.load(self.pkl_path)
             self.old_policy = data["policy"]
             self.latent_dim = self.old_policy.latent_dim
@@ -100,7 +100,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             self.resample = self.old_policy.resample  # this could not be needed...
             self.min_std = self.old_policy.min_std
             self.hidden_sizes_snn = self.old_policy.hidden_sizes
-        print "Final attributes: ", self.latent_dim, self.hidden_sizes_snn, self.bilinear_integration
+        print ("Final attributes: ", self.latent_dim, self.hidden_sizes_snn, self.bilinear_integration)
 
         if latent_name == 'normal':
             self.latent_dist = DiagonalGaussian(self.latent_dim)
@@ -128,7 +128,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         else:
             self.obs_robot_dim = env.robot_observation_space.flat_dim
             self.obs_maze_dim = env.maze_observation_space.flat_dim
-        print "the dims of the env are(rob/maze): ", self.obs_robot_dim, self.obs_maze_dim
+        print ("the dims of the env are(rob/maze): ", self.obs_robot_dim, self.obs_maze_dim)
         all_obs_dim = env_spec.observation_space.flat_dim
         assert all_obs_dim == self.obs_robot_dim + self.obs_maze_dim
 
@@ -349,10 +349,10 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         if not self.resample:
             if self.pre_fix_latent.size > 0:
                 self.latent_fix = self.pre_fix_latent
-                print 'I reset to latent {} because the pre_fix_latent is {}'.format(self.latent_fix, self.pre_fix_latent)
+                print ('I reset to latent {} because the pre_fix_latent is {}'.format(self.latent_fix, self.pre_fix_latent))
             else:
                 self.latent_fix = self.latent_dist.sample(self.latent_dist_info)
-                print "I just sampled a random latent: ", self.latent_fix
+                print ("I just sampled a random latent: ", self.latent_fix)
         else:
             pass
         # this is needed for the external latent!!

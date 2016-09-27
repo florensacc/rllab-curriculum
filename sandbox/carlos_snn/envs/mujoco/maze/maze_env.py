@@ -74,8 +74,8 @@ class MazeEnv(ProxyEnv, Serializable):
             M[1:c - 1, (1, c - 2)] = 0
             M[(1, c - 2), 1:c - 1] = 0
             M = M.astype(int).tolist()
-            M[1][c / 2] = 'r'
-            M[c - 2][c / 2] = 'g'
+            M[1][c // 2] = 'r'
+            M[c - 2][c // 2] = 'g'
             structure = M
             print(self.__class__.MAZE_STRUCTURE)
             self.__class__.MAZE_STRUCTURE = structure
@@ -87,10 +87,10 @@ class MazeEnv(ProxyEnv, Serializable):
             M[1:c - 1, (1, c - 2)] = 0
             M[(1, c - 2), 1:c - 1] = 0
             M = M.astype(int).tolist()
-            M[1][c / 2] = 'r'
+            M[1][c // 2] = 'r'
             # now block one of the ways and put the goal on the other side
-            M[1][c / 2 - 1] = 1
-            M[1][c / 2 - 2] = 'g'
+            M[1][c // 2 - 1] = 1
+            M[1][c // 2 - 2] = 'g'
             structure = M
             self.__class__.MAZE_STRUCTURE = structure
             print(structure)
@@ -117,7 +117,7 @@ class MazeEnv(ProxyEnv, Serializable):
             M[np.array([0, c - 1]), :] = 1
             M[:, np.array([0, c - 1])] = 1
             M = M.astype(int).tolist()
-            M[c / 2][c / 2] = 'r'
+            M[c // 2][c // 2] = 'r'
             for i in [1, c - 2]:
                 for j in [1, c - 2]:
                     M[i][j] = 'g'
