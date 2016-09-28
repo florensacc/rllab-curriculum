@@ -36,7 +36,9 @@ class VG(VariantGenerator):
 
     @variant
     def total_t(self):
-        return [2*7 * 3*10**6]
+        # return [2*7 * 3*10**6]
+        # half time, short trial
+        return [7 * 3*10**6]
 
     @variant
     def n_processes(self):
@@ -82,7 +84,7 @@ class VG(VariantGenerator):
     def lr(self, ):
         yield 7e-4
         # yield 1e-4
-        yield 2e-3
+        # yield 2e-3
         yield 5e-3
 
     @variant
