@@ -20,11 +20,13 @@ class BilinearIntegrationLayer(L.MergeLayer):
     def get_output_for(self, inputs, **kwargs):
         obs_robot_var = inputs[0]
         selection_var = inputs[1]
+
         bilinear = TT.concatenate([obs_robot_var, selection_var,
                                    TT.flatten(obs_robot_var[:, :, np.newaxis] * selection_var[:, np.newaxis, :],
                                               outdim=2)]
                                   , axis=1)
         return bilinear
+        # return obs_robot_var
 
 
 class CropLayer(L.Layer):
@@ -42,7 +44,24 @@ class CropLayer(L.Layer):
         if self.end_index:
             end = self.end_index
         new_length = end - start
-        return n_batch, new_length
+        return n_batch, new_length  # this automatically creates a tuple
 
     def get_output_for(self, all_obs_var, **kwargs):
         return all_obs_var[:, self.start_index:self.end_index]
+
+
+class ConstOutputLayer(L.Layer):
+    def __init__(self, output_var=None, incoming=None, name=None, input_var=None, input_shape=None):
+        super(ConstOutputLayer, self).__init__(incoming, name)
+        self.output_var = output_var
+
+    def get_output_shape_for(self, input_shape):
+        n_batch = input_shape[0]  # the batch size
+        single_output_shape = self.output_var.get_value().shape
+        return (n_batch,) + single_output_shape   # this is supposed to create a tuple
+
+    def get_output_for(self, all_obs_var, **kwargs):
+        n_batch = all_obs_var.shape[0]
+        out = TT.tile(self.output_var, (n_batch, 1))
+        return out
+

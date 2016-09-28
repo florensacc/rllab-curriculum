@@ -78,13 +78,14 @@ class MLP(LayersPowered, Serializable):
         return self._output
 
 
-class ConvNetwork(object):
+class ConvNetwork(LayersPowered, Serializable):
     def __init__(self, name, input_shape, output_dim,
                  conv_filters, conv_filter_sizes, conv_strides, conv_pads,
                  hidden_sizes, hidden_nonlinearity, output_nonlinearity,
                  hidden_W_init=L.XavierUniformInitializer(), hidden_b_init=tf.zeros_initializer,
                  output_W_init=L.XavierUniformInitializer(), output_b_init=tf.zeros_initializer,
                  input_var=None, input_layer=None, batch_normalization=False, weight_normalization=False):
+        Serializable.quick_init(self, locals())
         """
         A network composed of several convolution layers followed by some fc layers.
         input_shape: (width,height,channel)
@@ -167,6 +168,8 @@ class ConvNetwork(object):
             self._l_out = l_out
             # self._input_var = l_in.input_var
 
+        LayersPowered.__init__(self, l_out)
+
     @property
     def input_layer(self):
         return self._l_in
@@ -238,6 +241,10 @@ class GRUNetwork(object):
 
     @property
     def state_dim(self):
+        return self._hidden_dim
+
+    @property
+    def hidden_dim(self):
         return self._hidden_dim
 
     @property

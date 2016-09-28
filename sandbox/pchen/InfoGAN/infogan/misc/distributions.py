@@ -356,6 +356,32 @@ class Uniform(Gaussian):
     def sample_prior(self, batch_size):
         return tf.random_uniform([batch_size, self.dim], minval=-1., maxval=1.)
 
+class SparseUniform(Gaussian):
+    """
+    This distribution will sample prior data from a uniform distribution, but
+    the prior and posterior are still modeled as a Gaussian
+
+    except the noise is masked out 50% of the time
+    """
+
+    def kl_prior(self):
+        raise NotImplementedError
+
+
+    def sample_prior(self, batch_size):
+        shp = [batch_size, self.dim]
+        return tf.random_uniform(
+            shp,
+            minval=-1., maxval=1.
+        ) * tf.select(
+            0.5 >= tf.random_uniform(
+                shp,
+                minval=0., maxval=1.
+            ),
+            tf.zeros(shp),
+            tf.ones(shp)
+        )
+
 
 class Bernoulli(Distribution):
     def __init__(self, dim, smooth=None):
@@ -626,6 +652,15 @@ class MeanBernoulli(Bernoulli):
 
     def nonreparam_logli(self, x_var, dist_info):
         return tf.zeros_like(x_var[:, 0])
+
+class TanhMeanBernoulli(MeanBernoulli):
+    """
+    Behaves almost the same as the usual Bernoulli distribution, except that when sampling from it, directly
+    return the mean instead of sampling binary values
+    """
+
+    def activate_dist(self, flat_dist):
+        return dict(p=tf.nn.tanh(flat_dist))
 
 
 # class MeanCenteredUniform(MeanBernoulli):
@@ -1407,6 +1442,8 @@ class ConvAR(Distribution):
             sanity=False,
             sanity2=False,
             tieweight=False,
+            extra_nins=0,
+            inp_keepprob=1.,
     ):
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
@@ -1419,6 +1456,7 @@ class ConvAR(Distribution):
         self._context = context
         self._context_dim = context_dim
         inp = pt.template("y", books=dist_book).reshape([-1,] + list(shape))
+        inp = inp.custom_dropout(inp_keepprob)
         if sanity:
             inp *= 0.
         if context:
@@ -1488,6 +1526,14 @@ class ConvAR(Distribution):
                                 )
                         else:
                             raise Exception("what")
+                    for ninidx in range(extra_nins):
+                        cur = cur + 0.1 * cur.conv2d_mod(
+                            1,
+                            nr_channels,
+                            prefix="nin_ex_%s"%ninidx,
+                        )
+
+
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,

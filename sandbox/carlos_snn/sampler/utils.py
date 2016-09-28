@@ -1,6 +1,7 @@
 import numpy as np
 from rllab.misc import tensor_utils
 import time
+from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
 
 
 def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
@@ -9,7 +10,11 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
     rewards = []
     agent_infos = []
     env_infos = []
-    o = env.reset()
+    # o = env.reset()  # otherwise it will never advance!!
+    if isinstance(env, NormalizedEnv):
+        o = env.wrapped_env.get_current_obs()
+    else:
+        o = env.get_current_obs()
     agent.reset()
     path_length = 0
     if animated:
@@ -31,19 +36,6 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
             timestep = 0.05
             time.sleep(timestep / speedup)
 
-        if max_path_length == 1:
-            print("the action sampled recorded is: {}, the agent_info: {} and the reward: {}".format(a, agent_info, r))
-            print("but what is appended is {}".format(actions[-1]))
-
-    d = dict(
-        observations=tensor_utils.stack_tensor_list(observations),
-        actions=tensor_utils.stack_tensor_list(actions),
-        rewards=tensor_utils.stack_tensor_list(rewards),
-        agent_infos=tensor_utils.stack_tensor_dict_list(agent_infos),
-        env_infos=tensor_utils.stack_tensor_dict_list(env_infos),
-    )
-    if max_path_length == 1:
-        print("all the info of the rollout is:{}".format(d))
     return dict(
         observations=tensor_utils.stack_tensor_list(observations),
         actions=tensor_utils.stack_tensor_list(actions),

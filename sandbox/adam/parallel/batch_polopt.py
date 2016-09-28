@@ -36,10 +36,11 @@ class ParallelBatchPolopt(RLAlgorithm):
             center_adv=True,
             positive_adv=False,
             store_paths=False,
-            whole_paths=False,  # Different default from serial
+            whole_paths=True,
             n_parallel=1,
             set_cpu_affinity=False,
             cpu_assignments=None,
+            serial_compile=True,
             **kwargs
     ):
         """
@@ -81,11 +82,13 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.n_parallel = n_parallel
         self.set_cpu_affinity = set_cpu_affinity
         self.cpu_assignments = cpu_assignments
+        self.serial_compile = serial_compile
         self.worker_batch_size = batch_size // n_parallel
+        self.n_steps_collected = 0  # (set by sampler)
         self.sampler = WorkerBatchSampler(self)
 
     def __getstate__(self):
-        #  (multiprocessing does not allow pickling of manager objects)
+        """ Do not pickle parallel objects. """
         return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
 
     #
@@ -99,25 +102,23 @@ class ParallelBatchPolopt(RLAlgorithm):
         Any init_par_objs() method in a derived class must call this method,
         and, following that, may append() the SimpleContainer objects as needed.
         """
-        par_data = SimpleContainer(rank=None, avg_fac=1. / self.n_parallel)
+        n = self.n_parallel
+        self.rank = None
         shareds = SimpleContainer(
-            sum_discounted_return=mp.RawValue('d'),
-            sum_return=mp.RawValue('d'),
-            num_traj=mp.RawValue('i'),
-            max_return=mp.RawValue('d'),
-            min_return=mp.RawValue('d'),
-            num_steps=mp.RawValue('i'),
-            num_valids=mp.RawValue('i'),
-            sum_ent=mp.RawValue('d'),
-            n_steps_collected=mp.RawValue('i'),
+            sum_discounted_return=mp.RawArray('d', n),
+            sum_return=mp.RawArray('d', n),
+            num_traj=mp.RawArray('i', n),
+            max_return=mp.RawArray('d', n),
+            min_return=mp.RawArray('d', n),
+            num_steps=mp.RawArray('i', n),
+            num_valids=mp.RawArray('d', n),
+            sum_ent=mp.RawArray('d', n),
         )
-        mgr_objs = SimpleContainer(
-            lock=mp.Lock(),
-            barriers_dgnstc=[mp.Barrier(self.n_parallel) for _ in range(2)],
-            barriers_avgfac=[mp.Barrier(self.n_parallel) for _ in range(2)],
+        barriers = SimpleContainer(
+            dgnstc=mp.Barrier(n),
         )
-        self._par_objs = (par_data, shareds, mgr_objs)
-        self.baseline.init_par_objs(n_parallel=self.n_parallel)
+        self._par_objs = (shareds, barriers)
+        self.baseline.init_par_objs(n_parallel=n)
 
     def init_par_objs(self):
         """
@@ -143,12 +144,32 @@ class ParallelBatchPolopt(RLAlgorithm):
         if self.plot:
             plotter.update_plot(self.policy, self.max_path_length)
 
+    def prep_samples(self):
+        """
+        Used to prepare output from sampler.process_samples() for input to
+        optimizer.optimize(), and used in force_compile().
+        """
+        raise NotImplementedError
+
+    def force_compile(self, n_samples=100):
+        """
+        Serial - compile Theano (e.g. before spawning subprocesses, if desired)
+        """
+        logger.log("forcing Theano compilations...")
+        paths = self.sampler.obtain_samples(n_samples)
+        samples_data, _ = self.sampler.process_samples(paths)
+        input_values = self.prep_samples(samples_data)
+        self.optimizer.force_compile(input_values)
+        logger.log("all compiling complete")
+
     #
     # Main external method and its target for parallel subprocesses.
     #
 
     def train(self):
         self.init_opt()
+        if self.serial_compile:
+            self.force_compile()
         self.init_par_objs()
         processes = [mp.Process(target=self._train, args=(rank,))
             for rank in range(self.n_parallel)]
@@ -158,12 +179,11 @@ class ParallelBatchPolopt(RLAlgorithm):
             p.join()
 
     def _train(self, rank):
-        self.set_rank(rank)
+        self.init_rank(rank)
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
-                paths, n_steps_collected = self.sampler.obtain_samples(itr)
-                self.set_avg_fac(n_steps_collected)  # (parallel)
-                samples_data, dgnstc_data = self.sampler.process_samples(itr, paths)
+                paths = self.sampler.obtain_samples()
+                samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 self.optimize_policy(itr, samples_data)  # (parallel)
                 if rank == 0:
@@ -188,52 +208,30 @@ class ParallelBatchPolopt(RLAlgorithm):
                 self.current_itr = itr + 1
 
     #
-    # Parallelized methods.
+    # Parallelized methods and related.
     #
 
     def log_diagnostics(self, itr, samples_data, dgnstc_data):
-            par_data, shareds, mgr_objs = self._par_objs
+            shareds, barriers = self._par_objs
 
-            sum_discounted_returns = \
+            i = self.rank
+            shareds.sum_discounted_return[i] = \
                 np.sum([path["returns"][0] for path in samples_data["paths"]])
             undiscounted_returns = [sum(path["rewards"]) for path in samples_data["paths"]]
-            num_traj = len(undiscounted_returns)
-            num_steps = sum([len(path["rewards"]) for path in samples_data["paths"]])
-            sum_returns = np.sum(undiscounted_returns)
-            min_return = np.min(undiscounted_returns)
-            max_return = np.max(undiscounted_returns)
+            shareds.num_traj[i] = len(undiscounted_returns)
+            shareds.num_steps[i] = self.n_steps_collected
+            # shareds.num_steps[i] = sum([len(path["rewards"]) for path in samples_data["paths"]])
+            shareds.sum_return[i] = np.sum(undiscounted_returns)
+            shareds.min_return[i] = np.min(undiscounted_returns)
+            shareds.max_return[i] = np.max(undiscounted_returns)
             if not self.policy.recurrent:
-                sum_ent = np.sum(self.policy.distribution.entropy(samples_data["agent_infos"]))
-                num_valids = 0
+                shareds.sum_ent[i] = np.sum(self.policy.distribution.entropy(
+                    samples_data["agent_infos"]))
+                shareds.num_valids[i] = 0
             else:
-                sum_ent = np.sum(self.policy.distribution.entropy(
+                shareds.sum_ent[i] = np.sum(self.policy.distribution.entropy(
                     samples_data["agent_infos"]) * samples_data["valids"])
-                num_valids = np.sum(samples_data["valids"])
-
-            if par_data.rank == 0:
-                shareds.sum_discounted_return.value = sum_discounted_returns
-                shareds.sum_return.value = sum_returns
-                shareds.num_traj.value = num_traj
-                shareds.min_return.value = min_return
-                shareds.max_return.value = max_return
-                shareds.sum_ent.value = sum_ent
-                shareds.num_steps.value = num_steps
-                shareds.num_valids.value = num_valids
-                mgr_objs.barriers_dgnstc[0].wait()
-            else:
-                mgr_objs.barriers_dgnstc[0].wait()
-                with mgr_objs.lock:
-                    shareds.sum_discounted_return.value += sum_discounted_returns
-                    shareds.sum_return.value += sum_returns
-                    shareds.num_traj.value += num_traj
-                    shareds.num_steps.value += num_steps
-                    shareds.num_valids.value += num_valids
-                    if max_return > shareds.max_return.value:
-                        shareds.max_return.value = max_return
-                    if min_return < shareds.min_return.value:
-                        shareds.min_return.value = min_return
-                    shareds.sum_ent.value += sum_ent
-            mgr_objs.barriers_dgnstc[1].wait()
+                shareds.num_valids[i] = np.sum(samples_data["valids"])
 
             # TODO: ev needs sharing before computing.
             # ev = special.explained_variance_1d(
@@ -241,25 +239,30 @@ class ParallelBatchPolopt(RLAlgorithm):
             #     np.concatenate(dgnstc_data["returns"])
             # )
 
-            if par_data.rank == 0:
+            barriers.dgnstc.wait()
+
+            if self.rank == 0:
+                num_traj = sum(shareds.num_traj)
                 average_discounted_return = \
-                    shareds.sum_discounted_return.value / shareds.num_traj.value
-                average_return = shareds.sum_return.value / shareds.num_traj.value
+                    sum(shareds.sum_discounted_return) / num_traj
+                average_return = sum(shareds.sum_return) / num_traj
                 if self.policy.recurrent:
-                    ent = shareds.sum_ent.value / shareds.num_valids.value
+                    ent = sum(shareds.sum_ent) / sum(shareds.num_valids)
                 else:
-                    ent = shareds.sum_ent.value / shareds.num_steps.value
+                    ent = sum(shareds.sum_ent) / sum(shareds.num_steps)
+                max_return = max(shareds.max_return)
+                min_return = min(shareds.min_return)
 
                 logger.record_tabular('Iteration', itr)
                 logger.record_tabular('AverageDiscountedReturn', average_discounted_return)
                 logger.record_tabular('AverageReturn', average_return)
                 # logger.record_tabular('ExplainedVariance', ev)
-                logger.record_tabular('NumTrajs', shareds.num_traj.value)
+                logger.record_tabular('NumTrajs', num_traj)
                 logger.record_tabular('Entropy', ent)
                 logger.record_tabular('Perplexity', np.exp(ent))
                 # logger.record_tabular('StdReturn', np.std(undiscounted_returns))
-                logger.record_tabular('MaxReturn', shareds.max_return.value)
-                logger.record_tabular('MinReturn', shareds.min_return.value)
+                logger.record_tabular('MaxReturn', max_return)
+                logger.record_tabular('MinReturn', min_return)
 
         # NOTE: These others might only work if all path data is collected
         # centrally, could provide this as an option...might be easiest to build
@@ -271,39 +274,27 @@ class ParallelBatchPolopt(RLAlgorithm):
         # self.policy.log_diagnostics(paths)
         # self.baseline.log_diagnostics(paths)
 
-    def set_rank(self, rank):
-        par_data, _, _ = self._par_objs
-        par_data.rank = rank
+    def init_rank(self, rank):
+        self.rank = rank
         if self.set_cpu_affinity:
             self._set_affinity(rank)
-        self.baseline.set_rank(rank)
-        self.optimizer.set_rank(rank)
+        self.baseline.init_rank(rank)
+        self.optimizer.init_rank(rank)
         seed = ext.get_seed()
         if seed is None:
             # NOTE: Not sure if this is a good source for seed?
             seed = int(1e6 * np.random.rand())
         ext.set_seed(seed + rank)
 
-    def set_avg_fac(self, n_steps_collected):
-        par_data, shareds, mgr_objs = self._par_objs
-
-        if par_data.rank == 0:
-            shareds.n_steps_collected.value = n_steps_collected
-            mgr_objs.barriers_avgfac[0].wait()
-        else:
-            mgr_objs.barriers_avgfac[0].wait()
-            with mgr_objs.lock:
-                shareds.n_steps_collected.value += n_steps_collected
-        mgr_objs.barriers_avgfac[1].wait()
-
-        avg_fac = (n_steps_collected * 1.0) / shareds.n_steps_collected.value
-        par_data.avg_fac = avg_fac
-        self.optimizer.set_avg_fac(avg_fac)
-
     def optimize_policy(self, itr, samples_data):
         raise NotImplementedError
 
     def _set_affinity(self, rank, verbose=False):
+        """
+        Check your logical cpu vs physical core configuration, use
+        cpu_assignments list to put one worker per physical core.  Default
+        behavior is to use logical cpus 0,1,2,...
+        """
         import psutil
         if self.cpu_assignments is not None:
             n_assignments = len(self.cpu_assignments)

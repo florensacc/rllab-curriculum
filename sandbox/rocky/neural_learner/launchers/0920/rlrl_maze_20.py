@@ -90,9 +90,9 @@ class VG(VariantGenerator):
             wrapped_env=episode_env, n_episodes=n_episodes, episode_horizon=horizon, discount=discount,
         ))
 
-    # @variant
-    # def algo_type(self):
-    #     return ["pposgd"]  # "trpo", "pposgd", "ppo"]
+    @variant
+    def algo_type(self):
+        return ["trpo", "pposgd", "ppo"]
 
     # @variant
     # def bonus_coeff(self):
@@ -114,25 +114,50 @@ for v in variants:
         hidden_dim=v["hidden_dim"],
         network_type=v["network_type"]
     )
-
-    algo = PPOSGD(
-        env=v["env"],
-        policy=policy,
-        baseline=baseline,
-        max_path_length=v["horizon"] * v["n_episodes"],
-        batch_size=v["batch_size"],
-        discount=v["discount"],
-        n_itr=1000,
-        sampler_args=dict(n_envs=10),
-    )
+    if v["algo_type"] == "trpo":
+        algo = TRPO(
+            env=v["env"],
+            policy=policy,
+            baseline=baseline,
+            max_path_length=v["horizon"] * v["n_episodes"],
+            batch_size=v["batch_size"],
+            discount=v["discount"],
+            n_itr=1000,
+            sampler_args=dict(n_envs=10),
+            optimizer=ConjugateGradientOptimizer(hvp_approach=FiniteDifferenceHvp(base_eps=1e-5))
+        )
+    elif v["algo_type"] == "ppo":
+        algo = PPO(
+            env=v["env"],
+            policy=policy,
+            baseline=baseline,
+            max_path_length=v["horizon"] * v["n_episodes"],
+            batch_size=v["batch_size"],
+            discount=v["discount"],
+            n_itr=1000,
+            sampler_args=dict(n_envs=10),
+        )
+    elif v["algo_type"] == "pposgd":
+        algo = PPOSGD(
+            env=v["env"],
+            policy=policy,
+            baseline=baseline,
+            max_path_length=v["horizon"] * v["n_episodes"],
+            batch_size=v["batch_size"],
+            discount=v["discount"],
+            n_itr=1000,
+            sampler_args=dict(n_envs=10),
+        )
+    else:
+        raise NotImplementedError
 
     run_experiment_lite(
         algo.train(),
         exp_prefix="rlrl-maze-20",
-        mode="local",
+        mode="lab_kube",
         n_parallel=0,
         seed=v["seed"],
         variant=v,
         snapshot_mode="last",
     )
-    sys.exit()
+    # sys.exit()

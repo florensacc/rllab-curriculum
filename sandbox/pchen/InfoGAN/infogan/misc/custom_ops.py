@@ -76,6 +76,7 @@ class custom_conv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_dim,
                  k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02, in_dim=None, padding='SAME', activation_fn=None,
                  name="conv2d", residual=False, custom_phase=CustomPhase.train):
+        print("obsolete NN blocks custom_conv2d!!")
         print(("ignoring data init : %s" % custom_phase))
         with tf.variable_scope(name):
             w = self.variable('w', [k_h, k_w, in_dim or input_layer.shape[-1], output_dim],
@@ -183,7 +184,7 @@ class custom_fully_connected(pt.VarStoreMethod):
                                        init=tf.random_normal_initializer(stddev=stddev))
                 bias = self.variable("bias", [output_size], init=tf.constant_initializer(bias_start))
                 return input_layer.with_tensor(tf.matmul(input_, matrix) + bias, parameters=self.vars)
-        except Exception:
+        except Exception as exception:
             import ipdb;
             ipdb.set_trace()
 
@@ -575,6 +576,7 @@ from prettytensor.pretty_tensor_image_methods import *
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'batch_normalize',
             'custom_phase', 'wnorm', 'pixel_bias', 'var_scope',
+            'rate',
     )
 )
 class conv2d_mod(prettytensor.VarStoreMethod):
@@ -599,6 +601,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
                scale_init=0.1,
                var_scope=None,
                prefix="",
+               rate=1,
                name=PROVIDED
                ):
     """Adds a convolution to the stack of operations.
@@ -661,7 +664,11 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     if custom_phase == CustomPhase.init:
         params = params.initialized_value()
     params_norm = tf.nn.l2_normalize(params, [0,1,2]) if wnorm else params
-    y = tf.nn.conv2d(input_layer, params_norm, stride, edges)
+    if rate == 1:
+        y = tf.nn.conv2d(input_layer, params_norm, stride, edges)
+    else:
+        assert np.allclose(stride, 1)
+        y = tf.nn.atrous_conv2d(input_layer, params_norm, rate, edges)
     layers.add_l2loss(books, params, l2loss)
 
     out_w = int(y.get_shape()[1])
@@ -1194,10 +1201,10 @@ def resize_nearest_neighbor(x, scale):
     x = tf.image.resize_nearest_neighbor(x, size)
     return x
 
-def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None):
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None, conv_args=None):
     return resconv_v1_customconv(
         "conv2d_mod",
-        None,
+        conv_args,
         l_in=l_in, kernel=kernel, nch=nch, stride=stride, add_coeff=add_coeff,
         keep_prob=keep_prob, nn=nn, context=context
     )

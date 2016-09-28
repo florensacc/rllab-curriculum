@@ -1,3 +1,5 @@
+import pickle
+
 from rllab.sampler.base import BaseSampler
 from sandbox.rocky.tf.envs.parallel_vec_env_executor import ParallelVecEnvExecutor
 from sandbox.rocky.tf.envs.vec_env_executor import VecEnvExecutor
@@ -19,11 +21,15 @@ class VectorizedSampler(BaseSampler):
         if n_envs is None:
             n_envs = int(self.algo.batch_size / self.algo.max_path_length)
             n_envs = max(1, min(n_envs, 100))
-        self.vec_env = VecEnvExecutor(
-            self.algo.env,
-            n=n_envs,
-            max_path_length=self.algo.max_path_length
-        )
+
+        if getattr(self.algo.env, 'vectorized', False):
+            self.vec_env = self.algo.env.vec_env_executor(n_envs=n_envs, max_path_length=self.algo.max_path_length)
+        else:
+            envs = [pickle.loads(pickle.dumps(self.algo.env)) for _ in range(n_envs)]
+            self.vec_env = VecEnvExecutor(
+                envs=envs,
+                max_path_length=self.algo.max_path_length
+            )
         self.env_spec = self.algo.env.spec
 
     def shutdown_worker(self):

@@ -1,30 +1,31 @@
-from regularized_gan import RegularizedGAN
+# from sandbox.pchen.InfoGAN.infogan.models.regularized_gan import RegularizedGAN
 import prettytensor as pt
 import tensorflow as tf
 import numpy as np
 from progressbar import ETA, Bar, Percentage, ProgressBar
-from distributions import Bernoulli, Gaussian
+from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture, DiscretizedLogistic, ConvAR
 import sys
 
 TINY = 1e-8
 
 
 class GANTrainer(object):
-    def __init__(self,
-                 model,
-                 dataset,
-                 batch_size,
-                 exp_name="experiment",
-                 log_dir="logs",
-                 checkpoint_dir="ckt",
-                 max_epoch=100,
-                 updates_per_epoch=100,
-                 snapshot_interval=10000,
-                 discriminator_learning_rate=2e-4,
-                 generator_learning_rate=2e-4,
-                 ):
+    def __init__(
+            self,
+            model,
+            dataset,
+            batch_size,
+            exp_name="experiment",
+            log_dir="logs",
+            checkpoint_dir="ckt",
+            max_epoch=100,
+            updates_per_epoch=100,
+            snapshot_interval=10000,
+            discriminator_learning_rate=2e-4,
+            generator_learning_rate=2e-4,
+    ):
         """
-        :type model: RegularizedGAN
+        :type model: GAN
         """
         self.model = model
         self.dataset = dataset
@@ -48,12 +49,33 @@ class GANTrainer(object):
         with pt.defaults_scope(phase=pt.Phase.train):
             z_var = self.model.latent_dist.sample_prior(self.batch_size)
             fake_x, _ = self.model.generate(z_var)
-            all_d = self.model.discriminate(tf.concat(0, [input_tensor, fake_x]))
-            real_d = all_d[:self.batch_size, :]
-            fake_d = all_d[self.batch_size:, :]
+            all_d_logits = self.model.discriminate(
+                tf.concat(0, [input_tensor, fake_x]),
+                logits=True,
+            )
 
-            discriminator_loss = - tf.reduce_mean(tf.log(real_d + TINY) + tf.log(1. - fake_d + TINY))
-            generator_loss = - tf.reduce_mean(tf.log(fake_d + TINY))
+            real_d_logits = all_d_logits[:self.batch_size]
+            fake_d_logits = all_d_logits[self.batch_size:]
+
+            # discriminator_loss = \
+            #     - tf.reduce_mean(tf.log(real_d + TINY) + tf.log(1. - fake_d + TINY))
+            discriminator_losses = tf.nn.sigmoid_cross_entropy_with_logits(
+                real_d_logits,
+                tf.ones_like(real_d_logits)
+            ) + tf.nn.sigmoid_cross_entropy_with_logits(
+                fake_d_logits,
+                tf.zeros_like(fake_d_logits)
+            )
+            discriminator_loss = tf.reduce_mean(discriminator_losses)
+
+
+            # generator_loss = \
+            #     - tf.reduce_mean(tf.log(fake_d + TINY))
+            generator_losses = tf.nn.sigmoid_cross_entropy_with_logits(
+                fake_d_logits,
+                tf.ones_like(fake_d_logits)
+            )
+            generator_loss = tf.reduce_mean(generator_losses)
 
             all_vars = tf.trainable_variables()
             d_vars = [var for var in all_vars if var.name.startswith('d_')]
@@ -64,19 +86,32 @@ class GANTrainer(object):
 
             self.log_vars.append(("discriminator_loss", discriminator_loss))
             self.log_vars.append(("generator_loss", generator_loss))
-            self.log_vars.append(("max_real_d", tf.reduce_max(real_d)))
-            self.log_vars.append(("min_real_d", tf.reduce_min(real_d)))
-            self.log_vars.append(("max_fake_d", tf.reduce_max(fake_d)))
-            self.log_vars.append(("min_fake_d", tf.reduce_min(fake_d)))
+            self.log_vars.append(("max_real_d", tf.reduce_max(real_d_logits)))
+            self.log_vars.append(("min_real_d", tf.reduce_min(real_d_logits)))
+            self.log_vars.append(("max_fake_d", tf.reduce_max(fake_d_logits)))
+            self.log_vars.append(("min_fake_d", tf.reduce_min(fake_d_logits)))
             # self.log_vars.append(("min_z_var", tf.reduce_min(z_var)))
             # self.log_vars.append(("max_z_var", tf.reduce_max(z_var)))
 
-            discriminator_optimizer = tf.train.AdamOptimizer(self.discriminator_learning_rate, beta1=0.5)
-            self.discriminator_trainer = pt.apply_optimizer(discriminator_optimizer, losses=[discriminator_loss],
-                                                            var_list=d_vars)
+            discriminator_optimizer = tf.train.AdamOptimizer(
+                self.discriminator_learning_rate,
+                beta1=0.5
+            )
+            self.discriminator_trainer = pt.apply_optimizer(
+                discriminator_optimizer,
+                losses=[discriminator_loss],
+                var_list=d_vars
+            )
 
-            generator_optimizer = tf.train.AdamOptimizer(self.generator_learning_rate, beta1=0.5)
-            self.generator_trainer = pt.apply_optimizer(generator_optimizer, losses=[generator_loss], var_list=g_vars)
+            generator_optimizer = tf.train.AdamOptimizer(
+                self.generator_learning_rate,
+                beta1=0.5
+            )
+            self.generator_trainer = pt.apply_optimizer(
+                generator_optimizer,
+                losses=[generator_loss],
+                var_list=g_vars
+            )
 
         with pt.defaults_scope(phase=pt.Phase.test):
             with tf.variable_scope("model", reuse=True) as scope:
@@ -153,3 +188,4 @@ class GANTrainer(object):
 
                 print(log_line)
                 sys.stdout.flush()
+

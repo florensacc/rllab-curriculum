@@ -14,7 +14,7 @@ class LasagnePowered(Parameterized):
 
     @overrides
     def get_params_internal(self, **tags):  # this gives ALL the vars (not the params values)
-        return L.get_all_params(
+        return L.get_all_params(  # this lasagne function also returns all var below the passed layers
             L.concat(self._output_layers),
             **tags
         )
