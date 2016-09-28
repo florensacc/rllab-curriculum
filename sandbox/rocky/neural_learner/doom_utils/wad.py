@@ -6,6 +6,8 @@ import os
 import subprocess
 import sys
 import uuid
+import importlib.util
+
 
 ACC_PATH = os.environ["ACC_PATH"]
 
@@ -43,6 +45,9 @@ class TextMap(object):
 
 
 class WAD(object):
+
+    _cached_behaviors = dict()
+
     def __init__(self):
         self.wad_type = None
         self.lumps = []
@@ -158,7 +163,7 @@ class WAD(object):
                     # will always recompile the BEHAVIOR node
                     assert "SCRIPTS" in lump_names
                     continue
-                elif lump_name in ["__init__.py"]:
+                elif lump_name in ["__init__.py", "__pycache__"]:
                     # skip
                     continue
                 elif lump_name not in ["TEXTMAP", "TEXTMAP.py", "SCRIPTS", "ZNODES", "DIALOGUE"]:
@@ -167,23 +172,29 @@ class WAD(object):
                 lump_file_name = os.path.join(folder_name, level_name, lump_name)
 
                 if lump_name == "TEXTMAP.py":
-                    process = subprocess.Popen(['python', lump_file_name], stdout=subprocess.PIPE)
-                    lump_content, _ = process.communicate()
+                    spec = importlib.util.spec_from_file_location(".", lump_file_name)
+                    map_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(map_module)
+                    lump_content = map_module.create_map().encode('utf-8')
                     lump_name = "TEXTMAP"
                 else:
                     with open(lump_file_name, "rb") as f:
                         lump_content = f.read()
                 lumps.append(Lump(name=lump_name, content=lump_content))
                 if lump_name == "SCRIPTS":
-                    # also need to add a ACC-compiled node
-                    acs_file_name = "/tmp/%s.acs" % uuid.uuid4()
-                    o_file_name = "/tmp/%s.o" % uuid.uuid4()
-                    with open(acs_file_name, "wb") as acs_file:
-                        acs_file.write(lump_content)
-                    command = [os.path.join(ACC_PATH, "acc"), "-i", ACC_PATH, acs_file_name, o_file_name]
-                    subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
-                    with open(o_file_name, "rb") as o_file:
-                        lumps.append(Lump(name="BEHAVIOR", content=o_file.read()))
+                    script_hash = hash(lump_content)
+                    if script_hash not in cls._cached_behaviors:
+                        # also need to add a ACC-compiled node
+                        acs_file_name = "/tmp/%s.acs" % uuid.uuid4()
+                        o_file_name = "/tmp/%s.o" % uuid.uuid4()
+                        with open(acs_file_name, "wb") as acs_file:
+                            acs_file.write(lump_content)
+                        command = [os.path.join(ACC_PATH, "acc"), "-i", ACC_PATH, acs_file_name, o_file_name]
+                        subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
+                        with open(o_file_name, "rb") as o_file:
+                            cls._cached_behaviors[script_hash] = o_file.read()
+                    lump_content = cls._cached_behaviors[script_hash]
+                    lumps.append(Lump(name="BEHAVIOR", content=lump_content))
 
             lumps.append(Lump(name="ENDMAP", content=b""))
             wad.lumps.extend(sorted(lumps, key=Lump.order_key))
