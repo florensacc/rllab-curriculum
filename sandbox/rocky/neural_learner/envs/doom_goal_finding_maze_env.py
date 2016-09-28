@@ -253,6 +253,8 @@ class VecDoomGoalFindingMazeEnv(object):
 
         delta_rewards = total_rewards - self.rewards_so_far
 
+        self.rewards_so_far = total_rewards
+
         if np.any(dones):
             self.reset(dones)
 
