@@ -30,13 +30,23 @@ class EnsembleGANTrainer(object):
             anneal_len=None,
             natural_step=None,
             natural_g_only=False,
+            second_order_natural_approx=False,
             fixed_sampling_noise=False,
             d_multiples=1,
             g_multiples=1,
+            tgt_network=False,
     ):
         """
         :type model: EnsembleGAN
         """
+        self.second_order_natural_approx = second_order_natural_approx
+        self.tgt_network = tgt_network
+        if tgt_network:
+            assert natural_step is not None
+            import pickle
+            with tf.variable_scope("tgt"):
+                self.tgt_model = pickle.loads(pickle.dumps(model))
+
         self.g_multiples = g_multiples
         self.d_multiples = d_multiples
         self.natural_g_only = natural_g_only
@@ -104,22 +114,32 @@ class EnsembleGANTrainer(object):
             else:
                 raise Exception("sup")
 
+            if self.natural_step is None or self.natural_g_only:
+                real_d_tgt = tf.ones_like(real_d_logits)
+                fake_d_tgt = tf.zeros_like(fake_d_logits)
+            else:
+                real_p = tf.nn.sigmoid(real_d_logits)
+                fake_p = tf.nn.sigmoid(fake_d_logits)
+                if self.second_order_natural_approx:
+                    real_step = 2. * self.natural_step * real_p * (1. - real_p)
+                    fake_step = 2. * self.natural_step * fake_p * (1. - fake_p)
+                else:
+                    real_step = fake_step = self.natural_step
+                real_d_tgt = tf.minimum(
+                     real_p + real_step,
+                    1.,
+                )
+                fake_d_tgt = tf.maximum(
+                    fake_p - fake_step,
+                    0.,
+                )
+
             discriminator_losses = tf.nn.sigmoid_cross_entropy_with_logits(
                 real_d_logits,
-                tf.ones_like(real_d_logits)
-                    if self.natural_step is None or self.natural_g_only else
-                    tf.minimum(
-                        tf.nn.sigmoid(real_d_logits) + self.natural_step,
-                        1.,
-                    )
+                real_d_tgt
             ) + tf.nn.sigmoid_cross_entropy_with_logits(
                 fake_d_logits,
-                tf.zeros_like(fake_d_logits)
-                    if self.natural_step is None or self.natural_g_only else
-                    tf.maximum(
-                        tf.nn.sigmoid(fake_d_logits) - self.natural_step,
-                        0.,
-                    )
+                fake_d_tgt
             )
             discriminator_loss = tf.reduce_mean(discriminator_losses)
 
@@ -133,14 +153,21 @@ class EnsembleGANTrainer(object):
             else:
                 raise Exception("sup")
 
+            if self.natural_step is None:
+                fake_g_tgt = tf.zeros_like(fake_g_logits)
+            else:
+                fake_p = tf.nn.sigmoid(fake_g_logits)
+                if self.second_order_natural_approx:
+                    fake_step = 2. * self.natural_step * fake_p * (1. - fake_p)
+                else:
+                    fake_step = self.natural_step
+                fake_g_tgt = tf.minimum(
+                    fake_p + fake_step,
+                    1.,
+                )
             generator_losses = tf.nn.sigmoid_cross_entropy_with_logits(
                 fake_g_logits,
-                tf.ones_like(fake_g_logits)
-                    if self.natural_step is None else
-                    tf.minimum(
-                        tf.nn.sigmoid(fake_g_logits) + self.natural_step,
-                        1.,
-                    )
+                fake_g_tgt
             )
             generator_loss = tf.reduce_mean(generator_losses)
 

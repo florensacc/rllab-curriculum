@@ -1,3 +1,4 @@
+from rllab.core.serializable import Serializable
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Product, Distribution, Gaussian, Categorical, Bernoulli
 import prettytensor as pt
 import tensorflow as tf
@@ -5,7 +6,7 @@ import sandbox.pchen.InfoGAN.infogan.misc.custom_ops
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import leaky_rectify
 
 
-class EnsembleGAN(object):
+class EnsembleGAN(Serializable):
     def __init__(
             self,
             output_dist,
@@ -22,6 +23,8 @@ class EnsembleGAN(object):
         :type batch_size: int
         :type network_type: string
         """
+        Serializable.quick_init(self, locals())
+
         self.output_dist = output_dist
         self.latent_spec = latent_spec
         self.latent_dist = Product([x for x, _ in latent_spec])
