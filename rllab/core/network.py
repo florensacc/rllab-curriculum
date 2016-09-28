@@ -279,6 +279,7 @@ class ConvNetwork(object):
                  hidden_nonlinearity=LN.rectify,
                  output_nonlinearity=LN.softmax,
                  name=None, input_var=None):
+
         if name is None:
             prefix = ""
         else:

@@ -15,18 +15,21 @@ class WorkerBatchSampler(object):
         self.algo = algo
         self.worker_batch_size = algo.worker_batch_size
 
-    def obtain_samples(self, itr):
+    def obtain_samples(self, n_samples=None):
+        if n_samples is None:
+            n_samples = self.worker_batch_size
         n_steps_collected = 0
         paths = []
         # TODO: progbar for rank 0?
-        while n_steps_collected < self.worker_batch_size:
+        while n_steps_collected < n_samples:
             paths.append(rollout(self.algo.env, self.algo.policy, self.algo.max_path_length))
             n_steps_collected += len(paths[-1]["rewards"])
         if self.algo.whole_paths:
-            return paths, n_steps_collected
+            self.algo.n_steps_collected = n_steps_collected
+            return paths
         else:
             paths_truncated = self._truncate_paths(paths)
-            return paths_truncated, self.worker_batch_size
+            return paths_truncated
 
     def _truncate_paths(self, paths):
         """
@@ -56,7 +59,7 @@ class WorkerBatchSampler(object):
             paths.append(truncated_last_path)
         return paths
 
-    def process_samples(self, itr, paths):
+    def process_samples(self, paths):
         baselines = []
         returns = []
         for path in paths:

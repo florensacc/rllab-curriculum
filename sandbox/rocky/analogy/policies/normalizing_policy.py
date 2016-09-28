@@ -84,7 +84,7 @@ class NormalizingPolicy(Policy, Serializable):
         return params
 
     def set_param_values(self, flattened_params, **tags):
-        Policy.set_param_values(self, flattened_params)
+        Policy.set_param_values(self, flattened_params, **tags)
         self.obs_mean, self.obs_std, self.action_mean, self.action_std = tf.get_default_session().run([
             self.obs_mean_var, self.obs_std_var, self.action_mean_var, self.action_std_var
         ])

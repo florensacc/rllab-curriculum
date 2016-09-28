@@ -1,6 +1,6 @@
 """
 Use image observations
-Continue exp-007
+Continue exp-008
 Use GPU for acceleration
 """
 # from sandbox.rocky.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
@@ -36,8 +36,8 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_test"
-ec2_instance = "c4.8xlarge"
+mode = "kube_test"
+ec2_instance = "g2.2xlarge"
 subnet = "us-west-1c"
 
 n_parallel = 4
@@ -45,14 +45,14 @@ snapshot_mode = "last"
 plot = False
 use_gpu = True # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
-
+config.USE_TF = True
 
 # params ---------------------------------------
 batch_size = 10000
 max_path_length = 4500
 discount = 0.99
 n_itr = 1000
-force_batch_sampler = True
+force_batch_sampler = False
 cg_args = dict(
     cg_iters=10,
     reg_coeff=1e-3,
@@ -219,10 +219,13 @@ for v in variants:
         config.KUBE_DEFAULT_NODE_SELECTOR = {
             "aws/type": ec2_instance
         }
-        exp_prefix = exp_prefix.replace('/','-')
+        exp_prefix = exp_prefix.replace('/','-') # otherwise kube rejects
     else:
         raise NotImplementedError
 
+    if use_gpu:
+        config.USE_GPU = True
+        config.DOCKER_IMAGE = "dementrock/rllab3-shared-gpu"
 
     run_experiment_lite(
         algo.train(),

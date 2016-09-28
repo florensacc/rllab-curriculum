@@ -100,8 +100,10 @@ class BaseSampler(Sampler):
             max_path_length = max([len(path["advantages"]) for path in paths])
 
             # make all paths the same length (pad extra advantages with 0)
+            logger.log("Concating observations...")
             obs = [path["observations"] for path in paths]
-            obs = np.array([tensor_utils.pad_tensor(ob, max_path_length) for ob in obs])
+            obs = np.asarray([tensor_utils.pad_tensor(ob, max_path_length) for ob in obs])
+            logger.log("Concated")
 
             if self.algo.center_adv:
                 raw_adv = np.concatenate([path["advantages"] for path in paths])
@@ -111,16 +113,16 @@ class BaseSampler(Sampler):
             else:
                 adv = [path["advantages"] for path in paths]
 
-            adv = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in adv])
+            adv = np.asarray([tensor_utils.pad_tensor(a, max_path_length) for a in adv])
 
             actions = [path["actions"] for path in paths]
-            actions = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in actions])
+            actions = np.asarray([tensor_utils.pad_tensor(a, max_path_length) for a in actions])
 
             rewards = [path["rewards"] for path in paths]
-            rewards = np.array([tensor_utils.pad_tensor(r, max_path_length) for r in rewards])
+            rewards = np.asarray([tensor_utils.pad_tensor(r, max_path_length) for r in rewards])
 
             returns = [path["returns"] for path in paths]
-            returns = np.array([tensor_utils.pad_tensor(r, max_path_length) for r in returns])
+            returns = np.asarray([tensor_utils.pad_tensor(r, max_path_length) for r in returns])
 
             agent_infos = [path["agent_infos"] for path in paths]
             agent_infos = tensor_utils.stack_tensor_dict_list(
@@ -133,7 +135,7 @@ class BaseSampler(Sampler):
             )
 
             valids = [np.ones_like(path["returns"]) for path in paths]
-            valids = np.array([tensor_utils.pad_tensor(v, max_path_length) for v in valids])
+            valids = np.asarray([tensor_utils.pad_tensor(v, max_path_length) for v in valids])
 
             average_discounted_return = \
                 np.mean([path["returns"][0] for path in paths])

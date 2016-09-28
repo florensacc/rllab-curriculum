@@ -51,13 +51,13 @@ class VG(VariantGenerator):
     @variant
     def network_type(self):
         return [
-            rnn_utils.NetworkType.PSEUDO_LSTM,
-            rnn_utils.NetworkType.LSTM,
-            rnn_utils.NetworkType.LSTM_PEEPHOLE,
+            # rnn_utils.NetworkType.PSEUDO_LSTM,
+            # rnn_utils.NetworkType.LSTM,
+            # rnn_utils.NetworkType.LSTM_PEEPHOLE,
             rnn_utils.NetworkType.GRU,
             # # rnn_utils.NetworkType.TF_GRU,
             # # rnn_utils.NetworkType.TF_BASIC_LSTM,
-            rnn_utils.NetworkType.PSEUDO_LSTM_GATE_SQUASH,
+            # rnn_utils.NetworkType.PSEUDO_LSTM_GATE_SQUASH,
         ]
 
     @variant
@@ -70,11 +70,11 @@ class VG(VariantGenerator):
 
     @variant
     def layer_normalization(self):
-        return [True, False]#True, False]
+        return [False]#True, False]#True, False]
 
     @variant
     def weight_normalization(self):
-        return [True, False]
+        return [True]#, False]
 
     @variant
     def min_margin(self):

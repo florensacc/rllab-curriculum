@@ -6,7 +6,7 @@ import cv2
 import copy
 import atari_py
 
-from sandbox.rocky.tf.spaces.box import Box
+from rllab import config
 from rllab.spaces.discrete import Discrete
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Env
@@ -159,12 +159,21 @@ class AtariEnv(Env,Serializable):
 
     @property
     def observation_space(self):
+        if config.USE_TF:
+            from sandbox.rocky.tf.spaces.box import Box
+        else:
+            from rllab.spaces import Box
+
         if self.obs_type == "ram":
             return Box(low=-1, high=1,
                 shape=(self.n_last_rams, self.ale.getRAMSize())
             ) #np.zeros(128), high=np.ones(128))# + 255)
         elif self.obs_type == "image":
-            return Box(low=-1, high=1, shape=(self.img_width,self.img_height,self.n_last_screens))
+            if config.USE_TF:
+                image_shape = (self.img_width, self.img_height, self.n_last_screens)
+            else:
+                image_shape = (self.n_last_screens, self.img_width, self.img_height)
+            return Box(low=-1, high=1, shape=image_shape)
             # see sandbox.haoran.tf.core.layers.BaseConvLayer for a reason why channel is at the last dimension
         else:
             raise NotImplementedError

@@ -53,8 +53,8 @@ class BatchDataset(object):
 
 
 class SupervisedDataset(object):
-    def __init__(self, inputs, input_keys, train_batch_size, train_ratio, extra_inputs=None, test_batch_size=1,
-                 shuffler=None):
+    def __init__(self, inputs, train_batch_size, train_ratio, extra_inputs=None, test_batch_size=1,
+                 shuffler=None, input_keys=None):
         if extra_inputs is None:
             extra_inputs = []
         n_total = len(inputs[0])
