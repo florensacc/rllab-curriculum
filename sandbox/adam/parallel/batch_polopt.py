@@ -84,6 +84,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.cpu_assignments = cpu_assignments
         self.serial_compile = serial_compile
         self.worker_batch_size = batch_size // n_parallel
+        self.n_steps_collected = 0  # (set by sampler)
         self.sampler = WorkerBatchSampler(self)
 
     def __getstate__(self):

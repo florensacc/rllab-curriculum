@@ -1,20 +1,14 @@
 from rllab.envs.base import Env, Step
-from vizdoom import DoomGame
-from vizdoom import ScreenResolution
-from vizdoom import ScreenFormat
-from vizdoom import Button
-from vizdoom import Mode
 import os
 import uuid
 import numpy as np
 import cv2
 from rllab import config
 from rllab.spaces.box import Box
+from rllab.core.serializable import Serializable
 from rllab.spaces.discrete import Discrete
-from sandbox.rocky.neural_learner.doom_utils.wad import WAD
 import atexit
 
-DOOM_PATH = os.environ["DOOM_PATH"]
 
 ACTIONS = [
     [True, False, False, False],
@@ -24,9 +18,12 @@ ACTIONS = [
 ]
 
 
-class DoomGoalFindingMazeEnv(Env):
-    def __init__(self):
+class DoomGoalFindingMazeEnv(Env, Serializable):
+    def __init__(self, restart_game=True):
+        Serializable.quick_init(self, locals())
         self.game = None
+        self.reward_so_far = None
+        self.restart_game = restart_game
         self.reset_trial()
         atexit.register(self.terminate)
 
@@ -37,12 +34,18 @@ class DoomGoalFindingMazeEnv(Env):
         self.game = None
 
     def reset_trial(self):
-        if self.game is not None:
-            self.game.close()
-        self.game = self.init_game()
-        return self.reset()
+        return self.reset(restart_game=True)
 
     def init_game(self):
+        from vizdoom import DoomGame
+        from vizdoom import ScreenResolution
+        from vizdoom import ScreenFormat
+        from vizdoom import Button
+        from vizdoom import Mode
+        from vizdoom import GameVariable
+        from sandbox.rocky.neural_learner.doom_utils.wad import WAD
+        DOOM_PATH = os.environ["DOOM_PATH"]
+
         wad = WAD.from_folder(
             os.path.join(config.PROJECT_PATH, "sandbox/rocky/neural_learner/envs/wads/goal_finding_maze"))
         wad_file_name = "/tmp/%s.wad" % uuid.uuid4()
@@ -70,26 +73,37 @@ class DoomGoalFindingMazeEnv(Env):
         game.init()
         return game
 
-    def reset(self):
+    def reset(self, restart_game=None):
+        if restart_game is None:
+            restart_game = self.restart_game
+        if restart_game:
+            if self.game is not None:
+                self.game.close()
+            self.game = self.init_game()
         self.game.new_episode()
-        return self.get_image_obs(rescaled=True)
+        self.reward_so_far = 0
+        return self.get_image_obs(rescale=True)
 
     def step(self, action):
-        reward = self.game.make_action(ACTIONS[action])
+        self.game.set_action(ACTIONS[action])
+        self.game.advance_action(4, True, True)
+        total_reward = self.game.get_total_reward()
+        delta_reward = total_reward - self.reward_so_far
+        self.reward_so_far = total_reward
         done = self.game.is_episode_finished()
-        next_obs = self.get_image_obs(rescaled=True)
-        return Step(next_obs, reward, done)
+        next_obs = self.get_image_obs(rescale=True)
+        return Step(next_obs, delta_reward, done)
 
-    def get_image_obs(self, rescaled=False):
-        image = np.copy(self.game.get_state().image_buffer)
-        if rescaled:
+    def get_image_obs(self, rescale=False):
+        image = np.copy(self.game.get_game_screen())
+        if rescale:
             image = (image / 255.0 - 0.5) * 2.0
         return image
 
     def render(self):
         cv2.namedWindow('image', cv2.WINDOW_NORMAL)
         cv2.resizeWindow('image', width=400, height=400)
-        cv2.imshow('image', cv2.resize(self.get_image_obs(rescaled=False), (400, 400)))
+        cv2.imshow('image', cv2.resize(self.get_image_obs(rescale=False), (400, 400)))
         cv2.waitKey(10)
 
     @property

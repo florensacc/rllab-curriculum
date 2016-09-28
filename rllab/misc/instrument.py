@@ -462,11 +462,17 @@ def run_experiment_lite(
             print(command)
             if dry:
                 return
+            p = subprocess.Popen(command, shell=True)
             try:
-                subprocess.call(command, shell=True)
-            except Exception as e:
-                if isinstance(e, KeyboardInterrupt):
-                    raise
+                p.wait()
+            except KeyboardInterrupt:
+                try:
+                    print("terminating")
+                    p.terminate()
+                except OSError:
+                    print("os error!")
+                    pass
+                p.wait()
     elif mode == "ec2":
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
@@ -634,7 +640,7 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
         docker_code_dir=config.DOCKER_CODE_DIR
     )
     params = dict(params, log_dir=docker_log_dir)
-    command_prefix += " -t " + docker_image + " /bin/bash -c "
+    command_prefix += " -ti " + docker_image + " /bin/bash -c "
     command_list = list()
     if pre_commands is not None:
         command_list.extend(pre_commands)
@@ -642,9 +648,9 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
     command_list.append(to_local_command(
         params, python_command=python_command, script=osp.join(config.DOCKER_CODE_DIR, script), use_gpu=use_gpu))
     # We for 2 min sleep after termination to allow for last syncs.
-    post_commands = ['sleep 120']
-    if post_commands is not None:
-        command_list.extend(post_commands)
+    if post_commands is None:
+        post_commands = ['sleep 120']
+    command_list.extend(post_commands)
     return command_prefix + "'" + "; ".join(command_list) + "'"
 
 
