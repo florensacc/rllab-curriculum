@@ -1,10 +1,6 @@
-# overfitting according to data/local/play-0920-iaf-cc-cifar-ml-3ldc-gatedresnet-arch-midarcomp-0.1kl/
-# larger code to try to reduce overfitting
+# inherit from pool_encoder_arch_on_overfit
+# test better setting to more symmetric network & try more rep
 
-
-# zdim1024 with i_nr 5 will OOM
-# zdim1024 with i_nr 1 overfit and fit less thant zdim512 w/ i_nr 5
-# trying zdim512 w/ i_nr 1
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -44,7 +40,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 2222]
+        return [42, ]
         # return [123124234]
 
     @variant
@@ -53,11 +49,11 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [512, 1024, ]#[12, 32]
+        return [256, ]#[12, 32]
 
     @variant
     def min_kl(self):
-        return [0.05,]# 0.1]
+        return [0.01, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -74,7 +70,8 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen"
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
-        yield "resv1_k3_pixel_bias_filters_ratio_32"
+        # yield "resv1_k3_pixel_bias_filters_ratio_32"
+        yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
 
     @variant(hide=False)
     def steps(self, ):
@@ -82,11 +79,15 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [32, ]
+        return [96, ]
 
     @variant(hide=False)
     def dec_init_size(self, ):
         return [4]
+
+    @variant(hide=False)
+    def rep(self, ):
+        return [1, 3]
 
     @variant(hide=True)
     def wnorm(self):
@@ -114,8 +115,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nr(self):
-        return [1, 5] # for 1024 due to mem
-        # 5 for 512
+        return [5,]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -177,8 +177,8 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-
-for v in variants[:1]:
+i = 1
+for v in variants[i:i+1]:
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]
@@ -278,7 +278,10 @@ for v in variants[:1]:
             wnorm=v["wnorm"],
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                fc_size=v["zdim"],
+                old_dec=False,
+                base_filters=v["base_filters"],
+                enc_rep=v["rep"],
+                dec_rep=v["rep"],
             ),
         )
 
@@ -305,7 +308,7 @@ for v in variants[:1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0927_zdim_on_overfit_cifar",
+            exp_prefix="0928_pool_encoder_decoder_test",
             seed=v["seed"],
             variant=v,
             mode="local",

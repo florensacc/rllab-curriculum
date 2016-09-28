@@ -1,10 +1,8 @@
-# overfitting according to data/local/play-0920-iaf-cc-cifar-ml-3ldc-gatedresnet-arch-midarcomp-0.1kl/
-# larger code to try to reduce overfitting
+# from data/local/play-0920-iaf-cc-cifar-ml-3ldc-gatedresnet-arch-midarcomp-0.1kl/
 
+# try latent code that's spatial & avoid aggressive pooling
+# also try dilated conv to make sure enough receptive field coverage
 
-# zdim1024 with i_nr 5 will OOM
-# zdim1024 with i_nr 1 overfit and fit less thant zdim512 w/ i_nr 5
-# trying zdim512 w/ i_nr 1
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -44,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 2222]
+        return [42, ]
         # return [123124234]
 
     @variant
@@ -53,11 +51,11 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [512, 1024, ]#[12, 32]
+        return [256, ]#[12, 32]
 
     @variant
     def min_kl(self):
-        return [0.05,]# 0.1]
+        return [0.01,]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -74,7 +72,7 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen"
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
-        yield "resv1_k3_pixel_bias_filters_ratio_32"
+        yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
 
     @variant(hide=False)
     def steps(self, ):
@@ -83,6 +81,10 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def base_filters(self, ):
         return [32, ]
+
+    @variant(hide=False)
+    def step(self, ):
+        return [1, 2]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -114,7 +116,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nr(self):
-        return [1, 5] # for 1024 due to mem
+        return [5] # for 1024 due to mem
         # 5 for 512
 
     @variant(hide=False)
@@ -177,8 +179,8 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-
-for v in variants[:1]:
+i = 0
+for v in variants[i:i+1]:
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]
@@ -305,7 +307,7 @@ for v in variants[:1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0927_zdim_on_overfit_cifar",
+            exp_prefix="0927_spatial_code_cifar_iaf",
             seed=v["seed"],
             variant=v,
             mode="local",
