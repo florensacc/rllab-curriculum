@@ -1,5 +1,8 @@
 import atexit
-from queue import Empty
+try:
+    from queue import Empty
+except ImportError:
+    from Queue import Empty
 from multiprocessing import Process, Queue
 from rllab.sampler.utils import rollout
 import numpy as np

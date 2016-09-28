@@ -22,10 +22,25 @@
       <joint name='bally' type='slide' axis='0 1 0' pos='0 0 0' />
       <joint name='rot' type='hinge' axis='0 0 1' pos='0 0 0' limited="false" />
     </body>
-    <body name="target" pos=".1 -.1 .01">
-			<joint armature="0" axis="1 0 0" damping="0" limited="true" name="target_x" pos="0 0 0" range="-.27 .27" ref=".1" stiffness="0" type="slide"/>
-			<joint armature="0" axis="0 1 0" damping="0" limited="true" name="target_y" pos="0 0 0" range="-.27 .27" ref="-.1" stiffness="0" type="slide"/>
-			<geom conaffinity="0" contype="0" name="target" pos="0 0 0" rgba="0.9 0.2 0.2 1" size=".5" type="sphere"/>
+    <body name="target_0" pos=".1 -.1 .01">
+			<joint armature="0" axis="1 0 0" damping="0" limited="true" name="target_x_0" pos="0 0 0" range="-.27 .27" ref=".1" stiffness="0" type="slide"/>
+			<joint armature="0" axis="0 1 0" damping="0" limited="true" name="target_y_0" pos="0 0 0" range="-.27 .27" ref="-.1" stiffness="0" type="slide"/>
+			<geom conaffinity="0" contype="0" name="target_0" pos="0 0 0" rgba="0.2 0.9 0.2 1" size=".5" type="sphere"/>
+		</body>
+    <body name="target_1" pos=".1 -.1 .01">
+			<joint armature="0" axis="1 0 0" damping="0" limited="true" name="target_x_1" pos="0 0 0" range="-.27 .27" ref=".1" stiffness="0" type="slide"/>
+			<joint armature="0" axis="0 1 0" damping="0" limited="true" name="target_y_1" pos="0 0 0" range="-.27 .27" ref="-.1" stiffness="0" type="slide"/>
+			<geom conaffinity="0" contype="0" name="target_1" pos="0 0 0" rgba="0.9 0.2 0.2 1" size=".5" type="sphere"/>
+		</body>
+    <body name="target_2" pos=".1 -.1 .01">
+			<joint armature="0" axis="1 0 0" damping="0" limited="true" name="target_x_2" pos="0 0 0" range="-.27 .27" ref=".1" stiffness="0" type="slide"/>
+			<joint armature="0" axis="0 1 0" damping="0" limited="true" name="target_y_2" pos="0 0 0" range="-.27 .27" ref="-.1" stiffness="0" type="slide"/>
+			<geom conaffinity="0" contype="0" name="target_2" pos="0 0 0" rgba="0.2 0.2 0.9 1" size=".5" type="sphere"/>
+		</body>
+    <body name="target_3" pos=".1 -.1 .01">
+			<joint armature="0" axis="1 0 0" damping="0" limited="true" name="target_x_3" pos="0 0 0" range="-.27 .27" ref=".1" stiffness="0" type="slide"/>
+			<joint armature="0" axis="0 1 0" damping="0" limited="true" name="target_y_3" pos="0 0 0" range="-.27 .27" ref="-.1" stiffness="0" type="slide"/>
+			<geom conaffinity="0" contype="0" name="target_3" pos="0 0 0" rgba="0.5 0.5 0.0 1" size=".5" type="sphere"/>
 		</body>
   </worldbody>
   <actuator>
