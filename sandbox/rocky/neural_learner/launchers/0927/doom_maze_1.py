@@ -10,7 +10,7 @@ from sandbox.rocky.tf.policies.rnn_utils import NetworkType
 from sandbox.rocky.tf.core.network import ConvNetwork
 from rllab import config
 
-stub(globals())
+# stub(globals())
 
 env = TfEnv(DoomGoalFindingMazeEnv())
 baseline = ZeroBaseline(env_spec=env.spec)
@@ -48,6 +48,7 @@ algo = PPOSGD(
     n_steps=40,
     minibatch_size=256,
     n_epochs=3,
+    n_itr=1000,
     clip_lr=0.2,
     log_loss_kl_before=False,
     log_loss_kl_after=False,
@@ -63,12 +64,12 @@ else:
 
 run_experiment_lite(
     algo.train(),
-    exp_prefix="doom_maze_2",
-    mode="local_docker",
+    exp_prefix="doom_maze_1",
+    mode="local",
     n_parallel=0,
     seed=11,
     use_gpu=USE_GPU,
     # variant=v,
     snapshot_mode="last",
-    env=dict(CUDA_VISIBLE_DEVICES="0")
+    # env=dict(CUDA_VISIBLE_DEVICES="0")
 )

@@ -35,4 +35,4 @@ if __name__ == "__main__":
     while True:
         env = ConoptParticleEnv()
         policy = ConoptParticleTrackingPolicy(env)
-        rollout(env, policy, max_path_length=10, animated=True)
+        rollout(env, policy, max_path_length=100, animated=True)

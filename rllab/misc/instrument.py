@@ -904,14 +904,14 @@ def s3_sync_code(config, dry=False):
         tar_cmd = ["tar", "-zcvf", file_path, "-C", config.PROJECT_PATH]
         for pattern in config.FAST_CODE_SYNC_IGNORES:
             tar_cmd += ["--exclude", pattern]
-        tar_cmd += "."
+        tar_cmd += ["-h", "."]
 
         remote_path = "%s/%s" % (base, file_name)
 
         upload_cmd = ["aws", "s3", "cp", file_path, remote_path]
 
-        print(tar_cmd)
-        print(upload_cmd)
+        print(" ".join(tar_cmd))
+        print(" ".join(upload_cmd))
 
         if not dry:
             subprocess.check_call(tar_cmd)
