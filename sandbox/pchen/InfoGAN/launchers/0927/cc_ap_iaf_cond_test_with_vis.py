@@ -41,7 +41,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 2222]
+        return [42, ]
         # return [123124234]
 
     @variant

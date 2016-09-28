@@ -1,5 +1,11 @@
 # it's shown that data/local/play-0920-IAF-cc-cifar-ml-3ldc-resnet-arch-deepar/
 # this pixelcnn with GP can make use of code. this tests if AR prior brings in instability
+
+# Results
+# 1. free_bits = 0.05  ->> NaN
+# 2. freebits=0.01 trains, train 3.27bits/dim, vali 3.48->3.50 overfit
+#   --> fitting and overfitting behavior simiar to gaussian prior.
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
