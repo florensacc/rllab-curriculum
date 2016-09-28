@@ -7,6 +7,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian
 import sys
 
 TINY = 1e-8
+TINY_P = 0.03
 
 
 class EnsembleGANTrainer(object):
@@ -31,6 +32,7 @@ class EnsembleGANTrainer(object):
             natural_step=None,
             natural_g_only=False,
             second_order_natural_approx=False,
+            natural_anneal_len=None,
             fixed_sampling_noise=False,
             d_multiples=1,
             g_multiples=1,
@@ -39,6 +41,7 @@ class EnsembleGANTrainer(object):
         """
         :type model: EnsembleGAN
         """
+        self.natural_anneal_len = natural_anneal_len
         self.second_order_natural_approx = second_order_natural_approx
         self.tgt_network = tgt_network
         if tgt_network:
@@ -114,19 +117,25 @@ class EnsembleGANTrainer(object):
             else:
                 raise Exception("sup")
 
+            # specific to 2nd approx adaptive kl size
+            self.natural_step_var = tf.Variable(
+                initial_value=1./TINY_P if self.natural_anneal_len else self.natural_step,
+                name="natural_step",
+                trainable=False,
+            )
             if self.natural_step is None or self.natural_g_only:
                 real_d_tgt = tf.ones_like(real_d_logits)
                 fake_d_tgt = tf.zeros_like(fake_d_logits)
             else:
-                real_p = tf.nn.sigmoid(real_d_logits)
-                fake_p = tf.nn.sigmoid(fake_d_logits)
+                real_p = tf.stop_gradient(tf.nn.sigmoid(real_d_logits))
+                fake_p = tf.stop_gradient(tf.nn.sigmoid(fake_d_logits))
                 if self.second_order_natural_approx:
-                    real_step = 2. * self.natural_step * real_p * (1. - real_p)
-                    fake_step = 2. * self.natural_step * fake_p * (1. - fake_p)
+                    real_step = 2. * self.natural_step_var * tf.maximum(real_p, TINY_P) * (1. - real_p)
+                    fake_step = 2. * self.natural_step_var * fake_p * tf.maximum(1. - fake_p, TINY_P)
                 else:
                     real_step = fake_step = self.natural_step
                 real_d_tgt = tf.minimum(
-                     real_p + real_step,
+                    real_p + real_step,
                     1.,
                 )
                 fake_d_tgt = tf.maximum(
@@ -156,9 +165,9 @@ class EnsembleGANTrainer(object):
             if self.natural_step is None:
                 fake_g_tgt = tf.zeros_like(fake_g_logits)
             else:
-                fake_p = tf.nn.sigmoid(fake_g_logits)
+                fake_p = tf.stop_gradient(tf.nn.sigmoid(fake_g_logits))
                 if self.second_order_natural_approx:
-                    fake_step = 2. * self.natural_step * fake_p * (1. - fake_p)
+                    fake_step = 2. * self.natural_step_var * tf.maximum(fake_p, TINY_P) * (1. - fake_p)
                 else:
                     fake_step = self.natural_step
                 fake_g_tgt = tf.minimum(
@@ -310,6 +319,14 @@ class EnsembleGANTrainer(object):
                         )
                     ])
                     print("Factor annealed to %s" % factor)
+                if self.natural_anneal_len:
+                    eps = sess.run([
+                        self.natural_step_var.assign(
+                            (1./TINY_P - self.natural_step) * max(0, self.natural_anneal_len - epoch) / self.natural_anneal_len
+                            + self.natural_step
+                        )
+                    ])
+                    print("Natural eps annealed to %s" % eps)
 
                 all_log_vals = []
                 for i in range(self.updates_per_epoch):
