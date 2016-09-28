@@ -181,7 +181,7 @@ variants = vg.variants(randomized=False)
 
 print(len(variants))
 
-for v in variants[:1]:
+for v in variants[:]:
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]
@@ -281,11 +281,11 @@ for v in variants[:1]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=300,# 1500*3,
+            vali_eval_interval=1500*3,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
-            vis_ar=True,
+            vis_ar=False,
         )
 
         run_experiment_lite(
