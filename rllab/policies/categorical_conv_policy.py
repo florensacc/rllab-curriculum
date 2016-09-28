@@ -24,13 +24,17 @@ class CategoricalConvPolicy(StochasticPolicy, LasagnePowered, Serializable):
             hidden_nonlinearity=NL.rectify,
             output_nonlinearity=NL.softmax,
             prob_network=None,
+            feature_layer_index=-2,
     ):
         """
+        The policy consists of several convolution layers followed by fc layers and softmax
         :param env_spec: A spec for the mdp.
+        :param conv_filters, conv_filter_sizes, conv_strides, conv_pads: specify the convolutional layers. See rllab.core.network.ConvNetwork for details.
         :param hidden_sizes: list of sizes for the fully connected hidden layers
         :param hidden_nonlinearity: nonlinearity used for each hidden layer
         :param prob_network: manually specified network for this policy, other network params
         are ignored
+        :param feature_layer_index: index of the feature layer. Default -2 means the last layer before fc-softmax
         :return:
         """
         Serializable.quick_init(self, locals())
@@ -59,6 +63,13 @@ class CategoricalConvPolicy(StochasticPolicy, LasagnePowered, Serializable):
             [prob_network.input_layer.input_var],
             L.get_output(prob_network.output_layer)
         )
+        self._feature_layer_index = feature_layer_index
+        feature_layer = L.get_all_layers(prob_network.output_layer)[feature_layer_index] # layer before fc-softmax
+        self._f_feature = ext.compile_function(
+            [prob_network.input_layer.input_var],
+            L.get_output(feature_layer)
+        )
+        self._feature_shape = L.get_output_shape(feature_layer)[1:]
 
         self._dist = Categorical(env_spec.action_space.n)
 
@@ -102,3 +113,9 @@ class CategoricalConvPolicy(StochasticPolicy, LasagnePowered, Serializable):
     @property
     def distribution(self):
         return self._dist
+
+    def get_features(self,observations):
+        return self._f_feature(observations)
+
+    def get_feature_shape(self):
+        return self._feature_shape

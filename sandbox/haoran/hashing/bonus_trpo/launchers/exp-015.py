@@ -2,23 +2,32 @@
 Use image observations. Can compare to exp-013.
 Switch to Theano. Run on CPU. Use parallel TRPO
 """
+""" baseline """
 from rllab.baselines.gaussian_conv_baseline import GaussianConvBaseline
 from sandbox.adam.parallel.zero_baseline import ParallelZeroBaseline
+from sandbox.haoran.parallel_trpo.parallel_nn_feature_linear_baseline import ParallelNNFeatureLinearBaseline
 
+""" policy """
 from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
-from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
 
+""" optimizer """
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 
+""" algorithm """
 from sandbox.adam.parallel.trpo import ParallelTRPO
+
+""" environment """
 from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
+
+""" resetter """
 # from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
-from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
+
+""" others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from sandbox.haoran.ec2_info import instance_info, subnet_info
-
 from rllab import config
 from rllab.misc.instrument import stub, run_experiment_lite
 import sys,os
@@ -29,22 +38,30 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_docker_test"
+mode = "local_test"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3"
 
-n_parallel = 8
+n_parallel = 4
 snapshot_mode = "last"
 plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
 config.USE_TF = False
+if sys.platform == "darwin":
+    set_cpu_affinity = False
+    cpu_assignments = None
+    serial_compile = False
+else:
+    set_cpu_affinity = True
+    cpu_assignments = None
+    serial_compile = True
 
 # params ---------------------------------------
 # algo
 use_parallel = True
-batch_size = 10000
+batch_size = 1000
 max_path_length = 4500
 discount = 0.99
 n_itr = 1000
@@ -59,11 +76,11 @@ cg_args = dict(
     num_slices=1,
 )
 step_size = 0.01
-network_args = nips_dqn_args
+network_args = trpo_dqn_args
 
 # env
-img_width=84
-img_height=84
+img_width=42
+img_height=42
 clip_reward = True
 obs_type = "image"
 record_image=False
@@ -162,7 +179,12 @@ for v in variants:
     )
 
 
-    baseline = ParallelZeroBaseline(env_spec=env.spec)
+    baseline = ParallelNNFeatureLinearBaseline(
+        env_spec=env.spec,
+        policy=policy,
+        nn_feature_power=2,
+        t_power=3,
+    )
     if use_parallel:
         algo = ParallelTRPO(
             env=env,
@@ -175,7 +197,9 @@ for v in variants:
             plot=plot,
             optimizer_args=cg_args,
             step_size=step_size,
-            set_cpu_affinity=True,
+            set_cpu_affinity=set_cpu_affinity,
+            cpu_assignments=cpu_assignments,
+            serial_compile=serial_compile,
             n_parallel=n_parallel,
         )
     else:
