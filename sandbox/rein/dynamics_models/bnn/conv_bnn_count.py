@@ -24,13 +24,16 @@ class DiscreteEmbeddingNonlinearityLayer(lasagne.layers.Layer):
     This has to be put after the batch norm layer.
     """
 
-    def __init__(self, incoming,
+    def __init__(self, incoming, n_units, batch_size,
                  **kwargs):
         super(DiscreteEmbeddingNonlinearityLayer, self).__init__(incoming, **kwargs)
         self._srng = RandomStreams()
+        self._n_units = n_units
+        self._batch_size = batch_size
 
     def nonlinearity(self, x, noise_mask=1):
         # Force outputs to be binary through noise.
+        print('noise mask: {}'.format(noise_mask))
         return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(size=x.shape, low=-0.3,
                                                                                    high=0.3)
 
@@ -612,7 +615,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     s_net,
                     num_units=layer_disc['n_units'])
                 s_net = BatchNormLayer(s_net)
-                s_net = DiscreteEmbeddingNonlinearityLayer(s_net)
+                s_net = DiscreteEmbeddingNonlinearityLayer(s_net, layer_disc['n_units'], self.batch_size)
                 # Pull out discrete embedding layer.
                 self.discrete_emb_sym = s_net
             elif layer_disc['name'] == 'deterministic':

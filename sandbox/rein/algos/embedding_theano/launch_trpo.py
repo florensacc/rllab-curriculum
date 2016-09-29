@@ -20,18 +20,19 @@ TEST_RUN = True
 
 # global params
 n_seq_frames = 4
+model_batch_size = 32
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'trpo-emb-e-train'
+    exp_prefix = 'trpo-emb-g-notrain'
     seeds = range(5)
-    etas = [0.1, 0.01]
+    etas = [0, 0.1, 0.01]
     mdps = [AtariEnv(game='freeway', obs_type="image", frame_skip=4),
             AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
             AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
             AtariEnv(game='breakout', obs_type="image", frame_skip=4)]
-    lst_factor = [1]
-    trpo_batch_size = 30000
+    lst_factor = [2]
+    trpo_batch_size = 50000
     max_path_length = 4500
     dropout = False
     batch_norm = True
@@ -66,7 +67,7 @@ for factor, mdp, eta, seed in param_cart_product:
         conv_filters=(16, 16, 16),
         conv_filter_sizes=(6, 6, 6),
         conv_strides=(2, 2, 2),
-        conv_pads=(2, 2, 2),
+        conv_pads=(0, 2, 2),
     )
     policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
@@ -82,7 +83,7 @@ for factor, mdp, eta, seed in param_cart_product:
         conv_filters=(16, 16, 16),
         conv_filter_sizes=(6, 6, 16),
         conv_strides=(2, 2, 2),
-        conv_pads=(2, 2, 2),
+        conv_pads=(0, 2, 2),
     )
     baseline = GaussianMLPBaseline(
         env_spec=mdp.spec,
@@ -182,7 +183,7 @@ for factor, mdp, eta, seed in param_cart_product:
         n_batches=1,
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
-        batch_size=40,
+        batch_size=model_batch_size,
         n_samples=5,
         num_train_samples=1,
         prior_sd=0.05,
@@ -226,15 +227,15 @@ for factor, mdp, eta, seed in param_cart_product:
         # Count settings
         model_pool_args=dict(
             size=100000,
-            min_size=32,
-            batch_size=32,
+            min_size=model_batch_size,
+            batch_size=model_batch_size,
             subsample_factor=0.1,
             fill_before_subsampling=True,
         ),
         hamming_distance=0,
         eta=eta,
         train_model=True,
-        train_model_freq=5,
+        train_model_freq=1000000000,
     )
 
     run_experiment_lite(
@@ -243,7 +244,7 @@ for factor, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/algos/embedding_theano/run_experiment_lite.py",

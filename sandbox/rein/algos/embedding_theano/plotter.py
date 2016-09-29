@@ -13,8 +13,75 @@ class Plotter:
             integer = (integer << 1) | bit
         return integer
 
-    def plot_pred_imgs(self, model, counting_table, inputs, targets, itr, count, dir='/imgs', hamming_distance=None):
+    def print_embs(self, model, counting_table, inputs, dir='/imgs', hamming_distance=None):
         assert hamming_distance is not None
+        arr_cont_emb = model.discrete_emb(inputs)
+        with open(logger._snapshot_dir + dir + '/binary_codes.txt', 'w') as bin_codes_file, open(
+                                logger._snapshot_dir + dir + '/continuous_codes.txt',
+                'w') as cont_codes_file, open(
+                            logger._snapshot_dir + dir + '/counts.txt', 'w') as counts_file:
+            # Plotting all images
+            for idx in range(inputs.shape[0]):
+                cont_emb = arr_cont_emb[idx]
+                key = np.cast['int'](np.round(cont_emb))
+                key_int = self.bin_to_int(key)
+                if key_int in counting_table.keys():
+                    count = counting_table[key_int]
+                    if hamming_distance == 1:
+                        for i in range(len(key)):
+                            key_trans = np.array(key)
+                            key_trans[i] = 1 - key_trans[i]
+                            key_trans_int = self.bin_to_int(key_trans)
+                            # If you access the counting table directly, it puts a 0, which inflates the size.
+                            if key_trans_int in counting_table.keys():
+                                count += counting_table[self.bin_to_int(key_trans)]
+                else:
+                    count = 0
+
+                # --
+                # Write-out
+                emb_bin_as_str = ''.join([str(k) for k in key])
+                emb_cont_as_str = ' '.join(['{:.1f}'.format(c) for c in cont_emb])
+                bin_codes_file.write(emb_bin_as_str + '\n')
+                cont_codes_file.write(emb_cont_as_str + '\n')
+                counts_file.write(str(count) + '\n')
+
+    def print_consistency_embs(self, model, counting_table, inputs, dir='/imgs', hamming_distance=None):
+        assert hamming_distance is not None
+        arr_cont_emb = model.discrete_emb(inputs)
+        # Plotting all images
+
+        for idx in range(inputs.shape[0]):
+            with open(logger._snapshot_dir + dir + '/binary_code_{}.txt'.format(idx),
+                      'a') as bin_codes_file, open(
+                                logger._snapshot_dir + dir + '/continuous_code_{}.txt'.format(idx),
+                'a') as cont_codes_file, open(logger._snapshot_dir + dir + '/counts_{}.txt'.format(idx),
+                                              'a') as counts_file:
+                cont_emb = arr_cont_emb[idx]
+                key = np.cast['int'](np.round(cont_emb))
+                key_int = self.bin_to_int(key)
+                if key_int in counting_table.keys():
+                    count = counting_table[key_int]
+                    if hamming_distance == 1:
+                        for i in range(len(key)):
+                            key_trans = np.array(key)
+                            key_trans[i] = 1 - key_trans[i]
+                            key_trans_int = self.bin_to_int(key_trans)
+                            # If you access the counting table directly, it puts a 0, which inflates the size.
+                            if key_trans_int in counting_table.keys():
+                                count += counting_table[self.bin_to_int(key_trans)]
+                else:
+                    count = 0
+
+                # --
+                # Write-out
+                emb_bin_as_str = ''.join([str(k) for k in key])
+                emb_cont_as_str = ' '.join(['{:.1f}'.format(c) for c in cont_emb])
+                bin_codes_file.write(emb_bin_as_str + '\n')
+                cont_codes_file.write(emb_cont_as_str + '\n')
+                counts_file.write(str(count) + '\n')
+
+    def plot_pred_imgs(self, model, inputs, targets, itr, dir='/imgs'):
         import matplotlib.pyplot as plt
         if not hasattr(self, '_fig'):
             self._fig = plt.figure()
@@ -29,34 +96,13 @@ class Plotter:
                             labelbottom='off', right='off', left='off', labelleft='off')
             self._im1, self._im2, self._im3, self._im4 = None, None, None, None
 
+        if not os.path.exists(logger._snapshot_dir + dir):
+            os.makedirs(logger._snapshot_dir + dir)
+
+        # Predict all images at once.
+        sanity_pred = model.pred_fn(inputs)
         # Plotting all images
         for idx in range(inputs.shape[0]):
-            sanity_pred = model.pred_fn(inputs)
-            cont_emb = model.discrete_emb(inputs)[idx]
-            key = np.cast['int'](np.round(cont_emb))
-            key_int = self.bin_to_int(key)
-            if key_int in counting_table.keys():
-                count = counting_table[key_int]
-                if hamming_distance == 1:
-                    for i in range(len(key)):
-                        key_trans = np.array(key)
-                        key_trans[i] = 1 - key_trans[i]
-                        key_trans_int = self.bin_to_int(key_trans)
-                        # If you access the counting table directly, it puts a 0, which inflates the size.
-                        if key_trans_int in counting_table.keys():
-                            count += counting_table[self.bin_to_int(key_trans)]
-            else:
-                count = 0
-            # print(key_int, count)
-            title_bin = ''.join([str(k) for k in key])
-            title_float = ' '.join(['{:.1f}'.format(c) for c in cont_emb])
-            title_float2 = ''
-            for idy, char in enumerate(title_float):
-                title_float2 += char
-                if (idy % 101 == 0) and idy != 0:
-                    title_float2 += '\n'
-            title = title_bin + '\n\n' + title_float2 + '\n\n' + 'count: {}'.format(count)
-            plt.suptitle(title)
             sanity_pred_im = sanity_pred[idx, :]
             if model.output_type == model.OutputType.CLASSIFICATION:
                 sanity_pred_im = sanity_pred_im.reshape((-1, model.num_classes))
@@ -87,7 +133,5 @@ class Plotter:
                 self._im3.set_data(sanity_pred_im)
                 self._im4.set_data(err)
 
-            if not os.path.exists(logger._snapshot_dir + dir):
-                os.makedirs(logger._snapshot_dir + dir)
             plt.savefig(
-                logger._snapshot_dir + dir + '/model_{}_{}_{}.png'.format(itr, 0, idx), bbox_inches='tight')
+                logger._snapshot_dir + dir + '/model_{}_{}.png'.format(itr, idx), bbox_inches='tight')

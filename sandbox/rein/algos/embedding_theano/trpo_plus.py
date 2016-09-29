@@ -240,8 +240,7 @@ class TRPOPlus(TRPO):
 
         logger.log('Average unique values: {:.1f}/{:.1f}'.format(num_unique / float(len(paths)),
                                                                  tot_path_len / float(len(paths))))
-        unique_frac = num_unique / float(tot_path_len)
-        logger.record_tabular('UniqueFracPerTraj', unique_frac)
+        logger.record_tabular('UniqueFracPerTraj', num_unique / float(tot_path_len))
 
         # --
         # Compute intrinsic rewards from counts.
@@ -266,7 +265,7 @@ class TRPOPlus(TRPO):
         arr_surprise = np.hstack([path['S'] for path in paths])
         num_encountered_unique_keys = len(self._counting_table)
         logger.log('Counting table contains {} entries.'.format(num_encountered_unique_keys))
-        logger.record_tabular('NewStateCount', new_state_count)
+        logger.record_tabular('NewStateFrac', new_state_count / float(tot_path_len))
         logger.record_tabular('MeanS', np.mean(arr_surprise))
         logger.record_tabular('StdS', np.std(arr_surprise))
 
@@ -367,9 +366,10 @@ class TRPOPlus(TRPO):
                 logger.log('Autoencoder updated.')
 
                 logger.log('Plotting random samples ...')
-                self._plotter.plot_pred_imgs(self._model, self._counting_table, _x[0:8], _y[0:8], 0, 0,
-                                             dir=RANDOM_SAMPLES_DIR,
-                                             hamming_distance=self._hamming_distance)
+                self._plotter.plot_pred_imgs(model=self._model, inputs=_x[0:8], targets=_y[0:8], itr=0,
+                                             dir=RANDOM_SAMPLES_DIR)
+                self._plotter.print_embs(model=self._model, counting_table=self._counting_table, inputs=_x[0:8],
+                                         dir=RANDOM_SAMPLES_DIR, hamming_distance=self._hamming_distance)
 
             else:
                 logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
@@ -412,20 +412,28 @@ class TRPOPlus(TRPO):
         # Analysis
         # Get consistency images in first iteration.
         if itr == 0:
-            # Select 5 random images form the first path, evaluate them at every iteration to inspect emb.
-            rnd = np.random.randint(0, len(paths[0]['observations']), 8)
+            # Select random images form the first path, evaluate them at every iteration to inspect emb.
+            rnd = np.random.randint(0, len(paths[0]['observations']), 32)
             self._test_obs = self.encode_obs(paths[0]['observations'][rnd, -np.prod(self._model.state_dim):])
-        if itr % 10 == 0:
+        obs = self.encode_obs(paths[0]['observations'][-32:, -np.prod(self._model.state_dim):])
+
+        if itr % 20 == 0:
             logger.log('Plotting consistency images ...')
             self._plotter.plot_pred_imgs(
-                self._model, self._counting_table, self.decode_obs(self._test_obs), self._test_obs,
-                -itr - 1, 0,
-                dir=CONSISTENCY_CHECK_DIR, hamming_distance=self._hamming_distance)
+                model=self._model, inputs=self.decode_obs(self._test_obs), targets=self._test_obs,
+                itr=-itr - 1, dir=CONSISTENCY_CHECK_DIR)
             logger.log('Plotting uniqueness images ...')
-            obs = self.encode_obs(paths[0]['observations'][-20:, -np.prod(self._model.state_dim):])
             self._plotter.plot_pred_imgs(
-                self._model, self._counting_table, self.decode_obs(obs), obs, 0, 0,
-                dir=UNIQUENESS_CHECK_DIR, hamming_distance=self._hamming_distance)
+                model=self._model, inputs=self.decode_obs(obs), targets=obs, itr=0,
+                dir=UNIQUENESS_CHECK_DIR)
+
+        logger.log('Printing embeddings ...')
+        self._plotter.print_consistency_embs(
+            model=self._model, counting_table=self._counting_table, inputs=self.decode_obs(self._test_obs),
+            dir=CONSISTENCY_CHECK_DIR, hamming_distance=self._hamming_distance)
+        self._plotter.print_embs(
+            model=self._model, counting_table=self._counting_table, inputs=self.decode_obs(obs),
+            dir=UNIQUENESS_CHECK_DIR, hamming_distance=self._hamming_distance)
 
         # --
         # Diagnostics

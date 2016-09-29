@@ -1,4 +1,3 @@
-
 import numpy as np
 import theano.tensor as T
 import lasagne
@@ -67,6 +66,7 @@ def conv_input_length(output_length, filter_size, stride, pad=0):
     if not isinstance(pad, int):
         raise ValueError('Invalid pad: {0}'.format(pad))
     return (output_length - 1) * stride - 2 * pad + filter_size
+
 
 class BayesianLayer(lasagne.layers.Layer):
     """Generic Bayesian layer"""
@@ -167,7 +167,7 @@ class BayesianLayer(lasagne.layers.Layer):
             # In fact, this should be initialized to np.zeros(self.get_W_shape()),
             # but this trains much slower.
             self.mu = self.add_param(
-                lasagne.init.GlorotUniform(),
+                lasagne.init.GlorotUniform(gain='relu'),
                 self.get_W_shape(), name='mu', bayesian=(not self.disable_variance))
             if not self.disable_variance:
                 self.rho = self.add_param(
@@ -188,7 +188,8 @@ class BayesianLayer(lasagne.layers.Layer):
                 np.zeros(self.get_W_shape()), self.get_W_shape(), name='mu_old', trainable=False, oldparam=True)
             if not self.disable_variance:
                 self.rho_old = self.add_param(
-                    np.zeros(self.get_W_shape()), self.get_W_shape(), name='rho_old', trainable=False, oldparam=True)
+                    np.zeros(self.get_W_shape()), self.get_W_shape(), name='rho_old', trainable=False,
+                    oldparam=True)
 
             # Bias priors.
             self.b_mu_old = self.add_param(
