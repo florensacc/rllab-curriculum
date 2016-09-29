@@ -4,7 +4,7 @@ import rllab.misc.logger as logger
 import rllab.plotter as plotter
 from sandbox.rocky.tf.policies.base import Policy
 import tensorflow as tf
-from sandbox.rein.algos.embedding.batch_sampler import BatchSampler
+from sandbox.rein.algos.embedding_tf.batch_sampler import BatchSampler
 
 
 class BatchPolopt(RLAlgorithm):

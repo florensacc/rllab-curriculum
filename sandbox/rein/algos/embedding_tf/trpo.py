@@ -1,4 +1,4 @@
-from sandbox.rein.algos.embedding.npo import NPO
+from sandbox.rein.algos.embedding_tf.npo import NPO
 from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 
 

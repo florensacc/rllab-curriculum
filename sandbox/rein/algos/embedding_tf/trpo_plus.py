@@ -2,8 +2,8 @@ import tensorflow as tf
 import time
 from collections import defaultdict
 
-from sandbox.rein.algos.embedding.plotter import Plotter
-from sandbox.rein.algos.embedding.trpo import TRPO
+from sandbox.rein.algos.embedding_tf.plotter import Plotter
+from sandbox.rein.algos.embedding_tf.trpo import TRPO
 from rllab.misc import special
 import numpy as np
 from rllab.misc import tensor_utils
@@ -36,17 +36,20 @@ class TRPOPlus(TRPO):
             model_pool_args=None,
             hamming_distance=0,
             train_model=True,
+            train_model_freq=1,
             **kwargs):
         super(TRPOPlus, self).__init__(**kwargs)
 
         assert model is not None
         assert hamming_distance == 0 or hamming_distance == 1
         assert eta >= 0
+        assert train_model_freq >= 1
 
         self._model = model
         self._eta = eta
         self._hamming_distance = hamming_distance
         self._train_model = train_model
+        self._train_model_freq = train_model_freq
 
         if not self._train_model:
             logger.log('Training model disabled, using convolutional random projection.')
@@ -241,8 +244,8 @@ class TRPOPlus(TRPO):
 
         logger.log('Average unique values: {:.1f}/{:.1f}'.format(num_unique / float(len(paths)),
                                                                  tot_path_len / float(len(paths))))
-        unique_perc = num_unique / float(tot_path_len) * 100
-        logger.record_tabular('UniquePerc', unique_perc)
+        unique_frac = num_unique / float(tot_path_len)
+        logger.record_tabular('UniqueFracPerTraj', unique_frac)
 
         # --
         # Compute intrinsic rewards from counts.
@@ -324,7 +327,7 @@ class TRPOPlus(TRPO):
         :return:
         """
         acc_before, acc_after, train_loss, running_avg = 0., 0., 0., 0.
-        if itr == 0 or itr % 5 == 0:
+        if itr == 0 or itr % self._train_model_freq == 0:
             logger.log('Updating autoencoder using replay pool ({}) ...'.format(self._pool.size))
             if self._pool.size >= self._model_pool_args['min_size']:
 
@@ -334,11 +337,13 @@ class TRPOPlus(TRPO):
                     _y = batch['observations']
                     acc_before += self.accuracy(_x, _y) / 10.
 
-                done = False
+                # --
+                # Actual training of model.
+                done = 0
                 old_running_avg = np.inf
-                while not done:
+                while done < 7:
                     running_avg = 0.
-                    for _ in range(50):
+                    for _ in range(100):
                         # Replay pool return uint8 target format, so decode _x.
                         batch = self._pool.random_batch(self._model_pool_args['batch_size'])
                         _x = self.decode_obs(batch['observations'])
@@ -346,12 +351,14 @@ class TRPOPlus(TRPO):
                         train_loss = float(self._model.train_fn(_x, _y, 0))
                         assert not np.isinf(train_loss)
                         assert not np.isnan(train_loss)
-                        running_avg += train_loss / 50.
-                    if old_running_avg - running_avg < 1e-4:
-                        done = True
+                        running_avg += train_loss / 100.
                     logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
                         running_avg, old_running_avg - running_avg))
-                    old_running_avg = running_avg
+                    if old_running_avg - running_avg < 1e-4:
+                        done += 1
+                    else:
+                        old_running_avg = running_avg
+                        done = 0
 
                 for i in range(10):
                     batch = self._pool.random_batch(32)
@@ -407,21 +414,19 @@ class TRPOPlus(TRPO):
         # Get consistency images in first iteration.
         if itr == 0:
             # Select 5 random images form the first path, evaluate them at every iteration to inspect emb.
-            rnd = np.random.randint(0, len(paths[0]['observations']), 32)
-            self._test_obs = self.encode_obs(paths[0]['observations'][0:10, -np.prod(self._model.state_dim):])
-        # Consitency check tracks images over time, only every n iterations.
+            rnd = np.random.randint(0, len(paths[0]['observations']), 8)
+            self._test_obs = self.encode_obs(paths[0]['observations'][rnd, -np.prod(self._model.state_dim):])
         if itr % 10 == 0:
             logger.log('Plotting consistency images ...')
             self._plotter.plot_pred_imgs(
                 self._model, self._counting_table, self.decode_obs(self._test_obs), self._test_obs,
                 -itr - 1, 0,
                 dir=CONSISTENCY_CHECK_DIR, hamming_distance=self._hamming_distance)
-        # Run uniqueness check every iteration.
-        logger.log('Plotting uniqueness images ...')
-        obs = self.encode_obs(paths[0]['observations'][0:50, -np.prod(self._model.state_dim):])
-        self._plotter.plot_pred_imgs(
-            self._model, self._counting_table, self.decode_obs(obs), obs, 0, 0,
-            dir=UNIQUENESS_CHECK_DIR, hamming_distance=self._hamming_distance)
+            logger.log('Plotting uniqueness images ...')
+            obs = self.encode_obs(paths[0]['observations'][-20:, -np.prod(self._model.state_dim):])
+            self._plotter.plot_pred_imgs(
+                self._model, self._counting_table, self.decode_obs(obs), obs, 0, 0,
+                dir=UNIQUENESS_CHECK_DIR, hamming_distance=self._hamming_distance)
 
         # --
         # Diagnostics
@@ -438,8 +443,7 @@ class TRPOPlus(TRPO):
         if self.plot:
             self.update_plot()
             if self.pause_for_plot:
-                input("Plotting evaluation run: Press Enter to "
-                      "continue...")
+                input("Plotting evaluation run: Press Enter to continue...")
 
     def train(self):
         """
@@ -482,6 +486,7 @@ class TRPOPlus(TRPO):
 
                     # --
                     # Optimize policy according to latest trajectory batch `samples_data`.
+                    import ipdb; ipdb.set_trace()
                     self.optimize_policy(itr, samples_data)
 
                     # --

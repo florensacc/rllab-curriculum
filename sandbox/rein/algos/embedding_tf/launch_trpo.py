@@ -5,8 +5,8 @@ import tensorflow as tf
 
 from rllab.envs.env_spec import EnvSpec
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rein.algos.embedding.tf_atari import AtariEnv
-from sandbox.rein.algos.embedding.trpo_plus import TRPOPlus
+from sandbox.rein.algos.embedding_tf.tf_atari import AtariEnv
+from sandbox.rein.algos.embedding_tf.trpo_plus import TRPOPlus
 from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.rocky.tf.core.network import ConvNetwork
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
@@ -24,7 +24,7 @@ n_seq_frames = 1
 
 # Param ranges
 if TEST_RUN:
-    exp_prefix = 'trpo-embedding-a'
+    exp_prefix = 'trpo-emb-a'
     seeds = range(5)
     etas = [0, 0.1]
     mdps = [AtariEnv(game='freeway', obs_type="image", frame_skip=4),
@@ -36,7 +36,6 @@ if TEST_RUN:
     max_path_length = 4500
     dropout = False
     batch_norm = True
-    train_model = True
 else:
     exp_prefix = 'trpo-pxlnn-a'
     seeds = range(5)
@@ -49,7 +48,6 @@ else:
     max_path_length = 4500
     dropout = False
     batch_norm = True
-    train_model = True
 
 param_cart_product = itertools.product(
     lst_factor, mdps, etas, seeds
@@ -144,13 +142,6 @@ for factor, mdp, eta, seed in param_cart_product:
                  n_units=32,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=128 * factor,
-                 matrix_variate_gaussian=False,
-                 nonlinearity=lasagne.nonlinearities.rectify,
-                 batch_norm=batch_norm,
-                 dropout=dropout,
-                 deterministic=True),
-            dict(name='gaussian',
                  n_units=2304,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
@@ -195,7 +186,7 @@ for factor, mdp, eta, seed in param_cart_product:
         num_train_samples=1,
         prior_sd=0.05,
         second_order_update=False,
-        learning_rate=0.003,
+        learning_rate=0.001,
         surprise_type=ConvBNNVIME.SurpriseType.VAR,
         update_prior=False,
         update_likelihood_sd=False,
@@ -207,7 +198,10 @@ for factor, mdp, eta, seed in param_cart_product:
         ind_softmax=True,
         num_seq_inputs=1,
         label_smoothing=0.003,
-        disable_act_rew_paths=True  # Disable prediction of rewards and intake of actions, act as actual autoenc
+        disable_act_rew_paths=True,  # Disable prediction of rewards and intake of actions, act as actual autoenc
+        # --
+        # Count settings
+        binary_penalty=True,
     )
 
     algo = TRPOPlus(
@@ -224,6 +218,8 @@ for factor, mdp, eta, seed in param_cart_product:
             subsample_factor=0.1,
         ),
         n_seq_frames=n_seq_frames,
+        # --
+        # Count settings
         model_pool_args=dict(
             size=100000,
             min_size=32,
@@ -233,7 +229,8 @@ for factor, mdp, eta, seed in param_cart_product:
         ),
         hamming_distance=0,
         eta=eta,
-        train_model=train_model,
+        train_model=True,
+        train_model_freq=1,
     )
 
     run_experiment_lite(
