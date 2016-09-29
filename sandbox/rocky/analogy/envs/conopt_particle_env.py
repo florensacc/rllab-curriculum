@@ -1,3 +1,7 @@
+import logging
+log_level = logging.getLogger().level
+import gym
+logging.getLogger().setLevel(log_level)
 from rllab.envs.base import Env, Step
 from rllab.spaces.box import Box
 from rllab.core.serializable import Serializable
