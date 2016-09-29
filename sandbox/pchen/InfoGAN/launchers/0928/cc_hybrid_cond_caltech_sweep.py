@@ -1,6 +1,6 @@
-# from cc_omni_prior_ablative.py
-# it seems AP & IAF are beneficial for logprob.
-# this one tweaks cond-decoder's depth and arch -> gated_resnet
+# naive plug in of cc_hybrid_cond_caltech.py gets 79 nats @ 300 epoch and then overfit
+# explore regularization & stuff
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -144,7 +144,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def max_epoch(self, ):
-        yield 700
+        yield 600
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
@@ -178,7 +178,7 @@ variants = vg.variants(randomized=False)
 
 print(len(variants))
 
-for v in variants[:1]:
+for v in variants[:]:
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]
@@ -250,7 +250,6 @@ for v in variants[:1]:
             tieweight=v["ar_tie"],
             block="gated_resnet",
             extra_nins=v["ar_nin"],
-            sanity2=True,
         )
         model = RegularizedHelmholtzMachine(
             output_dist=ar_conv_dist,
@@ -280,18 +279,18 @@ for v in variants[:1]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
-            vis_ar=True,
+            vis_ar=False,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0928_caltech_cc_hybrid_gres_play_pixelcnn",
+            exp_prefix="0928_caltech_cc_hybrid_gres",
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 

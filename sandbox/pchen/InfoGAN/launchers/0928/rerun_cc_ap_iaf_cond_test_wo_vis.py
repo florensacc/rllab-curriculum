@@ -293,11 +293,11 @@ for v in variants[:]:
             exp_prefix="0928_rerun_%s_cc_hybrid_gres" % v["ds"],
             seed=v["seed"],
             variant=v,
-            mode="local_docker",
+            # mode="local_docker",
             # mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 
