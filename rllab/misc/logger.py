@@ -199,7 +199,7 @@ def dump_tabular(*args, **kwargs):
         # This assumes that the keys in each iteration won't change!
         for tabular_fd in list(_tabular_fds.values()):
             writer = csv.DictWriter(tabular_fd, fieldnames=list(tabular_dict.keys()))
-            if wh or (tabular_fd not in _tabular_header_written):
+            if wh or (wh is None and tabular_fd not in _tabular_header_written):
                 writer.writeheader()
                 _tabular_header_written.add(tabular_fd)
             writer.writerow(tabular_dict)

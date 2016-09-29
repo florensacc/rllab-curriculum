@@ -627,6 +627,16 @@ class VAE(object):
             return
         dist = self.model.output_dist
         x_var, context_var, go_sym, tgt_dist = dist.infer_sym(128)
+        def custom_imsave(name, img):
+            assert img.ndim == 3
+            if img.shape[2] == 3:
+                img = (img + 0.5) * 256
+            elif img.shape[2] == 1:
+                img = img.reshape(img.shape[:2])
+            scipy.misc.imsave(
+                name,
+                img
+            )
 
         # samples
         z_var = self.model.latent_dist.sample_prior(self.batch_size)
@@ -640,14 +650,21 @@ class VAE(object):
             pass
         # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
         # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
-        cur_zeros = np.zeros([128, 32, 32, 3])
-        for yi in range(32):
-            for xi in range(32):
-                ind = xi + yi * 32
-                if (ind % 8 == 1):
+        batch_imshp = [self.batch_size, ] + list(self.model.image_shape)
+        cur_zeros = np.zeros(batch_imshp)
+        h, w = self.model.image_shape[:2]
+        for yi in range(h):
+            for xi in range(w):
+                ind = xi + yi * w
+                if (ind % 16 == 1):
                     for ix in range(128):
-                        scipy.misc.imsave("%s/%s_step%s.png" % (fol, ix, ind),
-                                          (cur_zeros[ix] + 0.5) * 255)
+                        # scipy.misc.imsave(
+                        #     "%s/%s_step%s.png" % (fol, ix, ind),
+                        #                   (cur_zeros[ix] + 0.5) * 255)
+                        custom_imsave(
+                            "%s/%s_step%s.png" % (fol, ix, ind),
+                            cur_zeros[ix]
+                        )
                 proposal_zeros, tgt_dist_zeros = sess.run([go_sym, tgt_dist], {
                     x_var: cur_zeros,
                     context_var: context['context'],
@@ -658,7 +675,7 @@ class VAE(object):
         )
 
         # decompress
-        originals = tuple(feed.items())[0][1].reshape([128, 32, 32, 3])
+        originals = tuple(feed.items())[0][1].reshape(batch_imshp)
         context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)
         fol = "%s/decomp/" % self.checkpoint_dir
         try:
@@ -669,16 +686,20 @@ class VAE(object):
         # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
         # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
         for ix in range(128):
-            scipy.misc.imsave("%s/%s_step%s.png" % (fol, ix, 0),
-                              (originals[ix] + 0.5) * 255)
+            custom_imsave(
+                "%s/%s_step%s.png" % (fol, ix, 0),
+                originals[ix]
+            )
         cur_zeros = np.zeros_like(originals)
-        for yi in range(32):
-            for xi in range(32):
-                ind = xi + yi * 32
+        for yi in range(h):
+            for xi in range(w):
+                ind = xi + yi * w
                 if (ind % 8 == 1):
                     for ix in range(128):
-                        scipy.misc.imsave("%s/%s_step%s.png" % (fol, ix, ind),
-                                          (cur_zeros[ix] + 0.5) * 255)
+                        custom_imsave(
+                            "%s/%s_step%s.png" % (fol, ix, ind),
+                            cur_zeros[ix]
+                        )
                 proposal_zeros, tgt_dist_zeros = sess.run([go_sym, tgt_dist], {
                     x_var: cur_zeros,
                     context_var: context['context'],
@@ -700,17 +721,22 @@ class VAE(object):
             # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
             # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
             for ix in range(10):
-                scipy.misc.imsave("%s/%s_step%s.png" % (fol, ix, 0),
-                                  (cur_zeros[ix] + 0.5) * 255)
+                custom_imsave(
+                    "%s/%s_step%s.png" % (fol, ix, 0),
+                    originals[ix]
+                )
+
             cur_zeros = np.copy(originals)
             cur_zeros[:, 16, 16:, :] = 0.
             cur_zeros[:, 17:, :, :] = 0.
-            for yi in range(16, 32):
-                for xi in range(16 if yi == 16 else 0, 32):
-                    ind = xi + yi * 32
+            for yi in range(16, h):
+                for xi in range(16 if yi == 16 else 0, w):
+                    ind = xi + yi * w
                     for ix in range(10):
-                        scipy.misc.imsave("%s/%s_step%s.png" % (fol, ix, ind),
-                                          (cur_zeros[ix] + 0.5) * 255)
+                        custom_imsave(
+                            "%s/%s_step%s.png" % (fol, ix, ind),
+                            cur_zeros[ix]
+                        )
                     proposal_zeros, tgt_dist_zeros = sess.run([go_sym, tgt_dist], {
                         x_var: cur_zeros,
                         context_var: context['context'],

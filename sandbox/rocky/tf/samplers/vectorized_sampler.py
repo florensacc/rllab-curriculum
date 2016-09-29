@@ -22,11 +22,14 @@ class VectorizedSampler(BaseSampler):
             n_envs = int(self.algo.batch_size / self.algo.max_path_length)
             n_envs = max(1, min(n_envs, 100))
 
-        envs = [pickle.loads(pickle.dumps(self.algo.env)) for _ in range(n_envs)]
-        self.vec_env = VecEnvExecutor(
-            envs=envs,
-            max_path_length=self.algo.max_path_length
-        )
+        if getattr(self.algo.env, 'vectorized', False):
+            self.vec_env = self.algo.env.vec_env_executor(n_envs=n_envs, max_path_length=self.algo.max_path_length)
+        else:
+            envs = [pickle.loads(pickle.dumps(self.algo.env)) for _ in range(n_envs)]
+            self.vec_env = VecEnvExecutor(
+                envs=envs,
+                max_path_length=self.algo.max_path_length
+            )
         self.env_spec = self.algo.env.spec
 
     def shutdown_worker(self):

@@ -265,7 +265,7 @@ class BatchPolopt(RLAlgorithm):
                 old_running_avg = np.inf
                 while not done:
                     running_avg = 0.
-                    for _ in range(100):
+                    for _ in range(1):
                         # Replay pool return uint8 target format, so decode _x.
                         batch = self.pool.random_batch(self._dyn_pool_args['batch_size'])
                         _x = self.decode_obs(batch['observations'])
@@ -274,7 +274,7 @@ class BatchPolopt(RLAlgorithm):
                         assert not np.isinf(train_loss)
                         assert not np.isnan(train_loss)
                         running_avg += train_loss / 100.
-                    if old_running_avg - running_avg < 1e-4:
+                    if old_running_avg - running_avg < 1e4:
                         done = True
                     logger.log('Autoencoder loss= {:.5f}\tD= {:.5f}'.format(
                         running_avg, old_running_avg - running_avg))

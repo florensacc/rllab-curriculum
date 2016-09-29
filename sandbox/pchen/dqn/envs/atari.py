@@ -32,8 +32,9 @@ If you don't want to install cv2, note that Atari RAM environments don't require
 
 def rgb2gray(rgb):
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
-    gray = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    return gray
+    # gray = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    # return gray
+    return (0.299 * r) + (0.587 * g) + (0.114 * b)
 
 
 try:
@@ -75,7 +76,10 @@ class AtariEnvCX(Env, Serializable):
             frame_skip=4,
             life_terminating=False,
             color_averaging=False,
+            color_max=False,
             random_seed=False,
+            initial_manual_activation=False,
+            max_start_nullops=0,
     ):
         Serializable.quick_init(self, locals())
         assert obs_type in ("ram", "image")
@@ -92,10 +96,14 @@ class AtariEnvCX(Env, Serializable):
         # self.ale.setBool(b'color_averaging', color_averaging)
         self.ale.loadROM(game_path)
         self._obs_type = obs_type
+        self._game = game
         self._action_set = self.ale.getMinimalActionSet()
         self.frame_skip = frame_skip
         self.lives = self.ale.lives()
         self.life_terminating = life_terminating
+        self.color_max = color_max
+        self.initial_manual_activation = initial_manual_activation
+        self.max_start_nullops = max_start_nullops
 
     def over(self):
         return self.ale.game_over() or (self.life_terminating and (self.lives > self.ale.lives()))
@@ -104,10 +112,14 @@ class AtariEnvCX(Env, Serializable):
         reward = 0.0
         action = self._action_set[a]
         for _ in range(self.frame_skip):
+            if self.color_max:
+                last_ob = self._get_obs()
             reward += self.ale.act(action)
             if self.over():
                 break
         ob = self._get_obs()
+        if self.color_max:
+            ob = np.maximum(ob, last_ob)
 
         return ob, reward, self.over(), {}
 
@@ -151,6 +163,17 @@ class AtariEnvCX(Env, Serializable):
 
     def reset(self):
         self.ale.reset_game()
+        # for example, in Frostbite, the agent waits for a random number of time steps, and the temperature will decrease
+        if self.max_start_nullops > 0:
+            n_nullops = np.random.randint(0, self.max_start_nullops + 1)
+            for _ in range(n_nullops):
+                self.ale.act(0)
+
+        # sometimes the game doesn't start at all without performing actions other than noop,
+        # but the agent may not learn this at all
+        if self.initial_manual_activation:
+            if self._game == "breakout":
+                self.ale.act(3) # fire button, which does nothing but start the game
         return self._get_obs()
 
     def render(self, return_array=False):

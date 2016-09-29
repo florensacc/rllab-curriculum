@@ -16,21 +16,26 @@ from sandbox.pchen.async_rl.async_rl.utils.picklable import Picklable
 
 
 class AsyncAlgo(Picklable):
-    def __init__(self,
-        n_processes,
-        env,
-        agent,
-        seeds=None,
-        profile=False,
-        logging_level=logging.INFO,
-        total_steps=10**7,
-        eval_frequency=10**6,
-        eval_n_runs=10,
-        horizon=np.inf,
-        eval_horizon=np.inf,
-        **kwargs
+    def __init__(
+            self,
+            n_processes,
+            env,
+            agent,
+            seeds=None,
+            test_env=None,
+            profile=False,
+            logging_level=logging.INFO,
+            total_steps=10**7,
+            eval_frequency=10**6,
+            eval_n_runs=10,
+            horizon=np.inf,
+            eval_horizon=np.inf,
+            **kwargs
     ):
         self.env = env
+        if test_env is None:
+            test_env = env
+        self.test_env = test_env
         self.agent = agent
         self.n_processes = n_processes
         self.seeds = seeds
@@ -97,9 +102,12 @@ class AsyncAlgo(Picklable):
         seed = self.seeds[process_id]
         ext.set_seed(seed)
 
-    def child_fresh_env_agent(self):
+    def child_fresh_env_agent(self, test=False):
         # Copy from the mother env, agent
-        env = pickle.loads(pickle.dumps(self.env))
+        if test:
+            env = pickle.loads(pickle.dumps(self.test_env))
+        else:
+            env = pickle.loads(pickle.dumps(self.env))
         agent = self.agent.process_copy()
         agent.phase = "Train"
         return (env, agent)
@@ -238,7 +246,7 @@ class AsyncAlgo(Picklable):
             raise
 
     def evaluate_performance(self, n_runs, horizon):
-        env, agent = self.child_fresh_env_agent()
+        env, agent = self.child_fresh_env_agent(test=True)
 
         logger.log("Evaluating test performance",color="yellow")
         agent.phase = "Test"
@@ -258,6 +266,7 @@ class AsyncAlgo(Picklable):
                         color="yellow",
                     )
                     break
+            _ = agent.act(obs, reward, terminal, extra)
             logger.log(
                 "Finished testing #%d with score %f."%(i,scores[i]),
                 color="green",

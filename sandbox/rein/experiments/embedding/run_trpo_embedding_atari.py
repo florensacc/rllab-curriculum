@@ -5,8 +5,8 @@ import tensorflow as tf
 
 from rllab.envs.env_spec import EnvSpec
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rein.algos.embedding.tf_atari import AtariEnv
-from sandbox.rein.algos.embedding.trpo_plus import TRPOPlus
+from sandbox.rein.algos.embedding_tf.tf_atari import AtariEnv
+from sandbox.rein.algos.embedding_tf.trpo_plus import TRPOPlus
 from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.rocky.tf.core.network import ConvNetwork
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy

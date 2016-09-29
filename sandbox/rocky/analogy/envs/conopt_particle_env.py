@@ -1,9 +1,13 @@
+import logging
+log_level = logging.getLogger().level
+import gym
+logging.getLogger().setLevel(log_level)
 from rllab.envs.base import Env, Step
 from rllab.spaces.box import Box
 from rllab.core.serializable import Serializable
 from conopt.experiments.A4_particle_analogy import Experiment
 import numpy as np
-from sandbox.rocky.analogy.utils import using_seed
+from sandbox.rocky.analogy.utils import unwrap, using_seed
 from rllab.envs.gym_env import convert_gym_space
 from conopt import cost
 from cached_property import cached_property
@@ -15,7 +19,8 @@ def fast_residual2cost(r, metric):
     if metric == "L2":
         return 0.5 * np.sum(np.square(r))
     else:
-        import ipdb; ipdb.set_trace()
+        import ipdb;
+        ipdb.set_trace()
 
 
 def fast_compute_cost(reward_fn, s):
@@ -28,11 +33,24 @@ def fast_compute_cost(reward_fn, s):
     elif isinstance(reward_fn, cost.PenaltyCost):
         return fast_residual2cost(s[reward_fn.element], reward_fn.metric)
     else:
-        import ipdb; ipdb.set_trace()
+        import ipdb;
+        ipdb.set_trace()
+
+
+class Shuffler(object):
+    def shuffle(self, demo_paths, analogy_paths, demo_envs, analogy_envs):
+        # We are free to swap the pairs as long as they correspond to the same task
+        target_ids = [unwrap(x).conopt_scenario.task_id for x in analogy_envs]
+        for target_id in set(target_ids):
+            # shuffle each set of tasks separately
+            matching_ids, = np.where(target_ids == target_id)
+            shuffled = np.copy(matching_ids)
+            np.random.shuffle(shuffled)
+            analogy_paths[matching_ids] = analogy_paths[shuffled]
+            analogy_envs[matching_ids] = analogy_envs[shuffled]
 
 
 class ConoptParticleEnv(Env, Serializable):
-
     def __init__(self, seed=None, target_seed=None, obs_type='state'):
         Serializable.quick_init(self, locals())
         self.seed = seed
@@ -57,6 +75,9 @@ class ConoptParticleEnv(Env, Serializable):
         self.conopt_scenario = scenario
         self.conopt_env = env
         return self.reset()
+
+    def log_analogy_diagnostics(self, paths, envs):
+        pass
 
     def reset(self):
         return self.conopt_env.reset()
@@ -91,10 +112,15 @@ class ConoptParticleEnv(Env, Serializable):
         rew = []
         for i in range(env.batchsize):
             sense_here = {k: sense[k][i] for k in sense}
-            reward = fast_compute_cost(env.reward_fn, sense_here)#.compute_cost(sense_here)
+            reward = fast_compute_cost(env.reward_fn, sense_here)
             reward = np.squeeze(reward)
             rew.append(reward)
 
         env.x = xnext
 
         return Step(env._get_obs(), np.squeeze(rew), False)
+
+    @classmethod
+    def shuffler(cls):
+        return Shuffler()
+
