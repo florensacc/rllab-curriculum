@@ -48,55 +48,58 @@ def visualize_env(env, mode, max_steps=sys.maxsize, speedup=1):
             env.render()
             time.sleep(timestep / speedup)
     elif mode == 'human':
-        env.reset()
-        env.render()
-        tr = 0.
-        from rllab.envs.box2d.box2d_env import Box2DEnv
-        if isinstance(env, Box2DEnv):
-            for _ in range(max_steps):
-                pygame.event.pump()
-                keys = pygame.key.get_pressed()
-                action = env.action_from_keys(keys)
-                ob, r, done, _ = env.step(action)
-                tr += r
-                env.render()
-                time.sleep(timestep / speedup)
-                if done:
-                    tr = 0.
-                    env.reset()
-            return
-
-        from rllab.envs.mujoco.mujoco_env import MujocoEnv
-        from rllab.envs.mujoco.maze.maze_env import MazeEnv
-        if isinstance(env, (MujocoEnv, MazeEnv)):
-            trs = [tr]
-            actions = [np.zeros(2)]
-            from rllab.mujoco_py import glfw
-
-            def cb(window, key, scancode, action, mods):
-                actions[0] = env.action_from_key(key)
-
-            glfw.set_key_callback(env.viewer.window, cb)
-            while True:
-                try:
-                    actions[0] = np.zeros(2)
-                    glfw.poll_events()
-                    # if np.linalg.norm(actions[0]) > 0:
-                    ob, r, done, info = env.step(actions[0])
-                    trs[0] += r
+        if hasattr(env, 'start_interactive'):
+            env.start_interactive()
+        else:
+            env.reset()
+            env.render()
+            tr = 0.
+            from rllab.envs.box2d.box2d_env import Box2DEnv
+            if isinstance(env, Box2DEnv):
+                for _ in range(max_steps):
+                    pygame.event.pump()
+                    keys = pygame.key.get_pressed()
+                    action = env.action_from_keys(keys)
+                    ob, r, done, _ = env.step(action)
+                    tr += r
                     env.render()
-                    # time.sleep(env.timestep / speedup)
-                    time.sleep(env.timestep / speedup)
+                    time.sleep(timestep / speedup)
                     if done:
-                        trs[0] = 0.
+                        tr = 0.
                         env.reset()
-                except Exception as e:
-                    print(e)
-            return
+                return
 
-        assert hasattr(env, "start_interactive"), "The environment must implement method start_interactive"
+            from rllab.envs.mujoco.mujoco_env import MujocoEnv
+            from rllab.envs.mujoco.maze.maze_env import MazeEnv
+            if isinstance(env, (MujocoEnv, MazeEnv)):
+                trs = [tr]
+                actions = [np.zeros(2)]
+                from rllab.mujoco_py import glfw
 
-        env.start_interactive()
+                def cb(window, key, scancode, action, mods):
+                    actions[0] = env.action_from_key(key)
+
+                glfw.set_key_callback(env.viewer.window, cb)
+                while True:
+                    try:
+                        actions[0] = np.zeros(2)
+                        glfw.poll_events()
+                        # if np.linalg.norm(actions[0]) > 0:
+                        ob, r, done, info = env.step(actions[0])
+                        trs[0] += r
+                        env.render()
+                        # time.sleep(env.timestep / speedup)
+                        time.sleep(env.timestep / speedup)
+                        if done:
+                            trs[0] = 0.
+                            env.reset()
+                    except Exception as e:
+                        print(e)
+                return
+
+            assert hasattr(env, "start_interactive"), "The environment must implement method start_interactive"
+
+            env.start_interactive()
         # Assume using matplotlib
         # TODO - make this logic more legit
 
