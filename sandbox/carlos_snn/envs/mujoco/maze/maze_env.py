@@ -42,7 +42,7 @@ class MazeEnv(ProxyEnv, Serializable):
             sensor_range=10.,
             sensor_span=math.pi,
             maze_id=4,
-            length=1,
+            length=2,
             maze_height=0.2,
             maze_size_scaling=2,
             *args,
@@ -378,7 +378,7 @@ class MazeEnv(ProxyEnv, Serializable):
                     return j * size_scaling, i * size_scaling
         assert False
 
-    def _find_goal_range(self):
+    def _find_goal_range(self):  # this only finds one goal!
         structure = self.__class__.MAZE_STRUCTURE
         size_scaling = self.__class__.MAZE_SIZE_SCALING
         for i in range(len(structure)):
@@ -421,8 +421,8 @@ class MazeEnv(ProxyEnv, Serializable):
         # ref_y = y + self._init_torso_y
         reward = 0
         minx, maxx, miny, maxy = self._goal_range
-        # print "goal range: x [%s,%s], y [%s,%s], now [%s,%s]" % (str(minx), str(maxx), str(miny), str(maxy),
-        #                                                          str(x), str(y))
+        # print("goal range: x [%s,%s], y [%s,%s], now [%s,%s]" % (str(minx), str(maxx), str(miny), str(maxy),
+        #                                                          str(x), str(y)))
         if minx <= x <= maxx and miny <= y <= maxy:
             done = True
             reward = 1
