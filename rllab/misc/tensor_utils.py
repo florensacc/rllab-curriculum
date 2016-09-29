@@ -23,6 +23,13 @@ def pad_tensor(x, max_len):
     ])
 
 
+def pad_tensor_n(xs, max_len):
+    ret = np.zeros((len(xs), max_len) + xs[0].shape[1:], dtype=xs[0].dtype)
+    for idx, x in enumerate(xs):
+        ret[idx][:len(x)] = x
+    return ret
+
+
 def pad_tensor_dict(tensor_dict, max_len):
     keys = list(tensor_dict.keys())
     ret = dict()
