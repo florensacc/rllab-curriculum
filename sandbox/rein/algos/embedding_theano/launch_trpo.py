@@ -16,44 +16,25 @@ os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
-TEST_RUN = True
-
-# global params
 n_seq_frames = 4
 model_batch_size = 32
-
-# Param ranges
-if TEST_RUN:
-    exp_prefix = 'trpo-emb-g-notrain'
-    seeds = range(5)
-    etas = [0, 0.1, 0.01]
-    mdps = [AtariEnv(game='freeway', obs_type="image", frame_skip=4),
-            AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
-            AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
-            AtariEnv(game='breakout', obs_type="image", frame_skip=4)]
-    lst_factor = [2]
-    trpo_batch_size = 50000
-    max_path_length = 4500
-    dropout = False
-    batch_norm = True
-else:
-    exp_prefix = 'trpo-pxlnn-a'
-    seeds = range(5)
-    etas = [0, 1.0, 0.1, 0.01]
-    mdps = [AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
-            AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
-            AtariEnv(game='freeway', obs_type="image", frame_skip=4)]
-    lst_factor = [1]
-    trpo_batch_size = 20000
-    max_path_length = 4500
-    dropout = False
-    batch_norm = True
+exp_prefix = 'trpo-emb-j-train'
+seeds = range(5)
+etas = [0.1, 0.01]
+mdps = [AtariEnv(game='freeway', obs_type="image", frame_skip=4),
+        AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
+        AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
+        AtariEnv(game='breakout', obs_type="image", frame_skip=4)]
+trpo_batch_size = 30000
+max_path_length = 4500
+dropout = False
+batch_norm = True
 
 param_cart_product = itertools.product(
-    lst_factor, mdps, etas, seeds
+    mdps, etas, seeds
 )
 
-for factor, mdp, eta, seed in param_cart_product:
+for mdp, eta, seed in param_cart_product:
     env_spec = EnvSpec(
         observation_space=Box(low=-1, high=1, shape=(52, 52, n_seq_frames)),
         action_space=mdp.spec.action_space
@@ -134,7 +115,7 @@ for factor, mdp, eta, seed in param_cart_product:
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
-                 n_units=128 * factor,
+                 n_units=512,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
@@ -142,6 +123,13 @@ for factor, mdp, eta, seed in param_cart_product:
                  deterministic=True),
             dict(name='discrete_embedding',
                  n_units=256,
+                 deterministic=True),
+            dict(name='gaussian',
+                 n_units=512,
+                 matrix_variate_gaussian=False,
+                 nonlinearity=lasagne.nonlinearities.rectify,
+                 batch_norm=batch_norm,
+                 dropout=dropout,
                  deterministic=True),
             dict(name='gaussian',
                  n_units=2304,
@@ -184,7 +172,7 @@ for factor, mdp, eta, seed in param_cart_product:
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
         batch_size=model_batch_size,
-        n_samples=5,
+        n_samples=1,
         num_train_samples=1,
         prior_sd=0.05,
         second_order_update=False,
@@ -230,12 +218,12 @@ for factor, mdp, eta, seed in param_cart_product:
             min_size=model_batch_size,
             batch_size=model_batch_size,
             subsample_factor=0.1,
-            fill_before_subsampling=True,
+            fill_before_subsampling=False,
         ),
         hamming_distance=0,
         eta=eta,
         train_model=True,
-        train_model_freq=1000000000,
+        train_model_freq=10,
     )
 
     run_experiment_lite(

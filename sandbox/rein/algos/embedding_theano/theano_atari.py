@@ -123,7 +123,7 @@ class AtariEnv(Env, Serializable):
             next_obs = scipy.misc.imresize(
                 next_obs, (IMG_WH[1], IMG_WH[0], 3), interp='bicubic', mode=None)
             next_obs = rgb2gray(next_obs)
-            next_obs = next_obs / 256.
+            next_obs = next_obs / 256. * 2.0 - 1.0
             next_obs = next_obs[np.newaxis, :, :]
             return next_obs
 

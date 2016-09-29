@@ -291,13 +291,18 @@ class TRPOPlus(TRPO):
         Observation into uint8 encoding, also functions as target format
         """
         assert np.max(obs) <= 1.0
-        return (obs * self._model.num_classes).astype("uint8")
+        assert np.min(obs) >= -1.0
+        obs_enc = np.round((obs + 1.0) * 0.5 * self._model.num_classes).astype("uint8")
+        return obs_enc
 
     def decode_obs(self, obs):
         """
         From uint8 encoding to original observation format.
         """
-        return obs / float(self._model.num_classes)
+        obs_dec = obs / float(self._model.num_classes) * 2.0 - 1.0
+        assert np.max(obs_dec) <= 1.0
+        assert np.min(obs_dec) >= -1.0
+        return obs_dec
 
     def accuracy(self, _inputs, _targets):
         """
@@ -309,9 +314,7 @@ class TRPOPlus(TRPO):
         acc = 0.
         for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
             _i, _t, _ = batch
-            # Decode observations.
-            obs_dec_norm = self.decode_obs(_i)
-            _o = self._model.pred_fn(obs_dec_norm)
+            _o = self._model.pred_fn(_i)
             _o_s = _o.reshape((-1, np.prod(self._model.state_dim), self._model.num_classes))
             _o_s = np.argmax(_o_s, axis=2)
             acc += np.sum(np.abs(_o_s - _t))
@@ -366,9 +369,9 @@ class TRPOPlus(TRPO):
                 logger.log('Autoencoder updated.')
 
                 logger.log('Plotting random samples ...')
-                self._plotter.plot_pred_imgs(model=self._model, inputs=_x[0:8], targets=_y[0:8], itr=0,
+                self._plotter.plot_pred_imgs(model=self._model, inputs=_x, targets=_y, itr=0,
                                              dir=RANDOM_SAMPLES_DIR)
-                self._plotter.print_embs(model=self._model, counting_table=self._counting_table, inputs=_x[0:8],
+                self._plotter.print_embs(model=self._model, counting_table=self._counting_table, inputs=_x,
                                          dir=RANDOM_SAMPLES_DIR, hamming_distance=self._hamming_distance)
 
             else:

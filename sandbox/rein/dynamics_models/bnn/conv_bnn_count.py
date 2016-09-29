@@ -609,8 +609,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 if layer_disc['batch_norm'] is True:
                     s_net = batch_norm(s_net)
             elif layer_disc['name'] == 'discrete_embedding':
-                if 'nonlinearity' not in layer_disc.keys():
-                    layer_disc['nonlinearity'] = lasagne.nonlinearities.rectify
                 s_net = DiscreteEmbeddingLinearLayer(
                     s_net,
                     num_units=layer_disc['n_units'])
