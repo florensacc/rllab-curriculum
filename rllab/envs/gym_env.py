@@ -1,6 +1,3 @@
-
-
-
 import gym
 import gym.envs
 import gym.spaces
@@ -11,6 +8,7 @@ from rllab.envs.base import Env, Step
 from rllab.core.serializable import Serializable
 from rllab.spaces.box import Box
 from rllab.spaces.discrete import Discrete
+from rllab.spaces.product import Product
 from rllab.misc import logger
 import logging
 
@@ -20,6 +18,8 @@ def convert_gym_space(space):
         return Box(low=space.low, high=space.high)
     elif isinstance(space, gym.spaces.Discrete):
         return Discrete(n=space.n)
+    elif isinstance(space, gym.spaces.Tuple):
+        return Product([convert_gym_space(x) for x in space.spaces])
     else:
         raise NotImplementedError
 

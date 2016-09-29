@@ -113,7 +113,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             if self.latent_dim > 0:
                 self.latent_dist_info = dict(prob=1. / self.latent_dim * np.ones(self.latent_dim))
             else:
-                self.latent_dist_info = dict(prob=np.ones(self.latent_dim))
+                self.latent_dist_info = dict(prob=np.ones(self.latent_dim))  # this is an empty array
             print(self.latent_dist_info)
         else:
             raise NotImplementedError
@@ -132,14 +132,14 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         all_obs_dim = env_spec.observation_space.flat_dim
         assert all_obs_dim == self.obs_robot_dim + self.obs_maze_dim
 
-        if self.external_latent:
+        if self.external_latent:  # in case we want to fix the latent externally
             l_all_obs_var = L.InputLayer(shape=(None,) + (self.obs_robot_dim + self.obs_maze_dim,))
             all_obs_var = l_all_obs_var.input_var
             l_selection = ConstOutputLayer(incoming=l_all_obs_var, output_var=self.shared_latent_var)
             selection_var = L.get_output(l_selection)
 
         else:
-            # create network with softmax output: it will be the latent!
+            # create network with softmax output: it will be the latent 'selector'!
             latent_selection_network = MLP(
                 input_shape=(self.obs_robot_dim + self.obs_maze_dim,),
                 output_dim=self.latent_dim,
@@ -161,30 +161,26 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         obs_robot_var = all_obs_var[:, :self.obs_robot_dim]
         obs_maze_var = all_obs_var[:, self.obs_robot_dim:]
 
-        # Enlarge obs with the selectors (or latents)
+        # Enlarge obs with the selectors (or latents). Here just computing the final input dim
         if self.bilinear_integration:
-            obs_snn_dim = self.obs_robot_dim + self.latent_dim + \
-                          self.obs_robot_dim * self.latent_dim
+            # obs_snn_dim = self.obs_robot_dim + self.latent_dim + \
+            #               self.obs_robot_dim * self.latent_dim
+            l_obs_snn = BilinearIntegrationLayer([l_obs_robot, l_selection])
         else:
-            obs_snn_dim = self.obs_robot_dim + self.latent_dim  # here only if concat.
-
-        l_obs_snn = BilinearIntegrationLayer([l_obs_robot, l_selection])
+            # obs_snn_dim = self.obs_robot_dim + self.latent_dim  # here only if concat.
+            l_obs_snn = L.ConcatLayer([l_obs_robot, l_selection])
 
         action_dim = env_spec.action_space.flat_dim
 
         # create the action network
         mean_network = MLP(
-            input_layer=l_obs_snn,
+            input_layer=l_obs_snn,  # this is the layer that handles the integration of the selector
             output_dim=action_dim,
             hidden_sizes=self.hidden_sizes_snn,
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=output_nonlinearity,
             name="meanMLP",
         )
-        if not self.trainable_snn:
-            for layer in mean_network.layers:
-                for param, tags in layer.params.items():  # params of layer are OrDict: key=the shared var, val=tags
-                    tags.remove("trainable")
 
         self._layers_mean = mean_network.layers
         l_mean = mean_network.output_layer
@@ -211,6 +207,11 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             self._layers_log_std = [l_log_std]
 
         self._layers_snn = self._layers_mean + self._layers_log_std  # this returns a list with the "snn" layers
+
+        if not self.trainable_snn:
+            for layer in self._layers_snn:
+                for param, tags in layer.params.items():  # params of layer are OrDict: key=the shared var, val=tags
+                    tags.remove("trainable")
 
         if self.pkl_path:
             data = joblib.load(self.pkl_path)

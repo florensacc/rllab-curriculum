@@ -98,10 +98,10 @@ for v in variants:
         mlp_hidden_nonlinearity=getattr(tf.nn, v["nonlinearity"]),
         state_include_action=True,
         network_type=v["network_type"],
+        layer_normalization=v["layer_normalization"],
+        weight_normalization=v["weight_normalization"],
         network_args=dict(
             W_h_init=OrthogonalInitializer() if v["ortho_init"] else XavierUniformInitializer(),
-            layer_normalization=v["layer_normalization"],
-            weight_normalization=v["weight_normalization"],
             # fixed_horizon=20,
         )
     )

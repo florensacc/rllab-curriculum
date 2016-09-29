@@ -14,7 +14,7 @@ def cg(f_Ax, b, par_objs, rank, cg_iters=10, callback=None, verbose=False, resid
     par_objs: must be a dictionary containing the following
 
     'z': must refer to the shared variables to which f_Ax writes.
-    'p': used internally only.
+    'p': shared variable used internally only.
     'x': the shared variable to which the output is written.
     'brk': shared int
     'barrier': one multiprocessing barrier (for n_parallel)
@@ -28,7 +28,6 @@ def cg(f_Ax, b, par_objs, rank, cg_iters=10, callback=None, verbose=False, resid
 
 
 def _cg_master(f_Ax, b, par_objs, cg_iters, callback, verbose, residual_tol):
-
     z = par_objs['z']
     p = par_objs['p']
     x = par_objs['x']
@@ -78,6 +77,7 @@ def _cg(f_Ax, par_objs, cg_iters):
     p = par_objs['p']
     brk = par_objs['brk']
     barrier = par_objs['barrier']
+
     barrier.wait()
     for i in range(cg_iters):
         f_Ax(p)  # (parallel)

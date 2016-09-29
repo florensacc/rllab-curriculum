@@ -31,7 +31,7 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "ec2_test"
+mode = "kube_test"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 
@@ -47,7 +47,7 @@ batch_size = 10000
 max_path_length = 4500
 discount = 0.99
 n_itr = 1000
-force_batch_sampler = False
+force_batch_sampler = True
 cg_args = dict(
     cg_iters=10,
     reg_coeff=1e-3,
