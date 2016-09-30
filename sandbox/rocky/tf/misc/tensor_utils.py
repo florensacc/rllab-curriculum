@@ -1,5 +1,3 @@
-
-
 import tensorflow as tf
 import numpy as np
 
@@ -102,6 +100,13 @@ def pad_tensor(x, max_len):
         x,
         np.tile(np.zeros_like(x[0]), (max_len - len(x),) + (1,) * np.ndim(x[0]))
     ])
+
+
+def pad_tensor_n(xs, max_len):
+    ret = np.zeros((len(xs), max_len) + xs[0].shape[1:], dtype=xs[0].dtype)
+    for idx, x in enumerate(xs):
+        ret[idx][:len(x)] = x
+    return ret
 
 
 def pad_tensor_dict(tensor_dict, max_len):

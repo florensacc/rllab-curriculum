@@ -1,8 +1,12 @@
 from sandbox.rocky.analogy.algos.trainer import Trainer
+from sandbox.rocky.analogy.demo_collector.policy_demo_collector import PolicyDemoCollector
+from sandbox.rocky.analogy.demo_collector.trajopt_demo_collector import TrajoptDemoCollector
 from sandbox.rocky.analogy.envs.conopt_particle_env import ConoptParticleEnv
 from sandbox.rocky.analogy.policies.conopt_particle_tracking_policy import ConoptParticleTrackingPolicy
 from sandbox.rocky.analogy.policies.demo_rnn_mlp_analogy_policy import DemoRNNMLPAnalogyPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
+
+
 import tensorflow as tf
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab import config
@@ -21,7 +25,7 @@ Try compressed image representation
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [11]#, 21, 31]
+        return [11, 21, 31]
 
     @variant
     def n_train_trajs(self):
@@ -70,18 +74,19 @@ for v in variants:
         env_cls=TfEnv.wrap(
             ConoptParticleEnv,
         ),
-        demo_policy_cls=ConoptParticleTrackingPolicy,
+        demo_collector=TrajoptDemoCollector(),
+        # demo_collector=PolicyDemoCollector(policy_cls=ConoptParticleTrackingPolicy),
         n_train_trajs=v["n_train_trajs"],
         n_test_trajs=50,
         horizon=v["horizon"],
-        n_epochs=200,
+        n_epochs=1000,
         learning_rate=1e-2,
         no_improvement_tolerance=20,
         shuffler=ConoptParticleEnv.shuffler() if v["use_shuffler"] else None,
         batch_size=100,
     )
 
-    config.DOCKER_IMAGE = "dementrock/rllab3-conopt-gpu-cuda80"
+    config.DOCKER_IMAGE = "dementrock/rllab3-conopt-gpu"
     config.KUBE_DEFAULT_NODE_SELECTOR = {
         # "aws/type": "c4.2xlarge",
     }
@@ -103,8 +108,8 @@ for v in variants:
     run_experiment_lite(
         algo.train(),
         exp_prefix="conopt-particle-1",
-        mode="lab_kube",
-        n_parallel=4,
+        mode="local",
+        n_parallel=8,
         seed=v["seed"],
         snapshot_mode="last",
         variant=v,

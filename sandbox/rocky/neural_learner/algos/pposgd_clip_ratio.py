@@ -1,40 +1,50 @@
-from rllab.core.serializable import Serializable
+from collections import OrderedDict
+
 from rllab.misc import logger
+from sandbox.rocky.neural_learner.optimizers.tbptt_optimizer import TBPTTOptimizer
 from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
 import tensorflow as tf
-
-from sandbox.rocky.tf.core.layers_powered import LayersPowered
-import sandbox.rocky.tf.core.layers as L
-from sandbox.rocky.tf.core.network import MLP
 from sandbox.rocky.tf.misc import tensor_utils
 import numpy as np
+import sys
 
 
 class PPOSGD(BatchPolopt):
     def __init__(
             self,
             clip_lr=0.3,
-            minibatch_size=256,
-            n_steps=20,
-            n_epochs=10,
             increase_penalty_factor=2,
             decrease_penalty_factor=0.5,
+            min_penalty=1e-3,
+            max_penalty=1e6,
             entropy_bonus_coeff=0.,
             gradient_clipping=40.,
             log_loss_kl_before=True,
             log_loss_kl_after=True,
+            use_kl_penalty=False,
+            initial_kl_penalty=1.,
+            optimizer=None,
+            step_size=0.01,
+            min_n_epochs=2,
             **kwargs
     ):
         self.clip_lr = clip_lr
-        self.minibatch_size = minibatch_size
-        self.n_steps = n_steps
-        self.n_epochs = n_epochs
         self.increase_penalty_factor = increase_penalty_factor
         self.decrease_penalty_factor = decrease_penalty_factor
+        self.min_penalty = min_penalty
+        self.max_penalty = max_penalty
         self.entropy_bonus_coeff = entropy_bonus_coeff
         self.gradient_clipping = gradient_clipping
         self.log_loss_kl_before = log_loss_kl_before
         self.log_loss_kl_after = log_loss_kl_after
+        self.use_kl_penalty = use_kl_penalty
+        self.initial_kl_penalty = initial_kl_penalty
+        self.step_size = step_size
+        self.min_n_epochs = min_n_epochs
+        if optimizer is None:
+            optimizer = TBPTTOptimizer()
+        self.optimizer = optimizer
+
         super().__init__(**kwargs)
 
     def init_opt(self):
@@ -81,7 +91,6 @@ class PPOSGD(BatchPolopt):
             recurrent_state={recurrent_layer: state_var},
             recurrent_state_output=recurrent_state_output,
         )
-        minibatch_dist_info_vars_list = [minibatch_dist_info_vars[k] for k in dist.dist_info_keys]
 
         state_output = recurrent_state_output[rnn_network.recurrent_layer]
         final_state = tf.reverse(state_output, [False, True, False])[:, 0, :]
@@ -90,6 +99,11 @@ class PPOSGD(BatchPolopt):
         kl = dist.kl_sym(old_dist_info_vars, minibatch_dist_info_vars)
         ent = tf.reduce_sum(dist.entropy_sym(minibatch_dist_info_vars) * valid_var) / tf.reduce_sum(valid_var)
         mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
+        kl_penalty_var = tf.Variable(
+            initial_value=self.initial_kl_penalty,
+            dtype=tf.float32,
+            name="kl_penalty"
+        )
 
         clipped_lr = tf.clip_by_value(lr, 1. - self.clip_lr, 1. + self.clip_lr)
 
@@ -98,59 +112,43 @@ class PPOSGD(BatchPolopt):
             tf.minimum(lr * advantage_var, clipped_lr * advantage_var) * valid_var
         ) / tf.reduce_sum(valid_var)
 
-        optimizer = tf.train.AdamOptimizer(learning_rate=1e-3)
+        clipped_surr_pen_loss = clipped_surr_loss - self.entropy_bonus_coeff * ent
+        if self.use_kl_penalty:
+            clipped_surr_pen_loss += kl_penalty_var * tf.maximum(0., mean_kl - self.step_size)
 
-        params = self.policy.get_params(trainable=True)
-        gvs = optimizer.compute_gradients(clipped_surr_loss, var_list=params)
-        if self.gradient_clipping is not None:
-            capped_gvs = [(tf.clip_by_value(grad, -self.gradient_clipping, self.gradient_clipping), var) for grad, var
-                          in gvs]
-        else:
-            capped_gvs = gvs
-        train_op = optimizer.apply_gradients(capped_gvs)
+        self.kl_penalty_var = kl_penalty_var
 
-        self.f_train = tensor_utils.compile_function(
-            inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list + \
-                   [valid_var, state_var],
-            outputs=[train_op, surr_loss, mean_kl, final_state],
+        self.optimizer.update_opt(
+            loss=clipped_surr_pen_loss,
+            target=self.policy,
+            inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list + [valid_var],
+            rnn_init_state=rnn_network.state_init_param,
+            rnn_state_input=state_var,
+            rnn_final_state=final_state,
+            diagnostic_vars=OrderedDict([
+                ("UnclippedSurrLoss", surr_loss),
+                ("MeanKL", mean_kl),
+            ])
         )
-        self.f_loss_kl = tensor_utils.compile_function(
-            inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list + \
-                   [valid_var, state_var],
-            outputs=[surr_loss, mean_kl, final_state],
+
+        self.f_increase_penalty = tensor_utils.compile_function(
+            inputs=[],
+            outputs=tf.assign(
+                self.kl_penalty_var,
+                tf.minimum(self.kl_penalty_var * self.increase_penalty_factor, self.max_penalty)
+            )
         )
-        self.f_debug = tensor_utils.compile_function(
-            inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list + \
-                   [valid_var, state_var],
-            outputs=[surr_loss, mean_kl, final_state, lr, kl, minibatch_dist_info_vars_list],
+        self.f_decrease_penalty = tensor_utils.compile_function(
+            inputs=[],
+            outputs=tf.assign(
+                self.kl_penalty_var,
+                tf.maximum(self.kl_penalty_var * self.decrease_penalty_factor, self.min_penalty)
+            )
         )
 
     def sliced_loss_kl(self, inputs):
-        N, T, _ = inputs[0].shape
-        if self.n_steps is None:
-            n_steps = T
-        else:
-            n_steps = self.n_steps
-        if self.minibatch_size is None:
-            minibatch_size = N
-        else:
-            minibatch_size = self.minibatch_size
-
-        surr_losses = []
-        mean_kls = []
-
-        for batch_idx in range(0, N, minibatch_size):
-            batch_sliced_inputs = [x[batch_idx:batch_idx + self.minibatch_size] for x in inputs]
-            states = np.tile(
-                self.policy.prob_network.state_init_param.eval().reshape((1, -1)),
-                (batch_sliced_inputs[0].shape[0], 1)
-            )
-            for t in range(0, T, n_steps):
-                time_sliced_inputs = [x[:, t:t + n_steps] for x in batch_sliced_inputs]
-                surr_loss, mean_kl, states = self.f_loss_kl(*(time_sliced_inputs + [states]))
-                surr_losses.append(surr_loss)
-                mean_kls.append(mean_kl)
-        return np.mean(surr_losses), np.mean(mean_kls)
+        loss, diags = self.optimizer.loss_diagostics(inputs)
+        return diags["UnclippedSurrLoss"], diags["MeanKL"]
 
     def optimize_policy(self, itr, samples_data):
         logger.log("Start optimizing..")
@@ -166,63 +164,53 @@ class PPOSGD(BatchPolopt):
 
         all_inputs = [observations, actions, advantages] + state_info_list + dist_info_list + [valids]
 
-        N, T, _ = observations.shape
-        if self.n_steps is None:
-            n_steps = T
-        else:
-            n_steps = self.n_steps
-        if self.minibatch_size is None:
-            minibatch_size = N
-        else:
-            minibatch_size = self.minibatch_size
-
         if self.log_loss_kl_before:
             logger.log("Computing loss / KL before training")
             surr_loss_before, kl_before = self.sliced_loss_kl(all_inputs)
             logger.log("Computed")
 
-        best_loss = None
-        best_params = None
-
-        logger.log("Start training...")
-
         epoch_surr_losses = []
         epoch_mean_kls = []
 
-        for epoch_id in range(self.n_epochs):
-            logger.log("Epoch %d" % epoch_id)
-            surr_losses = []
-            mean_kls = []
-            for batch_idx in range(0, N, minibatch_size):
-                batch_sliced_inputs = [x[batch_idx:batch_idx + self.minibatch_size] for x in all_inputs]
-                states = np.tile(
-                    self.policy.prob_network.state_init_param.eval().reshape((1, -1)),
-                    (batch_sliced_inputs[0].shape[0], 1)
-                )
-                for t in range(0, T, n_steps):
-                    time_sliced_inputs = [x[:, t:t + n_steps] for x in batch_sliced_inputs]
-                    # The last input is the valid mask. Only bother computing if at least one entry is valid
-                    if np.any(np.nonzero(time_sliced_inputs[-1])):
-                        old_states = states
-                        _, surr_loss, mean_kl, states = self.f_train(*(time_sliced_inputs + [states]))
-                        surr_losses.append(surr_loss)
-                        mean_kls.append(mean_kl)
-                        if np.isnan(surr_loss) or np.isnan(mean_kl):
-                            debug_vals = self.f_debug(*(time_sliced_inputs + [old_states]))
-                            # TODO: replace this !!
-                            import ipdb; ipdb.set_trace()
-                    else:
-                        break
-            mean_kl = np.mean(mean_kls)
-            surr_loss = np.mean(surr_losses)
-            logger.log("Loss: %f; Mean KL: %f" % (surr_loss, mean_kl))
+        best_loss = None
+        best_kl = None
+        best_params = None
 
+        def itr_callback(itr, loss, diagnostics, *args, **kwargs):
+            nonlocal best_loss
+            nonlocal best_params
+            nonlocal best_kl
+            surr_loss = diagnostics["UnclippedSurrLoss"]
+            mean_kl = diagnostics["MeanKL"]
             epoch_surr_losses.append(surr_loss)
             epoch_mean_kls.append(mean_kl)
+            if mean_kl <= self.step_size:
+                if best_loss is None or surr_loss < best_loss:
+                    best_loss = surr_loss
+                    best_kl = mean_kl
+                    best_params = self.policy.get_param_values()
+            if mean_kl <= self.step_size and itr + 1 >= self.min_n_epochs:
+                penalty = self.f_decrease_penalty()
+                logger.log("Epoch %d; Loss %f; Mean KL: %f; decreasing penalty to %f and finish opt since KL and "
+                           "minimum #epochs reached" % (itr, surr_loss, mean_kl, penalty))
+                # early termination
+                return False
+            if self.use_kl_penalty:
+                if mean_kl > self.step_size:
+                    # constraint violated. increase penalty
+                    penalty = self.f_increase_penalty()
+                    logger.log("Epoch %d; Loss %f; Mean KL: %f; increasing penalty to %f" % (
+                        itr, surr_loss, mean_kl, penalty))
+                else:
+                    penalty = self.f_decrease_penalty()
+                    logger.log("Epoch %d; Loss %f; Mean KL: %f; decreasing penalty to %f" % (
+                        itr, surr_loss, mean_kl, penalty))
+            elif itr + 1 >= self.min_n_epochs:
+                # if do not use kl penalty, only execute for the minimum number of epochs
+                return False
+            return True
 
-            if best_loss is None or surr_loss < best_loss:
-                best_loss = surr_loss
-                best_params = self.policy.get_param_values()
+        self.optimizer.optimize(all_inputs, callback=itr_callback)
 
         if best_params is not None:
             self.policy.set_param_values(best_params)
@@ -245,10 +233,18 @@ class PPOSGD(BatchPolopt):
             logger.record_tabular('SurrLossAfter', surr_loss_after)
             logger.record_tabular('MeanKL', kl_after)
         else:
-            logger.record_tabular('LastEpoch.SurrLoss', epoch_surr_losses[-1])
-            logger.record_tabular('LastEpoch.MeanKL', epoch_mean_kls[-1])
+            if best_loss is None:
+                logger.record_tabular('LastEpoch.SurrLoss', epoch_surr_losses[-1])
+                logger.record_tabular('LastEpoch.MeanKL', epoch_mean_kls[-1])
+            else:
+                logger.record_tabular('LastEpoch.SurrLoss', best_loss)
+                logger.record_tabular('LastEpoch.MeanKL', best_kl)
         if self.log_loss_kl_before and self.log_loss_kl_after:
             logger.record_tabular('dSurrLoss', surr_loss_before - surr_loss_after)
+
+        if np.isnan(epoch_surr_losses[-1]):
+            logger.log("NaN detected! Terminating")
+            sys.exit()
 
         return dict()
 
