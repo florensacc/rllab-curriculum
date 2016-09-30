@@ -1,95 +1,101 @@
+import itertools
 import os
 import lasagne
-import itertools
+import tensorflow as tf
 
-from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.core.network import ConvNetwork
+from rllab.envs.env_spec import EnvSpec
 from rllab.misc.instrument import stub, run_experiment_lite
-from rllab.baselines.zero_baseline import ZeroBaseline
-
-from sandbox.rein.envs.atari import AtariEnvX
-from sandbox.rein.algos.trpo_count import TRPO
+from sandbox.rein.algos.embedding_tf.tf_atari import AtariEnv
+from sandbox.rein.algos.embedding_tf.trpo_plus import TRPOPlus
+from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from sandbox.rocky.tf.core.network import ConvNetwork
+from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from sandbox.rocky.tf.spaces.box import Box
 from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
+TEST_RUN = True
+
 # global params
-num_seq_frames = 1
-batch_norm = True
-dropout = False
-baseline = True
+n_seq_frames = 1
 
-exp_prefix = 'debug-bincount-trpo-a'
-seeds = range(5)
-etas = [0, 0.01, 0.1, 1.0]
-mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=4),
-        AtariEnvX(game='freeway', obs_type="image", frame_skip=4),
-        AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=4),
-        AtariEnvX(game='breakout', obs_type="image", frame_skip=4)]
-lst_factor = [2]
-trpo_batch_size = 500
-max_path_length = 45
-batch_norm = True
-
+# Param ranges
+if TEST_RUN:
+    exp_prefix = 'trpo-emb-a'
+    seeds = range(5)
+    etas = [0, 0.1]
+    mdps = [AtariEnv(game='freeway', obs_type="image", frame_skip=4),
+            AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
+            AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
+            AtariEnv(game='breakout', obs_type="image", frame_skip=4)]
+    lst_factor = [1]
+    trpo_batch_size = 30000
+    max_path_length = 4500
+    dropout = False
+    batch_norm = True
+else:
+    exp_prefix = 'trpo-pxlnn-a'
+    seeds = range(5)
+    etas = [0, 1.0, 0.1, 0.01]
+    mdps = [AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
+            AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
+            AtariEnv(game='freeway', obs_type="image", frame_skip=4)]
+    lst_factor = [1]
+    trpo_batch_size = 20000
+    max_path_length = 4500
+    dropout = False
+    batch_norm = True
 
 param_cart_product = itertools.product(
     lst_factor, mdps, etas, seeds
 )
 
 for factor, mdp, eta, seed in param_cart_product:
+    env_spec = EnvSpec(
+        observation_space=Box(low=-1, high=1, shape=(52, 52, n_seq_frames)),
+        action_space=mdp.spec.action_space
+    )
     network = ConvNetwork(
-        input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
+        name='policy_network',
+        hidden_nonlinearity=tf.nn.relu,
+        output_nonlinearity=tf.nn.softmax,
+        input_shape=env_spec.observation_space.shape,  # mdp.spec.observation_space.shape,
         output_dim=mdp.spec.action_space.flat_dim,
-        hidden_sizes=(64,),
+        hidden_sizes=(32,),
         conv_filters=(16, 16, 16),
         conv_filter_sizes=(6, 6, 6),
         conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
+        conv_pads=('VALID', 'VALID', 'VALID'),
     )
     policy = CategoricalMLPPolicy(
-        env_spec=mdp.spec,
-        num_seq_inputs=num_seq_frames,
+        name='policy',
+        env_spec=env_spec,  # mdp.spec,
         prob_network=network,
     )
 
-    if baseline:
-        network = ConvNetwork(
-            input_shape=(num_seq_frames,) + (mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
-            output_dim=1,
-            hidden_sizes=(32,),
-            conv_filters=(16, 16),
-            conv_filter_sizes=(6, 6),
-            conv_strides=(2, 2),
-            conv_pads=(0, 2),
-        )
-        baseline = GaussianMLPBaseline(
-            env_spec=mdp.spec,
-            num_seq_inputs=num_seq_frames,
-            regressor_args=dict(
-                mean_network=network,
-                batchsize=None,
-                subsample_factor=0.1,
-                # optimizer=FirstOrderOptimizer(
-                #     max_epochs=100,
-                #     verbose=True,
-                # ),
-                # use_trust_region=False,
-            ),
-        )
-    else:
-        baseline = ZeroBaseline(
-            env_spec=mdp.spec
-        )
+    network = ConvNetwork(
+        name='baseline_network',
+        hidden_nonlinearity=tf.nn.relu,
+        output_nonlinearity=tf.identity,
+        input_shape=env_spec.observation_space.shape,  # mdp.spec.observation_space.shape,
+        output_dim=1,
+        hidden_sizes=(32,),
+        conv_filters=(16, 16, 16),
+        conv_filter_sizes=(6, 6, 6),
+        conv_strides=(2, 2, 2),
+        conv_pads=('VALID', 'VALID', 'VALID'),
+    )
+    baseline = GaussianMLPBaseline(
+        env_spec=env_spec,  # mdp.spec,
+        regressor_args=dict(
+            mean_network=network,
+            subsample_factor=0.1,
+        ),
 
-    # If we don't use a replay pool, we could have correct values here, as
-    # it is purely Bayesian. We then divide the KL divergence term by the
-    # number of batches in each iteration `batch'. Also the batch size
-    # would be given correctly.
-    batch_size = 1
-    n_batches = 50
+    )
 
     autoenc = ConvBNNVIME(
         state_dim=mdp.spec.observation_space.shape,
@@ -136,21 +142,14 @@ for factor, mdp, eta, seed in param_cart_product:
                  n_units=32,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=128 * factor,
-                 matrix_variate_gaussian=False,
-                 nonlinearity=lasagne.nonlinearities.rectify,
-                 batch_norm=batch_norm,
-                 dropout=dropout,
-                 deterministic=True),
-            dict(name='gaussian',
-                 n_units=1536,
+                 n_units=2304,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
                  deterministic=True),
             dict(name='reshape',
-                 shape=([0], 64, 6, 4)),
+                 shape=([0], 64, 6, 6)),
             dict(name='deconvolution',
                  n_filters=64,
                  filter_size=(6, 6),
@@ -164,7 +163,7 @@ for factor, mdp, eta, seed in param_cart_product:
                  n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
-                 pad=(2, 0),
+                 pad=(2, 2),
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
@@ -173,21 +172,21 @@ for factor, mdp, eta, seed in param_cart_product:
                  n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
-                 pad=(0, 1),
+                 pad=(0, 0),
                  nonlinearity=lasagne.nonlinearities.linear,
                  batch_norm=True,
                  dropout=False,
                  deterministic=True),
         ],
-        n_batches=n_batches,
+        n_batches=1,
         trans_func=lasagne.nonlinearities.rectify,
         out_func=lasagne.nonlinearities.linear,
-        batch_size=batch_size,
+        batch_size=40,
         n_samples=5,
         num_train_samples=1,
         prior_sd=0.05,
         second_order_update=False,
-        learning_rate=0.003,
+        learning_rate=0.001,
         surprise_type=ConvBNNVIME.SurpriseType.VAR,
         update_prior=False,
         update_likelihood_sd=False,
@@ -197,44 +196,42 @@ for factor, mdp, eta, seed in param_cart_product:
         likelihood_sd_init=0.1,
         disable_variance=False,
         ind_softmax=True,
-        num_seq_inputs=num_seq_frames,
+        num_seq_inputs=1,
         label_smoothing=0.003,
-        disable_act_rew_paths=True  # Disable prediction of rewards and intake of actions, act as actual autoenc
+        disable_act_rew_paths=True,  # Disable prediction of rewards and intake of actions, act as actual autoenc
+        # --
+        # Count settings
+        binary_penalty=True,
     )
 
-    algo = TRPO(
-        # TRPO settings
-        # -------------
+    algo = TRPOPlus(
+        model=autoenc,
         discount=0.995,
         env=mdp,
         policy=policy,
         baseline=baseline,
-        autoenc=autoenc,
         batch_size=trpo_batch_size,
-        whole_paths=True,
         max_path_length=max_path_length,
-        n_itr=400,
+        n_itr=1000,
         step_size=0.01,
         optimizer_args=dict(
-            num_slices=30,
             subsample_factor=0.1,
         ),
-
-        # COUNT settings
-        # -------------
-        eta=eta,
-        dyn_pool_args=dict(
+        n_seq_frames=n_seq_frames,
+        # --
+        # Count settings
+        model_pool_args=dict(
             size=100000,
-            min_size=64,
-            batch_size=64,
+            min_size=32,
+            batch_size=32,
             subsample_factor=0.1,
             fill_before_subsampling=True,
         ),
-        surprise_transform=None,
-        hamming_distance=1
+        hamming_distance=0,
+        eta=eta,
+        train_model=True,
+        train_model_freq=1,
     )
-
-    # TODO: split AE from CONVBNNVIME
 
     run_experiment_lite(
         algo.train(),
@@ -242,9 +239,9 @@ for factor, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
-        script="sandbox/rein/experiments/run_experiment_lite_count.py",
+        script="sandbox/rein/algos/embedding/run_experiment_lite.py",
         sync_all_data_node_to_s3=True
     )
