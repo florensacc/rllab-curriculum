@@ -79,7 +79,7 @@ for v in variants:
         n_train_trajs=v["n_train_trajs"],
         n_test_trajs=50,
         horizon=v["horizon"],
-        n_epochs=1,
+        n_epochs=1000,
         learning_rate=1e-2,
         no_improvement_tolerance=20,
         shuffler=ConoptParticleEnv.shuffler() if v["use_shuffler"] else None,
