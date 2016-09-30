@@ -6,15 +6,14 @@ Switch to Theano. Run on CPU. Use parallel TRPO
 from rllab.baselines.gaussian_conv_baseline import GaussianConvBaseline
 from sandbox.adam.parallel.zero_baseline import ParallelZeroBaseline
 from sandbox.haoran.parallel_trpo.parallel_nn_feature_linear_baseline import ParallelNNFeatureLinearBaseline
+from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBaseline
 
 """ policy """
 from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
 from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
 
 """ optimizer """
-from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
-from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
+from sandbox.haoran.parallel_trpo.parallel.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
 
 """ algorithm """
 from sandbox.adam.parallel.trpo import ParallelTRPO
@@ -49,6 +48,7 @@ plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
 config.USE_TF = False
+
 if sys.platform == "darwin":
     set_cpu_affinity = False
     cpu_assignments = None
@@ -61,7 +61,7 @@ else:
 # params ---------------------------------------
 # algo
 use_parallel = True
-batch_size = 1000
+batch_size = 10000
 max_path_length = 4500
 discount = 0.99
 n_itr = 1000
@@ -76,9 +76,9 @@ cg_args = dict(
     num_slices=1,
 )
 step_size = 0.01
-network_args = trpo_dqn_args
 
 # env
+network_args = trpo_dqn_args
 img_width=42
 img_height=42
 clip_reward = True
@@ -179,32 +179,77 @@ for v in variants:
     )
 
 
-    baseline = ParallelNNFeatureLinearBaseline(
+    # baseline = ParallelNNFeatureLinearBaseline(
+    #     env_spec=env.spec,
+    #     policy=policy,
+    #     nn_feature_power=2,
+    #     t_power=3,
+    # )
+    # baseline = ParallelLinearFeatureBaseline(env_spec=env.spec)
+
+    network_args_for_vf = copy.deepcopy(network_args)
+    network_args_for_vf.pop("output_nonlinearity")
+    baseline = ParallelGaussianConvBaseline(
         env_spec=env.spec,
-        policy=policy,
-        nn_feature_power=2,
-        t_power=3,
+        regressor_args = dict(
+            optimizer=ParallelConjugateGradientOptimizer(
+                cg_iters=0,
+                subsample_factor=0.001,
+                max_backtracks=10,
+            ), # gradient descent w/ a learning rate decided by the constraint
+            subsample_factor=1.0, #FIXME
+            batchsize=batch_size, #FIXME
+            use_trust_region=True,
+            **network_args_for_vf
+        )
     )
-    if use_parallel:
-        algo = ParallelTRPO(
-            env=env,
+    algo = ParallelTRPO(
+        env=env,
+        policy=policy,
+        baseline=baseline,
+        batch_size=batch_size,
+        max_path_length=max_path_length,
+        discount=discount,
+        n_itr=n_itr,
+        plot=plot,
+        optimizer_args=cg_args,
+        step_size=step_size,
+        set_cpu_affinity=set_cpu_affinity,
+        cpu_assignments=cpu_assignments,
+        serial_compile=serial_compile,
+        n_parallel=n_parallel,
+        sync_all_data_node_to_s3=True,
+    )
+    if baseline_type == "nn_feature_linear":
+        baseline = ParallelNNFeatureLinearBaseline(
+            env_spec=env.spec,
             policy=policy,
-            baseline=baseline,
-            batch_size=batch_size,
-            max_path_length=max_path_length,
-            discount=discount,
-            n_itr=n_itr,
-            plot=plot,
-            optimizer_args=cg_args,
-            step_size=step_size,
-            set_cpu_affinity=set_cpu_affinity,
-            cpu_assignments=cpu_assignments,
-            serial_compile=serial_compile,
-            n_parallel=n_parallel,
+            nn_feature_power=2,
+            t_power=3,
+        )
+    elif baseline_type == "conv":
+        if baseline_optimizer == "sgd":
+            optimizer = ParallelFirstOrderOptimizer(
+                learning_rate=1e-3,
+                name="vf",
+                max_epochs=10,
+                verbose=False,
+                batch_size=None,
+            )
+        elif baseline_optimizer == "cg":
+            optimizer = ParallelConjugateGradientOptimizer(
+                subsample_factor=0.2,
+                cg_iters=10,
+            )
+        else:
+            raise NotImplementedError
+        regressor_args["optimizer"] = optimizer
+        baseline = ParallelGaussianConvBaseline(
+            env_spec=env.spec,
+            regressor_args=regressor_args,
         )
     else:
         raise NotImplementedError
-
 
     if use_gpu:
         config.USE_GPU = True
@@ -223,6 +268,7 @@ for v in variants:
             plot=plot,
             sync_s3_pkl=sync_s3_pkl,
             sync_log_on_termination=True,
+            sync_all_data_node_to_s3=True,
         )
     else:
         raise NotImplementedError

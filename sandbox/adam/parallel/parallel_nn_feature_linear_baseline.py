@@ -30,7 +30,6 @@ class ParallelNNFeatureLinearBaseline(LinearFeatureBaseline):
             nn_feature_power=2,
             t_power=3,
             reg_coeff=1e-5,
-            low_mem=False
         ):
         self._policy = policy
         self._nn_feature_power = nn_feature_power
@@ -38,12 +37,6 @@ class ParallelNNFeatureLinearBaseline(LinearFeatureBaseline):
         nn_feature_len = np.prod(policy.get_feature_shape())
         self._nn_feature_len = nn_feature_len
         self._vec_dim = int(nn_feature_len * nn_feature_power + t_power + 1)
-
-        self._low_mem = low_mem
-        if low_mem:
-            self.feat_mat = np.zeros([self._vec_dim, self._vec_dim])
-            self.target_vec = np.zeros([self._vec_dim, ])
-            self.path_vec = np.zeros([1, self._vec_dim])
         super().__init__(env_spec, reg_coeff)
 
     @overrides
@@ -106,15 +99,10 @@ class ParallelNNFeatureLinearBaseline(LinearFeatureBaseline):
         """
         shareds, barriers = self._par_objs
 
-        if self._low_mem:
-            self._features_and_targets(paths)
-            f_mat = self.feat_mat
-            t_vec = self.target_vec
-        else:
-            featmat = np.concatenate([self._features(path) for path in paths])
-            returns = np.concatenate([path["returns"] for path in paths])
-            f_mat = featmat.T.dot(featmat)
-            t_vec = featmat.T.dot(returns)
+        featmat = np.concatenate([self._features(path) for path in paths])
+        returns = np.concatenate([path["returns"] for path in paths])
+        f_mat = featmat.T.dot(featmat)
+        t_vec = featmat.T.dot(returns)
 
         shareds.feat_mat[:, :, self.rank] = f_mat
         shareds.target_vec[:, self.rank] = t_vec
@@ -134,6 +122,10 @@ class ParallelNNFeatureLinearBaseline(LinearFeatureBaseline):
                 if not np.any(np.isnan(shareds.coeffs)):
                     break
                 reg_coeff *= 10
+
+            # compute training error
+            train_error = np.average((featmat.dot(self._coeffs) - returns)**2)
+            print("---------- baseline training error: %f"%(train_error))
         barriers.fit[1].wait()
 
     def _features_and_targets(self, paths):
