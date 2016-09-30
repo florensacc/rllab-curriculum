@@ -8,7 +8,8 @@ import sys
 import rllab.misc.logger as logger
 
 TINY = 1e-8
-TINY_P = 1e-2
+TINY_G_P = 1e-2
+TINY_D_P = 1e-1
 
 
 class EnsembleGANTrainer(object):
@@ -32,6 +33,7 @@ class EnsembleGANTrainer(object):
             anneal_len=None,
             natural_step=None,
             natural_g_only=False,
+            natural_d_one_sided=False,
             second_order_natural_approx=False,
             natural_anneal_len=None,
             fixed_sampling_noise=False,
@@ -43,6 +45,7 @@ class EnsembleGANTrainer(object):
         """
         :type model: EnsembleGAN
         """
+        self.natural_d_one_sided = natural_d_one_sided
         self.tgt_network_update_freq = tgt_network_update_freq
         self.natural_anneal_len = natural_anneal_len
         self.second_order_natural_approx = second_order_natural_approx
@@ -151,7 +154,7 @@ class EnsembleGANTrainer(object):
 
             # specific to 2nd approx adaptive kl size
             self.natural_step_var = tf.Variable(
-                initial_value=1./TINY_P if self.natural_anneal_len else self.natural_step,
+                initial_value=1./TINY_G_P if self.natural_anneal_len else self.natural_step,
                 name="natural_step",
                 trainable=False,
             )
@@ -166,18 +169,24 @@ class EnsembleGANTrainer(object):
                     real_p = tf.stop_gradient(tf.nn.sigmoid(real_d_logits))
                     fake_p = tf.stop_gradient(tf.nn.sigmoid(fake_d_logits))
                 if self.second_order_natural_approx:
-                    real_step = 2. * self.natural_step_var * tf.maximum(real_p, TINY_P) * (1. - real_p)
-                    fake_step = 2. * self.natural_step_var * fake_p * tf.maximum(1. - fake_p, TINY_P)
+                    real_step = 2. * self.natural_step_var * tf.maximum(real_p, TINY_D_P) * (1. - real_p)
+                    fake_step = 2. * self.natural_step_var * fake_p * tf.maximum(1. - fake_p, TINY_D_P)
                 else:
                     real_step = fake_step = self.natural_step
-                real_d_tgt = tf.minimum(
-                    real_p + real_step,
-                    1.,
-                )
+                if self.natural_d_one_sided:
+                    real_d_tgt = tf.ones_like(real_d_logits)
+                else:
+                    real_d_tgt = tf.minimum(
+                        real_p + real_step,
+                        1.,
+                    )
                 fake_d_tgt = tf.maximum(
                     fake_p - fake_step,
                     0.,
                 )
+                mean, var = tf.nn.moments(fake_d_tgt, list(range(len(fake_d_tgt.get_shape()))))
+                self.log_vars.append(("fake_d_tgt_mean", mean))
+                self.log_vars.append(("fake_d_tgt_var", var))
 
             discriminator_losses = tf.nn.sigmoid_cross_entropy_with_logits(
                 real_d_logits,
@@ -213,19 +222,19 @@ class EnsembleGANTrainer(object):
                 else:
                     fake_p = tf.stop_gradient(tf.nn.sigmoid(fake_g_logits))
                 if self.second_order_natural_approx:
-                    fake_step = 2. * self.natural_step_var * tf.maximum(fake_p, TINY_P) * (1. - fake_p)
+                    fake_step = 2. * self.natural_step_var * tf.maximum(fake_p, TINY_G_P) * (1. - fake_p)
                 else:
                     fake_step = self.natural_step
                 mean, var = tf.nn.moments(fake_step, list(range(len(fake_step.get_shape()))))
-                self.log_vars.append(("fake_step_mean", mean))
-                self.log_vars.append(("fake_step_var", var))
+                self.log_vars.append(("fake_g_step_mean", mean))
+                self.log_vars.append(("fake_g_step_var", var))
                 fake_g_tgt = tf.minimum(
                     fake_p + fake_step,
                     1.,
                 )
                 mean, var = tf.nn.moments(fake_g_tgt, list(range(len(fake_step.get_shape()))))
-                self.log_vars.append(("fake_tgt_mean", mean))
-                self.log_vars.append(("fake_tgt_var", var))
+                self.log_vars.append(("fake_g_tgt_mean", mean))
+                self.log_vars.append(("fake_g_tgt_var", var))
             generator_losses = tf.nn.sigmoid_cross_entropy_with_logits(
                 fake_g_logits,
                 fake_g_tgt
@@ -446,7 +455,7 @@ class EnsembleGANTrainer(object):
                 avg_log_vals = np.mean(np.array(all_log_vals), axis=0)
                 # log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, avg_log_vals))
                 for k,v in zip(log_keys, avg_log_vals):
-                    logger.record_tabular("train_%s"%k, v)
+                    logger.record_tabular("%s"%k, v)
                 logger.dump_tabular(with_prefix=False)
 
                 # print(log_line)
