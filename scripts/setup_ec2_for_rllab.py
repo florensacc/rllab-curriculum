@@ -10,7 +10,7 @@ from string import Template
 
 ACCESS_KEY = os.environ["AWS_ACCESS_KEY"]
 ACCESS_SECRET = os.environ["AWS_ACCESS_SECRET"]
-S3_BUCKET_NAME = "your s3 bucket"
+S3_BUCKET_NAME = os.environ["RLLAB_S3_BUCKET"]
 
 ALL_REGION_AWS_SECURITY_GROUP_IDS = {}
 ALL_REGION_AWS_KEY_NAMES = {}
