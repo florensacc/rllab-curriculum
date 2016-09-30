@@ -73,3 +73,6 @@ class VecTfEnv(object):
 
     def step(self, action_n):
         return self.vec_env.step(action_n)
+
+    def terminate(self):
+        self.vec_env.terminate()

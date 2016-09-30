@@ -15,8 +15,8 @@ class DFSGridMazeGenerator(object):
         1: Free
         """
 
-        assert n_row % 2 == 1 and n_row >= 5
-        assert n_col % 2 == 1 and n_col >= 5
+        assert n_row % 2 == 1 and n_row >= 3
+        assert n_col % 2 == 1 and n_col >= 3
 
         maze_n_row = n_row // 2
         maze_n_col = n_col // 2
