@@ -2,8 +2,11 @@ import os.path as osp
 import tempfile
 import xml.etree.ElementTree as ET
 import math
-
+from functools import reduce
+from matplotlib import patches
+from matplotlib import pyplot as plt
 import numpy as np
+import collections
 
 from rllab import spaces
 from rllab.envs.base import Step
@@ -13,10 +16,12 @@ from rllab.envs.proxy_env import ProxyEnv
 
 from rllab.core.serializable import Serializable
 from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
-from rllab.misc.overrides import overrides
 from rllab.envs.mujoco.maze.maze_env_utils import ray_segment_intersect, point_distance
-
 from rllab.envs.env_spec import EnvSpec
+
+from rllab.misc.overrides import overrides
+from rllab.misc import logger
+
 
 
 class MazeEnv(ProxyEnv, Serializable):
@@ -42,7 +47,7 @@ class MazeEnv(ProxyEnv, Serializable):
             sensor_range=10.,
             sensor_span=math.pi,
             maze_id=4,
-            length=2,
+            length=1,
             maze_height=0.2,
             maze_size_scaling=2,
             *args,
@@ -430,3 +435,120 @@ class MazeEnv(ProxyEnv, Serializable):
 
     def action_from_key(self, key):
         return self.wrapped_env.action_from_key(key)
+
+    @overrides
+    def log_diagnostics(self, paths):
+        # we call here any logging related to the maze, strip the maze obs and call log_diag with the stripped paths
+        stripped_paths = []
+        for path in paths:
+            stripped_path = {}
+            for k, v in path.items():
+                stripped_path[k] = v
+            stripped_path['observations'] = \
+                stripped_path['observations'][:, :self.wrapped_env.observation_space.flat_dim]
+            #  this breaks if the obs of the robot are d>1 dimensional (not a vector)
+            stripped_paths.append(stripped_path)
+        self.wrapped_env.log_diagnostics(stripped_paths)
+        self.plot_visitation(stripped_paths, maze=self.__class__.MAZE_STRUCTURE,
+                             scaling=self.__class__.MAZE_SIZE_SCALING)
+
+    def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2, fig=None, ax=None):
+        if not fig and not ax:
+            print("creating a new figure")
+            fig, ax = plt.subplots()
+        elif not ax:  # if I have a fig but not specify an ax, I assume I have to plot in the first ax
+            ax = fig.get_axes()[0]
+        elif not fig:
+            print("don't give me just the axis bitch")
+        # now we will grid the space and check how much of it the policy is covering
+        x_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
+        y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -2] for path in paths]))))
+        print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
+        # we suppose discrete, one-hot latents
+        if maze:
+            x_max = scaling * len(
+                maze) / 2. - 1  # maze enlarge plot to include the walls. ASSUME ROBOT STARTS IN CENTER!
+            y_max = scaling * len(maze[0]) / 2. - 1
+
+        if 'agent_infos' in list(paths[0].keys()) and 'latents' in list(paths[0]['agent_infos'].keys()):
+            dict_visit = collections.OrderedDict()  # keys: latents, values: np.array with number of visitations
+            num_latents = np.size(paths[0]["agent_infos"]["latents"][0])
+            # set all the labels for the latents and initialize the entries of dict_visit
+            for i in range(num_latents):
+                # one_hot = np.zeros((1, num_latents))  # I put a 1 to be consistent with the rest
+                # one_hot[0,i] = 1
+                # latent_tick_label = 'lat: '+str(one_hot)
+                dict_visit[i] = np.zeros((2 * x_max * mesh_density + 1, 2 * y_max * mesh_density + 1))
+
+            # keep track of the overlap
+            overlap = 0
+            # now plot all the paths
+            for path in paths:
+                lats = [np.nonzero(lat)[1][0] for lat in path['agent_infos']['latents']]  # list of all lats by idx
+                com_x = np.ceil(((np.array(path['observations'][:, -3]) + x_max) * mesh_density)).astype(int)
+                com_y = np.ceil(((np.array(path['observations'][:, -2]) + y_max) * mesh_density)).astype(int)
+                coms = list(zip(com_x, com_y))
+                for i, com in enumerate(coms):
+                    dict_visit[lats[i]][com] += 1
+
+            # fix the colors for each latent
+            num_colors = num_latents + 2  # +2 for the 0 and Repetitions NOT COUNTING THE WALLS
+            cmap = plt.get_cmap('nipy_spectral', num_colors + 1)  # add one color for the walls
+            # create a matrix with entries corresponding to the latent that was there (or other if several/wall/nothing)
+            visitation_by_lat = np.zeros((2 * x_max * mesh_density + 1, 2 * y_max * mesh_density + 1))
+            for i, visit in dict_visit.items():
+                lat_visit = np.where(visit == 0, visit, i + 1)  # transform the map into 0 or i+1
+                visitation_by_lat += lat_visit
+                overlap += np.sum(np.where(visitation_by_lat > lat_visit))  # add the overlaps of this latent
+                visitation_by_lat = np.where(visitation_by_lat <= i + 1, visitation_by_lat,
+                                             num_colors - 1)  # mark overlaps
+            if maze:
+                for row in range(len(maze)):
+                    for col in range(len(maze[0])):
+                        if maze[row][col] == 1:
+                            wall_min_x = max(0, (row - 0.5) * mesh_density * scaling)
+                            wall_max_x = min(2 * x_max * mesh_density * scaling + 1,
+                                             (row + 0.5) * mesh_density * scaling)
+                            wall_min_y = max(0, (col - 0.5) * mesh_density * scaling)
+                            wall_max_y = min(2 * y_max * mesh_density * scaling + 1,
+                                             (col + 0.5) * mesh_density * scaling)
+                            visitation_by_lat[wall_min_x: wall_max_x,
+                            wall_min_y: wall_max_y] = num_colors
+
+            x = np.arange(2 * x_max * mesh_density + 1.) / mesh_density - x_max
+            y = np.arange(2 * y_max * mesh_density + 1.) / mesh_density - y_max
+
+            map_plot = ax.pcolormesh(x, y, visitation_by_lat, cmap=cmap, vmin=0.1,
+                                     vmax=num_latents + 2)  # before 1 (will it affect when no walls?)
+            color_len = (num_colors - 1.) / num_colors
+            ticks = np.arange(color_len / 2., num_colors - 1, color_len)
+            cbar = fig.colorbar(map_plot, ticks=ticks)
+            latent_tick_labels = ['latent: ' + str(i) for i in list(dict_visit.keys())]
+            cbar.ax.set_yticklabels(
+                ['No visitation'] + latent_tick_labels + ['Repetitions'])  # horizontal colorbar
+            # still log the total visitation
+            visitation = reduce(np.add, [visit for visit in dict_visit.values()])
+
+        gx_min, gx_max, gy_min, gy_max = self._find_goal_range()
+        ax.add_patch(patches.Rectangle(
+            (gx_min, gy_min),
+            gx_max - gx_min,
+            gy_max - gy_min,
+            edgecolor='g', fill=False, linewidth=2,
+        ))
+        ax.annotate('G', xy=(0.5*(gx_min+gx_max), 0.5*(gy_min+gy_max)), color='g', fontsize=20)
+
+        ax.set_xlim([x[0], x[-1]])
+        ax.set_ylim([y[0], y[-1]])
+
+        log_dir = logger.get_snapshot_dir()
+        exp_name = log_dir.split('/')[-1]
+        ax.set_title('visitation Maze: ' + exp_name)
+
+        plt.savefig(osp.join(log_dir, 'maze_visitation.png'))  # this saves the current figure, here f
+        plt.close()
+
+        total_visitation = np.count_nonzero(visitation)
+        logger.record_tabular('VisitationTotal', total_visitation)
+        logger.record_tabular('VisitationOverlap', overlap)
+        # gc.collect()
