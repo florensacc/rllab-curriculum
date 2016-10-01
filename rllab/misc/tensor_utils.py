@@ -44,6 +44,18 @@ def pad_tensor_dict(tensor_dict, max_len, mode='zero'):
     return ret
 
 
+def flatten_first_axis_tensor_dict(tensor_dict):
+    keys = list(tensor_dict.keys())
+    ret = dict()
+    for k in keys:
+        if isinstance(tensor_dict[k], dict):
+            ret[k] = flatten_first_axis_tensor_dict(tensor_dict[k])
+        else:
+            old_shape = tensor_dict[k].shape
+            ret[k] = tensor_dict[k].reshape((-1,) + old_shape[2:])
+    return ret
+
+
 def high_res_normalize(probs):
     return [x / sum(map(float, probs)) for x in list(map(float, probs))]
 
