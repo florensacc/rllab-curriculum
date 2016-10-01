@@ -1,10 +1,8 @@
-# overfitting according to data/local/play-0920-iaf-cc-cifar-ml-3ldc-gatedresnet-arch-midarcomp-0.1kl/
-# "object-centric" encoder to try to reduce overfitting
+# compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
+# test if ar channel is not being used so garbage color information is
+# leaking through
 
-# kl 0.01 better on train/vali
-# best train 3.068 with 96 base-filters and improving
-# best vali 3.35 @ 200 epoch w/ 48 chnls; 3.4 w/ 96 chnls
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -57,7 +55,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.01, 0.05,]# 0.1]
+        return [0.01, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -83,7 +81,7 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [96, 48]
+        return [48]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -111,7 +109,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [3, ]
+        return [0, 3, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -177,7 +175,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -255,8 +253,8 @@ for v in variants[i:i+1]:
         )
         ar_conv_dist = ConvAR(
             # tgt_dist=Bernoulli(1),
-            # tgt_dist=tgt_dist,
-            tgt_dist=tgt_ar_dist,
+            tgt_dist=tgt_dist,
+            # tgt_dist=tgt_ar_dist,
             shape=(32, 32, 3),
             filter_size=3,
             depth=v["ar_depth"],
@@ -306,7 +304,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0927_pool_encoder_arch_on_overfit",
+            exp_prefix="0929_noarch_on_pool_encoder_arch",
             seed=v["seed"],
             variant=v,
             mode="local",

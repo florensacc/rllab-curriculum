@@ -1,6 +1,13 @@
 # inherit from pool_encoder_arch_on_overfit
 # test better setting to more symmetric network & try more rep
 
+
+# more rep -> code not used! this means designing an architecture to make
+# sure information propogates is very important as expected!
+
+# train/test don't really get better
+
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

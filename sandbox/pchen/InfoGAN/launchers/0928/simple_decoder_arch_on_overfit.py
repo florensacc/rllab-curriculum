@@ -3,6 +3,9 @@
 # one way to combat overfitting is to have a simple decoder
 # this exp explores simple&corase decoder context
 
+
+# code is not used again in this setup
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
