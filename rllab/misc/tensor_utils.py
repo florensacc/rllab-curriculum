@@ -71,6 +71,24 @@ def stack_tensor_dict_list(tensor_dict_list):
     return ret
 
 
+def concat_tensor_list_subsample(tensor_list, f):
+    return np.concatenate(
+        [t[np.random.choice(len(t), int(np.ceil(len(t) * f)), replace=False)] for t in tensor_list], axis=0)
+
+
+def concat_tensor_dict_list_subsample(tensor_dict_list, f):
+    keys = list(tensor_dict_list[0].keys())
+    ret = dict()
+    for k in keys:
+        example = tensor_dict_list[0][k]
+        if isinstance(example, dict):
+            v = concat_tensor_dict_list_subsample([x[k] for x in tensor_dict_list], f)
+        else:
+            v = concat_tensor_list_subsample([x[k] for x in tensor_dict_list], f)
+        ret[k] = v
+    return ret
+
+
 def concat_tensor_list(tensor_list):
     return np.concatenate(tensor_list, axis=0)
 
