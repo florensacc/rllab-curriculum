@@ -2,12 +2,10 @@ from sandbox.rocky.neural_learner.doom_utils.textmap import *
 from io import StringIO
 import numpy as np
 import random
+from sandbox.rocky.neural_learner.envs.maze.dfs_grid_maze_generator import DFSGridMazeGenerator
 
-# random.seed(0)
-# np.random.seed(0)
 
 def create_map(*args, **kwargs):
-
     player = Thing(x=0, y=0, type=1, id=1)
     # this is the goal the player should reach
     # some candidate things:
@@ -19,10 +17,10 @@ def create_map(*args, **kwargs):
 
     things = [player, bluecard]
 
+    maze_gen = DFSGridMazeGenerator()
 
-
-    # maze_gen = DFSGridMazeGenerator()
-    # maze = maze_gen.gen_maze(n_row=5, n_col=5)
+    maze_size = np.random.choice([5, 7, 9])
+    maze = maze_gen.gen_maze(n_row=maze_size, n_col=maze_size)
 
     # maze = np.asarray([
     #     [0, 0, 0, 0, 0],
@@ -31,13 +29,20 @@ def create_map(*args, **kwargs):
     #     [0, 1, 1, 1, 0],
     #     [0, 0, 0, 0, 0],
     # ])
-    maze = np.asarray([
-        [0, 0, 0, 0, 0],
-        [0, 1, 0, 1, 0],
-        [0, 1, 0, 1, 0],
-        [0, 1, 1, 1, 0],
-        [0, 0, 0, 0, 0],
-    ])
+    # maze = np.asarray([
+    #     [0, 0, 0, 0, 0],
+    #     [0, 1, 0, 1, 0],
+    #     [0, 1, 0, 1, 0],
+    #     [0, 1, 1, 1, 0],
+    #     [0, 0, 0, 0, 0],
+    # ])
+    # maze = np.asarray([
+    #     [0, 0, 0, 0, 0],
+    #     [0, 1, 1, 1, 0],
+    #     [0, 1, 0, 1, 0],
+    #     [0, 1, 0, 1, 0],
+    #     [0, 0, 0, 0, 0],
+    # ])
 
     linedefs = []
     sidedefs = [Sidedef(sector=0, texturemiddle="BRICK9")]
@@ -87,10 +92,12 @@ def create_map(*args, **kwargs):
             y = np.random.randint(0, maze.shape[1] * 96)
             i = x // 96
             j = y // 96
-            if maze[i][j] == 1:
-                thing.x = x
-                thing.y = y
-                break
+            # make sure it's not too close to the boundary
+            if x % 96 > 10 and x % 96 < 86 and y % 96 > 10 and y % 96 < 86:
+                if maze[i][j] == 1:
+                    thing.x = x
+                    thing.y = y
+                    break
 
     sio = StringIO()
     textmap.write(sio)

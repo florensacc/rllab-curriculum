@@ -78,7 +78,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
         # now we will grid the space and check how much of it the policy is covering
         furthest = np.ceil(np.abs(np.max(np.concatenate([path["observations"][:, -3:-1] for path in paths]))))
         print('THE FUTHEST IT WENT COMPONENT-WISE IS', furthest)
-        furthest = max(furthest, 5)
+        furthest = max(furthest, 1)
         mesh_density = 50
         c_grid = int(furthest * 50 * 2)
 

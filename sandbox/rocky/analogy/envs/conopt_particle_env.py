@@ -11,6 +11,7 @@ from sandbox.rocky.analogy.utils import unwrap, using_seed
 from rllab.envs.gym_env import convert_gym_space
 from conopt import cost
 from cached_property import cached_property
+from conopt.worldgen.objs import Obj
 
 
 def fast_residual2cost(r, metric):
@@ -103,22 +104,24 @@ class ConoptParticleEnv(Env, Serializable):
     def step(self, action):
         env = self.conopt_env
         action = action.reshape(env.action_space.shape)
-        assert env.action_space.contains(action), 'Action should be in action_space:\nSPACE=%s\nACTION=%s' % (
-            env.action_space, action)
-
-        xnext, sense = env.world.forward_dynamics(env.x, action)
-        assert xnext.shape == env.x.shape, 'X shape changed! old=%s, new=%s' % (env.x.shape, xnext.shape)
-
-        rew = []
-        for i in range(env.batchsize):
-            sense_here = {k: sense[k][i] for k in sense}
-            reward = fast_compute_cost(env.reward_fn, sense_here)
-            reward = np.squeeze(reward)
-            rew.append(reward)
-
-        env.x = xnext
-
-        return Step(env._get_obs(), np.squeeze(rew), False)
+        next_obs, rew, done, infos = env.step(action)
+        import ipdb; ipdb.set_trace()
+        # assert env.action_space.contains(action), 'Action should be in action_space:\nSPACE=%s\nACTION=%s' % (
+        #     env.action_space, action)
+        #
+        # xnext, sense = env.world.forward_dynamics(env.x, action)
+        # assert xnext.shape == env.x.shape, 'X shape changed! old=%s, new=%s' % (env.x.shape, xnext.shape)
+        #
+        # # rew = []
+        # # for i in range(env.batchsize):
+        # #     sense_here = {k: sense[k][i] for k in sense}
+        # #     reward = - fast_compute_cost(env.reward_fn, sense_here)
+        # #     reward = np.squeeze(reward)
+        # #     rew.append(reward)
+        # #
+        # # env.x = xnext
+        #
+        # return Step(env._get_obs(), np.squeeze(rew), False)
 
     @classmethod
     def shuffler(cls):

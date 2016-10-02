@@ -77,6 +77,7 @@ class GaussianConvRegressor(LasagnePowered, Serializable):
         self._optimizer = optimizer
 
         self.input_shape = input_shape
+        self.output_dim = output_dim
         if mean_network is None:
             mean_network = ConvNetwork(
                 name="mean_network",
