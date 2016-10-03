@@ -1054,9 +1054,11 @@ class AR(Distribution):
                         reshape([-1, 2*self._dim])
         else:
             cur = self._iaf_template.reshape([-1,] + list(img_shape))
-            nr_channels = 2*dim*neuron_ratio
+            img_chn = img_shape[2]
+            nr_channels = 2*img_chn*neuron_ratio
             filter_size = 3
             extra_nins = 1
+
             from prettytensor import UnboundVariable
             with pt.defaults_scope(
                     activation_fn=tf.nn.elu,
@@ -1101,7 +1103,7 @@ class AR(Distribution):
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,
-                        img_shape[3] * 2,
+                        img_chn * 2,
                         activation_fn=None,
                     ).apply(
                         tf.transpose,

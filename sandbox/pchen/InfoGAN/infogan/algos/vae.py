@@ -8,43 +8,45 @@ from progressbar import ETA, Bar, Percentage, ProgressBar
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture, DiscretizedLogistic, ConvAR
 import rllab.misc.logger as logger
 import sys
-from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu
 
 
 class VAE(object):
-    def __init__(self,
-                 model,
-                 dataset,
-                 batch_size,
-                 exp_name="experiment",
-                 optimizer_cls=AdamaxOptimizer,
-                 optimizer_args={},
-                 # log_dir="logs",
-                 checkpoint_dir=None,
-                 resume_from=None,
-                 max_epoch=100,
-                 updates_per_epoch=None,
-                 snapshot_interval=10000,
-                 vali_eval_interval=400,
-                 # learning_rate=1e-3,
-                 summary_interval=100,
-                 monte_carlo_kl=False,
-                 min_kl=0.,
-                 use_prior_reg=False,
-                 weight_redundancy=1,
-                 bnn_decoder=False,
-                 bnn_kl_coeff=1.,
-                 k=1, # importance sampling ratio
-                 cond_px_ent=None,
-                 anneal_after=None,
-                 anneal_every=100,
-                 anneal_factor=0.75,
-                 exp_avg=None,
-                 l2_reg=None,
-                 img_on=True,
-                 kl_coeff=1.,
-                 noise=True,
-                 vis_ar=True,
+    def __init__(
+            self,
+            model,
+            dataset,
+            batch_size,
+            exp_name="experiment",
+            optimizer_cls=AdamaxOptimizer,
+            optimizer_args={},
+            # log_dir="logs",
+            checkpoint_dir=None,
+            resume_from=None,
+            max_epoch=100,
+            updates_per_epoch=None,
+            snapshot_interval=10000,
+            vali_eval_interval=400,
+            # learning_rate=1e-3,
+            summary_interval=100,
+            monte_carlo_kl=False,
+            min_kl=0.,
+            use_prior_reg=False,
+            weight_redundancy=1,
+            bnn_decoder=False,
+            bnn_kl_coeff=1.,
+            k=1, # importance sampling ratio
+            cond_px_ent=None,
+            anneal_after=None,
+            anneal_every=100,
+            anneal_factor=0.75,
+            exp_avg=None,
+            l2_reg=None,
+            img_on=True,
+            kl_coeff=1.,
+            noise=True,
+            vis_ar=True,
+            num_gpus=1,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -57,6 +59,7 @@ class VAE(object):
         Parameters
         ----------
         """
+        self.num_gpus = num_gpus
         self._vis_ar = vis_ar
         self.resume_from = resume_from
         self.checkpoint_dir = checkpoint_dir or logger.get_snapshot_dir()
@@ -131,8 +134,12 @@ class VAE(object):
                 "train_input_init_%s" % init
             )
 
-        # can only be set during template building!!
-        # with pt.defaults_scope(phase=phase):
+        # grads = []
+        # xs = tf.split(0, self.num_gpus, input_tensor)
+        #
+        # for i in range(self.num_gpus):
+        #     with tf.device(assign_to_gpu(i)):
+        #         pass
         z_var, log_p_z_given_x, z_dist_info = \
             self.model.encode(input_tensor, k=self.k if eval else 1)
         if not self.noise:

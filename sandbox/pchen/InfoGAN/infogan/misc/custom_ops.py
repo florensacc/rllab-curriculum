@@ -1514,3 +1514,11 @@ def depool2d_split(x, factor=2):
         [0, 2, 3, 1]
     )
 
+def assign_to_gpu(gpu=0, ps_dev="/device:CPU:0"):
+    def _assign(op):
+        node_def = op if isinstance(op, tf.NodeDef) else op.node_def
+        if node_def.op == "Variable":
+            return ps_dev
+        else:
+            return "/gpu:%d" % gpu
+    return _assign

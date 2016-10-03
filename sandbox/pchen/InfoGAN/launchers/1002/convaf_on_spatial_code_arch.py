@@ -100,7 +100,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, ]
+        return [2, 4, 6]
 
     @variant(hide=False)
     def nr(self):
@@ -178,7 +178,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -316,4 +316,5 @@ for v in variants[i:i+1]:
             # n_parallel=0,
             # use_gpu=True,
         )
+
 
