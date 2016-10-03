@@ -472,11 +472,11 @@ class TRPOPlus(TRPO):
                 # Preprocess trajectory data.
                 self.preprocess(paths)
 
-                if self._train_model:
-                    # --
-                    # Fill replay pool.
-                    self.fill_replay_pool(paths)
+                # --
+                # Fill replay pool.
+                self.fill_replay_pool(paths)
 
+                if self._train_model:
                     # --
                     # Train model.
                     self.train_model(itr)

@@ -3,6 +3,7 @@ from rllab.core.serializable import Serializable
 import theano
 import scipy.optimize
 import time
+from rllab.misc.ext import sliced_fun
 
 
 class LbfgsOptimizer(Serializable):
@@ -10,12 +11,13 @@ class LbfgsOptimizer(Serializable):
     Performs unconstrained optimization via L-BFGS.
     """
 
-    def __init__(self, max_opt_itr=20, callback=None):
+    def __init__(self, max_opt_itr=20, callback=None, n_slices=1):
         Serializable.quick_init(self, locals())
         self._max_opt_itr = max_opt_itr
         self._opt_fun = None
         self._target = None
         self._callback = callback
+        self._n_slices = n_slices
 
     def update_opt(self, loss, target, inputs, extra_inputs=None, gradients=None, *args, **kwargs):
         """
@@ -51,7 +53,8 @@ class LbfgsOptimizer(Serializable):
     def loss(self, inputs, extra_inputs=None):
         if extra_inputs is None:
             extra_inputs = list()
-        return self._opt_fun["f_loss"](*(list(inputs) + list(extra_inputs)))
+        # return self._opt_fun["f_loss"](*(list(inputs) + list(extra_inputs)))
+        return sliced_fun(self._opt_fun["f_loss"], self._n_slices)(inputs, extra_inputs)
 
     def optimize(self, inputs, extra_inputs=None):
         f_opt = self._opt_fun["f_opt"]
@@ -61,14 +64,14 @@ class LbfgsOptimizer(Serializable):
 
         def f_opt_wrapper(flat_params):
             self._target.set_param_values(flat_params, trainable=True)
-            return f_opt(*inputs)
+            return sliced_fun(f_opt, self._n_slices)(inputs)
 
         itr = [0]
         start_time = time.time()
 
         if self._callback:
             def opt_callback(params):
-                loss = self._opt_fun["f_loss"](*(inputs + extra_inputs))
+                loss = self.loss(inputs + extra_inputs)
                 elapsed = time.time() - start_time
                 self._callback(dict(
                     loss=loss,

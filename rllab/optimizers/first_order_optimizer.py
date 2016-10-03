@@ -9,6 +9,7 @@ import lasagne.updates
 import theano
 import pyprind
 from functools import partial
+from rllab.misc.ext import sliced_fun
 
 
 class FirstOrderOptimizer(Serializable):
@@ -25,6 +26,7 @@ class FirstOrderOptimizer(Serializable):
             batch_size=32,
             callback=None,
             verbose=False,
+            n_slices=1,
             **kwargs):
         """
 
@@ -32,6 +34,7 @@ class FirstOrderOptimizer(Serializable):
         :param tolerance:
         :param update_method:
         :param batch_size: None or an integer. If None the whole dataset will be used.
+        :param n_slices: Slice evaluation functions where possible into n_slices.
         :param callback:
         :param kwargs:
         :return:
@@ -46,13 +49,13 @@ class FirstOrderOptimizer(Serializable):
         self._tolerance = tolerance
         self._batch_size = batch_size
         self._verbose = verbose
+        self._n_slices = n_slices
 
     def update_opt(self, loss, target, inputs, extra_inputs=None, gradients=None, **kwargs):
         """
         :param loss: Symbolic expression for the loss function.
         :param target: A parameterized object to optimize over. It should implement methods of the
         :class:`rllab.core.paramerized.Parameterized` class.
-        :param leq_constraint: A constraint provided as a tuple (f, epsilon), of the form f(*inputs) <= epsilon.
         :param inputs: A list of symbolic variables as inputs
         :return: No return value.
         """
@@ -79,7 +82,7 @@ class FirstOrderOptimizer(Serializable):
     def loss(self, inputs, extra_inputs=None):
         if extra_inputs is None:
             extra_inputs = tuple()
-        return self._opt_fun["f_loss"](*(tuple(inputs) + extra_inputs))
+        return sliced_fun(self._opt_fun["f_loss"], self._n_slices)(inputs, extra_inputs)
 
     def optimize_gen(self, inputs, extra_inputs=None, callback=None, yield_itr=None):
 
@@ -88,30 +91,30 @@ class FirstOrderOptimizer(Serializable):
             raise NotImplementedError
 
         f_opt = self._opt_fun["f_opt"]
-        f_loss = self._opt_fun["f_loss"]
 
         if extra_inputs is None:
             extra_inputs = tuple()
 
-        last_loss = f_loss(*(tuple(inputs) + extra_inputs))
+        last_loss = self.loss(inputs, extra_inputs)
+        logger.log('Initial loss {}'.format(last_loss))
 
         start_time = time.time()
 
         dataset = BatchDataset(
             inputs, self._batch_size,
             extra_inputs=extra_inputs
-            #, randomized=self._randomized
+            # , randomized=self._randomized
         )
 
         itr = 0
         for epoch in pyprind.prog_bar(list(range(self._max_epochs))):
             for batch in dataset.iterate(update=True):
                 f_opt(*batch)
-                if yield_itr is not None and (itr % (yield_itr+1)) == 0:
+                if yield_itr is not None and (itr % (yield_itr + 1)) == 0:
                     yield
                 itr += 1
 
-            new_loss = f_loss(*(tuple(inputs) + extra_inputs))
+            new_loss = self.loss(inputs, extra_inputs)
             if self._verbose:
                 logger.log("Epoch %d, loss %s" % (epoch, new_loss))
 

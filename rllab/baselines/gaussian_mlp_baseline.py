@@ -8,7 +8,6 @@ from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
 
 
 class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
-
     def __init__(
             self,
             env_spec,
@@ -18,6 +17,7 @@ class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
     ):
         Serializable.quick_init(self, locals())
         super(GaussianMLPBaseline, self).__init__(env_spec)
+        self._subsample_factor = subsample_factor
         if regressor_args is None:
             regressor_args = dict()
 
@@ -30,8 +30,21 @@ class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
 
     @overrides
     def fit(self, paths):
-        observations = np.concatenate([p["observations"] for p in paths])
-        returns = np.concatenate([p["returns"] for p in paths])
+        # --
+        # Subsample before fitting.
+        if self._subsample_factor < 1:
+            lst_rnd_idx = []
+            for path in paths:
+                # Subsample index
+                path_len = len(path['returns'])
+                rnd_idx = np.random.choice(path_len, int(np.ceil(path_len * self._subsample_factor)),
+                                           replace=False)
+                lst_rnd_idx.append(rnd_idx)
+            observations = np.concatenate([p["observations"][idx] for p, idx in zip(paths, lst_rnd_idx)])
+            returns = np.concatenate([p["returns"][idx] for p, idx in zip(paths, lst_rnd_idx)])
+        else:
+            observations = np.concatenate([p["observations"] for p in paths])
+            returns = np.concatenate([p["returns"] for p in paths])
         self._regressor.fit(observations, returns.reshape((-1, 1)))
 
     @overrides

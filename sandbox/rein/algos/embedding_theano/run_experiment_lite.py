@@ -21,6 +21,8 @@ import pickle as pickle
 import base64
 import joblib
 
+import logging
+
 
 def run_experiment(argv):
     default_log_dir = config.LOG_DIR
@@ -43,6 +45,8 @@ def run_experiment(argv):
                              '(all iterations will be saved), "last" (only '
                              'the last iteration will be saved), or "none" '
                              '(do not save snapshots)')
+    parser.add_argument('--snapshot_gap', type=int, default=1,
+                        help='Gap between snapshot iterations.')
     parser.add_argument('--tabular_log_file', type=str, default='progress.csv',
                         help='Name of the tabular log file (in csv).')
     parser.add_argument('--text_log_file', type=str, default='debug.log',
@@ -63,6 +67,7 @@ def run_experiment(argv):
                         help='Pickled data for stub objects')
     parser.add_argument('--variant_data', type=str,
                         help='Pickled data for variant configuration')
+    parser.add_argument('--use_cloudpickle', type=ast.literal_eval, default=False)
 
     args = parser.parse_args(argv[1:])
 
@@ -91,14 +96,19 @@ def run_experiment(argv):
         variant_data = pickle.loads(base64.b64decode(args.variant_data))
         variant_log_file = osp.join(log_dir, args.variant_log_file)
         logger.log_variant(variant_log_file, variant_data)
+    else:
+        variant_data = None
 
-    logger.log_parameters_lite(params_log_file, args)
+    if not args.use_cloudpickle:
+        logger.log_parameters_lite(params_log_file, args)
+
     logger.add_text_output(text_log_file)
     logger.add_tabular_output(tabular_log_file)
     prev_snapshot_dir = logger.get_snapshot_dir()
     prev_mode = logger.get_snapshot_mode()
     logger.set_snapshot_dir(log_dir)
     logger.set_snapshot_mode(args.snapshot_mode)
+    logger.set_snapshot_gap(args.snapshot_gap)
     logger.set_log_tabular_only(args.log_tabular_only)
     logger.push_prefix("[%s] " % args.exp_name)
 
@@ -109,11 +119,16 @@ def run_experiment(argv):
         algo.train()
     else:
         # read from stdin
-        data = pickle.loads(base64.b64decode(args.args_data))
-        maybe_iter = concretize(data)
-        if is_iterable(maybe_iter):
-            for _ in maybe_iter:
-                pass
+        if args.use_cloudpickle:
+            import cloudpickle
+            method_call = cloudpickle.loads(base64.b64decode(args.args_data))
+            method_call(variant_data)
+        else:
+            data = pickle.loads(base64.b64decode(args.args_data))
+            maybe_iter = concretize(data)
+            if is_iterable(maybe_iter):
+                for _ in maybe_iter:
+                    pass
 
     logger.set_snapshot_mode(prev_mode)
     logger.set_snapshot_dir(prev_snapshot_dir)
