@@ -5,7 +5,7 @@ from sandbox.rein.dynamics_models.utils import load_dataset_atari
 from ops import lrelu, dense, conv2d, conv_transpose
 
 
-class ConvAutoEncoder:
+class BinaryEmbeddingConvAE:
     """Convolutional/Deconvolutional autoencoder with shared weights.
     """
 
@@ -52,8 +52,10 @@ class ConvAutoEncoder:
                               -1.0 / math.sqrt(n_input),
                               1.0 / math.sqrt(n_input)))
         b = tf.Variable(tf.zeros([32]))
-        self._z = tf.nn.sigmoid(tf.matmul(current_input, W) + b)
-        current_input = self._z
+        current_input = tf.nn.sigmoid(tf.matmul(current_input, W) + b)
+        current_input = current_input + tf.random_uniform(tf.shape(current_input), -0.3, 0.3,
+                                                          dtype=tf.float32)
+        self._z = current_input
         W = tf.Variable(
             tf.random_uniform([32, 360],
                               -1.0 / math.sqrt(n_input),
@@ -137,13 +139,10 @@ def test_atari():
 
     atari_dataset = load_dataset_atari('/Users/rein/programming/datasets/dataset_42x42.pkl')
     atari_dataset['x'] = atari_dataset['x'].transpose((0, 2, 3, 1))
-    ae = ConvAutoEncoder()
+    ae = BinaryEmbeddingConvAE()
 
     sess = tf.Session()
     sess.run(tf.initialize_all_variables())
-    z = ae.transform(sess, atari_dataset['x'][0:10])
-    print(z)
-    y = ae.generate(sess, None)
 
     n_epochs = 2000
     for epoch_i in range(n_epochs):
@@ -153,16 +152,39 @@ def test_atari():
 
     n_examples = 10
     recon = sess.run(ae.y, feed_dict={ae.x: atari_dataset['x'][0:n_examples]})
-    fig, axs = plt.subplots(2, n_examples, figsize=(10, 2))
+    fig, axs = plt.subplots(2, n_examples, figsize=(20, 4))
     for example_i in range(n_examples):
         axs[0][example_i].imshow(
-            np.reshape(atari_dataset['x'][example_i], (42, 42)))
+            np.reshape(atari_dataset['x'][example_i], (42, 42)),
+            cmap='Greys_r', vmin=0, vmax=1, interpolation='none')
+        axs[0][example_i].xaxis.set_visible(False)
+        axs[0][example_i].yaxis.set_visible(False)
         axs[1][example_i].imshow(
-            np.reshape(recon[example_i], (42, 42)))
+            np.reshape(recon[example_i], (42, 42)),
+            cmap='Greys_r', vmin=0, vmax=1, interpolation='none')
+        axs[1][example_i].xaxis.set_visible(False)
+        axs[1][example_i].yaxis.set_visible(False)
+
+    fig.show()
+    plt.show()
+
+    recon = ae.generate(sess, np.random.randint(0, 2, (n_examples, 32)))
+    fig, axs = plt.subplots(2, n_examples, figsize=(20, 4))
+    for example_i in range(n_examples):
+        axs[0][example_i].imshow(
+            np.reshape(atari_dataset['x'][example_i], (42, 42)),
+            cmap='Greys_r', vmin=0, vmax=1, interpolation='none')
+        axs[0][example_i].xaxis.set_visible(False)
+        axs[0][example_i].yaxis.set_visible(False)
+        axs[1][example_i].imshow(
+            np.reshape(recon[example_i], (42, 42)),
+            cmap='Greys_r', vmin=0, vmax=1, interpolation='none')
+        axs[1][example_i].xaxis.set_visible(False)
+        axs[1][example_i].yaxis.set_visible(False)
+
     tf.train.SummaryWriter('/Users/rein/programming/tensorboard/logs', sess.graph)
     fig.show()
-    plt.draw()
-    plt.waitforbuttonpress()
+    plt.show()
 
 
 if __name__ == '__main__':
