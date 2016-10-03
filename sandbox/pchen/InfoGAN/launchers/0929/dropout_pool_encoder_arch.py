@@ -1,14 +1,13 @@
-# from data/local/play-0920-iaf-cc-cifar-ml-3ldc-gatedresnet-arch-midarcomp-0.1kl/
+# overfitting according to data/local/play-0920-iaf-cc-cifar-ml-3ldc-gatedresnet-arch-midarcomp-0.1kl/
+# "object-centric" encoder to try to reduce overfitting
 
-# try latent code that's spatial & avoid aggressive pooling
-# also try dilated conv to make sure enough receptive field coverage
 
-# best train 3.19
-# best vali 3.53 ~ 200 epochs -> overfit more than compact version?
+# kl 0.01 better on train/vali
+# best train 3.068 with 96 base-filters and improving
+# best vali 3.35 @ 200 epoch w/ 48 chnls; 3.4 w/ 96 chnls
 
-# rerun a version that doesn't use iaf
-# rerun a version that uses iaf but no context
 
+# ^ try to reduce above overfitting by dropout
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -61,7 +60,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.01,]# 0.1]
+        return [0.01, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -78,7 +77,8 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen"
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
-        yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
+        # yield "resv1_k3_pixel_bias_filters_ratio_32"
+        yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
 
     @variant(hide=False)
     def steps(self, ):
@@ -86,12 +86,7 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [32, ]
-
-    @variant(hide=False)
-    def step(self, ):
-        return [1] # for no iaf exp
-        # return [1, 2]
+        return [96, ]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -119,14 +114,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [3] # for no context exp
-        return [0] # for no iaf exp
         return [3, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [5] # for 1024 due to mem
-        # 5 for 512
+        return [5,]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -136,8 +128,8 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            [], # for no context exp
-            # ["linear"],
+            # [],
+            ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -181,6 +173,22 @@ class VG(VariantGenerator):
     def ar_depth(self):
         return [3]
 
+    @variant(hide=False)
+    def enc_res_keep_prob(self):
+        return [0.9]
+
+    @variant(hide=False)
+    def dec_fc_keep_prob(self):
+        return [1., 0.9]
+
+    @variant(hide=False)
+    def dec_res_keep_prob(self):
+        return [1., 0.9]
+
+
+
+
+
 
 
 vg = VG()
@@ -188,7 +196,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 3
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -289,7 +297,11 @@ for v in variants[i:i+1]:
             wnorm=v["wnorm"],
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                fc_size=v["zdim"],
+                old_dec=True,
+                base_filters=v["base_filters"],
+                enc_res_keep_prob=v["enc_res_keep_prob"],
+                dec_fc_keep_prob=v["dec_fc_keep_prob"],
+                dec_res_keep_prob=v["dec_res_keep_prob"],
             ),
         )
 
@@ -316,7 +328,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0927_spatial_code_cifar_iaf",
+            exp_prefix="0929_dropout_on_pool_encoder_arch",
             seed=v["seed"],
             variant=v,
             mode="local",

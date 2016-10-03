@@ -3,6 +3,7 @@
 # test if ar channel is not being used so garbage color information is
 # leaking through
 
+# autoregressive channel is working. not doing this gives crappy logprob 3.82
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

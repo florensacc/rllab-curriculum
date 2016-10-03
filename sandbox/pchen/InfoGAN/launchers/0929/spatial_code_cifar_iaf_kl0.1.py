@@ -1,14 +1,4 @@
-# from data/local/play-0920-iaf-cc-cifar-ml-3ldc-gatedresnet-arch-midarcomp-0.1kl/
-
-# try latent code that's spatial & avoid aggressive pooling
-# also try dilated conv to make sure enough receptive field coverage
-
-# best train 3.19
-# best vali 3.53 ~ 200 epochs -> overfit more than compact version?
-
-# rerun a version that doesn't use iaf
-# rerun a version that uses iaf but no context
-
+# spatial code doesn't use code, increase freebits to increase stability
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -61,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.01,]# 0.1]
+        return [0.1,]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -119,9 +109,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [3] # for no context exp
-        return [0] # for no iaf exp
-        return [3, ]
+        return [0, 3, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -136,8 +124,8 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            [], # for no context exp
-            # ["linear"],
+            # [],
+            ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -316,7 +304,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0927_spatial_code_cifar_iaf",
+            exp_prefix="0929_spatial_code_cifar_iaf_0.1kl",
             seed=v["seed"],
             variant=v,
             mode="local",
@@ -324,5 +312,4 @@ for v in variants[i:i+1]:
             # n_parallel=0,
             # use_gpu=True,
         )
-
 
