@@ -146,7 +146,7 @@ class AtariSaveLoadResetter(object):
             timestamp = get_time_stamp()
             filename = os.path.join(self.restored_state_folder,timestamp+".jpg")
             cv2.imwrite(filename, img)
-            logger.log("Snapthost restored state to %s"%(filename))
+            logger.log("Snapshot restored state to %s"%(filename))
             self.updated_image_output = True
 
         return use_default_reset

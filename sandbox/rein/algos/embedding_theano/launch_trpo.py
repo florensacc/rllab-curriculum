@@ -4,6 +4,8 @@ import lasagne
 
 from rllab.envs.env_spec import EnvSpec
 from rllab.misc.instrument import stub, run_experiment_lite
+from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
+from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from sandbox.rein.algos.embedding_theano.theano_atari import AtariEnv
 from sandbox.rein.algos.embedding_theano.trpo_plus import TRPOPlus
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
@@ -11,6 +13,7 @@ from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from rllab.core.network import ConvNetwork
 from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 from rllab.spaces.box import Box
+from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
@@ -18,14 +21,14 @@ stub(globals())
 
 n_seq_frames = 4
 model_batch_size = 32
-exp_prefix = 'trpo-emb-j-train'
-seeds = range(5)
-etas = [0.1, 0.01]
+exp_prefix = 'trpo-a'
+seeds = range(4)
+etas = [0]
 mdps = [AtariEnv(game='freeway', obs_type="image", frame_skip=4),
         AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
         AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
         AtariEnv(game='breakout', obs_type="image", frame_skip=4)]
-trpo_batch_size = 30000
+trpo_batch_size = 100000
 max_path_length = 4500
 dropout = False
 batch_norm = True
@@ -45,10 +48,10 @@ for mdp, eta, seed in param_cart_product:
             mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
         output_dim=mdp.spec.action_space.flat_dim,
         hidden_sizes=(128,),
-        conv_filters=(16, 16, 16),
+        conv_filters=(32, 32, 32),
         conv_filter_sizes=(6, 6, 6),
         conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
+        conv_pads=(0, 1, 2),
     )
     policy = CategoricalMLPPolicy(
         env_spec=mdp.spec,
@@ -61,23 +64,28 @@ for mdp, eta, seed in param_cart_product:
             mdp.spec.observation_space.shape[1], mdp.spec.observation_space.shape[2]),
         output_dim=1,
         hidden_sizes=(128,),
-        conv_filters=(16, 16, 16),
-        conv_filter_sizes=(6, 6, 16),
+        conv_filters=(32, 32, 32),
+        conv_filter_sizes=(6, 6, 6),
         conv_strides=(2, 2, 2),
-        conv_pads=(0, 2, 2),
+        conv_pads=(0, 1, 2),
     )
     baseline = GaussianMLPBaseline(
         env_spec=mdp.spec,
         num_seq_inputs=n_seq_frames,
         regressor_args=dict(
             mean_network=network,
-            subsample_factor=0.1,
+            use_trust_region=False,
+            optimizer=LbfgsOptimizer(
+                n_slices=50,
+            ),
             # optimizer=FirstOrderOptimizer(
             #     max_epochs=100,
+            #     n_slices=50,
             #     verbose=True,
             # ),
-            use_trust_region=False,
         ),
+        subsample_factor=1,
+
     )
 
     autoenc = ConvBNNVIME(
@@ -98,7 +106,7 @@ for mdp, eta, seed in param_cart_product:
                  n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
-                 pad=(2, 2),
+                 pad=(1, 1),
                  batch_norm=batch_norm,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
@@ -122,7 +130,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=dropout,
                  deterministic=True),
             dict(name='discrete_embedding',
-                 n_units=256,
+                 n_units=128,
                  deterministic=True),
             dict(name='gaussian',
                  n_units=512,
@@ -132,14 +140,14 @@ for mdp, eta, seed in param_cart_product:
                  dropout=dropout,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=2304,
+                 n_units=1600,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
                  deterministic=True),
             dict(name='reshape',
-                 shape=([0], 64, 6, 6)),
+                 shape=([0], 64, 5, 5)),
             dict(name='deconvolution',
                  n_filters=64,
                  filter_size=(6, 6),
@@ -153,7 +161,7 @@ for mdp, eta, seed in param_cart_product:
                  n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
-                 pad=(2, 2),
+                 pad=(0, 0),
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
@@ -204,17 +212,17 @@ for mdp, eta, seed in param_cart_product:
         baseline=baseline,
         batch_size=trpo_batch_size,
         max_path_length=max_path_length,
-        n_itr=1000,
+        n_itr=500,
         step_size=0.01,
         optimizer_args=dict(
-            num_slices=30,
+            num_slices=50,
             subsample_factor=0.1,
         ),
         n_seq_frames=n_seq_frames,
         # --
         # Count settings
         model_pool_args=dict(
-            size=100000,
+            size=300000,
             min_size=model_batch_size,
             batch_size=model_batch_size,
             subsample_factor=0.1,
@@ -222,7 +230,7 @@ for mdp, eta, seed in param_cart_product:
         ),
         hamming_distance=0,
         eta=eta,
-        train_model=True,
+        train_model=False,
         train_model_freq=10,
     )
 

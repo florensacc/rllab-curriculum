@@ -13,6 +13,6 @@ script 1 OPEN
 
 script 2 (void)
 {
-    reward = reward + 1;
+    reward = reward + 100.0;
     Exit_Normal(0);
 }

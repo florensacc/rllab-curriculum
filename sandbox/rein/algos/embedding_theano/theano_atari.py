@@ -63,7 +63,7 @@ def to_rgb(ale):
 
 def to_ram(ale):
     ram_size = ale.getRAMSize()
-    ram = np.zeros((ram_size), dtype=np.uint8)
+    ram = np.zeros(ram_size, dtype=np.uint8)
     ale.getRAM(ram)
 
 

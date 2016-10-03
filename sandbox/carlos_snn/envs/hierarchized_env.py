@@ -86,7 +86,7 @@ class HierarchizedEnv(ProxyEnv, Serializable):
                                                                                      last_agent_info))
         if done:
             print("\n ########## \n ***** done!! *****")
-            # if done I need to make sure to PAD the tensor so there is no mismatch! Pad with what? with the last elem!
+            # if done I need to PAD the tensor so there is no mismatch! Pad with what? with the last elem!
             full_path = tensor_utils.pad_tensor_dict(frac_path, self.time_steps_agg, mode='last')
         else:
             full_path = frac_path
@@ -94,25 +94,12 @@ class HierarchizedEnv(ProxyEnv, Serializable):
         return Step(next_obs, reward, done,
                     last_env_info=last_env_info, last_agent_info=last_agent_info, full_path=full_path)
         # the last kwargs will all go to env_info, so path['env_info']['full_path'] gives a dict with the full path!
-        # But this breaks the regurlar concatenation of steps in the regular rollout!!
 
     @overrides
     def log_diagnostics(self, paths):
         ## to use the visualization I need to append all paths!
         ## and also I need the paths to have the "agent_infos" key including the latent!!
-        # all_obs = [np.concatenate(env_info['full_path']['observations'] for env_info in path['env_infos']) for path in paths]
-        # obs_by_steps = [env_info['full_path']['observations'] for path in paths for env_info in path['env_infos']]
-        # lats = [agent_info['latent'] for path in paths for agent_info in path['agent_infos']]
-        # chopped_paths = [{'observations': obs} for obs in obs_by_steps]
-
-        expanded_paths = []  # they need to be concatenated so they look as one single long path, and put this in a list
-        for path in paths:  # these are the high-level paths, each including batch_size number of lower-level paths
-
-            for i, obs in enumerate(path['env_infos']['full_path']['observations']):
-                lat = path['env_infos']['full_path']['agent_infos']['latents'][i]
-                chunk_path = {'observations': obs, 'agent_infos': {'latents': lat}}
-                expanded_paths.append(chunk_path)
-        # print(expanded_paths)
+        expanded_paths = [tensor_utils.flatten_first_axis_tensor_dict(path['env_infos']['full_path']) for path in paths]
         self.wrapped_env.log_diagnostics(expanded_paths)
 
     def __str__(self):

@@ -1,24 +1,31 @@
 """
 Use image observations. Can compare to exp-013.
-Switch to Theano. Run on CPU. Use parallel TRPO
+Switch to Theano. Run on CPU. Use parallel TRPO.
+Can compare to A3C exp-005a
 """
-from rllab.baselines.gaussian_conv_baseline import GaussianConvBaseline
-from sandbox.adam.parallel.zero_baseline import ParallelZeroBaseline
+""" baseline """
+from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBaseline
+from sandbox.adam.parallel.parallel_nn_feature_linear_baseline import ParallelNNFeatureLinearBaseline
 
+""" policy """
 from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
-from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-
-from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer, FiniteDifferenceHvp
-from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
-
-from sandbox.adam.parallel.trpo import ParallelTRPO
-from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
-# from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
 from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
+
+""" optimizer """
+from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
+
+""" algorithm """
+from sandbox.haoran.parallel_trpo.trpo import ParallelTRPO
+
+""" environment """
+from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
+
+""" resetter """
+# from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
+
+""" others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from sandbox.haoran.ec2_info import instance_info, subnet_info
-
 from rllab import config
 from rllab.misc.instrument import stub, run_experiment_lite
 import sys,os
@@ -29,26 +36,37 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "local_docker_test"
+mode = "kube"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
-config.DOCKER_IMAGE = "tsukuyomi2044/rllab3"
+config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 8
+n_parallel = 4
 snapshot_mode = "last"
 plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
 config.USE_TF = False
 
+if "local" in mode and sys.platform == "darwin":
+    set_cpu_affinity = False
+    cpu_assignments = None
+    serial_compile = False
+else:
+    set_cpu_affinity = True
+    cpu_assignments = None
+    serial_compile = True
+
 # params ---------------------------------------
 # algo
 use_parallel = True
-batch_size = 10000
+batch_size = 50000
 max_path_length = 4500
 discount = 0.99
-n_itr = 1000
-cg_args = dict(
+n_itr = 2000
+step_size = 0.01
+policy_opt_args = dict(
+    name="pi_opt",
     cg_iters=10,
     reg_coeff=1e-3,
     subsample_factor=0.1,
@@ -56,12 +74,11 @@ cg_args = dict(
     backtrack_ratio=0.8,
     accept_violation=False,
     hvp_approach=None,
-    num_slices=1,
+    num_slices=1, # reduces memory requirement
 )
-step_size = 0.01
-network_args = nips_dqn_args
 
 # env
+network_args = nips_dqn_args
 img_width=84
 img_height=84
 clip_reward = True
@@ -81,15 +98,22 @@ extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [111, 211, 311]
+        return [0,100,200]
 
     @variant
     def bonus_coeff(self):
         return [0]
 
     @variant
+    def baseline_type_opt(self):
+        return [
+            # ["conv","cg"],
+            ["nn_feature_linear",""],
+        ]
+
+    @variant
     def game(self):
-        return ["beam_rider"]
+        return ["space_invaders","qbert","pong","beam_rider","breakout"]
 variants = VG().variants()
 
 
@@ -161,26 +185,53 @@ for v in variants:
         **network_args
     )
 
-
-    baseline = ParallelZeroBaseline(env_spec=env.spec)
-    if use_parallel:
-        algo = ParallelTRPO(
-            env=env,
+    baseline_type, baseline_opt = v["baseline_type_opt"]
+    if baseline_type == "nn_feature_linear":
+        baseline = ParallelNNFeatureLinearBaseline(
+            env_spec=env.spec,
             policy=policy,
-            baseline=baseline,
-            batch_size=batch_size,
-            max_path_length=max_path_length,
-            discount=discount,
-            n_itr=n_itr,
-            plot=plot,
-            optimizer_args=cg_args,
-            step_size=step_size,
-            set_cpu_affinity=True,
-            n_parallel=n_parallel,
+            nn_feature_power=1,
+            t_power=3,
+        )
+    elif baseline_type == "conv":
+        network_args_for_vf = copy.deepcopy(network_args)
+        network_args_for_vf.pop("output_nonlinearity")
+        baseline = ParallelGaussianConvBaseline(
+            env_spec=env.spec,
+            regressor_args = dict(
+                optimizer=ParallelConjugateGradientOptimizer(
+                    subsample_factor=0.1,
+                    cg_iters=10,
+                    name="vf_opt",
+                ),
+                use_trust_region=True,
+                step_size=0.01,
+                batchsize=batch_size,
+                normalize_inputs=True,
+                normalize_outputs=True,
+                **network_args_for_vf
+            )
         )
     else:
         raise NotImplementedError
 
+
+    algo = ParallelTRPO(
+        env=env,
+        policy=policy,
+        baseline=baseline,
+        batch_size=batch_size,
+        max_path_length=max_path_length,
+        discount=discount,
+        n_itr=n_itr,
+        plot=plot,
+        optimizer_args=policy_opt_args,
+        step_size=step_size,
+        set_cpu_affinity=set_cpu_affinity,
+        cpu_assignments=cpu_assignments,
+        serial_compile=serial_compile,
+        n_parallel=n_parallel,
+    )
 
     if use_gpu:
         config.USE_GPU = True
@@ -199,6 +250,7 @@ for v in variants:
             plot=plot,
             sync_s3_pkl=sync_s3_pkl,
             sync_log_on_termination=True,
+            sync_all_data_node_to_s3=True,
         )
     else:
         raise NotImplementedError
