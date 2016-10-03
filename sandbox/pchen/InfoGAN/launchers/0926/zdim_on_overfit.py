@@ -5,6 +5,13 @@
 # zdim1024 with i_nr 5 will OOM
 # zdim1024 with i_nr 1 overfit and fit less thant zdim512 w/ i_nr 5
 # trying zdim512 w/ i_nr 1
+# zdim512 w/ i_nr 1 -> best results on vali
+# train vlb the other way. iaf really bad for generalizing ??
+# but consistent with rerun_cc_ap_iaf_cond_test_wo_vis.py
+
+
+# z512,i_nr5 -> -3.188 on train, (3.5 -> 3.59) on vali
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

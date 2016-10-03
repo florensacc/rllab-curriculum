@@ -7,6 +7,7 @@ import numpy as np
 import prettytensor as pt
 from progressbar import ProgressBar
 
+from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1, int_shape, \
     universal_int_shape, get_linear_ar_mask
@@ -16,7 +17,7 @@ TINY = 1e-8
 floatX = np.float32
 
 
-class Distribution(object):
+class Distribution(Serializable):
     @property
     def dist_flat_dim(self):
         """
@@ -135,6 +136,7 @@ class Distribution(object):
 
 class Categorical(Distribution):
     def __init__(self, dim):
+        Serializable.quick_init(self, locals())
         self._dim = dim
 
     @property
@@ -221,6 +223,8 @@ class Gaussian(Distribution):
             init_prior_mean=None,
             init_prior_stddev=None,
     ):
+        Serializable.quick_init(self, locals())
+
         self._name = "%sD_Gaussian_id_%s" % (dim, G_IDX)
         global G_IDX
         G_IDX += 1
@@ -385,6 +389,8 @@ class SparseUniform(Gaussian):
 
 class Bernoulli(Distribution):
     def __init__(self, dim, smooth=None):
+        Serializable.quick_init(self, locals())
+
         self._smooth = smooth
         self._dim = dim
         print("Bernoulli(dim=%s, smooth=%s)" % (dim, smooth))
@@ -438,6 +444,8 @@ class DiscretizedLogistic(Distribution):
 
     # assume to be -0.5 ~ 0.5
     def __init__(self, dim, bins=256., init_scale=0.1):
+        Serializable.quick_init(self, locals())
+
         self._dim = dim
         self._bins = bins
         self._init_scale = init_scale
@@ -530,6 +538,8 @@ class DiscretizedLogistic2(Distribution):
 
     # assume to be -0.5 ~ 0.5
     def __init__(self, dim, bins=256., init_scale=0.1):
+        Serializable.quick_init(self, locals())
+
         self._dim = dim
         self._bins = bins
         self._init_scale = init_scale
@@ -675,6 +685,8 @@ class Product(Distribution):
         """
         :type dists: list[Distribution]
         """
+        Serializable.quick_init(self, locals())
+
         self._dists = dists
 
     @property
@@ -817,6 +829,8 @@ class Product(Distribution):
 
 class Mixture(Distribution):
     def __init__(self, pairs, trainable=True):
+        Serializable.quick_init(self, locals())
+
         assert len(pairs) >= 1
         self._pairs = pairs
         self._dim = pairs[0][0].dim
@@ -972,6 +986,8 @@ class AR(Distribution):
             var_scope=None,
             rank=None,
     ):
+        Serializable.quick_init(self, locals())
+
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
         G_IDX += 1
@@ -1218,6 +1234,8 @@ class DistAR(Distribution):
             var_scope=None,
             rank=None,
     ):
+        Serializable.quick_init(self, locals())
+
         self._name = "%sD_AR_id_%s" % (dim, G_IDX)
         global G_IDX
         G_IDX += 1
@@ -1445,6 +1463,8 @@ class ConvAR(Distribution):
             extra_nins=0,
             inp_keepprob=1.,
     ):
+        Serializable.quick_init(self, locals())
+
         self._name = "%sD_ConvAR_id_%s" % (shape, G_IDX)
         global G_IDX
         G_IDX += 1

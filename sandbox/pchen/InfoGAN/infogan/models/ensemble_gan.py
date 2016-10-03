@@ -427,8 +427,8 @@ class EnsembleGAN(Serializable):
         #     ds,
         #     reduction_indices=[0]
         # )
-        mean_d, var_d = tf.nn.moments(ds, [1])
-        tf.scalar_summary("mean_var_d", tf.reduce_mean(var_d))
+        # mean_d, var_d = tf.nn.moments(ds, [1])
+        # tf.scalar_summary("mean_var_d", tf.reduce_mean(var_d))
         # if not logits:
         #     d = tf.nn.sigmoid(d)
         return ds

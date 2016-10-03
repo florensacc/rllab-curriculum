@@ -193,11 +193,6 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
 
     def fit(self, xs, ys):
 
-        if self._subsample_factor < 1:
-            num_samples_tot = xs.shape[0]
-            idx = np.random.randint(0, num_samples_tot, int(num_samples_tot * self._subsample_factor))
-            xs, ys = xs[idx], ys[idx]
-
         if self._normalize_inputs:
             # recompute normalizing constants for inputs
             self._x_mean_var.set_value(

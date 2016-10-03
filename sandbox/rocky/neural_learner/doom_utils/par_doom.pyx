@@ -107,7 +107,10 @@ cdef class ParDoom(object):
         with nogil, parallel():
             for i in prange(self.n_envs):
                 if no_mask or mask[i]:
-                    self.games[i].close()
+                    if self.games[i] != NULL:
+                        self.games[i].close()
+                        del self.games[i]
+                        self.games[i] = NULL
 
     def create_all(self, np.uint8_t[:] mask=None):
         cdef int i
@@ -115,7 +118,8 @@ cdef class ParDoom(object):
         with nogil, parallel():
             for i in prange(self.n_envs):
                 if no_mask or mask[i]:
-                    if self.games[i] is not NULL:
+                    if self.games[i] != NULL:
+                        self.games[i].close()
                         del self.games[i]
                     self.games[i] = new DoomGame()
 

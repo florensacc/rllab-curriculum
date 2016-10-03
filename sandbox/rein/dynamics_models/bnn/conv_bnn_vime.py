@@ -18,60 +18,6 @@ from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, Bayesia
     BayesianLayer
 
 
-class DiscreteEmbeddingNonlinearityLayer(lasagne.layers.Layer):
-    """
-    Discrete embedding layer, the nonlinear part
-    This has to be put after the batch norm layer.
-    """
-
-    def __init__(self, incoming,
-                 **kwargs):
-        super(DiscreteEmbeddingNonlinearityLayer, self).__init__(incoming, **kwargs)
-        self._srng = RandomStreams()
-
-    def nonlinearity(self, x, noise_mask=1):
-        # Force outputs to be binary through noise.
-        return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(size=x.shape, low=-0.3, high=0.3)
-
-    def get_output_for(self, input, noise_mask=1, **kwargs):
-        return self.nonlinearity(input, noise_mask)
-
-
-class DiscreteEmbeddingLinearLayer(lasagne.layers.Layer):
-    """
-    Discrete embedding layer, the linear part
-    This has to be put before the batch norm layer.
-    """
-
-    def __init__(self, incoming, num_units, W=lasagne.init.GlorotUniform(),
-                 b=lasagne.init.Constant(0.),
-                 **kwargs):
-        super(DiscreteEmbeddingLinearLayer, self).__init__(incoming, **kwargs)
-
-        self.num_units = num_units
-        self.num_inputs = int(np.prod(self.input_shape[1:]))
-
-        self.W = self.add_param(W, (self.num_inputs, num_units), name="W")
-        if b is None:
-            self.b = None
-        else:
-            self.b = self.add_param(b, (num_units,), name="b", regularizable=False)
-
-    def get_output_shape_for(self, input_shape):
-        return input_shape[0], self.num_units
-
-    def get_output_for(self, input, **kwargs):
-        if input.ndim > 2:
-            # if the input has more than two dimensions, flatten it into a
-            # batch of feature vectors.
-            input = input.flatten(2)
-
-        activation = T.dot(input, self.W)
-        if self.b is not None:
-            activation = activation + self.b.dimshuffle('x', 0)
-        return activation
-
-
 class IndependentSoftmaxLayer(lasagne.layers.Layer):
     def __init__(self, incoming, num_bins, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0), **kwargs):
         super(IndependentSoftmaxLayer, self).__init__(incoming, **kwargs)
@@ -594,16 +540,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                     s_net = dropout(s_net, p=dropout_p)
                 if layer_disc['batch_norm'] is True:
                     s_net = batch_norm(s_net)
-            elif layer_disc['name'] == 'discrete_embedding':
-                if 'nonlinearity' not in layer_disc.keys():
-                    layer_disc['nonlinearity'] = lasagne.nonlinearities.rectify
-                s_net = DiscreteEmbeddingLinearLayer(
-                    s_net,
-                    num_units=layer_disc['n_units'])
-                s_net = BatchNormLayer(s_net)
-                s_net = DiscreteEmbeddingNonlinearityLayer(s_net)
-                # Pull out discrete embedding layer.
-                self.discrete_emb_sym = s_net
             elif layer_disc['name'] == 'deterministic':
                 s_net = lasagne.layers.DenseLayer(
                     s_net,
@@ -926,11 +862,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 self.train_update_fn = ext.compile_function(
                     [input_var, target_var, step_size], loss_only_last_sample, updates=updates_bayesian,
                     log_name='fn_surprise_2nd', no_default_updates=False)
-
-        # Discrete embedding layer for counting.
-        self.discrete_emb = ext.compile_function(
-            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, noise_mask=0, deterministic=False),
-            log_name='fn_discrete_emb')
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 import pickle
 
+import tensorflow as tf
 from rllab.sampler.base import BaseSampler
 from sandbox.rocky.tf.envs.parallel_vec_env_executor import ParallelVecEnvExecutor
 from sandbox.rocky.tf.envs.vec_env_executor import VecEnvExecutor
@@ -47,11 +48,13 @@ class VectorizedSampler(BaseSampler):
         policy_time = 0
         env_time = 0
         process_time = 0
+
+        policy = self.algo.policy
         import time
         while n_samples < self.algo.batch_size:
             t = time.time()
-            self.algo.policy.reset(dones)
-            actions, agent_infos = self.algo.policy.get_actions(obses)
+            policy.reset(dones)
+            actions, agent_infos = policy.get_actions(obses)
 
             policy_time += time.time() - t
             t = time.time()

@@ -30,8 +30,8 @@ mdps = [AtariEnvX(game='frostbite', obs_type="image", frame_skip=4),
         AtariEnvX(game='montezuma_revenge', obs_type="image", frame_skip=4),
         AtariEnvX(game='breakout', obs_type="image", frame_skip=4)]
 lst_factor = [2]
-trpo_batch_size = 50000
-max_path_length = 4500
+trpo_batch_size = 500
+max_path_length = 45
 batch_norm = True
 
 
@@ -242,7 +242,7 @@ for factor, mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/experiments/run_experiment_lite_count.py",

@@ -57,6 +57,17 @@ def _download_omniglot_iwae(dataset):
     print('Downloading data from %s' % origin)
     urllib.request.urlretrieve(origin, dataset + '/chardata.mat')
 
+def _download_caltech101(dataset):
+    """
+    Download the caltech dataset if it is not present.
+    :return: The train, test and validation set.
+    """
+    origin = (
+        'https://people.cs.umass.edu/~marlin/data/caltech101_silhouettes_28_split1.mat'
+    )
+    print('Downloading data from %s' % origin)
+    urllib.request.urlretrieve(origin, dataset + '/caltech101.mat')
+
 
 def _download_norb_small(dataset):
     """
@@ -275,6 +286,26 @@ def load_omniglot_iwae(dataset=_get_datafolder_path()+'/omniglot_iwae'):
 
 
     return train_x, train_t, train_char, test_x, test_t, test_char
+
+def load_caltech(dataset=_get_datafolder_path()+'/caltech'):
+    '''
+    Loads the binary caltech
+    :param dataset: path to dataset file
+    :return: None
+    '''
+    from scipy.io import loadmat
+    if not os.path.exists(dataset):
+        os.makedirs(dataset)
+        _download_caltech101(dataset)
+
+    data = loadmat(dataset+'/caltech101.mat')
+
+
+    return (
+        data["train_data"],
+        data["val_data"],
+        data["test_data"],
+    )
 
 
 def load_mnist_realval(
@@ -1265,6 +1296,30 @@ class ResamplingBinarizedOmniglotDataset(object):
         self.train = BinarizedDataset(train_x)
         # self.test = Dataset(valid)
         self.validation = BinarizedDataset(test_x)
+        self._image_dim = 28 * 28
+        self._image_shape = (28, 28, 1)
+
+    def transform(self, data):
+        return data
+
+    def inverse_transform(self, data):
+        return data
+
+    @property
+    def image_dim(self):
+        return self._image_dim
+    @property
+    def image_shape(self):
+        return self._image_shape
+
+class Caltech101Dataset(object):
+    def __init__(self):
+        train_x, vali_x, test_x = load_caltech()
+        self.train = Dataset(
+            np.concatenate([train_x, vali_x], axis=0)
+        )
+        # self.test = Dataset(valid)
+        self.validation = Dataset(test_x)
         self._image_dim = 28 * 28
         self._image_shape = (28, 28, 1)
 

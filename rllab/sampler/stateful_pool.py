@@ -29,7 +29,7 @@ class ProgBarCounter(object):
             self.cur_progress = new_progress
 
     def stop(self):
-        if not logger.get_log_tabular_only():
+        if self.pbar is not None and self.pbar.active:
             self.pbar.stop()
 
 
@@ -93,7 +93,8 @@ class StatefulPool(object):
 
     def run_imap_unordered(self, runner, args_list):
         if self.n_parallel > 1:
-            yield from self.pool.imap_unordered(_worker_run_map, [(runner, args) for args in args_list])
+            for x in self.pool.imap_unordered(_worker_run_map, [(runner, args) for args in args_list]):
+                yield x
         else:
             for args in args_list:
                 yield runner(self.G, *args)

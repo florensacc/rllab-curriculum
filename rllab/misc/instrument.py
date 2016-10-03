@@ -356,7 +356,8 @@ def run_experiment_lite(
         terminate_machine=True,
         periodic_sync=True,
         periodic_sync_interval=15,
-        sync_all_data_node_to_s3=False,
+        sync_all_data_node_to_s3=True,
+        use_cloudpickle=False,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -390,7 +391,8 @@ def run_experiment_lite(
                 exp_name=exp_name,
                 log_dir=log_dir,
                 env=env,
-                variant=variant
+                variant=variant,
+                use_cloudpickle=use_cloudpickle
             )
         ]
 
@@ -402,7 +404,11 @@ def run_experiment_lite(
 
     for task in batch_tasks:
         call = task.pop("stub_method_call")
-        data = base64.b64encode(pickle.dumps(call)).decode("utf-8")
+        if use_cloudpickle:
+            import cloudpickle
+            data = base64.b64encode(cloudpickle.dumps(call)).decode("utf-8")
+        else:
+            data = base64.b64encode(pickle.dumps(call)).decode("utf-8")
         task["args_data"] = data
         exp_count += 1
         params = dict(kwargs)
@@ -458,6 +464,7 @@ def run_experiment_lite(
                 script=script,
                 env=env,
                 use_gpu=use_gpu,
+                use_tty=True,
             )
             print(command)
             if dry:
@@ -492,14 +499,14 @@ def run_experiment_lite(
                    periodic_sync=periodic_sync,
                    periodic_sync_interval=periodic_sync_interval)
     elif mode == "lab_kube":
-        assert env is None
+        # assert env is None
         # first send code folder to s3
         s3_code_path = s3_sync_code(config, dry=dry)
         if docker_image is None:
             docker_image = config.DOCKER_IMAGE
         for task in batch_tasks:
-            if 'env' in task:
-                assert task.pop('env') is None
+            # if 'env' in task:
+            #     assert task.pop('env') is None
             # TODO: dangerous when there are multiple tasks?
             task["resources"] = params.pop(
                 "resources", config.KUBE_DEFAULT_RESOURCES)
@@ -510,7 +517,9 @@ def run_experiment_lite(
                 task, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu,
                 python_command=python_command,
                 sync_s3_pkl=sync_s3_pkl, periodic_sync=periodic_sync, periodic_sync_interval=periodic_sync_interval,
-                sync_all_data_node_to_s3=sync_all_data_node_to_s3)
+                sync_all_data_node_to_s3=sync_all_data_node_to_s3,
+                terminate_machine=terminate_machine,
+            )
             pod_str = json.dumps(pod_dict, indent=1)
             if dry:
                 print(pod_str)
@@ -605,7 +614,7 @@ def to_local_command(params, python_command="python", script=osp.join(config.PRO
 
 
 def to_docker_command(params, docker_image, python_command="python", script='scripts/run_experiment.py',
-                      pre_commands=None,
+                      pre_commands=None, use_tty=False,
                       post_commands=None, dry=False, use_gpu=False, env=None, local_code_dir=None):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
@@ -640,7 +649,10 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
         docker_code_dir=config.DOCKER_CODE_DIR
     )
     params = dict(params, log_dir=docker_log_dir)
-    command_prefix += " -ti " + docker_image + " /bin/bash -c "
+    if use_tty:
+        command_prefix += " -ti " + docker_image + " /bin/bash -c "
+    else:
+        command_prefix += " -i " + docker_image + " /bin/bash -c "
     command_list = list()
     if pre_commands is not None:
         command_list.extend(pre_commands)
@@ -770,7 +782,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         sio.write("""
             {command}
         """.format(command=to_docker_command(params, docker_image, python_command=python_command, script=script,
-                                                                                                use_gpu=use_gpu, env=env,
+                                             use_gpu=use_gpu, env=env,
                                              local_code_dir=config.DOCKER_CODE_DIR)))
         sio.write("""
             aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
@@ -981,7 +993,8 @@ def to_lab_kube_pod(
         sync_s3_pkl=False,
         periodic_sync=True,
         periodic_sync_interval=15,
-        sync_all_data_node_to_s3=False
+        sync_all_data_node_to_s3=False,
+        terminate_machine=True
 ):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
@@ -995,6 +1008,11 @@ def to_lab_kube_pod(
     resources = params.pop("resources")
     node_selector = params.pop("node_selector")
     exp_prefix = params.pop("exp_prefix")
+
+    kube_env = [
+        {"name": k, "value": v}
+        for k, v in (params.pop("env", None) or dict()).items()
+        ]
     mkdir_p(log_dir)
     pre_commands = list()
     pre_commands.append('mkdir -p ~/.aws')
@@ -1062,6 +1080,8 @@ def to_lab_kube_pod(
     post_commands.append('aws s3 cp --recursive %s %s' %
                          (log_dir,
                           remote_log_dir))
+    if not terminate_machine:
+        post_commands.append('sleep infinity')
     command_list = list()
     if pre_commands is not None:
         command_list.extend(pre_commands)
@@ -1129,6 +1149,7 @@ def to_lab_kube_pod(
                 {
                     "name": "foo",
                     "image": docker_image,
+                    "env": kube_env,
                     "command": [
                         "/bin/bash",
                         "-c",

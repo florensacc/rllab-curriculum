@@ -35,12 +35,12 @@ def set_seed_tmp(seed=None):
         random.setstate(state)
 
 
-def collect_demo(G, demo_seed, analogy_seed, target_seed, env_cls, demo_policy_cls, horizon):
+def collect_demo(G, demo_collector, demo_seed, analogy_seed, target_seed, env_cls, horizon):
     demo_env = env_cls(seed=demo_seed, target_seed=target_seed)
     analogy_env = env_cls(seed=analogy_seed, target_seed=target_seed)
 
-    demo_path = rollout(demo_env, demo_policy_cls(demo_env), max_path_length=horizon)
-    analogy_path = rollout(analogy_env, demo_policy_cls(analogy_env), max_path_length=horizon)
+    demo_path = demo_collector.collect_demo(env=demo_env, horizon=horizon)
+    analogy_path = demo_collector.collect_demo(env=analogy_env, horizon=horizon)
 
     return demo_path, analogy_path, demo_env, analogy_env
 
@@ -131,7 +131,7 @@ class Trainer(Serializable):
             self,
             policy,
             env_cls,
-            demo_policy_cls,
+            demo_collector,
             shuffler=None,
             n_train_trajs=50,
             n_test_trajs=20,
@@ -146,7 +146,8 @@ class Trainer(Serializable):
     ):
         Serializable.quick_init(self, locals())
         self.env_cls = env_cls
-        self.demo_policy_cls = demo_policy_cls
+        self.demo_collector = demo_collector
+        # self.demo_policy_cls = demo_policy_cls
         self.shuffler = shuffler
         self.n_train_trajs = n_train_trajs
         self.n_test_trajs = n_test_trajs
@@ -179,10 +180,10 @@ class Trainer(Serializable):
 
         for data in singleton_pool.run_imap_unordered(
                 collect_demo,
-                [tuple(seeds) + (self.env_cls, self.demo_policy_cls, self.horizon)
+                [(self.demo_collector,) + tuple(seeds) + (self.env_cls, self.horizon)
                  for seeds in zip(demo_seeds, analogy_seeds, target_seeds)]
         ):
-            progbar.update()
+            progbar.update(force_flush=True)
             data_list.append(data)
         if progbar.active:
             progbar.stop()

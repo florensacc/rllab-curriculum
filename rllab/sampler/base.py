@@ -48,8 +48,14 @@ class BaseSampler(Sampler):
     def process_samples(self, itr, paths):
         baselines = []
         returns = []
-        for path in paths:
-            path_baselines = np.append(self.algo.baseline.predict(path), 0)
+
+        if hasattr(self.algo.baseline, "predict_n"):
+            all_path_baselines = self.algo.baseline.predict_n(paths)
+        else:
+            all_path_baselines = [self.algo.baseline.predict(path) for path in paths]
+
+        for idx, path in enumerate(paths):
+            path_baselines = np.append(all_path_baselines[idx], 0)
             deltas = path["rewards"] + \
                      self.algo.discount * path_baselines[1:] - \
                      path_baselines[:-1]
@@ -100,10 +106,8 @@ class BaseSampler(Sampler):
             max_path_length = max([len(path["advantages"]) for path in paths])
 
             # make all paths the same length (pad extra advantages with 0)
-            logger.log("Concating observations...")
             obs = [path["observations"] for path in paths]
-            obs = np.asarray([tensor_utils.pad_tensor(ob, max_path_length) for ob in obs])
-            logger.log("Concated")
+            obs = tensor_utils.pad_tensor_n(obs, max_path_length)
 
             if self.algo.center_adv:
                 raw_adv = np.concatenate([path["advantages"] for path in paths])
@@ -116,13 +120,13 @@ class BaseSampler(Sampler):
             adv = np.asarray([tensor_utils.pad_tensor(a, max_path_length) for a in adv])
 
             actions = [path["actions"] for path in paths]
-            actions = np.asarray([tensor_utils.pad_tensor(a, max_path_length) for a in actions])
+            actions = tensor_utils.pad_tensor_n(actions, max_path_length)
 
             rewards = [path["rewards"] for path in paths]
-            rewards = np.asarray([tensor_utils.pad_tensor(r, max_path_length) for r in rewards])
+            rewards = tensor_utils.pad_tensor_n(rewards, max_path_length)
 
             returns = [path["returns"] for path in paths]
-            returns = np.asarray([tensor_utils.pad_tensor(r, max_path_length) for r in returns])
+            returns = tensor_utils.pad_tensor_n(returns, max_path_length)
 
             agent_infos = [path["agent_infos"] for path in paths]
             agent_infos = tensor_utils.stack_tensor_dict_list(
@@ -135,7 +139,7 @@ class BaseSampler(Sampler):
             )
 
             valids = [np.ones_like(path["returns"]) for path in paths]
-            valids = np.asarray([tensor_utils.pad_tensor(v, max_path_length) for v in valids])
+            valids = tensor_utils.pad_tensor_n(valids, max_path_length)
 
             average_discounted_return = \
                 np.mean([path["returns"][0] for path in paths])
@@ -157,7 +161,10 @@ class BaseSampler(Sampler):
             )
 
         logger.log("fitting baseline...")
-        self.algo.baseline.fit(paths)
+        if hasattr(self.algo.baseline, 'fit_with_samples'):
+            self.algo.baseline.fit_with_samples(paths, samples_data)
+        else:
+            self.algo.baseline.fit(paths)
         logger.log("fitted")
 
         logger.record_tabular('Iteration', itr)

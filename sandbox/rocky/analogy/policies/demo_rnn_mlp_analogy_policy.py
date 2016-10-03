@@ -106,7 +106,7 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                 weight_normalization=weight_normalization,
                 layer_normalization=layer_normalization,
                 # batch_normalization=batch_normalization,
-                **network_args,
+                **network_args
             )
 
             summary_var = tf.placeholder(dtype=tf.float32, shape=(None, rnn_hidden_size), name="summary")
