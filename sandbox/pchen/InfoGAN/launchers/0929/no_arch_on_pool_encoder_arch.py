@@ -1,13 +1,9 @@
-# inherit from pool_encoder_arch_on_overfit
-# test better setting to more symmetric network & try more rep
+# compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
+# test if ar channel is not being used so garbage color information is
+# leaking through
 
-# more rep -> code not used! this means designing an architecture to make
-# sure information propogates is very important as expected!
-
-# train/test don't really get better
-
-
+# autoregressive channel is working. not doing this gives crappy logprob 3.82
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -86,15 +82,11 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [96, ]
+        return [48]
 
     @variant(hide=False)
     def dec_init_size(self, ):
         return [4]
-
-    @variant(hide=False)
-    def rep(self, ):
-        return [1, 3]
 
     @variant(hide=True)
     def wnorm(self):
@@ -118,7 +110,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [3, ]
+        return [0, 3, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -184,7 +176,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -262,8 +254,8 @@ for v in variants[i:i+1]:
         )
         ar_conv_dist = ConvAR(
             # tgt_dist=Bernoulli(1),
-            # tgt_dist=tgt_dist,
-            tgt_dist=tgt_ar_dist,
+            tgt_dist=tgt_dist,
+            # tgt_dist=tgt_ar_dist,
             shape=(32, 32, 3),
             filter_size=3,
             depth=v["ar_depth"],
@@ -285,11 +277,8 @@ for v in variants[i:i+1]:
             wnorm=v["wnorm"],
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                old_dec=False,
-                base_filters=v["base_filters"],
-                enc_rep=v["rep"],
-                dec_rep=v["rep"],
-                filter_size=4,
+                old_dec=True,
+                base_filters=v["base_filters"]
             ),
         )
 
@@ -316,7 +305,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0928_pool_encoder_decoder_test",
+            exp_prefix="0929_noarch_on_pool_encoder_arch",
             seed=v["seed"],
             variant=v,
             mode="local",

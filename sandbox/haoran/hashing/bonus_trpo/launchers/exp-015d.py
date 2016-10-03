@@ -1,7 +1,6 @@
 """
-Use image observations. Can compare to exp-013.
-Switch to Theano. Run on CPU. Use parallel TRPO.
-Can compare to A3C exp-005a
+Tune parameters on Breakout
+Try mixing eps uniform
 """
 """ baseline """
 from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBaseline
@@ -63,7 +62,7 @@ use_parallel = True
 batch_size = 50000
 max_path_length = 4500
 discount = 0.99
-n_itr = 2000
+n_itr = 1000
 step_size = 0.01
 policy_opt_args = dict(
     name="pi_opt",
@@ -112,8 +111,12 @@ class VG(VariantGenerator):
         ]
 
     @variant
+    def eps(self):
+        return [0.1, 0.5]
+
+    @variant
     def game(self):
-        return ["space_invaders","qbert","pong","beam_rider","breakout"]
+        return ["breakout"]
 variants = VG().variants()
 
 
@@ -182,6 +185,7 @@ for v in variants:
     policy = CategoricalConvPolicy(
         env_spec=env.spec,
         name="policy",
+        eps=v["eps"],
         **network_args
     )
 
@@ -192,6 +196,7 @@ for v in variants:
             policy=policy,
             nn_feature_power=1,
             t_power=3,
+            prediction_clip=1000,
         )
     elif baseline_type == "conv":
         network_args_for_vf = copy.deepcopy(network_args)

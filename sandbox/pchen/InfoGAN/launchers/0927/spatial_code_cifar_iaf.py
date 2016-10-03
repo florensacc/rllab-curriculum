@@ -3,6 +3,12 @@
 # try latent code that's spatial & avoid aggressive pooling
 # also try dilated conv to make sure enough receptive field coverage
 
+# best train 3.19
+# best vali 3.53 ~ 200 epochs -> overfit more than compact version?
+
+# rerun a version that doesn't use iaf
+# rerun a version that uses iaf but no context
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -84,7 +90,8 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def step(self, ):
-        return [1, 2]
+        return [1] # for no iaf exp
+        # return [1, 2]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -112,6 +119,8 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
+        return [3] # for no context exp
+        return [0] # for no iaf exp
         return [3, ]
 
     @variant(hide=False)
@@ -127,8 +136,8 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            # [],
-            ["linear"],
+            [], # for no context exp
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]

@@ -1,12 +1,15 @@
-# inherit from pool_encoder_arch_on_overfit
-# test better setting to more symmetric network & try more rep
+# overfitting according to data/local/play-0920-iaf-cc-cifar-ml-3ldc-gatedresnet-arch-midarcomp-0.1kl/
+# "object-centric" encoder to try to reduce overfitting
 
 
-# more rep -> code not used! this means designing an architecture to make
-# sure information propogates is very important as expected!
+# kl 0.01 better on train/vali
+# best train 3.068 with 96 base-filters and improving
+# best vali 3.35 @ 200 epoch w/ 48 chnls; 3.4 w/ 96 chnls
 
-# train/test don't really get better
 
+# ^ try to reduce above overfitting by dropout
+
+# trying best dropout param without context & w/ ar
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -92,10 +95,6 @@ class VG(VariantGenerator):
     def dec_init_size(self, ):
         return [4]
 
-    @variant(hide=False)
-    def rep(self, ):
-        return [1, 3]
-
     @variant(hide=True)
     def wnorm(self):
         return [True, ]
@@ -110,7 +109,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [0, ]
+        return [0, 3] # also try ar
 
     @variant(hide=False)
     def nr(self):
@@ -132,8 +131,8 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            # [],
-            ["linear"],
+            [], # try no context
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -176,6 +175,24 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_depth(self):
         return [3]
+
+    @variant(hide=False)
+    def enc_res_keep_prob(self):
+        return [0.9]
+
+    @variant(hide=False)
+    def dec_fc_keep_prob(self):
+        return [0.9] # try no context
+        return [1., 0.9]
+
+    @variant(hide=False)
+    def dec_res_keep_prob(self):
+        return [0.9] # try no context
+        return [1., 0.9]
+
+
+
+
 
 
 
@@ -285,11 +302,11 @@ for v in variants[i:i+1]:
             wnorm=v["wnorm"],
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                old_dec=False,
+                old_dec=True,
                 base_filters=v["base_filters"],
-                enc_rep=v["rep"],
-                dec_rep=v["rep"],
-                filter_size=4,
+                enc_res_keep_prob=v["enc_res_keep_prob"],
+                dec_fc_keep_prob=v["dec_fc_keep_prob"],
+                dec_res_keep_prob=v["dec_res_keep_prob"],
             ),
         )
 
@@ -316,7 +333,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0928_pool_encoder_decoder_test",
+            exp_prefix="0929_dropout_on_pool_encoder_arch",
             seed=v["seed"],
             variant=v,
             mode="local",

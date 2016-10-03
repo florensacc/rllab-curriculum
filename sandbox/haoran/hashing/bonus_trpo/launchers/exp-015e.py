@@ -1,7 +1,5 @@
 """
-Use image observations. Can compare to exp-013.
-Switch to Theano. Run on CPU. Use parallel TRPO.
-Can compare to A3C exp-005a
+Try GAE
 """
 """ baseline """
 from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBaseline
@@ -107,13 +105,17 @@ class VG(VariantGenerator):
     @variant
     def baseline_type_opt(self):
         return [
-            # ["conv","cg"],
             ["nn_feature_linear",""],
         ]
 
     @variant
+    def gae_lambda(self):
+        return [0.9, 0.94, 0.98, 1.0]
+
+    @variant
     def game(self):
-        return ["space_invaders","qbert","pong","beam_rider","breakout"]
+        return ["breakout"]
+
 variants = VG().variants()
 
 
@@ -223,6 +225,7 @@ for v in variants:
         batch_size=batch_size,
         max_path_length=max_path_length,
         discount=discount,
+        gae_lambda=v["gae_lambda"],
         n_itr=n_itr,
         plot=plot,
         optimizer_args=policy_opt_args,

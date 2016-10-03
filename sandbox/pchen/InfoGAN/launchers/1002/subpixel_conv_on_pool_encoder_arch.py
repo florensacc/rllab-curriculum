@@ -1,13 +1,10 @@
-# inherit from pool_encoder_arch_on_overfit
-# test better setting to more symmetric network & try more rep
+# from ///
+# kl 0.01 better on train/vali
+# best train 3.068 with 96 base-filters and improving
+# best vali 3.35 @ 200 epoch w/ 48 chnls; 3.4 w/ 96 chnls
 
-
-# more rep -> code not used! this means designing an architecture to make
-# sure information propogates is very important as expected!
-
-# train/test don't really get better
-
-
+# testing if subpixel conv makes a difference on performance
+# also test no context
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -60,7 +57,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.01, ]# 0.1]
+        return [0.01,]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -91,10 +88,6 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def dec_init_size(self, ):
         return [4]
-
-    @variant(hide=False)
-    def rep(self, ):
-        return [1, 3]
 
     @variant(hide=True)
     def wnorm(self):
@@ -132,7 +125,7 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            # [],
+            [],
             ["linear"],
             # ["gating"],
             # ["linear", "gating"]
@@ -177,6 +170,10 @@ class VG(VariantGenerator):
     def ar_depth(self):
         return [3]
 
+    @variant(hide=False)
+    def subpixel(self):
+        return [True, False]
+
 
 
 vg = VG()
@@ -184,7 +181,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 3
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -285,11 +282,9 @@ for v in variants[i:i+1]:
             wnorm=v["wnorm"],
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                old_dec=False,
+                old_dec=True,
                 base_filters=v["base_filters"],
-                enc_rep=v["rep"],
-                dec_rep=v["rep"],
-                filter_size=4,
+                subpixel=v["subpixel"],
             ),
         )
 
@@ -316,7 +311,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0928_pool_encoder_decoder_test",
+            exp_prefix="1002_subpixel_on_pool_encoder_arch",
             seed=v["seed"],
             variant=v,
             mode="local",
