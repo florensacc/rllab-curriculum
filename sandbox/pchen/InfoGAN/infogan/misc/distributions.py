@@ -969,6 +969,7 @@ class Mixture(Distribution):
         )
 
 dist_book = pt.bookkeeper_for_default_graph()
+# should have renamed this to AF (autoregressive flow)
 class AR(Distribution):
     def __init__(
             self,
@@ -985,6 +986,7 @@ class AR(Distribution):
             share_context=False,
             var_scope=None,
             rank=None,
+            img_shape=None,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1015,40 +1017,96 @@ class AR(Distribution):
             self._gating_context_dim = 2*dim*neuron_ratio
             self._context_dim += self._gating_context_dim
 
-        assert depth >= 1
-        from prettytensor import UnboundVariable
-        with pt.defaults_scope(
-                activation_fn=nl,
-                wnorm=data_init_wnorm,
-                custom_phase=UnboundVariable('custom_phase'),
-                init_scale=self._data_init_scale,
-                var_scope=var_scope,
-                rank=rank,
-        ):
-            for di in range(depth):
+        if img_shape is None:
+            assert depth >= 1
+            from prettytensor import UnboundVariable
+            with pt.defaults_scope(
+                    activation_fn=nl,
+                    wnorm=data_init_wnorm,
+                    custom_phase=UnboundVariable('custom_phase'),
+                    init_scale=self._data_init_scale,
+                    var_scope=var_scope,
+                    rank=rank,
+            ):
+                for di in range(depth):
+                    self._iaf_template = \
+                        self._iaf_template.arfc(
+                            2*dim*neuron_ratio,
+                            ngroups=dim,
+                            zerodiagonal=di == 0, # only blocking the first layer can stop data flow
+                            prefix="arfc%s" % di,
+                        )
+                    if di == 0:
+                        if gating_context:
+                            self._iaf_template *= (gate_con+1).apply(tf.nn.sigmoid)
+                        if linear_context:
+                            self._iaf_template += lin_con
                 self._iaf_template = \
-                    self._iaf_template.arfc(
-                        2*dim*neuron_ratio,
-                        ngroups=dim,
-                        zerodiagonal=di == 0, # only blocking the first layer can stop data flow
-                        prefix="arfc%s" % di,
-                    )
-                if di == 0:
-                    if gating_context:
-                        self._iaf_template *= (gate_con+1).apply(tf.nn.sigmoid)
-                    if linear_context:
-                        self._iaf_template += lin_con
-            self._iaf_template = \
-                self._iaf_template.\
-                    arfc(
-                        dim * 2,
+                    self._iaf_template.\
+                        arfc(
+                            dim * 2,
+                            activation_fn=None,
+                            ngroups=dim,
+                            prefix="arfc_last",
+                        ).\
+                        reshape([-1, self._dim, 2]).\
+                        apply(tf.transpose, [0, 2, 1]).\
+                        reshape([-1, 2*self._dim])
+        else:
+            cur = self._iaf_template.reshape([-1,] + list(img_shape))
+            nr_channels = 2*dim*neuron_ratio
+            filter_size = 3
+            extra_nins = 1
+            from prettytensor import UnboundVariable
+            with pt.defaults_scope(
+                    activation_fn=tf.nn.elu,
+                    wnorm=True,
+                    custom_phase=UnboundVariable('custom_phase'),
+                    init_scale=0.1,
+                    ar_channels=False,
+                    pixel_bias=True,
+                    var_scope=None,
+            ):
+                for di in range(depth):
+                    if di == 0:
+                        cur = \
+                            cur.ar_conv2d_mod(
+                                filter_size,
+                                nr_channels,
+                                zerodiagonal=True,
+                                prefix="step0",
+                            )
+                        context_shp = [-1,] + img_shape[:2] + [nr_channels]
+                        if gating_context:
+                            cur *= (gate_con+1).apply(tf.nn.sigmoid).reshape(context_shp)
+                        if linear_context:
+                            cur += lin_con.reshape([-1]).reshape(context_shp)
+                    else:
+                        cur = \
+                            resconv_v1_customconv(
+                                "ar_conv2d_mod",
+                                dict(zerodiagonal=False),
+                                cur,
+                                filter_size,
+                                nr_channels,
+                                nin=False,
+                                gating=True,
+                            )
+                    for ninidx in range(extra_nins):
+                        cur += 0.1 * cur.conv2d_mod(
+                            1,
+                            nr_channels,
+                            prefix="nin_ex_%s" % ninidx,
+                        )
+                self._iaf_template = \
+                    cur.ar_conv2d_mod(
+                        filter_size,
+                        img_shape[3] * 2,
                         activation_fn=None,
-                        ngroups=dim,
-                        prefix="arfc_last",
-                    ).\
-                    reshape([-1, self._dim, 2]).\
-                    apply(tf.transpose, [0, 2, 1]).\
-                    reshape([-1, 2*self._dim])
+                    ).apply(
+                        tf.transpose,
+                        [0, 3, 1, 2]
+                    ).reshape([-1, np.prod(img_shape) * 2])
 
     @overrides
     def init_mode(self):
