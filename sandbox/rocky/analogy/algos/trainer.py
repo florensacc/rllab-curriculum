@@ -18,6 +18,8 @@ import contextlib
 from sandbox.rocky.tf.envs.vec_env_executor import VecEnvExecutor
 from sandbox.rocky.tf.misc import tensor_utils
 
+from sandbox.rocky.analogy.envs.conopt_particle_env import ConoptParticleEnv
+
 
 @contextlib.contextmanager
 def set_seed_tmp(seed=None):
@@ -364,6 +366,12 @@ class Trainer(Serializable):
                 logger.log("Evaluating on test set...")
                 with logger.tabular_prefix('Test'):
                     self.eval_and_log(policy=policy, data_dict=test_dict)
+                    #rollout(self.env_cls, self.policy, max_path_length=self.horizon, animated=True)
+                    #new_test_env = ConoptParticleEnv()
+                    new_test_env = self.env_cls()
+                    rollout(env=env, agent=ApplyDemoPolicy(policy, demo_path=data_dict["demo_paths"][0]),
+                            max_path_length=self.horizon, animated=True)
+
 
                 logger.dump_tabular()
 

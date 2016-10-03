@@ -1,7 +1,3 @@
-# We use one RNN to extract the goal after watching the demo and another RNN for the policy itself
-# (we need memory to remember which points we've reached in the past).
-
-
 from rllab.core.serializable import Serializable
 from sandbox.rocky.analogy.policies.base import AnalogyPolicy
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
@@ -15,7 +11,7 @@ from sandbox.rocky.tf.policies import rnn_utils
 from sandbox.rocky.tf.spaces.box import Box
 
 
-class DualRNNAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
+class DoubleRNNAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
     def __init__(self, env_spec, name, rnn_hidden_size=32, rnn_hidden_nonlinearity=tf.nn.tanh,
                  state_include_action=False,
                  network_type=rnn_utils.NetworkType.GRU,  # mlp_hidden_nonlinearity=tf.nn.tanh,
@@ -56,49 +52,23 @@ class DualRNNAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                 assert state_include_action
                 embedding_dim = 40  # 100
 
-                embedding_network = MLP(
-                    name='embedding_network',
+                embedding_network = ConvNetwork(
+                    name="embedding_network",
                     input_shape=obs_input_shape,
                     input_layer=l_flat_obs_input,
                     output_dim=embedding_dim,
                     hidden_sizes=(),
+                    conv_filters=(embedding_dim, embedding_dim // 2),
+                    conv_filter_sizes=(5, 3),
+                    conv_strides=(1, 1),
+                    conv_pads=('SAME', 'SAME'),
                     hidden_nonlinearity=tf.nn.relu,
-                    output_nonlinearity=tf.nn.softmax,
+                    output_nonlinearity=L.spatial_expected_softmax,
                     weight_normalization=weight_normalization,
-                    batch_normalization=batch_normalization
-
+                    # layer_normalization=layer_normalization,
+                    batch_normalization=batch_normalization,
+                    # batch_normalization=True,
                 )
-
-            # action_network = MLP(
-            #     name="action_network",
-            #     input_shape=(mlp_input_dim,),
-            #     input_layer=L.concat([l_flat_embedding, l_summary_in], axis=1),
-            #     hidden_sizes=mlp_hidden_sizes,
-            #     hidden_nonlinearity=mlp_hidden_nonlinearity,
-            #     output_dim=action_dim,
-            #     output_nonlinearity=output_nonlinearity,
-            #     weight_normalization=weight_normalization,
-            #     # layer_normalization=layer_normalization,
-            #     batch_normalization=batch_normalization,
-            # )
-
-                #embedding_network = ConvNetwork(
-                #    name="embedding_network",
-                #    input_shape=obs_input_shape,
-                #    input_layer=l_flat_obs_input,
-                #    output_dim=embedding_dim,
-                #    hidden_sizes=(),
-                #    conv_filters=(embedding_dim, embedding_dim // 2),
-                #    conv_filter_sizes=(5, 3),
-                #    conv_strides=(1, 1),
-                #    conv_pads=('SAME', 'SAME'),
-                #    hidden_nonlinearity=tf.nn.relu,
-                #    output_nonlinearity=L.spatial_expected_softmax,
-                #    weight_normalization=weight_normalization,
-                #    # layer_normalization=layer_normalization,
-                #    batch_normalization=batch_normalization,
-                #    # batch_normalization=True,
-                #)
 
                 l_flat_embedding = embedding_network.output_layer
                 l_embedding = L.OpLayer(
@@ -161,9 +131,6 @@ class DualRNNAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                                                                       flat_summary_shape[1])
             )
 
-            self.summary = np.zeros((1, rnn_hidden_size), dtype=np.float32)
-
-
             # mlp_input_dim = embedding_dim + rnn_hidden_size
             action_network = rnn_utils.create_recurrent_network(
                 network_type,
@@ -218,12 +185,6 @@ class DualRNNAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             self.f_update_summary = tensor_utils.compile_function(
                 summary_inputs,
                 tf.assign(summary_var, L.get_output(l_summary, phase='test')),
-            )
-
-            self.f_compute_summary = tensor_utils.compile_function(
-                summary_inputs,
-                L.get_output(l_summary, phase='test'),
-                # tf.assign(summary_var, , validate_shape=False),
             )
 
             flat_embedding_var = L.get_output(l_flat_embedding, {l_obs_input: tf.expand_dims(obs_var, 0)})
@@ -283,40 +244,6 @@ class DualRNNAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             summary_inputs = [[demo_obs]]
         self.f_update_summary(*summary_inputs)
 
-    def apply_demos(self, paths):
-
-        # if len(dones) != len(self.summary):
-        #     self.summary = np.zeros((len(dones), self.summary_network.hidden_dim))
-
-        # if np.any(dones):
-        #     done_paths = [p for done, p in zip(dones, paths) if done]
-
-        max_len = np.max([len(p["rewards"]) for p in paths])
-
-        demo_obs = [p["observations"] for p in paths]
-        demo_obs = np.asarray([tensor_utils.pad_tensor(o, max_len) for o in demo_obs])
-
-        demo_actions = [p["actions"] for p in paths]
-        demo_actions = np.asarray([tensor_utils.pad_tensor(a, max_len) for a in demo_actions])
-
-        demo_valids = [np.ones_like(p["rewards"]) for p in paths]
-        demo_valids = np.asarray([tensor_utils.pad_tensor(v, max_len) for v in demo_valids])
-
-        assert np.all(demo_valids)
-
-        self.summary = self.f_compute_summary(demo_obs, demo_actions)
-            # self.summary[dones] = new_summary
-
-            # import ipdb; ipdb.set_trace()
-            #
-            # # self.f_update_summary
-
-            # run through paths, but only until it's valid?
-            # how to express this?
-            # we can sum over all valids
-
-            # self.f_update_summary(demo_obs, demo_actions)
-
     def reset(self, dones=None):
         # self.prev_actions = None
         self.prev_state = self.action_network.state_init_param.eval()
@@ -326,8 +253,3 @@ class DualRNNAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
         actions, new_states = self.f_action([flat_obs], [self.prev_state])
         self.prev_state = new_states[0]
         return actions[0], dict()
-
-    def get_actions(self, observations):
-        flat_obs = self.observation_space.flatten_n(observations)
-        actions = self.f_action(flat_obs, self.summary)
-        return actions, dict()

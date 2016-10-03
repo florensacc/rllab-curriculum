@@ -1,7 +1,9 @@
-from sandbox.rocky.analogy.algos.trainer import Trainer
-from sandbox.rocky.analogy.envs.conopt_particle_env import ConoptParticleEnv
+from sandbox.bradly.analogy.algos.trainer import Trainer
+from sandbox.bradly.analogy.envs.conopt_particle_env import ConoptParticleEnv
 from sandbox.rocky.analogy.policies.conopt_particle_tracking_policy import ConoptParticleTrackingPolicy
+from sandbox.bradly.analogy.policy.nu_dual_rnn_policy import DoubleRNNAnalogyPolicy
 from sandbox.rocky.analogy.policies.demo_rnn_mlp_analogy_policy import DemoRNNMLPAnalogyPolicy
+
 from sandbox.rocky.tf.envs.base import TfEnv
 import tensorflow as tf
 from rllab.misc.instrument import stub, run_experiment_lite
@@ -37,7 +39,7 @@ class VG(VariantGenerator):
 
     @variant
     def horizon(self):
-        return [30, 100]
+        return [80]
 
 
 vg = VG()
@@ -51,18 +53,19 @@ for v in variants:
         seed=0,
     ))
 
-    policy = DemoRNNMLPAnalogyPolicy(
+    policy = DoubleRNNAnalogyPolicy(
         env_spec=env.spec,
         name="policy",
         rnn_hidden_size=100,
         rnn_hidden_nonlinearity=tf.nn.relu,
-        mlp_hidden_sizes=(100, 100),
-        mlp_hidden_nonlinearity=tf.nn.relu,
+        #mlp_hidden_sizes=(100, 100),
+        #mlp_hidden_nonlinearity=tf.nn.relu,
         state_include_action=v["state_include_action"],
         batch_normalization=False,
         layer_normalization=False,
         weight_normalization=True,
         network_type=NetworkType.GRU,
+
     )
 
     algo = Trainer(
@@ -79,7 +82,8 @@ for v in variants:
         no_improvement_tolerance=20,
         shuffler=ConoptParticleEnv.shuffler() if v["use_shuffler"] else None,
         batch_size=100,
-        plot=True
+        plot=True,
+        particles_to_reach=2
     )
 
     config.DOCKER_IMAGE = "dementrock/rllab3-conopt-gpu-cuda80"
