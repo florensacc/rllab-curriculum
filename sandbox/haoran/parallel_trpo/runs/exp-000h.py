@@ -1,7 +1,5 @@
 """
-Debug exp-000g
-1. timer
-2. Re-run non-parallel linear baseline
+Repeat part of exp-000f, but use set_cpu_affinity
 """
 import lasagne
 from sandbox.haoran.parallel_trpo.trpo import ParallelTRPO
@@ -39,8 +37,9 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "parallel-trpo/" + os.path.basename(__file__).split('.')[0] # exp_xxx
+config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-mode = "kube"
+mode = "kube_test"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1c"
 
@@ -60,7 +59,7 @@ discount = 0.99
 n_itr = 1000
 
 
-if sys.platform == "darwin":
+if "local" in mode and sys.platform == "darwin":
     set_cpu_affinity = False
     cpu_assignments = None
     serial_compile = False
@@ -78,7 +77,7 @@ class VG(VariantGenerator):
         return ["hopper","walker"]
     @variant
     def use_parallel(self):
-        return [False]
+        return [True]
     @variant
     def cg_iters(self):
         return [10]
@@ -86,7 +85,7 @@ class VG(VariantGenerator):
     def baseline_type_opt(self):
         return [
             # ["nn_feature_linear",""],
-            # ["conv","cg"],
+            ["conv","cg"],
             ["conv","sgd"],
             ["linear",""],
         ]
@@ -256,6 +255,7 @@ for v in variants:
                 optimizer = ConjugateGradientOptimizer(
                     subsample_factor=0.2,
                     cg_iters=10,
+                    name="vf_opt"
                 )
             baseline_regressor_args["optimizer"] = optimizer
             baseline = GaussianConvBaseline(
@@ -265,7 +265,6 @@ for v in variants:
         else:
             raise NotImplementedError
 
-        policy_opt_args.pop("name")
         algo = TRPO(
             env=env,
             policy=policy,

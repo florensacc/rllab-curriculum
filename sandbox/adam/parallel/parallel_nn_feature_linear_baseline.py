@@ -30,6 +30,7 @@ class ParallelNNFeatureLinearBaseline(LinearFeatureBaseline):
             nn_feature_power=2,
             t_power=3,
             reg_coeff=1e-5,
+            prediction_clip=1000,
         ):
         self._policy = policy
         self._nn_feature_power = nn_feature_power
@@ -37,6 +38,7 @@ class ParallelNNFeatureLinearBaseline(LinearFeatureBaseline):
         nn_feature_len = np.prod(policy.get_feature_shape())
         self._nn_feature_len = nn_feature_len
         self._vec_dim = int(nn_feature_len * nn_feature_power + t_power + 1)
+        self._prediction_clip = prediction_clip
         super().__init__(env_spec, reg_coeff)
 
     @overrides
@@ -89,6 +91,9 @@ class ParallelNNFeatureLinearBaseline(LinearFeatureBaseline):
         self._coeffs = shareds.coeffs  # (compatible with inherited predict() method)
         self._par_objs = (shareds, barriers)
 
+    def force_compile(self):
+        pass
+
     def init_rank(self, rank):
         self.rank = rank
 
@@ -127,6 +132,14 @@ class ParallelNNFeatureLinearBaseline(LinearFeatureBaseline):
             train_error = np.average((featmat.dot(self._coeffs) - returns)**2)
             print("---------- baseline training error: %f"%(train_error))
         barriers.fit[1].wait()
+
+    @overrides
+    def predict(self, path):
+        if self._coeffs is None:
+            return np.zeros(len(path["rewards"]))
+        predictions = self._features(path).dot(self._coeffs)
+        clipped_predictions = np.clip(predictions,-self._prediction_clip, self._prediction_clip)
+        return clipped_predictions
 
     def _features_and_targets(self, paths):
         """

@@ -1,8 +1,9 @@
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.base import Hash
 import numpy as np
+import multiprocessing as mp
 
 class SimHash(Hash):
-    def __init__(self,item_dim, dim_key=128, bucket_sizes=None):
+    def __init__(self,item_dim, dim_key=128, bucket_sizes=None,parallel=False):
         """
         Encode each item (vector) as the signs of its dot products with random vectors (with uniformly sampled orientations) to get a binary code. Then further compress the binary code as \sum_{i=0}^{dim_key} b_i 2^i (mod bucket_size) for each bucket. The bucket sizes are primes, so that we obtain distinct keys. Bucket keys are redundant to reduce the error caused by compression (see the query part).
         A key is finally represented as indices in the bukckets.
@@ -29,7 +30,23 @@ class SimHash(Hash):
         self.mods_list = np.asarray(mods_list).T
 
         # the tables count the number of observed keys for each bucket
-        self.tables = np.zeros((len(bucket_sizes), np.max(bucket_sizes)),dtype=int)
+        self.parallel = parallel
+        if parallel:
+            self.tables_lock = mp.Value('i')
+            self.tables = np.frombuffer(
+                mp.RawArray('i', int(len(bucket_sizes) * np.max(bucket_sizes))),
+                np.int32,
+            )
+            self.tables = self.tables.reshape((len(bucket_sizes), np.max(bucket_sizes)))
+            self.unpicklable_list = ["tables_lock","tables"]
+        else:
+            self.tables = np.zeros((len(bucket_sizes), np.max(bucket_sizes)),dtype=int)
+            self.unpicklable_list = []
+
+    def __getstate__(self):
+        """ Do not pickle parallel objects. """
+        return {k: v for k, v in iter(self.__dict__.items()) if k not in self.unpicklable_list}
+
 
     def compute_keys(self, items):
         """
@@ -44,8 +61,13 @@ class SimHash(Hash):
         """
         Increment hash table counts for many items (row-wise stacked as a matrix)
         """
-        for idx in range(len(self.bucket_sizes)):
-            np.add.at(self.tables[idx], keys[:, idx], 1)
+        if self.parallel:
+            with self.tables_lock.get_lock():
+                for idx in range(len(self.bucket_sizes)):
+                    np.add.at(self.tables[idx], keys[:, idx], 1)
+        else:
+            for idx in range(len(self.bucket_sizes)):
+                np.add.at(self.tables[idx], keys[:, idx], 1)
 
     def query_keys(self, keys):
         """
@@ -58,6 +80,12 @@ class SimHash(Hash):
         return counts
 
     def reset(self):
-        self.tables = np.zeros(
-            (len(self.bucket_sizes), np.max(self.bucket_sizes))
-        )
+        if self.parallel:
+            with self.tables_lock.get_lock():
+                self.tables = np.zeros(
+                    (len(self.bucket_sizes), np.max(self.bucket_sizes))
+                )
+        else:
+            self.tables = np.zeros(
+                (len(self.bucket_sizes), np.max(self.bucket_sizes))
+            )

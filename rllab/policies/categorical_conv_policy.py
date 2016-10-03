@@ -10,6 +10,7 @@ from rllab.core.serializable import Serializable
 from rllab.misc import ext
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
+import theano
 import numpy as np
 import lasagne.nonlinearities as NL
 
@@ -25,6 +26,7 @@ class CategoricalConvPolicy(StochasticPolicy, LasagnePowered, Serializable):
             output_nonlinearity=NL.softmax,
             prob_network=None,
             feature_layer_index=-2,
+            eps=0,
     ):
         """
         The policy consists of several convolution layers followed by fc layers and softmax
@@ -35,6 +37,7 @@ class CategoricalConvPolicy(StochasticPolicy, LasagnePowered, Serializable):
         :param prob_network: manually specified network for this policy, other network params
         are ignored
         :param feature_layer_index: index of the feature layer. Default -2 means the last layer before fc-softmax
+        :param eps: mixture weight on uniform distribution; useful to force exploration
         :return:
         """
         Serializable.quick_init(self, locals())
@@ -59,10 +62,22 @@ class CategoricalConvPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         self._l_prob = prob_network.output_layer
         self._l_obs = prob_network.input_layer
+
+        # mix in uniform distribution
+        n_actions = env_spec.action_space.n
+        uniform_prob = np.ones(n_actions,dtype=theano.config.floatX) / n_actions
+        eps_var = theano.shared(
+            eps,
+            name="eps",
+        )
+        nn_prob = L.get_output(prob_network.output_layer)
+        final_prob = (1-eps_var) * nn_prob + eps_var * uniform_prob
         self._f_prob = ext.compile_function(
             [prob_network.input_layer.input_var],
-            L.get_output(prob_network.output_layer)
+            final_prob,
         )
+        self._eps_var = eps_var
+
         self._feature_layer_index = feature_layer_index
         feature_layer = L.get_all_layers(prob_network.output_layer)[feature_layer_index] # layer before fc-softmax
         self._f_feature = ext.compile_function(
@@ -76,17 +91,24 @@ class CategoricalConvPolicy(StochasticPolicy, LasagnePowered, Serializable):
         super(CategoricalConvPolicy, self).__init__(env_spec)
         LasagnePowered.__init__(self, [prob_network.output_layer])
 
+    def set_eps(self, eps):
+        self._eps_var.set_value(eps)
+
     @property
     def vectorized(self):
         return True
 
     @overrides
     def dist_info_sym(self, obs_var, state_info_vars=None):
+        nn_prob = L.get_output(
+            self._l_prob,
+            {self._l_obs: obs_var}
+        )
+        n_actions = self._env_spec.action_space.n
+        uniform_prob = np.ones(n_actions,dtype=theano.config.floatX) / n_actions
+        prob = (1-self._eps_var) * nn_prob + self._eps_var * uniform_prob
         return dict(
-            prob=L.get_output(
-                self._l_prob,
-                {self._l_obs: obs_var}
-            )
+            prob=prob
         )
 
     @overrides

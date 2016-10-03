@@ -7,7 +7,7 @@ from rllab.algos.base import RLAlgorithm
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 from rllab.misc import ext
-from sandbox.adam.parallel.sampler import WorkerBatchSampler
+from sandbox.haoran.parallel_trpo.sampler import WorkerBatchSampler
 from sandbox.adam.parallel.util import SimpleContainer
 # from rllab.policies.base import Policy
 
@@ -42,6 +42,9 @@ class ParallelBatchPolopt(RLAlgorithm):
             set_cpu_affinity=False,
             cpu_assignments=None,
             serial_compile=True,
+            clip_reward=True,
+            bonus_evaluator=None,
+            bonus_coeff=0,
             **kwargs
     ):
         """
@@ -87,6 +90,9 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.worker_batch_size = batch_size // n_parallel
         self.n_steps_collected = 0  # (set by sampler)
         self.sampler = WorkerBatchSampler(self)
+        self.clip_reward = clip_reward
+        self.bonus_evaluator = bonus_evaluator
+        self.bonus_coeff = bonus_coeff
 
     def __getstate__(self):
         """ Do not pickle parallel objects. """
@@ -107,10 +113,13 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.rank = None
         shareds = SimpleContainer(
             sum_discounted_return=mp.RawArray('d', n),
-            sum_return=mp.RawArray('d', n),
             num_traj=mp.RawArray('i', n),
+            sum_return=mp.RawArray('d', n),
             max_return=mp.RawArray('d', n),
             min_return=mp.RawArray('d', n),
+            sum_raw_return=mp.RawArray('d', n),
+            max_raw_return=mp.RawArray('d', n),
+            min_raw_return=mp.RawArray('d', n),
             num_steps=mp.RawArray('i', n),
             num_valids=mp.RawArray('d', n),
             sum_ent=mp.RawArray('d', n),
@@ -129,6 +138,8 @@ class ParallelBatchPolopt(RLAlgorithm):
         )
         self._par_objs = (shareds, barriers)
         self.baseline.init_par_objs(n_parallel=n)
+        if self.bonus_evaluator is not None:
+            self.bonus_evaluator.init_par_objs(n_parallel=n)
 
     def init_par_objs(self):
         """
@@ -189,6 +200,15 @@ class ParallelBatchPolopt(RLAlgorithm):
         for p in processes:
             p.join()
 
+    def process_paths(self, paths):
+        for path in paths:
+            path["raw_rewards"] = np.copy(path["rewards"])
+            if self.clip_reward:
+                path["rewards"] = np.clip(path["raw_rewards"],-1,1)
+            if self.bonus_evaluator is not None:
+                path["bonus_rewards"] = self.bonus_coeff * self.bonus_evaluator.predict(path)
+                path["rewards"] = path["rewards"] + path["bonus_rewards"]
+
     def _train(self, rank):
         self.init_rank(rank)
         if self.rank == 0:
@@ -196,6 +216,11 @@ class ParallelBatchPolopt(RLAlgorithm):
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.sampler.obtain_samples()
+                if self.bonus_evaluator is not None:
+                    if rank == 0:
+                        logger.log("fitting bonus evaluator")
+                    self.bonus_evaluator.fit_before_process_samples(paths)
+                self.process_paths(paths)
                 samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 self.optimize_policy(itr, samples_data)  # (parallel)
@@ -233,12 +258,16 @@ class ParallelBatchPolopt(RLAlgorithm):
             shareds.sum_discounted_return[i] = \
                 np.sum([path["returns"][0] for path in samples_data["paths"]])
             undiscounted_returns = [sum(path["rewards"]) for path in samples_data["paths"]]
+            undiscounted_raw_returns = [sum(path["raw_rewards"]) for path in samples_data["paths"]]
             shareds.num_traj[i] = len(undiscounted_returns)
             shareds.num_steps[i] = self.n_steps_collected
             # shareds.num_steps[i] = sum([len(path["rewards"]) for path in samples_data["paths"]])
             shareds.sum_return[i] = np.sum(undiscounted_returns)
             shareds.min_return[i] = np.min(undiscounted_returns)
             shareds.max_return[i] = np.max(undiscounted_returns)
+            shareds.sum_raw_return[i] = np.sum(undiscounted_raw_returns)
+            shareds.min_raw_return[i] = np.min(undiscounted_raw_returns)
+            shareds.max_raw_return[i] = np.max(undiscounted_raw_returns)
             if not self.policy.recurrent:
                 shareds.sum_ent[i] = np.sum(self.policy.distribution.entropy(
                     samples_data["agent_infos"]))
@@ -262,13 +291,17 @@ class ParallelBatchPolopt(RLAlgorithm):
                 num_traj = sum(shareds.num_traj)
                 average_discounted_return = \
                     sum(shareds.sum_discounted_return) / num_traj
-                average_return = sum(shareds.sum_return) / num_traj
                 if self.policy.recurrent:
                     ent = sum(shareds.sum_ent) / sum(shareds.num_valids)
                 else:
                     ent = sum(shareds.sum_ent) / sum(shareds.num_steps)
+                average_return = sum(shareds.sum_return) / num_traj
                 max_return = max(shareds.max_return)
                 min_return = min(shareds.min_return)
+
+                average_raw_return = sum(shareds.sum_raw_return) / num_traj
+                max_raw_return = max(shareds.max_raw_return)
+                min_raw_return = min(shareds.min_raw_return)
 
                 # compute explained variance
                 n_steps = sum(shareds.num_steps)
@@ -284,15 +317,19 @@ class ParallelBatchPolopt(RLAlgorithm):
                     ev = 1 - y_pred_error_var / (y_var + 1e-8)
 
                 logger.record_tabular('Iteration', itr)
-                logger.record_tabular('AverageDiscountedReturn', average_discounted_return)
-                logger.record_tabular('AverageReturn', average_return)
                 logger.record_tabular('ExplainedVariance', ev)
                 logger.record_tabular('NumTrajs', num_traj)
                 logger.record_tabular('Entropy', ent)
                 logger.record_tabular('Perplexity', np.exp(ent))
                 # logger.record_tabular('StdReturn', np.std(undiscounted_returns))
+                logger.record_tabular('AverageDiscountedReturn', average_discounted_return)
+                logger.record_tabular('AverageReturn', average_return)
                 logger.record_tabular('MaxReturn', max_return)
                 logger.record_tabular('MinReturn', min_return)
+                logger.record_tabular('AverageRawReturn', average_raw_return)
+                logger.record_tabular('MaxRawReturn', max_raw_return)
+                logger.record_tabular('MinRawReturn', min_raw_return)
+
 
         # NOTE: These others might only work if all path data is collected
         # centrally, could provide this as an option...might be easiest to build
@@ -310,6 +347,8 @@ class ParallelBatchPolopt(RLAlgorithm):
             self._set_affinity(rank)
         self.baseline.init_rank(rank)
         self.optimizer.init_rank(rank)
+        if self.bonus_evaluator is not None:
+            self.bonus_evaluator.init_rank(rank)
         seed = ext.get_seed()
         if seed is None:
             # NOTE: Not sure if this is a good source for seed?

@@ -1,8 +1,7 @@
 """
-Use image observations. Can compare to exp-013.
-Switch to Theano. Run on CPU. Use parallel TRPO.
-Can compare to A3C exp-005a
+Try reward bonus
 """
+
 """ baseline """
 from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBaseline
 from sandbox.adam.parallel.parallel_nn_feature_linear_baseline import ParallelNNFeatureLinearBaseline
@@ -23,6 +22,10 @@ from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 """ resetter """
 # from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
 
+""" bonus """
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash import SimHash
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.slicing_preprocessor import SlicingPreprocessor
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from sandbox.haoran.ec2_info import instance_info, subnet_info
@@ -81,6 +84,7 @@ policy_opt_args = dict(
 network_args = nips_dqn_args
 img_width=84
 img_height=84
+n_last_screens=4
 clip_reward = True
 obs_type = "image"
 record_image=False
@@ -89,10 +93,9 @@ record_ram=True
 record_internal_state=False
 
 # bonus
-dim_key = 64
+count_target = "observations"
 bonus_form="1/sqrt(n)"
-extra_dim_key = 1024
-extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
+bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
 
 
 class VG(VariantGenerator):
@@ -102,18 +105,25 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [0]
+        return [0.1,1.0]
 
     @variant
     def baseline_type_opt(self):
         return [
-            # ["conv","cg"],
             ["nn_feature_linear",""],
         ]
 
     @variant
+    def dim_key(self):
+        return [256, 512]
+
+    @variant
+    def gae_lambda(self):
+        return [1]
+
+    @variant
     def game(self):
-        return ["space_invaders","qbert","pong","beam_rider","breakout"]
+        return ["freeway"]
 variants = VG().variants()
 
 
@@ -167,11 +177,41 @@ for v in variants:
         raise NotImplementedError
 
     resetter = None
+    if count_target == "images" or (count_target == "observations" and obs_type == "image"):
+        total_pixels=img_width * img_height
+        state_preprocessor = SlicingPreprocessor(
+            input_dim=total_pixels * n_last_screens,
+            start=total_pixels * (n_last_screens - 1),
+            stop=total_pixels * n_last_screens,
+            step=1,
+        )
+    elif count_target == "ram_states":
+        state_preprocessor = None
+    else:
+        raise NotImplementedError
+
+    _hash = SimHash(
+        item_dim=state_preprocessor.get_output_dim(), # get around stub
+        dim_key=v["dim_key"],
+        bucket_sizes=bucket_sizes,
+        parallel=use_parallel,
+    )
+    bonus_evaluator = ALEHashingBonusEvaluator(
+        log_prefix="",
+        state_dim=state_preprocessor.get_output_dim(),
+        state_preprocessor=state_preprocessor,
+        hash=_hash,
+        bonus_form=bonus_form,
+        count_target=count_target,
+        parallel=use_parallel,
+    )
+
     env = AtariEnv(
             game=v["game"],
             seed=v["seed"],
             img_width=img_width,
             img_height=img_height,
+            n_last_screens=n_last_screens,
             obs_type=obs_type,
             record_ram=record_ram,
             record_image=record_image,
@@ -223,6 +263,7 @@ for v in variants:
         batch_size=batch_size,
         max_path_length=max_path_length,
         discount=discount,
+        gae_lambda=v["gae_lambda"],
         n_itr=n_itr,
         plot=plot,
         optimizer_args=policy_opt_args,
@@ -231,6 +272,8 @@ for v in variants:
         cpu_assignments=cpu_assignments,
         serial_compile=serial_compile,
         n_parallel=n_parallel,
+        bonus_evaluator=bonus_evaluator,
+        bonus_coeff=v["bonus_coeff"],
     )
 
     if use_gpu:
