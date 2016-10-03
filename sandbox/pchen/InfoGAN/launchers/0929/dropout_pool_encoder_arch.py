@@ -8,6 +8,9 @@
 
 
 # ^ try to reduce above overfitting by dropout
+
+# trying best dropout param without context & w/ ar
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -106,7 +109,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [0, ]
+        return [0, 3] # also try ar
 
     @variant(hide=False)
     def nr(self):
@@ -128,8 +131,8 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            # [],
-            ["linear"],
+            [], # try no context
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -179,10 +182,12 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def dec_fc_keep_prob(self):
+        return [0.9] # try no context
         return [1., 0.9]
 
     @variant(hide=False)
     def dec_res_keep_prob(self):
+        return [0.9] # try no context
         return [1., 0.9]
 
 
@@ -196,7 +201,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():

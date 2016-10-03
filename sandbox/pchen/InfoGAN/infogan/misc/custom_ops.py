@@ -1279,12 +1279,17 @@ def resconv_v1_customconv(
     mix = add_coeff * blk.as_layer() + origin
     return mix.nl()
 
-def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None):
+def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None, subpixel=False):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         if context is not None:
             blk.join([context], lambda lst: tf.concat(3, lst))
-        blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")
+        if subpixel:
+            # assume 2x upsampling
+            blk.conv2d_mod(kernel // 2, nch*4, prefix="de_pre")
+            blk.depool2d_split()
+        else:
+            blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")
         blk.custom_dropout(keep_prob)
         blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
         blk.apply(lambda x: x*add_coeff)
@@ -1294,7 +1299,12 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=Fals
             # origin.reshape([-1,]+out_wh+[nch, 2])
             origin.apply(tf.reduce_mean, [4],)
         else:
-            origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None, prefix="de_pre")
+            if subpixel:
+                # assume 2x upsampling
+                origin.conv2d_mod(kernel // 2, nch*4, activation_fn=None, prefix="de_straight")
+                origin.depool2d_split()
+            else:
+                origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None, prefix="de_straight")
     return seq.as_layer().nl()
 
 def gruconv_v1(l_in, kernel, nch, inp=None):
@@ -1476,4 +1486,31 @@ def down_shift(
         ]
     )
     return input_layer.with_tensor(y)
+
+# from https://github.com/openai/iaf/blob/master/graphy/nodes/conv.py#L28
+@prettytensor.Register
+def depool2d_split(x, factor=2):
+    assert factor >= 1
+    if factor == 1: return x
+    xs = int_shape(x)
+    # x.reshape((x.shape[0], x.shape[1] / factor ** 2, factor, factor, x.shape[2], x.shape[3]))
+    new_chns = xs[3] // factor**2
+    x = tf.reshape(
+        x,
+        (xs[0], xs[1], xs[2], new_chns, factor, factor, )
+    )
+    # x = x.dimshuffle(0, 1, 4, 2, 5, 3)
+    x = tf.transpose(
+        x,
+        [0, 3, 1, 4, 2, 5]
+    )
+    # x = x.reshape((x.shape[0], x.shape[1], x.shape[2]*x.shape[3], x.shape[4]*x.shape[5]))
+    x = tf.reshape(
+        x,
+        [xs[0], new_chns, xs[1]*factor, xs[2]*factor]
+    )
+    return tf.transpose(
+        x,
+        [0, 2, 3, 1]
+    )
 
