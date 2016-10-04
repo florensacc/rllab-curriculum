@@ -1,5 +1,10 @@
 # overfitting according to data/local/play-0920-iaf-cc-cifar-ml-3ldc-gatedresnet-arch-midarcomp-0.1kl/
 # "object-centric" encoder to try to reduce overfitting
+
+
+# kl 0.01 better on train/vali
+# best train 3.068 with 96 base-filters and improving
+# best vali 3.35 @ 200 epoch w/ 48 chnls; 3.4 w/ 96 chnls
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

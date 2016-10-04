@@ -1,13 +1,6 @@
-# inherit from pool_encoder_arch_on_overfit
-# test better setting to more symmetric network & try more rep
+# compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
-
-# more rep -> code not used! this means designing an architecture to make
-# sure information propogates is very important as expected!
-
-# train/test don't really get better
-
-
+# try playing with conv af model
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -37,6 +30,7 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 class VG(VariantGenerator):
+
     @variant
     def lr(self):
         # yield 0.0005#
@@ -78,7 +72,8 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
         # yield "resv1_k3_pixel_bias_filters_ratio_32"
-        yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
+        # yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
+        yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
 
     @variant(hide=False)
     def steps(self, ):
@@ -86,15 +81,11 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [96, ]
+        return [96]
 
     @variant(hide=False)
     def dec_init_size(self, ):
         return [4]
-
-    @variant(hide=False)
-    def rep(self, ):
-        return [1, 3]
 
     @variant(hide=True)
     def wnorm(self):
@@ -104,21 +95,29 @@ class VG(VariantGenerator):
     def ar_wnorm(self):
         return [True, ]
 
+    @variant
+    def num_gpus(self):
+        # yield 0.0005#
+        # yield
+        # return np.arange(1, 11) * 1e-4
+        # return [0.0001, 0.0005, 0.001]
+        return [2] #0.001]
+
     @variant(hide=False)
-    def k(self):
-        return [batch_size, ]
+    def k(self, num_gpus):
+        return [batch_size // num_gpus, ]
 
     @variant(hide=False)
     def nar(self):
-        return [0, ]
+        return [6]
 
     @variant(hide=False)
     def nr(self):
-        return [1,]
+        return [3,]
 
     @variant(hide=False)
     def i_nar(self):
-        return [3, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -129,17 +128,21 @@ class VG(VariantGenerator):
         return [0.1, ]
 
     @variant(hide=False)
-    def i_context(self):
+    def i_context(self, i_nar):
         # return [True, False]
+        if i_nar == 0:
+            return [
+                []
+            ]
         return [
-            # [],
+            [],
             ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
     @variant(hide=False)
     def exp_avg(self):
-        return [0.999, ]
+        return [None,]#0.999, ]
 
     @variant(hide=False)
     def tiear(self):
@@ -175,7 +178,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [3]
+        return [3*2]
 
 
 
@@ -184,7 +187,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -227,6 +230,7 @@ for v in variants[i:i+1]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
+                img_shape=[8,8,zdim//64],
             )
 
         latent_spec = [
@@ -285,11 +289,9 @@ for v in variants[i:i+1]:
             wnorm=v["wnorm"],
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                old_dec=False,
+                old_dec=True,
                 base_filters=v["base_filters"],
-                enc_rep=v["rep"],
-                dec_rep=v["rep"],
-                filter_size=4,
+                enc_rep=2,
             ),
         )
 
@@ -308,6 +310,7 @@ for v in variants[i:i+1]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
+            num_gpus=v["num_gpus"],
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
@@ -316,7 +319,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0928_pool_encoder_decoder_test",
+            exp_prefix="1003_mgpu_convaf_on_spatial_code_play",
             seed=v["seed"],
             variant=v,
             mode="local",

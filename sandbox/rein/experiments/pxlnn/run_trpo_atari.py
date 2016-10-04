@@ -8,7 +8,7 @@ from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rein.algos.pxlnn.batch_sampler import BatchSampler
 from sandbox.rein.algos.pxlnn.tf_atari import AtariEnv
 from sandbox.rein.algos.pxlnn.trpo_plus import TRPOPlus
-from sandbox.rein.dynamics_models.tf_autoenc.autoenc import ConvAutoEncoder
+from sandbox.rein.dynamics_models.tf_autoenc.autoenc import BinaryEmbeddingConvAE
 from sandbox.rocky.tf.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from sandbox.rocky.tf.core.network import ConvNetwork
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
@@ -93,7 +93,7 @@ for factor, mdp, eta, seed in param_cart_product:
 
     # Dynamics model f: num_seq_frames x h x w -> h x w
     # TODO: change into autoenc with softmax output.
-    model = ConvAutoEncoder(
+    model = BinaryEmbeddingConvAE(
         input_shape=env_spec.observation_space.shape,  # mdp.spec.observation_space.shape,
         n_filters=[n_seq_frames, 10, 10],
         filter_sizes=[6, 6, 6],

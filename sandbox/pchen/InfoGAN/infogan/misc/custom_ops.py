@@ -1279,12 +1279,17 @@ def resconv_v1_customconv(
     mix = add_coeff * blk.as_layer() + origin
     return mix.nl()
 
-def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None):
+def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None, subpixel=False):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         if context is not None:
             blk.join([context], lambda lst: tf.concat(3, lst))
-        blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")
+        if subpixel:
+            # assume 2x upsampling
+            blk.conv2d_mod(kernel // 2, nch*4, prefix="de_pre")
+            blk.depool2d_split()
+        else:
+            blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")
         blk.custom_dropout(keep_prob)
         blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
         blk.apply(lambda x: x*add_coeff)
@@ -1294,7 +1299,12 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=Fals
             # origin.reshape([-1,]+out_wh+[nch, 2])
             origin.apply(tf.reduce_mean, [4],)
         else:
-            origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None, prefix="de_pre")
+            if subpixel:
+                # assume 2x upsampling
+                origin.conv2d_mod(kernel // 2, nch*4, activation_fn=None, prefix="de_straight")
+                origin.depool2d_split()
+            else:
+                origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None, prefix="de_straight")
     return seq.as_layer().nl()
 
 def gruconv_v1(l_in, kernel, nch, inp=None):
@@ -1369,6 +1379,9 @@ class CustomBookkeeper(Bookkeeper):
     def add_histogram_summary(self, tensor, tag=None):
         """Add a summary operation to visualize any tensor."""
         print("passing histogram %s"%tag)
+
+    def add_scalar_summary(self, x, tag=None):
+        print("passing scalar summary %s"%tag)
 
 prettytensor.bookkeeper.BOOKKEEPER_FACTORY = CustomBookkeeper
 
@@ -1476,4 +1489,85 @@ def down_shift(
         ]
     )
     return input_layer.with_tensor(y)
+
+# from https://github.com/openai/iaf/blob/master/graphy/nodes/conv.py#L28
+@prettytensor.Register
+def depool2d_split(x, factor=2):
+    assert factor >= 1
+    if factor == 1: return x
+    xs = int_shape(x)
+    # x.reshape((x.shape[0], x.shape[1] / factor ** 2, factor, factor, x.shape[2], x.shape[3]))
+    new_chns = xs[3] // factor**2
+    x = tf.reshape(
+        x,
+        (xs[0], xs[1], xs[2], new_chns, factor, factor, )
+    )
+    # x = x.dimshuffle(0, 1, 4, 2, 5, 3)
+    x = tf.transpose(
+        x,
+        [0, 3, 1, 4, 2, 5]
+    )
+    # x = x.reshape((x.shape[0], x.shape[1], x.shape[2]*x.shape[3], x.shape[4]*x.shape[5]))
+    x = tf.reshape(
+        x,
+        [xs[0], new_chns, xs[1]*factor, xs[2]*factor]
+    )
+    return tf.transpose(
+        x,
+        [0, 2, 3, 1]
+    )
+
+def assign_to_gpu(
+        gpu=0,
+        ps_dev="/device:CPU:0",
+        # ps_dev="/device:GPU:0",
+        # ps_dev="/gpu:0",
+):
+    def _assign(op):
+        node_def = op if isinstance(op, tf.NodeDef) else op.node_def
+        if node_def.op == "Variable":
+            return ps_dev
+        else:
+            return "/gpu:%d" % gpu
+    return _assign
+
+
+def average_grads(tower_grads):
+    def average_dense(grad_and_vars):
+        if len(grad_and_vars) == 1:
+            return grad_and_vars[0][0]
+
+        grad = grad_and_vars[0][0]
+        for g, _ in grad_and_vars[1:]:
+            grad += g
+        return grad / len(grad_and_vars)
+
+    def average_sparse(grad_and_vars):
+        if len(grad_and_vars) == 1:
+            return grad_and_vars[0][0]
+
+        indices = []
+        values = []
+        for g, _ in grad_and_vars:
+            indices += [g.indices]
+            values += [g.values]
+        indices = tf.concat(0, indices)
+        values = tf.concat(0, values)
+        return tf.IndexedSlices(values, indices, grad_and_vars[0][0].dense_shape)
+
+    average_grads = []
+    for grad_and_vars in zip(*tower_grads):
+        if grad_and_vars[0][0] is None:
+            grad = None
+        elif isinstance(grad_and_vars[0][0], tf.IndexedSlices):
+            grad = average_sparse(grad_and_vars)
+        else:
+            grad = average_dense(grad_and_vars)
+        # Keep in mind that the Variables are redundant because they are shared
+        # across towers. So .. we will just return the first tower's pointer to
+        # the Variable.
+        v = grad_and_vars[0][1]
+        grad_and_var = (grad, v)
+        average_grads.append(grad_and_var)
+    return average_grads
 

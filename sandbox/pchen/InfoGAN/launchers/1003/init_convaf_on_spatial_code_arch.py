@@ -1,12 +1,12 @@
-# inherit from pool_encoder_arch_on_overfit
-# test better setting to more symmetric network & try more rep
+# compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
+# try playing with conv af model
 
-# more rep -> code not used! this means designing an architecture to make
-# sure information propogates is very important as expected!
+# kl 0.01 leads to no code being used/
+# switch to 0.06 and try again
 
-# train/test don't really get better
-
+# 0.06 might need to overfitting, so this will explore 0.01 kl but much smaller init scale
+# also try fewer feature maps but this shouldnt affect as much?
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -60,6 +60,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
+        # return [0.06, ]# 0.1]
         return [0.01, ]# 0.1]
     #
     @variant(hide=False)
@@ -78,7 +79,8 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
         # yield "resv1_k3_pixel_bias_filters_ratio_32"
-        yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
+        # yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
+        yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
 
     @variant(hide=False)
     def steps(self, ):
@@ -86,15 +88,11 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [96, ]
+        return [96, 32]
 
     @variant(hide=False)
     def dec_init_size(self, ):
         return [4]
-
-    @variant(hide=False)
-    def rep(self, ):
-        return [1, 3]
 
     @variant(hide=True)
     def wnorm(self):
@@ -110,15 +108,15 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [0, ]
+        return [2, ]
 
     @variant(hide=False)
     def nr(self):
-        return [1,]
+        return [3,]
 
     @variant(hide=False)
     def i_nar(self):
-        return [3, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -129,10 +127,14 @@ class VG(VariantGenerator):
         return [0.1, ]
 
     @variant(hide=False)
-    def i_context(self):
+    def i_context(self, i_nar):
         # return [True, False]
+        if i_nar == 0:
+            return [
+                []
+            ]
         return [
-            # [],
+            [],
             ["linear"],
             # ["gating"],
             # ["linear", "gating"]
@@ -177,6 +179,11 @@ class VG(VariantGenerator):
     def ar_depth(self):
         return [3]
 
+    @variant(hide=False)
+    def data_init_scale(self):
+        return [0.01, 0.001]
+
+
 
 
 vg = VG()
@@ -184,7 +191,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 3
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -227,6 +234,8 @@ for v in variants[i:i+1]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
+                img_shape=[8,8,zdim//64],
+                data_init_scale=v["data_init_scale"],
             )
 
         latent_spec = [
@@ -285,11 +294,8 @@ for v in variants[i:i+1]:
             wnorm=v["wnorm"],
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                old_dec=False,
-                base_filters=v["base_filters"],
-                enc_rep=v["rep"],
-                dec_rep=v["rep"],
-                filter_size=4,
+                old_dec=True,
+                base_filters=v["base_filters"]
             ),
         )
 
@@ -316,7 +322,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0928_pool_encoder_decoder_test",
+            exp_prefix="1003_init_convaf_on_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

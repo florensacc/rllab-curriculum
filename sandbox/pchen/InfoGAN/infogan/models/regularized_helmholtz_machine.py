@@ -1511,6 +1511,7 @@ class RegularizedHelmholtzMachine(object):
                     res_keep_prob = network_args.get("dec_res_keep_prob", 1.)
                     nn = network_args.get("dec_nn", False)
                     rep = network_args.get("dec_rep", 1)
+                    subpixel = network_args.get("subpixel", False)
                     print("decoder nn %s" % nn)
                     # assert old_dec
                     if old_dec:
@@ -1528,7 +1529,8 @@ class RegularizedHelmholtzMachine(object):
                             out_wh=[8,8],
                             keep_prob=res_keep_prob,
                             nn=nn,
-                            add_coeff=ac
+                            add_coeff=ac,
+                            subpixel=subpixel,
                         )
                         for _ in range(rep):
                             decoder = resconv_v1(decoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
@@ -1539,6 +1541,7 @@ class RegularizedHelmholtzMachine(object):
                             out_wh=[16,16],
                             keep_prob=res_keep_prob,
                             nn=nn,
+                            subpixel=subpixel,
                             add_coeff=ac
                         )
                         for _ in range(rep):
@@ -1550,6 +1553,7 @@ class RegularizedHelmholtzMachine(object):
                             out_wh=[32,32],
                             keep_prob=res_keep_prob,
                             nn=nn,
+                            subpixel=subpixel,
                             add_coeff=ac
                         )
                         for _ in range(rep-1):
