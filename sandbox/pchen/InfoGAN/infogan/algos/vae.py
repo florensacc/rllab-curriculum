@@ -179,6 +179,9 @@ class VAE(object):
 
                 ndim = self.model.output_dist.effective_dim
                 log_p_z = self.model.latent_dist.logli_prior(z_var)
+                dict_log_vars["log_p_z"].append(
+                    tf.reduce_mean(log_p_z)
+                )
 
                 if eval:
                     assert self.monte_carlo_kl
@@ -211,12 +214,11 @@ class VAE(object):
                     true_vlb = tf.reduce_mean(log_p_x_given_z) - kl
                     if self.min_kl_onesided:
                         avg_log_p_sg_z = tf.reduce_mean(
-                            self.model.latent_dist.logli_prior(
-                                tf.stop_gradient(z_var)
-                            )
-                        )
-                        dict_log_vars["log_p_sg_z"].append(
-                            avg_log_p_sg_z
+                            # self.model.latent_dist.logli_prior(
+                            #     tf.stop_gradient(z_var)
+                            # )
+                            log_p_z # this variant lets q(z|x) seek high density region
+                                    # but not pay the price
                         )
 
                         # when freebits is enabled, still give gradients to prior
