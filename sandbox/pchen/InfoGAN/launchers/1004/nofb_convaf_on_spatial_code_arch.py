@@ -1,12 +1,16 @@
-# from data/local/play-0920-iaf-cc-cifar-ml-3ldc-gatedresnet-arch-midarcomp-0.1kl/
+# compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
-# try latent code that's spatial & avoid aggressive pooling
-# also try dilated conv to make sure enough receptive field coverage
+# try playing with conv af model
 
-# best train 3.19
-# best vali 3.53 ~ 200 epochs -> overfit more than compact version?
+# kl 0.01 leads to no code being used/
+# switch to 0.06 and try again
 
-# this simply tries to replicate the best 3.22 vali results
+# 0.06 might need to overfitting, so this will explore 0.01 kl but much smaller init scale
+# also try fewer feature maps but this shouldnt affect as much?
+
+# no freebits!!
+
+# completely no freebits -> no bits used
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -47,7 +51,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 112]
+        return [42, ]
         # return [123124234]
 
     @variant
@@ -60,7 +64,13 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.01,]# 0.1]
+        # return [0.06, ]# 0.1]
+        return [0.0, ]# 0.1]
+
+    @variant
+    def min_kl_onesided(self):
+        # return [0.06, ]# 0.1]
+        return [False, True]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -77,6 +87,8 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen"
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
+        # yield "resv1_k3_pixel_bias_filters_ratio_32"
+        # yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
         yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
 
     @variant(hide=False)
@@ -85,12 +97,7 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [32, ]
-
-    @variant(hide=False)
-    def step(self, ):
-        return [1] # for no iaf exp
-        # return [1, 2]
+        return [32]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -110,32 +117,34 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [0, ]
+        return [2, ]
 
     @variant(hide=False)
     def nr(self):
-        return [1,]
+        return [3,]
 
     @variant(hide=False)
     def i_nar(self):
-        return [0] # for no iaf exp
-        return [3, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [5] # for 1024 due to mem
-        # 5 for 512
+        return [5,]
 
     @variant(hide=False)
     def i_init_scale(self):
         return [0.1, ]
 
     @variant(hide=False)
-    def i_context(self):
+    def i_context(self, i_nar):
         # return [True, False]
+        if i_nar == 0:
+            return [
+                []
+            ]
         return [
-            [], # for no context exp
-            # ["linear"],
+            [],
+            ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -178,6 +187,11 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_depth(self):
         return [3]
+
+    @variant(hide=False)
+    def data_init_scale(self):
+        return [0.1]
+
 
 
 
@@ -229,6 +243,8 @@ for v in variants[i:i+1]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
+                img_shape=[8,8,zdim//64],
+                data_init_scale=v["data_init_scale"],
             )
 
         latent_spec = [
@@ -287,7 +303,8 @@ for v in variants[i:i+1]:
             wnorm=v["wnorm"],
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                fc_size=v["zdim"],
+                old_dec=True,
+                base_filters=v["base_filters"]
             ),
         )
 
@@ -306,6 +323,7 @@ for v in variants[i:i+1]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
+            min_kl_onesided=v["min_kl_onesided"],
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
@@ -314,7 +332,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1003_repli_on_spatial_code_cifar",
+            exp_prefix="1004_nofb_convaf_on_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

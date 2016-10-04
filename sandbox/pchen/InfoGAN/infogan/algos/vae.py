@@ -49,6 +49,7 @@ class VAE(object):
             noise=True,
             vis_ar=True,
             num_gpus=1,
+            min_kl_onesided=False, # True if prior doesn't see freebits
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -61,6 +62,7 @@ class VAE(object):
         Parameters
         ----------
         """
+        self.min_kl_onesided = min_kl_onesided
         self.num_gpus = num_gpus
         self._vis_ar = vis_ar
         self.resume_from = resume_from
@@ -207,7 +209,31 @@ class VAE(object):
                         kl = tf.reduce_mean(self.model.latent_dist.kl_prior(z_dist_info))
 
                     true_vlb = tf.reduce_mean(log_p_x_given_z) - kl
-                    vlb = tf.reduce_mean(log_p_x_given_z) - tf.maximum(kl, self.min_kl * ndim) * self.kl_coeff
+                    if self.min_kl_onesided:
+                        avg_log_p_sg_z = tf.reduce_mean(
+                            self.model.latent_dist.logli_prior(
+                                tf.stop_gradient(z_var)
+                            )
+                        )
+                        dict_log_vars["log_p_sg_z"].append(
+                            avg_log_p_sg_z
+                        )
+
+                        # when freebits is enabled, still give gradients to prior
+                        # but maintain the original numerical values
+                        vlb = tf.reduce_mean(log_p_x_given_z) - \
+                              tf.maximum(
+                                  kl,
+                                  self.min_kl * ndim
+                                  - avg_log_p_sg_z
+                                  + tf.stop_gradient(avg_log_p_sg_z)
+                              ) * self.kl_coeff
+                    else:
+                        vlb = tf.reduce_mean(log_p_x_given_z) - \
+                          tf.maximum(
+                              kl,
+                              self.min_kl * ndim
+                          ) * self.kl_coeff
 
                 # Normalize by the dimensionality of the data distribution
                 dict_log_vars["vlb_sum"].append(vlb)
