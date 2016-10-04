@@ -19,15 +19,15 @@ stub(globals())
 
 n_seq_frames = 4
 model_batch_size = 32
-exp_prefix = 'trpo-emb-a'
+exp_prefix = 'trpo-a'
 seeds = range(5)
-etas = [0.1, 0.01]
+etas = [0]#0.1, 0.01]
 mdps = [AtariEnv(game='freeway', obs_type="image", frame_skip=8),
         AtariEnv(game='breakout', obs_type="image", frame_skip=8),
         AtariEnv(game='frostbite', obs_type="image", frame_skip=8),
         AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=8)]
-trpo_batch_size = 500
-max_path_length = 45
+trpo_batch_size = 50000
+max_path_length = 4500
 dropout = False
 batch_norm = True
 
@@ -223,7 +223,7 @@ for mdp, eta, seed in param_cart_product:
         ),
         hamming_distance=0,
         eta=eta,
-        train_model=True,
+        train_model=False,
         train_model_freq=5,
     )
 
@@ -233,7 +233,7 @@ for mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/algos/embedding_theano/run_experiment_lite.py",
