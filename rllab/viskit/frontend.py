@@ -52,7 +52,7 @@ def send_css(path):
     return flask.send_from_directory('css', path)
 
 
-def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None, title=None):
+def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None, title=None,xlim=None,ylim=None):
     data = []
     p25, p50, p75 = [], [], []
     for idx, plt in enumerate(plot_list):
@@ -112,6 +112,8 @@ def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None, ti
         width=plot_width,
         height=plot_height,
         title=title,
+        xaxis=go.XAxis(range=xlim),
+        yaxis=go.YAxis(range=ylim),
     )
     fig = go.Figure(data=data, layout=layout)
     fig_div = po.plot(fig, output_type='div', include_plotlyjs=False)
@@ -216,11 +218,27 @@ def check_nan(exp):
     return all(not np.any(np.isnan(vals)) for vals in list(exp.progress.values()))
 
 
-def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None, use_median=False,
-                         only_show_best=False, only_show_best_final=False, gen_eps=False,
-                         only_show_best_sofar=False, clip_plot_value=None, plot_width=None,
-                         plot_height=None, filter_nan=False, smooth_curve=False, custom_filter=None,
-                         legend_post_processor=None, normalize_error=False, custom_series_splitter=None):
+def get_plot_instruction(
+    plot_key,
+    split_key=None,
+    group_key=None,
+    filters=None,
+    use_median=False,
+    only_show_best=False,
+    only_show_best_final=False,
+    gen_eps=False,
+    only_show_best_sofar=False,
+    clip_plot_value=None,
+    plot_width=None,
+    plot_height=None,
+    filter_nan=False,
+    smooth_curve=False,
+    custom_filter=None,
+    legend_post_processor=None,
+    normalize_error=False,
+    custom_series_splitter=None,
+    xlim=None,ylim=None,
+):
     print(plot_key, split_key, group_key, filters)
     if filter_nan:
         nonnan_exps_data = list(filter(check_nan, exps_data))
@@ -434,7 +452,8 @@ def get_plot_instruction(plot_key, split_key=None, group_key=None, filters=None,
             plots.append(make_plot(
                 to_plot,
                 use_median=use_median, title=fig_title,
-                plot_width=plot_width, plot_height=plot_height
+                plot_width=plot_width, plot_height=plot_height,
+                xlim=xlim,ylim=ylim,
             ))
 
         if gen_eps:
@@ -493,14 +512,33 @@ def plot_div():
         custom_series_splitter = eval(custom_series_splitter)
     else:
         custom_series_splitter = None
-    plot_div = get_plot_instruction(plot_key=plot_key, split_key=split_key, filter_nan=filter_nan,
-                                    group_key=group_key, filters=filters, use_median=use_median, gen_eps=gen_eps,
-                                    only_show_best=only_show_best, only_show_best_final=only_show_best_final,
-                                    only_show_best_sofar=only_show_best_sofar,
-                                    clip_plot_value=clip_plot_value, plot_width=plot_width, plot_height=plot_height,
-                                    smooth_curve=smooth_curve, custom_filter=custom_filter,
-                                    legend_post_processor=legend_post_processor, normalize_error=normalize_error,
-                                    custom_series_splitter=custom_series_splitter)
+
+    xub = parse_float_arg(args,"xub")
+    xlb = parse_float_arg(args,"xlb")
+    yub = parse_float_arg(args,"yub")
+    ylb = parse_float_arg(args,"ylb")
+
+    plot_div = get_plot_instruction(
+        plot_key=plot_key,
+        split_key=split_key,
+        filter_nan=filter_nan,
+        group_key=group_key,
+        filters=filters,
+        use_median=use_median,
+        gen_eps=gen_eps,
+        only_show_best=only_show_best,
+        only_show_best_final=only_show_best_final,
+        only_show_best_sofar=only_show_best_sofar,
+        clip_plot_value=clip_plot_value,
+        plot_width=plot_width,
+        plot_height=plot_height,
+        smooth_curve=smooth_curve,
+        custom_filter=custom_filter,
+        legend_post_processor=legend_post_processor,
+        normalize_error=normalize_error,
+        custom_series_splitter=custom_series_splitter,
+        xlim=[xlb,xub],ylim=[ylb,yub],
+    )
     # print plot_div
     return plot_div
 

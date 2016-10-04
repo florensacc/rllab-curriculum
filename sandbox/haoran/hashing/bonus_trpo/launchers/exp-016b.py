@@ -1,6 +1,9 @@
 """
-RAM obs, RAM count, SL
-Continue exp-002b (RAM count) and exp-009e (RAM count with SL, which for some reason did not run)
+Repeat exp-016, but with params copied from exp-002b (except bonus form is fixed to 1/sqrt(n))
+bonus: 0.01 (seems best)
+batch size: 50k
+bucket sizes: 6M
+dim_key: 256
 """
 from sandbox.rocky.tf.baselines.linear_feature_baseline import LinearFeatureBaseline
 from sandbox.rocky.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
@@ -37,7 +40,7 @@ ec2_instance = "c4.8xlarge"
 subnet = "us-west-1c"
 
 n_parallel = 1
-snapshot_mode = "gap"
+snapshot_mode = "last"
 snapshot_gap = 50
 store_paths = False
 plot = False
@@ -49,7 +52,7 @@ config.USE_TF = True
 if "test" in mode:
     batch_size = 1000 # careful about memory usage
 else:
-    batch_size = 100000
+    batch_size = 50000
 max_path_length = 4500
 discount = 0.99
 n_itr = 1000
@@ -66,7 +69,8 @@ record_internal_state=False
 
 count_target = "ram_states"
 bonus_form="1/sqrt(n)"
-bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959] #90M
+# bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959] #90M
+bucket_sizes = None
 
 step_size = 0.01
 
@@ -82,7 +86,7 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [1e-5]
+        return [0.01,0.001]
 
     @variant
     def game(self):
@@ -94,7 +98,7 @@ class VG(VariantGenerator):
 
     @variant
     def dim_key(self):
-        return [512]
+        return [256]
 
     @variant
     def resetter(self):
