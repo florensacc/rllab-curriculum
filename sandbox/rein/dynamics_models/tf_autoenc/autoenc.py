@@ -1,84 +1,111 @@
 import tensorflow as tf
 import numpy as np
-import math
 from sandbox.rein.dynamics_models.utils import load_dataset_atari
-from ops import lrelu, dense, conv2d, conv_transpose
+import sandbox.rocky.tf.core.layers as L
 
 
-class BinaryEmbeddingConvAE:
+class BinaryCodeConvAE:
     """Convolutional/Deconvolutional autoencoder with shared weights.
     """
 
     def __init__(self,
                  input_shape=(42, 42, 1),
-                 n_filters=(10, 10, 10),
-                 filter_sizes=(3, 3, 3),
-                 n_classes=10,
                  ):
+        self._x = tf.placeholder(tf.float32, shape=(None,) + input_shape, name="input")
+        l_in = L.InputLayer(shape=(None,) + input_shape, input_var=self._x, name="input_layer")
+        l_conv_1 = L.Conv2DLayer(
+            l_in,
+            num_filters=96,
+            filter_size=5,
+            stride=(2, 2),
+            pad='VALID',
+            nonlinearity=tf.nn.relu,
+            name='conv_1',
+            weight_normalization=True,
+        )
+        l_conv_1_bn = L.batch_norm(l_conv_1)
+        l_conv_2 = L.Conv2DLayer(
+            l_conv_1_bn,
+            num_filters=96,
+            filter_size=5,
+            stride=(2, 2),
+            pad='VALID',
+            nonlinearity=tf.nn.relu,
+            name='conv_2',
+            weight_normalization=True,
+        )
+        l_conv_2_bn = L.batch_norm(l_conv_2)
+        l_flatten_1 = L.FlattenLayer(l_conv_2_bn)
+        l_dense_1 = L.DenseLayer(
+            l_flatten_1,
+            num_units=128,
+            nonlinearity=tf.nn.relu,
+            name='hidden_1',
+            W=L.XavierUniformInitializer(),
+            b=tf.zeros_initializer,
+            weight_normalization=True
+        )
+        l_dense_1_bn = L.batch_norm(l_dense_1)
+        l_dense_2 = L.DenseLayer(
+            l_dense_1_bn,
+            num_units=32,
+            nonlinearity=tf.nn.sigmoid,
+            name='binary_code',
+            W=L.XavierUniformInitializer(),
+            b=tf.zeros_initializer,
+            weight_normalization=True
+        )
+        l_dense_2_bn = L.batch_norm(l_dense_2)
+        self._z = l_dense_2_bn
+        l_dense_3 = L.DenseLayer(
+            l_dense_2_bn,
+            num_units=np.prod(l_conv_2.output_shape[1:]),
+            nonlinearity=tf.nn.relu,
+            name='hidden_2',
+            W=L.XavierUniformInitializer(),
+            b=tf.zeros_initializer,
+            weight_normalization=True
+        )
+        l_dense_3_bn = L.batch_norm(l_dense_3)
+        l_reshp_1 = L.ReshapeLayer(
+            l_dense_3_bn,
+            (-1,) + l_conv_2_bn.output_shape[1:]
+        )
+        l_deconv_1 = L.TransposedConv2DLayer(
+            l_reshp_1,
+            num_filters=96,
+            filter_size=5,
+            stride=(2, 2),
+            crop='VALID',
+            nonlinearity=tf.nn.relu,
+            name='deconv_1',
+            weight_normalization=True,
+        )
+        l_deconv_1_bn = L.batch_norm(l_deconv_1)
+        l_deconv_2 = L.TransposedConv2DLayer(
+            l_deconv_1_bn,
+            num_filters=1,
+            filter_size=6,
+            stride=(2, 2),
+            crop='VALID',
+            nonlinearity=tf.nn.sigmoid,
+            name='deconv_2',
+            weight_normalization=True,
+        )
+        l_out = l_deconv_2
+        # l_deconv_2_bn = L.batch_norm(l_deconv_2)
+        # l_out = L.Conv2DLayer(l_deconv_2_bn, 1, 1, pad='SAME', nonlinearity=tf.nn.sigmoid)
+        self._y = L.get_output(l_out)
+        self._z_in = tf.placeholder(tf.float32, shape=(None, 32), name="input")
+        self._y_gen = L.get_output(l_out, {l_dense_2_bn: self._z_in}, deterministic=True)
 
-        self._n_classes = n_classes
+        print(l_conv_1.output_shape)
+        print(l_conv_2.output_shape)
+        print(l_deconv_1.output_shape)
+        print(l_deconv_2.output_shape)
+        print(l_out.output_shape)
 
         # --
-        self._x = tf.placeholder(tf.float32, (None,) + input_shape, name='x')
-        current_input = self._x
-
-        # --
-        encoder = []
-        shapes = []
-        for layer_i, n_output in enumerate(n_filters):
-            n_input = current_input.get_shape().as_list()[3]
-            shapes.append(current_input.get_shape().as_list())
-            W = tf.Variable(
-                tf.random_uniform([
-                    filter_sizes[layer_i],
-                    filter_sizes[layer_i],
-                    n_input, n_output],
-                    -1.0 / math.sqrt(n_input),
-                    1.0 / math.sqrt(n_input)))
-            b = tf.Variable(tf.zeros([n_output]))
-            encoder.append(W)
-            output = lrelu(
-                tf.add(tf.nn.conv2d(
-                    current_input, W, strides=[1, 2, 2, 1], padding='SAME'), b))
-            current_input = output
-
-        # --
-        # Flatten conv output.
-        conv_out_shape = tf.shape(current_input)
-        flattened_size = np.prod(current_input.get_shape().as_list()[1:])
-        current_input = tf.reshape(current_input, (tf.pack([conv_out_shape[0], flattened_size])))
-        W = tf.Variable(
-            tf.random_uniform([flattened_size, 32],
-                              -1.0 / math.sqrt(n_input),
-                              1.0 / math.sqrt(n_input)))
-        b = tf.Variable(tf.zeros([32]))
-        current_input = tf.nn.sigmoid(tf.matmul(current_input, W) + b)
-        current_input = current_input + tf.random_uniform(tf.shape(current_input), -0.3, 0.3,
-                                                          dtype=tf.float32)
-        self._z = current_input
-        W = tf.Variable(
-            tf.random_uniform([32, 360],
-                              -1.0 / math.sqrt(n_input),
-                              1.0 / math.sqrt(n_input)))
-        b = tf.Variable(tf.zeros([360]))
-        current_input = lrelu(tf.matmul(current_input, W) + b)
-        current_input = tf.reshape(current_input, tf.pack([tf.shape(current_input)[0], 6, 6, 10]))
-        encoder.reverse()
-        shapes.reverse()
-
-        # --
-        for layer_i, shape in enumerate(shapes):
-            W = encoder[layer_i]
-            b = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]))
-            output = lrelu(tf.add(
-                tf.nn.conv2d_transpose(
-                    current_input, W,
-                    tf.pack([tf.shape(self._z)[0], shape[1], shape[2], shape[3]]),
-                    strides=[1, 2, 2, 1], padding='SAME'), b))
-            current_input = output
-
-        # --
-        self._y = current_input
         self._cost = tf.reduce_sum(tf.square(self._y - self._x))
 
         # --
@@ -99,10 +126,10 @@ class BinaryEmbeddingConvAE:
         space.
         """
         if z is None:
-            z = np.random.randint(0, 2, (10, 32))
+            z = np.random.randint(0, 2, (1, 32))
         # Note: This maps to mean of distribution, we could alternatively
         # sample from Gaussian distribution
-        return sess.run(self.y, feed_dict={self.z: z})
+        return sess.run(self._y_gen, feed_dict={self._z_in: z})
 
     def reconstruct(self, X):
         """ Use VAE to reconstruct given data. """
@@ -139,12 +166,12 @@ def test_atari():
 
     atari_dataset = load_dataset_atari('/Users/rein/programming/datasets/dataset_42x42.pkl')
     atari_dataset['x'] = atari_dataset['x'].transpose((0, 2, 3, 1))
-    ae = BinaryEmbeddingConvAE()
+    ae = BinaryCodeConvAE()
 
     sess = tf.Session()
     sess.run(tf.initialize_all_variables())
 
-    n_epochs = 2000
+    n_epochs = 1000
     for epoch_i in range(n_epochs):
         train = atari_dataset['x']
         sess.run(ae.optimizer, feed_dict={ae.x: train})
