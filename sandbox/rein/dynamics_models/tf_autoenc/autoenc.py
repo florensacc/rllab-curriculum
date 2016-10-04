@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from sandbox.rein.dynamics_models.utils import load_dataset_atari
 import sandbox.rocky.tf.core.layers as L
+from sandbox.rocky.tf.misc.tensor_utils import to_onehot_sym
 
 # --
 # Nonscientific printing of numpy arrays.
@@ -9,6 +10,7 @@ np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
 
 bin_code_dim = 32
+num_bins = 64
 
 
 class IndependentSoftmaxLayer(L.Layer):
@@ -17,30 +19,26 @@ class IndependentSoftmaxLayer(L.Layer):
         super(IndependentSoftmaxLayer, self).__init__(incoming, **kwargs)
 
         self._num_bins = num_bins
-        self.W = self.add_param(W, (self.input_shape[1], self._num_bins), name='W')
+        self.W = self.add_param(W, (self.input_shape[3], self._num_bins), name='W')
         self.b = self.add_param(b, (self._num_bins,), name='b')
         self.pixel_b = self.add_param(
             b,
-            (self.input_shape[2], self.input_shape[3], self._num_bins,),
+            (self.input_shape[1], self.input_shape[2], self._num_bins,),
             name='pixel_b'
         )
 
     def get_output_for(self, input, **kwargs):
-        fc = tf.matmul(
-            tf.reshape(
-                tf.transpose(
-                    input, (0, 2, 3, 1)),
-                tf.pack([tf.shape(input)[0], self.input_shape[1]])), self.W) + \
-             self.b[np.newaxis, :]
-        shp = self.get_output_shape_for([-1] + list(self.input_shape[1:]))
-        fc_biased = fc.reshape(shp) + self.pixel_b
-        out = tf.nn.softmax(
-            fc_biased.reshape([-1, self._num_bins])
-        )
-        return out.reshape(shp)
+        shape = (-1, self.input_shape[3])
+        input_reshaped = tf.reshape(input, shape)
+        in_dot_w = tf.matmul(input_reshaped, self.W) + tf.expand_dims(self.b, 0)
+        shp = (-1, self.input_shape[1], self.input_shape[2], self._num_bins)
+        fc_biased = tf.reshape(in_dot_w, shp) + self.pixel_b
+        fc_biased_rshp = tf.reshape(fc_biased, [-1, self._num_bins])
+        out = tf.nn.softmax(fc_biased_rshp)
+        return tf.reshape(out, shp)
 
     def get_output_shape_for(self, input_shape):
-        return input_shape[0], input_shape[2], input_shape[3], self._num_bins
+        return input_shape[0], input_shape[1], input_shape[2], self._num_bins
 
 
 class DiscreteEmbeddingNonlinearityLayer(L.Layer):
@@ -58,7 +56,8 @@ class DiscreteEmbeddingNonlinearityLayer(L.Layer):
         # Force outputs to be binary through noise.
         return tf.nn.sigmoid(x) + noise_mask * tf.random_uniform(shape=tf.shape(x), minval=-0.3, maxval=0.3)
 
-    def get_output_for(self, input, noise_mask=1, **kwargs):
+    # FIXME: noise_mask = 0
+    def get_output_for(self, input, noise_mask=0, **kwargs):
         return self.nonlinearity(input, noise_mask)
 
     def get_output_shape_for(self, input_shape):
@@ -71,7 +70,10 @@ class BinaryCodeConvAE:
 
     def __init__(self,
                  input_shape=(42, 42, 1),
+                 label_smoothing=0,
                  ):
+        self._label_smoothing = label_smoothing
+
         self._x = tf.placeholder(tf.float32, shape=(None,) + input_shape, name="input")
         l_in = L.InputLayer(shape=(None,) + input_shape, input_var=self._x, name="input_layer")
         l_conv_1 = L.Conv2DLayer(
@@ -82,7 +84,7 @@ class BinaryCodeConvAE:
             pad='VALID',
             nonlinearity=tf.nn.relu,
             name='enc_conv_1',
-            weight_normalization=False,
+            weight_normalization=True,
         )
         l_conv_2 = L.Conv2DLayer(
             l_conv_1,
@@ -92,7 +94,7 @@ class BinaryCodeConvAE:
             pad='VALID',
             nonlinearity=tf.nn.relu,
             name='enc_conv_2',
-            weight_normalization=False,
+            weight_normalization=True,
         )
         l_flatten_1 = L.FlattenLayer(l_conv_2)
         l_dense_1 = L.DenseLayer(
@@ -102,7 +104,7 @@ class BinaryCodeConvAE:
             name='enc_hidden_1',
             W=L.XavierUniformInitializer(),
             b=tf.zeros_initializer,
-            weight_normalization=False
+            weight_normalization=True
         )
         l_code_prenoise = L.DenseLayer(
             l_dense_1,
@@ -111,7 +113,7 @@ class BinaryCodeConvAE:
             name='binary_code_prenoise',
             W=L.XavierUniformInitializer(),
             b=tf.zeros_initializer,
-            weight_normalization=False
+            weight_normalization=True
         )
         l_code = DiscreteEmbeddingNonlinearityLayer(
             l_code_prenoise,
@@ -125,7 +127,7 @@ class BinaryCodeConvAE:
             name='dec_hidden_1',
             W=L.XavierUniformInitializer(),
             b=tf.zeros_initializer,
-            weight_normalization=False
+            weight_normalization=True
         )
         l_reshp_1 = L.ReshapeLayer(
             l_dense_3,
@@ -141,7 +143,7 @@ class BinaryCodeConvAE:
             crop='VALID',
             nonlinearity=tf.nn.relu,
             name='dec_deconv_1',
-            weight_normalization=False,
+            weight_normalization=True,
         )
         l_deconv_2 = L.TransposedConv2DLayer(
             l_deconv_1,
@@ -153,19 +155,40 @@ class BinaryCodeConvAE:
             crop='VALID',
             nonlinearity=tf.nn.sigmoid,
             name='dec_deconv_2',
-            weight_normalization=False,
+            weight_normalization=True,
         )
-        # l_softmax = IndependentSoftmaxLayer(
-        #     l_reshp_1,
-        #     num_bins=64,
-        # )
-        # l_out = l_softmax
-        l_out = l_deconv_2
+        l_softmax = IndependentSoftmaxLayer(
+            l_deconv_2,
+            num_bins=num_bins,
+        )
+        l_out = l_softmax
+        print(l_out.output_shape)
+        # l_out = l_deconv_2
 
         print(l_conv_1.output_shape)
         print(l_conv_2.output_shape)
         print(l_deconv_1.output_shape)
         print(l_deconv_2.output_shape)
+
+        def likelihood_classification(target, prediction):
+            def _log_prob_softmax_onehot(target, prediction):
+                # Cross-entropy; target vector selecting correct prediction
+                # entries.
+                ll = tf.reduce_sum((
+                    target * tf.log(prediction)
+                ), 1)
+                return ll
+
+            target = tf.cast(to_onehot_sym(
+                tf.cast(tf.reshape(target, [-1]), 'int32'),
+                num_bins
+            ), tf.float32)
+            target += self._label_smoothing
+            target = target / tf.reduce_sum(target, 1, keep_dims=True)
+            return tf.reduce_sum(_log_prob_softmax_onehot(
+                target,
+                tf.reshape(prediction, [-1, num_bins])
+            ))
 
         # --
         self._z = L.get_output(l_code, noise_mask=0)
@@ -174,14 +197,17 @@ class BinaryCodeConvAE:
         self._y = L.get_output(l_out, deterministic=True)
 
         # --
-        self._z_in = tf.placeholder(tf.float32, shape=(None, bin_code_dim), name="input")
+        self._z_in = tf.placeholder(tf.float32, shape=(None, bin_code_dim), name="z_in")
         self._y_gen = L.get_output(l_out, {l_code: self._z_in}, deterministic=True)
 
         # --
-        self._cost = tf.reduce_sum(tf.square(L.get_output(l_out) - self._x))
+        self._t = tf.placeholder(tf.int32, shape=(None,) + input_shape, name="target")
+        # self._cost = tf.reduce_sum(tf.square(L.get_output(l_out) - self._x))
+        self._cost = - likelihood_classification(
+            self._t, L.get_output(l_out)) / tf.cast(tf.shape(self._x)[0], tf.float32)
 
         # --
-        learning_rate = 0.001
+        learning_rate = 0.01
         self._optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self._cost)
 
     def transform(self, sess, X):
@@ -201,11 +227,13 @@ class BinaryCodeConvAE:
             z = np.random.randint(0, 2, (1, bin_code_dim))
         # Note: This maps to mean of distribution, we could alternatively
         # sample from Gaussian distribution
-        return sess.run(self._y_gen, feed_dict={self._z_in: z})
+        softmax_out = sess.run(self._y_gen, feed_dict={self._z_in: z})
+        return np.argmax(softmax_out, axis=-1) / float(num_bins - 1)
 
-    def reconstruct(self, X):
+    def reconstruct(self, sess, X):
         """ Use VAE to reconstruct given data. """
-        return self.sess.run(self.y, feed_dict={self.x: X})
+        softmax_out = sess.run(self.y, feed_dict={self.x: X})
+        return np.argmax(softmax_out, axis=-1) / float(num_bins - 1)
 
     @property
     def x(self):
@@ -234,25 +262,26 @@ class BinaryCodeConvAE:
 
 def test_atari():
     import matplotlib.pyplot as plt
-
     atari_dataset = load_dataset_atari('/Users/rein/programming/datasets/dataset_42x42.pkl')
     atari_dataset['x'] = atari_dataset['x'].transpose((0, 2, 3, 1))
-    ae = BinaryCodeConvAE()
+    atari_dataset['y'] = (atari_dataset['x'] * (num_bins - 1)).astype(np.int)
+    ae = BinaryCodeConvAE(label_smoothing=0.003)
 
     sess = tf.Session()
     sess.run(tf.initialize_all_variables())
 
-    n_epochs = 5
+    n_epochs = 40
     for epoch_i in range(n_epochs):
-        train = atari_dataset['x']
-        sess.run(ae.optimizer, feed_dict={ae.x: train})
-        print(epoch_i, sess.run(ae.cost, feed_dict={ae.x: train}))
+        train_x = atari_dataset['x']
+        train_y = atari_dataset['y']
+        sess.run(ae.optimizer, feed_dict={ae.x: train_x, ae._t: train_y})
+        print(epoch_i, sess.run(ae.cost, feed_dict={ae.x: train_x, ae._t: train_y}))
 
     n_examples = 10
-    examples = np.tile(atari_dataset['x'][0][None, :], (n_examples, 1, 1, 1))
-    # examples = atari_dataset['x'][0:n_examples]
+    # examples = np.tile(atari_dataset['x'][0][None, :], (n_examples, 1, 1, 1))
+    examples = atari_dataset['x'][0:n_examples]
 
-    recon = sess.run(ae.y, feed_dict={ae.x: examples})
+    recon = ae.reconstruct(sess, examples)
     fig, axs = plt.subplots(2, n_examples, figsize=(20, 4))
     for example_i in range(n_examples):
         axs[0][example_i].imshow(

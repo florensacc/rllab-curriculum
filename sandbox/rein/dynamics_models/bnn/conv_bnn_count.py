@@ -947,10 +947,12 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             lasagne.layers.get_output(self.discrete_emb_sym, input_var, noise_mask=0, deterministic=True),
             log_name='fn_discrete_emb')
 
-        z_in = T.matrix()
-        y_gen = lasagne.layers.get_output(self.network, {self.discrete_emb_sym: z_in}, deterministic=True)
+        z_in = T.vector()
+        y_gen = lasagne.layers.get_output(self.network, {self.discrete_emb: z_in}, deterministic=True)
         self.y_gen = ext.compile_function(
-            [z_in], y_gen, log_name='fn_y_gen')
+            [z_in],
+            y_gen,
+            log_name='fn_y_gen')
 
 
 if __name__ == '__main__':
