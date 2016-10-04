@@ -8,7 +8,7 @@ import pyprind
 from rllab.sampler.utils import rollout
 from sandbox.rocky.analogy.policies.apply_demo_policy import ApplyDemoPolicy
 from sandbox.rocky.analogy.dataset import SupervisedDataset
-from sandbox.rocky.analogy.policies.normalizing_policy import NormalizingPolicy
+from sandbox.bradly.analogy.policy.non_broken_normalizing_policy import NormalizingPolicy
 from sandbox.rocky.analogy.utils import unwrap
 from rllab.sampler.stateful_pool import singleton_pool
 import itertools
@@ -18,7 +18,7 @@ import contextlib
 from sandbox.rocky.tf.envs.vec_env_executor import VecEnvExecutor
 from sandbox.rocky.tf.misc import tensor_utils
 
-#from sandbox.rocky.analogy.envs.conopt_particle_env import ConoptParticleEnv
+from sandbox.rocky.analogy.envs.conopt_particle_env import ConoptParticleEnv
 
 
 @contextlib.contextmanager
@@ -35,12 +35,12 @@ def set_seed_tmp(seed=None):
         random.setstate(state)
 
 
-def collect_demo(G, demo_seed, analogy_seed, target_seed, env_cls, demo_policy_cls, horizon):
+def collect_demo(G, demo_collector, demo_seed, analogy_seed, target_seed, env_cls, horizon):
     demo_env = env_cls(seed=demo_seed, target_seed=target_seed)
     analogy_env = env_cls(seed=analogy_seed, target_seed=target_seed)
 
-    demo_path = rollout(demo_env, demo_policy_cls(demo_env), max_path_length=horizon, animated=False)
-    analogy_path = rollout(analogy_env, demo_policy_cls(analogy_env), max_path_length=horizon)
+    demo_path = demo_collector.collect_demo(env=demo_env, horizon=horizon)
+    analogy_path = demo_collector.collect_demo(env=analogy_env, horizon=horizon)
 
     return demo_path, analogy_path, demo_env, analogy_env
 
@@ -131,7 +131,7 @@ class Trainer(Serializable):
             self,
             policy,
             env_cls,
-            demo_policy_cls,
+            demo_collector,
             shuffler=None,
             n_train_trajs=50,
             n_test_trajs=20,
@@ -143,11 +143,11 @@ class Trainer(Serializable):
             learning_rate=1e-3,
             no_improvement_tolerance=5,
             plot=False,
-            particles_to_reach=2,
     ):
         Serializable.quick_init(self, locals())
         self.env_cls = env_cls
-        self.demo_policy_cls = demo_policy_cls
+        self.demo_collector = demo_collector
+        # self.demo_policy_cls = demo_policy_cls
         self.shuffler = shuffler
         self.n_train_trajs = n_train_trajs
         self.n_test_trajs = n_test_trajs
@@ -160,10 +160,9 @@ class Trainer(Serializable):
         self.n_eval_trajs = n_eval_trajs
         self.learning_rate = learning_rate
         self.no_improvement_tolerance = no_improvement_tolerance
-        self.particles_to_reach = 2
 
     def eval_and_log(self, policy, data_dict):
-        eval_paths = vectorized_rollout_analogy(
+        eval_paths = rollout_analogy(
             policy, data_dict["demo_paths"], data_dict["analogy_envs"], max_path_length=self.horizon
         )
 
@@ -181,10 +180,10 @@ class Trainer(Serializable):
 
         for data in singleton_pool.run_imap_unordered(
                 collect_demo,
-                [tuple(seeds) + (self.env_cls, self.demo_policy_cls, self.horizon)
+                [(self.demo_collector,) + tuple(seeds) + (self.env_cls, self.horizon)
                  for seeds in zip(demo_seeds, analogy_seeds, target_seeds)]
         ):
-            progbar.update()
+            progbar.update(force_flush=True)
             data_list.append(data)
         if progbar.active:
             progbar.stop()
@@ -297,6 +296,7 @@ class Trainer(Serializable):
             analogy_paths=train_dict["analogy_paths"],
             # normalize_obs=True,
         )
+        #policy = self.policy
 
         opt_info = self.init_opt(env, policy)
 

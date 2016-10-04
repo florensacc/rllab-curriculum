@@ -52,13 +52,16 @@ class Shuffler(object):
 
 
 class ConoptParticleEnv(Env, Serializable):
-    def __init__(self, seed=None, target_seed=None, obs_type='state'):
+    def __init__(self, seed=None, target_seed=None, obs_type='state', particles_to_reach=2):
         Serializable.quick_init(self, locals())
         self.seed = seed
         self.target_seed = target_seed
         self.conopt_exp = None
         self.conopt_scenario = None
         self.conopt_env = None
+        self.target_ids = None
+        self.curr_target_idx = 0
+        self.particles_to_reach = particles_to_reach
         self.reset_trial()
 
     def reset_trial(self):
@@ -68,7 +71,10 @@ class ConoptParticleEnv(Env, Serializable):
         self.target_seed = target_seed
         exp = Experiment()
         with using_seed(self.target_seed):
-            target_id = np.random.randint(0, 2)
+            #self.target_ids = np.random.choice(np.arange(2), 2, replace=False)
+            #target_id = self.target_ids[0]
+            #target_id = np.random.randint(0, 2)
+            target_id = 0
         with using_seed(self.seed):
             scenario = exp.make_scenario(trial_index=seed, task_id=target_id)
         env = scenario.to_env()
@@ -105,23 +111,21 @@ class ConoptParticleEnv(Env, Serializable):
         env = self.conopt_env
         action = action.reshape(env.action_space.shape)
         next_obs, rew, done, infos = env.step(action)
-        import ipdb; ipdb.set_trace()
-        # assert env.action_space.contains(action), 'Action should be in action_space:\nSPACE=%s\nACTION=%s' % (
-        #     env.action_space, action)
-        #
-        # xnext, sense = env.world.forward_dynamics(env.x, action)
-        # assert xnext.shape == env.x.shape, 'X shape changed! old=%s, new=%s' % (env.x.shape, xnext.shape)
-        #
-        # # rew = []
-        # # for i in range(env.batchsize):
-        # #     sense_here = {k: sense[k][i] for k in sense}
-        # #     reward = - fast_compute_cost(env.reward_fn, sense_here)
-        # #     reward = np.squeeze(reward)
-        # #     rew.append(reward)
-        # #
-        # # env.x = xnext
-        #
-        # return Step(env._get_obs(), np.squeeze(rew), False)
+        #print(rew)
+        if np.abs(rew) < 0.02:
+            self.switch_goal()
+
+        return Step(next_obs, rew, done)
+
+    def switch_goal(self):
+        #print('kay')
+        #self.curr_target_idx += 1
+        #self.curr_target_idx = min(self.curr_target_idx, self.particles_to_reach-1)
+        #curr_target_pt = self.target_ids[self.curr_target_idx]
+        #potential_targ = self.env.conopt_scenario.task_id + 1
+        #new_targ = min(potential_targ, 1)
+        curr_target_pt = 1
+        self.conopt_scenario.task_id = curr_target_pt
 
     @classmethod
     def shuffler(cls):

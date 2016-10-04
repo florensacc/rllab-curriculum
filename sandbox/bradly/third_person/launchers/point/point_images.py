@@ -1,6 +1,6 @@
 from sandbox.rocky.tf.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from sandbox.bradly.third_person.envs.point_images import PointEnv
+from sandbox.bradly.third_person.envs.old.point_images import PointEnv
 from rllab.envs.normalized_env import normalize
 from sandbox.bradly.third_person.policy.gaussian_conv_policy import GaussianConvPolicy
 from sandbox.rocky.tf.envs.base import TfEnv

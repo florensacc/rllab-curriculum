@@ -1,6 +1,6 @@
 from sandbox.rocky.tf.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from sandbox.bradly.third_person.envs.reacher import ReacherEnv
+from sandbox.bradly.third_person.envs.old.reacher import ReacherEnv
 from rllab.envs.normalized_env import normalize
 from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv

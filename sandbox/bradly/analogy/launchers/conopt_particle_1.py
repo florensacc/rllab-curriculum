@@ -1,10 +1,13 @@
 from sandbox.bradly.analogy.algos.trainer import Trainer
+from sandbox.rocky.analogy.demo_collector.policy_demo_collector import PolicyDemoCollector
+from sandbox.rocky.analogy.demo_collector.trajopt_demo_collector import TrajoptDemoCollector
 from sandbox.bradly.analogy.envs.conopt_particle_env import ConoptParticleEnv
-from sandbox.rocky.analogy.policies.conopt_particle_tracking_policy import ConoptParticleTrackingPolicy
-from sandbox.bradly.analogy.policy.nu_dual_rnn_policy import DoubleRNNAnalogyPolicy
+from sandbox.bradly.analogy.policy.conopt_particle_tracking_policy import ConoptParticleTrackingPolicy
 from sandbox.rocky.analogy.policies.demo_rnn_mlp_analogy_policy import DemoRNNMLPAnalogyPolicy
-
+from sandbox.bradly.analogy.policy.nu_dual_rnn_policy import DoubleRNNAnalogyPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
+
+
 import tensorflow as tf
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab import config
@@ -23,23 +26,23 @@ Try compressed image representation
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [11]#, 21, 31]
+        return [11]
 
     @variant
     def n_train_trajs(self):
-        return [300, 1000, 5000]
+        return [300]
 
     @variant
     def use_shuffler(self):
-        return [False, True]
+        return [False]
 
     @variant
     def state_include_action(self):
-        return [False, True]
+        return [False]
 
     @variant
     def horizon(self):
-        return [80]
+        return [100]
 
 
 vg = VG()
@@ -65,7 +68,6 @@ for v in variants:
         layer_normalization=False,
         weight_normalization=True,
         network_type=NetworkType.GRU,
-
     )
 
     algo = Trainer(
@@ -73,20 +75,20 @@ for v in variants:
         env_cls=TfEnv.wrap(
             ConoptParticleEnv,
         ),
-        demo_policy_cls=ConoptParticleTrackingPolicy,
+        #demo_collector=TrajoptDemoCollector(),
+        demo_collector=PolicyDemoCollector(policy_cls=ConoptParticleTrackingPolicy),
         n_train_trajs=v["n_train_trajs"],
         n_test_trajs=50,
         horizon=v["horizon"],
-        n_epochs=200,
+        n_epochs=1000,
         learning_rate=1e-2,
         no_improvement_tolerance=20,
         shuffler=ConoptParticleEnv.shuffler() if v["use_shuffler"] else None,
         batch_size=100,
-        plot=True,
-        particles_to_reach=2
+        plot=True
     )
 
-    config.DOCKER_IMAGE = "dementrock/rllab3-conopt-gpu-cuda80"
+    config.DOCKER_IMAGE = "dementrock/rllab3-conopt-gpu"
     config.KUBE_DEFAULT_NODE_SELECTOR = {
         # "aws/type": "c4.2xlarge",
     }

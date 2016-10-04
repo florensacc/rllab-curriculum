@@ -5,12 +5,13 @@ logging.getLogger().setLevel(log_level)
 from rllab.envs.base import Env, Step
 from rllab.spaces.box import Box
 from rllab.core.serializable import Serializable
-from conopt.experiments.A_9_particle_analogy_seq import Experiment
+from conopt.experiments.A4_particle_analogy import Experiment
 import numpy as np
 from sandbox.rocky.analogy.utils import unwrap, using_seed
 from rllab.envs.gym_env import convert_gym_space
 from conopt import cost
 from cached_property import cached_property
+from conopt.worldgen.objs import Obj
 
 
 def fast_residual2cost(r, metric):
@@ -70,11 +71,11 @@ class ConoptParticleEnv(Env, Serializable):
         self.target_seed = target_seed
         exp = Experiment()
         with using_seed(self.target_seed):
-            target_ids = np.random.choice(np.arange(4), self.particles_to_reach, replace=False) #np.random.randint(0, 4)
-            self.target_ids = target_ids
-            self.curr_target_idx = 0
+            self.target_ids = np.random.choice(np.arange(2), 2, replace=False)
+            target_id = self.target_ids[0]
+            #target_id = np.random.randint(0, 2)
         with using_seed(self.seed):
-            scenario = exp.make_scenario(trial_index=seed, task_id=target_ids[0])
+            scenario = exp.make_scenario(trial_index=seed, task_id=target_id)
         env = scenario.to_env()
         self.conopt_exp = exp
         self.conopt_scenario = scenario
@@ -108,25 +109,11 @@ class ConoptParticleEnv(Env, Serializable):
     def step(self, action):
         env = self.conopt_env
         action = action.reshape(env.action_space.shape)
-        assert env.action_space.contains(action), 'Action should be in action_space:\nSPACE=%s\nACTION=%s' % (
-            env.action_space, action)
+        next_obs, rew, done, infos = env.step(action)
+        if np.abs(rew) < 0.02:
+            self.switch_goal()
 
-        xnext, sense = env.world.forward_dynamics(env.x, action)
-        assert xnext.shape == env.x.shape, 'X shape changed! old=%s, new=%s' % (env.x.shape, xnext.shape)
-
-        rew = []
-        for i in range(env.batchsize):
-            sense_here = {k: sense[k][i] for k in sense}
-            reward = fast_compute_cost(env.reward_fn, sense_here)
-            reward = np.squeeze(reward)
-            rew.append(reward)
-            if reward < 0.08:
-                self.switch_goal()
-
-
-        env.x = xnext
-
-        return Step(env._get_obs(), np.squeeze(rew), False)
+        return Step(next_obs, rew, done)
 
     def switch_goal(self):
         #print('kay')
@@ -135,11 +122,8 @@ class ConoptParticleEnv(Env, Serializable):
         curr_target_pt = self.target_ids[self.curr_target_idx]
         #potential_targ = self.env.conopt_scenario.task_id + 1
         #new_targ = min(potential_targ, 1)
+        #curr_target_pt = 1
         self.conopt_scenario.task_id = curr_target_pt
-        #self.target_coords_offset()
-        #self.conopt_scenario.task_id = 0
-        #new_rew_fun =
-
 
     @classmethod
     def shuffler(cls):
