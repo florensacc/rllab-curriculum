@@ -9,9 +9,6 @@ from sandbox.rocky.tf.misc.tensor_utils import to_onehot_sym
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
 
-bin_code_dim = 32
-num_bins = 64
-
 
 class IndependentSoftmaxLayer(L.Layer):
     def __init__(self, incoming, num_bins, W=L.XavierUniformInitializer(), b=tf.zeros_initializer,
@@ -41,7 +38,7 @@ class IndependentSoftmaxLayer(L.Layer):
         return input_shape[0], input_shape[1], input_shape[2], self._num_bins
 
 
-class DiscreteEmbeddingNonlinearityLayer(L.Layer):
+class BinaryCodeNonlinearityLayer(L.Layer):
     """
     Discrete embedding layer, the nonlinear part
     This has to be put after the batch norm layer.
@@ -49,10 +46,11 @@ class DiscreteEmbeddingNonlinearityLayer(L.Layer):
 
     def __init__(self, incoming, num_units,
                  **kwargs):
-        super(DiscreteEmbeddingNonlinearityLayer, self).__init__(incoming, **kwargs)
+        super(BinaryCodeNonlinearityLayer, self).__init__(incoming, **kwargs)
         self.num_units = num_units
 
-    def nonlinearity(self, x, noise_mask=1):
+    @staticmethod
+    def nonlinearity(x, noise_mask=1):
         # Force outputs to be binary through noise.
         return tf.nn.sigmoid(x) + noise_mask * tf.random_uniform(shape=tf.shape(x), minval=-0.3, maxval=0.3)
 
@@ -71,8 +69,12 @@ class BinaryCodeConvAE:
     def __init__(self,
                  input_shape=(42, 42, 1),
                  label_smoothing=0,
+                 num_softmax_bins=64,
+                 code_dimension=32,
                  ):
         self._label_smoothing = label_smoothing
+        self._num_softmax_bins = num_softmax_bins
+        self._code_dimension = code_dimension
 
         self._x = tf.placeholder(tf.float32, shape=(None,) + input_shape, name="input")
         l_in = L.InputLayer(shape=(None,) + input_shape, input_var=self._x, name="input_layer")
@@ -86,6 +88,7 @@ class BinaryCodeConvAE:
             name='enc_conv_1',
             weight_normalization=True,
         )
+        l_conv_1 = L.batch_norm(l_conv_1)
         l_conv_2 = L.Conv2DLayer(
             l_conv_1,
             num_filters=96,
@@ -96,6 +99,7 @@ class BinaryCodeConvAE:
             name='enc_conv_2',
             weight_normalization=True,
         )
+        l_conv_2 = L.batch_norm(l_conv_2)
         l_flatten_1 = L.FlattenLayer(l_conv_2)
         l_dense_1 = L.DenseLayer(
             l_flatten_1,
@@ -106,18 +110,19 @@ class BinaryCodeConvAE:
             b=tf.zeros_initializer,
             weight_normalization=True
         )
+        l_dense_1 = L.batch_norm(l_dense_1)
         l_code_prenoise = L.DenseLayer(
             l_dense_1,
-            num_units=bin_code_dim,
+            num_units=self._code_dimension,
             nonlinearity=tf.identity,
             name='binary_code_prenoise',
             W=L.XavierUniformInitializer(),
             b=tf.zeros_initializer,
             weight_normalization=True
         )
-        l_code = DiscreteEmbeddingNonlinearityLayer(
+        l_code = BinaryCodeNonlinearityLayer(
             l_code_prenoise,
-            num_units=bin_code_dim,
+            num_units=self._code_dimension,
             name='binary_code',
         )
         l_dense_3 = L.DenseLayer(
@@ -129,6 +134,7 @@ class BinaryCodeConvAE:
             b=tf.zeros_initializer,
             weight_normalization=True
         )
+        l_dense_3 = L.batch_norm(l_dense_3)
         l_reshp_1 = L.ReshapeLayer(
             l_dense_3,
             (-1,) + l_conv_2.output_shape[1:]
@@ -145,6 +151,7 @@ class BinaryCodeConvAE:
             name='dec_deconv_1',
             weight_normalization=True,
         )
+        l_deconv_1 = L.batch_norm(l_deconv_1)
         l_deconv_2 = L.TransposedConv2DLayer(
             l_deconv_1,
             num_filters=1,
@@ -159,7 +166,7 @@ class BinaryCodeConvAE:
         )
         l_softmax = IndependentSoftmaxLayer(
             l_deconv_2,
-            num_bins=num_bins,
+            num_bins=self._num_softmax_bins,
         )
         l_out = l_softmax
         print(l_out.output_shape)
@@ -181,13 +188,13 @@ class BinaryCodeConvAE:
 
             target = tf.cast(to_onehot_sym(
                 tf.cast(tf.reshape(target, [-1]), 'int32'),
-                num_bins
+                self._num_softmax_bins
             ), tf.float32)
             target += self._label_smoothing
             target = target / tf.reduce_sum(target, 1, keep_dims=True)
             return tf.reduce_sum(_log_prob_softmax_onehot(
                 target,
-                tf.reshape(prediction, [-1, num_bins])
+                tf.reshape(prediction, [-1, self._num_softmax_bins])
             ))
 
         # --
@@ -197,12 +204,11 @@ class BinaryCodeConvAE:
         self._y = L.get_output(l_out, deterministic=True)
 
         # --
-        self._z_in = tf.placeholder(tf.float32, shape=(None, bin_code_dim), name="z_in")
+        self._z_in = tf.placeholder(tf.float32, shape=(None, self._code_dimension), name="z_in")
         self._y_gen = L.get_output(l_out, {l_code: self._z_in}, deterministic=True)
 
         # --
         self._t = tf.placeholder(tf.int32, shape=(None,) + input_shape, name="target")
-        # self._cost = tf.reduce_sum(tf.square(L.get_output(l_out) - self._x))
         self._cost = - likelihood_classification(
             self._t, L.get_output(l_out)) / tf.cast(tf.shape(self._x)[0], tf.float32)
 
@@ -224,16 +230,16 @@ class BinaryCodeConvAE:
         space.
         """
         if z is None:
-            z = np.random.randint(0, 2, (1, bin_code_dim))
+            z = np.random.randint(0, 2, (1, self._code_dimension))
         # Note: This maps to mean of distribution, we could alternatively
         # sample from Gaussian distribution
         softmax_out = sess.run(self._y_gen, feed_dict={self._z_in: z})
-        return np.argmax(softmax_out, axis=-1) / float(num_bins - 1)
+        return np.argmax(softmax_out, axis=-1) / float(self._num_softmax_bins - 1)
 
     def reconstruct(self, sess, X):
         """ Use VAE to reconstruct given data. """
         softmax_out = sess.run(self.y, feed_dict={self.x: X})
-        return np.argmax(softmax_out, axis=-1) / float(num_bins - 1)
+        return np.argmax(softmax_out, axis=-1) / float(self._num_softmax_bins - 1)
 
     @property
     def x(self):
@@ -262,20 +268,22 @@ class BinaryCodeConvAE:
 
 def test_atari():
     import matplotlib.pyplot as plt
+    num_bins = 64
+    bin_code_dim = 32
     atari_dataset = load_dataset_atari('/Users/rein/programming/datasets/dataset_42x42.pkl')
     atari_dataset['x'] = atari_dataset['x'].transpose((0, 2, 3, 1))
     atari_dataset['y'] = (atari_dataset['x'] * (num_bins - 1)).astype(np.int)
-    ae = BinaryCodeConvAE(label_smoothing=0.003)
+    ae = BinaryCodeConvAE(label_smoothing=0.003, num_softmax_bins=num_bins)
 
     sess = tf.Session()
     sess.run(tf.initialize_all_variables())
 
-    n_epochs = 40
+    n_epochs = 1000
     for epoch_i in range(n_epochs):
         train_x = atari_dataset['x']
         train_y = atari_dataset['y']
         sess.run(ae.optimizer, feed_dict={ae.x: train_x, ae._t: train_y})
-        print(epoch_i, sess.run(ae.cost, feed_dict={ae.x: train_x, ae._t: train_y}))
+        print('{:3d}'.format(epoch_i), sess.run(ae.cost, feed_dict={ae.x: train_x, ae._t: train_y}))
 
     n_examples = 10
     # examples = np.tile(atari_dataset['x'][0][None, :], (n_examples, 1, 1, 1))
