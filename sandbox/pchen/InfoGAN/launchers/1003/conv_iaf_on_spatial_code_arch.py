@@ -1,10 +1,6 @@
 # compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
 # try playing with conv af model
-
-# kl 0.01 leads to no code being used/
-# switch to 0.06 and try again
-
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -57,7 +53,6 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.06, ]# 0.1]
         return [0.01, ]# 0.1]
     #
     @variant(hide=False)
@@ -105,7 +100,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, 4, ]
+        return [0]
 
     @variant(hide=False)
     def nr(self):
@@ -113,7 +108,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [0, ]
+        return [2, 4]
 
     @variant(hide=False)
     def i_nr(self):
@@ -183,7 +178,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 3
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -226,7 +221,6 @@ for v in variants[i:i+1]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
-                img_shape=[8,8,zdim//64],
             )
 
         latent_spec = [
@@ -248,6 +242,7 @@ for v in variants[i:i+1]:
                 gating_context="gating" in v["i_context"],
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
+                img_shape=[8,8,zdim//64],
             )
         nml = 5
         tgt_dist = Mixture(
@@ -313,7 +308,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1002_convaf_on_spatial_code",
+            exp_prefix="1003_conv_iaf_on_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

@@ -1,10 +1,6 @@
 # compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
 # try playing with conv af model
-
-# kl 0.01 leads to no code being used/
-# switch to 0.06 and try again
-
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -34,6 +30,7 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 class VG(VariantGenerator):
+
     @variant
     def lr(self):
         # yield 0.0005#
@@ -57,7 +54,6 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.06, ]# 0.1]
         return [0.01, ]# 0.1]
     #
     @variant(hide=False)
@@ -99,13 +95,21 @@ class VG(VariantGenerator):
     def ar_wnorm(self):
         return [True, ]
 
+    @variant
+    def num_gpus(self):
+        # yield 0.0005#
+        # yield
+        # return np.arange(1, 11) * 1e-4
+        # return [0.0001, 0.0005, 0.001]
+        return [2] #0.001]
+
     @variant(hide=False)
-    def k(self):
-        return [batch_size, ]
+    def k(self, num_gpus):
+        return [batch_size // num_gpus, ]
 
     @variant(hide=False)
     def nar(self):
-        return [2, 4, ]
+        return [6]
 
     @variant(hide=False)
     def nr(self):
@@ -138,7 +142,7 @@ class VG(VariantGenerator):
         ]
     @variant(hide=False)
     def exp_avg(self):
-        return [0.999, ]
+        return [None,]#0.999, ]
 
     @variant(hide=False)
     def tiear(self):
@@ -174,7 +178,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [3]
+        return [3*2]
 
 
 
@@ -183,7 +187,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -286,7 +290,8 @@ for v in variants[i:i+1]:
             network_args=dict(
                 cond_rep=v["cond_rep"],
                 old_dec=True,
-                base_filters=v["base_filters"]
+                base_filters=v["base_filters"],
+                enc_rep=2,
             ),
         )
 
@@ -305,6 +310,7 @@ for v in variants[i:i+1]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
+            num_gpus=v["num_gpus"],
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
@@ -313,7 +319,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1002_convaf_on_spatial_code",
+            exp_prefix="1003_mgpu_convaf_on_spatial_code_play",
             seed=v["seed"],
             variant=v,
             mode="local",

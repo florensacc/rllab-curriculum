@@ -1380,6 +1380,9 @@ class CustomBookkeeper(Bookkeeper):
         """Add a summary operation to visualize any tensor."""
         print("passing histogram %s"%tag)
 
+    def add_scalar_summary(self, x, tag=None):
+        print("passing scalar summary %s"%tag)
+
 prettytensor.bookkeeper.BOOKKEEPER_FACTORY = CustomBookkeeper
 
 @prettytensor.Register(assign_defaults=['custom_phase','model_avg'],)
@@ -1514,7 +1517,12 @@ def depool2d_split(x, factor=2):
         [0, 2, 3, 1]
     )
 
-def assign_to_gpu(gpu=0, ps_dev="/device:CPU:0"):
+def assign_to_gpu(
+        gpu=0,
+        ps_dev="/device:CPU:0",
+        # ps_dev="/device:GPU:0",
+        # ps_dev="/gpu:0",
+):
     def _assign(op):
         node_def = op if isinstance(op, tf.NodeDef) else op.node_def
         if node_def.op == "Variable":
@@ -1522,3 +1530,44 @@ def assign_to_gpu(gpu=0, ps_dev="/device:CPU:0"):
         else:
             return "/gpu:%d" % gpu
     return _assign
+
+
+def average_grads(tower_grads):
+    def average_dense(grad_and_vars):
+        if len(grad_and_vars) == 1:
+            return grad_and_vars[0][0]
+
+        grad = grad_and_vars[0][0]
+        for g, _ in grad_and_vars[1:]:
+            grad += g
+        return grad / len(grad_and_vars)
+
+    def average_sparse(grad_and_vars):
+        if len(grad_and_vars) == 1:
+            return grad_and_vars[0][0]
+
+        indices = []
+        values = []
+        for g, _ in grad_and_vars:
+            indices += [g.indices]
+            values += [g.values]
+        indices = tf.concat(0, indices)
+        values = tf.concat(0, values)
+        return tf.IndexedSlices(values, indices, grad_and_vars[0][0].dense_shape)
+
+    average_grads = []
+    for grad_and_vars in zip(*tower_grads):
+        if grad_and_vars[0][0] is None:
+            grad = None
+        elif isinstance(grad_and_vars[0][0], tf.IndexedSlices):
+            grad = average_sparse(grad_and_vars)
+        else:
+            grad = average_dense(grad_and_vars)
+        # Keep in mind that the Variables are redundant because they are shared
+        # across towers. So .. we will just return the first tower's pointer to
+        # the Variable.
+        v = grad_and_vars[0][1]
+        grad_and_var = (grad, v)
+        average_grads.append(grad_and_var)
+    return average_grads
+
