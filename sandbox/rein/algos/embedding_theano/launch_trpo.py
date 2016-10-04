@@ -26,8 +26,8 @@ mdps = [AtariEnv(game='freeway', obs_type="image", frame_skip=8),
         AtariEnv(game='breakout', obs_type="image", frame_skip=8),
         AtariEnv(game='frostbite', obs_type="image", frame_skip=8),
         AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=8)]
-trpo_batch_size = 50000
-max_path_length = 4500
+trpo_batch_size = 500
+max_path_length = 45
 dropout = False
 batch_norm = True
 
@@ -233,7 +233,7 @@ for mdp, eta, seed in param_cart_product:
         n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/algos/embedding_theano/run_experiment_lite.py",

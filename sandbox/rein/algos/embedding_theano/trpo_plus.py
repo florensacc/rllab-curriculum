@@ -420,6 +420,11 @@ class TRPOPlus(TRPO):
             self._test_obs = self.encode_obs(paths[0]['observations'][rnd, -np.prod(self._model.state_dim):])
         obs = self.encode_obs(paths[0]['observations'][-32:, -np.prod(self._model.state_dim):])
 
+        inputs = np.random.randint(0, 2, (10, 128))
+        self._plotter.plot_gen_imgs(
+            model=self._model, inputs=inputs, targets=self._test_obs,
+            itr=-itr - 1, dir='/tmp')
+
         if itr % 20 == 0:
             logger.log('Plotting consistency images ...')
             self._plotter.plot_pred_imgs(
