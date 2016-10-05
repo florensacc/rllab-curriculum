@@ -1928,3 +1928,34 @@ def get_all_params(layer, **tags):
     layers = get_all_layers(layer)
     params = chain.from_iterable(l.get_params(**tags) for l in layers)
     return unique(params)
+
+
+def count_all_params(layer, **tags):
+    """
+    This function counts all parameters (i.e., the number of scalar
+    values) of all layers below one or more given :class:`Layer` instances,
+    including the layer(s) itself.
+    This is useful to compare the capacity of various network architectures.
+    All parameters returned by the :class:`Layer`s' `get_params` methods are
+    counted.
+    Parameters
+    ----------
+    layer : Layer or list
+        The :class:`Layer` instance for which to count the parameters, or a
+        list of :class:`Layer` instances.
+    **tags (optional)
+        tags can be specified to filter the list of parameter variables that
+        will be included in the count. Specifying ``tag1=True``
+        will limit the list to parameters that are tagged with ``tag1``.
+        Specifying ``tag1=False`` will limit the list to parameters that
+        are not tagged with ``tag1``. Commonly used tags are
+        ``regularizable`` and ``trainable``.
+    Returns
+    -------
+    int
+        The total number of learnable parameters.
+    """
+    params = get_all_params(layer, **tags)
+    shapes = [p.get_shape().as_list() for p in params]
+    counts = [np.prod(shape) for shape in shapes]
+    return sum(counts)

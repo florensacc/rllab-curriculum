@@ -352,7 +352,7 @@ class TRPOPlus(TRPO):
                         assert not np.isnan(train_loss)
                         running_avg += train_loss / 100.
                     running_avg_delta = old_running_avg - running_avg
-                    if running_avg_delta < 1e-1:
+                    if running_avg_delta < 1e-4:
                         done += 1
                     else:
                         old_running_avg = running_avg
@@ -420,11 +420,10 @@ class TRPOPlus(TRPO):
             self._test_obs = self.encode_obs(paths[0]['observations'][rnd, -np.prod(self._model.state_dim):])
         obs = self.encode_obs(paths[0]['observations'][-32:, -np.prod(self._model.state_dim):])
 
-        import ipdb; ipdb.set_trace()
-        inputs = np.random.randint(0, 2, (10, 128))
-        self._plotter.plot_gen_imgs(
-            model=self._model, inputs=inputs, targets=self._test_obs,
-            itr=-itr - 1, dir='/tmp')
+        # inputs = np.random.randint(0, 2, (10, 128))
+        # self._plotter.plot_gen_imgs(
+        #     model=self._model, inputs=inputs, targets=self._test_obs,
+        #     itr=0, dir='/generated')
 
         if itr % 20 == 0:
             logger.log('Plotting consistency images ...')

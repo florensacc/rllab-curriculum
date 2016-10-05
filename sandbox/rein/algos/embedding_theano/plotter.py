@@ -159,7 +159,7 @@ class Plotter:
         sanity_pred = model.y_gen(inputs)
         # Plotting all images
         for idx in range(inputs.shape[0]):
-            print(inputs[0])
+            print(inputs[idx])
             sanity_pred_im = sanity_pred[idx, :]
             if model.output_type == model.OutputType.CLASSIFICATION:
                 sanity_pred_im = sanity_pred_im.reshape((-1, model.num_classes))
