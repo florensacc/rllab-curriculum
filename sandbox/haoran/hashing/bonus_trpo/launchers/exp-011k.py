@@ -1,14 +1,17 @@
 """
-Try reward bonus
+Continue exp-011i
+Use parallel TRPO
 """
 
 """ baseline """
 from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBaseline
 from sandbox.adam.parallel.parallel_nn_feature_linear_baseline import ParallelNNFeatureLinearBaseline
+from sandbox.haoran.parallel_trpo.linear_feature_baseline import ParallelLinearFeatureBaseline
 
 """ policy """
 from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
 from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 
 """ optimizer """
 from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
@@ -26,6 +29,8 @@ from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash import SimHash
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.slicing_preprocessor import SlicingPreprocessor
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
+
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from sandbox.haoran.ec2_info import instance_info, subnet_info
@@ -39,13 +44,13 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "ec2_test"
-ec2_instance = "c4.2xlarge"
+mode = "kube"
+ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
 n_parallel = 4
-snapshot_mode = "none"
+snapshot_mode = "last"
 plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
@@ -56,7 +61,7 @@ if "local" in mode and sys.platform == "darwin":
     cpu_assignments = None
     serial_compile = False
 else:
-    set_cpu_affinity = False
+    set_cpu_affinity = True
     cpu_assignments = None
     serial_compile = True
 
@@ -64,16 +69,16 @@ else:
 # algo
 use_parallel = True
 if "test" in mode:
-    batch_size = 500
+    batch_size = 1000
 else:
-    batch_size = 50000
+    batch_size = 100000
 max_path_length = 4500
 discount = 0.99
-n_itr = 2000
+n_itr = 1000
 step_size = 0.01
 policy_opt_args = dict(
     name="pi_opt",
-    cg_iters=100,
+    cg_iters=10,
     reg_coeff=1e-3,
     subsample_factor=0.1,
     max_backtracks=15,
@@ -84,19 +89,19 @@ policy_opt_args = dict(
 )
 
 # env
-network_args = nips_dqn_args
 img_width=84
 img_height=84
-n_last_screens=4
+n_last_screens=1
+n_last_rams=1
 clip_reward = True
-obs_type = "image"
-record_image=False
+obs_type = "ram"
+record_image=True
 record_rgb_image=False
 record_ram=True
 record_internal_state=False
 
 # bonus
-count_target = "observations"
+count_target = "images"
 bonus_form="1/sqrt(n)"
 bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
 
@@ -104,29 +109,19 @@ bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0,100,200]
+        return [0,100,200,300,400,500,600,700,800,900]
 
     @variant
     def bonus_coeff(self):
-        return [1e-3,0]
-
-    @variant
-    def baseline_type_opt(self):
-        return [
-            ["nn_feature_linear",""],
-        ]
+        return [0.1]
 
     @variant
     def dim_key(self):
         return [256, 512]
 
     @variant
-    def gae_lambda(self):
-        return [1]
-
-    @variant
     def game(self):
-        return ["freeway"]
+        return ["montezuma_revenge"]
 variants = VG().variants()
 
 
@@ -154,14 +149,14 @@ for v in variants:
         n_parallel = int(info["vCPU"] /2)
 
         # choose subnet
-        # config.AWS_NETWORK_INTERFACES = [
-        #     dict(
-        #         SubnetId=subnet_info[subnet]["SubnetID"],
-        #         Groups=subnet_info[subnet]["Groups"],
-        #         DeviceIndex=0,
-        #         AssociatePublicIpAddress=True,
-        #     )
-        # ]
+        config.AWS_NETWORK_INTERFACES = [
+            dict(
+                SubnetId=subnet_info[subnet]["SubnetID"],
+                Groups=subnet_info[subnet]["Groups"],
+                DeviceIndex=0,
+                AssociatePublicIpAddress=True,
+            )
+        ]
     elif "kube" in mode:
         actual_mode = "lab_kube"
         info = instance_info[ec2_instance]
@@ -169,8 +164,7 @@ for v in variants:
 
         config.KUBE_DEFAULT_RESOURCES = {
             "requests": {
-                "cpu": n_parallel,
-                "memory": "50Gi",
+                "cpu": n_parallel
             }
         }
         config.KUBE_DEFAULT_NODE_SELECTOR = {
@@ -181,13 +175,19 @@ for v in variants:
         raise NotImplementedError
 
     resetter = None
-    if count_target == "images" or (count_target == "observations" and obs_type == "image"):
+    if count_target == "observations" and obs_type == "image":
         total_pixels=img_width * img_height
         state_preprocessor = SlicingPreprocessor(
             input_dim=total_pixels * n_last_screens,
             start=total_pixels * (n_last_screens - 1),
             stop=total_pixels * n_last_screens,
             step=1,
+        )
+    elif count_target == "images":
+        state_preprocessor = ImageVectorizePreprocessor(
+            n_channel=n_last_screens,
+            width=img_width,
+            height=img_height,
         )
     elif count_target == "ram_states":
         state_preprocessor = None
@@ -211,54 +211,24 @@ for v in variants:
     )
 
     env = AtariEnv(
-            game=v["game"],
-            seed=v["seed"],
-            img_width=img_width,
-            img_height=img_height,
-            n_last_screens=n_last_screens,
-            obs_type=obs_type,
-            record_ram=record_ram,
-            record_image=record_image,
-            record_rgb_image=record_rgb_image,
-            record_internal_state=record_internal_state,
-            resetter=resetter,
-        )
-    policy = CategoricalConvPolicy(
-        env_spec=env.spec,
-        name="policy",
-        **network_args
+        game=v["game"],
+        seed=v["seed"],
+        img_width=img_width,
+        img_height=img_height,
+        n_last_screens=n_last_screens,
+        n_last_rams=n_last_rams,
+        obs_type=obs_type,
+        record_ram=record_ram,
+        record_image=record_image,
+        record_rgb_image=record_rgb_image,
+        record_internal_state=record_internal_state,
+        resetter=resetter,
     )
-
-    baseline_type, baseline_opt = v["baseline_type_opt"]
-    if baseline_type == "nn_feature_linear":
-        baseline = ParallelNNFeatureLinearBaseline(
-            env_spec=env.spec,
-            policy=policy,
-            nn_feature_power=1,
-            t_power=3,
-        )
-    elif baseline_type == "conv":
-        network_args_for_vf = copy.deepcopy(network_args)
-        network_args_for_vf.pop("output_nonlinearity")
-        baseline = ParallelGaussianConvBaseline(
-            env_spec=env.spec,
-            regressor_args = dict(
-                optimizer=ParallelConjugateGradientOptimizer(
-                    subsample_factor=0.1,
-                    cg_iters=10,
-                    name="vf_opt",
-                ),
-                use_trust_region=True,
-                step_size=0.01,
-                batchsize=batch_size,
-                normalize_inputs=True,
-                normalize_outputs=True,
-                **network_args_for_vf
-            )
-        )
-    else:
-        raise NotImplementedError
-
+    policy = CategoricalMLPPolicy(
+        env_spec=env.spec,
+        hidden_sizes=(32,32),
+    )
+    baseline = ParallelLinearFeatureBaseline(env_spec=env.spec)
 
     algo = ParallelTRPO(
         env=env,
@@ -267,7 +237,6 @@ for v in variants:
         batch_size=batch_size,
         max_path_length=max_path_length,
         discount=discount,
-        gae_lambda=v["gae_lambda"],
         n_itr=n_itr,
         plot=plot,
         optimizer_args=policy_opt_args,
@@ -278,6 +247,7 @@ for v in variants:
         n_parallel=n_parallel,
         bonus_evaluator=bonus_evaluator,
         bonus_coeff=v["bonus_coeff"],
+        clip_reward=clip_reward,
     )
 
     if use_gpu:
@@ -285,7 +255,6 @@ for v in variants:
         config.DOCKER_IMAGE = "dementrock/rllab3-shared-gpu"
 
     if use_parallel:
-        print(config.AWS_REGION_NAME)
         run_experiment_lite(
             algo.train(),
             exp_prefix=exp_prefix,

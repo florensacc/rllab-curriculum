@@ -57,15 +57,22 @@ class ALEHashingBonusEvaluator(object):
     def __getstate__(self):
         """ Do not pickle parallel objects. """
         return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
-        
+
     def init_rank(self,rank):
         self.rank = rank
+        self.hash.init_rank(rank)
 
     def init_par_objs(self,n_parallel):
         n = n_parallel
         shareds = SimpleContainer(
-            new_state_count_vec = mp.RawArray('d',n),
-            total_state_count = mp.RawValue('d'),
+            new_state_count_vec = np.frombuffer(
+                mp.RawArray('l',n),
+                dtype=int,
+            ),
+            total_state_count = np.frombuffer(
+                mp.RawValue('l'),
+                dtype=int,
+            )[0],
         )
         barriers = SimpleContainer(
             new_state_count = mp.Barrier(n),
@@ -96,14 +103,24 @@ class ALEHashingBonusEvaluator(object):
             keys = self.retrieve_keys(paths)
             prev_counts = self.hash.query_keys(keys)
             new_state_count = list(prev_counts).count(0)
+            shareds.new_state_count_vec[self.rank] = new_state_count
             barriers.new_state_count.wait() # avoid updating the hash table before we count new states
+            print("%d: before inc_keys"%(self.rank))
             self.hash.inc_keys(keys)
+            print("%d: after inc_keys"%(self.rank))
             barriers.update_count.wait()
 
             if self.rank == 0:
-                logger.record_tabular(self.log_prefix + 'NewSteateCount',new_state_count)
-                self.total_state_count += new_state_count
-                logger.record_tabular(self.log_prefix + 'TotalStateCount',self.total_state_count)
+                total_new_state_count = sum(shareds.new_state_count_vec)
+                logger.record_tabular(
+                    self.log_prefix + 'NewSteateCount',
+                    total_new_state_count
+                )
+                shareds.total_state_count += total_new_state_count
+                logger.record_tabular(
+                    self.log_prefix + 'TotalStateCount',
+                    shareds.total_state_count,
+                )
 
         else:
             keys = self.retrieve_keys(paths)

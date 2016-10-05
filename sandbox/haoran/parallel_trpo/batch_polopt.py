@@ -44,6 +44,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             serial_compile=True,
             clip_reward=True,
             bonus_evaluator=None,
+            extra_bonus_evaluator=None,
             bonus_coeff=0,
             **kwargs
     ):
@@ -92,6 +93,8 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.sampler = WorkerBatchSampler(self)
         self.clip_reward = clip_reward
         self.bonus_evaluator = bonus_evaluator
+        if extra_bonus_evaluator is not None:
+            raise NotImplementedError
         self.bonus_coeff = bonus_coeff
 
     def __getstate__(self):
@@ -178,6 +181,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         """
         logger.log("forcing Theano compilations...")
         paths = self.sampler.obtain_samples(n_samples)
+        self.process_paths(paths)
         samples_data, _ = self.sampler.process_samples(paths)
         input_values = self.prep_samples(samples_data)
         self.optimizer.force_compile(input_values)
@@ -211,15 +215,18 @@ class ParallelBatchPolopt(RLAlgorithm):
 
     def _train(self, rank):
         self.init_rank(rank)
+        print("%d starts _train"%(rank))
         if self.rank == 0:
             start_time = time.time()
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.sampler.obtain_samples()
+                print("%d: before fitting bonus"%(self.rank))
                 if self.bonus_evaluator is not None:
                     if rank == 0:
                         logger.log("fitting bonus evaluator")
                     self.bonus_evaluator.fit_before_process_samples(paths)
+                print("%d: after fitting bonus"%(self.rank))
                 self.process_paths(paths)
                 samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
@@ -323,12 +330,12 @@ class ParallelBatchPolopt(RLAlgorithm):
                 logger.record_tabular('Perplexity', np.exp(ent))
                 # logger.record_tabular('StdReturn', np.std(undiscounted_returns))
                 logger.record_tabular('AverageDiscountedReturn', average_discounted_return)
-                logger.record_tabular('AverageReturn', average_return)
-                logger.record_tabular('MaxReturn', max_return)
-                logger.record_tabular('MinReturn', min_return)
-                logger.record_tabular('AverageRawReturn', average_raw_return)
-                logger.record_tabular('MaxRawReturn', max_raw_return)
-                logger.record_tabular('MinRawReturn', min_raw_return)
+                logger.record_tabular('ReturnAverage', average_return)
+                logger.record_tabular('ReturnMax', max_return)
+                logger.record_tabular('ReturnMin', min_return)
+                logger.record_tabular('RawReturnAverage', average_raw_return)
+                logger.record_tabular('RawReturnMax', max_raw_return)
+                logger.record_tabular('RawReturnMin', min_raw_return)
 
 
         # NOTE: These others might only work if all path data is collected

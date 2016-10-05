@@ -199,7 +199,7 @@ class AtariEnv(Env,Serializable):
         # if self.record_ram and self.obs_type != "ram":
         if self.record_ram:
             ram = np.copy(self.ale.getRAM())
-            ram = ram.reshape((len(ram),1)) # make it like an image
+            ram = ram.reshape((1,len(ram),1)) # make it like an image
             env_info["ram_states"] = ram
 
         if self.record_image and self.obs_type != "image":
