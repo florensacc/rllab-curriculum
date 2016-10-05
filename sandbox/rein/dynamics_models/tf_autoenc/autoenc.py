@@ -92,7 +92,7 @@ class BinaryCodeConvAE:
             pad='SAME',
             nonlinearity=tf.nn.relu,
             name='enc_conv_1',
-            weight_normalization=False,
+            weight_normalization=True,
         )
         l_conv_1 = L.batch_norm(l_conv_1)
         l_conv_2 = L.Conv2DLayer(
@@ -103,7 +103,7 @@ class BinaryCodeConvAE:
             pad='SAME',
             nonlinearity=tf.nn.relu,
             name='enc_conv_2',
-            weight_normalization=False,
+            weight_normalization=True,
         )
         l_conv_2 = L.batch_norm(l_conv_2)
         l_conv_3 = L.Conv2DLayer(
@@ -114,18 +114,18 @@ class BinaryCodeConvAE:
             pad='SAME',
             nonlinearity=tf.nn.relu,
             name='enc_conv_3',
-            weight_normalization=False,
+            weight_normalization=True,
         )
         l_conv_3 = L.batch_norm(l_conv_3)
         l_flatten_1 = L.FlattenLayer(l_conv_3)
         l_dense_1 = L.DenseLayer(
             l_flatten_1,
-            num_units=128,
+            num_units=512,
             nonlinearity=tf.nn.relu,
             name='enc_hidden_1',
             W=L.XavierUniformInitializer(),
             b=tf.zeros_initializer,
-            weight_normalization=False
+            weight_normalization=True
         )
         l_dense_1 = L.batch_norm(l_dense_1)
         l_code_prenoise = L.DenseLayer(
@@ -135,7 +135,7 @@ class BinaryCodeConvAE:
             name='binary_code_prenoise',
             W=L.XavierUniformInitializer(),
             b=tf.zeros_initializer,
-            weight_normalization=False
+            weight_normalization=True
         )
         l_code_prenoise = L.batch_norm(l_code_prenoise)
         l_code = BinaryCodeNonlinearityLayer(
@@ -150,7 +150,7 @@ class BinaryCodeConvAE:
             name='dec_hidden_1',
             W=L.XavierUniformInitializer(),
             b=tf.zeros_initializer,
-            weight_normalization=False
+            weight_normalization=True
         )
         l_dense_3 = L.batch_norm(l_dense_3)
         l_reshp_1 = L.ReshapeLayer(
@@ -167,7 +167,7 @@ class BinaryCodeConvAE:
             crop='SAME',
             nonlinearity=tf.nn.relu,
             name='dec_deconv_1',
-            weight_normalization=False,
+            weight_normalization=True,
         )
         l_deconv_1 = L.batch_norm(l_deconv_1)
         l_deconv_2 = L.TransposedConv2DLayer(
@@ -180,7 +180,7 @@ class BinaryCodeConvAE:
             crop='SAME',
             nonlinearity=tf.nn.relu,
             name='dec_deconv_2',
-            weight_normalization=False,
+            weight_normalization=True,
         )
         l_deconv_2 = L.batch_norm(l_deconv_2)
         l_deconv_3 = L.TransposedConv2DLayer(
@@ -193,8 +193,9 @@ class BinaryCodeConvAE:
             crop='SAME',
             nonlinearity=tf.nn.relu,
             name='dec_deconv_3',
-            weight_normalization=False,
+            weight_normalization=True,
         )
+        l_deconv_3 = L.batch_norm(l_deconv_3)
         l_upshape = L.TransposedConv2DLayer(
             l_deconv_3,
             num_filters=1,
@@ -204,7 +205,7 @@ class BinaryCodeConvAE:
             crop='VALID',
             nonlinearity=tf.identity,
             name='dec_upshape',
-            weight_normalization=False,
+            weight_normalization=True,
         )
         l_softmax = IndependentSoftmaxLayer(
             l_upshape,
@@ -258,7 +259,7 @@ class BinaryCodeConvAE:
             self._t, L.get_output(l_out)) / tf.cast(tf.shape(self._x)[0], tf.float32)
 
         # --
-        learning_rate = 0.03
+        learning_rate = 0.01
         self._optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self._cost)
 
     def transform(self, sess, X):
@@ -314,7 +315,7 @@ class BinaryCodeConvAE:
 def test_atari():
     import matplotlib.pyplot as plt
     num_bins = 64
-    bin_code_dim = 32
+    bin_code_dim = 128
     atari_dataset = load_dataset_atari('/Users/rein/programming/datasets/dataset_42x42.pkl')
     atari_dataset['x'] = atari_dataset['x'].transpose((0, 2, 3, 1))
     atari_dataset['y'] = (atari_dataset['x'] * (num_bins - 1)).astype(np.int)
