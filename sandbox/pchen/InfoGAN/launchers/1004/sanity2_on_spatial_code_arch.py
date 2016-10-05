@@ -1,9 +1,15 @@
 # compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
-# try playing with ar model
+# try playing with conv af model
 
-# data/local/1002-ar-change-on-pool-encoder-arch/
-# overfits like crazy
+# kl 0.01 leads to no code being used/
+# switch to 0.06 and try again
+
+# 0.06 might need to overfitting, so this will explore 0.01 kl but much smaller init scale
+# also try fewer feature maps but this shouldnt affect as much?
+
+# data/local/1003-init-convaf-on-spatial-code/ shows 32 feature maps can lead to 3.19 vali
+#   w/o overfitting too much. this is to check what's the limit of this pixelcnn
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -57,6 +63,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
+        # return [0.06, ]# 0.1]
         return [0.01, ]# 0.1]
     #
     @variant(hide=False)
@@ -75,7 +82,8 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
         # yield "resv1_k3_pixel_bias_filters_ratio_32"
-        yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
+        # yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
+        yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
 
     @variant(hide=False)
     def steps(self, ):
@@ -83,7 +91,7 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [96]
+        return [32]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -103,7 +111,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, ]
+        return [0, ]
 
     @variant(hide=False)
     def nr(self):
@@ -174,6 +182,11 @@ class VG(VariantGenerator):
     def ar_depth(self):
         return [3]
 
+    @variant(hide=False)
+    def data_init_scale(self):
+        return [0.01, ]
+
+
 
 
 vg = VG()
@@ -224,6 +237,8 @@ for v in variants[i:i+1]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
+                img_shape=[8,8,zdim//64],
+                data_init_scale=v["data_init_scale"],
             )
 
         latent_spec = [
@@ -269,6 +284,7 @@ for v in variants[i:i+1]:
             context_dim=v["context_dim"],
             nin=False,
             block="gated_resnet",
+            sanity2=True,
             extra_nins=2
             # block="plstm",
         )
@@ -310,7 +326,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1002_ar_change_on_pool_encoder_arch",
+            exp_prefix="1004_sanity2_on_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",
@@ -318,4 +334,5 @@ for v in variants[i:i+1]:
             # n_parallel=0,
             # use_gpu=True,
         )
+
 

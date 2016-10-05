@@ -1,9 +1,16 @@
 # compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
-# try playing with ar model
+# this tests no-iaf & iaf w/o context on the best train logprob parameter
 
-# data/local/1002-ar-change-on-pool-encoder-arch/
-# overfits like crazy
+# results: data/local/1002-iaf-change-on-pool-encoder-arch/
+# kl is used, slightly more w/ context
+# slightly more kl is used for iaf
+# slightly better train vlb with iaf
+
+# overfit slightly less without iaf -- but it still overfits 200+
+# !! this is surprising, meaning extremely easy for pool_encoder to overfit?
+
+# which prompts us to test the effect of receptive field with this pool enc
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -103,11 +110,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, ]
+        return [0, ]
 
     @variant(hide=False)
     def nr(self):
-        return [3,]
+        return [1,]
 
     @variant(hide=False)
     def i_nar(self):
@@ -172,7 +179,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [3]
+        return [2, 6]
 
 
 
@@ -181,7 +188,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -302,6 +309,7 @@ for v in variants[i:i+1]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
+            vis_ar=False,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
@@ -310,7 +318,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1002_ar_change_on_pool_encoder_arch",
+            exp_prefix="1004_srf_on_pool_encoder_arch",
             seed=v["seed"],
             variant=v,
             mode="local",

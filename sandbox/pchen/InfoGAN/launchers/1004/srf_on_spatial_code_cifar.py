@@ -179,11 +179,13 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [1, 2]
+        return [1, 2, 6]
 
     @variant(hide=False)
     def extra_nins(self, ar_depth):
-        return [2 + (3-ar_depth)*2]
+        return [
+            max(2 + (3-ar_depth)*2, 1)
+        ]
 
     @variant(hide=False)
     def sanity2(self, ar_depth):
@@ -196,7 +198,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 5
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -287,6 +289,7 @@ for v in variants[i:i+1]:
             # extra_nins=2,
             extra_nins=v["extra_nins"],
             # block="plstm",
+            sanity2=v["sanity2"],
         )
         model = RegularizedHelmholtzMachine(
             output_dist=ar_conv_dist,
@@ -321,6 +324,7 @@ for v in variants[i:i+1]:
             # img_on=True,
             # summary_interval=200,
             # resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
+            vis_ar=False,
         )
 
         run_experiment_lite(

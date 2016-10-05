@@ -1,10 +1,14 @@
 # compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
-# try playing with ar model
+# try playing with conv iaf model
 
-# data/local/1002-ar-change-on-pool-encoder-arch/
-# overfits like crazy
+# data/local/1003-conv-iaf-on-spatial-code/
+# results: still overfit but seems better than MADE
+# it also fits __very__ well on train, 3.1bits in just 500 epochs
+#        w/ 4 flows, w/o context
 
+
+# ^ try regularizing with parameter tying or dropout
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -75,7 +79,8 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
         # yield "resv1_k3_pixel_bias_filters_ratio_32"
-        yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
+        # yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
+        yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
 
     @variant(hide=False)
     def steps(self, ):
@@ -103,7 +108,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, ]
+        return [0]
 
     @variant(hide=False)
     def nr(self):
@@ -111,7 +116,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [0, ]
+        return [4]
 
     @variant(hide=False)
     def i_nr(self):
@@ -130,7 +135,7 @@ class VG(VariantGenerator):
             ]
         return [
             [],
-            ["linear"],
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -138,9 +143,9 @@ class VG(VariantGenerator):
     def exp_avg(self):
         return [0.999, ]
 
-    @variant(hide=False)
-    def tiear(self):
-        return [False]
+    # @variant(hide=False)
+    # def tiear(self):
+    #     return [False]
         # return [True, False]
 
     @variant(hide=False)
@@ -174,6 +179,16 @@ class VG(VariantGenerator):
     def ar_depth(self):
         return [3]
 
+    @variant(hide=False)
+    def iaf_tie(self):
+        return [True, False]
+
+    @variant(hide=False)
+    def iaf_keepprob(self, iaf_tie):
+        if iaf_tie:
+            return [1., 0.95]
+        return [0.95, 0.85]
+
 
 
 vg = VG()
@@ -181,7 +196,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 3
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -223,7 +238,8 @@ for v in variants[i:i+1]:
                 dist,
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
-                var_scope="AR_scope" if v["tiear"] else None,
+                # var_scope="AR_scope" if v["tiear"] else None,
+                var_scope=None,
             )
 
         latent_spec = [
@@ -244,7 +260,9 @@ for v in variants[i:i+1]:
                 linear_context="linear" in v["i_context"],
                 gating_context="gating" in v["i_context"],
                 share_context=True,
-                var_scope="IAR_scope" if v["tiear"] else None,
+                var_scope="IAR_scope" if v["iaf_tie"] else None,
+                keepprob=v["iaf_keepprob"],
+                img_shape=[8,8,zdim//64],
             )
         nml = 5
         tgt_dist = Mixture(
@@ -310,7 +328,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1002_ar_change_on_pool_encoder_arch",
+            exp_prefix="1004_reg_w_conv_iaf_on_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",
@@ -318,4 +336,5 @@ for v in variants[i:i+1]:
             # n_parallel=0,
             # use_gpu=True,
         )
+
 

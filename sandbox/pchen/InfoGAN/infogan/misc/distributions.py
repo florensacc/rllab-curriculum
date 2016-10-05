@@ -987,6 +987,7 @@ class AR(Distribution):
             var_scope=None,
             rank=None,
             img_shape=None,
+            keepprob=1.,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1019,6 +1020,7 @@ class AR(Distribution):
 
         if img_shape is None:
             assert depth >= 1
+            assert keepprob == 1.
             from prettytensor import UnboundVariable
             with pt.defaults_scope(
                     activation_fn=nl,
@@ -1100,6 +1102,7 @@ class AR(Distribution):
                             nr_channels,
                             prefix="nin_ex_%s" % ninidx,
                         )
+                    cur = cur.custom_dropout(keepprob)
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,
