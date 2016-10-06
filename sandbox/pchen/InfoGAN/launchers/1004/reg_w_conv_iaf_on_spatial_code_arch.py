@@ -9,6 +9,10 @@
 
 
 # ^ try regularizing with parameter tying or dropout
+
+# param tying leads to better train & vali
+# dropout always hurts
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

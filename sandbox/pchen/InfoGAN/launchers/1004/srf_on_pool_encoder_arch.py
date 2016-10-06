@@ -12,6 +12,9 @@
 
 # which prompts us to test the effect of receptive field with this pool enc
 
+# train: 3.25 w/ d2, 3.12 w/ d6 (kl: 0.054; 0.038)
+# vali: 3.5 w/ d2, 3.35 w/ d6
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

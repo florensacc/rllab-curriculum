@@ -10,6 +10,8 @@
 
 # try much smaller receptive field w/ sanity on/off
 
+# try more ar-depth
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -179,7 +181,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [1, 2, 6]
+        return [1, 2, 6, 4, 8, 12, ]
 
     @variant(hide=False)
     def extra_nins(self, ar_depth):
@@ -198,7 +200,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 5
+i = 11
 for v in variants[i:i+1]:
 
     # with skip_if_exception():

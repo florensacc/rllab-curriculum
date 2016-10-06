@@ -7,6 +7,8 @@
 # it also fits __very__ well on train, 3.1bits in just 500 epochs
 #        w/ 4 flows, w/o context
 
+# try small featmaps for conv iaf
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -87,7 +89,7 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [96]
+        return [32, 64]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -115,11 +117,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [2, 4]
+        return [2, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [5,]
+        return [3,]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -134,7 +136,7 @@ class VG(VariantGenerator):
             ]
         return [
             [],
-            ["linear"],
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -185,7 +187,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -315,7 +317,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1003_conv_iaf_on_spatial_code",
+            exp_prefix="1005_sfm_conv_iaf_on_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

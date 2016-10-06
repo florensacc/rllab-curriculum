@@ -1,11 +1,18 @@
 # compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
-# try playing with conv iaf model
+# try playing with conv af model
 
-# data/local/1003-conv-iaf-on-spatial-code/
-# results: still overfit but seems better than MADE
-# it also fits __very__ well on train, 3.1bits in just 500 epochs
-#        w/ 4 flows, w/o context
+# kl 0.01 leads to no code being used/
+# switch to 0.06 and try again
+
+# 0.06 might need to overfitting, so this will explore 0.01 kl but much smaller init scale
+# also try fewer feature maps but this shouldnt affect as much?
+
+# data/local/1003-init-convaf-on-spatial-code/
+# --> turns out fewer feature maps helps a lot??
+# and only 0.005kl is used
+
+# this explores larger receptive field & convaf
 
 
 from rllab.misc.instrument import run_experiment_lite, stub
@@ -60,6 +67,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
+        # return [0.06, ]# 0.1]
         return [0.01, ]# 0.1]
     #
     @variant(hide=False)
@@ -87,7 +95,7 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [96]
+        return [32, ]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -107,7 +115,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [0]
+        return [2, ]
 
     @variant(hide=False)
     def nr(self):
@@ -115,7 +123,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [2, 4]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -164,7 +172,10 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
-        return [int(max_epoch * 0.7)]
+        return [
+            # int(max_epoch * 0.7)
+            1500
+        ]
 
     @variant(hide=False)
     def context_dim(self, ):
@@ -176,7 +187,12 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [3]
+        return [4, 6, 8, 12]
+
+    @variant(hide=False)
+    def data_init_scale(self):
+        return [0.01, ]
+
 
 
 
@@ -228,6 +244,8 @@ for v in variants[i:i+1]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
+                img_shape=[8,8,zdim//64],
+                data_init_scale=v["data_init_scale"],
             )
 
         latent_spec = [
@@ -249,7 +267,6 @@ for v in variants[i:i+1]:
                 gating_context="gating" in v["i_context"],
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
-                img_shape=[8,8,zdim//64],
             )
         nml = 5
         tgt_dist = Mixture(
@@ -315,7 +332,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1003_conv_iaf_on_spatial_code",
+            exp_prefix="1005_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",
