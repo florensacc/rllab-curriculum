@@ -30,6 +30,7 @@ class AtariEnv(Env,Serializable):
             avoid_life_lost=False,
             n_last_rams=4,
             n_last_screens=4,
+            frame_skip=4,
         ):
         """
         plot: not compatible with rllab yet
@@ -52,7 +53,7 @@ class AtariEnv(Env,Serializable):
         self.img_width = img_width
         self.img_height = img_height
         self._prior_reward = 0
-        self.frame_skip = 4
+        self.frame_skip = frame_skip
         self.n_last_screens = n_last_screens
         self.n_last_rams = n_last_rams
         self.avoid_life_lost = avoid_life_lost

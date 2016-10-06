@@ -39,12 +39,13 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "ec2_test"
+mode = "kube_test"
 ec2_instance = "c4.2xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
 n_parallel = 4
+memory = 10
 snapshot_mode = "none"
 plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
@@ -56,7 +57,7 @@ if "local" in mode and sys.platform == "darwin":
     cpu_assignments = None
     serial_compile = False
 else:
-    set_cpu_affinity = False
+    set_cpu_affinity = True
     cpu_assignments = None
     serial_compile = True
 
@@ -170,7 +171,7 @@ for v in variants:
         config.KUBE_DEFAULT_RESOURCES = {
             "requests": {
                 "cpu": n_parallel,
-                "memory": "50Gi",
+                "memory": "%dGi"%(memory),
             }
         }
         config.KUBE_DEFAULT_NODE_SELECTOR = {
