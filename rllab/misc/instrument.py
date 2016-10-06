@@ -434,7 +434,18 @@ def run_experiment_lite(
         if not remote_confirmed:
             sys.exit(1)
 
-    if mode == "local":
+    if hasattr(mode, "__call__"):
+        if docker_image is None:
+            docker_image = config.DOCKER_IMAGE
+        mode(
+            task,
+            docker_image=docker_image,
+            use_gpu=use_gpu,
+            exp_prefix=exp_prefix,
+            script=script,
+            python_command=python_command,
+        )
+    elif mode == "local":
         for task in batch_tasks:
             del task["remote_log_dir"]
             env = task.pop("env", None)
@@ -613,7 +624,7 @@ def to_local_command(params, python_command="python", script=osp.join(config.PRO
     return command
 
 
-def to_docker_command(params, docker_image, python_command="python", script='scripts/run_experiment.py',
+def to_docker_command(params, docker_image, python_command="python", script='scripts/run_experiment_lite.py',
                       pre_commands=None, use_tty=False,
                       post_commands=None, dry=False, use_gpu=False, env=None, local_code_dir=None):
     """
@@ -624,9 +635,14 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
     :return:
     """
     log_dir = params.get("log_dir")
+    docker_args = params.pop("docker_args", "")
+    if pre_commands is None:
+        pre_commands = params.pop("pre_commands", None)
+    if post_commands is None:
+        post_commands = params.pop("post_commands", None)
     # script = 'rllab/' + script
-    if not dry:
-        mkdir_p(log_dir)
+    # if not dry:
+    #     mkdir_p(log_dir)
     # create volume for logging directory
     if use_gpu:
         command_prefix = "nvidia-docker run"
@@ -642,6 +658,7 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
         local_log_dir=log_dir,
         docker_log_dir=docker_log_dir
     )
+    command_prefix += docker_args
     if local_code_dir is None:
         local_code_dir = config.PROJECT_PATH
     command_prefix += " -v {local_code_dir}:{docker_code_dir}".format(
@@ -976,7 +993,7 @@ def upload_file_to_s3(script_content):
     import tempfile
     import uuid
     f = tempfile.NamedTemporaryFile(delete=False)
-    f.write(script_content)
+    f.write(script_content.encode())
     f.close()
     remote_path = os.path.join(
         config.AWS_CODE_SYNC_S3_PATH, "oversize_bash_scripts", str(uuid.uuid4()))

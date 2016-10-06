@@ -11,6 +11,10 @@ np.set_printoptions(precision=4)
 
 
 class IndependentSoftmaxLayer(L.Layer):
+    """
+    Pixel-wise independent softmax.
+    """
+
     def __init__(self, incoming, num_bins, W=L.XavierUniformInitializer(), b=tf.zeros_initializer,
                  **kwargs):
         super(IndependentSoftmaxLayer, self).__init__(incoming, **kwargs)
@@ -56,7 +60,8 @@ class BinaryCodeNonlinearityLayer(L.Layer):
 
     # FIXME: noise_mask = 0
     def get_output_for(self, input, noise_mask=0, **kwargs):
-        return self.nonlinearity(input, noise_mask)
+        # return self.nonlinearity(input, noise_mask)
+        return tf.nn.relu(input)
 
     def get_output_shape_for(self, input_shape):
         return input_shape[0], self.num_units
@@ -78,12 +83,13 @@ class BinaryCodeConvAE:
 
         self._x = tf.placeholder(tf.float32, shape=(None,) + input_shape, name="input")
         l_in = L.InputLayer(shape=(None,) + input_shape, input_var=self._x, name="input_layer")
+        l_in = L.batch_norm(l_in)
         l_conv_1 = L.Conv2DLayer(
             l_in,
             num_filters=96,
             filter_size=5,
             stride=(2, 2),
-            pad='VALID',
+            pad='SAME',
             nonlinearity=tf.nn.relu,
             name='enc_conv_1',
             weight_normalization=True,
@@ -94,16 +100,27 @@ class BinaryCodeConvAE:
             num_filters=96,
             filter_size=5,
             stride=(2, 2),
-            pad='VALID',
+            pad='SAME',
             nonlinearity=tf.nn.relu,
             name='enc_conv_2',
             weight_normalization=True,
         )
         l_conv_2 = L.batch_norm(l_conv_2)
-        l_flatten_1 = L.FlattenLayer(l_conv_2)
+        l_conv_3 = L.Conv2DLayer(
+            l_conv_2,
+            num_filters=96,
+            filter_size=5,
+            stride=(2, 2),
+            pad='SAME',
+            nonlinearity=tf.nn.relu,
+            name='enc_conv_3',
+            weight_normalization=True,
+        )
+        l_conv_3 = L.batch_norm(l_conv_3)
+        l_flatten_1 = L.FlattenLayer(l_conv_3)
         l_dense_1 = L.DenseLayer(
             l_flatten_1,
-            num_units=128,
+            num_units=512,
             nonlinearity=tf.nn.relu,
             name='enc_hidden_1',
             W=L.XavierUniformInitializer(),
@@ -120,6 +137,7 @@ class BinaryCodeConvAE:
             b=tf.zeros_initializer,
             weight_normalization=True
         )
+        l_code_prenoise = L.batch_norm(l_code_prenoise)
         l_code = BinaryCodeNonlinearityLayer(
             l_code_prenoise,
             num_units=self._code_dimension,
@@ -127,7 +145,7 @@ class BinaryCodeConvAE:
         )
         l_dense_3 = L.DenseLayer(
             l_code,
-            num_units=np.prod(l_conv_2.output_shape[1:]),
+            num_units=np.prod(l_conv_3.output_shape[1:]),
             nonlinearity=tf.nn.sigmoid,
             name='dec_hidden_1',
             W=L.XavierUniformInitializer(),
@@ -137,7 +155,7 @@ class BinaryCodeConvAE:
         l_dense_3 = L.batch_norm(l_dense_3)
         l_reshp_1 = L.ReshapeLayer(
             l_dense_3,
-            (-1,) + l_conv_2.output_shape[1:]
+            (-1,) + l_conv_3.output_shape[1:]
         )
         l_deconv_1 = L.TransposedConv2DLayer(
             l_reshp_1,
@@ -146,7 +164,7 @@ class BinaryCodeConvAE:
             stride=(2, 2),
             W=L.XavierUniformInitializer(),
             b=tf.zeros_initializer,
-            crop='VALID',
+            crop='SAME',
             nonlinearity=tf.nn.relu,
             name='dec_deconv_1',
             weight_normalization=True,
@@ -154,28 +172,56 @@ class BinaryCodeConvAE:
         l_deconv_1 = L.batch_norm(l_deconv_1)
         l_deconv_2 = L.TransposedConv2DLayer(
             l_deconv_1,
-            num_filters=1,
-            filter_size=6,
+            num_filters=96,
+            filter_size=5,
             stride=(2, 2),
             W=L.XavierUniformInitializer(),
             b=tf.zeros_initializer,
-            crop='VALID',
-            nonlinearity=tf.nn.sigmoid,
+            crop='SAME',
+            nonlinearity=tf.nn.relu,
             name='dec_deconv_2',
             weight_normalization=True,
         )
-        l_softmax = IndependentSoftmaxLayer(
+        l_deconv_2 = L.batch_norm(l_deconv_2)
+        l_deconv_3 = L.TransposedConv2DLayer(
             l_deconv_2,
+            num_filters=1,
+            filter_size=5,
+            stride=(2, 2),
+            W=L.XavierUniformInitializer(),
+            b=tf.zeros_initializer,
+            crop='SAME',
+            nonlinearity=tf.nn.relu,
+            name='dec_deconv_3',
+            weight_normalization=True,
+        )
+        l_deconv_3 = L.batch_norm(l_deconv_3)
+        l_upshape = L.TransposedConv2DLayer(
+            l_deconv_3,
+            num_filters=1,
+            filter_size=2,
+            W=L.XavierUniformInitializer(),
+            b=tf.zeros_initializer,
+            crop='VALID',
+            nonlinearity=tf.identity,
+            name='dec_upshape',
+            weight_normalization=True,
+        )
+        l_softmax = IndependentSoftmaxLayer(
+            l_upshape,
             num_bins=self._num_softmax_bins,
         )
         l_out = l_softmax
-        print(l_out.output_shape)
-        # l_out = l_deconv_2
 
         print(l_conv_1.output_shape)
         print(l_conv_2.output_shape)
+        print(l_conv_3.output_shape)
         print(l_deconv_1.output_shape)
         print(l_deconv_2.output_shape)
+        print(l_deconv_3.output_shape)
+        print(l_upshape.output_shape)
+        print(l_out.output_shape)
+        print('#params: {}'.format(L.count_all_params(l_out)))
 
         def likelihood_classification(target, prediction):
             def _log_prob_softmax_onehot(target, prediction):
@@ -201,11 +247,11 @@ class BinaryCodeConvAE:
         self._z = L.get_output(l_code, noise_mask=0)
 
         # --
-        self._y = L.get_output(l_out, deterministic=True)
+        self._y = L.get_output(l_out, phase='nottrain')
 
         # --
         self._z_in = tf.placeholder(tf.float32, shape=(None, self._code_dimension), name="z_in")
-        self._y_gen = L.get_output(l_out, {l_code: self._z_in}, deterministic=True)
+        self._y_gen = L.get_output(l_out, {l_code: self._z_in}, phase='nottrain')
 
         # --
         self._t = tf.placeholder(tf.int32, shape=(None,) + input_shape, name="target")
@@ -269,7 +315,7 @@ class BinaryCodeConvAE:
 def test_atari():
     import matplotlib.pyplot as plt
     num_bins = 64
-    bin_code_dim = 32
+    bin_code_dim = 128
     atari_dataset = load_dataset_atari('/Users/rein/programming/datasets/dataset_42x42.pkl')
     atari_dataset['x'] = atari_dataset['x'].transpose((0, 2, 3, 1))
     atari_dataset['y'] = (atari_dataset['x'] * (num_bins - 1)).astype(np.int)
@@ -278,36 +324,33 @@ def test_atari():
     sess = tf.Session()
     sess.run(tf.initialize_all_variables())
 
-    n_epochs = 1000
+    n_epochs = 2000
     for epoch_i in range(n_epochs):
         train_x = atari_dataset['x']
         train_y = atari_dataset['y']
         sess.run(ae.optimizer, feed_dict={ae.x: train_x, ae._t: train_y})
         print('{:3d}'.format(epoch_i), sess.run(ae.cost, feed_dict={ae.x: train_x, ae._t: train_y}))
 
-    n_examples = 10
-    # examples = np.tile(atari_dataset['x'][0][None, :], (n_examples, 1, 1, 1))
-    examples = atari_dataset['x'][0:n_examples]
-
-    recon = ae.reconstruct(sess, examples)
-    fig, axs = plt.subplots(2, n_examples, figsize=(20, 4))
-    for example_i in range(n_examples):
-        axs[0][example_i].imshow(
-            np.reshape(atari_dataset['x'][example_i], (42, 42)),
-            cmap='Greys_r', vmin=0, vmax=1, interpolation='none')
-        axs[0][example_i].xaxis.set_visible(False)
-        axs[0][example_i].yaxis.set_visible(False)
-        axs[1][example_i].imshow(
-            np.reshape(recon[example_i], (42, 42)),
-            cmap='Greys_r', vmin=0, vmax=1, interpolation='none')
-        axs[1][example_i].xaxis.set_visible(False)
-        axs[1][example_i].yaxis.set_visible(False)
-
-    fig.show()
-    plt.show()
+        if epoch_i % 200 == 0:
+            n_examples = 2
+            examples = atari_dataset['x'][0:n_examples]
+            recon = ae.reconstruct(sess, examples)
+            fig, axs = plt.subplots(2, n_examples, figsize=(4, 4))
+            for example_i in range(n_examples):
+                axs[0][example_i].imshow(
+                    np.reshape(atari_dataset['x'][example_i], (42, 42)),
+                    cmap='Greys_r', vmin=0, vmax=1, interpolation='nearest')
+                axs[0][example_i].xaxis.set_visible(False)
+                axs[0][example_i].yaxis.set_visible(False)
+                axs[1][example_i].imshow(
+                    np.reshape(recon[example_i], (42, 42)),
+                    cmap='Greys_r', vmin=0, vmax=1, interpolation='nearest')
+                axs[1][example_i].xaxis.set_visible(False)
+                axs[1][example_i].yaxis.set_visible(False)
+            plt.show()
 
     recon = ae.generate(sess, np.random.randint(0, 2, (n_examples, bin_code_dim)))
-    fig, axs = plt.subplots(2, n_examples, figsize=(20, 4))
+    fig, axs = plt.subplots(2, n_examples, figsize=(4, 4))
     for example_i in range(n_examples):
         axs[0][example_i].imshow(
             np.reshape(atari_dataset['x'][example_i], (42, 42)),
