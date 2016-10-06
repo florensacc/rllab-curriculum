@@ -33,6 +33,6 @@ if __name__ == "__main__":
     from rllab.sampler.utils import rollout
 
     while True:
-        env = ConoptParticleEnv()
+        env = ConoptParticleEnv(particles_to_reach=3)
         policy = ConoptParticleTrackingPolicy(env)
-        rollout(env, policy, max_path_length=100, animated=True)
+        rollout(env, policy, max_path_length=220, animated=True)

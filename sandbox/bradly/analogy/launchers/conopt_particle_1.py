@@ -42,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def horizon(self):
-        return [100]
+        return [125]
 
 
 vg = VG()
@@ -53,7 +53,7 @@ print("#Experiments: %d" % len(variants))
 
 for v in variants:
     env = TfEnv(ConoptParticleEnv(
-        seed=0,
+        seed=0, particles_to_reach=3
     ))
 
     policy = DoubleRNNAnalogyPolicy(

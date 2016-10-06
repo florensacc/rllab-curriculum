@@ -71,9 +71,8 @@ class ConoptParticleEnv(Env, Serializable):
         self.target_seed = target_seed
         exp = Experiment()
         with using_seed(self.target_seed):
-            self.target_ids = np.random.choice(np.arange(2), 2, replace=False)
-            target_id = self.target_ids[0]
-            #target_id = np.random.randint(0, 2)
+            self.target_ids = None
+            target_id = 0
         with using_seed(self.seed):
             scenario = exp.make_scenario(trial_index=seed, task_id=target_id)
         env = scenario.to_env()
@@ -110,20 +109,8 @@ class ConoptParticleEnv(Env, Serializable):
         env = self.conopt_env
         action = action.reshape(env.action_space.shape)
         next_obs, rew, done, infos = env.step(action)
-        if np.abs(rew) < 0.02:
-            self.switch_goal()
 
         return Step(next_obs, rew, done)
-
-    def switch_goal(self):
-        #print('kay')
-        self.curr_target_idx += 1
-        self.curr_target_idx = min(self.curr_target_idx, self.particles_to_reach-1)
-        curr_target_pt = self.target_ids[self.curr_target_idx]
-        #potential_targ = self.env.conopt_scenario.task_id + 1
-        #new_targ = min(potential_targ, 1)
-        #curr_target_pt = 1
-        self.conopt_scenario.task_id = curr_target_pt
 
     @classmethod
     def shuffler(cls):
