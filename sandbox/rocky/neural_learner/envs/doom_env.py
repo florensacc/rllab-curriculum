@@ -2,6 +2,8 @@ from rllab.envs.base import Env, Step
 import os
 import numpy as np
 import cv2
+
+from rllab.misc import logger
 from rllab.spaces.box import Box
 from rllab.core.serializable import Serializable
 from rllab.spaces.discrete import Discrete
@@ -77,6 +79,9 @@ class DoomConfig(object):
             par_games.set_window_visible(i, self.window_visible)
         if self.sound_enabled is not None:
             par_games.set_sound_enabled(i, self.sound_enabled)
+        # generate new seed
+        seed = np.random.randint(low=0, high=np.iinfo(np.uintc).max)
+        par_games.set_seed(i, seed)
         if self.available_buttons is not None:
             for button in self.available_buttons:
                 par_games.add_available_button(i, button)
@@ -85,11 +90,14 @@ class DoomConfig(object):
 
 
 class DoomEnv(Env, Serializable):
-    def __init__(self, restart_game=True):
+    def __init__(self, restart_game=True, vectorized=True, verbose_debug=False, rescale_obs=None):
         Serializable.quick_init(self, locals())
+        self._vectorized = vectorized
+        self._verbose_debug = verbose_debug
         self.mode = Mode.PLAYER
         self.restart_game = restart_game
-        self.executor = VecDoomEnv(n_envs=1, max_path_length=None, env=self)
+        self.rescale_obs = rescale_obs
+        self.executor = VecDoomEnv(n_envs=1, env=self)
         self.reset_trial()
 
     def reset_trial(self):
@@ -97,10 +105,10 @@ class DoomEnv(Env, Serializable):
 
     @property
     def vectorized(self):
-        return False#True
+        return self._vectorized
 
-    def vec_env_executor(self, n_envs, max_path_length):
-        return VecDoomEnv(n_envs=n_envs, max_path_length=max_path_length, env=self)
+    def vec_env_executor(self, n_envs):
+        return VecDoomEnv(n_envs=n_envs, env=self)
 
     def get_doom_config(self):
         doom_config = DoomConfig()
@@ -134,7 +142,11 @@ class DoomEnv(Env, Serializable):
         return self.executor.reset(dones=None, restart_game=restart_game)[0]
 
     def step(self, action):
-        next_obses, rewards, dones, infos = self.executor.step([action])
+        if self._verbose_debug:
+            logger.log("start stepping")
+        next_obses, rewards, dones, infos = self.executor.step([action], max_path_length=None)
+        if self._verbose_debug:
+            logger.log("finished stepping")
         return Step(next_obses[0], rewards[0], dones[0], **{k: v[0] for k, v in infos.items()})
 
     def configure_game(self, par_games, i):
@@ -156,15 +168,21 @@ class DoomEnv(Env, Serializable):
     def get_image_obs(self, rescale=False):
         return self.executor.get_image_obs(rescale=rescale)[0]
 
-    def render(self):
-        cv2.namedWindow('image', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('image', width=400, height=400)
-        cv2.imshow('image', cv2.resize(self.get_image_obs(rescale=False), (400, 400)))
-        cv2.waitKey(10)
+    def render(self, close=False):
+        if close:
+            cv2.destroyWindow('image')
+        else:
+            cv2.namedWindow('image', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('image', width=400, height=400)
+            cv2.imshow('image', cv2.resize(self.get_image_obs(rescale=False), (400, 400)))
+            cv2.waitKey(10)
 
     @property
     def observation_space(self):
-        return Box(low=-1., high=1., shape=(120, 160, 3))
+        if self.rescale_obs is not None:
+            return Box(low=-1., high=1., shape=self.rescale_obs + (3,))
+        else:
+            return Box(low=-1., high=1., shape=(120, 160, 3))
 
     @property
     def action_map(self):
@@ -179,11 +197,9 @@ class VecDoomEnv(object):
     def __init__(
             self,
             n_envs,
-            max_path_length,
             env):
         self.n_envs = n_envs
         self.env = env
-        self.max_path_length = max_path_length
         self.par_games = par_doom.ParDoom(n_envs)
         self.rewards_so_far = np.zeros((self.n_envs,))
         self.ts = np.zeros((n_envs,), dtype=np.int)
@@ -206,12 +222,17 @@ class VecDoomEnv(object):
             restart_game = self.env.restart_game
         if dones is None or np.any(dones):
             if restart_game:
+                if self.env._verbose_debug:
+                    logger.log("closing games")
                 try:
                     self.par_games.close_all(dones)
                 except Exception as e:
+                    print(e)
                     import ipdb;
                     ipdb.set_trace()
             self.init_games(dones)
+            if self.env._verbose_debug:
+                logger.log("start new episodes")
             self.par_games.new_episode_all(dones)
             if dones is None:
                 self.rewards_so_far[:] = 0
@@ -224,6 +245,9 @@ class VecDoomEnv(object):
 
     def get_image_obs(self, rescale=False):
         images = self.par_games.get_game_screen_all()
+        if self.env.rescale_obs is not None:
+            import cv2
+            images = [cv2.resize(img, self.env.rescale_obs) for img in images]
         if rescale:
             images = np.array(images, dtype=np.float32)
             images /= 255.0  # [0, 1]
@@ -233,18 +257,24 @@ class VecDoomEnv(object):
             images = np.array(images)
         return images
 
-    def step(self, action_n):
+    def step(self, action_n, max_path_length):
+        if self.env._verbose_debug:
+            logger.log("setting action")
         for i in range(self.n_envs):
             self.par_games.set_action(i, self.env.action_map[action_n[i]])
         # advance in parallel
+        if self.env._verbose_debug:
+            logger.log("advancing action")
         self.par_games.advance_action_all(4, True, True)
+        if self.env._verbose_debug:
+            logger.log("checking if episode finished")
         dones = np.asarray(
             [self.par_games.is_episode_finished(i) for i in range(self.n_envs)],
-            dtype=np.uint8
+            dtype=np.int32
         )
         self.ts += 1
-        if self.max_path_length is not None:
-            dones[self.ts >= self.max_path_length] = 1
+        if max_path_length is not None:
+            dones[self.ts >= max_path_length] = 1
 
         next_obs = self.get_image_obs(rescale=True)
 
@@ -256,10 +286,9 @@ class VecDoomEnv(object):
 
         self.rewards_so_far = total_rewards
 
-        # # TODO change it back!!
-        # dones = np.cast['uint8'](np.random.randint(low=0, high=2, size=dones.shape))
-
         if np.any(dones):
+            if self.env._verbose_debug:
+                logger.log("resetting")
             self.reset(dones)
 
         return next_obs, delta_rewards, np.cast['bool'](dones), dict()
@@ -271,5 +300,8 @@ class VecDoomEnv(object):
             if dones is None or dones[i]:
                 doom_config = self.env.get_doom_config()
                 doom_config.configure(self.par_games, i)
-
+        if self.env._verbose_debug:
+            logger.log("initing games")
         self.par_games.init_all(dones)
+        if self.env._verbose_debug:
+            logger.log("init finished")

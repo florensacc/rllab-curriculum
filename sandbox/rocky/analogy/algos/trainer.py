@@ -1,7 +1,11 @@
+import hashlib
+import os
+import pickle
 from collections import OrderedDict
 
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
+from rllab.misc import console
 import numpy as np
 import tensorflow as tf
 import pyprind
@@ -11,6 +15,7 @@ from sandbox.rocky.analogy.dataset import SupervisedDataset
 from sandbox.rocky.analogy.policies.normalizing_policy import NormalizingPolicy
 from sandbox.rocky.analogy.utils import unwrap
 from rllab.sampler.stateful_pool import singleton_pool
+from rllab import config
 import itertools
 import random
 import contextlib
@@ -40,11 +45,11 @@ def collect_demo(G, demo_collector, demo_seed, analogy_seed, target_seed, env_cl
     demo_path = demo_collector.collect_demo(env=demo_env, horizon=horizon)
     analogy_path = demo_collector.collect_demo(env=analogy_env, horizon=horizon)
 
-    return demo_path, analogy_path, demo_env, analogy_env
+    return demo_path, analogy_path, demo_seed, analogy_seed, target_seed
 
 
 def vectorized_rollout_analogy(policy, demo_paths, analogy_envs, max_path_length):
-    vec_env = VecEnvExecutor(envs=analogy_envs, max_path_length=max_path_length)
+    vec_env = VecEnvExecutor(envs=analogy_envs)
     obses = vec_env.reset()
     dones = np.asarray([True] * vec_env.num_envs)
     running_paths = [None] * vec_env.num_envs
@@ -62,7 +67,7 @@ def vectorized_rollout_analogy(policy, demo_paths, analogy_envs, max_path_length
         policy.reset(dones)
         actions, agent_infos = policy.get_actions(obses)
 
-        next_obses, rewards, dones, env_infos = vec_env.step(actions)
+        next_obses, rewards, dones, env_infos = vec_env.step(actions, max_path_length=max_path_length)
 
         agent_infos = tensor_utils.split_tensor_dict_list(agent_infos)
         env_infos = tensor_utils.split_tensor_dict_list(env_infos)
@@ -131,6 +136,7 @@ class Trainer(Serializable):
             env_cls,
             demo_collector,
             shuffler=None,
+            demo_cache_key=None,
             n_train_trajs=50,
             n_test_trajs=20,
             horizon=50,
@@ -140,11 +146,14 @@ class Trainer(Serializable):
             n_eval_trajs=10,
             learning_rate=1e-3,
             no_improvement_tolerance=5,
+            skip_eval=False,
             plot=False,
+            intertwined=False,
     ):
         Serializable.quick_init(self, locals())
         self.env_cls = env_cls
         self.demo_collector = demo_collector
+        self.demo_cache_key = demo_cache_key
         # self.demo_policy_cls = demo_policy_cls
         self.shuffler = shuffler
         self.n_train_trajs = n_train_trajs
@@ -156,8 +165,10 @@ class Trainer(Serializable):
         self.n_epochs = n_epochs
         self.n_passes_per_epoch = n_passes_per_epoch
         self.n_eval_trajs = n_eval_trajs
+        self.skip_eval = skip_eval
         self.learning_rate = learning_rate
         self.no_improvement_tolerance = no_improvement_tolerance
+        self.intertwined = intertwined
 
     def eval_and_log(self, policy, data_dict):
         eval_paths = vectorized_rollout_analogy(
@@ -186,8 +197,7 @@ class Trainer(Serializable):
         if progbar.active:
             progbar.stop()
 
-        demo_paths, analogy_paths, demo_envs, analogy_envs = zip(*data_list)
-        return demo_paths, analogy_paths, demo_envs, analogy_envs
+        return zip(*data_list)
 
     def init_opt(self, env, policy):
         demo_obs_var = env.observation_space.new_tensor_variable(name="demo_obs", extra_dims=2)
@@ -195,6 +205,13 @@ class Trainer(Serializable):
 
         analogy_obs_var = env.observation_space.new_tensor_variable(name="analogy_obs", extra_dims=2)
         analogy_action_var = env.action_space.new_tensor_variable(name="analogy_actions", extra_dims=2)
+        prev_action_var = tf.concat(
+            1,
+            [
+                tf.zeros(tf.pack([tf.shape(analogy_action_var)[0], 1, env.action_space.flat_dim])),
+                analogy_action_var[:, :-1, :],
+            ]
+        )
 
         lr_var = tf.placeholder(dtype=tf.float32, shape=(), name="lr")
 
@@ -202,7 +219,8 @@ class Trainer(Serializable):
             analogy_obs_var,
             state_info_vars=dict(
                 demo_obs=demo_obs_var,
-                demo_action=demo_action_var
+                demo_action=demo_action_var,
+                prev_action=prev_action_var,
             ),
             phase='train'
         )
@@ -210,7 +228,8 @@ class Trainer(Serializable):
             analogy_obs_var,
             state_info_vars=dict(
                 demo_obs=demo_obs_var,
-                demo_action=demo_action_var
+                demo_action=demo_action_var,
+                prev_action=prev_action_var,
             ),
             phase='test'
         )
@@ -253,22 +272,78 @@ class Trainer(Serializable):
 
         return dict(f_train=f_train, f_test_loss=f_test_loss)
 
-    def train(self):
+    def collect_demos(self):
+        if self.demo_cache_key is not None:
+            n_trajs = self.n_train_trajs + self.n_test_trajs
+            local_cache_dir = os.path.join(config.PROJECT_PATH, "data/conopt-trajs/%s" % self.demo_cache_key)
+            s3_cache_dir = os.path.join(config.AWS_S3_PATH, "data/conopt-trajs/%s" % self.demo_cache_key)
+            s3_command = "aws s3 sync %s %s" % (s3_cache_dir, local_cache_dir)
+            print(s3_command)
+            os.system(s3_command)
+            existing_files = os.listdir(local_cache_dir)
+            existing_n_trajs = sorted([int(x.split('.')[0]) for x in existing_files])
+            existing_n_trajs = [x for x in existing_n_trajs if x >= n_trajs]
+            if len(existing_n_trajs) > 0:
+                load_file = os.path.join(local_cache_dir, '%d.npz' % existing_n_trajs[0])
+                logger.log("Loading existing data from %s" % load_file)
+                existing_data = np.load(load_file)
 
+                demo_paths = existing_data["demo_paths"][:n_trajs]
+                analogy_paths = existing_data["analogy_paths"][:n_trajs]
+                demo_seeds = existing_data["demo_seeds"][:n_trajs]
+                analogy_seeds = existing_data["analogy_seeds"][:n_trajs]
+                target_seeds = existing_data["target_seeds"][:n_trajs]
+                # demo_envs = existing_data["demo_envs"][:n_trajs]
+                # analogy_envs = existing_data["analogy_envs"][:n_trajs]
+                return OrderedDict([
+                    ("demo_paths", np.asarray(demo_paths)),
+                    ("analogy_paths", np.asarray(analogy_paths)),
+                    ("demo_seeds", np.asarray(demo_seeds)),
+                    ("analogy_seeds", np.asarray(analogy_seeds)),
+                    ("target_seeds", np.asarray(target_seeds)),
+                    # ("demo_envs", np.array(demo_envs)),
+                    # ("analogy_envs", np.array(analogy_envs)),
+                ])
+            # sync local with s3
+            # check in the cache directory
         demo_seeds, analogy_seeds, target_seeds = np.random.randint(
             low=0, high=np.iinfo(np.int32).max, size=(3, self.n_train_trajs + self.n_test_trajs)
         )
 
-        demo_paths, analogy_paths, demo_envs, analogy_envs = self.collect_trajs(demo_seeds, analogy_seeds, target_seeds)
-
-        logger.log("Processing data")
+        demo_paths, analogy_paths, demo_seeds, analogy_seeds, target_seeds = \
+            self.collect_trajs(demo_seeds, analogy_seeds, target_seeds)
 
         data_dict = OrderedDict([
             ("demo_paths", np.asarray(demo_paths)),
             ("analogy_paths", np.asarray(analogy_paths)),
-            ("demo_envs", np.array(demo_envs)),
-            ("analogy_envs", np.array(analogy_envs)),
+            ("demo_seeds", np.asarray(demo_seeds)),
+            ("analogy_seeds", np.asarray(analogy_seeds)),
+            ("target_seeds", np.asarray(target_seeds)),
         ])
+
+        if self.demo_cache_key is not None:
+            console.mkdir_p(local_cache_dir)
+            local_file = os.path.join(local_cache_dir, "%d.npz" % n_trajs)
+            np.savez_compressed(local_file, **data_dict)
+            s3_command = "aws s3 sync %s %s" % (local_cache_dir, s3_cache_dir)
+            os.system(s3_command)
+
+        return data_dict
+
+    def train(self):
+
+        data_dict = self.collect_demos()#self.collect_trajs(demo_seeds,
+        # analogy_seeds,
+        #                                                                          target_seeds)
+
+        logger.log("Processing data")
+
+        # data_dict = OrderedDict([
+        #     ("demo_paths", np.asarray(demo_paths)),
+        #     ("analogy_paths", np.asarray(analogy_paths)),
+        #     ("demo_envs", np.array(demo_envs)),
+        #     ("analogy_envs", np.array(analogy_envs)),
+        # ])
 
         dataset = SupervisedDataset(
             inputs=list(data_dict.values()),
@@ -278,7 +353,10 @@ class Trainer(Serializable):
             shuffler=self.shuffler,
         )
 
-        env = demo_envs[0]
+        env = self.env_cls(seed=data_dict["demo_seeds"][0], target_seed=data_dict["target_seeds"][0])
+
+
+        # let's check consistency
 
         logger.log("Constructing optimization problem")
 
@@ -287,6 +365,22 @@ class Trainer(Serializable):
         test_dict = dataset.test.input_dict
         n_test = len(dataset.test.inputs[0])
         subsampled_train_dict = {k: v[:n_test] for k, v in train_dict.items()}
+
+        logger.log("Generating envs for evaluation")
+        subsampled_train_dict["analogy_envs"] = [
+            self.env_cls(seed=analogy_seed, target_seed=target_seed)
+            for analogy_seed, target_seed in zip(
+                subsampled_train_dict["analogy_seeds"],
+                subsampled_train_dict["target_seeds"],
+            )
+        ]
+        test_dict["analogy_envs"] = [
+            self.env_cls(seed=analogy_seed, target_seed=target_seed)
+            for analogy_seed, target_seed in zip(
+                test_dict["analogy_seeds"],
+                test_dict["target_seeds"],
+            )
+        ]
 
         policy = NormalizingPolicy(
             self.policy,
@@ -359,12 +453,13 @@ class Trainer(Serializable):
                     [np.sum(p["rewards"]) for p in test_dict["analogy_paths"]]
                 ))
 
-                logger.log("Evaluating on subsampled training set...")
-                with logger.tabular_prefix('Train'):
-                    self.eval_and_log(policy=policy, data_dict=subsampled_train_dict)
-                logger.log("Evaluating on test set...")
-                with logger.tabular_prefix('Test'):
-                    self.eval_and_log(policy=policy, data_dict=test_dict)
+                if not self.skip_eval:
+                    logger.log("Evaluating on subsampled training set...")
+                    with logger.tabular_prefix('Train'):
+                        self.eval_and_log(policy=policy, data_dict=subsampled_train_dict)
+                    logger.log("Evaluating on test set...")
+                    with logger.tabular_prefix('Test'):
+                        self.eval_and_log(policy=policy, data_dict=test_dict)
 
                 logger.dump_tabular()
 
@@ -381,7 +476,7 @@ class Trainer(Serializable):
                 save_params = dict(
                     policy=policy,
                     # save a version of the environment
-                    env=analogy_envs[-1],
+                    env=test_dict["analogy_envs"][-1],
                     trainer=self,
                 )
                 logger.save_itr_params(epoch_idx, save_params)

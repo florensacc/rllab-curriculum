@@ -24,19 +24,18 @@ class VectorizedSampler(BaseSampler):
             n_envs = max(1, min(n_envs, 100))
 
         if getattr(self.algo.env, 'vectorized', False):
-            self.vec_env = self.algo.env.vec_env_executor(n_envs=n_envs, max_path_length=self.algo.max_path_length)
+            self.vec_env = self.algo.env.vec_env_executor(n_envs=n_envs)
         else:
             envs = [pickle.loads(pickle.dumps(self.algo.env)) for _ in range(n_envs)]
             self.vec_env = VecEnvExecutor(
                 envs=envs,
-                max_path_length=self.algo.max_path_length
             )
         self.env_spec = self.algo.env.spec
 
     def shutdown_worker(self):
         self.vec_env.terminate()
 
-    def obtain_samples(self, itr):
+    def obtain_samples(self, itr, max_path_length, batch_size):
         logger.log("Obtaining samples for iteration %d..." % itr)
         paths = []
         n_samples = 0
@@ -44,21 +43,21 @@ class VectorizedSampler(BaseSampler):
         dones = np.asarray([True] * self.vec_env.num_envs)
         running_paths = [None] * self.vec_env.num_envs
 
-        pbar = ProgBarCounter(self.algo.batch_size)
+        pbar = ProgBarCounter(batch_size)
         policy_time = 0
         env_time = 0
         process_time = 0
 
         policy = self.algo.policy
         import time
-        while n_samples < self.algo.batch_size:
+        while n_samples < batch_size:
             t = time.time()
             policy.reset(dones)
             actions, agent_infos = policy.get_actions(obses)
 
             policy_time += time.time() - t
             t = time.time()
-            next_obses, rewards, dones, env_infos = self.vec_env.step(actions)
+            next_obses, rewards, dones, env_infos = self.vec_env.step(actions, max_path_length=max_path_length)
             env_time += time.time() - t
 
             t = time.time()

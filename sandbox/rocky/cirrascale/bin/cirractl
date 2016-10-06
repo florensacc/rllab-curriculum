@@ -104,6 +104,63 @@ def kill(job_id):
 
 
 @cli.command()
+@click.argument('job_id')
+def ssh(job_id):
+    import redis
+    import json
+    import subprocess
+    import os
+    from sandbox.rocky.cirrascale import cirra_config
+    redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
+
+    content = redis_cli.get("job/%s" % job_id)
+    job = json.loads(content.decode())
+    print(job)
+
+    command = "ssh -t rocky@{gpu_host} 'cd /local_home/rocky/rllab-workdir/{job_id} && exec bash -l'".format(
+        gpu_host=job['gpu_host'], job_id=job_id)
+    print(command)
+    os.system(command)
+
+@cli.command()
+@click.argument('job_id')
+def sim_policy(job_id):
+    import redis
+    import json
+    import subprocess
+    import os
+    from sandbox.rocky.cirrascale import cirra_config
+    from rllab import config
+    redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
+
+    content = redis_cli.get("job/%s" % job_id)
+    job = json.loads(content.decode())
+    print(job)
+
+    file_location = subprocess.check_output([
+        "ssh",
+        "rocky@{gpu_host}".format(gpu_host=job['gpu_host']),
+        "find /local_home/rocky/rllab-workdir/{job_id}/data/local -name *.pkl".format(job_id=job_id)
+    ]).decode().split("\n")[0]
+    subprocess.check_call([
+        "ssh",
+        "rocky@{gpu_host}".format(gpu_host=job['gpu_host']),
+        "cp {file} /tmp/params.pkl".format(file=file_location)
+    ])
+    subprocess.check_call([
+        "scp",
+        "rocky@{gpu_host}:/tmp/params.pkl".format(gpu_host=job['gpu_host']),
+        "/tmp/params.pkl"
+    ])
+
+    if "conopt" in file_location:
+        script = "sandbox/rocky/analogy/scripts/sim_policy.py"
+    else:
+        script = "scripts/sim_policy.py"
+    subprocess.check_call(["python", os.path.join(config.PROJECT_PATH, script), "/tmp/params.pkl"])
+
+
+@cli.command()
 def kill_all():
     import redis
     import json
@@ -165,6 +222,7 @@ def status(job_id, lines):
             print(subprocess.check_output(command).decode())
         except Exception as e:
             print(e)
+
 
 
 if __name__ == '__main__':

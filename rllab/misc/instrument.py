@@ -476,6 +476,7 @@ def run_experiment_lite(
                 env=env,
                 use_gpu=use_gpu,
                 use_tty=True,
+                python_command=python_command,
             )
             print(command)
             if dry:

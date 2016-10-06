@@ -11,6 +11,8 @@ from inspect import getargspec
 from difflib import get_close_matches
 from warnings import warn
 
+from sandbox.rocky.tf.misc import tensor_utils
+
 
 class G(object):
     pass
@@ -403,6 +405,17 @@ class DenseLayer(Layer):
         if self.b is not None:
             activation = activation + tf.expand_dims(self.b, 0)
         return self.nonlinearity(activation)
+
+
+class IdentityLayer(Layer):
+    def __init__(self, incoming, **kwargs):
+        super(IdentityLayer, self).__init__(incoming, **kwargs)
+
+    def get_output_shape_for(self, input_shape):
+        return input_shape
+
+    def get_output_for(self, input, **kwargs):
+        return input
 
 
 class BaseConvLayer(Layer):
@@ -1150,7 +1163,9 @@ class GRUStepLayer(MergeLayer):
         n_batch = tf.shape(x)[0]
         x = tf.reshape(x, tf.pack([n_batch, -1]))
         x.set_shape((None, self.input_shapes[0][1]))
-        return self._gru_layer.step(hprev, x)
+        stepped = self._gru_layer.step(hprev, x)
+        stepped.set_shape((None, self._gru_layer.num_units))
+        return stepped
 
 
 class TfGRULayer(Layer):
@@ -1828,6 +1843,36 @@ class ElemwiseSumLayer(MergeLayer):
     def get_output_shape_for(self, input_shapes):
         assert len(set(input_shapes)) == 1
         return input_shapes[0]
+
+
+class TemporalFlattenLayer(Layer):
+    """
+    Assume input is of shape (batch_size, n_steps, feature_size)
+    """
+
+    def get_output_for(self, input, **kwargs):
+        return tensor_utils.temporal_flatten_sym(input)
+
+    def get_output_shape_for(self, input_shape):
+        if input_shape[0] is None or input_shape[1] is None:
+            output_shape = (None, input_shape[2])
+        else:
+            output_shape = (input_shape[0] * input_shape[1], input_shape[2])
+        return output_shape
+
+
+class TemporalUnflattenLayer(MergeLayer):
+    def __init__(self, layer, ref_layer, **kwargs):
+        MergeLayer.__init__(self, [layer, ref_layer], **kwargs)
+
+    def get_output_for(self, inputs, **kwargs):
+        var, ref_var = inputs
+        return tensor_utils.temporal_unflatten_sym(var, ref_var)
+
+    def get_output_shape_for(self, input_shapes):
+        shape, ref_shape = input_shapes
+        output_shape = (ref_shape[0], ref_shape[1], shape[1])
+        return output_shape
 
 
 def get_output(layer_or_layers, inputs=None, **kwargs):

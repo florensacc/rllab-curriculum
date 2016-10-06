@@ -163,7 +163,7 @@ class SimpleParticleEnv(Env):
 
     @cached_property
     def observation_space(self):
-        if self.obs_type == 'state':
+        if self.obs_type == 'full_state':
             return Product(
                 Box(low=-np.inf, high=np.inf, shape=(2,)),
                 Box(low=-np.inf, high=np.inf, shape=(self.n_particles, 2))
@@ -174,7 +174,11 @@ class SimpleParticleEnv(Env):
             raise NotImplementedError
 
     def get_env_info(self):
-        return dict(agent_pos=np.copy(self.agent_pos), target_pos=np.copy(self.particles[self.target_id]))
+        return dict(
+            agent_pos=np.copy(self.agent_pos),
+            target_pos=np.copy(self.particles[self.target_id]),
+            target_id=self.target_id
+        )
 
     @cached_property
     def action_space(self):
@@ -199,7 +203,7 @@ class SimpleParticleEnv(Env):
             return np.cast['uint8'](image)
 
     def get_current_obs(self):
-        if self.obs_type == 'state':
+        if self.obs_type == 'full_state':
             return self.get_state_obs()
         elif self.obs_type == 'image':
             return self.get_image_obs(rescale=True)
