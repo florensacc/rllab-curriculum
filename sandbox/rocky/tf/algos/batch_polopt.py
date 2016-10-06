@@ -23,7 +23,9 @@ class BatchPolopt(RLAlgorithm):
             n_itr=500,
             start_itr=0,
             batch_size=5000,
+            batch_size_schedule=None,
             max_path_length=500,
+            max_path_length_schedule=None,
             discount=0.99,
             gae_lambda=1,
             plot=False,
@@ -66,7 +68,9 @@ class BatchPolopt(RLAlgorithm):
         self.n_itr = n_itr
         self.start_itr = start_itr
         self.batch_size = batch_size
+        self.batch_size_schedule = batch_size_schedule
         self.max_path_length = max_path_length
+        self.max_path_length_schedule = max_path_length_schedule
         self.discount = discount
         self.gae_lambda = gae_lambda
         self.plot = plot
@@ -95,7 +99,19 @@ class BatchPolopt(RLAlgorithm):
         self.sampler.shutdown_worker()
 
     def obtain_samples(self, itr):
-        return self.sampler.obtain_samples(itr)
+        if self.max_path_length_schedule is not None:
+            max_path_length = self.max_path_length_schedule[itr]
+        else:
+            max_path_length = self.max_path_length
+        if self.batch_size_schedule is not None:
+            batch_size = self.batch_size_schedule[itr]
+        else:
+            batch_size = self.batch_size
+        return self.sampler.obtain_samples(
+            itr,
+            max_path_length=max_path_length,
+            batch_size=batch_size
+        )
 
     def process_samples(self, itr, paths):
         return self.sampler.process_samples(itr, paths)

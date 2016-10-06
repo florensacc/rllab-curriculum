@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from pip._vendor.distlib.locators import locate
 
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
@@ -8,43 +10,46 @@ from progressbar import ETA, Bar, Percentage, ProgressBar
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture, DiscretizedLogistic, ConvAR
 import rllab.misc.logger as logger
 import sys
-from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten
-
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
+    average_grads
 
 class VAE(object):
-    def __init__(self,
-                 model,
-                 dataset,
-                 batch_size,
-                 exp_name="experiment",
-                 optimizer_cls=AdamaxOptimizer,
-                 optimizer_args={},
-                 # log_dir="logs",
-                 checkpoint_dir=None,
-                 resume_from=None,
-                 max_epoch=100,
-                 updates_per_epoch=None,
-                 snapshot_interval=10000,
-                 vali_eval_interval=400,
-                 # learning_rate=1e-3,
-                 summary_interval=100,
-                 monte_carlo_kl=False,
-                 min_kl=0.,
-                 use_prior_reg=False,
-                 weight_redundancy=1,
-                 bnn_decoder=False,
-                 bnn_kl_coeff=1.,
-                 k=1, # importance sampling ratio
-                 cond_px_ent=None,
-                 anneal_after=None,
-                 anneal_every=100,
-                 anneal_factor=0.75,
-                 exp_avg=None,
-                 l2_reg=None,
-                 img_on=True,
-                 kl_coeff=1.,
-                 noise=True,
-                 vis_ar=True,
+    def __init__(
+            self,
+            model,
+            dataset,
+            batch_size,
+            exp_name="experiment",
+            optimizer_cls=AdamaxOptimizer,
+            optimizer_args={},
+            # log_dir="logs",
+            checkpoint_dir=None,
+            resume_from=None,
+            max_epoch=100,
+            updates_per_epoch=None,
+            snapshot_interval=10000,
+            vali_eval_interval=400,
+            # learning_rate=1e-3,
+            summary_interval=100,
+            monte_carlo_kl=False,
+            min_kl=0.,
+            use_prior_reg=False,
+            weight_redundancy=1,
+            bnn_decoder=False,
+            bnn_kl_coeff=1.,
+            k=1, # importance sampling ratio
+            cond_px_ent=None,
+            anneal_after=None,
+            anneal_every=100,
+            anneal_factor=0.75,
+            exp_avg=None,
+            l2_reg=None,
+            img_on=True,
+            kl_coeff=1.,
+            noise=True,
+            vis_ar=True,
+            num_gpus=1,
+            min_kl_onesided=False, # True if prior doesn't see freebits
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -57,6 +62,8 @@ class VAE(object):
         Parameters
         ----------
         """
+        self.min_kl_onesided = min_kl_onesided
+        self.num_gpus = num_gpus
         self._vis_ar = vis_ar
         self.resume_from = resume_from
         self.checkpoint_dir = checkpoint_dir or logger.get_snapshot_dir()
@@ -109,13 +116,30 @@ class VAE(object):
         self.eval_log_vars = []
         self.sym_vars = {}
 
+        assert not self.cond_px_ent
+        assert not self.l2_reg
+
+        with tf.variable_scope("optim"):
+            # optimizer = tf.train.AdamOptimizer(self.learning_rate)
+            optimizer = self.optimizer_cls # AdamaxOptimizer(self.learning_rate)
+            if self.anneal_after is not None:
+                self.lr_var = tf.Variable(
+                    # assume lr is always set
+                    initial_value=self.optimizer_args["learning_rate"],
+                    name="opt_lr",
+                    trainable=False,
+                )
+                self.optimizer_args["learning_rate"] = self.lr_var
+                self.optimizer = self.optimizer_cls(**self.optimizer_args)
+
     def init_opt(self, init=False, eval=False):
         if init:
             self.model.init_mode()
         else:
             self.model.train_mode(eval=eval)
 
-        log_vars = []
+        # log_vars = []
+        dict_log_vars = defaultdict(list)
         if eval:
             self.eval_input_tensor = \
                 input_tensor = \
@@ -131,159 +155,127 @@ class VAE(object):
                 "train_input_init_%s" % init
             )
 
-        # can only be set during template building!!
-        # with pt.defaults_scope(phase=phase):
-        z_var, log_p_z_given_x, z_dist_info = \
-            self.model.encode(input_tensor, k=self.k if eval else 1)
-        if not self.noise:
-            z_var = z_dist_info["mean"]
-            log_p_x_given_z = 1.
-        x_var, x_dist_info = self.model.decode(z_var, sample=self.img_on)
 
-        log_p_x_given_z = self.model.output_dist.logli(
-            tf.reshape(
-                tf.tile(input_tensor, [1, self.k]),
-                [-1, self.dataset.image_dim],
-            ) if eval else input_tensor,
-            x_dist_info
-        )
+        grads = []
+        xs = tf.split(0, self.num_gpus, input_tensor)
 
-        ndim = self.model.output_dist.effective_dim
-        log_p_z = self.model.latent_dist.logli_prior(z_var)
-        if eval:
-            assert self.monte_carlo_kl
-            kls = (
-                    - log_p_z \
-                    + log_p_z_given_x
+        for i in range(self.num_gpus):
+            x = xs[i]
+            with tf.device(assign_to_gpu(i)):
+                z_var, log_p_z_given_x, z_dist_info = \
+                    self.model.encode(x, k=self.k if eval else 1)
+                if not self.noise:
+                    z_var = z_dist_info["mean"]
+                    log_p_x_given_z = 1.
+                x_var, x_dist_info = self.model.decode(z_var, sample=self.img_on)
+
+                log_p_x_given_z = self.model.output_dist.logli(
+                    tf.reshape(
+                        tf.tile(x, [1, self.k]),
+                        [-1, self.dataset.image_dim],
+                    ) if eval else x,
+                    x_dist_info
                 )
-            kl = tf.reduce_mean(kls)
 
+                ndim = self.model.output_dist.effective_dim
+                log_p_z = self.model.latent_dist.logli_prior(z_var)
 
-            true_vlb = tf.reduce_mean(
-                logsumexp(tf.reshape(log_p_x_given_z - kls, [-1, self.k])),
-            ) - np.log(self.k)
-            # this is shaky but ok since we are just in eval mode
-            vlb = tf.reduce_mean(log_p_x_given_z) - \
-                  tf.maximum(kl, self.min_kl * ndim) * self.kl_coeff
-            log_vars.append((
-                "true_vlb_sum_k0",
-                tf.reduce_mean(log_p_x_given_z - kls)
-            ))
-        else:
-            if self.monte_carlo_kl:
-                # Construct the variational lower bound
-                kl = tf.reduce_mean(
-                    - log_p_z  \
-                    + log_p_z_given_x
-                )
-            else:
-                # Construct the variational lower bound
-                kl = tf.reduce_mean(self.model.latent_dist.kl_prior(z_dist_info))
+                if eval:
+                    assert self.monte_carlo_kl
+                    kls = (
+                            - log_p_z \
+                            + log_p_z_given_x
+                        )
+                    kl = tf.reduce_mean(kls)
 
-            true_vlb = tf.reduce_mean(log_p_x_given_z) - kl
-            vlb = tf.reduce_mean(log_p_x_given_z) - tf.maximum(kl, self.min_kl * ndim) * self.kl_coeff
+                    true_vlb = tf.reduce_mean(
+                        logsumexp(tf.reshape(log_p_x_given_z - kls, [-1, self.k])),
+                    ) - np.log(self.k)
+                    # this is shaky but ok since we are just in eval mode
+                    vlb = tf.reduce_mean(log_p_x_given_z) - \
+                          tf.maximum(kl, self.min_kl * ndim) * self.kl_coeff
+                    dict_log_vars["true_vlb_sum_k0"].append(
+                        tf.reduce_mean(log_p_x_given_z - kls)
+                    )
+                else:
+                    if self.monte_carlo_kl:
+                        # Construct the variational lower bound
+                        kl = tf.reduce_mean(
+                            - log_p_z  \
+                            + log_p_z_given_x
+                        )
+                    else:
+                        # Construct the variational lower bound
+                        kl = tf.reduce_mean(self.model.latent_dist.kl_prior(z_dist_info))
 
-        # ld = self.model.latent_dist
-        # prior_z_var = ld.sample_prior(self.batch_size)
-        # prior_reg = tf.reduce_mean(
-        #     ld.logli_prior(prior_z_var) - \
-        #         ld.logli_init_prior(prior_z_var)
-        # )
-        # emp_prior_reg = tf.reduce_mean(
-        #     ld.logli_prior(z_var) - \
-        #     ld.logli_init_prior(z_var)
-        # )
-        # self.log_vars.append(("prior_reg", prior_reg))
-        # self.log_vars.append(("emp_prior_reg", emp_prior_reg))
-        # if self.use_prior_reg:
-        #     vlb -= prior_reg
+                    true_vlb = tf.reduce_mean(log_p_x_given_z) - kl
+                    if self.min_kl_onesided:
+                        avg_log_p_sg_z = tf.reduce_mean(
+                            self.model.latent_dist.logli_prior(
+                                tf.stop_gradient(z_var)
+                            )
+                        )
+                        dict_log_vars["log_p_sg_z"].append(
+                            avg_log_p_sg_z
+                        )
 
+                        # when freebits is enabled, still give gradients to prior
+                        # but maintain the original numerical values
+                        vlb = tf.reduce_mean(log_p_x_given_z) - \
+                              tf.maximum(
+                                  kl,
+                                  self.min_kl * ndim
+                                  - avg_log_p_sg_z
+                                  + tf.stop_gradient(avg_log_p_sg_z)
+                              ) * self.kl_coeff
+                    else:
+                        vlb = tf.reduce_mean(log_p_x_given_z) - \
+                          tf.maximum(
+                              kl,
+                              self.min_kl * ndim
+                          ) * self.kl_coeff
 
-        # surr_vlb = vlb + tf.reduce_mean(
-        #         tf.stop_gradient(log_p_x_given_z) * self.model.latent_dist.nonreparam_logli(z_var, z_dist_info)
-        #     )
-        # surr_vlb
-        # Normalize by the dimensionality of the data distribution
-        log_vars.append(("vlb_sum", vlb))
-        log_vars.append(("kl_sum", kl))
-        log_vars.append(("true_vlb_sum", true_vlb))
-        log_vars.append(("cond_logp", true_vlb + kl))
+                # Normalize by the dimensionality of the data distribution
+                dict_log_vars["vlb_sum"].append(vlb)
+                dict_log_vars["kl_sum"].append(kl)
+                dict_log_vars["true_vlb_sum"].append(true_vlb)
+                dict_log_vars["cond_logp"].append(true_vlb + kl)
 
-        true_vlb /= ndim
-        vlb /= ndim
-        # surr_vlb /= ndim
-        kl /= ndim
+                true_vlb /= ndim
+                vlb /= ndim
+                # surr_vlb /= ndim
+                kl /= ndim
 
-        # loss = - vlb
-        # surr_loss = - surr_vlb
+                dict_log_vars["vlb"].append(vlb)
+                dict_log_vars["kl"].append(kl)
+                dict_log_vars["true_vlb"].append(true_vlb)
+                dict_log_vars["bits/dim"].append(true_vlb/np.log(2.))
+                # final_losses = [-vlb]
 
-        # log_vars.append((
-        #     "ent_x_given_z",
-        #     tf.reduce_mean(self.model.output_dist.entropy(x_dist_info)) / ndim
-        # ))
-        log_vars.append(("vlb", vlb))
-        log_vars.append(("kl", kl))
-        log_vars.append(("true_vlb", true_vlb))
-        log_vars.append(("bits/dim", true_vlb/np.log(2.)))
-        final_losses = [-vlb]
-
-        if self.cond_px_ent:
-            ld = self.model.latent_dist
-            prior_z_var = ld.sample_prior(self.batch_size)
-            _, prior_x_dist_info = self.model.decode(prior_z_var)
-            prior_ent = tf.reduce_mean(self.model.output_dist.entropy(prior_x_dist_info)) \
-                        / ndim
-            # loss += self.cond_px_ent * prior_ent
-            final_losses.append(self.cond_px_ent * prior_ent)
-            log_vars.append((
-                "prior_ent_x_given_z",
-                prior_ent
-            ))
-        if self.l2_reg is not None:
-            final_losses += [
-                self.l2_reg * tf.nn.l2_loss(var) for var in tf.trainable_variables() \
-                    if "scale" not in var.name
-            ]
-        grads_and_vars = []
-
-        self.init_hook(locals())
-
-        log_vars.append((
-            "final_loss",
-            tf.reduce_sum(final_losses)
-        ))
-        if isinstance(self.model.output_dist, DiscretizedLogistic):
-            log_vars.append((
-                "logistic_scale",
-                tf.reduce_mean(x_dist_info["scale"])
-            ))
+                surr_loss = -vlb
+                tower_grads = None
+                self.init_hook(locals())
+                if tower_grads is None:
+                    tower_grads = self.optimizer.compute_gradients(surr_loss)
+                grads.append(tower_grads)
 
         if init and self.exp_avg is not None:
             self.ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
             self.ema_applied = self.ema.apply(tf.trainable_variables())
             self.avg_dict = self.ema.variables_to_restore()
 
+        log_vars = [
+            (key, tf.add_n(vals) / self.num_gpus)
+            for key, vals in dict_log_vars.items()
+        ]
         if (not init) and (not eval):
-            for name, var in self.log_vars:
+            for name, var in log_vars:
                 tf.scalar_summary(name, var)
+
             with tf.variable_scope("optim"):
-                # optimizer = tf.train.AdamOptimizer(self.learning_rate)
-                optimizer = self.optimizer_cls # AdamaxOptimizer(self.learning_rate)
-                if self.anneal_after is not None:
-                    self.lr_var = tf.Variable(
-                        # assume lr is always set
-                        initial_value=self.optimizer_args["learning_rate"],
-                        name="opt_lr",
-                        trainable=False,
-                    )
-                    self.optimizer_args["learning_rate"] = self.lr_var
-                final_loss = tf.reduce_sum(final_losses)
-                optimizer = self.optimizer_cls(**self.optimizer_args)
-                if len(grads_and_vars) == 0:
-                    grads_and_vars = optimizer.compute_gradients(final_loss)
-                else:
-                    print("grads supplied by hook")
-                self.trainer = optimizer.apply_gradients(grads_and_vars=grads_and_vars)
+                self.trainer = self.optimizer.apply_gradients(
+                    grads_and_vars=average_grads(grads)
+                )
                 if self.exp_avg is not None:
                     with tf.name_scope(None):
                         self.trainer = tf.group(*[self.trainer, self.ema_applied])
@@ -505,6 +497,21 @@ class VAE(object):
                     self.iter_hook(
                        sess=sess, counter=counter, feed=feed
                     )
+
+                    # if i == 20:
+                    #     run_metadata = tf.RunMetadata()
+                    #     log_vals = sess.run(
+                    #         [self.trainer] + log_vars,
+                    #         feed,
+                    #         options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
+                    #         run_metadata=run_metadata,
+                    #     )[1:]
+                    #     from tensorflow.python.client import timeline
+                    #     trace = timeline.Timeline(step_stats=run_metadata.step_stats)
+                    #     trace_file = open('timeline_noexp_gpups.ctf.json', 'w')
+                    #     trace_file.write(trace.generate_chrome_trace_format())
+                    #     trace_file.close()
+                    #     import ipdb; ipdb.set_trace()
 
                     log_vals = sess.run(
                         [self.trainer] + log_vars,

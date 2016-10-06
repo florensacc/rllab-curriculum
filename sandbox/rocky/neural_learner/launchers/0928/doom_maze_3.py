@@ -11,7 +11,7 @@ OPT_N_STEPS = 32
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [11]#, 21, 31]
+        return [11, 21, 31]
 
     @variant
     def batch_size(self):
@@ -183,7 +183,7 @@ for v in variants:#[:10]:
 
     run_experiment_lite(
         run_task,
-        exp_prefix="doom_maze_3_cpu_1",
+        exp_prefix="doom_maze_3_cpu_2",
         mode=MODE,
         n_parallel=0,
         seed=v["seed"],

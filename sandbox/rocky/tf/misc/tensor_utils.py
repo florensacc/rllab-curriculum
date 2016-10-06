@@ -118,3 +118,34 @@ def pad_tensor_dict(tensor_dict, max_len):
         else:
             ret[k] = pad_tensor(tensor_dict[k], max_len)
     return ret
+
+
+def temporal_flatten_sym(var):
+    """
+    Assume var is of shape (batch_size, n_steps, feature_dim). Flatten into
+    (batch_size * n_steps, feature_dim)
+    """
+    return tf.reshape(var, tf.pack([-1, tf.shape(var)[2]]))
+
+
+def temporal_unflatten_sym(var, ref_var):
+    """
+    Assume var is of shape (batch_size * n_steps, feature_dim) and ref_var is of shape (batch_size, n_steps, sth_else).
+    Reshape var into shape (batch_size, n_steps, feature_dim)
+    """
+    return tf.reshape(
+        var,
+        tf.pack([tf.shape(ref_var)[0], tf.shape(ref_var)[1], tf.shape(var)[1]])
+    )
+
+
+def temporal_tile_sym(var, ref_var):
+    """
+    Assume var is of shape (batch_size, feature_dim), and ref_var is of shape (batch_size, n_steps, sth_else).
+    Tile var along the temporal dimension so that it has new shape (batch_size, n_steps, feature_dim)
+    """
+    T = tf.shape(ref_var)[1]
+    return tf.tile(
+        tf.expand_dims(var, 1),
+        tf.pack([1, T, 1]),
+    )

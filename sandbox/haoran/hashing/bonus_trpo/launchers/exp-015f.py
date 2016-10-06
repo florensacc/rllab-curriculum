@@ -39,13 +39,14 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "kube"
-ec2_instance = "c4.8xlarge"
+mode = "kube_test"
+ec2_instance = "c4.2xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
 n_parallel = 4
-snapshot_mode = "last"
+memory = 10
+snapshot_mode = "none"
 plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
@@ -63,14 +64,17 @@ else:
 # params ---------------------------------------
 # algo
 use_parallel = True
-batch_size = 50000
+if "test" in mode:
+    batch_size = 500
+else:
+    batch_size = 50000
 max_path_length = 4500
 discount = 0.99
 n_itr = 2000
 step_size = 0.01
 policy_opt_args = dict(
     name="pi_opt",
-    cg_iters=10,
+    cg_iters=100,
     reg_coeff=1e-3,
     subsample_factor=0.1,
     max_backtracks=15,
@@ -105,7 +109,7 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [0.1,1.0]
+        return [1e-3,0]
 
     @variant
     def baseline_type_opt(self):
@@ -151,14 +155,14 @@ for v in variants:
         n_parallel = int(info["vCPU"] /2)
 
         # choose subnet
-        config.AWS_NETWORK_INTERFACES = [
-            dict(
-                SubnetId=subnet_info[subnet]["SubnetID"],
-                Groups=subnet_info[subnet]["Groups"],
-                DeviceIndex=0,
-                AssociatePublicIpAddress=True,
-            )
-        ]
+        # config.AWS_NETWORK_INTERFACES = [
+        #     dict(
+        #         SubnetId=subnet_info[subnet]["SubnetID"],
+        #         Groups=subnet_info[subnet]["Groups"],
+        #         DeviceIndex=0,
+        #         AssociatePublicIpAddress=True,
+        #     )
+        # ]
     elif "kube" in mode:
         actual_mode = "lab_kube"
         info = instance_info[ec2_instance]
@@ -166,7 +170,8 @@ for v in variants:
 
         config.KUBE_DEFAULT_RESOURCES = {
             "requests": {
-                "cpu": n_parallel
+                "cpu": n_parallel,
+                "memory": "%dGi"%(memory),
             }
         }
         config.KUBE_DEFAULT_NODE_SELECTOR = {
@@ -281,6 +286,7 @@ for v in variants:
         config.DOCKER_IMAGE = "dementrock/rllab3-shared-gpu"
 
     if use_parallel:
+        print(config.AWS_REGION_NAME)
         run_experiment_lite(
             algo.train(),
             exp_prefix=exp_prefix,

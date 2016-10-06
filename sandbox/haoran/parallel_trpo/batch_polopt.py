@@ -42,8 +42,9 @@ class ParallelBatchPolopt(RLAlgorithm):
             set_cpu_affinity=False,
             cpu_assignments=None,
             serial_compile=True,
-            clip_reward=True,
+            clip_reward=False,
             bonus_evaluator=None,
+            extra_bonus_evaluator=None,
             bonus_coeff=0,
             **kwargs
     ):
@@ -92,6 +93,8 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.sampler = WorkerBatchSampler(self)
         self.clip_reward = clip_reward
         self.bonus_evaluator = bonus_evaluator
+        if extra_bonus_evaluator is not None:
+            raise NotImplementedError
         self.bonus_coeff = bonus_coeff
 
     def __getstate__(self):
@@ -178,6 +181,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         """
         logger.log("forcing Theano compilations...")
         paths = self.sampler.obtain_samples(n_samples)
+        self.process_paths(paths)
         samples_data, _ = self.sampler.process_samples(paths)
         input_values = self.prep_samples(samples_data)
         self.optimizer.force_compile(input_values)
@@ -189,12 +193,18 @@ class ParallelBatchPolopt(RLAlgorithm):
     #
 
     def train(self):
+        print("self.n_parallel:%d"%(self.n_parallel))
+        print("Before init_opt()")
         self.init_opt()
+        print("Before force_compile()")
         if self.serial_compile:
             self.force_compile()
+        print("Before init_par_objs()")
         self.init_par_objs()
+        print("Before definining processes")
         processes = [mp.Process(target=self._train, args=(rank,))
             for rank in range(self.n_parallel)]
+        print("len(processes)=%d"%(len(processes)))
         for p in processes:
             p.start()
         for p in processes:
@@ -210,20 +220,25 @@ class ParallelBatchPolopt(RLAlgorithm):
                 path["rewards"] = path["rewards"] + path["bonus_rewards"]
 
     def _train(self, rank):
+        print("%d: inside _train()"%(rank))
         self.init_rank(rank)
+        print("%d: starts _train"%(rank))
         if self.rank == 0:
             start_time = time.time()
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.sampler.obtain_samples()
+                print("%d: before fitting bonus"%(self.rank))
                 if self.bonus_evaluator is not None:
                     if rank == 0:
                         logger.log("fitting bonus evaluator")
                     self.bonus_evaluator.fit_before_process_samples(paths)
+                print("%d: after fitting bonus"%(self.rank))
                 self.process_paths(paths)
                 samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 self.optimize_policy(itr, samples_data)  # (parallel)
+                print("%d: after optimize_policy()"%(self.rank))
                 if rank == 0:
                     logger.log("fitting baseline...")
                 self.baseline.fit(paths)  # (parallel)
@@ -323,12 +338,12 @@ class ParallelBatchPolopt(RLAlgorithm):
                 logger.record_tabular('Perplexity', np.exp(ent))
                 # logger.record_tabular('StdReturn', np.std(undiscounted_returns))
                 logger.record_tabular('AverageDiscountedReturn', average_discounted_return)
-                logger.record_tabular('AverageReturn', average_return)
-                logger.record_tabular('MaxReturn', max_return)
-                logger.record_tabular('MinReturn', min_return)
-                logger.record_tabular('AverageRawReturn', average_raw_return)
-                logger.record_tabular('MaxRawReturn', max_raw_return)
-                logger.record_tabular('MinRawReturn', min_raw_return)
+                logger.record_tabular('ReturnAverage', average_return)
+                logger.record_tabular('ReturnMax', max_return)
+                logger.record_tabular('ReturnMin', min_return)
+                logger.record_tabular('RawReturnAverage', average_raw_return)
+                logger.record_tabular('RawReturnMax', max_raw_return)
+                logger.record_tabular('RawReturnMin', min_raw_return)
 
 
         # NOTE: These others might only work if all path data is collected
@@ -343,17 +358,24 @@ class ParallelBatchPolopt(RLAlgorithm):
 
     def init_rank(self, rank):
         self.rank = rank
+        print("%d: before set_cpu_affinity"%(rank))
         if self.set_cpu_affinity:
             self._set_affinity(rank)
+        print("%d: before baseline.init_rank"%(rank))
         self.baseline.init_rank(rank)
+        print("%d: before optimizer.init_rank"%(rank))
         self.optimizer.init_rank(rank)
+        print("%d: before bonus_evaluator.init_rank"%(rank))
         if self.bonus_evaluator is not None:
             self.bonus_evaluator.init_rank(rank)
+        print("%d: before get_seed"%(rank))
         seed = ext.get_seed()
         if seed is None:
             # NOTE: Not sure if this is a good source for seed?
             seed = int(1e6 * np.random.rand())
+        print("%d: before set_seed"%(rank))
         ext.set_seed(seed + rank)
+        print("%d: after set_seed"%(rank))
 
     def optimize_policy(self, itr, samples_data):
         raise NotImplementedError

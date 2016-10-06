@@ -429,7 +429,8 @@ class ConvMergeNetwork(LayersPowered, Serializable):
                  output_W_init=L.XavierUniformInitializer(), output_b_init=tf.zeros_initializer,
                  hidden_nonlinearity=tf.nn.relu,
                  output_nonlinearity=None,
-                 input_var=None, input_layer=None):
+                 input_var=None, input_layer=None,
+                 weight_normalization=False, batch_normalization=False):
         Serializable.quick_init(self, locals())
 
         if extra_hidden_sizes is None:
@@ -455,6 +456,8 @@ class ConvMergeNetwork(LayersPowered, Serializable):
                 ([0],) + input_shape,
                 name="conv_reshaped"
             )
+            if batch_normalization:
+                l_conv_in = L.batch_norm(l_conv_in)
             l_extra_in = L.reshape(
                 L.SliceLayer(
                     l_in,
@@ -464,6 +467,8 @@ class ConvMergeNetwork(LayersPowered, Serializable):
                 ([0],) + extra_input_shape,
                 name="extra_reshaped"
             )
+            if batch_normalization:
+                l_extra_in = L.batch_norm(l_extra_in)
 
             l_conv_hid = l_conv_in
             for idx, conv_filter, filter_size, stride, pad in zip(
@@ -481,7 +486,10 @@ class ConvMergeNetwork(LayersPowered, Serializable):
                     pad=pad,
                     nonlinearity=hidden_nonlinearity,
                     name="conv_hidden_%d" % idx,
+                    weight_normalization=weight_normalization,
                 )
+                if batch_normalization:
+                    l_conv_hid = L.batch_norm(l_conv_hid)
 
             l_extra_hid = l_extra_in
             for idx, hidden_size in enumerate(extra_hidden_sizes):
@@ -492,7 +500,10 @@ class ConvMergeNetwork(LayersPowered, Serializable):
                     name="extra_hidden_%d" % idx,
                     W=hidden_W_init,
                     b=hidden_b_init,
+                    weight_normalization=weight_normalization,
                 )
+                if batch_normalization:
+                    l_extra_hid = L.batch_norm(l_extra_hid)
 
             l_joint_hid = L.concat(
                 [L.flatten(l_conv_hid, name="conv_hidden_flat"), l_extra_hid],
@@ -507,7 +518,10 @@ class ConvMergeNetwork(LayersPowered, Serializable):
                     name="joint_hidden_%d" % idx,
                     W=hidden_W_init,
                     b=hidden_b_init,
+                    weight_normalization=weight_normalization,
                 )
+                if batch_normalization:
+                    l_joint_hid = L.batch_norm(l_joint_hid)
             l_out = L.DenseLayer(
                 l_joint_hid,
                 num_units=output_dim,
@@ -515,7 +529,10 @@ class ConvMergeNetwork(LayersPowered, Serializable):
                 name="output",
                 W=output_W_init,
                 b=output_b_init,
+                weight_normalization=weight_normalization
             )
+            if batch_normalization:
+                l_out = L.batch_norm(l_out)
             self._l_in = l_in
             self._l_out = l_out
 

@@ -1,0 +1,4 @@
+# REDIS_HOST = "10.240.122.36"
+REDIS_HOST = "10.240.76.39"
+
+DIRECTORY_KEY = "rocky/gpu_directory"

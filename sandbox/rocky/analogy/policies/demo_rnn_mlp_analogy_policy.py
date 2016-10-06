@@ -16,7 +16,9 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                  mlp_hidden_sizes=(32, 32), state_include_action=False,
                  network_type=rnn_utils.NetworkType.GRU, mlp_hidden_nonlinearity=tf.nn.tanh,
                  weight_normalization=False, layer_normalization=False, batch_normalization=False,
-                 output_nonlinearity=None, network_args=None):
+                 output_nonlinearity=None, network_args=None,
+                 embedding_start_dim=None, embedding_end_dim=None, embedded_input_shape=None,
+                 embedding_dim=40):
         Serializable.quick_init(self, locals())
         with tf.variable_scope(name):
             AnalogyPolicy.__init__(self, env_spec=env_spec)
@@ -25,10 +27,6 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
             action_dim = env_spec.action_space.flat_dim
 
             use_embedding = isinstance(env_spec.observation_space, Box) and len(env_spec.observation_space.shape) == 3
-            if use_embedding:
-                obs_input_shape = env_spec.observation_space.shape
-            else:
-                obs_input_shape = (env_spec.observation_space.flat_dim,)
 
             if network_args is None:
                 network_args = dict()
@@ -44,18 +42,48 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
 
             l_flat_obs_input = L.OpLayer(
                 l_obs_input,
-                op=lambda obs_input: tf.reshape(obs_input, (-1,) + obs_input_shape),
-                shape_op=lambda shape: (None,) + obs_input_shape
+                op=lambda obs_input: tf.reshape(obs_input, (-1, obs_dim)),
+                shape_op=lambda shape: (None, obs_dim),
             )
 
             if use_embedding:
                 assert state_include_action
                 embedding_dim = 40#100
 
+                assert embedding_start_dim is not None
+                assert embedding_end_dim is not None
+                assert embedded_input_shape is not None
+
+                has_nonembedding = embedding_start_dim > 0 or embedding_end_dim < obs_dim
+
+                if has_nonembedding:
+                    l_embedded_obs_input = L.SliceLayer(
+                        l_flat_obs_input,
+                        indices=slice(embedding_start_dim, embedding_end_dim),
+                        axis=1,
+                    )
+                else:
+                    l_embedded_obs_input = l_flat_obs_input
+
+                nonembedding_dim = embedding_start_dim + obs_dim - embedding_end_dim
+
+                l_nonembedded_obs_input = L.concat([
+                    L.SliceLayer(
+                        l_flat_obs_input,
+                        indices=slice(0, embedding_start_dim),
+                        axis=1
+                    ),
+                    L.SliceLayer(
+                        l_flat_obs_input,
+                        indices=slice(embedding_end_dim, obs_dim),
+                        axis=1
+                    )
+                ], axis=1)
+
                 embedding_network = ConvNetwork(
                     name="embedding_network",
-                    input_shape=obs_input_shape,
-                    input_layer=l_flat_obs_input,
+                    input_shape=embedded_input_shape,
+                    input_layer=l_embedded_obs_input,
                     output_dim=embedding_dim,
                     hidden_sizes=(),
                     conv_filters=(embedding_dim // 2, embedding_dim // 2),
@@ -70,16 +98,23 @@ class DemoRNNMLPAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
                     # batch_normalization=True,
                 )
 
-                l_flat_embedding = embedding_network.output_layer
+                if has_nonembedding:
+                    l_flat_embedding = L.concat([
+                        embedding_network.output_layer,
+                        l_nonembedded_obs_input
+                    ], axis=1)
+                else:
+                    l_flat_embedding = embedding_network.output_layer
+
                 l_embedding = L.OpLayer(
                     l_flat_embedding,
                     extras=[l_obs_input],
                     name="reshape_feature",
                     op=lambda flat_embedding, input: tf.reshape(
                         flat_embedding,
-                        tf.pack([tf.shape(input)[0], tf.shape(input)[1], embedding_dim])
+                        tf.pack([tf.shape(input)[0], tf.shape(input)[1], embedding_dim + nonembedding_dim])
                     ),
-                    shape_op=lambda _, input_shape: (input_shape[0], input_shape[1], embedding_dim)
+                    shape_op=lambda _, input_shape: (input_shape[0], input_shape[1], embedding_dim + nonembedding_dim)
                 )
 
             else:

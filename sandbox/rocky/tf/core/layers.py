@@ -11,6 +11,8 @@ from inspect import getargspec
 from difflib import get_close_matches
 from warnings import warn
 
+from sandbox.rocky.tf.misc import tensor_utils
+
 
 class G(object):
     pass
@@ -375,7 +377,8 @@ class OpLayer(MergeLayer):
 
 
 class DenseLayer(Layer):
-    def __init__(self, incoming, num_units, nonlinearity=None, W=XavierUniformInitializer(), b=tf.zeros_initializer,
+    def __init__(self, incoming, num_units, nonlinearity=None, W=XavierUniformInitializer(),
+                 b=tf.zeros_initializer,
                  **kwargs):
         super(DenseLayer, self).__init__(incoming, **kwargs)
         self.nonlinearity = tf.identity if nonlinearity is None else nonlinearity
@@ -402,6 +405,17 @@ class DenseLayer(Layer):
         if self.b is not None:
             activation = activation + tf.expand_dims(self.b, 0)
         return self.nonlinearity(activation)
+
+
+class IdentityLayer(Layer):
+    def __init__(self, incoming, **kwargs):
+        super(IdentityLayer, self).__init__(incoming, **kwargs)
+
+    def get_output_shape_for(self, input_shape):
+        return input_shape
+
+    def get_output_for(self, input, **kwargs):
+        return input
 
 
 class BaseConvLayer(Layer):
@@ -458,6 +472,15 @@ class BaseConvLayer(Layer):
         """
         num_input_channels = self.input_shape[-1]
         return self.filter_size + (num_input_channels, self.num_filters)
+
+    # def get_output_shape_for(self, input_shape):
+    #     pad = self.pad if isinstance(self.pad, tuple) else (self.pad,) * self.n
+    #     batchsize = input_shape[0]
+    #     return ((batchsize, self.num_filters) +
+    #             tuple(conv_output_length(input, filter, stride, p)
+    #                   for input, filter, stride, p
+    #                   in zip(input_shape[2:], self.filter_size,
+    #                          self.stride, pad)))
 
     def get_output_shape_for(self, input_shape):
         if self.pad == 'SAME':
@@ -524,6 +547,71 @@ class Conv2DLayer(BaseConvLayer):
 
     def convolve(self, input, **kwargs):
         conved = self.convolution(input, self.W, strides=(1,) + self.stride + (1,), padding=self.pad)
+        return conved
+
+
+def conv_input_length(output_length, filter_size, stride, pad='valid'):
+    if output_length is None:
+        return None
+    if pad == 'valid':
+        pad = 0
+    elif pad == 'full':
+        pad = filter_size - 1
+    elif pad == 'same':
+        pad = filter_size // 2
+    if not isinstance(pad, int):
+        raise ValueError('Invalid pad: {0}'.format(pad))
+    return (output_length - 1) * stride - 2 * pad + filter_size
+
+
+class TransposedConv2DLayer(BaseConvLayer):
+    def __init__(self, incoming, num_filters, filter_size, stride=(1, 1),
+                 crop='VALID', untie_biases=False,
+                 W=XavierUniformInitializer(), b=tf.zeros_initializer,
+                 nonlinearity=tf.nn.relu,
+                 output_size=None, **kwargs):
+        # output_size must be set before calling the super constructor
+        if (not isinstance(output_size, tf.Variable) and
+                    output_size is not None):
+            output_size = as_tuple(output_size, 2, int)
+        self.output_size = output_size
+        super(TransposedConv2DLayer, self).__init__(
+            incoming=incoming, num_filters=num_filters, filter_size=filter_size,
+            stride=stride, pad=crop, untie_biases=untie_biases, W=W, b=b,
+            nonlinearity=nonlinearity, n=2, **kwargs)
+        # rename self.pad to self.crop:
+        self.crop = self.pad
+        del self.pad
+
+    def get_W_shape(self):
+        num_input_channels = self.input_shape[-1]
+        return self.filter_size + (self.num_filters, num_input_channels)
+
+    def get_output_shape_for(self, input_shape):
+        # If self.output_size is not specified, return the smallest shape
+        # when called from the constructor, self.crop is still called self.pad:
+        crop = getattr(self, 'crop', getattr(self, 'pad', None))
+        if crop == 'SAME':
+            crop = ('same',) * self.n
+        elif crop == 'VALID':
+            crop = (0,) * self.n
+        else:
+            raise NotImplementedError
+
+        batchsize = input_shape[0]
+        return ((batchsize,) +
+                tuple(conv_input_length(input, filter, stride, p)
+                      for input, filter, stride, p
+                      in zip(input_shape[1:3], self.filter_size,
+                             self.stride, crop))) + (self.num_filters,)
+
+    def convolve(self, input, **kwargs):
+        n_batch = tf.shape(input)[0]
+        shape = tf.pack([n_batch, self.output_shape[1], self.output_shape[2], self.output_shape[3]])
+        conved = tf.nn.conv2d_transpose(
+            value=input, filter=self.W, output_shape=shape,
+            strides=(1,) + self.stride + (1,), padding=self.crop, name=self.name
+        )
         return conved
 
 
@@ -616,7 +704,7 @@ class SpatialExpectedSoftmaxLayer(Layer):
         return (input_shape[0], input_shape[-1] * 2)
 
     def get_output_for(self, input, **kwargs):
-        return spatial_expected_softmax(input)#, self.temp)
+        return spatial_expected_softmax(input)  # , self.temp)
         # max_ = tf.reduce_max(input, reduction_indices=[1, 2], keep_dims=True)
         # exp = tf.exp(input - max_) + 1e-5
 
@@ -950,7 +1038,8 @@ class GRULayer(Layer):
     """
 
     def __init__(self, incoming, num_units, hidden_nonlinearity,
-                 gate_nonlinearity=tf.nn.sigmoid, W_x_init=XavierUniformInitializer(), W_h_init=OrthogonalInitializer(),
+                 gate_nonlinearity=tf.nn.sigmoid, W_x_init=XavierUniformInitializer(),
+                 W_h_init=OrthogonalInitializer(),
                  b_init=tf.zeros_initializer, hidden_init=tf.zeros_initializer, hidden_init_trainable=False,
                  layer_normalization=False, **kwargs):
 
@@ -1074,7 +1163,9 @@ class GRUStepLayer(MergeLayer):
         n_batch = tf.shape(x)[0]
         x = tf.reshape(x, tf.pack([n_batch, -1]))
         x.set_shape((None, self.input_shapes[0][1]))
-        return self._gru_layer.step(hprev, x)
+        stepped = self._gru_layer.step(hprev, x)
+        stepped.set_shape((None, self._gru_layer.num_units))
+        return stepped
 
 
 class TfGRULayer(Layer):
@@ -1181,7 +1272,8 @@ class PseudoLSTMLayer(Layer):
     """
 
     def __init__(self, incoming, num_units, hidden_nonlinearity=tf.tanh,
-                 gate_nonlinearity=tf.nn.sigmoid, W_x_init=XavierUniformInitializer(), W_h_init=OrthogonalInitializer(),
+                 gate_nonlinearity=tf.nn.sigmoid, W_x_init=XavierUniformInitializer(),
+                 W_h_init=OrthogonalInitializer(),
                  forget_bias=1.0, b_init=tf.zeros_initializer, hidden_init=tf.zeros_initializer,
                  hidden_init_trainable=False, cell_init=tf.zeros_initializer, cell_init_trainable=False,
                  gate_squash_inputs=False, layer_normalization=False, **kwargs):
@@ -1352,7 +1444,8 @@ class LSTMLayer(Layer):
     """
 
     def __init__(self, incoming, num_units, hidden_nonlinearity=tf.tanh,
-                 gate_nonlinearity=tf.nn.sigmoid, W_x_init=XavierUniformInitializer(), W_h_init=OrthogonalInitializer(),
+                 gate_nonlinearity=tf.nn.sigmoid, W_x_init=XavierUniformInitializer(),
+                 W_h_init=OrthogonalInitializer(),
                  forget_bias=1.0, use_peepholes=False, w_init=tf.random_normal_initializer(stddev=0.1),
                  b_init=tf.zeros_initializer, hidden_init=tf.zeros_initializer, hidden_init_trainable=False,
                  cell_init=tf.zeros_initializer, cell_init_trainable=False, layer_normalization=False,
@@ -1681,11 +1774,13 @@ class BatchNormLayer(Layer):
         params_shape = input_shape[-1:]
 
         if center:
-            self.beta = self.add_param(beta, shape=params_shape, name='beta', trainable=True, regularizable=False)
+            self.beta = self.add_param(beta, shape=params_shape, name='beta', trainable=True,
+                                       regularizable=False)
         else:
             self.beta = None
         if scale:
-            self.gamma = self.add_param(gamma, shape=params_shape, name='gamma', trainable=True, regularizable=True)
+            self.gamma = self.add_param(gamma, shape=params_shape, name='gamma', trainable=True,
+                                        regularizable=True)
         else:
             self.gamma = None
 
@@ -1748,6 +1843,36 @@ class ElemwiseSumLayer(MergeLayer):
     def get_output_shape_for(self, input_shapes):
         assert len(set(input_shapes)) == 1
         return input_shapes[0]
+
+
+class TemporalFlattenLayer(Layer):
+    """
+    Assume input is of shape (batch_size, n_steps, feature_size)
+    """
+
+    def get_output_for(self, input, **kwargs):
+        return tensor_utils.temporal_flatten_sym(input)
+
+    def get_output_shape_for(self, input_shape):
+        if input_shape[0] is None or input_shape[1] is None:
+            output_shape = (None, input_shape[2])
+        else:
+            output_shape = (input_shape[0] * input_shape[1], input_shape[2])
+        return output_shape
+
+
+class TemporalUnflattenLayer(MergeLayer):
+    def __init__(self, layer, ref_layer, **kwargs):
+        MergeLayer.__init__(self, [layer, ref_layer], **kwargs)
+
+    def get_output_for(self, inputs, **kwargs):
+        var, ref_var = inputs
+        return tensor_utils.temporal_unflatten_sym(var, ref_var)
+
+    def get_output_shape_for(self, input_shapes):
+        shape, ref_shape = input_shapes
+        output_shape = (ref_shape[0], ref_shape[1], shape[1])
+        return output_shape
 
 
 def get_output(layer_or_layers, inputs=None, **kwargs):
@@ -1848,3 +1973,34 @@ def get_all_params(layer, **tags):
     layers = get_all_layers(layer)
     params = chain.from_iterable(l.get_params(**tags) for l in layers)
     return unique(params)
+
+
+def count_all_params(layer, **tags):
+    """
+    This function counts all parameters (i.e., the number of scalar
+    values) of all layers below one or more given :class:`Layer` instances,
+    including the layer(s) itself.
+    This is useful to compare the capacity of various network architectures.
+    All parameters returned by the :class:`Layer`s' `get_params` methods are
+    counted.
+    Parameters
+    ----------
+    layer : Layer or list
+        The :class:`Layer` instance for which to count the parameters, or a
+        list of :class:`Layer` instances.
+    **tags (optional)
+        tags can be specified to filter the list of parameter variables that
+        will be included in the count. Specifying ``tag1=True``
+        will limit the list to parameters that are tagged with ``tag1``.
+        Specifying ``tag1=False`` will limit the list to parameters that
+        are not tagged with ``tag1``. Commonly used tags are
+        ``regularizable`` and ``trainable``.
+    Returns
+    -------
+    int
+        The total number of learnable parameters.
+    """
+    params = get_all_params(layer, **tags)
+    shapes = [p.get_shape().as_list() for p in params]
+    counts = [np.prod(shape) for shape in shapes]
+    return sum(counts)

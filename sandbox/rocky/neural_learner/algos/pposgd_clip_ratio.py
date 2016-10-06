@@ -23,6 +23,9 @@ class PPOSGD(BatchPolopt):
             log_loss_kl_after=True,
             use_kl_penalty=False,
             initial_kl_penalty=1.,
+            use_line_search=True,
+            max_backtracks=10,
+            backtrack_ratio=0.5,
             optimizer=None,
             step_size=0.01,
             min_n_epochs=2,
@@ -39,6 +42,9 @@ class PPOSGD(BatchPolopt):
         self.log_loss_kl_after = log_loss_kl_after
         self.use_kl_penalty = use_kl_penalty
         self.initial_kl_penalty = initial_kl_penalty
+        self.use_line_search = use_line_search
+        self.max_backtracks = max_backtracks
+        self.backtrack_ratio = backtrack_ratio
         self.step_size = step_size
         self.min_n_epochs = min_n_epochs
         if optimizer is None:
@@ -147,10 +153,11 @@ class PPOSGD(BatchPolopt):
         )
 
     def sliced_loss_kl(self, inputs):
-        loss, diags = self.optimizer.loss_diagostics(inputs)
+        loss, diags = self.optimizer.loss_diagnostics(inputs)
         return diags["UnclippedSurrLoss"], diags["MeanKL"]
 
     def optimize_policy(self, itr, samples_data):
+        logger.log("Policy param norm: %f" % np.linalg.norm(self.policy.get_param_values()))
         logger.log("Start optimizing..")
         observations = samples_data["observations"]
         actions = samples_data["actions"]
@@ -168,6 +175,8 @@ class PPOSGD(BatchPolopt):
             logger.log("Computing loss / KL before training")
             surr_loss_before, kl_before = self.sliced_loss_kl(all_inputs)
             logger.log("Computed")
+
+        prev_params = self.policy.get_param_values(trainable=True)
 
         epoch_surr_losses = []
         epoch_mean_kls = []
@@ -215,10 +224,24 @@ class PPOSGD(BatchPolopt):
         if best_params is not None:
             self.policy.set_param_values(best_params)
 
-        if self.log_loss_kl_after:
+        if self.log_loss_kl_after or self.use_line_search:
             logger.log("Computing loss / KL after training")
             surr_loss_after, kl_after = self.sliced_loss_kl(all_inputs)
             logger.log("Computed")
+
+            if self.use_line_search and kl_after > self.step_size:
+                logger.log("Performing line search to make sure KL is within range")
+                n_trials = 0
+                step_size = 1.
+                now_params = self.policy.get_param_values(trainable=True)
+                while kl_after > self.step_size and n_trials < self.max_backtracks:
+                    step_size *= self.backtrack_ratio
+                    self.policy.set_param_values(
+                        (1 - step_size) * prev_params + step_size * now_params,
+                        trainable=True
+                    )
+                    surr_loss_after, kl_after = self.sliced_loss_kl(all_inputs)
+                    logger.log("After shrinking step, loss = %f, Mean KL = %f" % (surr_loss_after, kl_after))
 
         # perform minibatch gradient descent on the surrogate loss, while monitoring the KL divergence
 
@@ -229,7 +252,7 @@ class PPOSGD(BatchPolopt):
             # Log approximately
             logger.record_tabular('FirstEpoch.SurrLoss', epoch_surr_losses[0])
             logger.record_tabular('FirstEpoch.MeanKL', epoch_mean_kls[0])
-        if self.log_loss_kl_after:
+        if self.log_loss_kl_after or self.use_line_search:
             logger.record_tabular('SurrLossAfter', surr_loss_after)
             logger.record_tabular('MeanKL', kl_after)
         else:

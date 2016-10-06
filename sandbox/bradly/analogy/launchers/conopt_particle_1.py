@@ -42,7 +42,7 @@ class VG(VariantGenerator):
 
     @variant
     def horizon(self):
-        return [125]
+        return [100]
 
 
 vg = VG()

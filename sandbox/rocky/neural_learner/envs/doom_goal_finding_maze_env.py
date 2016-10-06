@@ -15,9 +15,6 @@ from sandbox.rocky.neural_learner.envs.doom_env import DoomEnv
 
 
 class DoomGoalFindingMazeEnv(DoomEnv, Serializable):
-    def __init__(self, restart_game=True):
-        Serializable.quick_init(self, locals())
-        DoomEnv.__init__(self, restart_game=restart_game)
 
     def get_doom_config(self):
         DOOM_PATH = os.environ["DOOM_PATH"]
@@ -57,4 +54,6 @@ class DoomGoalFindingMazeEnv(DoomEnv, Serializable):
 
     def log_diagnostics(self, paths):
         success_rate = np.mean([path["rewards"][-1] > 0 for path in paths])
+        success_traj_len = np.asarray([len(path["rewards"]) for path in paths if path["rewards"][-1] > 0])
         logger.record_tabular('SuccessRate', success_rate)
+        logger.record_tabular_misc_stat('SuccessTrajLen', success_traj_len)

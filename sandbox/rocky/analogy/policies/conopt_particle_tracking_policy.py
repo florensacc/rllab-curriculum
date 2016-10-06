@@ -15,16 +15,19 @@ class ConoptParticleTrackingPolicy(AnalogyPolicy):
     def agent_coords_offset(self):
         return self.env.model.site_names.index(b'object') * 3
 
+    @cached_property
     def target_coords_offset(self):
         target_id = self.env.conopt_scenario.task_id
         return self.env.model.site_names.index(('target%d' % target_id).encode()) * 3
 
     def get_action(self, obs):
-        # print(obs[2].shape)
-        agent_pos = obs[2][self.agent_coords_offset:self.agent_coords_offset + 2]  # does this need a leading 0 index?
-        target_pos = obs[2][self.target_coords_offset():self.target_coords_offset() + 2]
+        data = self.env.model.data
+        xpos = data.site_xpos.flatten()
+        qvel = data.qvel
+        agent_pos = xpos[self.agent_coords_offset:self.agent_coords_offset + 2]
+        target_pos = xpos[self.target_coords_offset:self.target_coords_offset + 2]
         action = target_pos - agent_pos
-        action -= np.squeeze(obs[1]) * 0.05
+        action -= np.squeeze(qvel) * 0.05
         return self.env.action_space.unflatten(action), dict()
 
 
