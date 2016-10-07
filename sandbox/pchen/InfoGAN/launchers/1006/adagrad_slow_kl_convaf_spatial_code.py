@@ -51,7 +51,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, ] #0.001]
+        return [0.02, ] #0.001]
 
     @variant
     def seed(self):
@@ -205,7 +205,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 4
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -319,7 +319,8 @@ for v in variants[i:i+1]:
             batch_size=batch_size,
             exp_name=exp_name,
             max_epoch=max_epoch,
-            optimizer_cls=AdamaxOptimizer,
+            # optimizer_cls=AdamaxOptimizer,
+            optimizer_cls=tf.train.AdagradOptimizer,
             optimizer_args=dict(learning_rate=v["lr"]),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
@@ -338,7 +339,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1006_slow_kl_convaf_spatial_code",
+            exp_prefix="1006_adagrad_slow_kl_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",
