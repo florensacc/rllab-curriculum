@@ -6,7 +6,7 @@ from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.base import Hash
 import numpy as np
 
 class ALEHackyHashV2(Hash):
-    def __init__(self,item_dim, game):
+    def __init__(self,item_dim, game, parallel=False):
         """
         Hand-designed state encodings using RAM
         TODO: use int32 instead of int to reduce memory requirement?
@@ -52,14 +52,29 @@ class ALEHackyHashV2(Hash):
             len(self.ram_info[index]["values"])
             for index in self.ram_indices
         ]
-        self.table = dict()
-        # self.table = np.zeros(np.prod(self.n_values),dtype=int)
+        if parallel:
+            self.table_lock = mp.Value('i')
+            self.table = np.frombuffer(
+                mp.RawArray('i', self.n_values),
+                np.int32,
+            )
+            self.unpicklable_list = ["table_lock","table"]
+        else:
+            self.table = dict()
+            self.unpicklable_list = []
+        self.parallel = parallel
+
+    def __getstate__(self):
+        """ Do not pickle parallel objects. """
+        return {k: v for k, v in iter(self.__dict__.items()) if k not in self.unpicklable_list}
 
 
     def compute_keys(self, items):
         # sometimes items have the shape (n_items, 128, 1), like images
         if len(items.shape) == 3:
             items = np.asarray([item.ravel() for item in items],dtype=int)
+        else:
+            items = items.astype(int)
         n_items = items.shape[0]
 
         # convert useful ram values to an integer code
@@ -116,22 +131,33 @@ class ALEHackyHashV2(Hash):
         return values
 
     def inc_keys(self, keys):
-        for key in keys:
-            if key not in self.table:
-                self.table[key] = 1
-            else:
-                self.table[key] += 1
-        # np.add.at(self.table, list(keys), 1)
+        if self.parallel:
+            with self.table_lock.get_lock():
+                np.add.at(self.table, list(keys), 1)
+        else:
+            for key in keys:
+                if key not in self.table:
+                    self.table[key] = 1
+                else:
+                    self.table[key] += 1
+
+
 
     def query_keys(self, keys):
-        counts = []
-        for key in keys:
-            if key not in self.table:
-                counts.append(0)
-            else:
-                counts.append(self.table[key])
-        # counts = self.table[list(keys)]
-        return counts
+        if self.parallel:
+            counts = self.table[list(keys)]
+        else:
+            counts = []
+            for key in keys:
+                if key not in self.table:
+                    counts.append(0)
+                else:
+                    counts.append(self.table[key])
+            return counts
 
     def reset(self):
-        self.table = np.zeros_like(self.table)
+        if self.parallel:
+            with self.table_lock.get_lock():
+                self.table = np.zeros_like(self.table)
+        else:
+            self.table = dict()

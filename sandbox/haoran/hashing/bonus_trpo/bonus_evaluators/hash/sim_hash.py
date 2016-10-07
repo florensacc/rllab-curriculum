@@ -47,6 +47,8 @@ class SimHash(Hash):
         """ Do not pickle parallel objects. """
         return {k: v for k, v in iter(self.__dict__.items()) if k not in self.unpicklable_list}
 
+    def init_rank(self,rank):
+        self.rank = rank
 
     def compute_keys(self, items):
         """
@@ -62,9 +64,12 @@ class SimHash(Hash):
         Increment hash table counts for many items (row-wise stacked as a matrix)
         """
         if self.parallel:
+            print("%d: before table lock"%(self.rank))
             with self.tables_lock.get_lock():
+                print("%d: inside table lock"%(self.rank))
                 for idx in range(len(self.bucket_sizes)):
                     np.add.at(self.tables[idx], keys[:, idx], 1)
+            print("%d: exit table lock"%(self.rank))
         else:
             for idx in range(len(self.bucket_sizes)):
                 np.add.at(self.tables[idx], keys[:, idx], 1)

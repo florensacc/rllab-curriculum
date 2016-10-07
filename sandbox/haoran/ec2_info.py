@@ -2,6 +2,7 @@ instance_info = {
     "c4.large": dict(price=0.105, vCPU=2),
     "c4.xlarge": dict(price=0.209, vCPU=4),
     "c4.2xlarge": dict(price=0.419, vCPU=8),
+    "c4.4xlarge": dict(price=0.838, vCPU=16),
     "m4.10xlarge": dict(price=2.394,vCPU=40),
     "c4.8xlarge": dict(price=1.675,vCPU=36),
     "g2.2xlarge": dict(price=0.65, vCPU=8),

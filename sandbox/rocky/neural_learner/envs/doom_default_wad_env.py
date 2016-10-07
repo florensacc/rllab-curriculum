@@ -7,10 +7,10 @@ from sandbox.rocky.neural_learner.envs.doom_env import DoomEnv
 
 
 class DoomDefaultWadEnv(DoomEnv, Serializable):
-    def __init__(self, wad_name="symphod.wad", restart_game=True):
+    def __init__(self, wad_name="symphod.wad", *args, **kwargs):
         Serializable.quick_init(self, locals())
         self.wad_name = wad_name
-        DoomEnv.__init__(self, restart_game=restart_game)
+        DoomEnv.__init__(self, *args, **kwargs)
 
     def get_doom_config(self):
         DOOM_PATH = os.environ["DOOM_PATH"]

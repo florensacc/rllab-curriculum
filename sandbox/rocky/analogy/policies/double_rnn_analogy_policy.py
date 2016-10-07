@@ -14,7 +14,7 @@ from sandbox.rocky.tf.spaces.box import Box
 class DoubleRNNAnalogyPolicy(AnalogyPolicy, LayersPowered, Serializable):
     def __init__(self, env_spec, name, rnn_hidden_size=32, rnn_hidden_nonlinearity=tf.nn.tanh,
                  state_include_action=False,
-                 network_type=rnn_utils.NetworkType.GRU,  # mlp_hidden_nonlinearity=tf.nn.tanh,
+                 network_type=rnn_utils.NetworkType.GRU,
                  weight_normalization=False, layer_normalization=False, batch_normalization=False,
                  output_nonlinearity=None, network_args=None):
         Serializable.quick_init(self, locals())

@@ -36,7 +36,12 @@ if __name__ == "__main__":
                 seed = np.random.randint(np.iinfo(np.int32).max)
                 demo_env = env_cls(seed=seed, target_seed=target_seed)
                 analogy_env = env_cls(seed=seed + 10007, target_seed=target_seed)
-                demo_policy = trainer.demo_policy_cls(demo_env)
+                if hasattr(trainer, 'demo_policy_cls'):
+                    demo_policy = trainer.demo_policy_cls(demo_env)
+                elif hasattr(trainer, 'demo_collector'):
+                    demo_policy = trainer.demo_collector.policy_cls(demo_env)
+                else:
+                    raise NotImplementedError
 
                 demo_env.reset()
                 demo_env.render()
