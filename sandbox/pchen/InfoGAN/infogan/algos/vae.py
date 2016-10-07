@@ -50,6 +50,7 @@ class VAE(object):
             vis_ar=True,
             num_gpus=1,
             min_kl_onesided=False, # True if prior doesn't see freebits
+            slow_kl=False,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -62,6 +63,7 @@ class VAE(object):
         Parameters
         ----------
         """
+        self.slow_kl = slow_kl
         self.min_kl_onesided = min_kl_onesided
         self.num_gpus = num_gpus
         self._vis_ar = vis_ar
@@ -115,6 +117,9 @@ class VAE(object):
         self.eval_input_tensor = None
         self.eval_log_vars = []
         self.sym_vars = {}
+
+        if self.slow_kl:
+            self.ema_kl = tf.Variable(initial_value=0., trainable=False, name="ema_kl")
 
         assert not self.cond_px_ent
         assert not self.l2_reg
@@ -231,11 +236,32 @@ class VAE(object):
                                   + tf.stop_gradient(avg_log_p_sg_z)
                               ) * self.kl_coeff
                     else:
-                        vlb = tf.reduce_mean(log_p_x_given_z) - \
-                          tf.maximum(
-                              kl,
-                              self.min_kl * ndim
-                          ) * self.kl_coeff
+                        if self.slow_kl:
+                            ema_kl = self.ema_kl
+                            dict_log_vars["ema_kl"].append(ema_kl / ndim)
+                            ema_kl_decay = 0.99
+                            if self.slow_kl is True:
+                                # "soft" version
+                                kl, _ = tf.tuple([
+                                    kl,
+                                    ema_kl.assign(ema_kl*ema_kl_decay+ kl*(1.-ema_kl_decay))
+                                ])
+                            elif self.slow_kl == "hard":
+                                pass
+                                # rely on training algo
+                            else:
+                                raise ValueError()
+                            surr_kl = tf.select(
+                                ema_kl >= self.min_kl*ndim,
+                                kl,
+                                self.min_kl*ndim
+                            )
+                        else:
+                            surr_kl = tf.maximum(
+                                kl,
+                                self.min_kl * ndim
+                            )
+                        vlb = tf.reduce_mean(log_p_x_given_z) - surr_kl * self.kl_coeff
 
                 # Normalize by the dimensionality of the data distribution
                 dict_log_vars["vlb_sum"].append(vlb)
@@ -586,10 +612,28 @@ class VAE(object):
                 log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, avg_log_vals))
 
                 logger.log(log_line)
-                for k,v in zip(log_keys, avg_log_vals):
-                    logger.record_tabular("train_%s"%k, v)
-                for k,v in zip(eval_log_keys, avg_test_log_vals):
-                    logger.record_tabular("vali_%s"%k, v)
+                for lk, lraw in [
+                    ("train", all_log_vals),
+                    ("vali", all_test_log_vals),
+                ]:
+                    for k, v in zip(
+                            log_keys,
+                            # avg_log_vals
+                            np.array(lraw).T
+                    ):
+                        if k == "kl":
+                            logger.record_tabular_misc_stat("%s_%s"%(lk,k), v)
+                        else:
+                            logger.record_tabular("%s_%s"%(lk,k), np.mean(v))
+
+                        if self.slow_kl == "hard" and lk == "train" and k == "kl_sum":
+                            sess.run(
+                                self.ema_kl.assign(np.mean(v))
+                            )
+
+                # for k,v in zip(eval_log_keys, avg_test_log_vals):
+                #     logger.record_tabular("vali_%s"%k, v)
+
                 logger.dump_tabular(with_prefix=False)
 
                 if self.anneal_after is not None and epoch >= self.anneal_after:

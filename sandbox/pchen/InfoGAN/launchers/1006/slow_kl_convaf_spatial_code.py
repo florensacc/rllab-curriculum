@@ -1,6 +1,21 @@
 # compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
 # try playing with conv af model
+
+# kl 0.01 leads to no code being used/
+# switch to 0.06 and try again
+
+# 0.06 might need to overfitting, so this will explore 0.01 kl but much smaller init scale
+# also try fewer feature maps but this shouldnt affect as much?
+
+# data/local/1003-init-convaf-on-spatial-code/
+# --> turns out fewer feature maps helps a lot??
+# and only 0.005kl is used
+
+# this explores smaller free bits & diff featmaps
+
+# observed weird dynamics of kl free bits & ar prior. investigate the instability of kl objective
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -22,7 +37,7 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
-batch_size = 1024
+batch_size = 128
 # updates_per_epoch = 100
 
 stub(globals())
@@ -30,14 +45,13 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 class VG(VariantGenerator):
-
     @variant
     def lr(self):
         # yield 0.0005#
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002*8, ] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
@@ -50,10 +64,11 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [512, ]#[12, 32]
+        return [256, ]#[12, 32]
 
     @variant
     def min_kl(self):
+        # return [0.06, ]# 0.1]
         return [0.01, ]# 0.1]
     #
     @variant(hide=False)
@@ -81,7 +96,7 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [32]
+        return [32, ]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -95,21 +110,13 @@ class VG(VariantGenerator):
     def ar_wnorm(self):
         return [True, ]
 
-    @variant
-    def num_gpus(self):
-        # yield 0.0005#
-        # yield
-        # return np.arange(1, 11) * 1e-4
-        # return [0.0001, 0.0005, 0.001]
-        return [4] #0.001]
-
     @variant(hide=False)
-    def k(self, num_gpus):
-        return [batch_size // num_gpus, ]
+    def k(self):
+        return [batch_size, ]
 
     @variant(hide=False)
     def nar(self):
-        return [4]
+        return [2, ]
 
     @variant(hide=False)
     def nr(self):
@@ -142,7 +149,7 @@ class VG(VariantGenerator):
         ]
     @variant(hide=False)
     def exp_avg(self):
-        return [None,]#0.999, ]
+        return [0.999, ]
 
     @variant(hide=False)
     def tiear(self):
@@ -166,8 +173,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
-        # return [int(max_epoch * 0.7)]
-        yield 1000
+        return [int(max_epoch * 0.7)]
 
     @variant(hide=False)
     def context_dim(self, ):
@@ -179,7 +185,15 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [12]
+        return [3]
+
+    @variant(hide=False)
+    def data_init_scale(self):
+        return [0.01, ]
+
+    @variant(hide=False)
+    def slow_kl(self):
+        return [False, True, "hard"]
 
 
 
@@ -188,7 +202,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 2
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -230,9 +244,9 @@ for v in variants[i:i+1]:
                 dist,
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
-                data_init_scale=0.01,
-                var_scope="AR_scope",
+                var_scope="AR_scope" if v["tiear"] else None,
                 img_shape=[8,8,zdim//64],
+                data_init_scale=v["data_init_scale"],
             )
 
         latent_spec = [
@@ -292,8 +306,7 @@ for v in variants[i:i+1]:
             network_args=dict(
                 cond_rep=v["cond_rep"],
                 old_dec=True,
-                base_filters=v["base_filters"],
-                enc_rep=1,
+                base_filters=v["base_filters"]
             ),
         )
 
@@ -312,17 +325,16 @@ for v in variants[i:i+1]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
-            num_gpus=v["num_gpus"],
+            slow_kl=v["slow_kl"],
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
             # resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
-            vis_ar=False,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1006_test_mgpu_tiewconvaf_on_spatial_code_play",
+            exp_prefix="1006_slow_kl_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",
@@ -330,5 +342,4 @@ for v in variants[i:i+1]:
             # n_parallel=0,
             # use_gpu=True,
         )
-
 
