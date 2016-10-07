@@ -11,7 +11,8 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian
 import rllab.misc.logger as logger
 import sys
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
-    average_grads
+    average_grads, temp_restore
+
 
 class VAE(object):
     def __init__(
@@ -511,7 +512,29 @@ class VAE(object):
                         feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
 
                         if self.resume_from:
-                            self.ar_vis(sess, feed)
+                            # self.ar_vis(sess, feed)
+
+                            print("resumption ema eval")
+                            with temp_restore(sess, self.ema):
+                                ds = self.dataset.validation
+                                all_test_log_vals = []
+                                for ti in range(ds.images.shape[0] // self.eval_batch_size):
+                                    # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
+                                    # test_x = np.tile(test_x, [self.weight_redundancy, 1])
+                                    eval_feed = self.prepare_eval_feed(
+                                        self.dataset.validation,
+                                        self.eval_batch_size,
+                                    )
+                                    test_log_vals = sess.run(
+                                        eval_log_vars,
+                                        eval_feed,
+                                    )
+                                    all_test_log_vals.append(test_log_vals)
+
+                            avg_test_log_vals = np.mean(np.array(all_test_log_vals), axis=0)
+                            log_line = "EVAL" + "; ".join("%s: %s" % (str(k), str(v))
+                                                          for k, v in zip(eval_log_keys, avg_test_log_vals))
+                            print(log_line)
                             import ipdb; ipdb.set_trace()
 
                         log_vals = sess.run([] + log_vars, feed)[:]
