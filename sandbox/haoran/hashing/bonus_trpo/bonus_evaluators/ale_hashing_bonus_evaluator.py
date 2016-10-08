@@ -115,6 +115,7 @@ class ALEHashingBonusEvaluator(object):
             keys = self.retrieve_keys(paths)
             prev_counts = self.hash.query_keys(keys)
             new_state_count = list(prev_counts).count(0)
+            #FIXME: if a new state is encountered by more than one process, then it is counted more than once
             shareds.new_state_count_vec[self.rank] = new_state_count
             barriers.new_state_count.wait() # avoid updating the hash table before we count new states
             if self.rank == 0:
