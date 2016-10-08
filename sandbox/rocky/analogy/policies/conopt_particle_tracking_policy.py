@@ -21,10 +21,13 @@ class ConoptParticleTrackingPolicy(AnalogyPolicy):
         return self.env.model.site_names.index(('target%d' % target_id).encode()) * 3
 
     def get_action(self, obs):
-        agent_pos = obs[2][0, self.agent_coords_offset:self.agent_coords_offset + 2]
-        target_pos = obs[2][0, self.target_coords_offset:self.target_coords_offset + 2]
+        data = self.env.model.data
+        xpos = data.site_xpos.flatten()
+        qvel = data.qvel
+        agent_pos = xpos[self.agent_coords_offset:self.agent_coords_offset + 2]
+        target_pos = xpos[self.target_coords_offset:self.target_coords_offset + 2]
         action = target_pos - agent_pos
-        action -= np.squeeze(obs[1]) * 0.05
+        action -= np.squeeze(qvel) * 0.05
         return self.env.action_space.unflatten(action), dict()
 
 

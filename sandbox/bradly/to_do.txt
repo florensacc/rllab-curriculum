@@ -1,0 +1,16 @@
+A. Analogy
+Test robustness. Make sure to shuffle target indexes etc. Also test on longer sequences.
+Implement softmax attention over frames.
+Move to reacher and try analogy there. Possibly using con-opt LQR for the expert.
+
+
+B. Third Person
+Pointmass and Reacher working with only images.
+Then pointmass and reacher working on domain invariant images.
+Then show that PR2 fails with images.
+
+C. Robot arm reaching green ball with vision
+This might be best left to Waj for now. Sadly, without the derivatives needed for the LQR controller it's
+not clear this makes sense as a tractable problem for now.
+
+Get shit working on cluster.

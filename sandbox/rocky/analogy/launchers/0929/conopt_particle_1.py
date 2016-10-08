@@ -74,8 +74,8 @@ for v in variants:
         env_cls=TfEnv.wrap(
             ConoptParticleEnv,
         ),
-        demo_collector=TrajoptDemoCollector(),
-        # demo_collector=PolicyDemoCollector(policy_cls=ConoptParticleTrackingPolicy),
+        #demo_collector=TrajoptDemoCollector(),
+        demo_collector=PolicyDemoCollector(policy_cls=ConoptParticleTrackingPolicy),
         n_train_trajs=v["n_train_trajs"],
         n_test_trajs=50,
         horizon=v["horizon"],
@@ -84,6 +84,7 @@ for v in variants:
         no_improvement_tolerance=20,
         shuffler=ConoptParticleEnv.shuffler() if v["use_shuffler"] else None,
         batch_size=100,
+        plot=True
     )
 
     config.DOCKER_IMAGE = "dementrock/rllab3-conopt-gpu"

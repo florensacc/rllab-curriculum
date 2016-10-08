@@ -56,6 +56,7 @@ class NormalizingPolicy(Policy, Serializable):
         norm_demo_action_var = (demo_action_var - self.action_mean_var) / self.action_std_var
         norm_action_var = self.wrapped_policy.action_sym(
             norm_obs_var, state_info_vars=dict(
+                state_info_vars,
                 demo_obs=norm_demo_obs_var,
                 demo_action=norm_demo_action_var
             ), **kwargs
