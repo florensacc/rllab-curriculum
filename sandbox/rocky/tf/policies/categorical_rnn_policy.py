@@ -14,6 +14,54 @@ from rllab.misc import special
 from rllab.misc.overrides import overrides
 
 
+class SoftmaxDefault(object):
+    """
+    Normal softmax. Parametrize via logits.
+    """
+    def __init__(self, dim):
+        self.dim = dim
+
+    @property
+    def flat_dim(self):
+        return self.dim
+
+    def activate(self, x):
+        return tf.nn.softmax(x)
+
+
+class SoftmaxNormalized(object):
+    """
+    Normalized softmax. Normalize logits to unit standard deviation, and then apply temperature.
+    """
+    def __init__(self, dim, bias=1.0):
+        self.dim = dim
+        self.bias = bias
+
+    @property
+    def flat_dim(self):
+        # The last dimension encodes the temperature (before an exponential transform)
+        return self.dim + 1
+
+    def activate(self, x):
+        logits = x[:, :self.dim]
+        temp = tf.exp(x[:, self.dim:] + self.bias)
+        _, var_logits = tf.nn.moments(logits, axes=[1], keep_dims=True)
+        std_logits = tf.sqrt(var_logits)
+        norm_logits = logits / (std_logits + 1e-8)
+        return tf.nn.softmax(norm_logits / temp)
+
+
+class SoftmaxExactEntropy(object):
+    """
+    Directly parametrize the entropy of the softmax function.
+
+    TODO
+    """
+
+    pass
+
+
+
 class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
     def __init__(
             self,
@@ -26,6 +74,7 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             network_type=NetworkType.GRU,
             weight_normalization=False,
             layer_normalization=False,
+            action_param=None,
     ):
         Serializable.quick_init(self, locals())
         """
@@ -69,14 +118,19 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
                     shape_op=lambda _, input_shape: (input_shape[0], input_shape[1], feature_dim)
                 )
 
+            if action_param is None:
+                action_param = SoftmaxDefault(env_spec.action_space.n)
+
+            self.action_param = action_param
+
             prob_network = create_recurrent_network(
                 network_type,
                 input_shape=(feature_dim,),
                 input_layer=l_feature,
-                output_dim=env_spec.action_space.n,
+                output_dim=self.action_param.flat_dim,  # env_spec.action_space.n,
                 hidden_dim=hidden_dim,
                 hidden_nonlinearity=hidden_nonlinearity,
-                output_nonlinearity=tf.nn.softmax,
+                output_nonlinearity=self.action_param.activate,  # None,#tf.nn.softmax,
                 weight_normalization=weight_normalization,
                 layer_normalization=layer_normalization,
                 name="prob_network",

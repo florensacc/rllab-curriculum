@@ -42,7 +42,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             set_cpu_affinity=False,
             cpu_assignments=None,
             serial_compile=True,
-            clip_reward=True,
+            clip_reward=False,
             bonus_evaluator=None,
             extra_bonus_evaluator=None,
             bonus_coeff=0,
@@ -215,18 +215,17 @@ class ParallelBatchPolopt(RLAlgorithm):
 
     def _train(self, rank):
         self.init_rank(rank)
-        print("%d starts _train"%(rank))
         if self.rank == 0:
             start_time = time.time()
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
+                if rank == 0:
+                    logger.log("Collecting samples ...")
                 paths = self.sampler.obtain_samples()
-                print("%d: before fitting bonus"%(self.rank))
                 if self.bonus_evaluator is not None:
                     if rank == 0:
                         logger.log("fitting bonus evaluator")
                     self.bonus_evaluator.fit_before_process_samples(paths)
-                print("%d: after fitting bonus"%(self.rank))
                 self.process_paths(paths)
                 samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)

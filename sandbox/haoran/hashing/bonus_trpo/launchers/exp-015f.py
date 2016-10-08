@@ -39,12 +39,13 @@ stub(globals())
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "ec2_test"
-ec2_instance = "c4.2xlarge"
+mode = "kube"
+ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 4
+n_parallel = 1
+memory = 10
 snapshot_mode = "none"
 plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
@@ -56,7 +57,7 @@ if "local" in mode and sys.platform == "darwin":
     cpu_assignments = None
     serial_compile = False
 else:
-    set_cpu_affinity = False
+    set_cpu_affinity = True
     cpu_assignments = None
     serial_compile = True
 
@@ -69,7 +70,7 @@ else:
     batch_size = 50000
 max_path_length = 4500
 discount = 0.99
-n_itr = 2000
+n_itr = 1000
 step_size = 0.01
 policy_opt_args = dict(
     name="pi_opt",
@@ -84,9 +85,9 @@ policy_opt_args = dict(
 )
 
 # env
-network_args = nips_dqn_args
-img_width=84
-img_height=84
+network_args = trpo_dqn_args
+img_width=42
+img_height=42
 n_last_screens=4
 clip_reward = True
 obs_type = "image"
@@ -99,6 +100,7 @@ record_internal_state=False
 count_target = "observations"
 bonus_form="1/sqrt(n)"
 bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
+retrieve_sample_size=100
 
 
 class VG(VariantGenerator):
@@ -118,7 +120,7 @@ class VG(VariantGenerator):
 
     @variant
     def dim_key(self):
-        return [256, 512]
+        return [256]
 
     @variant
     def gae_lambda(self):
@@ -170,7 +172,7 @@ for v in variants:
         config.KUBE_DEFAULT_RESOURCES = {
             "requests": {
                 "cpu": n_parallel,
-                "memory": "50Gi",
+                "memory": "%dGi"%(memory),
             }
         }
         config.KUBE_DEFAULT_NODE_SELECTOR = {
@@ -208,6 +210,7 @@ for v in variants:
         bonus_form=bonus_form,
         count_target=count_target,
         parallel=use_parallel,
+        retrieve_sample_size=retrieve_sample_size,
     )
 
     env = AtariEnv(

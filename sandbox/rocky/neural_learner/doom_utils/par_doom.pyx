@@ -68,6 +68,8 @@ cdef extern from "ViZDoom.h" namespace "vizdoom":
 
         void setMode(Mode mode) nogil
 
+        void setSeed(unsigned int seed) nogil
+
         void newEpisode() nogil
 
         bool init() nogil
@@ -101,7 +103,7 @@ cdef class ParDoom(object):
         self.games.resize(n_envs)
         self.create_all()
 
-    def close_all(self, np.uint8_t[:] mask=None):
+    def close_all(self, np.int32_t[:] mask=None):
         cdef int i
         cdef bool no_mask = mask is None
         with nogil, parallel():
@@ -112,7 +114,7 @@ cdef class ParDoom(object):
                         del self.games[i]
                         self.games[i] = NULL
 
-    def create_all(self, np.uint8_t[:] mask=None):
+    def create_all(self, np.int32_t[:] mask=None):
         cdef int i
         cdef bool no_mask = mask is None
         with nogil, parallel():
@@ -123,7 +125,7 @@ cdef class ParDoom(object):
                         del self.games[i]
                     self.games[i] = new DoomGame()
 
-    def init_all(self, np.uint8_t[:] mask=None):
+    def init_all(self, np.int32_t[:] mask=None):
         cdef int i
         cdef bool no_mask = mask is None
         with nogil, parallel():
@@ -131,7 +133,7 @@ cdef class ParDoom(object):
                 if no_mask or mask[i]:
                     self.games[i].init()
 
-    def new_episode_all(self, np.uint8_t[:] mask=None):
+    def new_episode_all(self, np.int32_t[:] mask=None):
         cdef int i
         cdef bool no_mask = mask is None
         with nogil, parallel():
@@ -186,6 +188,9 @@ cdef class ParDoom(object):
 
     def set_mode(self, int i, Mode mode):
         self.games[i].setMode(mode)
+
+    def set_seed(self, int i, unsigned int seed):
+        self.games[i].setSeed(seed)
 
     def set_action(self, int i, np.ndarray[int, ndim=1, mode="c"] actions not None):
         cdef vector[int] vec_actions

@@ -11,6 +11,9 @@ from string import Template
 ACCESS_KEY = os.environ["AWS_ACCESS_KEY"]
 ACCESS_SECRET = os.environ["AWS_ACCESS_SECRET"]
 S3_BUCKET_NAME = os.environ["RLLAB_S3_BUCKET"]
+SECURITY_GROUP_NAME = "rllab-sg"
+INSTANCE_PROFILE_NAME = "rllab"
+INSTANCE_ROLE_NAME = "rllab"
 
 ALL_REGION_AWS_SECURITY_GROUP_IDS = {}
 ALL_REGION_AWS_KEY_NAMES = {}
@@ -37,9 +40,9 @@ AWS_S3_PATH = "s3://$s3_bucket_name/rllab/experiments"
 AWS_CODE_SYNC_S3_PATH = "s3://$s3_bucket_name/rllab/code"
 
 ALL_REGION_AWS_IMAGE_IDS = {
-    "us-west-1": "ami-bbd19fdb",
-    "us-west-2": "ami-92eb35f2",
-    "us-east-1": "ami-472b6a50"
+    "us-west-1": "ami-ad81c8cd",
+    "us-west-2": "ami-7ea27a1e",
+    "us-east-1": "ami-6b99d57c",
 }
 
 AWS_IMAGE_ID = ALL_REGION_AWS_IMAGE_IDS[AWS_REGION_NAME]
@@ -61,9 +64,9 @@ AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY", None)
 
 AWS_ACCESS_SECRET = os.environ.get("AWS_ACCESS_SECRET", None)
 
-AWS_IAM_INSTANCE_PROFILE_NAME = "rllab"
+AWS_IAM_INSTANCE_PROFILE_NAME = "$instance_profile_name"
 
-AWS_SECURITY_GROUPS = ["rllab-sg"]
+AWS_SECURITY_GROUPS = ["$security_group_name"]
 
 ALL_REGION_AWS_SECURITY_GROUP_IDS = $all_region_aws_security_group_ids
 
@@ -107,13 +110,19 @@ def setup_iam():
 
     # delete existing role if it exists
     try:
-        existing_role = iam.Role('rllab')
+        existing_role = iam.Role(INSTANCE_ROLE_NAME)
         existing_role.load()
         # if role exists, delete and recreate
-        if not query_yes_no(
-                "There is an existing role named rllab. Proceed to delete everything rllab-related and recreate?",
-                default="no"):
+        response = query_yes_no(
+                "There is an existing role named %s. Proceed to delete everything rllab-related and recreate?" %
+                INSTANCE_ROLE_NAME,
+                default="no", allow_skip=True)
+        if response == "skip":
+            return
+        elif not response:
             sys.exit()
+        else:
+            pass
         print("Listing instance profiles...")
         inst_profiles = existing_role.instance_profiles.all()
         for prof in inst_profiles:
@@ -136,15 +145,15 @@ def setup_iam():
         else:
             raise e
 
-    print("Creating role rllab")
+    print("Creating role %s " % INSTANCE_ROLE_NAME)
     iam_client.create_role(
         Path='/',
-        RoleName='rllab',
+        RoleName=INSTANCE_ROLE_NAME,
         AssumeRolePolicyDocument=json.dumps({'Version': '2012-10-17', 'Statement': [
             {'Action': 'sts:AssumeRole', 'Effect': 'Allow', 'Principal': {'Service': 'ec2.amazonaws.com'}}]})
     )
 
-    role = iam.Role('rllab')
+    role = iam.Role(INSTANCE_ROLE_NAME)
     print("Attaching policies")
     role.attach_policy(PolicyArn='arn:aws:iam::aws:policy/AmazonS3FullAccess')
     role.attach_policy(PolicyArn='arn:aws:iam::aws:policy/ResourceGroupsandTagEditorFullAccess')
@@ -184,15 +193,15 @@ def setup_iam():
         })
     )
 
-    print("Creating instance profile rllab")
+    print("Creating instance profile %s" % INSTANCE_PROFILE_NAME)
     iam_client.create_instance_profile(
-        InstanceProfileName='rllab',
+        InstanceProfileName=INSTANCE_PROFILE_NAME,
         Path='/'
     )
-    print("Adding role rllab to instance profile rllab")
+    print("Adding role %s to instance profile %s" % (INSTANCE_ROLE_NAME, INSTANCE_PROFILE_NAME))
     iam_client.add_role_to_instance_profile(
-        InstanceProfileName='rllab',
-        RoleName='rllab'
+        InstanceProfileName=INSTANCE_PROFILE_NAME,
+        RoleName=INSTANCE_ROLE_NAME
     )
 
 
@@ -240,18 +249,18 @@ def setup_ec2():
         print("Creating security group in VPC %s" % str(vpc.id))
         try:
             security_group = vpc.create_security_group(
-                GroupName='rllab-sg', Description='Security group for rllab'
+                GroupName=SECURITY_GROUP_NAME, Description='Security group for rllab'
             )
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == 'InvalidGroup.Duplicate':
-                sgs = list(vpc.security_groups.filter(GroupNames=['rllab-sg']))
+                sgs = list(vpc.security_groups.filter(GroupNames=[SECURITY_GROUP_NAME]))
                 security_group = sgs[0]
             else:
                 raise e
 
         ALL_REGION_AWS_SECURITY_GROUP_IDS[region] = [security_group.id]
 
-        ec2_client.create_tags(Resources=[security_group.id], Tags=[{'Key': 'Name', 'Value': 'rllab-sg'}])
+        ec2_client.create_tags(Resources=[security_group.id], Tags=[{'Key': 'Name', 'Value': SECURITY_GROUP_NAME}])
         try:
             security_group.authorize_ingress(FromPort=22, ToPort=22, IpProtocol='tcp', CidrIp='0.0.0.0/0')
         except botocore.exceptions.ClientError as e:
@@ -296,6 +305,9 @@ def write_config():
         all_region_aws_key_names=json.dumps(ALL_REGION_AWS_KEY_NAMES, indent=4),
         all_region_aws_security_group_ids=json.dumps(ALL_REGION_AWS_SECURITY_GROUP_IDS, indent=4),
         s3_bucket_name=S3_BUCKET_NAME,
+        security_group_name=SECURITY_GROUP_NAME,
+        instance_profile_name=INSTANCE_PROFILE_NAME,
+        instance_role_name=INSTANCE_ROLE_NAME,
     )
     config_personal_file = os.path.join(config.PROJECT_PATH, "rllab/config_personal.py")
     if os.path.exists(config_personal_file):
@@ -312,7 +324,7 @@ def setup():
     write_config()
 
 
-def query_yes_no(question, default="yes"):
+def query_yes_no(question, default="yes", allow_skip=False):
     """Ask a yes/no question via raw_input() and return their answer.
 
     "question" is a string that is presented to the user.
@@ -324,6 +336,8 @@ def query_yes_no(question, default="yes"):
     """
     valid = {"yes": True, "y": True, "ye": True,
              "no": False, "n": False}
+    if allow_skip:
+        valid["skip"] = "skip"
     if default is None:
         prompt = " [y/n] "
     elif default == "yes":
@@ -332,7 +346,8 @@ def query_yes_no(question, default="yes"):
         prompt = " [y/N] "
     else:
         raise ValueError("invalid default answer: '%s'" % default)
-
+    if allow_skip:
+        prompt += " or skip"
     while True:
         sys.stdout.write(question + prompt)
         choice = input().lower()
