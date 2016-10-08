@@ -19,8 +19,8 @@ stub(globals())
 
 n_seq_frames = 4
 model_batch_size = 32
-exp_prefix = 'trpo-rndconv-a'
-seeds = range(4)
+exp_prefix = 'trpo-emb-a'
+seeds = range(5)
 etas = [0.1, 0.01]
 mdps = [AtariEnv(game='freeway', obs_type="image", frame_skip=8),
         AtariEnv(game='breakout', obs_type="image", frame_skip=8),
@@ -92,7 +92,7 @@ for mdp, eta, seed in param_cart_product:
                  stride=(2, 2),
                  pad=(0, 0),
                  batch_norm=batch_norm,
-                 nonlinearity=lasagne.nonlinearities.linear,
+                 nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
                  deterministic=True),
             dict(name='convolution',
@@ -101,7 +101,7 @@ for mdp, eta, seed in param_cart_product:
                  stride=(2, 2),
                  pad=(1, 1),
                  batch_norm=batch_norm,
-                 nonlinearity=lasagne.nonlinearities.linear,
+                 nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
                  deterministic=True),
             dict(name='convolution',
@@ -110,7 +110,7 @@ for mdp, eta, seed in param_cart_product:
                  stride=(2, 2),
                  pad=(2, 2),
                  batch_norm=batch_norm,
-                 nonlinearity=lasagne.nonlinearities.linear,
+                 nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
                  deterministic=True),
             dict(name='reshape',
@@ -118,12 +118,12 @@ for mdp, eta, seed in param_cart_product:
             dict(name='gaussian',
                  n_units=1024,
                  matrix_variate_gaussian=False,
-                 nonlinearity=lasagne.nonlinearities.linear,
+                 nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=dropout,
                  deterministic=True),
             dict(name='discrete_embedding',
-                 n_units=128,
+                 n_units=512,
                  deterministic=True),
             dict(name='gaussian',
                  n_units=1024,
@@ -218,12 +218,12 @@ for mdp, eta, seed in param_cart_product:
             size=1000000,
             min_size=model_batch_size,
             batch_size=model_batch_size,
-            subsample_factor=0.2,
-            fill_before_subsampling=True,
+            subsample_factor=0.3,
+            fill_before_subsampling=False,
         ),
         hamming_distance=0,
         eta=eta,
-        train_model=False,
+        train_model=True,
         train_model_freq=5,
     )
 
