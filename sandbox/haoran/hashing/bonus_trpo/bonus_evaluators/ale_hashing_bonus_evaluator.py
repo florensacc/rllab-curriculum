@@ -19,6 +19,7 @@ class ALEHashingBonusEvaluator(object):
             log_prefix="",
             count_target="observations",
             parallel=False,
+            retrieve_sample_size=np.inf,
         ):
         self.state_dim = state_dim
         if state_preprocessor is not None:
@@ -45,6 +46,7 @@ class ALEHashingBonusEvaluator(object):
         self.count_target = count_target
         self.parallel = parallel
         assert self.parallel == self.hash.parallel
+        self.retrieve_sample_size = retrieve_sample_size
 
         # logging stats ---------------------------------
         self.epoch_hash_count_list = []
@@ -89,12 +91,22 @@ class ALEHashingBonusEvaluator(object):
         return processed_states
 
     def retrieve_keys(self,paths):
-        if self.count_target == "observations":
-            states = np.concatenate([p["observations"] for p in paths])
-        else:
-            states = np.concatenate([p["env_infos"][self.count_target] for p in paths])
-        states = self.preprocess(states)
-        keys = self.hash.compute_keys(states)
+        # do it path by path to avoid memory overflow
+        keys = None
+        for path in paths:
+            path_len = len(path["rewards"])
+            k = min(path_len, self.retrieve_sample_size)
+            for i in range(0,path_len,k):
+                if self.count_target == "observations":
+                    states = path["observations"][i:i+k]
+                else:
+                    states = path["env_infos"][self.count_target][i:i+k]
+                states = self.preprocess(states)
+                new_keys = self.hash.compute_keys(states)
+                if keys is None:
+                    keys = new_keys
+                else:
+                    keys = np.concatenate([keys,new_keys])
         return keys
 
     def fit_before_process_samples(self, paths):
@@ -105,11 +117,6 @@ class ALEHashingBonusEvaluator(object):
             new_state_count = list(prev_counts).count(0)
             shareds.new_state_count_vec[self.rank] = new_state_count
             barriers.new_state_count.wait() # avoid updating the hash table before we count new states
-            print("%d: before inc_keys"%(self.rank))
-            self.hash.inc_keys(keys)
-            print("%d: after inc_keys"%(self.rank))
-            barriers.update_count.wait()
-
             if self.rank == 0:
                 total_new_state_count = sum(shareds.new_state_count_vec)
                 logger.record_tabular(
@@ -122,6 +129,8 @@ class ALEHashingBonusEvaluator(object):
                     shareds.total_state_count,
                 )
 
+            self.hash.inc_keys(keys)
+            barriers.update_count.wait()
         else:
             keys = self.retrieve_keys(paths)
 
