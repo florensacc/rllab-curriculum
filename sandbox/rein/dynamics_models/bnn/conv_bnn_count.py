@@ -84,11 +84,19 @@ class IndependentSoftmaxLayer(lasagne.layers.Layer):
         self._num_bins = num_bins
         self.W = self.add_param(W, (self.input_shape[1], self._num_bins), name='W')
         self.b = self.add_param(b, (self._num_bins,), name='b')
-        self.pixel_b = self.add_param(
-            b,
-            (self.input_shape[2], self.input_shape[3], self._num_bins,),
-            name='pixel_b'
-        )
+        # FIXME: changed
+        if len(self.input_shape) == 2:
+            self.pixel_b = self.add_param(
+                b,
+                self.input_shape[1:] + (self._num_bins,),
+                name='pixel_b'
+            )
+        else:
+            self.pixel_b = self.add_param(
+                b,
+                (self.input_shape[2], self.input_shape[3], self._num_bins,),
+                name='pixel_b'
+            )
 
     def get_output_for(self, input, **kwargs):
         fc = input.dimshuffle(0, 2, 3, 1). \
@@ -103,7 +111,9 @@ class IndependentSoftmaxLayer(lasagne.layers.Layer):
         return out.reshape(shp)
 
     def get_output_shape_for(self, input_shape):
-        return input_shape[0], input_shape[2], input_shape[3], self._num_bins
+        # FIXME: changed
+        return (input_shape[0],) + input_shape[2:] + (self._num_bins,)
+        # return input_shape[0], input_shape[2], input_shape[3], self._num_bins
 
 
 class LogitLayer(lasagne.layers.Layer):
@@ -545,6 +555,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # Make sure that we are able to unmerge the s_in and a_in.
 
         # Input to the s_net is always flattened.
+        # FIXME: changed
         input_dim = (self.num_seq_inputs,) + (self.state_dim[1:])
         s_flat_dim = np.prod(input_dim)
 
