@@ -52,6 +52,8 @@ class VAE(object):
             num_gpus=1,
             min_kl_onesided=False, # True if prior doesn't see freebits
             slow_kl=False,
+            lwarm_until=None,
+            arwarm_until=None,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -64,6 +66,8 @@ class VAE(object):
         Parameters
         ----------
         """
+        self.arwarm_until = arwarm_until
+        self.lwarm_until = lwarm_until
         self.slow_kl = slow_kl
         self.min_kl_onesided = min_kl_onesided
         self.num_gpus = num_gpus
@@ -463,7 +467,7 @@ class VAE(object):
             logger.log("total parameters %s" % total_parameters)
 
             for epoch in range(self.max_epoch):
-                self.pre_epoch(epoch)
+                self.pre_epoch(epoch, locals())
 
                 logger.log("epoch %s" % epoch)
                 widgets = ["epoch #%d|" % epoch, Percentage(), Bar(), ETA()]
@@ -691,8 +695,37 @@ class VAE(object):
     def init_hook(self, vars):
         pass
 
-    def pre_epoch(self, epoch):
-        pass
+    def pre_epoch(self, epoch, kw):
+        if self.lwarm_until is not None:
+            if epoch == self.lwarm_until:
+                assert self.lwarm_until != 0
+                inp_mask = kw["sess"].run(
+                    self.model.output_dist._inp_mask.assign(
+                        1.
+                    )
+                )
+                print("local ar ON: %s"%inp_mask)
+            elif epoch == 0:
+                # inp_mask = kw["sess"].run(
+                #     self.model.output_dist._inp_mask.assign(
+                #         0.
+                #     )
+                # )
+                assert self.model.output_dist._sanity
+        if self.arwarm_until is not None:
+            assert self.lwarm_until is None
+            if epoch == self.arwarm_until:
+                assert self.arwarm_until != 0
+                inp_mask = kw["sess"].run(
+                    self.model.output_dist._context_mask.assign(
+                        1.
+                    )
+                )
+                print("code ON: %s"%inp_mask)
+            elif epoch == 0:
+                assert self.model.output_dist._sanity2
+
+
 
     def iter_hook(self, **kw):
         pass

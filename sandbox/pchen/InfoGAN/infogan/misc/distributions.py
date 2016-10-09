@@ -1535,19 +1535,30 @@ class ConvAR(Distribution):
         self._tgt_dist = tgt_dist
         self._shape = shape
         self._dim = int(np.prod(shape))
+        self._sanity = sanity
+        self._sanity2 = sanity2
         context = context_dim is not None
         self._context = context
         self._context_dim = context_dim
         inp = pt.template("y", books=dist_book).reshape([-1,] + list(shape))
         inp = inp.custom_dropout(inp_keepprob)
-        if sanity:
-            inp *= 0.
+        self._inp_mask = tf.Variable(
+            initial_value=0. if sanity else 1.,
+            trainable=False,
+            name="%s_inp_mask" % G_IDX,
+        )
+        inp *= pt.wrap(self._inp_mask).init_ensured()
+
         if context:
             context_inp = \
                 pt.template("context", books=dist_book).\
                     reshape([-1,] + list(shape[:-1]) + [context_dim])
-            if sanity2:
-                context_inp *= 0.
+            self._context_mask = tf.Variable(
+                initial_value=0. if sanity2 else 1.,
+                trainable=False,
+                name="%s_context_mask" % G_IDX,
+            )
+            context_inp *= pt.wrap(self._context_mask).init_ensured()
             inp = inp.join(
                 [context_inp],
             )
