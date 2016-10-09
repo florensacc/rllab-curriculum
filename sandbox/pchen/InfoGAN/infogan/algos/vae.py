@@ -641,12 +641,12 @@ class VAE(object):
                 log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, avg_log_vals))
 
                 logger.log(log_line)
-                for lk, lraw in [
-                    ("train", all_log_vals),
-                    ("vali", all_test_log_vals),
+                for lk, lks, lraw in [
+                    ("train", log_keys, all_log_vals),
+                    ("vali", eval_log_keys, all_test_log_vals),
                 ]:
                     for k, v in zip(
-                            log_keys,
+                            lks,
                             # avg_log_vals
                             np.array(lraw).T
                     ):

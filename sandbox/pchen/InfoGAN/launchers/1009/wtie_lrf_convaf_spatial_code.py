@@ -17,6 +17,8 @@
 # ar-depth 12 has good performance, this explores training it faster
 # w/ multi-gpu and check ar-depth 6 w/ double feat maps & deeper depth
 
+# try to get some best bit by doing param-tying of ar & larger code & deeper and wider AF
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -66,7 +68,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [256, ]#[12, 32]
+        return [512, ]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -126,11 +128,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, ]
+        return [4, ]
 
     @variant(hide=False)
     def nr(self):
-        return [3,]
+        return [8,]
 
     @variant(hide=False)
     def i_nar(self):
@@ -198,7 +200,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [12, 8, 16]
+        return [12, ]
 
     @variant(hide=False)
     def data_init_scale(self):
@@ -212,7 +214,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 2
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -254,9 +256,10 @@ for v in variants[i:i+1]:
                 dist,
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
-                var_scope="AR_scope" if v["tiear"] else None,
+                var_scope="AR_scope",
                 img_shape=[8,8,zdim//64],
                 data_init_scale=v["data_init_scale"],
+
             )
 
         latent_spec = [
@@ -345,7 +348,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1008_final_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1009_wtie_mgpu_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

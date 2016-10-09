@@ -238,7 +238,7 @@ for v in variants[:]:
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
             network_args=dict(
-                
+
             )
         )
 
@@ -266,10 +266,10 @@ for v in variants[:]:
             exp_prefix="1008_conv_code_iaf_mnist_static",
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
         )
 
 
