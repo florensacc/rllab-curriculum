@@ -1,7 +1,8 @@
 """
-Try reward bonus
+Use image observations. Can compare to exp-013.
+Switch to Theano. Run on CPU. Use parallel TRPO.
+Can compare to A3C exp-005a
 """
-
 """ baseline """
 from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBaseline
 from sandbox.adam.parallel.parallel_nn_feature_linear_baseline import ParallelNNFeatureLinearBaseline
@@ -22,10 +23,6 @@ from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 """ resetter """
 # from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
 
-""" bonus """
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash import SimHash
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.slicing_preprocessor import SlicingPreprocessor
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from sandbox.haoran.ec2_info import instance_info, subnet_info
@@ -44,9 +41,8 @@ ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 1
-memory = 10
-snapshot_mode = "none"
+n_parallel = 4
+snapshot_mode = "last"
 plot = False
 use_gpu = False # should change conv_type and ~/.theanorc
 sync_s3_pkl = True
@@ -64,17 +60,14 @@ else:
 # params ---------------------------------------
 # algo
 use_parallel = True
-if "test" in mode:
-    batch_size = 500
-else:
-    batch_size = 50000
+batch_size = 50000
 max_path_length = 4500
 discount = 0.99
-n_itr = 1000
+n_itr = 2000
 step_size = 0.01
 policy_opt_args = dict(
     name="pi_opt",
-    cg_iters=100,
+    cg_iters=10,
     reg_coeff=1e-3,
     subsample_factor=0.1,
     max_backtracks=15,
@@ -85,10 +78,9 @@ policy_opt_args = dict(
 )
 
 # env
-network_args = trpo_dqn_args
-img_width=42
-img_height=42
-n_last_screens=4
+network_args = nips_dqn_args
+img_width=84
+img_height=84
 clip_reward = True
 obs_type = "image"
 record_image=False
@@ -97,10 +89,10 @@ record_ram=True
 record_internal_state=False
 
 # bonus
-count_target = "observations"
+dim_key = 64
 bonus_form="1/sqrt(n)"
-bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
-retrieve_sample_size=100
+extra_dim_key = 1024
+extra_bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
 
 
 class VG(VariantGenerator):
@@ -110,25 +102,18 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [1e-3,0]
+        return [0]
 
     @variant
     def baseline_type_opt(self):
         return [
+            # ["conv","cg"],
             ["nn_feature_linear",""],
         ]
 
     @variant
-    def dim_key(self):
-        return [256]
-
-    @variant
-    def gae_lambda(self):
-        return [1]
-
-    @variant
     def game(self):
-        return ["freeway"]
+        return ["space_invaders","qbert","pong","beam_rider","breakout"]
 variants = VG().variants()
 
 
@@ -156,14 +141,14 @@ for v in variants:
         n_parallel = int(info["vCPU"] /2)
 
         # choose subnet
-        # config.AWS_NETWORK_INTERFACES = [
-        #     dict(
-        #         SubnetId=subnet_info[subnet]["SubnetID"],
-        #         Groups=subnet_info[subnet]["Groups"],
-        #         DeviceIndex=0,
-        #         AssociatePublicIpAddress=True,
-        #     )
-        # ]
+        config.AWS_NETWORK_INTERFACES = [
+            dict(
+                SubnetId=subnet_info[subnet]["SubnetID"],
+                Groups=subnet_info[subnet]["Groups"],
+                DeviceIndex=0,
+                AssociatePublicIpAddress=True,
+            )
+        ]
     elif "kube" in mode:
         actual_mode = "lab_kube"
         info = instance_info[ec2_instance]
@@ -171,8 +156,7 @@ for v in variants:
 
         config.KUBE_DEFAULT_RESOURCES = {
             "requests": {
-                "cpu": n_parallel,
-                "memory": "%dGi"%(memory),
+                "cpu": n_parallel
             }
         }
         config.KUBE_DEFAULT_NODE_SELECTOR = {
@@ -183,42 +167,11 @@ for v in variants:
         raise NotImplementedError
 
     resetter = None
-    if count_target == "images" or (count_target == "observations" and obs_type == "image"):
-        total_pixels=img_width * img_height
-        state_preprocessor = SlicingPreprocessor(
-            input_dim=total_pixels * n_last_screens,
-            start=total_pixels * (n_last_screens - 1),
-            stop=total_pixels * n_last_screens,
-            step=1,
-        )
-    elif count_target == "ram_states":
-        state_preprocessor = None
-    else:
-        raise NotImplementedError
-
-    _hash = SimHash(
-        item_dim=state_preprocessor.get_output_dim(), # get around stub
-        dim_key=v["dim_key"],
-        bucket_sizes=bucket_sizes,
-        parallel=use_parallel,
-    )
-    bonus_evaluator = ALEHashingBonusEvaluator(
-        log_prefix="",
-        state_dim=state_preprocessor.get_output_dim(),
-        state_preprocessor=state_preprocessor,
-        hash=_hash,
-        bonus_form=bonus_form,
-        count_target=count_target,
-        parallel=use_parallel,
-        retrieve_sample_size=retrieve_sample_size,
-    )
-
     env = AtariEnv(
             game=v["game"],
             seed=v["seed"],
             img_width=img_width,
             img_height=img_height,
-            n_last_screens=n_last_screens,
             obs_type=obs_type,
             record_ram=record_ram,
             record_image=record_image,
@@ -270,7 +223,6 @@ for v in variants:
         batch_size=batch_size,
         max_path_length=max_path_length,
         discount=discount,
-        gae_lambda=v["gae_lambda"],
         n_itr=n_itr,
         plot=plot,
         optimizer_args=policy_opt_args,
@@ -279,8 +231,6 @@ for v in variants:
         cpu_assignments=cpu_assignments,
         serial_compile=serial_compile,
         n_parallel=n_parallel,
-        bonus_evaluator=bonus_evaluator,
-        bonus_coeff=v["bonus_coeff"],
     )
 
     if use_gpu:
@@ -288,7 +238,6 @@ for v in variants:
         config.DOCKER_IMAGE = "dementrock/rllab3-shared-gpu"
 
     if use_parallel:
-        print(config.AWS_REGION_NAME)
         run_experiment_lite(
             algo.train(),
             exp_prefix=exp_prefix,
