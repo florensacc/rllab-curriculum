@@ -73,7 +73,7 @@ class ExperimentDatabase(object):
 
     def _read_data(self, progress_file):
         entries = dict()
-        with open(progress_file, 'rb') as csvfile:
+        with open(progress_file, 'r') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 for k, v in row.items():
