@@ -169,7 +169,9 @@ class VAE(object):
         grads = []
         xs = tf.split(0, self.num_gpus, input_tensor)
 
-        for i in range(self.num_gpus):
+        for i in range(
+            1 if init else self.num_gpus
+        ):
             x = xs[i]
             with tf.device(assign_to_gpu(i)):
                 z_var, log_p_z_given_x, z_dist_info = \

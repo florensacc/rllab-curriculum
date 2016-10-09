@@ -5,6 +5,7 @@ import itertools
 import tensorflow as tf
 import numpy as np
 import prettytensor as pt
+from prettytensor.pretty_tensor_class import Layer
 from progressbar import ProgressBar
 
 from rllab.core.serializable import Serializable
@@ -1504,7 +1505,6 @@ class DistAR(Distribution):
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
 
-
 class ConvAR(Distribution):
     """Basic masked conv ar"""
 
@@ -1546,8 +1546,8 @@ class ConvAR(Distribution):
             initial_value=0. if sanity else 1.,
             trainable=False,
             name="%s_inp_mask" % G_IDX,
+            dtype=tf.float32,
         )
-        inp *= pt.wrap(self._inp_mask).init_ensured()
 
         if context:
             context_inp = \
@@ -1557,15 +1557,9 @@ class ConvAR(Distribution):
                 initial_value=0. if sanity2 else 1.,
                 trainable=False,
                 name="%s_context_mask" % G_IDX,
+                dtype=tf.float32,
             )
-            context_inp *= pt.wrap(self._context_mask).init_ensured()
-            inp = inp.join(
-                [context_inp],
-            )
-        cur = inp
         self._custom_phase = CustomPhase.init
-
-        peep_inp = inp.left_shift(filter_size-1).down_shift()
 
         from prettytensor import UnboundVariable
         with pt.defaults_scope(
@@ -1577,6 +1571,15 @@ class ConvAR(Distribution):
             pixel_bias=pixel_bias,
             var_scope="ConvAR" if tieweight else None,
         ):
+            inp = inp.mul_init_ensured(self._inp_mask)
+            if context:
+                context_inp = context_inp.mul_init_ensured(self._context_mask)
+                inp = inp.join(
+                    [context_inp],
+                )
+            cur = inp
+            peep_inp = inp.left_shift(filter_size-1).down_shift()
+
             if masked:
                 for di in range(depth):
                     if di == 0:

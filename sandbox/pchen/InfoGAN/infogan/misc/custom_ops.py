@@ -1478,16 +1478,17 @@ def left_shift(
 @pt.Register(
     assign_defaults=('custom_phase', )
 )
-def init_ensured(
+def mul_init_ensured(
         input_layer,
+        w,
         custom_phase=CustomPhase.train,
         name=PROVIDED
 ):
     x = input_layer.tensor
     if custom_phase == CustomPhase.init:
-        x = x.initialized_value()
+        w = w.initialized_value()
 
-    return input_layer.with_tensor(x)
+    return input_layer.with_tensor(x*w)
 
 @prettytensor.Register
 def right_shift(
