@@ -3,8 +3,12 @@ import tempfile
 import xml.etree.ElementTree as ET
 import math
 from functools import reduce
+
+import matplotlib as mpl
+mpl.use('Agg')
 from matplotlib import patches
 from matplotlib import pyplot as plt
+
 import numpy as np
 import collections
 
@@ -466,9 +470,9 @@ class MazeEnv(ProxyEnv, Serializable):
         print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
         # we suppose discrete, one-hot latents
         if maze:
-            x_max = scaling * len(
-                maze) / 2. - 1  # maze enlarge plot to include the walls. ASSUME ROBOT STARTS IN CENTER!
-            y_max = scaling * len(maze[0]) / 2. - 1
+            x_max = max(scaling * len(
+                maze) / 2. - 1, x_max)  # maze enlarge plot to include the walls. ASSUME ROBOT STARTS IN CENTER!
+            y_max = max( scaling * len(maze[0]) / 2. - 1, y_max)
 
         if 'agent_infos' in list(paths[0].keys()) and 'latents' in list(paths[0]['agent_infos'].keys()):
             dict_visit = collections.OrderedDict()  # keys: latents, values: np.array with number of visitations
@@ -515,8 +519,11 @@ class MazeEnv(ProxyEnv, Serializable):
                             visitation_by_lat[wall_min_x: wall_max_x,
                             wall_min_y: wall_max_y] = num_colors
 
-            x = np.arange(2 * x_max * mesh_density + 1.) / mesh_density - x_max
-            y = np.arange(2 * y_max * mesh_density + 1.) / mesh_density - y_max
+            # x = np.arange(2 * x_max * mesh_density + 1.) / mesh_density - x_max  # this gave error!!
+            # y = np.arange(2 * y_max * mesh_density + 1.) / mesh_density - y_max
+            x_len, y_len = visitation_by_lat.shape
+            x = np.arange(x_len) / mesh_density - x_max
+            y = np.arange(y_len) / mesh_density - y_max
 
             map_plot = ax.pcolormesh(x, y, visitation_by_lat, cmap=cmap, vmin=0.1,
                                      vmax=num_latents + 2)  # before 1 (will it affect when no walls?)

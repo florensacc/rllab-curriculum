@@ -28,6 +28,19 @@ def from_onehot(x_var):
     return ret
 
 
+def from_index(x_var, dim):  # I need to know the dim of the one-hot to output. [1,0,0..] corresp to 0!!!! (not 1)
+    if type(x_var) is np.ndarray and x_var.shape and x_var.shape[0] > 1:
+        new_array = []
+        for row in x_var:
+            new_array.append(from_index(row, dim))
+        return np.stack(new_array)
+
+    else:
+        ret = np.zeros(dim, 'int32')
+        ret[x_var] = 1
+        return ret
+
+
 class Categorical(Distribution):  # modified version where the array "prob" has only one axis
     def __init__(self, dim):
         self._dim = dim
@@ -78,8 +91,8 @@ class Categorical(Distribution):  # modified version where the array "prob" has 
     def log_likelihood_sym(self, x_var, dist_info_vars):
         probs = dist_info_vars["prob"]
         # Assume layout is N * A  ## not really! the output will just be (n1,n2,..) And when using this for fitting,
-        return TT.log(TT.sum(probs * TT.cast(x_var, 'float32'), axis=-1) + TINY)   #there is a TT.mean, and because it
-                                                                    #is just a max, the 1/n constant does not affect
+        return TT.log(TT.sum(probs * TT.cast(x_var, 'float32'), axis=-1) + TINY)  # there is a TT.mean, and because it
+        # is just a max, the 1/n constant does not affect
 
     def log_likelihood(self, xs, dist_info):  # layout is (n1,n2,...,A)
         probs = np.asarray(dist_info["prob"])
@@ -104,7 +117,7 @@ class Categorical(Distribution):  # modified version where the array "prob" has 
         # for prob in probs:
         #     samples.append(np.random.multinomial(n=1, pvals=prob, size=1))
         # return samples
-        return np.random.multinomial(n=1, pvals=probs) #, size=1)  # this gives a one-hot of shape (1, dim)
+        return np.random.multinomial(n=1, pvals=probs)  # , size=1)  # this gives a one-hot of shape (1, dim)
 
     @property
     def dist_info_keys(self):
