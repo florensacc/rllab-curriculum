@@ -23,6 +23,9 @@
 # kl ends up not being used. try to remove param-tying
 # wtie is indeed the issue, removing it makes this model climb to 3.06bits in just 450 epochs
 
+# 1) retrain the same thing^ but with clipping
+# 2) throw iaf in the mix
+# 3) no iaf, but more steps in encoder
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -98,9 +101,6 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
         yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
 
-    @variant(hide=False)
-    def steps(self, ):
-        return [3]
     #
     @variant(hide=False)
     def base_filters(self, ):
@@ -140,11 +140,17 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [0, ]
+        return [0, 4, ]
 
     @variant(hide=False)
     def i_nr(self):
         return [5,]
+
+    @variant(hide=False)
+    def steps(self, i_nar):
+        if i_nar == 0:
+            return [3, 5]
+        return [3]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -153,13 +159,9 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def i_context(self, i_nar):
         # return [True, False]
-        if i_nar == 0:
-            return [
-                []
-            ]
         return [
             [],
-            ["linear"],
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -169,7 +171,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def tiear(self):
-        return [True, False]
+        return [False]
         # return [True, False]
 
     @variant(hide=False)
@@ -218,7 +220,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 2
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -263,7 +265,7 @@ for v in variants[i:i+1]:
                 var_scope="AR_scope" if v["tiear"] else None,
                 img_shape=[8,8,zdim//64],
                 data_init_scale=v["data_init_scale"],
-
+                clip=True,
             )
 
         latent_spec = [
@@ -285,6 +287,7 @@ for v in variants[i:i+1]:
                 gating_context="gating" in v["i_context"],
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
+                clip=True,
             )
         nml = 5
         tgt_dist = Mixture(
@@ -323,7 +326,8 @@ for v in variants[i:i+1]:
             network_args=dict(
                 cond_rep=v["cond_rep"],
                 old_dec=True,
-                base_filters=v["base_filters"]
+                base_filters=v["base_filters"],
+                enc_rep=v["steps"]-2,# hack..
             ),
         )
 
@@ -350,9 +354,10 @@ for v in variants[i:i+1]:
             # resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
         )
 
+        print(v)
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1009_wtie_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1009_clipped_mgpu_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

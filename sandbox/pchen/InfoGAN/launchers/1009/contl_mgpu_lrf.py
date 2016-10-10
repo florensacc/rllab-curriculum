@@ -17,11 +17,9 @@
 # ar-depth 12 has good performance, this explores training it faster
 # w/ multi-gpu and check ar-depth 6 w/ double feat maps & deeper depth
 
-# try to get some best bit by doing param-tying of ar & larger code & deeper and wider AF
-
-
-# kl ends up not being used. try to remove param-tying
-# wtie is indeed the issue, removing it makes this model climb to 3.06bits in just 450 epochs
+# this control experiment investigates:
+# 1) g prior and g post dont work. does iaf posterior work well enough? (w/o clip)
+# 2) global pool
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -72,7 +70,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [512, ]#[12, 32]
+        return [256, ]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -95,15 +93,17 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
         # yield "resv1_k3_pixel_bias_filters_ratio_32"
-        # yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
         yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
+        yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
 
     @variant(hide=False)
     def steps(self, ):
         return [3]
     #
     @variant(hide=False)
-    def base_filters(self, ):
+    def base_filters(self, network):
+        if "pool" in network:
+            return [96]
         return [32, ]
 
     @variant(hide=False)
@@ -131,16 +131,20 @@ class VG(VariantGenerator):
         return [batch_size // num_gpus, ]
 
     @variant(hide=False)
-    def nar(self):
-        return [4, ]
+    def nar(self, network):
+        if "pool" in network:
+            return [2, ]
+        return [0]
 
     @variant(hide=False)
     def nr(self):
-        return [8,]
+        return [3,]
 
     @variant(hide=False)
-    def i_nar(self):
-        return [0, ]
+    def i_nar(self, network):
+        if "pool" in network:
+            return [0, ]
+        return [2, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -153,13 +157,9 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def i_context(self, i_nar):
         # return [True, False]
-        if i_nar == 0:
-            return [
-                []
-            ]
         return [
             [],
-            ["linear"],
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -169,7 +169,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def tiear(self):
-        return [True, False]
+        return [False]
         # return [True, False]
 
     @variant(hide=False)
@@ -263,7 +263,6 @@ for v in variants[i:i+1]:
                 var_scope="AR_scope" if v["tiear"] else None,
                 img_shape=[8,8,zdim//64],
                 data_init_scale=v["data_init_scale"],
-
             )
 
         latent_spec = [
@@ -352,7 +351,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1009_wtie_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1009_contl_mgpu_lrf",
             seed=v["seed"],
             variant=v,
             mode="local",

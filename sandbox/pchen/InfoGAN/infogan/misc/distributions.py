@@ -1150,7 +1150,7 @@ class AR(Distribution):
             **in_dict
         ).tensor
         iaf_mu, iaf_logstd = flat_iaf[:, :self._dim], flat_iaf[:, self._dim:]
-        if not self._legacy:
+        if self._clip:
             iaf_mu = tf.clip_by_value(
                 iaf_mu,
                 -5,
