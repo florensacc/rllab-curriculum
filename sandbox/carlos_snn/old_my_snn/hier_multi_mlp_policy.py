@@ -71,21 +71,21 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
             output_nonlinearity=None,
             min_std=1e-4,
     ):
-        # if not use a selector NN here, just externally fixed selector variable:
-        self.external_selector = external_selector  # whether to use the selectorNN defined here or the pre_fix_selector
-        self.pre_fix_selector = np.array([])  # if this is not empty when using reset() it will use this selector
-        self.selector_fix = np.array([])  # this will hold the selectors variable sampled in reset()
-        self.shared_selector_var = theano.shared(self.selector_fix)  # this is for external selector! update that
-        # else, describe the MLP used:
-        self.hidden_sizes_selector = hidden_sizes_selector  # size of the selector NN defined here
-        self.min_std = min_std
-        self._set_std_to_0 = False
         # define where are the old policies to use and what to do with them:
         self.trainable_old = trainable_old  # whether to keep training the old policies loaded here
         self.pkl_paths = pkl_paths
         self.json_paths = json_paths
         self.npz_paths = npz_paths
-        self.selector_dim = max(len(json_paths), len(pkl_paths))  # probably one will be 0
+        self.selector_dim = max(len(json_paths), len(pkl_paths))  # pkl could be zero if giving npz
+        # if not use a selector NN here, just externally fixed selector variable:
+        self.external_selector = external_selector  # whether to use the selectorNN defined here or the pre_fix_selector
+        self.pre_fix_selector = np.zeros((self.selector_dim))  # if this is not empty when using reset() it will use this selector
+        self.selector_fix = np.zeros((self.selector_dim))  # this will hold the selectors variable sampled in reset()
+        self.shared_selector_var = theano.shared(self.selector_fix)  # this is for external selector! update that
+        # else, describe the MLP used:
+        self.hidden_sizes_selector = hidden_sizes_selector  # size of the selector NN defined here
+        self.min_std = min_std
+        self._set_std_to_0 = False
 
         self.action_dim = env_spec.action_space.flat_dim  # not checking that all the old policies have this act_dim
 
