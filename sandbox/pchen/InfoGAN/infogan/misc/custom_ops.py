@@ -1608,13 +1608,16 @@ def average_grads(tower_grads):
 
 @contextmanager
 def temp_restore(sess, ema):
-    ema_keys = list(ema._averages.keys())
-    old_vals = sess.run(ema_keys)
-    _ = sess.run(
-        [tf.assign(var, avg) for var, avg in ema._averages.items()]
-    )
-    yield
-    _ = sess.run(
-        [tf.assign(var, avg) for var, avg in zip(ema_keys, old_vals)]
-    )
+    if ema is None:
+        yield
+    else:
+        ema_keys = list(ema._averages.keys())
+        old_vals = sess.run(ema_keys)
+        _ = sess.run(
+            [tf.assign(var, avg) for var, avg in ema._averages.items()]
+        )
+        yield
+        _ = sess.run(
+            [tf.assign(var, avg) for var, avg in zip(ema_keys, old_vals)]
+        )
 

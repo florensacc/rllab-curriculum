@@ -19,6 +19,9 @@
 
 # try to get some best bit by doing param-tying of ar & larger code & deeper and wider AF
 
+
+# kl ends up not being used. try to remove param-tying
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -165,7 +168,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def tiear(self):
-        return [False]
+        return [True, False]
         # return [True, False]
 
     @variant(hide=False)
@@ -214,7 +217,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -256,7 +259,7 @@ for v in variants[i:i+1]:
                 dist,
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
-                var_scope="AR_scope",
+                var_scope="AR_scope" if v["tiear"] else None,
                 img_shape=[8,8,zdim//64],
                 data_init_scale=v["data_init_scale"],
 

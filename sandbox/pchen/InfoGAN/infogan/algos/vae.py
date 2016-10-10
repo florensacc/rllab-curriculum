@@ -122,6 +122,7 @@ class VAE(object):
         self.eval_input_tensor = None
         self.eval_log_vars = []
         self.sym_vars = {}
+        self.ema = None
 
         if self.slow_kl:
             self.ema_kl = tf.Variable(initial_value=0., trainable=False, name="ema_kl")
@@ -518,30 +519,29 @@ class VAE(object):
                         feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
 
                         if self.resume_from:
-                            # self.ar_vis(sess, feed)
+                            self.ar_vis(sess, feed)
 
-                            print("resumption ema eval")
-                            with temp_restore(sess, self.ema):
-                                ds = self.dataset.validation
-                                all_test_log_vals = []
-                                for ti in range(ds.images.shape[0] // self.eval_batch_size):
-                                    # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
-                                    # test_x = np.tile(test_x, [self.weight_redundancy, 1])
-                                    eval_feed = self.prepare_eval_feed(
-                                        self.dataset.validation,
-                                        self.eval_batch_size,
-                                    )
-                                    test_log_vals = sess.run(
-                                        eval_log_vars,
-                                        eval_feed,
-                                    )
-                                    all_test_log_vals.append(test_log_vals)
-
-                            avg_test_log_vals = np.mean(np.array(all_test_log_vals), axis=0)
-                            log_line = "EVAL" + "; ".join("%s: %s" % (str(k), str(v))
-                                                          for k, v in zip(eval_log_keys, avg_test_log_vals))
-                            print(log_line)
-                            import ipdb; ipdb.set_trace()
+                            # print("resumption ema eval")
+                            # with temp_restore(sess, self.ema):
+                            #     ds = self.dataset.validation
+                            #     all_test_log_vals = []
+                            #     for ti in range(ds.images.shape[0] // self.eval_batch_size):
+                            #         # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
+                            #         # test_x = np.tile(test_x, [self.weight_redundancy, 1])
+                            #         eval_feed = self.prepare_eval_feed(
+                            #             self.dataset.validation,
+                            #             self.eval_batch_size,
+                            #         )
+                            #         test_log_vals = sess.run(
+                            #             eval_log_vars,
+                            #             eval_feed,
+                            #         )
+                            #         all_test_log_vals.append(test_log_vals)
+                            #
+                            # avg_test_log_vals = np.mean(np.array(all_test_log_vals), axis=0)
+                            # log_line = "EVAL" + "; ".join("%s: %s" % (str(k), str(v))
+                            #                               for k, v in zip(eval_log_keys, avg_test_log_vals))
+                            # print(log_line)
 
                         log_vals = sess.run([] + log_vars, feed)[:]
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
@@ -605,24 +605,26 @@ class VAE(object):
                             if isinstance(self.model.output_dist, ConvAR):
                                 if counter != 0:
                                     self.ar_vis(sess, feed)
-                            ds = self.dataset.validation
-                            all_test_log_vals = []
-                            for ti in range(ds.images.shape[0] // self.eval_batch_size):
-                                # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
-                                # test_x = np.tile(test_x, [self.weight_redundancy, 1])
-                                eval_feed = self.prepare_eval_feed(
-                                    self.dataset.validation,
-                                    self.eval_batch_size,
-                                )
-                                test_log_vals = sess.run(
-                                    eval_log_vars,
-                                    eval_feed,
-                                )
-                                all_test_log_vals.append(test_log_vals)
-                                # fast eval for the first itr
-                                if counter == 0 and (self.resume_from is None):
-                                    if ti >= 4:
-                                        break
+
+                            with temp_restore(sess, self.ema):
+                                ds = self.dataset.validation
+                                all_test_log_vals = []
+                                for ti in range(ds.images.shape[0] // self.eval_batch_size):
+                                    # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
+                                    # test_x = np.tile(test_x, [self.weight_redundancy, 1])
+                                    eval_feed = self.prepare_eval_feed(
+                                        self.dataset.validation,
+                                        self.eval_batch_size,
+                                    )
+                                    test_log_vals = sess.run(
+                                        eval_log_vars,
+                                        eval_feed,
+                                    )
+                                    all_test_log_vals.append(test_log_vals)
+                                    # fast eval for the first itr
+                                    if counter == 0 and (self.resume_from is None):
+                                        if ti >= 4:
+                                            break
 
                             avg_test_log_vals = np.mean(np.array(all_test_log_vals), axis=0)
                             log_line = "EVAL" + "; ".join("%s: %s" % (str(k), str(v))

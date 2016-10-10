@@ -14,8 +14,8 @@
 
 # this explores larger receptive field & convaf
 
-# ar-depth 12 has good performance, this explores training it faster
-# w/ multi-gpu and check ar-depth 6 w/ double feat maps & deeper depth
+# resume the best one to explore why samples look chaotic
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -38,8 +38,7 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
-# batch_size = 128
-batch_size = 129
+batch_size = 128
 # updates_per_epoch = 100
 
 stub(globals())
@@ -113,16 +112,8 @@ class VG(VariantGenerator):
         return [True, ]
 
     @variant(hide=False)
-    def num_gpus(self):
-        # yield 0.0005#
-        # yield
-        # return np.arange(1, 11) * 1e-4
-        # return [0.0001, 0.0005, 0.001]
-        return [3] #0.001]
-
-    @variant(hide=False)
-    def k(self, num_gpus):
-        return [batch_size // num_gpus, ]
+    def k(self):
+        return [batch_size, ]
 
     @variant(hide=False)
     def nar(self):
@@ -198,7 +189,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [12, 8, 16]
+        return [12]
 
     @variant(hide=False)
     def data_init_scale(self):
@@ -212,7 +203,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -297,12 +288,14 @@ for v in variants[i:i+1]:
             shape=(32, 32, 3),
             filter_size=3,
             depth=v["ar_depth"],
-            nr_channels=12*2*2 // 12 * v["ar_depth"],
+            nr_channels=12*2*2,
             pixel_bias=True,
             context_dim=v["context_dim"],
             nin=False,
             block="gated_resnet",
-            extra_nins=2
+            extra_nins=2,
+            legacy=True,
+
             # block="plstm",
         )
         model = RegularizedHelmholtzMachine(
@@ -335,8 +328,7 @@ for v in variants[i:i+1]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
-            vis_ar=False,
-            num_gpus=v["num_gpus"],
+            resume_from="data/local/1005-lrf-convaf-spatial-code/1005_lrf_convaf_spatial_code_2016_10_06_00_26_32_0001/",
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
@@ -345,7 +337,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1008_final_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1009_resume_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",
