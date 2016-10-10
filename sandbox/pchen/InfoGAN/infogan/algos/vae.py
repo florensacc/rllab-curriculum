@@ -786,6 +786,7 @@ class VAE(object):
         os.system(
             "tar -zcvf %s/../samples.tar.gz %s" % (fol, fol)
         )
+        # import ipdb; ipdb.set_trace()
 
         # decompress
         originals = tuple(feed.items())[0][1].reshape(batch_imshp)

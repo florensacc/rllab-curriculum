@@ -990,6 +990,7 @@ class AR(Distribution):
             img_shape=None,
             keepprob=1.,
             clip=False,
+            squash=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1010,6 +1011,7 @@ class AR(Distribution):
         self._share_context = share_context
         self._rank = rank
         self._clip = clip
+        self._squash = squash
         self._iaf_template = pt.template("y", books=dist_book)
         if linear_context:
             lin_con = pt.template("linear_context", books=dist_book)
@@ -1161,6 +1163,9 @@ class AR(Distribution):
                 -4,
                 4,
             )
+        if self._squash:
+            iaf_mu = tf.tanh(iaf_mu)*2.7
+            iaf_logstd = tf.tanh(iaf_logstd)*1.5
         return iaf_mu, (iaf_logstd)
 
     def logli(self, x_var, dist_info):
