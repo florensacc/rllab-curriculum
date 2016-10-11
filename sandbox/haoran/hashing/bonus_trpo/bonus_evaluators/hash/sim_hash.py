@@ -64,12 +64,12 @@ class SimHash(Hash):
         Increment hash table counts for many items (row-wise stacked as a matrix)
         """
         if self.parallel:
-            print("%d: before table lock"%(self.rank))
+            # print("%d: before table lock"%(self.rank))
             with self.tables_lock.get_lock():
-                print("%d: inside table lock"%(self.rank))
+                # print("%d: inside table lock"%(self.rank))
                 for idx in range(len(self.bucket_sizes)):
                     np.add.at(self.tables[idx], keys[:, idx], 1)
-            print("%d: exit table lock"%(self.rank))
+            # print("%d: exit table lock"%(self.rank))
         else:
             for idx in range(len(self.bucket_sizes)):
                 np.add.at(self.tables[idx], keys[:, idx], 1)

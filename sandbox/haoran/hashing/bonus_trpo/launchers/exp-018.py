@@ -1,17 +1,18 @@
 """
-TRPO + image obs + hacky hash on Montezuma's Revenge
-- frame_skip = 4 (make sure it is easy to pass beams)
-- image: 42 x 42 (faster)
-- network: NIPS (better NN feature for baseline)
+Parallel-TRPO w/ RAM observations: testing
+The setup is similar to exp-016b
+
+For Davis:
+1. for testing, use mode = "local_test"
+2. for actual running, use mode = "kube"
+3. count targets: "images"(only current frame) or "ram_states"
 """
 # imports -----------------------------------------------------
 """ baseline """
-from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBaseline
-from sandbox.adam.parallel.parallel_nn_feature_linear_baseline import ParallelNNFeatureLinearBaseline
+from sandbox.haoran.parallel_trpo.linear_feature_baseline import ParallelLinearFeatureBaseline
 
 """ policy """
-from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
-from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
+from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 
 """ optimizer """
 from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
@@ -23,13 +24,13 @@ from sandbox.haoran.parallel_trpo.trpo import ParallelTRPO
 from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 
 """ resetter """
-# from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
 from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import AtariSaveLoadResetter
 
 """ bonus """
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.identity_preprocessor import IdentityPreprocessor
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.ale_hacky_hash_v2 import ALEHackyHashV2
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash import SimHash
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
 
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
@@ -46,15 +47,15 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
-mode = "kube"
+mode = "local_test"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 4 # only for local exp
+n_parallel = 2 # only for local exp
 snapshot_mode = "last"
 plot = False
-use_gpu = False # should change conv_type and ~/.theanorc
+use_gpu = False
 sync_s3_pkl = True
 config.USE_TF = False
 
@@ -72,21 +73,22 @@ class VG(VariantGenerator):
     @variant
     def seed(self):
         return [0,100,200,300,400,500,600,700,800,900]
+
     @variant
     def bonus_coeff(self):
-        return [1e-4,1e-2]
-    @variant
-    def baseline_type_opt(self):
-        return [
-            # ["conv","cg"],
-            ["nn_feature_linear",""],
-        ]
+        return [0.01]
+
     @variant
     def game(self):
         return ["montezuma_revenge"]
+
     @variant
-    def resetter_type(self):
-        return [None]
+    def dim_key(self):
+        return [256]
+
+    @variant
+    def count_target(self):
+        return ["images","ram_states"]
 variants = VG().variants()
 
 
@@ -102,13 +104,13 @@ for v in variants:
         batch_size = 50000
     max_path_length = 4500
     discount = 0.99
-    n_itr = 2000
+    n_itr = 1000
     step_size = 0.01
     policy_opt_args = dict(
         name="pi_opt",
         cg_iters=10,
-        reg_coeff=1e-3,
-        subsample_factor=0.1,
+        reg_coeff=1e-5,
+        subsample_factor=1.,
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
@@ -118,25 +120,27 @@ for v in variants:
 
     # env
     game=v["game"]
+    env_seed=1 # deterministic env
     frame_skip=4
-    network_args = nips_dqn_args
-    img_width=42
-    img_height=42
+    img_width=84
+    img_height=84
+    n_last_screens=1
     clip_reward = True
-    obs_type = "image"
-    record_image=False
+    obs_type = "ram"
+    count_target = v["count_target"]
+    record_image=(count_target == "images")
     record_rgb_image=False
-    record_ram=True
+    record_ram=(count_target == "ram_states")
     record_internal_state=False
 
     # bonus
     bonus_coeff=v["bonus_coeff"]
     bonus_form="1/sqrt(n)"
-    count_target="ram_states"
-    retrieve_sample_size=100
+    count_target=v["count_target"]
+    retrieve_sample_size=100000 # compute keys for all paths at once
+    bucket_sizes=None # None means default
 
     # others
-    resetter_type = v["resetter_type"]
     baseline_prediction_clip = 100
 
     # other exp setup --------------------------------------
@@ -192,89 +196,52 @@ for v in variants:
         raise NotImplementedError
 
     # construct objects ----------------------------------
-    if resetter_type == "SL":
-        resetter = AtariSaveLoadResetter(
-            restored_state_folder=None,
-            avoid_life_lost=False,
-        )
-    else:
-        resetter = None
-
     env = AtariEnv(
-            game=game,
-            seed=seed,
-            img_width=img_width,
-            img_height=img_height,
-            obs_type=obs_type,
-            record_ram=record_ram,
-            record_image=record_image,
-            record_rgb_image=record_rgb_image,
-            record_internal_state=record_internal_state,
-            resetter=resetter,
-            frame_skip=frame_skip,
-        )
-    policy = CategoricalConvPolicy(
+        game=game,
+        seed=env_seed,
+        img_width=img_width,
+        img_height=img_height,
+        obs_type=obs_type,
+        record_ram=record_ram,
+        record_image=record_image,
+        record_rgb_image=record_rgb_image,
+        record_internal_state=record_internal_state,
+        frame_skip=frame_skip,
+    )
+    policy = CategoricalMLPPolicy(
         env_spec=env.spec,
-        name="policy",
-        **network_args
+        hidden_sizes=(32,32),
     )
 
     # baseline
-    baseline_type, baseline_opt = v["baseline_type_opt"]
-    if baseline_type == "nn_feature_linear":
-        baseline = ParallelNNFeatureLinearBaseline(
-            env_spec=env.spec,
-            policy=policy,
-            nn_feature_power=1,
-            t_power=3,
-            prediction_clip=baseline_prediction_clip,
-        )
-    elif baseline_type == "conv":
-        network_args_for_vf = copy.deepcopy(network_args)
-        network_args_for_vf.pop("output_nonlinearity")
-        baseline = ParallelGaussianConvBaseline(
-            env_spec=env.spec,
-            regressor_args = dict(
-                optimizer=ParallelConjugateGradientOptimizer(
-                    subsample_factor=0.1,
-                    cg_iters=10,
-                    name="vf_opt",
-                ),
-                use_trust_region=True,
-                step_size=0.01,
-                batchsize=batch_size,
-                normalize_inputs=True,
-                normalize_outputs=True,
-                **network_args_for_vf
-            )
-        )
-    else:
-        raise NotImplementedError
+    baseline = ParallelLinearFeatureBaseline(env_spec=env.spec)
 
     # bonus
-    if count_target == "images" or \
-    (count_target == "observations" and obs_type == "image"):
-        total_pixels=img_width * img_height
-        state_preprocessor = SlicingPreprocessor(
-            input_dim=total_pixels * n_last_screens,
-            start=total_pixels * (n_last_screens - 1),
-            stop=total_pixels * n_last_screens,
-            step=1,
+    if count_target == "images":
+        state_preprocessor = ImageVectorizePreprocessor(
+            n_channel=n_last_screens,
+            width=img_width,
+            height=img_height,
         )
     elif count_target == "ram_states":
-        state_preprocessor = None
+        state_preprocessor = ImageVectorizePreprocessor(
+            n_channel=1,
+            width=128,
+            height=1,
+        )
     else:
         raise NotImplementedError
 
-    _hash = ALEHackyHashV2(
-        item_dim=128,
-        game=game,
+    _hash = SimHash(
+        item_dim=state_preprocessor.get_output_dim(), # get around stub
+        dim_key=v["dim_key"],
+        bucket_sizes=bucket_sizes,
         parallel=use_parallel,
     )
     bonus_evaluator = ALEHashingBonusEvaluator(
         log_prefix="",
-        state_dim=128,
-        state_preprocessor=None,
+        state_dim=state_preprocessor.get_output_dim(), # get around stub
+        state_preprocessor=state_preprocessor,
         hash=_hash,
         bonus_form=bonus_form,
         count_target=count_target,
@@ -292,6 +259,7 @@ for v in variants:
         max_path_length=max_path_length,
         discount=discount,
         n_itr=n_itr,
+        clip_reward=clip_reward,
         plot=plot,
         optimizer_args=policy_opt_args,
         step_size=step_size,

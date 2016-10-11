@@ -1,8 +1,6 @@
 """
-TRPO + image obs + hacky hash on Montezuma's Revenge
-- frame_skip = 4 (make sure it is easy to pass beams)
-- image: 42 x 42 (faster)
-- network: NIPS (better NN feature for baseline)
+Re-run exp-017, but without beam_countdown as part of count info.
+The idea is that we can't really tell beam_countdown from images, so it is probably a distraction and leads to incorrect exploration.
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -74,7 +72,7 @@ class VG(VariantGenerator):
         return [0,100,200,300,400,500,600,700,800,900]
     @variant
     def bonus_coeff(self):
-        return [1e-4,1e-2]
+        return [1e-4]
     @variant
     def baseline_type_opt(self):
         return [
@@ -137,7 +135,7 @@ for v in variants:
 
     # others
     resetter_type = v["resetter_type"]
-    baseline_prediction_clip = 100
+    baseline_prediction_clip = 10
 
     # other exp setup --------------------------------------
     exp_name = "{exp_index}_{time}_{game}".format(
