@@ -1112,9 +1112,11 @@ class AR(Distribution):
                         filter_size,
                         img_chn * 2,
                         activation_fn=None,
+                    ).reshape(
+                        [-1,] + img_shape + [2]
                     ).apply(
                         tf.transpose,
-                        [0, 3, 1, 2]
+                        [0, 4, 1, 2, 3]
                     ).reshape([-1, np.prod(img_shape) * 2])
 
     @overrides

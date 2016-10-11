@@ -10,13 +10,14 @@
 
 # data/local/1003-init-convaf-on-spatial-code/
 # --> turns out fewer feature maps helps a lot??
+# and only 0.005kl is used
 
-# warm up ar decoder schedule
-# slow KL also ON to make sure code is not killed off prematurely
+# this explores larger receptive field & convaf
 
-# verdict: doesnt seem to be better than doing it from scratch
-# even very late starter doesn't use mre kl
-# -> does this mean free bits is just not a very good idea in vlae?
+# resume the best one to explore why samples look chaotic
+
+# rerun after af is fixed
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -71,7 +72,7 @@ class VG(VariantGenerator):
     @variant
     def min_kl(self):
         # return [0.06, ]# 0.1]
-        return [0.01, ]# 0.1]
+        return [0.01, 0.]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -98,7 +99,7 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [32]
+        return [32, ]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -175,7 +176,10 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
-        return [int(max_epoch * 0.7)]
+        return [
+            # int(max_epoch * 0.7)
+            1500
+        ]
 
     @variant(hide=False)
     def context_dim(self, ):
@@ -187,15 +191,12 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [3]
+        return [12]
 
     @variant(hide=False)
     def data_init_scale(self):
-        return [0.001]
+        return [0.01, ]
 
-    @variant(hide=False)
-    def arwarm_until(self):
-        return [5, 50, 30, 300, 500]
 
 
 
@@ -204,7 +205,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 4
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -295,8 +296,8 @@ for v in variants[i:i+1]:
             nin=False,
             block="gated_resnet",
             extra_nins=2,
-            # sanity=True,
-            sanity2=True,
+            legacy=True,
+
             # block="plstm",
         )
         model = RegularizedHelmholtzMachine(
@@ -329,9 +330,7 @@ for v in variants[i:i+1]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
-            arwarm_until=v["arwarm_until"],
-            slow_kl=True,
-            vis_ar=False,
+            resume_from="data/local/1005-lrf-convaf-spatial-code/1005_lrf_convaf_spatial_code_2016_10_06_00_26_32_0001/",
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
@@ -340,7 +339,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1008_slowkl_arwarm_convaf_on_spatial_code",
+            exp_prefix="1011_faf_resume_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

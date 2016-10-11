@@ -1397,10 +1397,12 @@ class CustomBookkeeper(Bookkeeper):
 
     def add_histogram_summary(self, tensor, tag=None):
         """Add a summary operation to visualize any tensor."""
-        print("passing histogram %s"%tag)
+        pass
+        # print("passing histogram %s"%tag)
 
     def add_scalar_summary(self, x, tag=None):
-        print("passing scalar summary %s"%tag)
+        pass
+        # print("passing scalar summary %s"%tag)
 
 prettytensor.bookkeeper.BOOKKEEPER_FACTORY = CustomBookkeeper
 

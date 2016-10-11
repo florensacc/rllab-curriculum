@@ -350,12 +350,13 @@ for v in variants[i:i+1]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
-            vis_ar=True,
+            # vis_ar=True,
             num_gpus=v["num_gpus"],
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
             # resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
+            # resume_from="/home/peter/rllab-private/data/local/1010-squash-mgpu-lrf-convaf-spatial-code/1010_squash_mgpu_lrf_convaf_spatial_code_2016_10_10_12_15_14_0001",
         )
 
         print(v)

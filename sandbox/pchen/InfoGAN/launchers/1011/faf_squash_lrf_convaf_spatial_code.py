@@ -10,14 +10,27 @@
 
 # data/local/1003-init-convaf-on-spatial-code/
 # --> turns out fewer feature maps helps a lot??
+# and only 0.005kl is used
 
-# warm up ar decoder schedule
-# slow KL also ON to make sure code is not killed off prematurely
+# this explores larger receptive field & convaf
 
-# verdict: doesnt seem to be better than doing it from scratch
-# even very late starter doesn't use mre kl
-# -> does this mean free bits is just not a very good idea in vlae?
+# ar-depth 12 has good performance, this explores training it faster
+# w/ multi-gpu and check ar-depth 6 w/ double feat maps & deeper depth
 
+# try to get some best bit by doing param-tying of ar & larger code & deeper and wider AF
+
+
+# kl ends up not being used. try to remove param-tying
+# wtie is indeed the issue, removing it makes this model climb to 3.06bits in just 450 epochs
+
+# 1) retrain the same thing^ but with clipping
+# 2) throw iaf in the mix
+# 3) no iaf, but more steps in encoder
+
+# from resumption -> clipping, it seems like this thing still tends to give crazy flow.
+# this one explroes squshing
+
+# fixed af
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -39,7 +52,8 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
-batch_size = 128
+# batch_size = 128
+batch_size = 129
 # updates_per_epoch = 100
 
 stub(globals())
@@ -66,7 +80,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [256, ]#[12, 32]
+        return [512, ]#[12, 32]
 
     @variant
     def min_kl(self):
@@ -92,13 +106,10 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
         yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
 
-    @variant(hide=False)
-    def steps(self, ):
-        return [3]
     #
     @variant(hide=False)
     def base_filters(self, ):
-        return [32]
+        return [32, ]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -113,16 +124,24 @@ class VG(VariantGenerator):
         return [True, ]
 
     @variant(hide=False)
-    def k(self):
-        return [batch_size, ]
+    def num_gpus(self):
+        # yield 0.0005#
+        # yield
+        # return np.arange(1, 11) * 1e-4
+        # return [0.0001, 0.0005, 0.001]
+        return [3] #0.001]
+
+    @variant(hide=False)
+    def k(self, num_gpus):
+        return [batch_size // num_gpus, ]
 
     @variant(hide=False)
     def nar(self):
-        return [2, ]
+        return [4, ]
 
     @variant(hide=False)
     def nr(self):
-        return [3,]
+        return [8,]
 
     @variant(hide=False)
     def i_nar(self):
@@ -133,19 +152,21 @@ class VG(VariantGenerator):
         return [5,]
 
     @variant(hide=False)
+    def steps(self, i_nar):
+        if i_nar == 0:
+            return [3, ]
+        return [3]
+
+    @variant(hide=False)
     def i_init_scale(self):
         return [0.1, ]
 
     @variant(hide=False)
     def i_context(self, i_nar):
         # return [True, False]
-        if i_nar == 0:
-            return [
-                []
-            ]
         return [
             [],
-            ["linear"],
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -175,7 +196,10 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
-        return [int(max_epoch * 0.7)]
+        return [
+            # int(max_epoch * 0.7)
+            1500
+        ]
 
     @variant(hide=False)
     def context_dim(self, ):
@@ -187,15 +211,12 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [3]
+        return [12, ]
 
     @variant(hide=False)
     def data_init_scale(self):
-        return [0.001]
+        return [0.01, ]
 
-    @variant(hide=False)
-    def arwarm_until(self):
-        return [5, 50, 30, 300, 500]
 
 
 
@@ -204,7 +225,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 4
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -249,6 +270,8 @@ for v in variants[i:i+1]:
                 var_scope="AR_scope" if v["tiear"] else None,
                 img_shape=[8,8,zdim//64],
                 data_init_scale=v["data_init_scale"],
+                # clip=True,
+                squash=True,
             )
 
         latent_spec = [
@@ -270,6 +293,7 @@ for v in variants[i:i+1]:
                 gating_context="gating" in v["i_context"],
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
+                clip=True,
             )
         nml = 5
         tgt_dist = Mixture(
@@ -289,14 +313,12 @@ for v in variants[i:i+1]:
             shape=(32, 32, 3),
             filter_size=3,
             depth=v["ar_depth"],
-            nr_channels=12*2*2,
+            nr_channels=12*2*2 // 12 * v["ar_depth"],
             pixel_bias=True,
             context_dim=v["context_dim"],
             nin=False,
             block="gated_resnet",
-            extra_nins=2,
-            # sanity=True,
-            sanity2=True,
+            extra_nins=2
             # block="plstm",
         )
         model = RegularizedHelmholtzMachine(
@@ -310,7 +332,8 @@ for v in variants[i:i+1]:
             network_args=dict(
                 cond_rep=v["cond_rep"],
                 old_dec=True,
-                base_filters=v["base_filters"]
+                base_filters=v["base_filters"],
+                enc_rep=v["steps"]-2,# hack..
             ),
         )
 
@@ -329,18 +352,19 @@ for v in variants[i:i+1]:
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
-            arwarm_until=v["arwarm_until"],
-            slow_kl=True,
-            vis_ar=False,
+            # vis_ar=True,
+            num_gpus=v["num_gpus"],
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
             # resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
+            # resume_from="/home/peter/rllab-private/data/local/1010-squash-mgpu-lrf-convaf-spatial-code/1010_squash_mgpu_lrf_convaf_spatial_code_2016_10_10_12_15_14_0001",
         )
 
+        print(v)
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1008_slowkl_arwarm_convaf_on_spatial_code",
+            exp_prefix="1011_faf_squash_mgpu_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

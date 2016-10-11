@@ -17,6 +17,8 @@
 # ar-depth 12 has good performance, this explores training it faster
 # w/ multi-gpu and check ar-depth 6 w/ double feat maps & deeper depth
 
+# deeper ar still better
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
