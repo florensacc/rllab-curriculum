@@ -10,13 +10,15 @@ from rllab.envs.base import Step
 from rllab.misc import tensor_utils
 
 from sandbox.carlos_snn.sampler.utils import rollout  # this is a different rollout! (not doing the same: no reset!)
-from sandbox.carlos_snn.old_my_snn.hier_mlp_policy import GaussianMLPPolicy_hier
+from sandbox.carlos_snn.old_my_snn.hier_snn_mlp_policy import GaussianMLPPolicy_snn_hier
 
 import joblib
 import json
+from rllab import config
+import os
 
 
-class HierarchizedEnv(ProxyEnv, Serializable):
+class HierarchizedSnnEnv(ProxyEnv, Serializable):
     def __init__(
             self,
             env,
@@ -31,26 +33,19 @@ class HierarchizedEnv(ProxyEnv, Serializable):
         self.time_steps_agg = time_steps_agg
         self.animate = animate
         if json_path:
-            self.data = json.load(open(json_path, 'r'))
+            self.data = json.load(open(os.path.join(config.PROJECT_PATH, json_path), 'r'))
             self.low_policy_latent_dim = self.data['json_args']['policy']['latent_dim']
         elif pkl_path:
+            pkl_path = os.path.join(config.PROJECT_PATH, pkl_path)
             self.data = joblib.load(pkl_path)
-            # self.low_policy_action_dim = self.data['policy']._env_spec.action_space.flat_dim
-            # assert self.low_policy._env_spec.action_space.flat_dim == env.spec.action_space.flat_dim, "the action" \
-            # "space of the hierarchized env and the pre-trained policy do not coincide: might be different robot!"
             self.low_policy_latent_dim = self.data['policy'].latent_dim
         else:
             raise Exception("No path no file given")
 
-        # if self.low_policy._env_spec.observation_space.flat_dim != env.spec.observation_space.flat_dim:
-        #     print ("The ObsSpace of hierarchized env is {}, the pre-trained was {}".format(
-        #         env.spec.observation_space.flat_dim,
-        #         self.low_policy._env_spec.observation_space.flat_dim))
-
         assert isinstance(env, MazeEnv) or isinstance(env.wrapped_env,
                                                       MazeEnv), "the obsSpaces mismatch but it's not a maze (by Carlos)"
         # I need to define a new hier-policy that will cope with that!
-        self.low_policy = GaussianMLPPolicy_hier(
+        self.low_policy = GaussianMLPPolicy_snn_hier(
             env_spec=env.spec,
             env=env,
             pkl_path=pkl_path,
@@ -63,13 +58,13 @@ class HierarchizedEnv(ProxyEnv, Serializable):
     @property
     @overrides
     def action_space(self):
-        # print ("the action space of the hierarchyzed env is: {}".format(self.low_policy.latent_dim))
         lat_dim = self.low_policy_latent_dim
         return spaces.Discrete(lat_dim)  # the action is now just a selection
 
     @overrides
     def step(self, action):
         action = self.action_space.flatten(action)
+        # print("the action taken is: ", action)
         with self.low_policy.fix_latent(action):
             print("The hier action is prefixed latent: {}".format(self.low_policy.pre_fix_latent))
             frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
@@ -106,4 +101,4 @@ class HierarchizedEnv(ProxyEnv, Serializable):
         return "Hierarchized: %s" % self._wrapped_env
 
 
-hierarchize = HierarchizedEnv
+hierarchize_snn = HierarchizedSnnEnv

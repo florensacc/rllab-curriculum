@@ -95,7 +95,7 @@ class AtariEnv(Env, Serializable):
     @property
     def observation_space(self):
         if self._obs_type == "ram":
-            return spaces.Box(low=-1, high=1, shape=(128,))  # np.zeros(128), high=np.ones(128))# + 255)
+            return spaces.Box(low=-1, high=1, shape=(1, 128))  # np.zeros(128), high=np.ones(128))# + 255)
         elif self._obs_type == "image":
             return spaces.Box(low=-1, high=1, shape=(1,) + IMG_WH[::-1])
             # return spaces.Box(low=-1, high=1, shape=IMG_WH + (4,))

@@ -8,6 +8,9 @@
 # 0.06 might need to overfitting, so this will explore 0.01 kl but much smaller init scale
 # also try fewer feature maps but this shouldnt affect as much?
 
+# data/local/1003-init-convaf-on-spatial-code/
+# --> turns out fewer feature maps helps a lot??
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

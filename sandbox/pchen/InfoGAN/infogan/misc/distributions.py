@@ -5,6 +5,7 @@ import itertools
 import tensorflow as tf
 import numpy as np
 import prettytensor as pt
+from prettytensor.pretty_tensor_class import Layer
 from progressbar import ProgressBar
 
 from rllab.core.serializable import Serializable
@@ -987,6 +988,8 @@ class AR(Distribution):
             var_scope=None,
             rank=None,
             img_shape=None,
+            keepprob=1.,
+            clip=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1006,7 +1009,7 @@ class AR(Distribution):
         self._context_dim = 0
         self._share_context = share_context
         self._rank = rank
-
+        self._clip = clip
         self._iaf_template = pt.template("y", books=dist_book)
         if linear_context:
             lin_con = pt.template("linear_context", books=dist_book)
@@ -1019,6 +1022,7 @@ class AR(Distribution):
 
         if img_shape is None:
             assert depth >= 1
+            assert keepprob == 1.
             from prettytensor import UnboundVariable
             with pt.defaults_scope(
                     activation_fn=nl,
@@ -1100,6 +1104,7 @@ class AR(Distribution):
                             nr_channels,
                             prefix="nin_ex_%s" % ninidx,
                         )
+                    cur = cur.custom_dropout(keepprob)
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,
@@ -1145,6 +1150,17 @@ class AR(Distribution):
             **in_dict
         ).tensor
         iaf_mu, iaf_logstd = flat_iaf[:, :self._dim], flat_iaf[:, self._dim:]
+        if self._clip:
+            iaf_mu = tf.clip_by_value(
+                iaf_mu,
+                -5,
+                5
+            )
+            iaf_logstd = tf.clip_by_value(
+                iaf_logstd,
+                -4,
+                4,
+            )
         return iaf_mu, (iaf_logstd)
 
     def logli(self, x_var, dist_info):
@@ -1179,6 +1195,7 @@ class AR(Distribution):
         go = z # place holder
         for i in range(self._dim):
             iaf_mu, iaf_logstd = self.infer(go)
+
             go = iaf_mu + tf.exp(iaf_logstd)*z
         return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
 
@@ -1501,7 +1518,6 @@ class DistAR(Distribution):
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
 
-
 class ConvAR(Distribution):
     """Basic masked conv ar"""
 
@@ -1522,6 +1538,7 @@ class ConvAR(Distribution):
             tieweight=False,
             extra_nins=0,
             inp_keepprob=1.,
+            legacy=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1532,26 +1549,33 @@ class ConvAR(Distribution):
         self._tgt_dist = tgt_dist
         self._shape = shape
         self._dim = int(np.prod(shape))
+        self._sanity = sanity
+        self._sanity2 = sanity2
         context = context_dim is not None
         self._context = context
         self._context_dim = context_dim
         inp = pt.template("y", books=dist_book).reshape([-1,] + list(shape))
         inp = inp.custom_dropout(inp_keepprob)
-        if sanity:
-            inp *= 0.
+        if not legacy:
+            self._inp_mask = tf.Variable(
+            initial_value=0. if sanity else 1.,
+            trainable=False,
+            name="%s_inp_mask" % G_IDX,
+            dtype=tf.float32,
+        )
+
         if context:
             context_inp = \
                 pt.template("context", books=dist_book).\
                     reshape([-1,] + list(shape[:-1]) + [context_dim])
-            if sanity2:
-                context_inp *= 0.
-            inp = inp.join(
-                [context_inp],
+            if not legacy:
+                self._context_mask = tf.Variable(
+                initial_value=0. if sanity2 else 1.,
+                trainable=False,
+                name="%s_context_mask" % G_IDX,
+                dtype=tf.float32,
             )
-        cur = inp
         self._custom_phase = CustomPhase.init
-
-        peep_inp = inp.left_shift(filter_size-1).down_shift()
 
         from prettytensor import UnboundVariable
         with pt.defaults_scope(
@@ -1563,6 +1587,17 @@ class ConvAR(Distribution):
             pixel_bias=pixel_bias,
             var_scope="ConvAR" if tieweight else None,
         ):
+            if not legacy:
+                inp = inp.mul_init_ensured(self._inp_mask)
+            if context:
+                if not legacy:
+                    context_inp = context_inp.mul_init_ensured(self._context_mask)
+                inp = inp.join(
+                    [context_inp],
+                )
+            cur = inp
+            peep_inp = inp.left_shift(filter_size-1).down_shift()
+
             if masked:
                 for di in range(depth):
                     if di == 0:

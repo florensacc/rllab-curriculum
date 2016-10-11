@@ -11,7 +11,8 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian
 import rllab.misc.logger as logger
 import sys
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
-    average_grads
+    average_grads, temp_restore
+
 
 class VAE(object):
     def __init__(
@@ -50,6 +51,9 @@ class VAE(object):
             vis_ar=True,
             num_gpus=1,
             min_kl_onesided=False, # True if prior doesn't see freebits
+            slow_kl=False,
+            lwarm_until=None,
+            arwarm_until=None,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -62,6 +66,9 @@ class VAE(object):
         Parameters
         ----------
         """
+        self.arwarm_until = arwarm_until
+        self.lwarm_until = lwarm_until
+        self.slow_kl = slow_kl
         self.min_kl_onesided = min_kl_onesided
         self.num_gpus = num_gpus
         self._vis_ar = vis_ar
@@ -115,6 +122,10 @@ class VAE(object):
         self.eval_input_tensor = None
         self.eval_log_vars = []
         self.sym_vars = {}
+        self.ema = None
+
+        if self.slow_kl:
+            self.ema_kl = tf.Variable(initial_value=0., trainable=False, name="ema_kl")
 
         assert not self.cond_px_ent
         assert not self.l2_reg
@@ -159,7 +170,9 @@ class VAE(object):
         grads = []
         xs = tf.split(0, self.num_gpus, input_tensor)
 
-        for i in range(self.num_gpus):
+        for i in range(
+            1 if init else self.num_gpus
+        ):
             x = xs[i]
             with tf.device(assign_to_gpu(i)):
                 z_var, log_p_z_given_x, z_dist_info = \
@@ -179,6 +192,9 @@ class VAE(object):
 
                 ndim = self.model.output_dist.effective_dim
                 log_p_z = self.model.latent_dist.logli_prior(z_var)
+                dict_log_vars["log_p_z"].append(
+                    tf.reduce_mean(log_p_z)
+                )
 
                 if eval:
                     assert self.monte_carlo_kl
@@ -211,12 +227,11 @@ class VAE(object):
                     true_vlb = tf.reduce_mean(log_p_x_given_z) - kl
                     if self.min_kl_onesided:
                         avg_log_p_sg_z = tf.reduce_mean(
-                            self.model.latent_dist.logli_prior(
-                                tf.stop_gradient(z_var)
-                            )
-                        )
-                        dict_log_vars["log_p_sg_z"].append(
-                            avg_log_p_sg_z
+                            # self.model.latent_dist.logli_prior(
+                            #     tf.stop_gradient(z_var)
+                            # )
+                            log_p_z # this variant lets q(z|x) seek high density region
+                                    # but not pay the price
                         )
 
                         # when freebits is enabled, still give gradients to prior
@@ -229,11 +244,32 @@ class VAE(object):
                                   + tf.stop_gradient(avg_log_p_sg_z)
                               ) * self.kl_coeff
                     else:
-                        vlb = tf.reduce_mean(log_p_x_given_z) - \
-                          tf.maximum(
-                              kl,
-                              self.min_kl * ndim
-                          ) * self.kl_coeff
+                        if self.slow_kl:
+                            ema_kl = self.ema_kl
+                            dict_log_vars["ema_kl"].append(ema_kl / ndim)
+                            ema_kl_decay = 0.99
+                            if self.slow_kl is True:
+                                # "soft" version
+                                kl, _ = tf.tuple([
+                                    kl,
+                                    ema_kl.assign(ema_kl*ema_kl_decay+ kl*(1.-ema_kl_decay))
+                                ])
+                            elif self.slow_kl == "hard":
+                                pass
+                                # rely on training algo
+                            else:
+                                raise ValueError()
+                            surr_kl = tf.select(
+                                ema_kl >= self.min_kl*ndim,
+                                kl,
+                                self.min_kl*ndim
+                            )
+                        else:
+                            surr_kl = tf.maximum(
+                                kl,
+                                self.min_kl * ndim
+                            )
+                        vlb = tf.reduce_mean(log_p_x_given_z) - surr_kl * self.kl_coeff
 
                 # Normalize by the dimensionality of the data distribution
                 dict_log_vars["vlb_sum"].append(vlb)
@@ -434,7 +470,7 @@ class VAE(object):
             logger.log("total parameters %s" % total_parameters)
 
             for epoch in range(self.max_epoch):
-                self.pre_epoch(epoch)
+                self.pre_epoch(epoch, locals())
 
                 logger.log("epoch %s" % epoch)
                 widgets = ["epoch #%d|" % epoch, Percentage(), Bar(), ETA()]
@@ -484,7 +520,28 @@ class VAE(object):
 
                         if self.resume_from:
                             self.ar_vis(sess, feed)
-                            import ipdb; ipdb.set_trace()
+
+                            # print("resumption ema eval")
+                            # with temp_restore(sess, self.ema):
+                            #     ds = self.dataset.validation
+                            #     all_test_log_vals = []
+                            #     for ti in range(ds.images.shape[0] // self.eval_batch_size):
+                            #         # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
+                            #         # test_x = np.tile(test_x, [self.weight_redundancy, 1])
+                            #         eval_feed = self.prepare_eval_feed(
+                            #             self.dataset.validation,
+                            #             self.eval_batch_size,
+                            #         )
+                            #         test_log_vals = sess.run(
+                            #             eval_log_vars,
+                            #             eval_feed,
+                            #         )
+                            #         all_test_log_vals.append(test_log_vals)
+                            #
+                            # avg_test_log_vals = np.mean(np.array(all_test_log_vals), axis=0)
+                            # log_line = "EVAL" + "; ".join("%s: %s" % (str(k), str(v))
+                            #                               for k, v in zip(eval_log_keys, avg_test_log_vals))
+                            # print(log_line)
 
                         log_vals = sess.run([] + log_vars, feed)[:]
                         log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, log_vals))
@@ -548,24 +605,26 @@ class VAE(object):
                             if isinstance(self.model.output_dist, ConvAR):
                                 if counter != 0:
                                     self.ar_vis(sess, feed)
-                            ds = self.dataset.validation
-                            all_test_log_vals = []
-                            for ti in range(ds.images.shape[0] // self.eval_batch_size):
-                                # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
-                                # test_x = np.tile(test_x, [self.weight_redundancy, 1])
-                                eval_feed = self.prepare_eval_feed(
-                                    self.dataset.validation,
-                                    self.eval_batch_size,
-                                )
-                                test_log_vals = sess.run(
-                                    eval_log_vars,
-                                    eval_feed,
-                                )
-                                all_test_log_vals.append(test_log_vals)
-                                # fast eval for the first itr
-                                if counter == 0 and (self.resume_from is None):
-                                    if ti >= 4:
-                                        break
+
+                            with temp_restore(sess, self.ema):
+                                ds = self.dataset.validation
+                                all_test_log_vals = []
+                                for ti in range(ds.images.shape[0] // self.eval_batch_size):
+                                    # test_x, _ = self.dataset.validation.next_batch(self.eval_batch_size)
+                                    # test_x = np.tile(test_x, [self.weight_redundancy, 1])
+                                    eval_feed = self.prepare_eval_feed(
+                                        self.dataset.validation,
+                                        self.eval_batch_size,
+                                    )
+                                    test_log_vals = sess.run(
+                                        eval_log_vars,
+                                        eval_feed,
+                                    )
+                                    all_test_log_vals.append(test_log_vals)
+                                    # fast eval for the first itr
+                                    if counter == 0 and (self.resume_from is None):
+                                        if ti >= 4:
+                                            break
 
                             avg_test_log_vals = np.mean(np.array(all_test_log_vals), axis=0)
                             log_line = "EVAL" + "; ".join("%s: %s" % (str(k), str(v))
@@ -584,10 +643,28 @@ class VAE(object):
                 log_line = "; ".join("%s: %s" % (str(k), str(v)) for k, v in zip(log_keys, avg_log_vals))
 
                 logger.log(log_line)
-                for k,v in zip(log_keys, avg_log_vals):
-                    logger.record_tabular("train_%s"%k, v)
-                for k,v in zip(eval_log_keys, avg_test_log_vals):
-                    logger.record_tabular("vali_%s"%k, v)
+                for lk, lks, lraw in [
+                    ("train", log_keys, all_log_vals),
+                    ("vali", eval_log_keys, all_test_log_vals),
+                ]:
+                    for k, v in zip(
+                            lks,
+                            # avg_log_vals
+                            np.array(lraw).T
+                    ):
+                        if k == "kl":
+                            logger.record_tabular_misc_stat("%s_%s"%(lk,k), v)
+                        else:
+                            logger.record_tabular("%s_%s"%(lk,k), np.mean(v))
+
+                        if self.slow_kl == "hard" and lk == "train" and k == "kl_sum":
+                            sess.run(
+                                self.ema_kl.assign(np.mean(v))
+                            )
+
+                # for k,v in zip(eval_log_keys, avg_test_log_vals):
+                #     logger.record_tabular("vali_%s"%k, v)
+
                 logger.dump_tabular(with_prefix=False)
 
                 if self.anneal_after is not None and epoch >= self.anneal_after:
@@ -622,8 +699,37 @@ class VAE(object):
     def init_hook(self, vars):
         pass
 
-    def pre_epoch(self, epoch):
-        pass
+    def pre_epoch(self, epoch, kw):
+        if self.lwarm_until is not None:
+            if epoch == self.lwarm_until:
+                assert self.lwarm_until != 0
+                inp_mask = kw["sess"].run(
+                    self.model.output_dist._inp_mask.assign(
+                        1.
+                    )
+                )
+                print("local ar ON: %s"%inp_mask)
+            elif epoch == 0:
+                # inp_mask = kw["sess"].run(
+                #     self.model.output_dist._inp_mask.assign(
+                #         0.
+                #     )
+                # )
+                assert self.model.output_dist._sanity
+        if self.arwarm_until is not None:
+            assert self.lwarm_until is None
+            if epoch == self.arwarm_until:
+                assert self.arwarm_until != 0
+                inp_mask = kw["sess"].run(
+                    self.model.output_dist._context_mask.assign(
+                        1.
+                    )
+                )
+                print("code ON: %s"%inp_mask)
+            elif epoch == 0:
+                assert self.model.output_dist._sanity2
+
+
 
     def iter_hook(self, **kw):
         pass

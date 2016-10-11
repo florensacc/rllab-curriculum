@@ -2,9 +2,11 @@
 
 # try playing with conv af model
 
-# kl 0.01 leads to no code being used/
+# kl 0.01 leads to no code being used/ --> not sure if this is true, more likely it's being used
 # switch to 0.06 and try again
 
+# data/local/1002-convaf-on-spatial-code/
+# kl 0.01 optimizes faster
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

@@ -26,7 +26,26 @@ class BilinearIntegrationLayer(L.MergeLayer):
                                               outdim=2)]
                                   , axis=1)
         return bilinear
-        # return obs_robot_var
+
+
+class SumProdLayer(L.MergeLayer):
+    def __init__(self, incomings, name=None):  # prod is a numpy vector (or list) with the scalars to multiply
+        super(SumProdLayer, self).__init__(incomings, name)  # each incoming layer before summing them, LAST IS COEFS!!
+        # check if all input shapes are the same. See that the first dim might be NONE (for batch)
+        coef_layer = incomings[-1]
+        assert self.input_shapes[1:-1] == self.input_shapes[:-2]
+        assert coef_layer.output_shape[0] == len(incomings) - 1 or coef_layer.output_shape[1] == len(incomings) - 1
+        self.coef_layer = coef_layer
+
+    def get_output_shape_for(self, input_shapes):
+        return input_shapes[0]  # they are all supposed to be the same
+
+    def get_output_for(self, inputs, **kwargs):
+        coefs = inputs[-1]
+        output = TT.zeros_like(inputs[0])
+        for i, input_arr in enumerate(inputs[:-1]):
+            output += input_arr * coefs[:, i].reshape((-1, 1))
+        return output
 
 
 class CropLayer(L.Layer):
@@ -58,10 +77,9 @@ class ConstOutputLayer(L.Layer):
     def get_output_shape_for(self, input_shape):
         n_batch = input_shape[0]  # the batch size
         single_output_shape = self.output_var.get_value().shape
-        return (n_batch,) + single_output_shape   # this is supposed to create a tuple
+        return (n_batch,) + single_output_shape  # this is supposed to create a tuple
 
     def get_output_for(self, all_obs_var, **kwargs):
         n_batch = all_obs_var.shape[0]
         out = TT.tile(self.output_var, (n_batch, 1))
         return out
-

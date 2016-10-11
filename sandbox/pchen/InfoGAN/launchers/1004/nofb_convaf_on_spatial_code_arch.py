@@ -63,14 +63,18 @@ class VG(VariantGenerator):
         return [256, ]#[12, 32]
 
     @variant
-    def min_kl(self):
-        # return [0.06, ]# 0.1]
-        return [0.0, ]# 0.1]
-
-    @variant
     def min_kl_onesided(self):
         # return [0.06, ]# 0.1]
         return [False, True]# 0.1]
+
+    @variant
+    def min_kl(self, min_kl_onesided):
+        return [0.01]
+        if min_kl_onesided:
+            return [0.01]
+        # return [0.06, ]# 0.1]
+        return [0.0, ]# 0.1]
+
     #
     @variant(hide=False)
     def network(self):
@@ -191,7 +195,6 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def data_init_scale(self):
         return [0.1]
-
 
 
 
@@ -324,6 +327,7 @@ for v in variants[i:i+1]:
             anneal_after=v["anneal_after"],
             img_on=False,
             min_kl_onesided=v["min_kl_onesided"],
+            vis_ar=False,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,

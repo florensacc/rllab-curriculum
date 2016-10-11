@@ -97,6 +97,7 @@ def load_exps_data(exp_folder_paths,disable_variant=False):
     exps = []
     for exp_folder_path in exp_folder_paths:
         exps += [x[0] for x in os.walk(exp_folder_path)]
+    print("finished walking exp folders")
     exps_data = []
     for exp in exps:
         try:
@@ -190,7 +191,7 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
                 )
             ),
             key=lambda x: (
-                tuple(0. if it is None else it for it in x),
+                tuple(0. if it is None else str(it) for it in x),
             )
         )
     except Exception as e:
