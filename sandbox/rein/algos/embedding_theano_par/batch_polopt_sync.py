@@ -196,12 +196,17 @@ class ParallelBatchPolopt(RLAlgorithm):
         if self.serial_compile:
             self.force_compile()
         self.init_par_objs()
-        processes = [mp.Process(target=self._train, args=(rank,))
-                     for rank in range(self.n_parallel)]
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
+        for itr in range(self.current_itr, self.n_itr):
+            with logger.prefix('itr #%d | ' % itr):
+                processes = [mp.Process(target=self._train, args=(rank,))
+                             for rank in range(self.n_parallel)]
+                for p in processes:
+                    p.start()
+                for p in processes:
+                    p.join()
+                if self._train_model:
+                    self.fill_replay_pool(paths)
+                    self.train_model(itr)
 
     def process_paths(self, paths):
         for path in paths:
@@ -223,81 +228,72 @@ class ParallelBatchPolopt(RLAlgorithm):
         raise NotImplementedError
 
     def _train(self, rank):
+        import theano.sandbox.cuda
+        theano.sandbox.cuda.use("cpu")
         self.init_rank(rank)
         if self.rank == 0:
             start_time = time.time()
-        for itr in range(self.current_itr, self.n_itr):
-            with logger.prefix('itr #%d | ' % itr):
-                if rank == 0:
-                    logger.log("Collecting samples ...")
-                paths = self.sampler.obtain_samples()
 
-                # --
-                # Additional
-                self.preprocess(paths)
-                if self._train_model:
-                    self.fill_replay_pool(paths)
-                    self.train_model(itr)
-                self.comp_int_rewards(paths)
+            if rank == 0:
+                logger.log("Collecting samples ...")
+            paths = self.sampler.obtain_samples()
 
-                if self.rank == 0:
-                    # --
-                    # Analysis
-                    # Get consistency images in first iteration.
-                    if itr == 0:
-                        # Select random images form the first path,
-                        # evaluate them at every iteration to inspect emb.
-                        rnd = np.random.randint(0, len(paths[0]['env_infos']['images']), 32)
-                        self._test_obs = self.encode_obs(
-                            paths[0]['env_infos']['images'][rnd, -np.prod(self._model.state_dim):])
-                    obs = self.encode_obs(
-                        paths[0]['env_infos']['images'][-32:, -np.prod(self._model.state_dim):])
+            # --
+            # Additional
+            self.preprocess(paths)
+            self.comp_int_rewards(paths)
 
-                    if self._model_embedding and self._train_model and itr % 20 == 0:
-                        logger.log('Plotting consistency images ...')
-                        self._plotter.plot_pred_imgs(
-                            model=self._model, inputs=self.decode_obs(self._test_obs), targets=self._test_obs,
-                            itr=-itr - 1, dir=CONSISTENCY_CHECK_DIR)
-                        logger.log('Plotting uniqueness images ...')
-                        self._plotter.plot_pred_imgs(
-                            model=self._model, inputs=self.decode_obs(obs), targets=obs, itr=0,
-                            dir=UNIQUENESS_CHECK_DIR)
+           np.random.randint(0, len(paths[0]['env_infos']['images']), 32)
+                    self._test_obs = self.encode_obs(
+                        paths[0]['env_infos']['images'][rnd, -np.prod(self._model.state_dim):])
+                obs = self.encode_obs(
+                    paths[0]['env_infos']['images'][-32:, -np.prod(self._model.state_dim):])
 
-                    if self._model_embedding:
-                        logger.log('Printing embeddings ...')
-                        self._plotter.print_consistency_embs(
-                            model=self._model, counting_table=None, inputs=self.decode_obs(self._test_obs),
-                            dir=CONSISTENCY_CHECK_DIR, hamming_distance=0)
-                        self._plotter.print_embs(
-                            model=self._model, counting_table=None, inputs=self.decode_obs(obs),
-                            dir=UNIQUENESS_CHECK_DIR, hamming_distance=0)
+                if self._model_embedding and self._train_model and itr % 20 == 0:
+                    logger.log('Plotting consistency images ...')
+                    self._plotter.plot_pred_imgs(
+                        model=self._model, inputs=self.decode_obs(self._test_obs), targets=self._test_obs,
+                        itr=-itr - 1, dir=CONSISTENCY_CHECK_DIR)
+                    logger.log('Plotting uniqueness images ...')
+                    self._plotter.plot_pred_imgs(
+                        model=self._model, inputs=self.decode_obs(obs), targets=obs, itr=0,
+                        dir=UNIQUENESS_CHECK_DIR)
 
-                self.process_paths(paths)
-                samples_data, dgnstc_data = self.sampler.process_samples(paths)
-                self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
-                self.optimize_policy(itr, samples_data)  # (parallel)
-                if rank == 0:
-                    logger.log("fitting baseline...")
-                self.baseline.fit(paths)  # (parallel)
-                if rank == 0:
-                    logger.log("fitted")
-                    logger.log("saving snapshot...")
-                    params = self.get_itr_snapshot(itr, samples_data)
-                    params["algo"] = self
-                    if self.store_paths:
-                        # NOTE: Only paths from rank==0 worker will be saved.
-                        params["paths"] = samples_data["paths"]
-                    logger.save_itr_params(itr, params)
-                    logger.log("saved")
+                if self._model_embedding:
+                    logger.log('Printing embeddings ...')
+                    self._plotter.print_consistency_embs(
+                        model=self._model, counting_table=None, inputs=self.decode_obs(self._test_obs),
+                        dir=CONSISTENCY_CHECK_DIR, hamming_distance=0)
+                    self._plotter.print_embs(
+                        model=self._model, counting_table=None, inputs=self.decode_obs(obs),
+                        dir=UNIQUENESS_CHECK_DIR, hamming_distance=0)
 
-                    logger.record_tabular("ElapsedTime", time.time() - start_time)
-                    logger.dump_tabular(with_prefix=False)
-                    if self.plot:
-                        self.update_plot()
-                        if self.pause_for_plot:
-                            input("Plotting evaluation run: Press Enter to "
-                                  "continue...")
-                self.current_itr = itr + 1
+            self.process_paths(paths)
+            samples_data, dgnstc_data = self.sampler.process_samples(paths)
+            self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
+            self.optimize_policy(itr, samples_data)  # (parallel)
+            if rank == 0:
+                logger.log("fitting baseline...")
+            self.baseline.fit(paths)  # (parallel)
+            if rank == 0:
+                logger.log("fitted")
+                logger.log("saving snapshot...")
+                params = self.get_itr_snapshot(itr, samples_data)
+                params["algo"] = self
+                if self.store_paths:
+                    # NOTE: Only paths from rank==0 worker will be saved.
+                    params["paths"] = samples_data["paths"]
+                logger.save_itr_params(itr, params)
+                logger.log("saved")
+
+                logger.record_tabular("ElapsedTime", time.time() - start_time)
+                logger.dump_tabular(with_prefix=False)
+                if self.plot:
+                    self.update_plot()
+                    if self.pause_for_plot:
+                        input("Plotting evaluation run: Press Enter to "
+                              "continue...")
+            self.current_itr = itr + 1
 
     #
     # Parallelized methods and related.

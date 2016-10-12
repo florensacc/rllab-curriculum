@@ -35,16 +35,15 @@ class ALEHashingBonusEvaluator(object):
             self.hash = hash
         elif sim_hash_args is not None:
             # Default: SimHash
-            self.hash = SimHash(state_dim, **sim_hash_args)
+            self.hash = SimHash(state_dim, **sim_hash_args, parallel=parallel)
             self.hash.reset()
         else:
             # Default: SimHash
             sim_hash_args = {
                 "dim_key": 64,
                 "bucket_sizes": None,
-                "parallel": parallel
             }
-            self.hash = SimHash(state_dim, **sim_hash_args)
+            self.hash = SimHash(state_dim, **sim_hash_args, parallel=parallel)
             self.hash.reset()
 
         self.bonus_form = bonus_form
@@ -116,7 +115,7 @@ class ALEHashingBonusEvaluator(object):
     def fit_before_process_samples(self, paths):
         if self.parallel:
             shareds, barriers = self._par_objs
-            keys = self.retrieve_ys(paths)
+            keys = self.retrieve_keys(paths)
             prev_counts = self.hash.query_keys(keys)
             new_state_count = list(prev_counts).count(0)
             shareds.new_state_count_vec[self.rank] = new_state_count
@@ -124,7 +123,7 @@ class ALEHashingBonusEvaluator(object):
             if self.rank == 0:
                 total_new_state_count = sum(shareds.new_state_count_vec)
                 logger.record_tabular(
-                    self.log_prefix + 'NewSteateCount',
+                    self.log_prefix + 'NewStateCount',
                     total_new_state_count
                 )
                 shareds.total_state_count += total_new_state_count

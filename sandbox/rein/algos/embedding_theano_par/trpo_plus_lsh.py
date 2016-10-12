@@ -60,7 +60,6 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         self.step_size = step_size
         self.truncate_local_is_ratio = truncate_local_is_ratio
         self.mkl_num_threads = mkl_num_threads
-        super(ParallelTRPOPlusLSH, self).__init__(**kwargs)
 
         assert eta >= 0
         assert train_model_freq >= 1
@@ -84,16 +83,18 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
                 sim_hash_args=dict(
                     dim_key=256,
                     bucket_sizes=None,
-                    parallel=False,
-                )
+                ),
+                parallel=True
             )
         else:
+            self._hashing_evaluator_ram = None
             state_dim = 128
 
         self._hashing_evaluator = ALEHashingBonusEvaluator(
             state_dim=state_dim,
             count_target='embeddings',
             sim_hash_args=sim_hash_args,
+            parallel=True,
         )
 
         if self._model_embedding:
@@ -124,6 +125,7 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
                 **self._model_pool_args
             )
         self._plotter = Plotter()
+        super(ParallelTRPOPlusLSH, self).__init__(**kwargs)
 
     @overrides
     def init_opt(self):
@@ -271,13 +273,15 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
 
         # --
         # Update counting table.
-        logger.log('Retrieve embeddings ...')
+        if self.rank == 0:
+            logger.log('Retrieve embeddings ...')
         for idx, path in enumerate(paths):
             # When using num_seq_frames > 1, we need to extract the last one.
             keys = obs_to_key(path)
             path['env_infos']['embeddings'] = keys
 
-        logger.log('Update counting table and compute intrinsic reward ...')
+        if self.rank == 0:
+            logger.log('Update counting table and compute intrinsic reward ...')
         self._hashing_evaluator.fit_before_process_samples(paths)
         for path in paths:
             path['S'] = self._hashing_evaluator.predict(path)
@@ -287,7 +291,8 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         logger.record_tabular('StdS', np.std(arr_surprise))
 
         if self._model_embedding:
-            logger.log('Update counting table and compute intrinsic reward (RAM) ...')
+            if self.rank == 0:
+                logger.log('Update counting table and compute intrinsic reward (RAM) ...')
             self._hashing_evaluator_ram.fit_before_process_samples(paths)
             for path in paths:
                 path['ram_S'] = self._hashing_evaluator_ram.predict(path)
@@ -295,7 +300,8 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
             logger.record_tabular('ram_MeanS', np.mean(arr_surprise_ram))
             logger.record_tabular('ram_StdS', np.std(arr_surprise_ram))
 
-        logger.log('Intrinsic rewards computed')
+        if self.rank == 0:
+            logger.log('Intrinsic rewards computed')
 
     @overrides
     def fill_replay_pool(self, paths):
@@ -417,26 +423,16 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         logger.record_tabular('AE_TrainLoss', running_avg)
 
     @overrides
-    def add_int_to_ext_rewards(self, paths):
-        """
-        Alter rewards in-place.
-        :param paths: sampled trajectories
-        :return: None
-        """
-        for path in paths:
-            path['rewards'] += self._eta * path['S']
-
-    @overrides
-    def preprocess(paths):
+    def preprocess(self, paths):
         """
         Preprocess data.
         :param paths:
         :return:
         """
         # --
-        # Save external rewards.
-        for path in paths:
-            path['ext_rewards'] = np.array(path['rewards'])
+        # # Save external rewards.
+        # for path in paths:
+        #     path['raw_rewards'] = np.array(path['rewards'])
 
         # --
         # Observations are concatenations of RAM and img.

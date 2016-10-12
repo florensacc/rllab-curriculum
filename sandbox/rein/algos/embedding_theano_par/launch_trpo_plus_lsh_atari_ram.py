@@ -16,17 +16,17 @@ os.environ["THEANO_FLAGS"] = "device=gpu"
 stub(globals())
 
 n_seq_frames = 1
-n_parallel = 2
+n_parallel = 12
 model_batch_size = 32
-exp_prefix = 'trpo-par-rndconv-a'
+exp_prefix = 'trpo-par-rndconv-d'
 seeds = [0, 1, 2]
-etas = [0.001]
-mdps = [AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
-        AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
-        AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
+etas = [0.01, 0.001]
+mdps = [#AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
+        #AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
+        #AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
         AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=4)]
-trpo_batch_size = 5000
-max_path_length = 450
+trpo_batch_size = 50000
+max_path_length = 4500
 dropout = False
 batch_norm = False
 
@@ -42,7 +42,7 @@ for mdp, eta, seed in param_cart_product:
 
     policy = CategoricalMLPPolicy(
         env_spec=mdp_spec,
-        hidden_sizes=(128, 128),
+        hidden_sizes=(32, 32),
     )
     baseline = ParallelLinearFeatureBaseline(env_spec=mdp_spec)
 
@@ -85,35 +85,35 @@ for mdp, eta, seed in param_cart_product:
                  deterministic=True),
             dict(name='reshape',
                  shape=([0], -1)),
-            dict(name='gaussian',
-                 n_units=512,
-                 matrix_variate_gaussian=False,
-                 nonlinearity=lasagne.nonlinearities.linear,
-                 batch_norm=batch_norm,
-                 dropout=dropout,
-                 deterministic=True),
+            # dict(name='gaussian',
+            #      n_units=1024,
+            #      matrix_variate_gaussian=False,
+            #      nonlinearity=lasagne.nonlinearities.linear,
+            #      batch_norm=batch_norm,
+            #      dropout=dropout,
+            #      deterministic=True),
             dict(name='discrete_embedding',
-                 n_units=4096,
+                 n_units=1024,
                  batch_norm=batch_norm,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=512,
+                 n_units=2,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=dropout,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=2400,
+                 n_units=50,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
                  deterministic=True),
             dict(name='reshape',
-                 shape=([0], 96, 5, 5)),
+                 shape=([0], 2, 5, 5)),
             dict(name='deconvolution',
-                 n_filters=96,
+                 n_filters=2,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -122,7 +122,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='deconvolution',
-                 n_filters=96,
+                 n_filters=2,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 0),
@@ -131,7 +131,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='deconvolution',
-                 n_filters=96,
+                 n_filters=2,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 0),
@@ -149,11 +149,11 @@ for mdp, eta, seed in param_cart_product:
         prior_sd=0.05,
         second_order_update=False,
         learning_rate=0.0003,
-        surprise_type=ConvBNNVIME.SurpriseType.VAR,
+        surprise_type=None,
         update_prior=False,
         update_likelihood_sd=False,
         output_type=ConvBNNVIME.OutputType.CLASSIFICATION,
-        num_classes=64,
+        num_classes=256,
         likelihood_sd_init=0.1,
         disable_variance=False,
         ind_softmax=True,
@@ -193,14 +193,13 @@ for mdp, eta, seed in param_cart_product:
             fill_before_subsampling=False,
         ),
         eta=eta,
-        train_model=False,
+        train_model=True,
         train_model_freq=5,
         continuous_embedding=False,
         model_embedding=True,
         sim_hash_args=dict(
             dim_key=256,
             bucket_sizes=None,  # [15485867, 15485917, 15485927, 15485933, 15485941, 15485959],
-            parallel=False,
         )
     )
 
@@ -210,7 +209,7 @@ for mdp, eta, seed in param_cart_product:
         n_parallel=n_parallel,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=False,
         script="sandbox/rein/algos/embedding_theano/run_experiment_lite_ram_img.py",
