@@ -1,6 +1,14 @@
 # compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
 # this tests no-iaf & iaf w/o context on the best train logprob parameter
+
+# results: data/local/1002-iaf-change-on-pool-encoder-arch/
+# kl is used, slightly more w/ context
+# slightly more kl is used for iaf
+# slightly better train vlb with iaf
+
+# overfit slightly less without iaf -- but it still overfits 200+
+# !! this is surprising, meaning extremely easy for pool_encoder to overfit?
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

@@ -123,6 +123,9 @@ class ParallelBatchPolopt(RLAlgorithm):
             sum_raw_return=mp.RawArray('d', n),
             max_raw_return=mp.RawArray('d', n),
             min_raw_return=mp.RawArray('d', n),
+            sum_path_len=mp.RawArray('i',n),
+            max_path_len=mp.RawArray('i',n),
+            min_path_len=mp.RawArray('i',n),
             num_steps=mp.RawArray('i', n),
             num_valids=mp.RawArray('d', n),
             sum_ent=mp.RawArray('d', n),
@@ -232,7 +235,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                 self.optimize_policy(itr, samples_data)  # (parallel)
                 if rank == 0:
                     logger.log("fitting baseline...")
-                self.baseline.fit(paths)  # (parallel)
+                self.baseline.fit(samples_data["paths"])  # (parallel)
                 if rank == 0:
                     logger.log("fitted")
                     logger.log("saving snapshot...")
@@ -283,13 +286,19 @@ class ParallelBatchPolopt(RLAlgorithm):
                     samples_data["agent_infos"]) * samples_data["valids"])
                 shareds.num_valids[i] = np.sum(samples_data["valids"])
 
-            # TODO: ev needs sharing before computing.
+            # explained variance
             y_pred = np.concatenate(dgnstc_data["baselines"])
             y = np.concatenate(dgnstc_data["returns"])
             shareds.baseline_stats.y_sum_vec[i] = np.sum(y)
             shareds.baseline_stats.y_square_sum_vec[i] = np.sum(y**2)
             shareds.baseline_stats.y_pred_error_sum_vec[i] = np.sum(y-y_pred)
             shareds.baseline_stats.y_pred_error_square_sum_vec[i] = np.sum((y-y_pred)**2)
+
+            # path lengths
+            path_lens = [len(path["rewards"]) for path in samples_data["paths"]]
+            shareds.sum_path_len[i] = np.sum(path_lens)
+            shareds.max_path_len[i] = np.amax(path_lens)
+            shareds.min_path_len[i] = np.amin(path_lens)
 
             barriers.dgnstc.wait()
 
@@ -322,6 +331,11 @@ class ParallelBatchPolopt(RLAlgorithm):
                 else:
                     ev = 1 - y_pred_error_var / (y_var + 1e-8)
 
+                # path lens
+                avg_path_len = sum(shareds.sum_path_len) / float(num_traj)
+                max_path_len = max(shareds.max_path_len)
+                min_path_len = min(shareds.min_path_len)
+
                 logger.record_tabular('Iteration', itr)
                 logger.record_tabular('ExplainedVariance', ev)
                 logger.record_tabular('NumTrajs', num_traj)
@@ -335,6 +349,9 @@ class ParallelBatchPolopt(RLAlgorithm):
                 logger.record_tabular('RawReturnAverage', average_raw_return)
                 logger.record_tabular('RawReturnMax', max_raw_return)
                 logger.record_tabular('RawReturnMin', min_raw_return)
+                logger.record_tabular('PathLenAverage',avg_path_len)
+                logger.record_tabular('PathLenMax',max_path_len)
+                logger.record_tabular('PathLenMin',min_path_len)
 
 
         # NOTE: These others might only work if all path data is collected

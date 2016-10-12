@@ -50,10 +50,10 @@ class MazeEnv(ProxyEnv, Serializable):
             n_bins=20,
             sensor_range=10.,
             sensor_span=math.pi,
-            maze_id=4,
+            maze_id=0,
             length=1,
-            maze_height=0.2,
-            maze_size_scaling=2,
+            maze_height=0.5,
+            maze_size_scaling=4,
             *args,
             **kwargs):
 
@@ -453,10 +453,11 @@ class MazeEnv(ProxyEnv, Serializable):
             #  this breaks if the obs of the robot are d>1 dimensional (not a vector)
             stripped_paths.append(stripped_path)
         self.wrapped_env.log_diagnostics(stripped_paths)
-        self.plot_visitation(stripped_paths, maze=self.__class__.MAZE_STRUCTURE,
-                             scaling=self.__class__.MAZE_SIZE_SCALING)
+        # self.plot_visitation(stripped_paths, maze=self.__class__.MAZE_STRUCTURE,
+        #                      scaling=self.__class__.MAZE_SIZE_SCALING)
 
     def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2, fig=None, ax=None):
+        ## this is buggus because of the x, y in the pcolormesh
         if not fig and not ax:
             print("creating a new figure")
             fig, ax = plt.subplots()
@@ -468,20 +469,16 @@ class MazeEnv(ProxyEnv, Serializable):
         x_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
         y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -2] for path in paths]))))
         print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
-        # we suppose discrete, one-hot latents
         if maze:
             x_max = max(scaling * len(
                 maze) / 2. - 1, x_max)  # maze enlarge plot to include the walls. ASSUME ROBOT STARTS IN CENTER!
-            y_max = max( scaling * len(maze[0]) / 2. - 1, y_max)
-
+            y_max = max(scaling * len(maze[0]) / 2. - 1, y_max)  # the max here should be useless...
+            print("THE MAZE LIMITS ARE: x_max={}, y_max={}".format(x_max, y_max))
         if 'agent_infos' in list(paths[0].keys()) and 'latents' in list(paths[0]['agent_infos'].keys()):
             dict_visit = collections.OrderedDict()  # keys: latents, values: np.array with number of visitations
             num_latents = np.size(paths[0]["agent_infos"]["latents"][0])
             # set all the labels for the latents and initialize the entries of dict_visit
-            for i in range(num_latents):
-                # one_hot = np.zeros((1, num_latents))  # I put a 1 to be consistent with the rest
-                # one_hot[0,i] = 1
-                # latent_tick_label = 'lat: '+str(one_hot)
+            for i in range(num_latents):  # use integer to define the latents
                 dict_visit[i] = np.zeros((2 * x_max * mesh_density + 1, 2 * y_max * mesh_density + 1))
 
             # keep track of the overlap

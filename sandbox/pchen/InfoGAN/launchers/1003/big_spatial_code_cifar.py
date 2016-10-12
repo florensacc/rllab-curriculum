@@ -8,6 +8,9 @@
 
 # bigger enc/dec but no af or iaf
 
+# results: erroneous experiments that didn't really set base_filters
+# bigger zdim overfits slightly less
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

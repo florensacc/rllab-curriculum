@@ -344,7 +344,7 @@ def load_mnist_binarized(
         _download_mnist_binarized(datasetfolder)
 
     f = gzip.open(dataset, 'rb')
-    x_train, x_valid, x_test = pkl.load(f)
+    x_train, x_valid, x_test = pkl.load(f, encoding='latin1')
     f.close()
     return x_train, x_valid, x_test
 

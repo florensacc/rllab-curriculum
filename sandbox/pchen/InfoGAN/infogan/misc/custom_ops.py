@@ -1151,11 +1151,20 @@ class AdamaxOptimizer(optimizer.Optimizer):
     @@__init__
     """
 
-    def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, use_locking=False, name="Adamax"):
+    def __init__(
+            self,
+            learning_rate=0.001,
+            beta1=0.9,
+            beta2=0.999,
+            use_locking=False,
+            name="Adamax",
+            beta2_sparse=False,
+    ):
         super(AdamaxOptimizer, self).__init__(use_locking, name)
         self._lr = learning_rate
         self._beta1 = beta1
         self._beta2 = beta2
+        self._beta2_sparse = beta2_sparse
 
         # Tensor versions of the constructor arguments, created in _prepare().
         self._lr_t = None
@@ -1185,7 +1194,16 @@ class AdamaxOptimizer(optimizer.Optimizer):
         v = self.get_slot(var, "v")
         v_t = v.assign(beta1_t * v + (1. - beta1_t) * grad)
         m = self.get_slot(var, "m")
-        m_t = m.assign(tf.maximum(beta2_t * m + eps, tf.abs(grad)))
+        if self._beta2_sparse:
+            m_t = m.assign(
+                tf.select(
+                    tf.abs(grad) > 1e-10,
+                    tf.maximum(beta2_t * m + eps, tf.abs(grad)),
+                    tf.maximum(m, eps),
+                )
+            )
+        else:
+            m_t = m.assign(tf.maximum(beta2_t * m + eps, tf.abs(grad)))
         g_t = v_t / m_t
 
         var_update = state_ops.assign_sub(var, lr_t * g_t)
@@ -1193,6 +1211,7 @@ class AdamaxOptimizer(optimizer.Optimizer):
 
     def _apply_sparse(self, grad, var):
         raise NotImplementedError("Sparse gradient updates are not supported.")
+
 
 def resize_nearest_neighbor(x, scale):
     input_shape = list(map(int, x.get_shape().as_list()))
@@ -1456,6 +1475,21 @@ def left_shift(
     )
     return input_layer.with_tensor(y)
 
+@pt.Register(
+    assign_defaults=('custom_phase', )
+)
+def mul_init_ensured(
+        input_layer,
+        w,
+        custom_phase=CustomPhase.train,
+        name=PROVIDED
+):
+    x = input_layer.tensor
+    if custom_phase == CustomPhase.init:
+        w = w.initialized_value()
+
+    return input_layer.with_tensor(x*w)
+
 @prettytensor.Register
 def right_shift(
         input_layer,
@@ -1570,4 +1604,20 @@ def average_grads(tower_grads):
         grad_and_var = (grad, v)
         average_grads.append(grad_and_var)
     return average_grads
+
+
+@contextmanager
+def temp_restore(sess, ema):
+    if ema is None:
+        yield
+    else:
+        ema_keys = list(ema._averages.keys())
+        old_vals = sess.run(ema_keys)
+        _ = sess.run(
+            [tf.assign(var, avg) for var, avg in ema._averages.items()]
+        )
+        yield
+        _ = sess.run(
+            [tf.assign(var, avg) for var, avg in zip(ema_keys, old_vals)]
+        )
 

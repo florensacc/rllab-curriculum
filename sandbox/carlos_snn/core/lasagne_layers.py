@@ -33,8 +33,8 @@ class SumProdLayer(L.MergeLayer):
         super(SumProdLayer, self).__init__(incomings, name)  # each incoming layer before summing them, LAST IS COEFS!!
         # check if all input shapes are the same. See that the first dim might be NONE (for batch)
         coef_layer = incomings[-1]
-        assert self.input_shapes[1:-1] == self.input_shapes[:-2] and (coef_layer.output_shape[0] == len(incomings) - 1 or
-                                                                      coef_layer.output_shape[1] == len(incomings) - 1)
+        assert self.input_shapes[1:-1] == self.input_shapes[:-2]
+        assert coef_layer.output_shape[0] == len(incomings) - 1 or coef_layer.output_shape[1] == len(incomings) - 1
         self.coef_layer = coef_layer
 
     def get_output_shape_for(self, input_shapes):

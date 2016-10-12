@@ -5,6 +5,10 @@
 
 # testing if subpixel conv makes a difference on performance
 # also test no context
+
+
+# data/local/1002-subpixel-on-pool-encoder-arch/
+# no real difference
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

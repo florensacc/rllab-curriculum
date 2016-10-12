@@ -36,6 +36,7 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
             self.data = json.load(open(os.path.join(config.PROJECT_PATH, json_path), 'r'))
             self.low_policy_latent_dim = self.data['json_args']['policy']['latent_dim']
         elif pkl_path:
+            pkl_path = os.path.join(config.PROJECT_PATH, pkl_path)
             self.data = joblib.load(pkl_path)
             self.low_policy_latent_dim = self.data['policy'].latent_dim
         else:
@@ -63,6 +64,7 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
     @overrides
     def step(self, action):
         action = self.action_space.flatten(action)
+        # print("the action taken is: ", action)
         with self.low_policy.fix_latent(action):
             print("The hier action is prefixed latent: {}".format(self.low_policy.pre_fix_latent))
             frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,

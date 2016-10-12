@@ -6,16 +6,23 @@ class SimHashV2(BinaryHash):
     """
     Same as SimHash, but defined as a subclass of BinaryHash
     """
-    def __init__(self,item_dim, dim_key=128, bucket_sizes=None,parallel=False):
-        # each column is a vector of uniformly random orientation
-        self.projection_matrix = np.random.normal(size=(item_dim, dim_key))
-        self.item_dim = item_dim
-
+    def __init__(self,
+            item_dim,
+            dim_key=128,
+            bucket_sizes=None,
+            parallel=False,
+        ):
         super().__init__(
             dim_key=dim_key,
             bucket_sizes=bucket_sizes,
             parallel=parallel,
         )
+
+        # each column is a vector of uniformly random orientation
+        self.projection_matrix = np.random.normal(size=(item_dim, dim_key))
+        self.item_dim = item_dim
+
+        self.snapshot_list = ["projection_matrix"]
 
     def compute_binary_keys(self, items):
         binaries = np.sign(np.asarray(items).dot(self.projection_matrix))

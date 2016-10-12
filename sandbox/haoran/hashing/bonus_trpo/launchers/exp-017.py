@@ -46,7 +46,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
-mode = "local_test"
+mode = "kube"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -86,7 +86,7 @@ class VG(VariantGenerator):
         return ["montezuma_revenge"]
     @variant
     def resetter_type(self):
-        return ["SL",None]
+        return [None]
 variants = VG().variants()
 
 
@@ -137,13 +137,13 @@ for v in variants:
 
     # others
     resetter_type = v["resetter_type"]
+    baseline_prediction_clip = 100
 
     # other exp setup --------------------------------------
-    exp_name = "alex_{exp_index}_{time}_{game}_{obs_type}".format(
+    exp_name = "{exp_index}_{time}_{game}".format(
         exp_index=exp_index,
         time=get_time_stamp(),
         game=game,
-        obs_type=obs_type,
     )
     if ("ec2" in mode) and (len(exp_name) > 64):
         print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
@@ -227,6 +227,7 @@ for v in variants:
             policy=policy,
             nn_feature_power=1,
             t_power=3,
+            prediction_clip=baseline_prediction_clip,
         )
     elif baseline_type == "conv":
         network_args_for_vf = copy.deepcopy(network_args)
