@@ -20,6 +20,7 @@
 # deeper ar still better
 
 # fixed af, reproduce 12 ar depth & try to add in iaf post
+# kl is not used as stably as in slowkl version, and slowkl seems to have better performance
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -216,7 +217,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():

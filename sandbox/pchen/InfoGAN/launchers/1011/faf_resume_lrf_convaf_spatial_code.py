@@ -18,6 +18,8 @@
 
 # rerun after af is fixed
 
+# min-Kl = 0 -> nan, try larger
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -72,7 +74,7 @@ class VG(VariantGenerator):
     @variant
     def min_kl(self):
         # return [0.06, ]# 0.1]
-        return [0.01, 0.]# 0.1]
+        return [0.01, 0., 0.1]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -205,7 +207,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 2
 for v in variants[i:i+1]:
 
     # with skip_if_exception():

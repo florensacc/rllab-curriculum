@@ -82,7 +82,7 @@ class VG(VariantGenerator):
     @variant
     def min_kl(self):
         # return [0.06, ]# 0.1]
-        return [0.01, ]# 0.1]
+        return [0.01, 0.1]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -142,7 +142,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [0, 4, ]
+        return [4, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -222,7 +222,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 2
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -289,6 +289,7 @@ for v in variants[i:i+1]:
                 gating_context="gating" in v["i_context"],
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
+                img_shape=[8,8,zdim//64],
                 clip=True,
             )
         nml = 5
@@ -359,7 +360,7 @@ for v in variants[i:i+1]:
         print(v)
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1011_faf_clipped_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1011_faf_big_slowkl_0.01_mgpu_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",
