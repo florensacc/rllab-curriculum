@@ -1,15 +1,20 @@
-import time
+import os
 
-from sandbox.rein.algos.embedding_theano.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
-from sandbox.rein.algos.embedding_theano.plotter import Plotter
-from sandbox.rein.algos.embedding_theano.trpo import TRPO
-from rllab.misc import special
+import theano
+import theano.tensor as TT
 import numpy as np
-from rllab.misc import tensor_utils
+
+from rllab.misc import ext
+from rllab.misc.overrides import overrides
+
+from sandbox.rein.algos.embedding_theano_par.batch_polopt import ParallelBatchPolopt
+from sandbox.rein.algos.embedding_theano_par.conjugate_gradient_optimizer import \
+    ParallelConjugateGradientOptimizer
 import rllab.misc.logger as logger
-from rllab.algos import util
+from sandbox.rein.algos.embedding_theano_par.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
+from sandbox.rein.algos.embedding_theano_par.plotter import Plotter
+from sandbox.rein.algos.embedding_theano_par.replay_pool import SingleStateReplayPool
 from sandbox.rein.dynamics_models.utils import iterate_minibatches
-from sandbox.rein.algos.replay_pool import SingleStateReplayPool
 
 # --
 # Nonscientific printing of numpy arrays.
@@ -21,17 +26,23 @@ UNIQUENESS_CHECK_DIR = '/uniqueness_check'
 RANDOM_SAMPLES_DIR = '/random_samples'
 
 
-class TRPOPlusLSH(TRPO):
+class ParallelTRPOPlusLSH(ParallelBatchPolopt):
     """
-    TRPO+
+    Parallelized Trust Region Policy Optimization (Synchronous)
 
-    Extension to TRPO to allow for intrinsic reward.
-    TRPOPlus, but with locality-sensitive hashing (LSH) on top.
+    In this class definition, identical to serial case, except:
+        - Inherits from parallelized base class
+        - Holds a parallelized optimizer
+        - Has an init_par_objs() method (working on base class and optimizer)
     """
 
     def __init__(
             self,
-            model=None,
+            optimizer=None,
+            optimizer_args=None,
+            step_size=0.01,
+            truncate_local_is_ratio=None,
+            mkl_num_threads=1,
             eta=0.1,
             model_pool_args=None,
             train_model=True,
@@ -39,8 +50,17 @@ class TRPOPlusLSH(TRPO):
             continuous_embedding=True,
             model_embedding=True,
             sim_hash_args=None,
+            model=None,
             **kwargs):
-        super(TRPOPlusLSH, self).__init__(**kwargs)
+        if optimizer is None:
+            if optimizer_args is None:
+                optimizer_args = dict()
+            optimizer = ParallelConjugateGradientOptimizer(**optimizer_args)
+        self.optimizer = optimizer
+        self.step_size = step_size
+        self.truncate_local_is_ratio = truncate_local_is_ratio
+        self.mkl_num_threads = mkl_num_threads
+        super(ParallelTRPOPlusLSH, self).__init__(**kwargs)
 
         assert eta >= 0
         assert train_model_freq >= 1
@@ -105,133 +125,120 @@ class TRPOPlusLSH(TRPO):
             )
         self._plotter = Plotter()
 
-    def process_samples(self, itr, paths):
-        baselines = []
-        returns = []
-        for path in paths:
-            path_baselines = np.append(self.baseline.predict(path), 0)
-            deltas = path["rewards"] + \
-                     self.discount * path_baselines[1:] - \
-                     path_baselines[:-1]
-            path["advantages"] = special.discount_cumsum(
-                deltas, self.discount * self.gae_lambda)
-            path["returns"] = special.discount_cumsum(path["rewards"], self.discount)
-            baselines.append(path_baselines[:-1])
-            returns.append(path["returns"])
+    @overrides
+    def init_opt(self):
+        """
+        Same as normal NPO, except for setting MKL_NUM_THREADS.
+        """
+        # Set BEFORE Theano compiling; make equal to number of cores per worker.
+        os.environ['MKL_NUM_THREADS'] = str(self.mkl_num_threads)
 
-        ev = special.explained_variance_1d(
-            np.concatenate(baselines),
-            np.concatenate(returns)
+        is_recurrent = int(self.policy.recurrent)
+        obs_var = self.env.observation_space.new_tensor_variable(
+            'obs',
+            extra_dims=1 + is_recurrent,
+        )
+        action_var = self.env.action_space.new_tensor_variable(
+            'action',
+            extra_dims=1 + is_recurrent,
+        )
+        advantage_var = ext.new_tensor(
+            'advantage',
+            ndim=1 + is_recurrent,
+            dtype=theano.config.floatX
+        )
+        dist = self.policy.distribution
+        old_dist_info_vars = {
+            k: ext.new_tensor(
+                'old_%s' % k,
+                ndim=2 + is_recurrent,
+                dtype=theano.config.floatX
+            ) for k in dist.dist_info_keys
+            }
+        old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
+
+        state_info_vars = {
+            k: ext.new_tensor(
+                k,
+                ndim=2 + is_recurrent,
+                dtype=theano.config.floatX
+            ) for k in self.policy.state_info_keys
+            }
+        state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
+
+        if is_recurrent:
+            valid_var = TT.matrix('valid')
+        else:
+            valid_var = None
+
+        dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
+        kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
+        lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
+        if self.truncate_local_is_ratio is not None:
+            lr = TT.minimum(self.truncate_local_is_ratio, lr)
+        if is_recurrent:
+            mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
+            surr_loss = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
+        else:
+            mean_kl = TT.mean(kl)
+            surr_loss = - TT.mean(lr * advantage_var)
+
+        input_list = [obs_var,
+                      action_var,
+                      advantage_var,
+                      ] + state_info_vars_list + old_dist_info_vars_list
+        if is_recurrent:
+            input_list.append(valid_var)
+
+        self.optimizer.update_opt(
+            loss=surr_loss,
+            target=self.policy,
+            leq_constraint=(mean_kl, self.step_size),
+            inputs=input_list,
+            constraint_name="mean_kl"
+        )
+        return dict()
+
+    @overrides
+    def prep_samples(self, samples_data):
+        all_input_values = tuple(ext.extract(
+            samples_data,
+            "observations", "actions", "advantages"
+        ))
+        agent_infos = samples_data["agent_infos"]
+        state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
+        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
+        all_input_values += tuple(state_info_list) + tuple(dist_info_list)
+        if self.policy.recurrent:
+            all_input_values += (samples_data["valids"],)
+        return all_input_values
+
+    @overrides
+    def optimize_policy(self, itr, samples_data):
+        if self.whole_paths:
+            self.optimizer.set_avg_fac(self.n_steps_collected)  # (parallel)
+        all_input_values = self.prep_samples(samples_data)
+        self.optimizer.optimize(all_input_values)  # (parallel)
+        return dict()
+
+    @overrides
+    def get_itr_snapshot(self, itr, samples_data):
+        return dict(
+            itr=itr,
+            policy=self.policy,
+            baseline=self.baseline,
+            env=self.env,
         )
 
-        if not self.policy.recurrent:
-            observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
-            actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
-            rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
-            returns = tensor_utils.concat_tensor_list([path["returns"] for path in paths])
-            advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
-            env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
-            agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
+    @overrides
+    def init_par_objs(self):
+        self._init_par_objs_batchpolopt()  # (must do first)
+        self.optimizer.init_par_objs(
+            n_parallel=self.n_parallel,
+            size_grad=len(self.policy.get_param_values(trainable=True)),
+        )
 
-            if self.center_adv:
-                advantages = util.center_advantages(advantages)
-
-            if self.positive_adv:
-                advantages = util.shift_advantages_to_positive(advantages)
-
-            average_discounted_return = \
-                np.mean([path["returns"][0] for path in paths])
-
-            undiscounted_returns = [sum(path["ext_rewards"]) for path in paths]
-
-            ent = np.mean(self.policy.distribution.entropy(agent_infos))
-
-            samples_data = dict(
-                observations=observations,
-                actions=actions,
-                rewards=rewards,
-                returns=returns,
-                advantages=advantages,
-                env_infos=env_infos,
-                agent_infos=agent_infos,
-                paths=paths,
-            )
-        else:
-            max_path_length = max([len(path["advantages"]) for path in paths])
-
-            # make all paths the same length (pad extra advantages with 0)
-            obs = [path["observations"] for path in paths]
-            obs = np.array([tensor_utils.pad_tensor(ob, max_path_length) for ob in obs])
-
-            if self.center_adv:
-                raw_adv = np.concatenate([path["advantages"] for path in paths])
-                adv_mean = np.mean(raw_adv)
-                adv_std = np.std(raw_adv) + 1e-8
-                adv = [(path["advantages"] - adv_mean) / adv_std for path in paths]
-            else:
-                adv = [path["advantages"] for path in paths]
-
-            adv = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in adv])
-
-            actions = [path["actions"] for path in paths]
-            actions = np.array([tensor_utils.pad_tensor(a, max_path_length) for a in actions])
-
-            rewards = [path["rewards"] for path in paths]
-            rewards = np.array([tensor_utils.pad_tensor(r, max_path_length) for r in rewards])
-
-            returns = [path["returns"] for path in paths]
-            returns = np.array([tensor_utils.pad_tensor(r, max_path_length) for r in returns])
-
-            agent_infos = [path["agent_infos"] for path in paths]
-            agent_infos = tensor_utils.stack_tensor_dict_list(
-                [tensor_utils.pad_tensor_dict(p, max_path_length) for p in agent_infos]
-            )
-
-            env_infos = [path["env_infos"] for path in paths]
-            env_infos = tensor_utils.stack_tensor_dict_list(
-                [tensor_utils.pad_tensor_dict(p, max_path_length) for p in env_infos]
-            )
-
-            valids = [np.ones_like(path["returns"]) for path in paths]
-            valids = np.array([tensor_utils.pad_tensor(v, max_path_length) for v in valids])
-
-            average_discounted_return = \
-                np.mean([path["returns"][0] for path in paths])
-
-            undiscounted_returns = [sum(path["ext_rewards"]) for path in paths]
-
-            ent = np.sum(self.policy.distribution.entropy(agent_infos) * valids) / np.sum(valids)
-
-            samples_data = dict(
-                observations=obs,
-                actions=actions,
-                advantages=adv,
-                rewards=rewards,
-                returns=returns,
-                valids=valids,
-                agent_infos=agent_infos,
-                env_infos=env_infos,
-                paths=paths,
-            )
-
-        logger.log("Updating baseline ...")
-        self.baseline.fit(paths)
-        logger.log("Baseline updated.")
-
-        logger.record_tabular('Iteration', itr)
-        logger.record_tabular('AverageDiscountedReturn',
-                              average_discounted_return)
-        logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
-        logger.record_tabular('ExplainedVariance', ev)
-        logger.record_tabular('NumTrajs', len(paths))
-        logger.record_tabular('Entropy', ent)
-        logger.record_tabular('Perplexity', np.exp(ent))
-        logger.record_tabular('StdReturn', np.std(undiscounted_returns))
-        logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
-        logger.record_tabular('MinReturn', np.min(undiscounted_returns))
-
-        return samples_data
-
+    @overrides
     def comp_int_rewards(self, paths):
         """
         Retrieve binary code and increase count of each sample in batch.
@@ -290,6 +297,7 @@ class TRPOPlusLSH(TRPO):
 
         logger.log('Intrinsic rewards computed')
 
+    @overrides
     def fill_replay_pool(self, paths):
         """
         Fill up replay pool.
@@ -308,6 +316,7 @@ class TRPOPlusLSH(TRPO):
                 self._pool.add_sample(obs_enc[i])
         logger.log('{} samples added to replay pool ({}).'.format(tot_path_len, self._pool.size))
 
+    @overrides
     def encode_obs(self, obs):
         """
         Observation into uint8 encoding, also functions as target format
@@ -317,6 +326,7 @@ class TRPOPlusLSH(TRPO):
         obs_enc = np.round((obs + 1.0) * 0.5 * self._model.num_classes).astype("uint8")
         return obs_enc
 
+    @overrides
     def decode_obs(self, obs):
         """
         From uint8 encoding to original observation format.
@@ -342,6 +352,7 @@ class TRPOPlusLSH(TRPO):
             acc += np.sum(np.abs(_o_s - _t))
         return acc / _inputs.shape[0]
 
+    @overrides
     def train_model(self, itr):
         """
         Train autoencoder model.
@@ -405,6 +416,7 @@ class TRPOPlusLSH(TRPO):
         logger.record_tabular('AE_SqErrAfter', acc_after)
         logger.record_tabular('AE_TrainLoss', running_avg)
 
+    @overrides
     def add_int_to_ext_rewards(self, paths):
         """
         Alter rewards in-place.
@@ -414,7 +426,7 @@ class TRPOPlusLSH(TRPO):
         for path in paths:
             path['rewards'] += self._eta * path['S']
 
-    @staticmethod
+    @overrides
     def preprocess(paths):
         """
         Preprocess data.
@@ -431,109 +443,3 @@ class TRPOPlusLSH(TRPO):
         # Actual observation = RAM, split off img into 'img'
         for path in paths:
             path['images'] = np.array(path['observations'][128:])
-
-    def diagnostics(self, start_time, itr, samples_data, paths):
-        """
-        Diagnostics of each run.
-        :param start_time:
-        :param itr:
-        :param samples_data:
-        :param paths:
-        """
-        # --
-        # Analysis
-        # Get consistency images in first iteration.
-        if itr == 0:
-            # Select random images form the first path, evaluate them at every iteration to inspect emb.
-            rnd = np.random.randint(0, len(paths[0]['env_infos']['images']), 32)
-            self._test_obs = self.encode_obs(
-                paths[0]['env_infos']['images'][rnd, -np.prod(self._model.state_dim):])
-        obs = self.encode_obs(paths[0]['env_infos']['images'][-32:, -np.prod(self._model.state_dim):])
-
-        # inputs = np.random.randint(0, 2, (10, 128))
-        # self._plotter.plot_gen_imgs(
-        #     model=self._model, inputs=inputs, targets=self._test_obs,
-        #     itr=0, dir='/generated')
-
-        if self._model_embedding and self._train_model and itr % 20 == 0:
-            logger.log('Plotting consistency images ...')
-            self._plotter.plot_pred_imgs(
-                model=self._model, inputs=self.decode_obs(self._test_obs), targets=self._test_obs,
-                itr=-itr - 1, dir=CONSISTENCY_CHECK_DIR)
-            logger.log('Plotting uniqueness images ...')
-            self._plotter.plot_pred_imgs(
-                model=self._model, inputs=self.decode_obs(obs), targets=obs, itr=0,
-                dir=UNIQUENESS_CHECK_DIR)
-
-        if self._model_embedding:
-            logger.log('Printing embeddings ...')
-            self._plotter.print_consistency_embs(
-                model=self._model, counting_table=None, inputs=self.decode_obs(self._test_obs),
-                dir=CONSISTENCY_CHECK_DIR, hamming_distance=0)
-            self._plotter.print_embs(
-                model=self._model, counting_table=None, inputs=self.decode_obs(obs),
-                dir=UNIQUENESS_CHECK_DIR, hamming_distance=0)
-
-        # --
-        # Diagnostics
-        self.log_diagnostics(paths)
-        logger.log("Saving snapshot ...")
-        params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
-        if self.store_paths:
-            params["paths"] = samples_data["paths"]
-        logger.save_itr_params(itr, params)
-        logger.log("saved")
-        logger.record_tabular('Time', time.time() - start_time)
-        logger.dump_tabular(with_prefix=False)
-        if self.plot:
-            self.update_plot()
-            if self.pause_for_plot:
-                input("Plotting evaluation run: Press Enter to continue...")
-
-    def train(self):
-        """
-        Main RL training procedure.
-        """
-        self.start_worker()
-        self.init_opt()
-        start_time = time.time()
-        for itr in range(self.n_itr):
-            with logger.prefix('itr #%d | ' % itr):
-                # --
-                # Sample trajectories.
-                paths = self.obtain_samples(itr)
-
-                # --
-                # Preprocess trajectory data.
-                self.preprocess(paths)
-
-                if self._train_model:
-                    # --
-                    # Fill replay pool.
-                    self.fill_replay_pool(paths)
-
-                    # --
-                    # Train model.
-                    self.train_model(itr)
-
-                # --
-                # Compute intrinisc rewards.
-                self.comp_int_rewards(paths)
-
-                # --
-                # Add intrinsic reward to external: 'rewards' is what is actually used as 'true' reward.
-                self.add_int_to_ext_rewards(paths)
-
-                # --
-                # Compute deltas, advantages, etc.
-                samples_data = self.process_samples(itr, paths)
-
-                # --
-                # Optimize policy according to latest trajectory batch `samples_data`.
-                self.optimize_policy(itr, samples_data)
-
-                # --
-                # Diagnosics
-                self.diagnostics(start_time, itr, samples_data, paths)
-
-        self.shutdown_worker()

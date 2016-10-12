@@ -1,15 +1,27 @@
-from rllab.misc import ext
-from rllab.misc.overrides import overrides
-from sandbox.rein.algos.embedding_theano.batch_polopt import BatchPolopt
-import rllab.misc.logger as logger
+
+import os
+
 import theano
 import theano.tensor as TT
-from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+
+from rllab.misc import ext
+from rllab.misc.overrides import overrides
+# from rllab.algos.batch_polopt import BatchPolopt
+# import rllab.misc.logger as logger
+# from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+
+from sandbox.haoran.parallel_trpo.batch_polopt import ParallelBatchPolopt
+from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
 
 
-class NPO(BatchPolopt):
+class ParallelTRPO(ParallelBatchPolopt):
     """
-    Natural Policy Optimization.
+    Parallelized Trust Region Policy Optimization (Synchronous)
+
+    In this class definition, identical to serial case, except:
+        - Inherits from parallelized base class
+        - Holds a parallelized optimizer
+        - Has an init_par_objs() method (working on base class and optimizer)
     """
 
     def __init__(
@@ -18,19 +30,26 @@ class NPO(BatchPolopt):
             optimizer_args=None,
             step_size=0.01,
             truncate_local_is_ratio=None,
-            **kwargs
-    ):
+            mkl_num_threads=1,
+            **kwargs):
         if optimizer is None:
             if optimizer_args is None:
                 optimizer_args = dict()
-            optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
+            optimizer = ParallelConjugateGradientOptimizer(**optimizer_args)
         self.optimizer = optimizer
         self.step_size = step_size
         self.truncate_local_is_ratio = truncate_local_is_ratio
-        super(NPO, self).__init__(**kwargs)
+        self.mkl_num_threads = mkl_num_threads
+        super(ParallelTRPO, self).__init__(**kwargs)
 
     @overrides
     def init_opt(self):
+        """
+        Same as normal NPO, except for setting MKL_NUM_THREADS.
+        """
+        # Set BEFORE Theano compiling; make equal to number of cores per worker.
+        os.environ['MKL_NUM_THREADS'] = str(self.mkl_num_threads)
+
         is_recurrent = int(self.policy.recurrent)
         obs_var = self.env.observation_space.new_tensor_variable(
             'obs',
@@ -52,7 +71,7 @@ class NPO(BatchPolopt):
                 ndim=2 + is_recurrent,
                 dtype=theano.config.floatX
             ) for k in dist.dist_info_keys
-            }
+        }
         old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
 
         state_info_vars = {
@@ -81,11 +100,10 @@ class NPO(BatchPolopt):
             mean_kl = TT.mean(kl)
             surr_loss = - TT.mean(lr * advantage_var)
 
-        input_list = [
-                         obs_var,
-                         action_var,
-                         advantage_var,
-                     ] + state_info_vars_list + old_dist_info_vars_list
+        input_list = [obs_var,
+                      action_var,
+                      advantage_var,
+                      ] + state_info_vars_list + old_dist_info_vars_list
         if is_recurrent:
             input_list.append(valid_var)
 
@@ -99,7 +117,7 @@ class NPO(BatchPolopt):
         return dict()
 
     @overrides
-    def optimize_policy(self, itr, samples_data):
+    def prep_samples(self, samples_data):
         all_input_values = tuple(ext.extract(
             samples_data,
             "observations", "actions", "advantages"
@@ -110,16 +128,14 @@ class NPO(BatchPolopt):
         all_input_values += tuple(state_info_list) + tuple(dist_info_list)
         if self.policy.recurrent:
             all_input_values += (samples_data["valids"],)
-        loss_before = self.optimizer.loss(all_input_values)
-        mean_kl_before = self.optimizer.constraint_val(all_input_values)
-        self.optimizer.optimize(all_input_values)
-        mean_kl = self.optimizer.constraint_val(all_input_values)
-        loss_after = self.optimizer.loss(all_input_values)
-        logger.record_tabular('LossBefore', loss_before)
-        logger.record_tabular('LossAfter', loss_after)
-        logger.record_tabular('MeanKLBefore', mean_kl_before)
-        logger.record_tabular('MeanKL', mean_kl)
-        logger.record_tabular('dLoss', loss_before - loss_after)
+        return all_input_values
+
+    @overrides
+    def optimize_policy(self, itr, samples_data):
+        if self.whole_paths:
+            self.optimizer.set_avg_fac(self.n_steps_collected)  # (parallel)
+        all_input_values = self.prep_samples(samples_data)
+        self.optimizer.optimize(all_input_values)  # (parallel)
         return dict()
 
     @overrides
@@ -129,5 +145,12 @@ class NPO(BatchPolopt):
             policy=self.policy,
             baseline=self.baseline,
             env=self.env,
-            model=self._model,
+        )
+
+    @overrides
+    def init_par_objs(self):
+        self._init_par_objs_batchpolopt()  # (must do first)
+        self.optimizer.init_par_objs(
+            n_parallel=self.n_parallel,
+            size_grad=len(self.policy.get_param_values(trainable=True)),
         )

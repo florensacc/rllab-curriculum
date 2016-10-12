@@ -84,19 +84,11 @@ class IndependentSoftmaxLayer(lasagne.layers.Layer):
         self._num_bins = num_bins
         self.W = self.add_param(W, (self.input_shape[1], self._num_bins), name='W')
         self.b = self.add_param(b, (self._num_bins,), name='b')
-        # FIXME: changed
-        if len(self.input_shape) == 2:
-            self.pixel_b = self.add_param(
-                b,
-                self.input_shape[1:] + (self._num_bins,),
-                name='pixel_b'
-            )
-        else:
-            self.pixel_b = self.add_param(
-                b,
-                (self.input_shape[2], self.input_shape[3], self._num_bins,),
-                name='pixel_b'
-            )
+        self.pixel_b = self.add_param(
+            b,
+            (self.input_shape[2], self.input_shape[3], self._num_bins,),
+            name='pixel_b'
+        )
 
     def get_output_for(self, input, **kwargs):
         fc = input.dimshuffle(0, 2, 3, 1). \
@@ -111,9 +103,7 @@ class IndependentSoftmaxLayer(lasagne.layers.Layer):
         return out.reshape(shp)
 
     def get_output_shape_for(self, input_shape):
-        # FIXME: changed
-        return (input_shape[0],) + input_shape[2:] + (self._num_bins,)
-        # return input_shape[0], input_shape[2], input_shape[3], self._num_bins
+        return input_shape[0], input_shape[2], input_shape[3], self._num_bins
 
 
 class LogitLayer(lasagne.layers.Layer):
@@ -555,7 +545,6 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # Make sure that we are able to unmerge the s_in and a_in.
 
         # Input to the s_net is always flattened.
-        # FIXME: changed
         input_dim = (self.num_seq_inputs,) + (self.state_dim[1:])
         s_flat_dim = np.prod(input_dim)
 
@@ -623,10 +612,12 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 s_net = DiscreteEmbeddingLinearLayer(
                     s_net,
                     num_units=layer_disc['n_units'])
-                s_net = BatchNormLayer(s_net)
+                if layer_disc['batch_norm'] is True:
+                    s_net = BatchNormLayer(s_net)
                 s_net = DiscreteEmbeddingNonlinearityLayer(s_net, layer_disc['n_units'], self.batch_size)
                 # Pull out discrete embedding layer.
                 self.discrete_emb_sym = s_net
+                self.discrete_emb_size = layer_disc['n_units']
             elif layer_disc['name'] == 'deterministic':
                 s_net = lasagne.layers.DenseLayer(
                     s_net,
