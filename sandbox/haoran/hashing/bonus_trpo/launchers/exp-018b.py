@@ -1,12 +1,5 @@
 """
-Parallel-TRPO w/ RAM observations: testing
-The setup is similar to exp-016b
-Also try the same params for image counts
-
-For Davis:
-1. for testing, use mode = "local_test"
-2. for actual running, use mode = "kube"
-3. count targets: "images"(only current frame) or "ram_states"
+Here we try to understand why sometimes new_state_count is more than the batch size
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -48,7 +41,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
-mode = "kube"
+mode = "kube_test"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -85,11 +78,11 @@ class VG(VariantGenerator):
 
     @variant
     def dim_key(self):
-        return [256]
+        return [512]
 
     @variant
     def count_target(self):
-        return ["images","ram_states"]
+        return ["ram_states"]
 variants = VG().variants()
 
 
@@ -100,7 +93,7 @@ for v in variants:
     use_parallel = True
     seed=v["seed"]
     if "test" in mode:
-        batch_size = 500
+        batch_size = 50000
     else:
         batch_size = 50000
     max_path_length = 4500
@@ -139,7 +132,7 @@ for v in variants:
     bonus_form="1/sqrt(n)"
     count_target=v["count_target"]
     retrieve_sample_size=100000 # compute keys for all paths at once
-    bucket_sizes=None # None means default
+    bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959] #90M
 
     # others
     baseline_prediction_clip = 100

@@ -1,19 +1,16 @@
 """
-Parallel-TRPO w/ RAM observations: testing
-The setup is similar to exp-016b
-Also try the same params for image counts
-
-For Davis:
-1. for testing, use mode = "local_test"
-2. for actual running, use mode = "kube"
-3. count targets: "images"(only current frame) or "ram_states"
+Continue exp-017c
+- log more count info
+- composite bonus
 """
 # imports -----------------------------------------------------
 """ baseline """
-from sandbox.haoran.parallel_trpo.linear_feature_baseline import ParallelLinearFeatureBaseline
+from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBaseline
+from sandbox.adam.parallel.parallel_nn_feature_linear_baseline import ParallelNNFeatureLinearBaseline
 
 """ policy """
-from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
+from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
 
 """ optimizer """
 from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
@@ -23,15 +20,19 @@ from sandbox.haoran.parallel_trpo.trpo import ParallelTRPO
 
 """ environment """
 from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
+from sandbox.haoran.hashing.bonus_trpo.envs.atari_env_info import semantic_actions
 
 """ resetter """
+# from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
 from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import AtariSaveLoadResetter
+
+""" terminator """
+from sandbox.haoran.hashing.bonus_trpo.terminators.montezuma_terminator import MontezumaTerminator
 
 """ bonus """
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.identity_preprocessor import IdentityPreprocessor
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash import SimHash
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.ale_hacky_hash_v3 import ALEHackyHashV3
 
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
@@ -48,7 +49,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
-mode = "kube"
+mode = "local_test"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -74,22 +75,33 @@ class VG(VariantGenerator):
     @variant
     def seed(self):
         return [0,100,200,300,400,500,600,700,800,900]
-
     @variant
     def bonus_coeff(self):
-        return [0.01]
-
+        return [1e-4]
+    @variant
+    def baseline_type_opt(self):
+        return [
+            # ["conv","cg"],
+            ["nn_feature_linear",""],
+        ]
     @variant
     def game(self):
         return ["montezuma_revenge"]
-
     @variant
-    def dim_key(self):
-        return [256]
-
+    def resetter_type(self):
+        return [""]
     @variant
-    def count_target(self):
-        return ["images","ram_states"]
+    def task(self):
+        return ["to_second_room"]
+    @variant
+    def cg_iters(self):
+        return [10]
+    @variant
+    def subsample_factor(self):
+        return [0.1,0.3]
+    @variant
+    def center_adv(self):
+        return [True]
 variants = VG().variants()
 
 
@@ -99,19 +111,21 @@ for v in variants:
     # algo
     use_parallel = True
     seed=v["seed"]
-    if "test" in mode:
+    if mode == "local_test":
         batch_size = 500
     else:
         batch_size = 50000
-    max_path_length = 4500
+    max_path_length = 1500
     discount = 0.99
     n_itr = 1000
     step_size = 0.01
+    clip_reward = True
+    center_adv=v["center_adv"]
     policy_opt_args = dict(
         name="pi_opt",
-        cg_iters=10,
-        reg_coeff=1e-5,
-        subsample_factor=1.,
+        cg_iters=v["cg_iters"],
+        reg_coeff=1e-3,
+        subsample_factor=v["subsample_factor"],
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
@@ -121,28 +135,36 @@ for v in variants:
 
     # env
     game=v["game"]
-    env_seed=1 # deterministic env
-    frame_skip=4
-    img_width=84
-    img_height=84
-    n_last_screens=1
-    clip_reward = True
-    obs_type = "ram"
-    count_target = v["count_target"]
-    record_image=(count_target == "images")
+    frame_skip=8
+    max_start_nullops = 0
+    network_args = nips_dqn_args
+    img_width=42
+    img_height=42
+    obs_type = "image"
+    record_image=False
     record_rgb_image=False
-    record_ram=(count_target == "ram_states")
+    record_ram=True
     record_internal_state=False
+    legal_semantic_actions = [
+        "noop","fire",
+        "up","right","left","down",
+        "up-fire","right-fire","left-fire","down-fire",
+    ] # disable diagonal movement
+    legal_actions=[
+        semantic_actions.index(s_action)
+        for s_action in legal_semantic_actions
+    ]
 
     # bonus
     bonus_coeff=v["bonus_coeff"]
     bonus_form="1/sqrt(n)"
-    count_target=v["count_target"]
-    retrieve_sample_size=100000 # compute keys for all paths at once
-    bucket_sizes=None # None means default
+    count_target="ram_states"
+    retrieve_sample_size=10000
 
     # others
+    resetter_type = v["resetter_type"]
     baseline_prediction_clip = 100
+    task = v["task"]
 
     # other exp setup --------------------------------------
     exp_name = "{exp_index}_{time}_{game}".format(
@@ -197,9 +219,24 @@ for v in variants:
         raise NotImplementedError
 
     # construct objects ----------------------------------
+    if resetter_type == "SL":
+        # resetter = AtariSaveLoadResetter(
+        #     restored_state_folder=None,
+        #     avoid_life_lost=False,
+        # )
+        raise NotImplementedError
+    else:
+        resetter = None
+
+    if task == "":
+        terminator = None
+    else:
+        terminator = MontezumaTerminator(task=task)
+
     env = AtariEnv(
         game=game,
-        seed=env_seed,
+        seed=seed,
+        max_start_nullops=max_start_nullops,
         img_width=img_width,
         img_height=img_height,
         obs_type=obs_type,
@@ -207,42 +244,73 @@ for v in variants:
         record_image=record_image,
         record_rgb_image=record_rgb_image,
         record_internal_state=record_internal_state,
+        resetter=resetter,
+        terminator=terminator,
         frame_skip=frame_skip,
+        legal_actions=legal_actions,
     )
-    policy = CategoricalMLPPolicy(
+    policy = CategoricalConvPolicy(
         env_spec=env.spec,
-        hidden_sizes=(32,32),
+        name="policy",
+        **network_args
     )
 
     # baseline
-    baseline = ParallelLinearFeatureBaseline(env_spec=env.spec)
-
-    # bonus
-    if count_target == "images":
-        state_preprocessor = ImageVectorizePreprocessor(
-            n_channel=n_last_screens,
-            width=img_width,
-            height=img_height,
+    baseline_type, baseline_opt = v["baseline_type_opt"]
+    if baseline_type == "nn_feature_linear":
+        baseline = ParallelNNFeatureLinearBaseline(
+            env_spec=env.spec,
+            policy=policy,
+            nn_feature_power=1,
+            t_power=3,
+            prediction_clip=baseline_prediction_clip,
         )
-    elif count_target == "ram_states":
-        state_preprocessor = ImageVectorizePreprocessor(
-            n_channel=1,
-            width=128,
-            height=1,
+    elif baseline_type == "conv":
+        network_args_for_vf = copy.deepcopy(network_args)
+        network_args_for_vf.pop("output_nonlinearity")
+        baseline = ParallelGaussianConvBaseline(
+            env_spec=env.spec,
+            regressor_args = dict(
+                optimizer=ParallelConjugateGradientOptimizer(
+                    subsample_factor=0.1,
+                    cg_iters=10,
+                    name="vf_opt",
+                ),
+                use_trust_region=True,
+                step_size=0.01,
+                batchsize=batch_size*10,
+                normalize_inputs=True,
+                normalize_outputs=True,
+                **network_args_for_vf
+            )
         )
     else:
         raise NotImplementedError
 
-    _hash = SimHash(
-        item_dim=state_preprocessor.get_output_dim(), # get around stub
-        dim_key=v["dim_key"],
-        bucket_sizes=bucket_sizes,
+    # bonus
+    if count_target == "images" or \
+    (count_target == "observations" and obs_type == "image"):
+        total_pixels=img_width * img_height
+        state_preprocessor = SlicingPreprocessor(
+            input_dim=total_pixels * n_last_screens,
+            start=total_pixels * (n_last_screens - 1),
+            stop=total_pixels * n_last_screens,
+            step=1,
+        )
+    elif count_target == "ram_states":
+        state_preprocessor = None
+    else:
+        raise NotImplementedError
+
+    _hash = ALEHackyHashV3(
+        item_dim=128,
+        game=game,
         parallel=use_parallel,
     )
     bonus_evaluator = ALEHashingBonusEvaluator(
         log_prefix="",
-        state_dim=state_preprocessor.get_output_dim(), # get around stub
-        state_preprocessor=state_preprocessor,
+        state_dim=128,
+        state_preprocessor=None,
         hash=_hash,
         bonus_form=bonus_form,
         count_target=count_target,
@@ -260,7 +328,6 @@ for v in variants:
         max_path_length=max_path_length,
         discount=discount,
         n_itr=n_itr,
-        clip_reward=clip_reward,
         plot=plot,
         optimizer_args=policy_opt_args,
         step_size=step_size,
@@ -268,6 +335,8 @@ for v in variants:
         cpu_assignments=cpu_assignments,
         serial_compile=serial_compile,
         n_parallel=n_parallel,
+        clip_reward=clip_reward,
+        center_adv=center_adv,
     )
 
     if use_parallel:

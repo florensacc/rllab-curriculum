@@ -1,12 +1,5 @@
 """
-Parallel-TRPO w/ RAM observations: testing
-The setup is similar to exp-016b
-Also try the same params for image counts
-
-For Davis:
-1. for testing, use mode = "local_test"
-2. for actual running, use mode = "kube"
-3. count targets: "images"(only current frame) or "ram_states"
+Try random bonus rewards
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -28,9 +21,11 @@ from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import AtariSaveLoadResetter
 
 """ bonus """
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.random_bonus_evaluator import RandomBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.identity_preprocessor import IdentityPreprocessor
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash import SimHash
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash_v2 import SimHashV2
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
 
 """ others """
@@ -84,12 +79,9 @@ class VG(VariantGenerator):
         return ["montezuma_revenge"]
 
     @variant
-    def dim_key(self):
-        return [256]
+    def entropy_bonus(self):
+        return [0]
 
-    @variant
-    def count_target(self):
-        return ["images","ram_states"]
 variants = VG().variants()
 
 
@@ -99,7 +91,7 @@ for v in variants:
     # algo
     use_parallel = True
     seed=v["seed"]
-    if "test" in mode:
+    if mode == "local_test":
         batch_size = 500
     else:
         batch_size = 50000
@@ -118,6 +110,7 @@ for v in variants:
         hvp_approach=None,
         num_slices=1, # reduces memory requirement
     )
+    entropy_bonus = v["entropy_bonus"]
 
     # env
     game=v["game"]
@@ -128,18 +121,16 @@ for v in variants:
     n_last_screens=1
     clip_reward = True
     obs_type = "ram"
-    count_target = v["count_target"]
-    record_image=(count_target == "images")
+    record_image=False
     record_rgb_image=False
-    record_ram=(count_target == "ram_states")
+    record_ram=False
     record_internal_state=False
 
     # bonus
     bonus_coeff=v["bonus_coeff"]
     bonus_form="1/sqrt(n)"
-    count_target=v["count_target"]
     retrieve_sample_size=100000 # compute keys for all paths at once
-    bucket_sizes=None # None means default
+    bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959] #90M
 
     # others
     baseline_prediction_clip = 100
@@ -218,36 +209,9 @@ for v in variants:
     baseline = ParallelLinearFeatureBaseline(env_spec=env.spec)
 
     # bonus
-    if count_target == "images":
-        state_preprocessor = ImageVectorizePreprocessor(
-            n_channel=n_last_screens,
-            width=img_width,
-            height=img_height,
-        )
-    elif count_target == "ram_states":
-        state_preprocessor = ImageVectorizePreprocessor(
-            n_channel=1,
-            width=128,
-            height=1,
-        )
-    else:
-        raise NotImplementedError
-
-    _hash = SimHash(
-        item_dim=state_preprocessor.get_output_dim(), # get around stub
-        dim_key=v["dim_key"],
-        bucket_sizes=bucket_sizes,
-        parallel=use_parallel,
-    )
-    bonus_evaluator = ALEHashingBonusEvaluator(
+    bonus_evaluator = RandomBonusEvaluator(
         log_prefix="",
-        state_dim=state_preprocessor.get_output_dim(), # get around stub
-        state_preprocessor=state_preprocessor,
-        hash=_hash,
-        bonus_form=bonus_form,
-        count_target=count_target,
-        parallel=use_parallel,
-        retrieve_sample_size=retrieve_sample_size,
+        randomness_form="uniform",
     )
 
     algo = ParallelTRPO(
@@ -268,6 +232,7 @@ for v in variants:
         cpu_assignments=cpu_assignments,
         serial_compile=serial_compile,
         n_parallel=n_parallel,
+        entropy_bonus=entropy_bonus,
     )
 
     if use_parallel:

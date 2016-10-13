@@ -1,12 +1,5 @@
 """
-Parallel-TRPO w/ RAM observations: testing
-The setup is similar to exp-016b
-Also try the same params for image counts
-
-For Davis:
-1. for testing, use mode = "local_test"
-2. for actual running, use mode = "kube"
-3. count targets: "images"(only current frame) or "ram_states"
+Re-run exp-011c. Understand why sometimes image counting works
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -31,6 +24,7 @@ from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import 
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.identity_preprocessor import IdentityPreprocessor
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash import SimHash
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash_v2 import SimHashV2
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
 
 """ others """
@@ -53,7 +47,7 @@ ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 2 # only for local exp
+n_parallel = 1 # only for local exp
 snapshot_mode = "last"
 plot = False
 use_gpu = False
@@ -73,7 +67,7 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0,100,200,300,400,500,600,700,800,900]
+        return [1000,2000,3000,4000,5000]
 
     @variant
     def bonus_coeff(self):
@@ -81,15 +75,19 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["montezuma_revenge"]
+        return ["freeway", "venture"]
 
     @variant
     def dim_key(self):
-        return [256]
+        return [64,256]
 
     @variant
     def count_target(self):
-        return ["images","ram_states"]
+        return ["images"]
+
+    @variant
+    def entropy_bonus(self):
+        return [1e-2]
 variants = VG().variants()
 
 
@@ -99,7 +97,7 @@ for v in variants:
     # algo
     use_parallel = True
     seed=v["seed"]
-    if "test" in mode:
+    if mode == "local_test":
         batch_size = 500
     else:
         batch_size = 50000
@@ -118,6 +116,7 @@ for v in variants:
         hvp_approach=None,
         num_slices=1, # reduces memory requirement
     )
+    entropy_bonus = v["entropy_bonus"]
 
     # env
     game=v["game"]
@@ -139,7 +138,7 @@ for v in variants:
     bonus_form="1/sqrt(n)"
     count_target=v["count_target"]
     retrieve_sample_size=100000 # compute keys for all paths at once
-    bucket_sizes=None # None means default
+    bucket_sizes = None
 
     # others
     baseline_prediction_clip = 100
@@ -233,7 +232,7 @@ for v in variants:
     else:
         raise NotImplementedError
 
-    _hash = SimHash(
+    _hash = SimHashV2(
         item_dim=state_preprocessor.get_output_dim(), # get around stub
         dim_key=v["dim_key"],
         bucket_sizes=bucket_sizes,
@@ -268,6 +267,7 @@ for v in variants:
         cpu_assignments=cpu_assignments,
         serial_compile=serial_compile,
         n_parallel=n_parallel,
+        entropy_bonus=entropy_bonus,
     )
 
     if use_parallel:
