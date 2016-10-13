@@ -229,11 +229,11 @@ class ParallelBatchPolopt(RLAlgorithm):
                 if rank == 0:
                     logger.log("Collecting samples ...")
                 paths = self.sampler.obtain_samples()
+                self.process_paths(paths) # temporary change for debugging in exp-018f (could be a permanent change, as this tends to give higher bonuses)
                 if self.bonus_evaluator is not None:
                     if rank == 0:
                         logger.log("fitting bonus evaluator")
                     self.bonus_evaluator.fit_before_process_samples(paths)
-                self.process_paths(paths)
                 samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 self.optimize_policy(itr, samples_data)  # (parallel)
