@@ -123,6 +123,9 @@ class ParallelBatchPolopt(RLAlgorithm):
             sum_raw_return=mp.RawArray('d', n),
             max_raw_return=mp.RawArray('d', n),
             min_raw_return=mp.RawArray('d', n),
+            max_bonus=mp.RawArray('d', n),
+            min_bonus=mp.RawArray('d', n),
+            sum_bonus=mp.RawArray('d', n),
             sum_path_len=mp.RawArray('i',n),
             max_path_len=mp.RawArray('i',n),
             min_path_len=mp.RawArray('i',n),
@@ -281,11 +284,19 @@ class ParallelBatchPolopt(RLAlgorithm):
             shareds.sum_raw_return[i] = np.sum(undiscounted_raw_returns)
             shareds.min_raw_return[i] = np.min(undiscounted_raw_returns)
             shareds.max_raw_return[i] = np.max(undiscounted_raw_returns)
+
+            # bonuses
+            bonuses = np.concatenate([path["bonus_rewards"] for path in samples_data["paths"]])
+            shareds.max_bonus[i] = np.max(bonuses)
+            shareds.min_bonus[i] = np.min(bonuses)
+            shareds.sum_bonus[i] = np.sum(bonuses)
+
             if not self.policy.recurrent:
                 shareds.sum_ent[i] = np.sum(self.policy.distribution.entropy(
                     samples_data["agent_infos"]))
                 shareds.num_valids[i] = 0
             else:
+                raise NotImplementedError
                 shareds.sum_ent[i] = np.sum(self.policy.distribution.entropy(
                     samples_data["agent_infos"]) * samples_data["valids"])
                 shareds.num_valids[i] = np.sum(samples_data["valids"])
@@ -308,6 +319,8 @@ class ParallelBatchPolopt(RLAlgorithm):
 
             if self.rank == 0:
                 num_traj = sum(shareds.num_traj)
+                n_steps = sum(shareds.num_steps)
+
                 average_discounted_return = \
                     sum(shareds.sum_discounted_return) / num_traj
                 if self.policy.recurrent:
@@ -322,8 +335,11 @@ class ParallelBatchPolopt(RLAlgorithm):
                 max_raw_return = max(shareds.max_raw_return)
                 min_raw_return = min(shareds.min_raw_return)
 
+                max_bonus = max(shareds.max_bonus)
+                min_bonus = min(shareds.min_bonus)
+                average_bonus = sum(shareds.sum_bonus) / n_steps
+
                 # compute explained variance
-                n_steps = sum(shareds.num_steps)
                 y_mean = sum(shareds.baseline_stats.y_sum_vec) / n_steps
                 y_square_mean = sum(shareds.baseline_stats.y_square_sum_vec) / n_steps
                 y_pred_error_mean = sum(shareds.baseline_stats.y_pred_error_sum_vec) / n_steps
@@ -357,6 +373,9 @@ class ParallelBatchPolopt(RLAlgorithm):
                 logger.record_tabular('PathLenAverage',avg_path_len)
                 logger.record_tabular('PathLenMax',max_path_len)
                 logger.record_tabular('PathLenMin',min_path_len)
+                logger.record_tabular('BonusRewardMax',max_bonus)
+                logger.record_tabular('BonusRewardMin',min_bonus)
+                logger.record_tabular('BonusRewardAverage',average_bonus)
 
 
         # NOTE: These others might only work if all path data is collected
