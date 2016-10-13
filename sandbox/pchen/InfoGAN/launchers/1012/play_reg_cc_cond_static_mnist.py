@@ -1,46 +1,18 @@
-# compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
+# try removing iaf and af to see if it reduces overfitting
 
-# try playing with conv af model
+# iaf creates overfitting more. af alone with ard6 -> 79.26
+# interestingly, 8 overfits more than 6!
 
-# kl 0.01 leads to no code being used/
-# switch to 0.06 and try again
-
-# 0.06 might need to overfitting, so this will explore 0.01 kl but much smaller init scale
-# also try fewer feature maps but this shouldnt affect as much?
-
-# data/local/1003-init-convaf-on-spatial-code/
-# --> turns out fewer feature maps helps a lot??
-# and only 0.005kl is used
-
-# this explores larger receptive field & convaf
-
-# ar-depth 12 has good performance, this explores training it faster
-# w/ multi-gpu and check ar-depth 6 w/ double feat maps & deeper depth
-
-# deeper ar still better
-
-# fixed af, reproduce 12 ar depth w/ slow kl
-# 2-step af and 4-step af
-
-# better than no slowkl version in terms of kl and bits/dim
-# no difference between 2-step & 4-step version, which means p(z) is not the limitation
-#   of current capacity
-
-# THINK: curves look spiky, maybe reduce lr?
-# THINK: what is limiting the capacity? try different axes
-
-# adding bigger zdim exp
-
-# is the conv code being deficient due to w/ autoregressive channels
+# try tying arconv param & fewer conv ar channels
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
-    IAR, ConvAR, DiscretizedLogistic, DistAR
+    IAR, ConvAR
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset, Cifar10Dataset
+    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset, load_caltech, Caltech101Dataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -54,8 +26,7 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
-# batch_size = 128
-batch_size = 129
+batch_size = 128*3
 # updates_per_epoch = 100
 
 stub(globals())
@@ -81,9 +52,12 @@ class VG(VariantGenerator):
         return [True, ]
 
     @variant
+    def zdim(self):
+        return [64, ]#[12, 32]
+
+    @variant
     def min_kl(self):
-        # return [0.06, ]# 0.1]
-        return [0.01, ]# 0.1]
+        return [0.01, ] #0.05, 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -100,17 +74,11 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_widegen"
         # yield "resv1_k3_pixel_bias_widegen_conv_ar"
         # yield "resv1_k3_pixel_bias_filters_ratio"
-        # yield "resv1_k3_pixel_bias_filters_ratio_32"
-        # yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
-        yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
+        yield "resv1_k3_pixel_bias_filters_ratio_conv_ar"
 
     @variant(hide=False)
-    def steps(self, ):
-        return [3]
-    #
-    @variant(hide=False)
     def base_filters(self, ):
-        return [32, ]
+        return [16, ]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -125,28 +93,23 @@ class VG(VariantGenerator):
         return [True, ]
 
     @variant(hide=False)
-    def num_gpus(self):
-        # yield 0.0005#
-        # yield
-        # return np.arange(1, 11) * 1e-4
-        # return [0.0001, 0.0005, 0.001]
-        return [3] #0.001]
-
-    @variant(hide=False)
-    def k(self, num_gpus):
-        return [batch_size // num_gpus, ]
+    def k(self):
+        return [128, ]
 
     @variant(hide=False)
     def nar(self):
-        return [4]
+        return [4,]
 
     @variant(hide=False)
     def nr(self):
-        return [3,]
+        return [5,]
 
     @variant(hide=False)
-    def i_nar(self):
-        return [0, ]
+    def i_nar(self, nar):
+        if nar == 0:
+            return [4, ]
+        else:
+            return [0]
 
     @variant(hide=False)
     def i_nr(self):
@@ -157,21 +120,17 @@ class VG(VariantGenerator):
         return [0.1, ]
 
     @variant(hide=False)
-    def i_context(self, i_nar):
+    def i_context(self):
         # return [True, False]
-        if i_nar == 0:
-            return [
-                []
-            ]
         return [
-            [],
+            # [],
             ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
     @variant(hide=False)
     def exp_avg(self):
-        return [0.999, ]
+        return [0.99, ]
 
     @variant(hide=False)
     def tiear(self):
@@ -185,24 +144,21 @@ class VG(VariantGenerator):
     # @variant(hide=False)
     # def ds(self):
     #     return [
-    #         # "mnist",
-    #         "omni",
+    #         "mnist",
+    #         "omni"
     #     ]
 
     @variant(hide=True)
     def max_epoch(self, ):
-        yield 3000
+        yield 600
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
-        return [
-            # int(max_epoch * 0.7)
-            1500
-        ]
+        return [int(max_epoch * 0.7)]
 
     @variant(hide=False)
     def context_dim(self, ):
-        return [9]
+        return [4]
 
     @variant(hide=False)
     def cond_rep(self, context_dim):
@@ -210,15 +166,19 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [12, ]
+        return [6, ]
 
     @variant(hide=False)
-    def data_init_scale(self):
-        return [0.01, ]
+    def ar_nin(self, ar_depth):
+        return [2, ]
 
-    @variant
-    def zdim(self):
-        return [256, ]#[12, 32]
+    @variant(hide=False)
+    def ar_tie(self):
+        return [True, False]
+
+    @variant(hide=False)
+    def ar_chns(self):
+        return [12, 6]
 
 
 
@@ -227,9 +187,8 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
-for v in variants[i:i+1]:
-        print(v)
+
+for v in variants[:]:
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]
@@ -241,13 +200,10 @@ for v in variants[i:i+1]:
 
         print("Exp name: %s" % exp_name)
 
-
-        # if v["ds"] == "omni":
-        #     dataset = ResamplingBinarizedOmniglotDataset()
-        # else:
-        #     dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
-
-        dataset = Cifar10Dataset()
+        # load_caltech()
+        # dataset = Caltech101Dataset()
+        # dataset = Caltech101Dataset()
+        dataset = BinarizedMnistDataset()
 
         # init_size = v["dec_init_size"]
         # ch_size = zdim // init_size // init_size
@@ -271,9 +227,6 @@ for v in variants[i:i+1]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
-                img_shape=[8,8,zdim//64],
-                ar_channels=True,
-                data_init_scale=v["data_init_scale"],
             )
 
         latent_spec = [
@@ -295,33 +248,20 @@ for v in variants[i:i+1]:
                 gating_context="gating" in v["i_context"],
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
-                img_shape=[8,8,zdim//64],
             )
-        nml = 5
-        tgt_dist = Mixture(
-           [(DiscretizedLogistic(3), 1./nml) for _ in range(nml)]
-        )
-        tgt_ar_dist = DistAR(
-            3,
-            tgt_dist,
-            depth=2,
-            neuron_ratio=2,
-            linear_context=True,
-        )
+
         ar_conv_dist = ConvAR(
-            # tgt_dist=Bernoulli(1),
-            # tgt_dist=tgt_dist,
-            tgt_dist=tgt_ar_dist,
-            shape=(32, 32, 3),
+            tgt_dist=MeanBernoulli(1),
+            shape=(28, 28, 1),
             filter_size=3,
             depth=v["ar_depth"],
-            nr_channels=12*2*2 // 12 * v["ar_depth"],
+            nr_channels=12,
             pixel_bias=True,
-            context_dim=v["context_dim"],
-            nin=False,
-            block="gated_resnet",
-            extra_nins=2
             # block="plstm",
+            context_dim=v["context_dim"],
+            tieweight=v["ar_tie"],
+            block="gated_resnet",
+            extra_nins=v["ar_nin"],
         )
         model = RegularizedHelmholtzMachine(
             output_dist=ar_conv_dist,
@@ -333,8 +273,6 @@ for v in variants[i:i+1]:
             wnorm=v["wnorm"],
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                old_dec=True,
-                base_filters=v["base_filters"]
             ),
         )
 
@@ -349,28 +287,34 @@ for v in variants[i:i+1]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*3*4,
+            vali_eval_interval=6000//128*5,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
             vis_ar=False,
-            num_gpus=v["num_gpus"],
-            slow_kl=True,
-            # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
-            # img_on=True,
-            # summary_interval=200,
-            # resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1012_ar_channels_slowkl_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1012_play_reg_smnist_cc_af_gres",
             seed=v["seed"],
             variant=v,
             mode="local",
             # mode="lab_kube",
             # n_parallel=0,
             # use_gpu=True,
+            # node_selector={
+            #     "aws/type": "p2.xlarge",
+            #     "openai/computing": "true",
+            # },
+            # resources=dict(
+            #     requests=dict(
+            #         cpu=1.6,
+            #     ),
+            #     limits=dict(
+            #         cpu=1.6,
+            #     )
+            # )
         )
 
 

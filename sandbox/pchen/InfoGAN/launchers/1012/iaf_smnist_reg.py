@@ -167,7 +167,7 @@ variants = vg.variants(randomized=False)
 
 print(len(variants))
 
-for v in variants[:]:
+for v in variants[3:]:
 
     # with skip_if_exception():
 
