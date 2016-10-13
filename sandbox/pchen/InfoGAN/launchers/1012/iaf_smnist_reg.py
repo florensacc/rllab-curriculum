@@ -1,7 +1,6 @@
-# try autoregressive flow on static mnist
+# try some regularization for iaf
+# like thinner iaf
 
-# best 80.1 w/ nr10 and nar4
-# nar2 & nr30 slightly worse
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -26,7 +25,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 # updates_per_epoch = 100
-max_epoch = 700
+max_epoch = 500
 
 stub(globals())
 
@@ -52,12 +51,23 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [32, ]#[12, 32]
+        return [64, ]#[12, 32]
 
     @variant
     def min_kl(self):
         return [0.01, ] #0.05, 0.1]
     #
+    @variant
+    def nar(self):
+        # return [0,]#2,4]
+        # return [2,]#2,4]
+        # return [0,1,]#4]
+        return [0, ]
+
+    @variant
+    def nr(self, nar):
+        return [1]
+
     # @variant
     # def nm(self):
     #     return [10, ]
@@ -97,20 +107,15 @@ class VG(VariantGenerator):
         return [False]
 
     @variant(hide=False)
-    def nar(self, linear):
-        return [2, 4]
-
-    @variant(hide=False)
-    def nr(self):
-        return [10, 30]
-
-    @variant(hide=False)
     def i_nar(self, linear):
-        return [0]
+        if linear:
+            return [1]
+        else:
+            return [4, 8, 12]
 
     @variant(hide=False)
     def i_nr(self):
-        return [30, ]
+        return [5, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -132,7 +137,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def anneal_every(self):
-        return [75]
+        return [50]
+
+    @variant(hide=False)
+    def base_filters(self):
+        return [16, 8]
 
     @variant(hide=False)
     def anneal_factor(self):
@@ -182,14 +191,14 @@ for v in variants[:]:
         #             data_init_wnorm=v["ar_wnorm"],
         #         )
         # else:
-        for _ in range(v["nar"]):
-            dist = AR(
-                zdim,
-                dist,
-                neuron_ratio=v["nr"],
-                data_init_wnorm=v["ar_wnorm"],
-                var_scope="AR_scope" if v["tiear"] else None,
-            )
+        #     for _ in xrange(v["nar"]):
+        #         dist = AR(
+        #             zdim,
+        #             dist,
+        #             neuron_ratio=v["nr"],
+        #             data_init_wnorm=v["ar_wnorm"],
+        #             var_scope="AR_scope" if v["tiear"] else None,
+        #         )
 
         latent_spec = [
             (
@@ -234,6 +243,9 @@ for v in variants[:]:
             network_type=v["network"],
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
+            network_args=dict(
+                base_filters=v["base_filters"]
+            ),
         )
 
         algo = VAE(
@@ -257,25 +269,13 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1010_af_mnist_static",
+            exp_prefix="1012_iaf_smnist_reg",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
-            use_gpu=True,
-            node_selector={
-                "aws/type": "p2.xlarge",
-                "openai/computing": "true",
-            },
-            resources=dict(
-                requests=dict(
-                    cpu=1.6,
-                ),
-                limits=dict(
-                    cpu=1.6,
-                )
-            )
+            mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
         )
 
 
