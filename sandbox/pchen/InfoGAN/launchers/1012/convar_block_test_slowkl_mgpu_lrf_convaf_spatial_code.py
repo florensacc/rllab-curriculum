@@ -31,6 +31,8 @@
 
 # adding bigger zdim exp
 
+# does convar block matter?
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -53,7 +55,7 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 # batch_size = 128
-batch_size = 129
+batch_size = 128
 # updates_per_epoch = 100
 
 stub(globals())
@@ -128,7 +130,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [3] #0.001]
+        return [2] #0.001]
 
     @variant(hide=False)
     def k(self, num_gpus):
@@ -136,7 +138,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, 4]
+        return [4]
 
     @variant(hide=False)
     def nr(self):
@@ -216,8 +218,15 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [256, 512]#[12, 32]
+        return [256, ]#[12, 32]
 
+    @variant
+    def block(self):
+        return [
+            "resnet",
+            "gated_resnet",
+            "plstm",
+        ]
 
 
 
@@ -227,7 +236,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
         print(v)
 
@@ -272,6 +281,7 @@ for v in variants[i:i+1]:
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
                 img_shape=[8,8,zdim//64],
+                # ar_channels=True,
                 data_init_scale=v["data_init_scale"],
             )
 
@@ -318,7 +328,7 @@ for v in variants[i:i+1]:
             pixel_bias=True,
             context_dim=v["context_dim"],
             nin=False,
-            block="gated_resnet",
+            block=v["gated_resnet"],
             extra_nins=2
             # block="plstm",
         )
@@ -363,7 +373,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1011_faf_slowkl_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1012_convar_block_slowkl_mgpu_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

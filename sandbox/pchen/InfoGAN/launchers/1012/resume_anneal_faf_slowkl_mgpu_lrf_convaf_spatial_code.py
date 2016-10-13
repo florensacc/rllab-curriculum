@@ -31,6 +31,8 @@
 
 # adding bigger zdim exp
 
+# this uses resumption to test much smaller lr & aggressive annealing
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -67,7 +69,12 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, ] #0.001]
+        return [
+            0.002 / 2,# this still oscilate a lot so i short circuit it to do a more drastic one
+            0.002/10,
+            0.002 / 50,
+
+        ] #0.001]
 
     @variant
     def seed(self):
@@ -136,7 +143,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, 4]
+        return [2, ]
 
     @variant(hide=False)
     def nr(self):
@@ -195,7 +202,7 @@ class VG(VariantGenerator):
     def anneal_after(self, max_epoch):
         return [
             # int(max_epoch * 0.7)
-            1500
+            100
         ]
 
     @variant(hide=False)
@@ -216,7 +223,7 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [256, 512]#[12, 32]
+        return [256, ]#[12, 32]
 
 
 
@@ -227,7 +234,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 2
 for v in variants[i:i+1]:
         print(v)
 
@@ -355,6 +362,7 @@ for v in variants[i:i+1]:
             vis_ar=False,
             num_gpus=v["num_gpus"],
             slow_kl=True,
+            resume_from="data/local/1011-faf-slowkl-mgpu-lrf-convaf-spatial-code/1011_faf_slowkl_mgpu_lrf_convaf_spatial_code_2016_10_11_13_22_46_0001/",
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
@@ -363,7 +371,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1011_faf_slowkl_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1012_resume_anneal_faf_slowkl_mgpu_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

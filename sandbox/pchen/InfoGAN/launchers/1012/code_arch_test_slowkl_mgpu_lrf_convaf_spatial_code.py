@@ -31,6 +31,8 @@
 
 # adding bigger zdim exp
 
+# is the conv code being deficient due to w/ autoregressive channels
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -136,7 +138,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, 4]
+        return [4]
 
     @variant(hide=False)
     def nr(self):
@@ -216,8 +218,15 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [256, 512]#[12, 32]
+        return [256, ]#[12, 32]
 
+    @variant
+    def block(self):
+        return [
+            "resnet",
+            "gated_resnet",
+            "plstm",
+        ]
 
 
 
@@ -227,7 +236,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
         print(v)
 
@@ -272,6 +281,7 @@ for v in variants[i:i+1]:
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
                 img_shape=[8,8,zdim//64],
+                ar_channels=True,
                 data_init_scale=v["data_init_scale"],
             )
 
@@ -363,7 +373,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1011_faf_slowkl_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1012_ar_channels_slowkl_mgpu_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

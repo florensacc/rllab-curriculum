@@ -991,6 +991,7 @@ class AR(Distribution):
             keepprob=1.,
             clip=False,
             squash=False,
+            ar_channels=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1082,6 +1083,7 @@ class AR(Distribution):
                                 filter_size,
                                 nr_channels,
                                 zerodiagonal=True,
+                                ar_channels=ar_channels,
                                 prefix="step0",
                             )
                         context_shp = [-1,] + img_shape[:2] + [nr_channels]
@@ -1093,7 +1095,10 @@ class AR(Distribution):
                         cur = \
                             resconv_v1_customconv(
                                 "ar_conv2d_mod",
-                                dict(zerodiagonal=False),
+                                dict(
+                                    zerodiagonal=False,
+                                    ar_channels=ar_channels,
+                                ),
                                 cur,
                                 filter_size,
                                 nr_channels,
@@ -1101,11 +1106,21 @@ class AR(Distribution):
                                 gating=True,
                             )
                     for ninidx in range(extra_nins):
-                        cur += 0.1 * cur.conv2d_mod(
-                            1,
-                            nr_channels,
-                            prefix="nin_ex_%s" % ninidx,
-                        )
+                        if ar_channels:
+                            cur += 0.1 * cur.ar_conv2d_mod(
+                                1,
+                                nr_channels,
+                                zerodiagonal=False,
+                                ar_channels=ar_channels,
+                                prefix="nin_ex_%s" % ninidx,
+                            )
+                        else:
+                            # backward compatibility for resumption
+                            cur += 0.1 * cur.conv2d_mod(
+                                1,
+                                nr_channels,
+                                prefix="nin_ex_%s" % ninidx,
+                            )
                     cur = cur.custom_dropout(keepprob)
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
