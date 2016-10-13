@@ -1,3 +1,5 @@
+import contextlib
+
 from path import Path
 import sys
 import pickle as pickle
@@ -204,6 +206,18 @@ def set_seed(seed):
             'green'
         )
     ))
+
+
+@contextlib.contextmanager
+def using_seed(seed):
+    rand_state = random.getstate()
+    np_rand_state = np.random.get_state()
+    random.seed(seed)
+    np.random.seed(seed)
+    yield
+    random.setstate(rand_state)
+    np.random.set_state(np_rand_state)
+
 
 
 def get_seed():

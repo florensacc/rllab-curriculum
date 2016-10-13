@@ -650,6 +650,14 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
     else:
         command_prefix = "docker run"
     docker_log_dir = config.DOCKER_LOG_DIR
+
+    if env is None:
+        env = dict()
+    env = dict(
+        env,
+        AWS_ACCESS_KEY_ID=config.AWS_ACCESS_KEY,
+        AWS_SECRET_ACCESS_KEY=config.AWS_ACCESS_SECRET,
+    )
     if env is not None:
         for k, v in env.items():
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)

@@ -1,15 +1,13 @@
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
-from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
 import tensorflow as tf
 
+from sandbox.rocky.neural_learner.algos.batch_polopt import BatchPolopt
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
 import sandbox.rocky.tf.core.layers as L
 from sandbox.rocky.tf.core.network import MLP
 from sandbox.rocky.tf.misc import tensor_utils
 import numpy as np
-
-
 
 
 class PPOSGD(BatchPolopt):

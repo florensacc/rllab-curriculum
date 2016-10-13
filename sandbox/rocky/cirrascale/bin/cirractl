@@ -1,9 +1,17 @@
 #!/Users/dementrock/anaconda/envs/rllab3/bin/python
+import json
 import logging
+import multiprocessing
 import re
 import sys
 
 import click
+import subprocess
+
+import redis
+
+from sandbox.rocky.cirrascale import cirra_config
+from sandbox.rocky.cirrascale.launch_job import FORBIDDEN
 
 DEBUG_LOGGING_MAP = {
     0: logging.CRITICAL,
@@ -27,6 +35,108 @@ def cli(ctx, verbose):
     logging.getLogger().setLevel(DEBUG_LOGGING_MAP.get(verbose, logging.DEBUG))
 
 
+def _get_gpu_type(host):
+    try:
+        result = subprocess.check_output([
+            "ssh",
+            "-oStrictHostKeyChecking=no",
+            "-oConnectTimeout=10",
+            "rocky@" + host, "nvidia-smi -L"
+        ])
+    except Exception as e:
+        print("Error while probing %s" % host)
+        return (host, None)
+    result = result.decode()
+    if "GeForce GTX TITAN X" in result:
+        print("%s identified as TitanX Maxwell" % host)
+        return (host, "maxwell")
+    elif "TITAN X (Pascal)" in result:
+        print("%s identified as TitanX Pascal" % host)
+        return (host, "pascal")
+    else:
+        print(result)
+        return (host, None)
+
+
+@cli.command()
+def update_directory():
+    hosts = ["%d.cirrascale.sci.openai.org" % idx for idx in range(1, 100)]
+    redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
+    with multiprocessing.Pool(processes=100) as pool:
+        print("Probing status...")
+        results = pool.map(_get_gpu_type, hosts)
+        results = dict([(k, v) for k, v in results if v is not None])
+        print("Updating redis...")
+        redis_cli.set(cirra_config.DIRECTORY_KEY, json.dumps(results))
+        print("Updated")
+
+
+def _probe_host(host):
+    try:
+        pids = subprocess.check_output([
+            "ssh",
+            "-oConnectTimeout=10",
+            "rocky@" + host,
+            "nvidia-smi --format=csv,noheader --query-compute-apps=pid",
+        ])
+        pids = pids.decode().strip().split('\n')
+        if len(pids) == 0:
+            return []
+        gpus = subprocess.check_output([
+            "ssh",
+            "-oConnectTimeout=10",
+            "rocky@" + host,
+            "nvidia-smi --format=csv,noheader --query-gpu=index"
+        ])
+        gpus = gpus.decode().strip().split('\n')
+        if len(gpus) == 0:
+            return []
+        processes = subprocess.check_output([
+            "ssh",
+            "-oConnectTimeout=10",
+            "rocky@" + host,
+            "ps aux | grep -e '%s'" % '\|'.join(pids)
+        ])
+        lines = [l for l in processes.decode().split('\n') if 'exp_name' in l and not 'peter' in l]
+
+        ret = []
+        for line in lines:
+            words = line.split()
+            idx = words.index('--exp_name')
+            exp_name = words[idx + 1]
+            process = words[1]
+            gpu = gpus[pids.index(process)]
+            ret.append((host, gpu, exp_name))
+        print("Finished probing %s" % host)
+        return ret
+    except Exception as e:
+        print("Error while probing %s" % host)
+        print(e)
+        return []
+
+
+@cli.command()
+def probe():
+    from sandbox.rocky.cirrascale.launch_job import get_directory
+    dir = get_directory()
+    hosts = dir.keys()
+    with multiprocessing.Pool(processes=100) as pool:
+        print("Probing host status...")
+        results = pool.map(_probe_host, hosts)
+        for host, gpu, exp_name in sorted(sum(results, []), key=lambda x: x[::-1]):
+            print('%s running on %s:%s' % (exp_name, host, gpu))
+        print("Saving result to redis...")
+        redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
+        to_set = dict()
+        for host, gpu, exp_name in sorted(sum(results, []), key=lambda x: x[::-1]):
+            to_set["job/%s" % exp_name] = json.dumps(dict(
+                job_id=exp_name,
+                gpu_host=host,
+                gpu_index=gpu
+            ))
+        redis_cli.mset(to_set)
+
+
 @cli.command()
 def stats():
     from sandbox.rocky.cirrascale import client
@@ -38,14 +148,15 @@ def stats():
     n_maxwells = 0
     n_free_maxwells = 0
     for host, gpus in gpus.items():
-        if host in dir and dir[host] == "pascal":
-            n_pascals += len(gpus)
-            n_free_pascals += len([g for g in gpus if g.available])
-        elif host in dir and dir[host] == "maxwell":
-            n_maxwells += len(gpus)
-            n_free_maxwells += len([g for g in gpus if g.available])
-        else:
-            pass
+        if int(host.split('.')[0]) not in FORBIDDEN:
+            if host in dir and dir[host] == "pascal":
+                n_pascals += len(gpus)
+                n_free_pascals += len([g for g in gpus if g.available])
+            elif host in dir and dir[host] == "maxwell":
+                n_maxwells += len(gpus)
+                n_free_maxwells += len([g for g in gpus if g.available])
+            else:
+                pass
     print("#Pascal GPU: %d" % n_pascals)
     print("#Free Pascal GPU: %d" % n_free_pascals)
     print("#Maxwell GPU: %d" % n_maxwells)
@@ -64,7 +175,7 @@ def jobs(all):
         print("No jobs currently running")
     else:
         job_dicts = [json.loads(x.decode()) for x in redis_cli.mget(jobs)]
-        job_dicts = sorted(job_dicts, key=lambda x: (x["created_at"], x["job_id"]))
+        job_dicts = sorted(job_dicts, key=lambda x: x["job_id"])
 
         for job in job_dicts:
             print("%s running on %s:%s" % (job["job_id"], job["gpu_host"], job["gpu_index"]))
@@ -72,35 +183,9 @@ def jobs(all):
 
 @cli.command()
 @click.argument('job_id')
-def kill(job_id):
-    import redis
-    import json
-    import subprocess
-    import os
-    from sandbox.rocky.cirrascale import cirra_config
-    redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
-
-    content = redis_cli.get("job/%s" % job_id)
-    job = json.loads(content.decode())
-    print(job)
-
-    assert len(job['job_id']) > 5
-
-    command = [
-        "ssh",
-        "rocky@%s" % job['gpu_host'],
-        'sudo pkill -f -9 %s' % job['job_id']
-    ]
-
-    print(command)
-
-    try:
-        print(subprocess.check_output(command))
-    except Exception as e:
-        print(e)
-
-    redis_cli.delete("job/%s" % job_id)
-    print("Job %s deleted" % job_id)
+@click.option('--force', '-f', default=False, help='force removal of the job from redis')
+def kill(job_id, force):
+    _kill_job((job_id, force))
 
 
 @cli.command()
@@ -121,6 +206,7 @@ def ssh(job_id):
         gpu_host=job['gpu_host'], job_id=job_id)
     print(command)
     os.system(command)
+
 
 @cli.command()
 @click.argument('job_id')
@@ -153,24 +239,18 @@ def sim_policy(job_id):
         "/tmp/params.pkl"
     ])
 
-    if "conopt" in file_location:
+    if "conopt" in file_location or "analogy" in file_location:
         script = "sandbox/rocky/analogy/scripts/sim_policy.py"
     else:
         script = "scripts/sim_policy.py"
     subprocess.check_call(["python", os.path.join(config.PROJECT_PATH, script), "/tmp/params.pkl"])
 
 
-@cli.command()
-def kill_all():
-    import redis
-    import json
-    import subprocess
-    import os
-    from sandbox.rocky.cirrascale import cirra_config
-    redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
-
-    jobs = redis_cli.keys("job/*")  # % job_id)
-    for job_id in jobs:
+def _kill_job(args):
+    job_id, force = args
+    try:
+        ret = ""
+        redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
         content = redis_cli.get(job_id)
         job = json.loads(content.decode())
         print(job)
@@ -183,15 +263,94 @@ def kill_all():
             "sudo kill -9 $(ps aux | grep %s | awk '{print $2}')" % job['job_id'],
         ]
 
-        print(command)
+        print(" ".join(command))
 
-        try:
-            print(subprocess.check_output(command))
-        except Exception as e:
-            print(e)
+        ret = subprocess.check_output(command)
+    except Exception as e:
+        print(e)
+        print(len(ret))
+        if not force:
+            return
 
-        redis_cli.delete(job_id)
-        print("Job %s deleted" % job_id)
+    redis_cli.delete(job_id)
+    print("Job %s deleted" % job_id)
+
+
+@cli.command()
+@click.option('--force', '-f', default=False, help='force removal of the job from redis')
+def kill_all(force):
+    import redis
+    import json
+    import subprocess
+    import os
+    from sandbox.rocky.cirrascale import cirra_config
+    redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
+
+    jobs = redis_cli.keys("job/*")  # % job_id)
+
+    with multiprocessing.Pool(100) as pool:
+        pool.map(_kill_job, zip(jobs, [force] * len(jobs)))
+        # for job_id in jobs:
+        #     content = redis_cli.get(job_id)
+        #     job = json.loads(content.decode())
+        #     print(job)
+        #
+        #     assert len(job['job_id']) > 5
+        #
+        #     command = [
+        #         "ssh",
+        #         "rocky@%s" % job['gpu_host'],
+        #         "sudo kill -9 $(ps aux | grep %s | awk '{print $2}')" % job['job_id'],
+        #     ]
+        #
+        #     print(command)
+        #
+        #     try:
+        #         print(subprocess.check_output(command))
+        #     except Exception as e:
+        #         print(e)
+        #
+        #     redis_cli.delete(job_id)
+        #     print("Job %s deleted" % job_id)
+
+
+@cli.command()
+@click.argument('pattern')
+@click.option('--force', '-f', default=False, help='force removal of the job from redis')
+def kill_f(pattern, force):
+    import redis
+    import json
+    import subprocess
+    import os
+    from sandbox.rocky.cirrascale import cirra_config
+    redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
+
+    jobs = redis_cli.keys("job/*")  # % job_id)
+    for job_id in jobs:
+        if pattern in job_id.decode():
+            _kill_job((job_id, force))
+            # content = redis_cli.get(job_id)
+            # job = json.loads(content.decode())
+            # print(job)
+            #
+            # assert len(job['job_id']) > 5
+            #
+            # command = [
+            #     "ssh",
+            #     "rocky@%s" % job['gpu_host'],
+            #     "sudo kill -9 $(ps aux | grep %s | awk '{print $2}')" % job['job_id'],
+            # ]
+            #
+            # print(command)
+            #
+            # try:
+            #     print(subprocess.check_output(command))
+            # except Exception as e:
+            #     print(e)
+            #     return
+            #
+            # redis_cli.delete(job_id)
+            # print("Job %s deleted" % job_id)
 
 
 @cli.command()
@@ -222,7 +381,6 @@ def status(job_id, lines):
             print(subprocess.check_output(command).decode())
         except Exception as e:
             print(e)
-
 
 
 if __name__ == '__main__':
