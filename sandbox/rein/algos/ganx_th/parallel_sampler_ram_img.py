@@ -1,4 +1,4 @@
-from sandbox.rein.algos.embedding_theano.utils_ram_img import rollout
+from sandbox.rein.algos.ganx_th.utils_ram_img import rollout
 from rllab.sampler.stateful_pool import singleton_pool, SharedGlobal
 from rllab.misc import ext
 from rllab.misc import logger

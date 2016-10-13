@@ -1,6 +1,5 @@
 import itertools
 import os
-import lasagne
 
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rein.algos.embedding_theano.theano_atari import AtariEnv
@@ -16,12 +15,12 @@ stub(globals())
 
 n_seq_frames = 1
 model_batch_size = 32
-exp_prefix = 'trpo-auto-f'
-seeds = [0]
-etas = [0.001]
-mdps = [AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
-        AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
-        AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
+exp_prefix = 'trpo-auto-g'
+seeds = [1]
+etas = [0.01]
+mdps = [#AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
+        #AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
+        #AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
         AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=4)]
 trpo_batch_size = 50000
 max_path_length = 4500
@@ -43,7 +42,6 @@ for mdp, eta, seed in param_cart_product:
     baseline = LinearFeatureBaseline(env_spec=mdp_spec)
 
     algo = TRPOPlusLSH(
-        # model=autoenc,
         discount=0.995,
         env=mdp,
         policy=policy,
@@ -72,7 +70,7 @@ for mdp, eta, seed in param_cart_product:
         continuous_embedding=False,
         model_embedding=True,
         sim_hash_args=dict(
-            dim_key=32,
+            dim_key=64,
             bucket_sizes=None,  # [15485867, 15485917, 15485927, 15485933, 15485941, 15485959],
         )
     )
@@ -80,7 +78,7 @@ for mdp, eta, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix=exp_prefix,
-        n_parallel=4,
+        n_parallel=3,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

@@ -1,22 +1,19 @@
 import itertools
 import os
-import lasagne
 
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rein.algos.embedding_theano.theano_atari import AtariEnv
+from sandbox.rein.algos.ganx_th.theano_atari import AtariEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from sandbox.rein.algos.embedding_theano.trpo_plus_lsh import TRPOPlusLSH
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.env_spec import EnvSpec
 from rllab.spaces.box import Box
-
-os.environ["THEANO_FLAGS"] = "device=gpu"
+from sandbox.rein.algos.ganx_th.trpo_plus import TRPOPlus
 
 stub(globals())
 
 n_seq_frames = 1
 model_batch_size = 32
-exp_prefix = 'trpo-auto-f'
+exp_prefix = 'trpo-ganx-a'
 seeds = [0]
 etas = [0.001]
 mdps = [AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
@@ -42,8 +39,7 @@ for mdp, eta, seed in param_cart_product:
     )
     baseline = LinearFeatureBaseline(env_spec=mdp_spec)
 
-    algo = TRPOPlusLSH(
-        # model=autoenc,
+    algo = TRPOPlus(
         discount=0.995,
         env=mdp,
         policy=policy,
@@ -57,24 +53,19 @@ for mdp, eta, seed in param_cart_product:
             subsample_factor=0.1,
         ),
         n_seq_frames=n_seq_frames,
-        # --
-        # Count settings
-        model_pool_args=dict(
-            size=5000000,
-            min_size=model_batch_size,
-            batch_size=model_batch_size,
-            subsample_factor=1,
-            fill_before_subsampling=False,
+
+        bonus_evaluator_args=dict(
+            observation_shape=(mdp.observation_space.flat_dim,),
+            observation_dtype="uint8",
+            model_pool_args=dict(
+                size=5000000,
+                min_size=model_batch_size,
+                batch_size=model_batch_size,
+                subsample_factor=1,
+                fill_before_subsampling=False,
+            ),
         ),
         eta=eta,
-        train_model=True,
-        train_model_freq=5,
-        continuous_embedding=False,
-        model_embedding=True,
-        sim_hash_args=dict(
-            dim_key=32,
-            bucket_sizes=None,  # [15485867, 15485917, 15485927, 15485933, 15485941, 15485959],
-        )
     )
 
     run_experiment_lite(
@@ -83,7 +74,7 @@ for mdp, eta, seed in param_cart_product:
         n_parallel=4,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/algos/embedding_theano/run_experiment_lite_ram_img.py",

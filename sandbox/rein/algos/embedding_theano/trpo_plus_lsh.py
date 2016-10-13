@@ -31,7 +31,6 @@ class TRPOPlusLSH(TRPO):
 
     def __init__(
             self,
-            model=None,
             eta=0.1,
             model_pool_args=None,
             train_model=True,
@@ -46,9 +45,7 @@ class TRPOPlusLSH(TRPO):
         assert train_model_freq >= 1
         if train_model:
             assert model_embedding
-            # assert model is not None
 
-        # self._model = model
         self._eta = eta
         self._train_model = train_model
         self._train_model_freq = train_model_freq
@@ -521,11 +518,12 @@ class TRPOPlusLSH(TRPO):
 
                 logger.log('Autoencoder updated.')
 
-                logger.log('Plotting random samples ...')
-                self._plotter.plot_pred_imgs(model=self._model, inputs=_x, targets=_y, itr=0,
-                                             dir=RANDOM_SAMPLES_DIR)
-                self._plotter.print_embs(model=self._model, counting_table=None, inputs=_x,
-                                         dir=RANDOM_SAMPLES_DIR, hamming_distance=0)
+                if itr % 30 == 0:
+                    logger.log('Plotting random samples ...')
+                    self._plotter.plot_pred_imgs(model=self._model, inputs=_x, targets=_y, itr=0,
+                                                 dir=RANDOM_SAMPLES_DIR)
+                    self._plotter.print_embs(model=self._model, counting_table=None, inputs=_x,
+                                             dir=RANDOM_SAMPLES_DIR, hamming_distance=0)
 
             else:
                 logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
@@ -586,7 +584,7 @@ class TRPOPlusLSH(TRPO):
         #     model=self._model, inputs=inputs, targets=self._test_obs,
         #     itr=0, dir='/generated')
 
-        if self._model_embedding and self._train_model and itr % 20 == 0:
+        if self._model_embedding and self._train_model and itr % 30 == 0:
             logger.log('Plotting consistency images ...')
             self._plotter.plot_pred_imgs(
                 model=self._model, inputs=self.decode_obs(self._test_obs), targets=self._test_obs,

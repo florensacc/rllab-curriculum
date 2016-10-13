@@ -1,6 +1,6 @@
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
-from sandbox.rein.algos.embedding_theano.batch_polopt import BatchPolopt
+from sandbox.rein.algos.ganx_th.batch_polopt import BatchPolopt
 import rllab.misc.logger as logger
 import theano
 import theano.tensor as TT
