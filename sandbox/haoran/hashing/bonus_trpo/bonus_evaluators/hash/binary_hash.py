@@ -1,6 +1,7 @@
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.base import Hash
 import numpy as np
 import multiprocessing as mp
+import copy
 
 class BinaryHash(Hash):
     def __init__(self,dim_key, bucket_sizes=None,parallel=False):
@@ -36,7 +37,7 @@ class BinaryHash(Hash):
             )
             self.tables = self.tables.reshape((len(bucket_sizes), np.max(bucket_sizes)))
             self.unpicklable_list = ["tables_lock","tables"]
-            self.snapshot_list = []
+            self.snapshot_list = ["tables"]
         else:
             self.tables = np.zeros((len(bucket_sizes), np.max(bucket_sizes)),dtype=int)
             self.unpicklable_list = []
@@ -44,7 +45,6 @@ class BinaryHash(Hash):
 
     def __getstate__(self):
         """ Do not pickle parallel objects. """
-        return {k: v for k, v in iter(self.__dict__.items()) if k not in self.unpicklable_list}
         state = dict()
         for k,v in iter(self.__dict__.items()):
             if k not in self.unpicklable_list:

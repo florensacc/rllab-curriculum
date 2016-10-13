@@ -200,12 +200,16 @@ class ParallelBatchPolopt(RLAlgorithm):
         if self.serial_compile:
             self.force_compile()
         self.init_par_objs()
-        processes = [mp.Process(target=self._train, args=(rank,))
-            for rank in range(self.n_parallel)]
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
+
+        if self.n_parallel == 1:
+            self._train(rank=0)
+        else:
+            processes = [mp.Process(target=self._train, args=(rank,))
+                for rank in range(self.n_parallel)]
+            for p in processes:
+                p.start()
+            for p in processes:
+                p.join()
 
     def process_paths(self, paths):
         for path in paths:
@@ -339,6 +343,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                 logger.record_tabular('Iteration', itr)
                 logger.record_tabular('ExplainedVariance', ev)
                 logger.record_tabular('NumTrajs', num_traj)
+                logger.record_tabular('NumSamples',n_steps)
                 logger.record_tabular('Entropy', ent)
                 logger.record_tabular('Perplexity', np.exp(ent))
                 # logger.record_tabular('StdReturn', np.std(undiscounted_returns))
@@ -363,6 +368,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         # self.env.log_diagnostics(paths)
         # self.policy.log_diagnostics(paths)
         # self.baseline.log_diagnostics(paths)
+        # self.bonus_evaluator.log_diagnostics(paths)
 
     def init_rank(self, rank):
         self.rank = rank
