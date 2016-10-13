@@ -215,14 +215,19 @@ class InputLayer(Layer):
 
 
 class MergeLayer(Layer):
-    def __init__(self, incomings, name=None, **kwargs):
+    def __init__(self, incomings, name=None, variable_reuse=None, **kwargs):
         self.input_shapes = [incoming if isinstance(incoming, tuple)
                              else incoming.output_shape
                              for incoming in incomings]
         self.input_layers = [None if isinstance(incoming, tuple)
                              else incoming
                              for incoming in incomings]
+        if name is None:
+            name = "%s_%d" % (type(self).__name__, G._n_layers)
+            G._n_layers += 1
+
         self.name = name
+        self.variable_reuse = variable_reuse
         self.params = OrderedDict()
         self.get_output_kwargs = []
 
@@ -401,6 +406,7 @@ class DenseLayer(Layer):
             # if the input has more than two dimensions, flatten it into a
             # batch of feature vectors.
             input = tf.reshape(input, tf.pack([tf.shape(input)[0], -1]))
+        input = tf.cast(input, tf.float32)
         activation = tf.matmul(input, self.W)
         if self.b is not None:
             activation = activation + tf.expand_dims(self.b, 0)

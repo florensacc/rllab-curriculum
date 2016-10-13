@@ -13,26 +13,39 @@ class ModularAnalogyPolicy(AnalogyPolicy, Parameterized, Serializable):
 
         AnalogyPolicy.__init__(self, env_spec=env_spec)
 
-        # with tf.variable_scope(name):
         summary_network, action_network = net.new_networks(env_spec=env_spec)
 
         self.summary_network = summary_network
         self.action_network = action_network
 
+        summary_obs_var = env_spec.observation_space.new_tensor_variable(
+            "summary_obs",
+            extra_dims=2
+        )
+        summary_actions_var = env_spec.action_space.new_tensor_variable(
+            "summary_actions",
+            extra_dims=2
+        )
+        summary_valids_var = tf.placeholder(dtype=tf.float32, shape=(None, None), name="summary_valids")
+
         self.f_update_summary = tensor_utils.compile_function(
-            summary_network.input_vars,
-            summary_network.get_update_op(phase='test'),
+            [summary_obs_var, summary_actions_var, summary_valids_var],
+            summary_network.get_update_op(
+                obs_var=summary_obs_var,
+                actions_var=summary_actions_var,
+                valids_var=summary_valids_var,
+                phase='test'
+            ),
         )
 
-        obs_var = env_spec.observation_space.new_tensor_variable(
-            "obs",
+        action_obs_var = env_spec.observation_space.new_tensor_variable(
+            "action_obs",
             extra_dims=1
         )
-        # summary_var = tf.placeholder(tf.float32, (None, summary_network.output_dim), "summary")
         dones_var = tf.placeholder(tf.float32, (None,), "dones")
 
-        action_inputs = [obs_var]#, summary_var]
-        action_input_args = dict(obs_var=obs_var)#, summary_var=summary_var)
+        action_inputs = [action_obs_var, summary_valids_var]
+        action_input_args = dict(obs_var=action_obs_var, demo_valids_var=summary_valids_var)
 
         if action_network.recurrent:
             prev_action_var = env_spec.action_space.new_tensor_variable(
@@ -67,13 +80,12 @@ class ModularAnalogyPolicy(AnalogyPolicy, Parameterized, Serializable):
         self.summary_network = summary_network
         self.action_network = action_network
 
-        # LayersPowered.__init__(self, [summary_network.output_layer, action_network.output_layer])
-
     def get_params_internal(self, **tags):
-        return sorted(
+        params = sorted(
             set(self.summary_network.get_params(**tags) + self.action_network.get_params(**tags)),
             key=lambda x: x.name
         )
+        return params
 
     @property
     def action_dim(self):
@@ -81,37 +93,41 @@ class ModularAnalogyPolicy(AnalogyPolicy, Parameterized, Serializable):
 
     def action_sym(self, obs_var, state_info_vars, **kwargs):
         demo_obs_var = state_info_vars["demo_obs"]
-        demo_action_var = state_info_vars["demo_action"]
+        demo_actions_var = state_info_vars["demo_actions"]
+        demo_valids_var = state_info_vars["demo_valids"]
 
         summary_var = self.summary_network.get_output(
             obs_var=demo_obs_var,
-            action_var=demo_action_var,
+            actions_var=demo_actions_var,
+            valids_var=demo_valids_var,
             **kwargs
         )
 
         return self.action_network.get_output(
             obs_var=obs_var,
             summary_var=summary_var,
-            # state_info_vars=state_info_vars,
+            demo_valids_var=demo_valids_var,
             **kwargs
         )
 
+    def apply_demo(self, path):
+        self.apply_demos([path])
+
     def apply_demos(self, paths):
 
-        max_len = np.max([len(p["rewards"]) for p in paths])
+        max_len = np.max([len(p["observations"]) for p in paths])
 
         demo_obs = [p["observations"] for p in paths]
-        demo_obs = np.asarray([tensor_utils.pad_tensor(o, max_len) for o in demo_obs])
+        demo_obs = tensor_utils.pad_tensor_n(demo_obs, max_len)
 
         demo_actions = [p["actions"] for p in paths]
-        demo_actions = np.asarray([tensor_utils.pad_tensor(a, max_len) for a in demo_actions])
+        demo_actions = tensor_utils.pad_tensor_n(demo_actions, max_len)
 
-        demo_valids = [np.ones_like(p["rewards"]) for p in paths]
-        demo_valids = np.asarray([tensor_utils.pad_tensor(v, max_len) for v in demo_valids])
+        demo_valids = [np.ones(len(p["observations"])) for p in paths]
+        demo_valids = tensor_utils.pad_tensor_n(demo_valids, max_len)
 
-        assert np.all(demo_valids)
-
-        self.f_update_summary(demo_obs, demo_actions)
+        self.demo_valids = demo_valids
+        self.f_update_summary(demo_obs, demo_actions, demo_valids)
 
     def get_action(self, observation):
         actions, agent_infos = self.get_actions([observation])
@@ -119,19 +135,12 @@ class ModularAnalogyPolicy(AnalogyPolicy, Parameterized, Serializable):
 
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)
-        actions = self.f_action(flat_obs)
-        # agent_info = dict(zip(self.action_network.state_info_keys, state_info_list))
-        # print("prev action:", np.linalg.norm(self.action_network.prev_action_var.eval()))
-        # print("prev state:", np.linalg.norm(self.action_network.prev_state_var.eval()))
-        return actions, dict()#agent_info
+        actions = self.f_action(flat_obs, self.demo_valids)
+        return actions, dict()
 
     @property
     def recurrent(self):
         return self.action_network.recurrent
-
-    # @property
-    # def state_info_specs(self):
-    #     return self.action_network.state_info_specs
 
     def reset(self, dones=None):
         if self.action_network.recurrent:
@@ -142,7 +151,3 @@ class ModularAnalogyPolicy(AnalogyPolicy, Parameterized, Serializable):
             else:
                 self.f_partial_reset(dones)
             self.prev_reset_length = len(dones)
-            # if np.any(dones):
-            #     print("summary:", np.linalg.norm(self.summary_network.summary_var.eval()[dones]))
-            #     print("prev action:", np.linalg.norm(self.action_network.prev_action_var.eval()[dones]))
-            #     print("prev state:", np.linalg.norm(self.action_network.prev_state_var.eval()[dones]))
