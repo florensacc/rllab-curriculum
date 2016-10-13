@@ -33,6 +33,8 @@
 
 # is the conv code being deficient due to w/ autoregressive channels
 
+# gating fixed
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -364,7 +366,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1012_ar_channels_slowkl_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1012_gate_fixed_ar_channels_slowkl_mgpu_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

@@ -1072,7 +1072,7 @@ class AR(Distribution):
                     wnorm=True,
                     custom_phase=UnboundVariable('custom_phase'),
                     init_scale=0.1,
-                    ar_channels=False,
+                    ar_channels=ar_channels,
                     pixel_bias=True,
                     var_scope=None,
             ):
@@ -1083,7 +1083,6 @@ class AR(Distribution):
                                 filter_size,
                                 nr_channels,
                                 zerodiagonal=True,
-                                ar_channels=ar_channels,
                                 prefix="step0",
                             )
                         context_shp = [-1,] + img_shape[:2] + [nr_channels]
@@ -1097,13 +1096,13 @@ class AR(Distribution):
                                 "ar_conv2d_mod",
                                 dict(
                                     zerodiagonal=False,
-                                    ar_channels=ar_channels,
                                 ),
                                 cur,
                                 filter_size,
                                 nr_channels,
                                 nin=False,
                                 gating=True,
+                                slow_gating=True,
                             )
                     for ninidx in range(extra_nins):
                         if ar_channels:
@@ -1111,7 +1110,6 @@ class AR(Distribution):
                                 1,
                                 nr_channels,
                                 zerodiagonal=False,
-                                ar_channels=ar_channels,
                                 prefix="nin_ex_%s" % ninidx,
                             )
                         else:
@@ -1126,6 +1124,7 @@ class AR(Distribution):
                     cur.ar_conv2d_mod(
                         filter_size,
                         img_chn * 2,
+                        zerodiagonal=False,
                         activation_fn=None,
                     ).reshape(
                         [-1,] + img_shape + [2]

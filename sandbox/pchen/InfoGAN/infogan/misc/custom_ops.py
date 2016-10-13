@@ -728,10 +728,11 @@ def get_conv_ar_mask(h, w, n_in, n_out, ar_channels=False, zerodiagonal=False):
     mask = np.zeros([h, w, n_in, n_out], dtype=np.float32)
     mask[:l, :, :, :] = 1.
     mask[l, :m, :, :] = 1.
-    if not zerodiagonal:
-        mask[l, m, :, :] = 1.
     if ar_channels:
         mask[l, m, :, :] = get_linear_ar_mask(n_in, n_out, zerodiagonal)
+    else:
+        if not zerodiagonal:
+            mask[l, m, :, :] = 1.
     return mask
 
 @prettytensor.Register(
@@ -1254,21 +1255,40 @@ def resconv_v1_customconv(
         keep_prob=1.,
         nn=False,
         gating=False,
+        slow_gating=False,
         nin=False,
         context=None,
 ):
     blk = origin = l_in
     if gating:
-        blk_conv = partial(blk, conv_method, conv_args)(
-            kernel=kernel,
-            depth=nch * 2,
-            stride=stride,
-            prefix="gated_pre",
-            activation_fn=None,
-        )
+        if slow_gating:
+            # it's just for simple impl of AR model
+            gate_conv = partial(blk, conv_method, conv_args)(
+                kernel=kernel,
+                depth=nch,
+                stride=stride,
+                prefix="gated_gate",
+                activation_fn=tf.nn.sigmoid,
+            )
+            pre_conv = partial(blk, conv_method, conv_args)(
+                kernel=kernel,
+                depth=nch,
+                stride=stride,
+                prefix="gated_main",
+                activation_fn=tf.nn.tanh,
+            )
+        else:
+            blk_conv = partial(blk, conv_method, conv_args)(
+                kernel=kernel,
+                depth=nch * 2,
+                stride=stride,
+                prefix="gated_pre",
+                activation_fn=None,
+            )
+            gate_conv = blk_conv[:, :, :, :nch].apply(tf.nn.sigmoid)
+            pre_conv = blk_conv[:, :, :, nch:].apply(tf.nn.tanh)
         blk = (
-            blk_conv[:, :, :, :nch].apply(tf.nn.sigmoid) *
-                blk_conv[:, :, :, nch:].apply(tf.nn.tanh)
+            gate_conv * pre_conv
         ).sequential()
     else:
         blk = blk.sequential()
