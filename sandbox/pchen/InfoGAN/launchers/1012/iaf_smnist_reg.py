@@ -1,5 +1,5 @@
 # try some regularization for iaf
-# like thinner iaf
+# like thinner iaf, smaller feature maps & no context
 
 
 from rllab.misc.instrument import run_experiment_lite, stub
@@ -111,7 +111,7 @@ class VG(VariantGenerator):
         if linear:
             return [1]
         else:
-            return [4, 8, 12]
+            return [12, 4, 8, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -125,8 +125,8 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            # [],
-            ["linear"],
+            [],
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -163,7 +163,7 @@ class VG(VariantGenerator):
 
 vg = VG()
 
-variants = vg.variants(randomized=True)
+variants = vg.variants(randomized=False)
 
 print(len(variants))
 
@@ -272,10 +272,22 @@ for v in variants[:]:
             exp_prefix="1012_iaf_smnist_reg",
             seed=v["seed"],
             variant=v,
-            mode="local",
-            # mode="lab_kube",
-            # n_parallel=0,
-            # use_gpu=True,
+            # mode="local",
+            mode="lab_kube",
+            n_parallel=0,
+            use_gpu=True,
+            node_selector={
+                "aws/type": "p2.xlarge",
+                "openai/computing": "true",
+            },
+            resources=dict(
+                requests=dict(
+                    cpu=1.6,
+                ),
+                limits=dict(
+                    cpu=1.6,
+                )
+            )
         )
 
 

@@ -378,7 +378,7 @@ class RegularizedHelmholtzMachine(object):
                     decoder = (pt.template('input', self.book).
                                wnorm_fc(450, ).
                                wnorm_fc(512, ).
-                               reshape([-1, 4, 4, 32])
+                               reshape([-1, 4, 4, base_filters*2])
                                )
                     decoder = resconv_v1(decoder, 3,   base_filters*2, stride=1)
                     decoder = resdeconv_v1(decoder, 3, base_filters*2, out_wh=[7,7])
