@@ -20,11 +20,11 @@ n_parallel = 12
 model_batch_size = 32
 exp_prefix = 'trpo-par-rndconv-d'
 seeds = [0, 1, 2]
-etas = [0.01, 0.001]
-mdps = [#AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
-        #AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
-        #AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
-        AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=4)]
+etas = [0.01]
+mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
+    # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
+    # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
+    AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=4)]
 trpo_batch_size = 50000
 max_path_length = 4500
 dropout = False
@@ -193,12 +193,12 @@ for mdp, eta, seed in param_cart_product:
             fill_before_subsampling=False,
         ),
         eta=eta,
-        train_model=True,
+        train_model=False,
         train_model_freq=5,
         continuous_embedding=False,
         model_embedding=True,
         sim_hash_args=dict(
-            dim_key=256,
+            dim_key=64,
             bucket_sizes=None,  # [15485867, 15485917, 15485927, 15485933, 15485941, 15485959],
         )
     )

@@ -1,20 +1,15 @@
-# naive plug in of cc_hybrid_cond_caltech.py gets 79 nats @ 300 epoch and then overfit
-# explore regularization & stuff
-
-
-# verdict: ard6 > ard3
-# surprisingly: nin2 > nin0
-# both in terms of generailziation
+# try some regularization for iaf
+# like thinner iaf, smaller feature maps & no context
 
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
-    IAR, ConvAR
+    IAR
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset, load_caltech, Caltech101Dataset
+    ResamplingBinarizedMnistDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -30,11 +25,13 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 # updates_per_epoch = 100
+max_epoch = 500
 
 stub(globals())
 
 from rllab.misc.instrument import VariantGenerator, variant
 
+# pa_mnist_lr_0.0001_min_kl_0.05_mix_std_0.8_monte_carlo_kl_True_nm_10_seed_42_zdim_64
 class VG(VariantGenerator):
     @variant
     def lr(self):
@@ -47,7 +44,6 @@ class VG(VariantGenerator):
     @variant
     def seed(self):
         return [42, ]
-        # return [123124234]
 
     @variant
     def monte_carlo_kl(self):
@@ -61,30 +57,37 @@ class VG(VariantGenerator):
     def min_kl(self):
         return [0.01, ] #0.05, 0.1]
     #
-    @variant(hide=False)
+    @variant
+    def nar(self):
+        # return [0,]#2,4]
+        # return [2,]#2,4]
+        # return [0,1,]#4]
+        return [0, ]
+
+    @variant
+    def nr(self, nar):
+        return [1]
+
+    # @variant
+    # def nm(self):
+    #     return [10, ]
+    #     return [5, 10, 20]
+
+    # @variant
+    # def pr(self):
+    #     return [True, False]
+
+    @variant(hide=True)
     def network(self):
         # yield "large_conv"
         # yield "small_conv"
         # yield "deep_mlp"
         # yield "mlp"
         # yield "resv1_k3"
-        # yield "conv1_k5
+        # yield "conv1_k5"
         # yield "small_res"
         # yield "small_res_small_kern"
-        # res_hybrid_long_re_real_anneal.pyyield "resv1_k3_pixel_bias"
-        # yield "resv1_k3_pixel_bias"
-        # yield "resv1_k3_pixel_bias_widegen"
-        # yield "resv1_k3_pixel_bias_widegen_conv_ar"
-        # yield "resv1_k3_pixel_bias_filters_ratio"
-        yield "resv1_k3_pixel_bias_filters_ratio_conv_ar"
-
-    @variant(hide=False)
-    def base_filters(self, ):
-        return [16, ]
-
-    @variant(hide=False)
-    def dec_init_size(self, ):
-        return [4]
+        yield "resv1_k3_pixel_bias"
 
     @variant(hide=True)
     def wnorm(self):
@@ -99,20 +102,20 @@ class VG(VariantGenerator):
         return [128, ]
 
     @variant(hide=False)
-    def nar(self):
-        return [4, ]
+    def linear(self):
+        # return [False]
+        return [False]
 
     @variant(hide=False)
-    def nr(self):
-        return [5,]
-
-    @variant(hide=False)
-    def i_nar(self):
-        return [4, ]
+    def i_nar(self, linear):
+        if linear:
+            return [1]
+        else:
+            return [12, 4, 8, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [5,]
+        return [5, ]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -122,59 +125,40 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            # [],
-            ["linear"],
+            [],
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
+
+    @variant(hide=False)
+    def anneal_after(self):
+        return [300, ]
+
+    @variant(hide=False)
+    def anneal_every(self):
+        return [50]
+
+    @variant(hide=False)
+    def base_filters(self):
+        return [16, 8]
+
+    @variant(hide=False)
+    def anneal_factor(self):
+        return [0.75, ]
+
     @variant(hide=False)
     def exp_avg(self):
         return [0.999, ]
 
     @variant(hide=False)
-    def tiear(self):
-        return [False]
-        # return [True, False]
-
-    @variant(hide=False)
-    def dec_context(self):
+    def share_context(self):
         return [True, ]
 
-    # @variant(hide=False)
-    # def ds(self):
-    #     return [
-    #         "mnist",
-    #         "omni"
-    #     ]
-
-    @variant(hide=True)
-    def max_epoch(self, ):
-        yield 600
-
-    @variant(hide=True)
-    def anneal_after(self, max_epoch):
-        return [int(max_epoch * 0.7)]
-
     @variant(hide=False)
-    def context_dim(self, ):
-        return [4]
-
-    @variant(hide=False)
-    def cond_rep(self, context_dim):
-        return [context_dim]
-
-    @variant(hide=False)
-    def ar_depth(self):
-        return [3, 6]
-
-    @variant(hide=False)
-    def ar_nin(self, ar_depth):
-        return [0, 2]
-
-    @variant(hide=False)
-    def ar_tie(self):
+    def tiear(self):
+        # return [False]
         return [False]
-
 
 
 vg = VG()
@@ -183,10 +167,9 @@ variants = vg.variants(randomized=False)
 
 print(len(variants))
 
-for v in variants[:]:
+for v in variants[3:]:
 
     # with skip_if_exception():
-        max_epoch = v["max_epoch"]
 
         zdim = v["zdim"]
         import tensorflow as tf
@@ -195,34 +178,27 @@ for v in variants[:]:
 
         print("Exp name: %s" % exp_name)
 
-        # load_caltech()
-        # dataset = Caltech101Dataset()
-        # dataset = Caltech101Dataset()
+        # dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
         dataset = BinarizedMnistDataset()
 
-        # init_size = v["dec_init_size"]
-        # ch_size = zdim // init_size // init_size
-        # tgt_dist = Mixture([
-        #     (Gaussian(ch_size), 1./v["nm"])
-        #     for _ in range(v["nm"])
-        # ])
-        # dist = ConvAR(
-        #     tgt_dist,
-        #     shape=(init_size, init_size, ch_size),
-        #     depth=v["ar_depth"],
-        #     block=v["ar_block"],
-        #     nr_channels=ch_size*3,
-        #     pixel_bias=True,
-        # )
         dist = Gaussian(zdim)
-        for _ in range(v["nar"]):
-            dist = AR(
-                zdim,
-                dist,
-                neuron_ratio=v["nr"],
-                data_init_wnorm=v["ar_wnorm"],
-                var_scope="AR_scope" if v["tiear"] else None,
-            )
+        # if v["linear"]:
+        #     for _ in xrange(v["nar"]):
+        #         dist = AR(
+        #             zdim,
+        #             dist,
+        #             neuron_ratio=v["nr"],
+        #             data_init_wnorm=v["ar_wnorm"],
+        #         )
+        # else:
+        #     for _ in xrange(v["nar"]):
+        #         dist = AR(
+        #             zdim,
+        #             dist,
+        #             neuron_ratio=v["nr"],
+        #             data_init_wnorm=v["ar_wnorm"],
+        #             var_scope="AR_scope" if v["tiear"] else None,
+        #         )
 
         latent_spec = [
             (
@@ -233,33 +209,34 @@ for v in variants[:]:
         ]
 
         inf_dist = Gaussian(zdim)
-        for _ in range(v["i_nar"]):
-            inf_dist = IAR(
-                zdim,
-                inf_dist,
-                neuron_ratio=v["i_nr"],
-                data_init_scale=v["i_init_scale"],
-                linear_context="linear" in v["i_context"],
-                gating_context="gating" in v["i_context"],
-                share_context=True,
-                var_scope="IAR_scope" if v["tiear"] else None,
-            )
+        if v["linear"]:
+            for _ in range(v["i_nar"]):
+                inf_dist = IAR(
+                    zdim,
+                    inf_dist,
+                    neuron_ratio=v["i_nr"],
+                    data_init_scale=v["i_init_scale"],
+                    linear_context=False,
+                    gating_context=False,
+                    share_context=True,
+                    var_scope=None,
+                    nl=None,
+                )
+        else:
+            for _ in range(v["i_nar"]):
+                inf_dist = IAR(
+                    zdim,
+                    inf_dist,
+                    neuron_ratio=v["i_nr"],
+                    data_init_scale=v["i_init_scale"],
+                    linear_context="linear" in v["i_context"],
+                    gating_context="gating" in v["i_context"],
+                    share_context=v["share_context"],
+                    var_scope="IAR_scope" if v["tiear"] else None,
+                )
 
-        ar_conv_dist = ConvAR(
-            tgt_dist=MeanBernoulli(1),
-            shape=(28, 28, 1),
-            filter_size=3,
-            depth=v["ar_depth"],
-            nr_channels=12,
-            pixel_bias=True,
-            # block="plstm",
-            context_dim=v["context_dim"],
-            tieweight=v["ar_tie"],
-            block="gated_resnet",
-            extra_nins=v["ar_nin"],
-        )
         model = RegularizedHelmholtzMachine(
-            output_dist=ar_conv_dist,
+            output_dist=MeanBernoulli(dataset.image_dim),
             latent_spec=latent_spec,
             batch_size=batch_size,
             image_shape=dataset.image_shape,
@@ -267,7 +244,7 @@ for v in variants[:]:
             inference_dist=inf_dist,
             wnorm=v["wnorm"],
             network_args=dict(
-                cond_rep=v["cond_rep"],
+                base_filters=v["base_filters"]
             ),
         )
 
@@ -282,22 +259,35 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=6000//128*5,
+            vali_eval_interval=1500*4,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
+            anneal_every=v["anneal_every"],
+            anneal_factor=v["anneal_factor"],
             img_on=False,
-            vis_ar=False,
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1007_smnist_cc_hybrid_gres",
+            exp_prefix="1012_iaf_smnist_reg",
             seed=v["seed"],
             variant=v,
             # mode="local",
             mode="lab_kube",
             n_parallel=0,
             use_gpu=True,
+            node_selector={
+                "aws/type": "p2.xlarge",
+                "openai/computing": "true",
+            },
+            resources=dict(
+                requests=dict(
+                    cpu=1.6,
+                ),
+                limits=dict(
+                    cpu=1.6,
+                )
+            )
         )
 
 

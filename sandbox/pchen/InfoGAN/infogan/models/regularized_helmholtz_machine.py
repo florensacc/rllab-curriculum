@@ -357,17 +357,18 @@ class RegularizedHelmholtzMachine(object):
                         wnorm=self.wnorm,
                         pixel_bias=True,
                 ):
+                    base_filters = network_args.get("base_filters", 16)
                     encoder = \
                         (pt.template('input', self.book).
                          reshape([-1] + list(image_shape))
                          )
                     from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
-                    encoder = resconv_v1(encoder, 3, 16, stride=2) #14
-                    encoder = resconv_v1(encoder, 3, 16, stride=1)
-                    encoder = resconv_v1(encoder, 3, 32, stride=2) #7
-                    encoder = resconv_v1(encoder, 3, 32, stride=1)
-                    encoder = resconv_v1(encoder, 3, 32, stride=2) #4
-                    encoder = resconv_v1(encoder, 3, 32, stride=1)
+                    encoder = resconv_v1(encoder, 3, base_filters, stride=2) #14
+                    encoder = resconv_v1(encoder, 3, base_filters, stride=1)
+                    encoder = resconv_v1(encoder, 3, base_filters * 2, stride=2) #7
+                    encoder = resconv_v1(encoder, 3, base_filters * 2, stride=1)
+                    encoder = resconv_v1(encoder, 3, base_filters * 2, stride=2) #4
+                    encoder = resconv_v1(encoder, 3, base_filters * 2, stride=1)
                     self.encoder_template = \
                         (encoder.
                          flatten().
@@ -376,15 +377,15 @@ class RegularizedHelmholtzMachine(object):
                          )
                     decoder = (pt.template('input', self.book).
                                wnorm_fc(450, ).
-                               wnorm_fc(512, ).
-                               reshape([-1, 4, 4, 32])
+                               wnorm_fc(4*4*base_filters*2 ).
+                               reshape([-1, 4, 4, base_filters*2])
                                )
-                    decoder = resconv_v1(decoder, 3, 32, stride=1)
-                    decoder = resdeconv_v1(decoder, 3, 32, out_wh=[7,7])
-                    decoder = resconv_v1(decoder, 3, 32, stride=1)
-                    decoder = resdeconv_v1(decoder, 3, 32, out_wh=[14,14])
-                    decoder = resconv_v1(decoder, 3, 32, stride=1)
-                    decoder = resdeconv_v1(decoder, 3, 16, out_wh=[28,28])
+                    decoder = resconv_v1(decoder, 3,   base_filters*2, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, base_filters*2, out_wh=[7,7])
+                    decoder = resconv_v1(decoder, 3,   base_filters*2, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[14,14])
+                    decoder = resconv_v1(decoder, 3,   base_filters, stride=1)
+                    decoder = resdeconv_v1(decoder, 3, base_filters, out_wh=[28,28])
                     self.decoder_template = (
                         decoder.
                             conv2d_mod(3, 1, activation_fn=None).

@@ -739,7 +739,10 @@ class VAE(object):
         if not self._vis_ar:
             return
         dist = self.model.output_dist
-        x_var, context_var, go_sym, tgt_dist = dist.infer_sym(128)
+        bs_per_gpu = self.batch_size // self.num_gpus
+        x_var, context_var, go_sym, tgt_dist = dist.infer_sym(
+            bs_per_gpu
+        )
         def custom_imsave(name, img):
             assert img.ndim == 3
             if img.shape[2] == 3:
@@ -752,7 +755,7 @@ class VAE(object):
             )
 
         # samples
-        z_var = self.model.latent_dist.sample_prior(self.batch_size)
+        z_var = self.model.latent_dist.sample_prior(bs_per_gpu)
         _, x_dist_info = self.model.decode(z_var, sample=False)
         context = sess.run(x_dist_info)
         fol = "%s/samples/" % self.checkpoint_dir
@@ -763,14 +766,14 @@ class VAE(object):
             pass
         # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
         # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
-        batch_imshp = [self.batch_size, ] + list(self.model.image_shape)
+        batch_imshp = [bs_per_gpu, ] + list(self.model.image_shape)
         cur_zeros = np.zeros(batch_imshp)
         h, w = self.model.image_shape[:2]
         for yi in range(h):
             for xi in range(w):
                 ind = xi + yi * w
                 if (ind % 16 == 1):
-                    for ix in range(128):
+                    for ix in range(bs_per_gpu):
                         # scipy.misc.imsave(
                         #     "%s/%s_step%s.png" % (fol, ix, ind),
                         #                   (cur_zeros[ix] + 0.5) * 255)
@@ -786,9 +789,10 @@ class VAE(object):
         os.system(
             "tar -zcvf %s/../samples.tar.gz %s" % (fol, fol)
         )
+        # import ipdb; ipdb.set_trace()
 
         # decompress
-        originals = tuple(feed.items())[0][1].reshape(batch_imshp)
+        originals = tuple(feed.items())[0][1][-bs_per_gpu:].reshape(batch_imshp)
         context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)
         fol = "%s/decomp/" % self.checkpoint_dir
         try:
@@ -798,7 +802,7 @@ class VAE(object):
             pass
         # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
         # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
-        for ix in range(128):
+        for ix in range(bs_per_gpu):
             custom_imsave(
                 "%s/%s_step%s.png" % (fol, ix, 0),
                 originals[ix]
@@ -808,7 +812,7 @@ class VAE(object):
             for xi in range(w):
                 ind = xi + yi * w
                 if (ind % 8 == 1):
-                    for ix in range(128):
+                    for ix in range(bs_per_gpu):
                         custom_imsave(
                             "%s/%s_step%s.png" % (fol, ix, ind),
                             cur_zeros[ix]
