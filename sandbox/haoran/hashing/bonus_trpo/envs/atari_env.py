@@ -265,6 +265,8 @@ class AtariEnv(Env,Serializable):
                 self.lives_lost = False
 
             if self.is_terminal:
+                if self.terminator is not None:
+                    rewards.append(self.terminator.get_terminal_reward())
                 break
         self._reward = sum(rewards)
         if self._prior_reward > 0:

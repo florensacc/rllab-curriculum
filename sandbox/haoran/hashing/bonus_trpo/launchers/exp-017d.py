@@ -1,7 +1,10 @@
 """
 Continue exp-017c
 - log more count info
-- composite bonus
+- compute bonus rewards before updating the hash tables
+- the terminator gives a big reward for getting into the second room
+- try conv baseline
+- try random initial state
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -49,7 +52,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
-mode = "local_test"
+mode = "kube"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -81,7 +84,7 @@ class VG(VariantGenerator):
     @variant
     def baseline_type_opt(self):
         return [
-            # ["conv","cg"],
+            ["conv","cg"],
             ["nn_feature_linear",""],
         ]
     @variant
@@ -98,7 +101,7 @@ class VG(VariantGenerator):
         return [10]
     @variant
     def subsample_factor(self):
-        return [0.1,0.3]
+        return [0.1]
     @variant
     def center_adv(self):
         return [True]
@@ -136,7 +139,7 @@ for v in variants:
     # env
     game=v["game"]
     frame_skip=8
-    max_start_nullops = 0
+    max_start_nullops = 30
     network_args = nips_dqn_args
     img_width=42
     img_height=42
@@ -165,6 +168,7 @@ for v in variants:
     resetter_type = v["resetter_type"]
     baseline_prediction_clip = 100
     task = v["task"]
+    task_reward = 50
 
     # other exp setup --------------------------------------
     exp_name = "{exp_index}_{time}_{game}".format(
@@ -231,7 +235,10 @@ for v in variants:
     if task == "":
         terminator = None
     else:
-        terminator = MontezumaTerminator(task=task)
+        terminator = MontezumaTerminator(
+            task=task,
+            task_reward=task_reward
+        )
 
     env = AtariEnv(
         game=game,

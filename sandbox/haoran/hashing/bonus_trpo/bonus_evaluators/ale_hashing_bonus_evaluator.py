@@ -201,7 +201,7 @@ class ALEHashingBonusEvaluator(object):
 
     def predict(self, path):
         keys = self.retrieve_keys([path])
-        counts = self.hash.query_keys(keys)
+        counts = np.maximum(self.hash.query_keys(keys),1)
 
         if self.bonus_form == "1/n":
             bonuses = 1./counts
