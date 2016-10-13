@@ -224,8 +224,8 @@ class VG(VariantGenerator):
     def block(self):
         return [
             "resnet",
-            "gated_resnet",
             "plstm",
+            "gated_resnet",
         ]
 
 
@@ -236,7 +236,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 2
 for v in variants[i:i+1]:
         print(v)
 
@@ -328,8 +328,8 @@ for v in variants[i:i+1]:
             pixel_bias=True,
             context_dim=v["context_dim"],
             nin=False,
-            block=v["gated_resnet"],
-            extra_nins=2
+            block=v["block"],
+            extra_nins=1
             # block="plstm",
         )
         model = RegularizedHelmholtzMachine(

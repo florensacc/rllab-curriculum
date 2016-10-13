@@ -3,6 +3,8 @@
 # iaf creates overfitting more. af alone with ard6 -> 79.26
 # interestingly, 8 overfits more than 6!
 
+# try tying arconv param & fewer conv ar channels
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -96,7 +98,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [4, 0]
+        return [4,]
 
     @variant(hide=False)
     def nr(self):
@@ -128,7 +130,7 @@ class VG(VariantGenerator):
         ]
     @variant(hide=False)
     def exp_avg(self):
-        return [0.999, ]
+        return [0.99, ]
 
     @variant(hide=False)
     def tiear(self):
@@ -164,15 +166,19 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [6, 8]
+        return [6, ]
 
     @variant(hide=False)
     def ar_nin(self, ar_depth):
-        return [0, ]
+        return [2, ]
 
     @variant(hide=False)
     def ar_tie(self):
-        return [False]
+        return [True, False]
+
+    @variant(hide=False)
+    def ar_chns(self):
+        return [12, 6]
 
 
 
@@ -290,7 +296,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1010_smnist_cc_strip_gres",
+            exp_prefix="1012_reg_smnist_cc_af_gres",
             seed=v["seed"],
             variant=v,
             # mode="local",

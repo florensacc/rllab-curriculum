@@ -2,6 +2,11 @@
 # explore regularization & stuff
 
 
+# verdict: ard6 > ard3
+# surprisingly: nin2 > nin0
+# both in terms of generailziation
+
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
