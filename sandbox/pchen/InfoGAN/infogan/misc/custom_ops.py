@@ -1323,7 +1323,11 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=Fals
                 origin.conv2d_mod(kernel // 2, nch*4, activation_fn=None, prefix="de_straight")
                 origin.depool2d_split()
             else:
-                origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None, prefix="de_straight")
+                origin.custom_deconv2d(
+                    [0]+out_wh+[nch],
+                    k_h=kernel, k_w=kernel,
+                    activation_fn=None, prefix="de_straight"
+                )
     return seq.as_layer().nl()
 
 def gruconv_v1(l_in, kernel, nch, inp=None):
@@ -1397,10 +1401,12 @@ class CustomBookkeeper(Bookkeeper):
 
     def add_histogram_summary(self, tensor, tag=None):
         """Add a summary operation to visualize any tensor."""
-        print("passing histogram %s"%tag)
+        pass
+        # print("passing histogram %s"%tag)
 
     def add_scalar_summary(self, x, tag=None):
-        print("passing scalar summary %s"%tag)
+        pass
+        # print("passing scalar summary %s"%tag)
 
 prettytensor.bookkeeper.BOOKKEEPER_FACTORY = CustomBookkeeper
 

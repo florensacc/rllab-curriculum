@@ -18,6 +18,8 @@
 
 # tried to investigate if sparse gradients are culprit
 
+# verdict: beta2_sparse on dpesnt really encourage more information to be used
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

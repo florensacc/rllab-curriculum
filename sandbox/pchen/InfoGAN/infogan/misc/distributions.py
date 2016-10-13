@@ -990,6 +990,8 @@ class AR(Distribution):
             img_shape=None,
             keepprob=1.,
             clip=False,
+            squash=False,
+            ar_channels=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1010,6 +1012,7 @@ class AR(Distribution):
         self._share_context = share_context
         self._rank = rank
         self._clip = clip
+        self._squash = squash
         self._iaf_template = pt.template("y", books=dist_book)
         if linear_context:
             lin_con = pt.template("linear_context", books=dist_book)
@@ -1080,6 +1083,7 @@ class AR(Distribution):
                                 filter_size,
                                 nr_channels,
                                 zerodiagonal=True,
+                                ar_channels=ar_channels,
                                 prefix="step0",
                             )
                         context_shp = [-1,] + img_shape[:2] + [nr_channels]
@@ -1091,7 +1095,10 @@ class AR(Distribution):
                         cur = \
                             resconv_v1_customconv(
                                 "ar_conv2d_mod",
-                                dict(zerodiagonal=False),
+                                dict(
+                                    zerodiagonal=False,
+                                    ar_channels=ar_channels,
+                                ),
                                 cur,
                                 filter_size,
                                 nr_channels,
@@ -1099,20 +1106,32 @@ class AR(Distribution):
                                 gating=True,
                             )
                     for ninidx in range(extra_nins):
-                        cur += 0.1 * cur.conv2d_mod(
-                            1,
-                            nr_channels,
-                            prefix="nin_ex_%s" % ninidx,
-                        )
+                        if ar_channels:
+                            cur += 0.1 * cur.ar_conv2d_mod(
+                                1,
+                                nr_channels,
+                                zerodiagonal=False,
+                                ar_channels=ar_channels,
+                                prefix="nin_ex_%s" % ninidx,
+                            )
+                        else:
+                            # backward compatibility for resumption
+                            cur += 0.1 * cur.conv2d_mod(
+                                1,
+                                nr_channels,
+                                prefix="nin_ex_%s" % ninidx,
+                            )
                     cur = cur.custom_dropout(keepprob)
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,
                         img_chn * 2,
                         activation_fn=None,
+                    ).reshape(
+                        [-1,] + img_shape + [2]
                     ).apply(
                         tf.transpose,
-                        [0, 3, 1, 2]
+                        [0, 4, 1, 2, 3]
                     ).reshape([-1, np.prod(img_shape) * 2])
 
     @overrides
@@ -1161,6 +1180,9 @@ class AR(Distribution):
                 -4,
                 4,
             )
+        if self._squash:
+            iaf_mu = tf.tanh(iaf_mu)*2.7
+            iaf_logstd = tf.tanh(iaf_logstd)*1.5
         return iaf_mu, (iaf_logstd)
 
     def logli(self, x_var, dist_info):

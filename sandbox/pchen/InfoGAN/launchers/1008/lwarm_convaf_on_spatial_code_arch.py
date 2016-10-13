@@ -13,6 +13,10 @@
 
 # warm up latent code schedule
 
+# verdict: this can indeed change the information content that's being carried
+# but it seems like forcing too much information into it doesn't seem to be better than
+# letting it learn from scratch
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
