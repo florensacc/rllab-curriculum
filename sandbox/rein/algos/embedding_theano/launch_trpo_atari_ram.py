@@ -16,10 +16,10 @@ stub(globals())
 n_seq_frames = 1
 model_batch_size = 32
 exp_prefix = 'trpo-ram-emb-a'
-seeds = range(5)
+seeds = range(1)
 etas = [0.1, 0.01]
 mdps = [AtariEnv(game='freeway', obs_type="ram", frame_skip=8),
-        AtariEnv(game='breakout', obs_type="ram", frame_skip=8),
+        AtariEnv(game='breakout', obs_type="ram", frame_skip=4),
         AtariEnv(game='frostbite', obs_type="ram", frame_skip=8),
         AtariEnv(game='montezuma_revenge', obs_type="ram", frame_skip=8)]
 trpo_batch_size = 500
@@ -115,7 +115,7 @@ for mdp, eta, seed in param_cart_product:
         ),
         hamming_distance=0,
         eta=eta,
-        train_model=True,
+        train_model=False,
         train_model_freq=5,
     )
 

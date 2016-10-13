@@ -36,13 +36,22 @@ class BinaryHash(Hash):
             )
             self.tables = self.tables.reshape((len(bucket_sizes), np.max(bucket_sizes)))
             self.unpicklable_list = ["tables_lock","tables"]
+            self.snapshot_list = []
         else:
             self.tables = np.zeros((len(bucket_sizes), np.max(bucket_sizes)),dtype=int)
             self.unpicklable_list = []
+            self.snapshot_list = []
 
     def __getstate__(self):
         """ Do not pickle parallel objects. """
         return {k: v for k, v in iter(self.__dict__.items()) if k not in self.unpicklable_list}
+        state = dict()
+        for k,v in iter(self.__dict__.items()):
+            if k not in self.unpicklable_list:
+                state[k] = v
+            elif k in self.snapshot_list:
+                state[k] = copy.deepcopy(v)
+        return state
 
     def init_rank(self,rank):
         self.rank = rank

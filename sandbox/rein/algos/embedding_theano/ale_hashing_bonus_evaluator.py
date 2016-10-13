@@ -21,6 +21,7 @@ class ALEHashingBonusEvaluator(object):
             count_target="observations",
             parallel=False,
             retrieve_sample_size=np.inf,
+            sim_hash_args=None,
     ):
         self.state_dim = state_dim
         if state_preprocessor is not None:
@@ -32,6 +33,10 @@ class ALEHashingBonusEvaluator(object):
         if hash is not None:
             assert (hash.item_dim == state_dim)
             self.hash = hash
+        elif sim_hash_args is not None:
+            # Default: SimHash
+            self.hash = SimHash(state_dim, **sim_hash_args)
+            self.hash.reset()
         else:
             # Default: SimHash
             sim_hash_args = {
@@ -90,7 +95,6 @@ class ALEHashingBonusEvaluator(object):
         return processed_states
 
     def retrieve_keys(self, paths):
-        # TODO: remove path dependency
         # do it path by path to avoid memory overflow
         keys = None
         for path in paths:
@@ -110,10 +114,9 @@ class ALEHashingBonusEvaluator(object):
         return keys
 
     def fit_before_process_samples(self, paths):
-        # TODO: remove path dependency
         if self.parallel:
             shareds, barriers = self._par_objs
-            keys = self.retrieve_keys(paths)
+            keys = self.retrieve_ys(paths)
             prev_counts = self.hash.query_keys(keys)
             new_state_count = list(prev_counts).count(0)
             shareds.new_state_count_vec[self.rank] = new_state_count
@@ -142,13 +145,12 @@ class ALEHashingBonusEvaluator(object):
             counts = self.hash.query_keys(keys)
 
             logger.record_tabular_misc_stat(self.log_prefix + 'StateCount', counts)
-            logger.record_tabular(self.log_prefix + 'NewSteateCount', new_state_count)
+            logger.record_tabular(self.log_prefix + 'NewStateCount', new_state_count)
 
             self.total_state_count += new_state_count
             logger.record_tabular(self.log_prefix + 'TotalStateCount', self.total_state_count)
 
     def predict(self, path):
-        # TODO: remove path dependency
         keys = self.retrieve_keys([path])
         counts = self.hash.query_keys(keys)
 

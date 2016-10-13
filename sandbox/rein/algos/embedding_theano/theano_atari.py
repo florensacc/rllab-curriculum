@@ -64,13 +64,13 @@ def to_rgb(ale):
 def to_ram(ale):
     ram_size = ale.getRAMSize()
     ram = np.zeros(ram_size, dtype=np.uint8)
-    ale.getRAM(ram)
+    return ale.getRAM(ram)
 
 
 class AtariEnv(Env, Serializable):
     def __init__(self, game="pong", obs_type="ram", frame_skip=4):
         Serializable.quick_init(self, locals())
-        assert obs_type in ("ram", "image")
+        assert obs_type in ("ram", "image", "ram+image")
         game_path = atari_py.get_game_path(game)
         if not os.path.exists(game_path):
             raise IOError("You asked for game %s but path %s does not exist" % (game, game_path))
@@ -99,6 +99,8 @@ class AtariEnv(Env, Serializable):
         elif self._obs_type == "image":
             return spaces.Box(low=-1, high=1, shape=(1,) + IMG_WH[::-1])
             # return spaces.Box(low=-1, high=1, shape=IMG_WH + (4,))
+        elif self._obs_type == "ram+image":
+            return spaces.Box(low=-1, high=1, shape=(1, 128 + np.prod(IMG_WH)))
 
     def _get_image(self):
         return to_rgb(self.ale)
@@ -126,6 +128,20 @@ class AtariEnv(Env, Serializable):
             next_obs = next_obs / 256. * 2.0 - 1.0
             next_obs = next_obs[np.newaxis, :, :]
             return next_obs
+        elif self._obs_type == "ram+image":
+            img = self._get_image()[1:-1, :, :]
+            img = scipy.misc.imresize(
+                img, (IMG_WH[1], IMG_WH[0], 3), interp='bicubic', mode=None)
+            img = rgb2gray(img)
+            img = img / 256. * 2.0 - 1.0
+            img = img[np.newaxis, :, :]
+            img = img.flatten()
+            ram = self._get_ram()
+            # scale to [0, 1]
+            ram = ram / 255.
+            # scale to [-1, 1]
+            ram = ram * 2.0 - 1.0
+            return np.concatenate((ram, img))
 
     # return: (states, observations)
     def reset(self):

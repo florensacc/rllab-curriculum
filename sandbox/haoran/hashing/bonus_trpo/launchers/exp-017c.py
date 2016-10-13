@@ -1,8 +1,10 @@
 """
-TRPO + image obs + hacky hash on Montezuma's Revenge
-- frame_skip = 4 (make sure it is easy to pass beams)
-- image: 42 x 42 (faster)
-- network: NIPS (better NN feature for baseline)
+Re-run exp-017
+Extremely simplify the environment.
+- short horizon (less get stuck)
+- more hacky hash (has_key, is_skull_dead)
+- terminate whenever the right door is opened
+- frame_skip = 8
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -26,10 +28,13 @@ from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 # from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
 from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import AtariSaveLoadResetter
 
+""" terminator """
+from sandbox.haoran.hashing.bonus_trpo.terminators.montezuma_terminator import MontezumaTerminator
+
 """ bonus """
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.identity_preprocessor import IdentityPreprocessor
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.ale_hacky_hash_v2 import ALEHackyHashV2
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.ale_hacky_hash_v3 import ALEHackyHashV3
 
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
@@ -46,15 +51,15 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
-mode = "kube"
-ec2_instance = "c4.8xlarge"
+mode = "local_test"
+ec2_instance = "c4.2xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 4 # only for local exp
+n_parallel = 1 # only for local exp
 snapshot_mode = "last"
 plot = False
-use_gpu = False # should change conv_type and ~/.theanorc
+use_gpu = False
 sync_s3_pkl = True
 config.USE_TF = False
 
@@ -74,7 +79,7 @@ class VG(VariantGenerator):
         return [0,100,200,300,400,500,600,700,800,900]
     @variant
     def bonus_coeff(self):
-        return [1e-4,1e-2]
+        return [1e-4]
     @variant
     def baseline_type_opt(self):
         return [
@@ -86,7 +91,16 @@ class VG(VariantGenerator):
         return ["montezuma_revenge"]
     @variant
     def resetter_type(self):
-        return [None]
+        return [""]
+    @variant
+    def task(self):
+        return ["to_second_room"]
+    @variant
+    def cg_iters(self):
+        return [10,100]
+    @variant
+    def subsample_factor(self):
+        return [0.1,0.5]
 variants = VG().variants()
 
 
@@ -100,15 +114,15 @@ for v in variants:
         batch_size = 500
     else:
         batch_size = 50000
-    max_path_length = 4500
+    max_path_length = 1000
     discount = 0.99
     n_itr = 2000
     step_size = 0.01
     policy_opt_args = dict(
         name="pi_opt",
-        cg_iters=10,
+        cg_iters=v["cg_iters"],
         reg_coeff=1e-3,
-        subsample_factor=0.1,
+        subsample_factor=v["subsample_factor"],
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
@@ -118,7 +132,8 @@ for v in variants:
 
     # env
     game=v["game"]
-    frame_skip=4
+    frame_skip=8
+    max_start_nullops = 30
     network_args = nips_dqn_args
     img_width=42
     img_height=42
@@ -137,7 +152,8 @@ for v in variants:
 
     # others
     resetter_type = v["resetter_type"]
-    baseline_prediction_clip = 100
+    baseline_prediction_clip = 10
+    task = v["task"]
 
     # other exp setup --------------------------------------
     exp_name = "{exp_index}_{time}_{game}".format(
@@ -200,19 +216,26 @@ for v in variants:
     else:
         resetter = None
 
+    if task == "":
+        terminator = None
+    else:
+        terminator = MontezumaTerminator(task=task)
+
     env = AtariEnv(
-            game=game,
-            seed=seed,
-            img_width=img_width,
-            img_height=img_height,
-            obs_type=obs_type,
-            record_ram=record_ram,
-            record_image=record_image,
-            record_rgb_image=record_rgb_image,
-            record_internal_state=record_internal_state,
-            resetter=resetter,
-            frame_skip=frame_skip,
-        )
+        game=game,
+        seed=seed,
+        max_start_nullops=max_start_nullops,
+        img_width=img_width,
+        img_height=img_height,
+        obs_type=obs_type,
+        record_ram=record_ram,
+        record_image=record_image,
+        record_rgb_image=record_rgb_image,
+        record_internal_state=record_internal_state,
+        resetter=resetter,
+        terminator=terminator,
+        frame_skip=frame_skip,
+    )
     policy = CategoricalConvPolicy(
         env_spec=env.spec,
         name="policy",
@@ -266,7 +289,7 @@ for v in variants:
     else:
         raise NotImplementedError
 
-    _hash = ALEHackyHashV2(
+    _hash = ALEHackyHashV3(
         item_dim=128,
         game=game,
         parallel=use_parallel,

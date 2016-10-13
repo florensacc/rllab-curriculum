@@ -1,5 +1,5 @@
 from rllab.algos.base import RLAlgorithm
-from sandbox.rein.algos.embedding_theano import parallel_sampler
+from sandbox.rein.algos.embedding_theano import parallel_sampler_ram_img
 from rllab.sampler.base import BaseSampler
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
@@ -14,14 +14,14 @@ class BatchSampler(BaseSampler):
         self.algo = algo
 
     def start_worker(self):
-        parallel_sampler.populate_task(self.algo.env, self.algo.policy, scope=self.algo.scope)
+        parallel_sampler_ram_img.populate_task(self.algo.env, self.algo.policy, scope=self.algo.scope)
 
     def shutdown_worker(self):
-        parallel_sampler.terminate_task(scope=self.algo.scope)
+        parallel_sampler_ram_img.terminate_task(scope=self.algo.scope)
 
     def obtain_samples(self, itr, n_seq_frames):
         cur_params = self.algo.policy.get_param_values()
-        paths = parallel_sampler.sample_paths(
+        paths = parallel_sampler_ram_img.sample_paths(
             policy_params=cur_params,
             max_samples=self.algo.batch_size,
             max_path_length=self.algo.max_path_length,
@@ -31,7 +31,7 @@ class BatchSampler(BaseSampler):
         if self.algo.whole_paths:
             return paths
         else:
-            paths_truncated = parallel_sampler.truncate_paths(paths, self.algo.batch_size)
+            paths_truncated = parallel_sampler_ram_img.truncate_paths(paths, self.algo.batch_size)
             return paths_truncated
 
 

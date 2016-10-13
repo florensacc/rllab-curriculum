@@ -31,7 +31,7 @@ import tensorflow as tf
 from rllab.misc.instrument import VariantGenerator, variant
 
 exp_prefix = "bonus-trpo-atari/" + os.path.basename(__file__).split('.')[0] # exp_xxx
-mode = "kube"
+mode = "local_test"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1c"
 
