@@ -5,7 +5,7 @@ logging.getLogger().setLevel(log_level)
 from rllab.envs.base import Env, Step
 from rllab.spaces.box import Box
 from rllab.core.serializable import Serializable
-from conopt.experiments.A9_particle_analogy_seq import Experiment
+from conopt.experiments.TF2_lift_claw import Experiment
 import numpy as np
 from sandbox.rocky.analogy.utils import unwrap, using_seed
 from rllab.envs.gym_env import convert_gym_space
@@ -51,7 +51,7 @@ class Shuffler(object):
             analogy_envs[matching_ids] = analogy_envs[shuffled]
 
 
-class ConoptParticleEnv(Env, Serializable):
+class ConoptArmEnv(Env, Serializable):
     def __init__(self, seed=None, target_seed=None, obs_type='state', particles_to_reach=2):
         Serializable.quick_init(self, locals())
         self.seed = seed
@@ -71,11 +71,11 @@ class ConoptParticleEnv(Env, Serializable):
         self.target_seed = target_seed
         exp = Experiment()
         with using_seed(self.target_seed):
-            self.target_ids = np.random.choice(np.arange(4), self.particles_to_reach, replace=False)
+            self.target_ids = np.random.choice(np.arange(3), self.particles_to_reach, replace=False)
             target_id = self.target_ids[0]
             #target_id = np.random.randint(0, 2)
         with using_seed(self.seed):
-            scenario = exp.make_scenario(trial_index=seed, task_id=target_id)
+            scenario = exp.make_scenario(trial_index=seed) #, task_id=target_id)
         env = scenario.to_env()
         self.conopt_exp = exp
         self.conopt_scenario = scenario

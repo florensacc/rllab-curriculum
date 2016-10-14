@@ -1,6 +1,7 @@
 from sandbox.bradly.analogy.algos.trainer import Trainer
 from sandbox.rocky.analogy.demo_collector.policy_demo_collector import PolicyDemoCollector
 from sandbox.rocky.analogy.demo_collector.trajopt_demo_collector import TrajoptDemoCollector
+from sandbox.bradly.analogy.demo_collector.mixture_demo_collector import MixtureDemoCollector
 from sandbox.bradly.analogy.envs.conopt_particle_env import ConoptParticleEnv
 from sandbox.bradly.analogy.policy.conopt_particle_tracking_policy import ConoptParticleTrackingPolicy
 from sandbox.rocky.analogy.policies.demo_rnn_mlp_analogy_policy import DemoRNNMLPAnalogyPolicy
@@ -76,7 +77,8 @@ for v in variants:
             ConoptParticleEnv,
         ),
         #demo_collector=TrajoptDemoCollector(),
-        demo_collector=PolicyDemoCollector(policy_cls=ConoptParticleTrackingPolicy),
+        #demo_collector=PolicyDemoCollector(policy_cls=ConoptParticleTrackingPolicy),
+        demo_collector=MixtureDemoCollector(policy_cls=ConoptParticleTrackingPolicy),
         n_train_trajs=v["n_train_trajs"],
         n_test_trajs=50,
         horizon=v["horizon"],

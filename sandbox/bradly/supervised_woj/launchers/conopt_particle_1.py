@@ -1,10 +1,9 @@
-from sandbox.bradly.analogy.algos.trainer import Trainer
-from sandbox.rocky.analogy.demo_collector.policy_demo_collector import PolicyDemoCollector
+from sandbox.bradly.supervised_woj.trainer.trainer import Trainer
+from sandbox.bradly.supervised_woj.demo_collector.policy_demo_collector import PolicyDemoCollector
 from sandbox.rocky.analogy.demo_collector.trajopt_demo_collector import TrajoptDemoCollector
-from sandbox.bradly.analogy.envs.conopt_particle_env import ConoptParticleEnv
-from sandbox.bradly.analogy.policy.conopt_particle_tracking_policy import ConoptParticleTrackingPolicy
-from sandbox.rocky.analogy.policies.demo_rnn_mlp_analogy_policy import DemoRNNMLPAnalogyPolicy
-from sandbox.bradly.analogy.policy.nu_dual_rnn_policy import DoubleRNNAnalogyPolicy
+from sandbox.bradly.supervised_woj.envs.conopt_particle_env import ConoptParticleEnv
+from sandbox.bradly.supervised_woj.policy.conopt_particle_tracking_policy import ConoptParticleTrackingPolicy
+from sandbox.bradly.supervised_woj.policy.mlp_policy import MLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 
 
@@ -53,21 +52,11 @@ print("#Experiments: %d" % len(variants))
 
 for v in variants:
     env = TfEnv(ConoptParticleEnv(
-        seed=0, particles_to_reach=3
+        seed=0
     ))
 
-    policy = DoubleRNNAnalogyPolicy(
+    policy = MLPPolicy(
         env_spec=env.spec,
-        name="policy",
-        rnn_hidden_size=100,
-        rnn_hidden_nonlinearity=tf.nn.relu,
-        #mlp_hidden_sizes=(100, 100),
-        #mlp_hidden_nonlinearity=tf.nn.relu,
-        state_include_action=v["state_include_action"],
-        batch_normalization=False,
-        layer_normalization=False,
-        weight_normalization=True,
-        network_type=NetworkType.GRU,
     )
 
     algo = Trainer(
@@ -82,8 +71,6 @@ for v in variants:
         horizon=v["horizon"],
         n_epochs=1000,
         learning_rate=1e-2,
-        no_improvement_tolerance=20,
-        shuffler=ConoptParticleEnv.shuffler() if v["use_shuffler"] else None,
         batch_size=100,
         plot=True
     )

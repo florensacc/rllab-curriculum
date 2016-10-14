@@ -5,7 +5,7 @@ logging.getLogger().setLevel(log_level)
 from rllab.envs.base import Env, Step
 from rllab.spaces.box import Box
 from rllab.core.serializable import Serializable
-from conopt.experiments.A4_particle_analogy import Experiment
+from conopt.experiments.A8_particle_imitation import Experiment
 import numpy as np
 from sandbox.rocky.analogy.utils import unwrap, using_seed
 from rllab.envs.gym_env import convert_gym_space
@@ -38,30 +38,15 @@ def fast_compute_cost(reward_fn, s):
         ipdb.set_trace()
 
 
-class Shuffler(object):
-    def shuffle(self, demo_paths, analogy_paths, demo_envs, analogy_envs):
-        # We are free to swap the pairs as long as they correspond to the same task
-        target_ids = [unwrap(x).conopt_scenario.task_id for x in analogy_envs]
-        for target_id in set(target_ids):
-            # shuffle each set of tasks separately
-            matching_ids, = np.where(target_ids == target_id)
-            shuffled = np.copy(matching_ids)
-            np.random.shuffle(shuffled)
-            analogy_paths[matching_ids] = analogy_paths[shuffled]
-            analogy_envs[matching_ids] = analogy_envs[shuffled]
-
-
 class ConoptParticleEnv(Env, Serializable):
-    def __init__(self, seed=None, target_seed=None, obs_type='state', particles_to_reach=2):
+    def __init__(self, seed=None, target_seed=None, obs_type='state'):
         Serializable.quick_init(self, locals())
         self.seed = seed
         self.target_seed = target_seed
         self.conopt_exp = None
         self.conopt_scenario = None
         self.conopt_env = None
-        self.target_ids = None
         self.curr_target_idx = 0
-        self.particles_to_reach = particles_to_reach
         self.reset_trial()
 
     def reset_trial(self):
@@ -70,19 +55,13 @@ class ConoptParticleEnv(Env, Serializable):
         target_seed = np.random.randint(np.iinfo(np.int32).max)
         self.target_seed = target_seed
         exp = Experiment()
-        with using_seed(self.target_seed):
-            self.target_ids = None
-            target_id = 0
         with using_seed(self.seed):
-            scenario = exp.make_scenario(trial_index=seed, task_id=target_id)
+            scenario = exp.make_scenario(trial_index=seed)
         env = scenario.to_env()
         self.conopt_exp = exp
         self.conopt_scenario = scenario
         self.conopt_env = env
         return self.reset()
-
-    def log_analogy_diagnostics(self, paths, envs):
-        pass
 
     def reset(self):
         return self.conopt_env.reset()
@@ -109,10 +88,5 @@ class ConoptParticleEnv(Env, Serializable):
         env = self.conopt_env
         action = action.reshape(env.action_space.shape)
         next_obs, rew, done, infos = env.step(action)
-
         return Step(next_obs, rew, done)
-
-    @classmethod
-    def shuffler(cls):
-        return Shuffler()
 
