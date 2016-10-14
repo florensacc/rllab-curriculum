@@ -4,7 +4,7 @@ import multiprocessing as mp
 
 
 class SimHash(Hash):
-    def __init__(self, item_dim, dim_key=128, bucket_sizes=None, parallel=False):
+    def __init__(self, item_dim, dim_key=128, bucket_sizes=None, parallel=False, disable_rnd_proj=False):
         """
         Encode each item (vector) as the signs of its dot products with random vectors
         (with uniformly sampled orientations) to get a binary code.
@@ -17,7 +17,9 @@ class SimHash(Hash):
         This way the count is less prone to errors caused by key compression.
         """
         # each column is a vector of uniformly random orientation
-        self.projection_matrix = np.random.normal(size=(item_dim, dim_key))
+        self._disable_rnd_proj = disable_rnd_proj
+        if not disable_rnd_proj:
+            self.projection_matrix = np.random.normal(size=(item_dim, dim_key))
         self.item_dim = item_dim
 
         self.dim_key = dim_key
@@ -61,7 +63,10 @@ class SimHash(Hash):
         Compute the keys for many items (row-wise stacked as a matrix)
         """
         # compute the signs of the dot products with the random vectors
-        binaries = np.sign(np.asarray(items).dot(self.projection_matrix))
+        if not self._disable_rnd_proj:
+            binaries = np.sign(np.asarray(items).dot(self.projection_matrix))
+        else:
+            binaries = items
         keys = np.cast['int'](binaries.dot(self.mods_list)) % self.bucket_sizes
         return keys
 
@@ -70,12 +75,9 @@ class SimHash(Hash):
         Increment hash table counts for many items (row-wise stacked as a matrix)
         """
         if self.parallel:
-            print("%d: before table lock" % (self.rank))
             with self.tables_lock.get_lock():
-                print("%d: inside table lock" % (self.rank))
                 for idx in range(len(self.bucket_sizes)):
                     np.add.at(self.tables[idx], keys[:, idx], 1)
-            print("%d: exit table lock" % (self.rank))
         else:
             for idx in range(len(self.bucket_sizes)):
                 np.add.at(self.tables[idx], keys[:, idx], 1)

@@ -28,6 +28,8 @@ class Plotter:
             for idx in range(inputs.shape[0]):
                 cont_emb = arr_cont_emb[idx]
                 key = np.cast['int'](np.round(cont_emb))
+                key = key.reshape(-1, 4).mean(axis=1)
+                key = np.cast['int'](np.round(key))
                 key_int = self.bin_to_int(key)
                 if counting_table is not None:
                     if key_int in counting_table.keys():
@@ -67,6 +69,8 @@ class Plotter:
                                               'a') as counts_file:
                 cont_emb = arr_cont_emb[idx]
                 key = np.cast['int'](np.round(cont_emb))
+                key = key.reshape(-1, 4).mean(axis=1)
+                key = np.cast['int'](np.round(key))
                 key_int = self.bin_to_int(key)
                 if counting_table is not None:
                     if key_int in counting_table.keys():
