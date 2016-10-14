@@ -1,5 +1,3 @@
-
-
 import functools
 import itertools
 import tensorflow as tf
@@ -55,7 +53,10 @@ class Distribution(Serializable):
         raise NotImplementedError
 
     def logli_prior(self, x_var):
-        return self.logli(x_var, self.prior_dist_info(x_var.get_shape()[0]))
+        return self.logli(
+            x_var,
+            self.prior_dist_info(x_var.get_shape()[0])
+        )
 
     def logli_init_prior(self, x_var):
         return self.logli(x_var, self.prior_dist_info(x_var.get_shape()[0]))
@@ -1315,6 +1316,8 @@ class IAR(AR):
         else:
             return self._base_dist.activate_dist(flat)
 
+# MADE that outputs \theta_i for p_\theta_i(x_i | x<i)
+# where conditional p is specified by tgt_dist
 class DistAR(Distribution):
     def __init__(
             self,
@@ -1327,6 +1330,7 @@ class DistAR(Distribution):
             data_init_scale=0.1,
             linear_context=False,
             gating_context=False,
+            mul_gating=False,
             op_context=False,
             share_context=False,
             var_scope=None,
@@ -1416,9 +1420,14 @@ class DistAR(Distribution):
                     )
                 if di == 0:
                     if gating_context:
-                        self._iaf_template *= (gate_con+1).apply(tf.nn.sigmoid)
+                        if mul_gating:
+                            self._iaf_template *= (gate_con)
+                        else:
+                            self._iaf_template *= (gate_con+1).apply(tf.nn.sigmoid)
                     if linear_context:
                         self._iaf_template += lin_con
+            # shortcut of [-1, dim, nom, 2]
+            # -> [-1, nom, 2, dim]
             self._iaf_template = \
                 self._iaf_template. \
                     arfc(
@@ -1430,7 +1439,6 @@ class DistAR(Distribution):
                     reshape([-1, self._dim, 2*nom]). \
                     apply(tf.transpose, [0, 2, 1]). \
                     reshape([-1, 2*self._dim*nom])
-
     @overrides
     def init_mode(self):
         self._custom_phase = CustomPhase.init

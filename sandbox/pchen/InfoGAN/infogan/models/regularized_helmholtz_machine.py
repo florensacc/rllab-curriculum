@@ -1499,7 +1499,10 @@ class RegularizedHelmholtzMachine(object):
                             encoder,
                             fs,
                             base_filters,
-                            stride=1, keep_prob=res_keep_prob, add_coeff=ac, nn=True
+                            stride=1,
+                            keep_prob=res_keep_prob,
+                            add_coeff=ac,
+                            nn=True
                         )
                     encoder = resconv_v1(
                         encoder,

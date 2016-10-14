@@ -132,7 +132,6 @@ class VAE(object):
 
         with tf.variable_scope("optim"):
             # optimizer = tf.train.AdamOptimizer(self.learning_rate)
-            optimizer = self.optimizer_cls # AdamaxOptimizer(self.learning_rate)
             if self.anneal_after is not None:
                 self.lr_var = tf.Variable(
                     # assume lr is always set
@@ -141,7 +140,7 @@ class VAE(object):
                     trainable=False,
                 )
                 self.optimizer_args["learning_rate"] = self.lr_var
-                self.optimizer = self.optimizer_cls(**self.optimizer_args)
+            self.optimizer = self.optimizer_cls(**self.optimizer_args)
 
     def init_opt(self, init=False, eval=False):
         if init:
@@ -587,7 +586,7 @@ class VAE(object):
                             exit(1)
 
 
-                    if counter % self.snapshot_interval == 0:
+                    if counter != 0 and counter % self.snapshot_interval == 0:
                         snapshot_name = "%s_%s" % (self.exp_name, str(counter))
                         fn = saver.save(sess, "%s/%s.ckpt" % (self.checkpoint_dir, snapshot_name))
                         print(("Model saved in file: %s" % fn))

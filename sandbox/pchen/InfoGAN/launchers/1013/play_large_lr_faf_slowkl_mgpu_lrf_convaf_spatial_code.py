@@ -17,17 +17,25 @@
 # ar-depth 12 has good performance, this explores training it faster
 # w/ multi-gpu and check ar-depth 6 w/ double feat maps & deeper depth
 
-# try to get some best bit by doing param-tying of ar & larger code & deeper and wider AF
+# deeper ar still better
 
+# fixed af, reproduce 12 ar depth w/ slow kl
+# 2-step af and 4-step af
 
-# kl ends up not being used. try to remove param-tying
-# wtie is indeed the issue, removing it makes this model climb to 3.06bits in just 450 epochs
+# better than no slowkl version in terms of kl and bits/dim
+# no difference between 2-step & 4-step version, which means p(z) is not the limitation
+#   of current capacity
 
-# 1) retrain the same thing^ but with clipping
-# 2) throw iaf in the mix
-# 3) no iaf, but more steps in encoder
+# THINK: curves look spiky, maybe reduce lr?
+# THINK: what is limiting the capacity? try different axes
 
-# fixed af
+# adding bigger zdim exp
+
+# vali sofar, 4nar: 3.186
+# train : 3.13
+# annealing seems to kill the slope!
+# 4nar starts to exhibit slope and then killed off
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -64,7 +72,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, ] #0.001]
+        return [0.01, ] #0.001]
 
     @variant
     def seed(self):
@@ -76,13 +84,9 @@ class VG(VariantGenerator):
         return [True, ]
 
     @variant
-    def zdim(self):
-        return [512, ]#[12, 32]
-
-    @variant
     def min_kl(self):
         # return [0.06, ]# 0.1]
-        return [0.01, 0.1]# 0.1]
+        return [0.01, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -103,6 +107,9 @@ class VG(VariantGenerator):
         # yield "resv1_k3_pixel_bias_filters_ratio_32_global_pool"
         yield "resv1_k3_pixel_bias_filters_ratio_32_big_spatial"
 
+    @variant(hide=False)
+    def steps(self, ):
+        return [3]
     #
     @variant(hide=False)
     def base_filters(self, ):
@@ -134,25 +141,19 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [4, ]
+        return [2, 4]
 
     @variant(hide=False)
     def nr(self):
-        return [8,]
+        return [3,]
 
     @variant(hide=False)
     def i_nar(self):
-        return [4, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
         return [5,]
-
-    @variant(hide=False)
-    def steps(self, i_nar):
-        if i_nar == 0:
-            return [3, 5]
-        return [3]
 
     @variant(hide=False)
     def i_init_scale(self):
@@ -161,9 +162,13 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def i_context(self, i_nar):
         # return [True, False]
+        if i_nar == 0:
+            return [
+                []
+            ]
         return [
             [],
-            # ["linear"],
+            ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -214,6 +219,11 @@ class VG(VariantGenerator):
     def data_init_scale(self):
         return [0.01, ]
 
+    @variant
+    def zdim(self):
+        return [256, 512]#[12, 32]
+
+
 
 
 
@@ -222,8 +232,9 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 3
 for v in variants[i:i+1]:
+        print(v)
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]
@@ -267,7 +278,6 @@ for v in variants[i:i+1]:
                 var_scope="AR_scope" if v["tiear"] else None,
                 img_shape=[8,8,zdim//64],
                 data_init_scale=v["data_init_scale"],
-                clip=True,
             )
 
         latent_spec = [
@@ -290,11 +300,10 @@ for v in variants[i:i+1]:
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
                 img_shape=[8,8,zdim//64],
-                clip=True,
             )
         nml = 5
         tgt_dist = Mixture(
-           [(DiscretizedLogistic(3 ), 1./nml) for _ in range(nml)]
+           [(DiscretizedLogistic(3), 1./nml) for _ in range(nml)]
         )
         tgt_ar_dist = DistAR(
             3,
@@ -329,8 +338,7 @@ for v in variants[i:i+1]:
             network_args=dict(
                 cond_rep=v["cond_rep"],
                 old_dec=True,
-                base_filters=v["base_filters"],
-                enc_rep=v["steps"]-2,# hack..
+                base_filters=v["base_filters"]
             ),
         )
 
@@ -341,7 +349,10 @@ for v in variants[i:i+1]:
             exp_name=exp_name,
             max_epoch=max_epoch,
             optimizer_cls=AdamaxOptimizer,
-            optimizer_args=dict(learning_rate=v["lr"]),
+            optimizer_args=dict(
+                learning_rate=v["lr"],
+                beta2_sparse=True,
+            ),
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
@@ -351,16 +362,16 @@ for v in variants[i:i+1]:
             img_on=False,
             vis_ar=False,
             num_gpus=v["num_gpus"],
+            slow_kl=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
             # resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
         )
 
-        print(v)
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1011_faf_big_slowkl_0.01_mgpu_lrf_convaf_spatial_code",
+            exp_prefix="1013_play_llr_sparseb_faf_slowkl_mgpu_lrf_convaf_spatial_code",
             seed=v["seed"],
             variant=v,
             mode="local",

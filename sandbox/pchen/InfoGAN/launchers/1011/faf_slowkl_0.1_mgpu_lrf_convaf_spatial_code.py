@@ -27,6 +27,8 @@
 # interestingly, 0.1 kl  doesn't do worse than 0.01 kl even though it never uses more than 0.1kl
 # running for longer to see
 
+# starts to do worse than 0.01kl in train. comparable on vali? kl never exceeds 0.1
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

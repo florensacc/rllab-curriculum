@@ -32,8 +32,12 @@
 # adding bigger zdim exp
 
 # is the conv code being deficient due to w/ autoregressive channels
+# gating introduced leak!! still results can be useful:
+# kl: -0.14nats/dim <-> -0.18bits/dim, so the best conditional is only ~3.2! not surprising that it doesnt overfit that
+
 
 # gating fixed
+# verdict: actually slower on train. hypothesis: even distribution is more expressive, fewer parameters
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
