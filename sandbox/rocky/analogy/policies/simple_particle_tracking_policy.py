@@ -22,6 +22,6 @@ if __name__ == "__main__":
     from sandbox.rocky.analogy.envs.simple_particle_env import SimpleParticleEnv
     from rllab.sampler.utils import rollout
     while True:
-        env = SimpleParticleEnv()
+        env = SimpleParticleEnv(n_particles=6, seq_length=10)
         policy = SimpleParticleTrackingPolicy(env)
-        rollout(env, policy, max_path_length=10, animated=True)
+        rollout(env, policy, max_path_length=100, animated=True)

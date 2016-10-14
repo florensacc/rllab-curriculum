@@ -200,12 +200,16 @@ class ParallelBatchPolopt(RLAlgorithm):
         if self.serial_compile:
             self.force_compile()
         self.init_par_objs()
-        processes = [mp.Process(target=self._train, args=(rank,))
-            for rank in range(self.n_parallel)]
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
+
+        if self.n_parallel == 1:
+            self._train(rank=0)
+        else:
+            processes = [mp.Process(target=self._train, args=(rank,))
+                for rank in range(self.n_parallel)]
+            for p in processes:
+                p.start()
+            for p in processes:
+                p.join()
 
     def process_paths(self, paths):
         for path in paths:
@@ -225,11 +229,11 @@ class ParallelBatchPolopt(RLAlgorithm):
                 if rank == 0:
                     logger.log("Collecting samples ...")
                 paths = self.sampler.obtain_samples()
+                self.process_paths(paths) # temporary change for debugging in exp-018f (could be a permanent change, as this tends to give higher bonuses)
                 if self.bonus_evaluator is not None:
                     if rank == 0:
                         logger.log("fitting bonus evaluator")
                     self.bonus_evaluator.fit_before_process_samples(paths)
-                self.process_paths(paths)
                 samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 self.optimize_policy(itr, samples_data)  # (parallel)
@@ -339,6 +343,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                 logger.record_tabular('Iteration', itr)
                 logger.record_tabular('ExplainedVariance', ev)
                 logger.record_tabular('NumTrajs', num_traj)
+                logger.record_tabular('NumSamples',n_steps)
                 logger.record_tabular('Entropy', ent)
                 logger.record_tabular('Perplexity', np.exp(ent))
                 # logger.record_tabular('StdReturn', np.std(undiscounted_returns))
@@ -363,6 +368,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         # self.env.log_diagnostics(paths)
         # self.policy.log_diagnostics(paths)
         # self.baseline.log_diagnostics(paths)
+        # self.bonus_evaluator.log_diagnostics(paths)
 
     def init_rank(self, rank):
         self.rank = rank

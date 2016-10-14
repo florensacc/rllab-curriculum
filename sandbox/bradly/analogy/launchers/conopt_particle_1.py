@@ -30,7 +30,7 @@ class VG(VariantGenerator):
 
     @variant
     def n_train_trajs(self):
-        return [300]
+        return [50]
 
     @variant
     def use_shuffler(self):

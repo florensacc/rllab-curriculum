@@ -1,9 +1,13 @@
 from sandbox.haoran.hashing.bonus_trpo.terminators.base import Terminator
 
 class MontezumaTerminator(Terminator):
-    def __init__(self,task,verbose=False):
+    def __init__(self,task,verbose=False,task_reward=1):
+        """
+        task_reward: given only when the task is complete (note that it is usually clipped to 1 by the algorithm)
+        """
         self.task = task
         self.verbose = verbose
+        self.task_reward = task_reward
 
     def set_env(self,env):
         self.env = env
@@ -24,6 +28,7 @@ class MontezumaTerminator(Terminator):
         if task_complete:
             message = "Terminate due to task %s complete"%(self.task)
             terminal = True
+            self.terminal_reward = self.task_reward
         else:
             if self.env.avoid_life_lost:
                 if self.env.ale.game_over() or self.lives_lost:
@@ -37,9 +42,13 @@ class MontezumaTerminator(Terminator):
                     terminal = True
                 else:
                     terminal = False
+            self.terminal_reward = 0
 
         if self.verbose:
             print(message)
 
 
         return terminal
+
+    def get_terminal_reward(self):
+        return self.terminal_reward

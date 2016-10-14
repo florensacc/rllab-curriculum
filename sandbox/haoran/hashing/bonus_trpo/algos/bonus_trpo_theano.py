@@ -25,6 +25,30 @@ class BonusTRPO(TRPO):
             bonus_evaluator=self.bonus_evaluator,
         )
 
+    def train(self):
+        self.start_worker()
+        self.init_opt()
+        for itr in range(self.current_itr, self.n_itr):
+            with logger.prefix('itr #%d | ' % itr):
+                paths = self.sampler.obtain_samples(itr)
+                samples_data = self.process_samples(itr, paths)
+                self.log_diagnostics(paths)
+                self.optimize_policy(itr, samples_data)
+                logger.log("saving snapshot...")
+                params = self.get_itr_snapshot(itr, samples_data)
+                self.current_itr = itr + 1
+                params["algo"] = self
+                if self.store_paths:
+                    params["paths"] = samples_data["paths"]
+                logger.save_itr_params(itr, params)
+                logger.log("saved")
+                logger.dump_tabular(with_prefix=False)
+                if self.plot:
+                    self.update_plot()
+                    if self.pause_for_plot:
+                        input("Plotting evaluation run: Press Enter to "
+                                  "continue...")
+
 
     def log_diagnostics(self, paths):
         super(BonusTRPO, self).log_diagnostics(paths)
@@ -58,8 +82,8 @@ class BonusTRPO(TRPO):
             path["raw_returns"] = special.discount_cumsum(path["raw_rewards"], self.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
-        if self.env.wrapped_env.resetter is not None:
-            self.env.wrapped_env.resetter.update(paths)
+        if self.env.resetter is not None:
+            self.env.resetter.update(paths)
 
         if not self.policy.recurrent:
             observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
@@ -193,12 +217,12 @@ class BonusTRPO(TRPO):
         logger.record_tabular_misc_stat("PathLen",path_lens)
 
         # Log info for trajs whose initial states are not modified by the resetter
-        if self.env.wrapped_env.resetter is not None:
+        if self.env.resetter is not None:
             test_paths = [
                 path for path in paths
                 if path["env_infos"]["use_default_reset"][0] == True
             ]
-            if len(test_paths) > 0 and type(self.env.wrapped_env.resetter).__name__ != "AtariSaveLoadResetter":
+            if len(test_paths) > 0 and type(self.env.resetter).__name__ != "AtariSaveLoadResetter":
                 test_average_discounted_return = \
                     np.mean([path["returns"][0] for path in test_paths])
 

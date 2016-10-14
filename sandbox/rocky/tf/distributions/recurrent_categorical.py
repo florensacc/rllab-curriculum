@@ -19,8 +19,8 @@ class RecurrentCategorical(Distribution):
         """
         Compute the symbolic KL divergence of two categorical distributions
         """
-        old_prob_var = old_dist_info_vars["prob"]
-        new_prob_var = new_dist_info_vars["prob"]
+        old_prob_var = tf.cast(old_dist_info_vars["prob"], tf.float32)
+        new_prob_var = tf.cast(new_dist_info_vars["prob"], tf.float32)
         # Assume layout is N * T * A
         return tf.reduce_sum(
             old_prob_var * (tf.log(old_prob_var + TINY) - tf.log(new_prob_var + TINY)),

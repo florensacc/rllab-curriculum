@@ -1,8 +1,12 @@
 from rllab.core.serializable import Serializable
-from sandbox.rocky.analogy.envs.conopt_particle_env import ConoptParticleEnv
+#from sandbox.rocky.analogy.envs.conopt_particle_env import ConoptParticleEnv
+#from sandbox.bradly.analogy.envs.conopt_floating_arm import ConoptArmEnv
+from sandbox.bradly.third_person.envs.conopt_particle_env_easy import ConoptParticleEnvEasy
 from sandbox.rocky.analogy.utils import unwrap
 from conopt.trajectory import Trajectory
 from conopt.core import OptimizerParams
+
+import numpy as np
 
 
 class LQRExpert(Serializable):
@@ -18,10 +22,10 @@ class LQRExpert(Serializable):
 
     def collect_expert_demo(self, env, horizon):
         env = unwrap(env)
-        assert isinstance(env, ConoptParticleEnv)
+        assert isinstance(env, ConoptParticleEnvEasy)
         scenario = env.conopt_scenario
         trajopt = Trajectory(scenario=scenario)
-        opt_params = OptimizerParams(T=horizon, **(self.optimizer_params or dict()))
+        opt_params = OptimizerParams(T=horizon, num_iterations=2, **(self.optimizer_params or dict()))
         trajopt.optimize(opt_params)
         observations = env.observation_space.flatten_n(list(zip(*trajopt.observations_over_time())))
         actions = env.action_space.flatten_n(trajopt.actions_over_time())
@@ -39,6 +43,13 @@ class LQRExpert(Serializable):
 
 
 if __name__ == '__main__':
+    num_expert_trajs = 100
+    #for iter_step in range(0, num_expert_trajs):
     t = LQRExpert()
-    tim = t.collect_expert_demo(ConoptParticleEnv(), horizon=100)
-    print(tim['rewards'])
+    bill = ConoptParticleEnvEasy()
+    tim = t.collect_expert_demo(bill, horizon=10)
+    r = LQRExpert()
+    tim_2 = t.collect_expert_demo(bill, horizon=10)
+    #print(tim['rewards'])
+    #print(iter_step)
+    assert np.allclose(tim['rewards'], tim_2['rewards'])

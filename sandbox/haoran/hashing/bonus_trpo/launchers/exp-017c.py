@@ -23,6 +23,7 @@ from sandbox.haoran.parallel_trpo.trpo import ParallelTRPO
 
 """ environment """
 from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
+from sandbox.haoran.hashing.bonus_trpo.envs.atari_env_info import semantic_actions
 
 """ resetter """
 # from sandbox.haoran.hashing.bonus_trpo.resetter.atari_count_resetter import AtariCountResetter
@@ -51,8 +52,8 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
-mode = "local_test"
-ec2_instance = "c4.2xlarge"
+mode = "kube"
+ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
@@ -97,10 +98,13 @@ class VG(VariantGenerator):
         return ["to_second_room"]
     @variant
     def cg_iters(self):
-        return [10,100]
+        return [10]
     @variant
     def subsample_factor(self):
-        return [0.1,0.5]
+        return [0.1,0.3]
+    @variant
+    def center_adv(self):
+        return [True]
 variants = VG().variants()
 
 
@@ -110,14 +114,16 @@ for v in variants:
     # algo
     use_parallel = True
     seed=v["seed"]
-    if "test" in mode:
+    if mode == "local_test":
         batch_size = 500
     else:
         batch_size = 50000
-    max_path_length = 1000
+    max_path_length = 1500
     discount = 0.99
-    n_itr = 2000
+    n_itr = 1000
     step_size = 0.01
+    clip_reward = True
+    center_adv=v["center_adv"]
     policy_opt_args = dict(
         name="pi_opt",
         cg_iters=v["cg_iters"],
@@ -133,26 +139,34 @@ for v in variants:
     # env
     game=v["game"]
     frame_skip=8
-    max_start_nullops = 30
+    max_start_nullops = 0
     network_args = nips_dqn_args
     img_width=42
     img_height=42
-    clip_reward = True
     obs_type = "image"
     record_image=False
     record_rgb_image=False
     record_ram=True
     record_internal_state=False
+    legal_semantic_actions = [
+        "noop","fire",
+        "up","right","left","down",
+        "up-fire","right-fire","left-fire","down-fire",
+    ] # disable diagonal movement
+    legal_actions=[
+        semantic_actions.index(s_action)
+        for s_action in legal_semantic_actions
+    ]
 
     # bonus
     bonus_coeff=v["bonus_coeff"]
     bonus_form="1/sqrt(n)"
     count_target="ram_states"
-    retrieve_sample_size=100
+    retrieve_sample_size=10000
 
     # others
     resetter_type = v["resetter_type"]
-    baseline_prediction_clip = 10
+    baseline_prediction_clip = 100
     task = v["task"]
 
     # other exp setup --------------------------------------
@@ -209,10 +223,11 @@ for v in variants:
 
     # construct objects ----------------------------------
     if resetter_type == "SL":
-        resetter = AtariSaveLoadResetter(
-            restored_state_folder=None,
-            avoid_life_lost=False,
-        )
+        # resetter = AtariSaveLoadResetter(
+        #     restored_state_folder=None,
+        #     avoid_life_lost=False,
+        # )
+        raise NotImplementedError
     else:
         resetter = None
 
@@ -235,6 +250,7 @@ for v in variants:
         resetter=resetter,
         terminator=terminator,
         frame_skip=frame_skip,
+        legal_actions=legal_actions,
     )
     policy = CategoricalConvPolicy(
         env_spec=env.spec,
@@ -265,7 +281,7 @@ for v in variants:
                 ),
                 use_trust_region=True,
                 step_size=0.01,
-                batchsize=batch_size,
+                batchsize=batch_size*10,
                 normalize_inputs=True,
                 normalize_outputs=True,
                 **network_args_for_vf
@@ -322,6 +338,8 @@ for v in variants:
         cpu_assignments=cpu_assignments,
         serial_compile=serial_compile,
         n_parallel=n_parallel,
+        clip_reward=clip_reward,
+        center_adv=center_adv,
     )
 
     if use_parallel:

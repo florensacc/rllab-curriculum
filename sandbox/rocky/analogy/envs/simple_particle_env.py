@@ -1,11 +1,8 @@
-from __future__ import print_function
-from __future__ import absolute_import
+import itertools
+
 from rllab.envs.base import Env, Step
-import random
 import numpy as np
-import contextlib
 import scipy
-import math
 from cached_property import cached_property
 
 from rllab.misc import logger
@@ -13,6 +10,7 @@ from rllab.spaces.product import Product
 from rllab.spaces.box import Box
 from sandbox.rocky.analogy.utils import unwrap, using_seed
 
+import math
 import numba
 import cv2
 
@@ -21,22 +19,35 @@ import cv2
 def render_image(poses, screen_width, screen_height, colors, buffer):
     image = buffer
     radius = 0.05
-    agent_radius = 0.1
     scaled_radius = max(1, int(math.floor(radius * min(screen_width, screen_height))))
-    scaled_agent_radius = max(1, int(math.floor(agent_radius * min(screen_width, screen_height))))
     for pos_idx in range(len(poses)):
         x, y = poses[pos_idx]
         color = colors[pos_idx]
         scaled_x = int(np.floor((x + 1) * screen_height * 0.5))
         scaled_y = int(np.floor((y + 1) * screen_width * 0.5))
-        if pos_idx == 0:
-            cur_radius = scaled_agent_radius
-        else:
-            cur_radius = scaled_radius
+        cur_radius = scaled_radius
         for x_ in range(max(0, scaled_x - cur_radius), min(screen_height, scaled_x + cur_radius)):
             for y_ in range(max(0, scaled_y - cur_radius), min(screen_width, scaled_y + cur_radius)):
                 image[x_, y_] = color
     return image
+
+
+def rand_unique_seq(choices, seq_length):
+    seq = np.random.choice(
+        choices,
+        replace=True,
+        size=seq_length
+    )
+    while True:
+        # make sure no adjacent targets are the same
+        repeats = np.asarray([idx
+                              for idx, x, y in zip(itertools.count(), seq, seq[1:])
+                              if x == y])
+        if len(repeats) == 0:
+            break
+        # regenerate these
+        seq[repeats] = np.random.choice(choices, replace=True, size=len(repeats))
+    return seq
 
 
 def make_colors():
@@ -67,22 +78,34 @@ COLORS = make_colors()
 
 
 class Shuffler(object):
-    def shuffle(self, demo_paths, analogy_paths, demo_envs, analogy_envs):
+    def shuffle(self, demo_paths, analogy_paths, demo_seeds, analogy_seeds, target_seeds):
         # We are free to swap the pairs as long as they correspond to the same task
-        target_ids = [unwrap(x).target_id for x in analogy_envs]
-        for target_id in set(target_ids):
+        target_ids_list = [p["env_infos"]["target_ids"][0] for p in analogy_paths]
+        target_ids_strs = np.asarray([",".join(map(str, x)) for x in target_ids_list])
+
+        for target_ids in set(target_ids_strs):
             # shuffle each set of tasks separately
-            matching_ids, = np.where(target_ids == target_id)
+            matching_ids, = np.where(target_ids_strs == target_ids)
             shuffled = np.copy(matching_ids)
             np.random.shuffle(shuffled)
             analogy_paths[matching_ids] = analogy_paths[shuffled]
-            analogy_envs[matching_ids] = analogy_envs[shuffled]
+            analogy_seeds[matching_ids] = analogy_seeds[shuffled]
 
 
 class SimpleParticleEnv(Env):
-    # The agent always starts at (0, 0)
-    def __init__(self, n_particles=2, seed=None, target_seed=None, n_vis_demo_segments=100, min_margin=0.,
-                 min_angular_margin=0., obs_type='state', obs_size=(100, 100), random_init_position=False):
+    def __init__(
+            self,
+            n_particles=2,
+            min_seq_length=1,
+            max_seq_length=1,
+            seed=None,
+            target_seed=None,
+            n_vis_demo_segments=100,
+            min_margin=None,
+            obs_type='full_state',
+            obs_size=(100, 100),
+            random_init_position=True
+    ):
         """
         :param n_particles: Number of particles
         :param seed: Seed for generating positions of the particles
@@ -97,13 +120,20 @@ class SimpleParticleEnv(Env):
         self.seed = seed
         self.particles = None
         self.n_particles = n_particles
+        self.min_seq_length = min_seq_length
+        self.max_seq_length = max_seq_length
         self.agent_pos = None
         self.viewers = dict()
+        self.target_ids = None
         self.target_id = None
+        self.target_index = None
         self.target_seed = target_seed
         self.n_vis_demo_segments = n_vis_demo_segments
+        if min_margin is None:
+            min_margin = (((0.8 * 2) ** 2 / (n_particles + 1)) ** 0.5) / 2
+        self.position_bounds = (-1, 1)
+        self.action_bounds = (-0.1, 0.1)
         self.min_margin = min_margin
-        self.min_angular_margin = min_angular_margin
         self.obs_type = obs_type
         self.obs_size = obs_size
         self.random_init_position = random_init_position
@@ -112,6 +142,7 @@ class SimpleParticleEnv(Env):
             Box(low=-np.inf, high=np.inf, shape=(self.n_particles, 2))
         )
         self._image_obs_space = Box(low=-1, high=1, shape=self.obs_size + (3,))
+        self.reset()
 
     def reset_trial(self):
         seed = np.random.randint(np.iinfo(np.int32).max)
@@ -124,42 +155,59 @@ class SimpleParticleEnv(Env):
         seed = self.seed
         with using_seed(seed):
             if self.random_init_position:
-                self.agent_pos = np.random.uniform(low=-0.4, high=0.4, size=(2,))  # np.array([0., 0.])
+                n = self.n_particles + 1
             else:
-                self.agent_pos = np.array([0., 0.])
+                n = self.n_particles
 
-            self.particles = np.random.uniform(
-                low=-0.8, high=0.8, size=(self.n_particles, 2)
+            particles = np.random.uniform(
+                low=-0.8, high=0.8, size=(n, 2)
             )
-            if self.min_margin > 0 or self.min_angular_margin > 0:
+            if self.min_margin > 0:
                 while True:
                     l2_in_conflict = np.where(
                         scipy.spatial.distance.squareform(
-                            scipy.spatial.distance.pdist(self.particles, 'euclidean')
-                        ) + np.eye(self.n_particles) * 10000 < self.min_margin
-                    )
-                    cosine_in_conflict = np.where(
-                        scipy.spatial.distance.squareform(
-                            scipy.spatial.distance.pdist(self.particles - self.agent_pos.reshape((1, -1)), 'cosine')
-                        ) + np.eye(self.n_particles) * 10000 < 1 - math.cos(self.min_angular_margin)
+                            scipy.spatial.distance.pdist(particles, 'euclidean')
+                        ) + np.eye(n) * 10000 < self.min_margin
                     )
                     if len(l2_in_conflict[0]) > 0:
                         tweak_idx = l2_in_conflict[0][0]
-                        self.particles[tweak_idx] = np.random.uniform(low=-0.8, high=0.8, size=(2,))
-                    elif len(cosine_in_conflict[0]) > 0:
-                        tweak_idx = cosine_in_conflict[0][0]
-                        self.particles[tweak_idx] = np.random.uniform(low=-0.8, high=0.8, size=(2,))
+                        particles[tweak_idx] = np.random.uniform(low=-0.8, high=0.8, size=(2,))
                     else:
                         break
-            with using_seed(self.target_seed):
-                self.target_id = np.random.choice(np.arange(self.n_particles))
+
+            if self.random_init_position:
+                self.particles = particles[:-1]
+                self.agent_pos = particles[-1]
+            else:
+                self.agent_pos = np.array([0., 0.])
+                self.particles = particles
+
+        with using_seed(self.target_seed):
+            seq_length = np.random.randint(low=self.min_seq_length, high=self.max_seq_length + 1)
+            self.target_ids = rand_unique_seq(
+                np.arange(self.n_particles),
+                seq_length
+            )
+
+        self.target_id = self.target_ids[0]
+        self.target_index = 0
+
         return self.get_current_obs()
 
     def step(self, action):
-        self.agent_pos += np.asarray(action)
+        done = False
+        self.agent_pos += np.asarray(np.clip(action, *self.action_bounds))
         dist = np.sqrt(np.sum(np.square(self.agent_pos - self.particles[self.target_id])))
         reward = -dist
-        return Step(self.get_current_obs(), reward, False, **self.get_env_info())
+        if dist < 0.1:
+            self.target_index += 1
+            reward = 1.
+            if self.target_index < len(self.target_ids):
+                self.target_id = self.target_ids[self.target_index]
+            else:
+                done = True
+        self.agent_pos = np.clip(self.agent_pos, *self.position_bounds)
+        return Step(self.get_current_obs(), reward, done, **self.get_env_info())
 
     @cached_property
     def observation_space(self):
@@ -176,20 +224,20 @@ class SimpleParticleEnv(Env):
     def get_env_info(self):
         return dict(
             agent_pos=np.copy(self.agent_pos),
-            target_pos=np.copy(self.particles[self.target_id]),
-            target_id=self.target_id
+            target_ids=self.target_ids
         )
 
     @cached_property
     def action_space(self):
-        return Box(low=-0.1, high=0.1, shape=(2,))
+        return Box(low=self.action_bounds[0], high=self.action_bounds[1], shape=(2,))
 
     def get_state_obs(self):
         return np.copy(self.agent_pos), np.copy(self.particles)
 
     def get_image_obs(self, rescale=False):
-        colors = np.cast['float32'](np.concatenate([np.array([[0, 0, 0]]), np.asarray(COLORS) * 255], axis=0))
-        poses = np.concatenate([[self.agent_pos], self.particles], axis=0)
+        colors = np.cast['float32'](np.concatenate([np.asarray(COLORS[:self.n_particles]) * 255, np.array([[0, 0, 0]])],
+                                                   axis=0))
+        poses = np.concatenate([self.particles, [self.agent_pos]], axis=0)
 
         buffer = np.zeros(self.obs_size + (3,), dtype=np.float32) + 255
         screen_height, screen_width = self.obs_size
@@ -217,14 +265,16 @@ class SimpleParticleEnv(Env):
         cv2.imshow('image', cv2.resize(self.get_image_obs(rescale=False), (400, 400)))
         cv2.waitKey(10)
 
+    def success_rate(self, paths, envs):
+        n_visited = [np.sum(np.equal(p["rewards"], 1)) for p in paths]
+        seq_lengths = [len(p["env_infos"]["target_ids"][0]) for p in paths]
+        success = np.equal(n_visited, seq_lengths)
+        return np.mean(success)
+
     def log_analogy_diagnostics(self, paths, envs):
-        last_agent_pos = np.asarray([p["env_infos"]["agent_pos"][-1] for p in paths])
-        target_pos = np.asarray([p["env_infos"]["target_pos"][-1] for p in paths])
-        dists = np.sqrt(np.sum(np.square(last_agent_pos - target_pos), axis=-1))
-        logger.record_tabular('AverageFinalDistToGoal', np.mean(dists))
-        logger.record_tabular('SuccessRate(Dist<0.1)', np.mean(dists < 0.1))
-        logger.record_tabular('SuccessRate(Dist<0.05)', np.mean(dists < 0.05))
-        logger.record_tabular('SuccessRate(Dist<0.01)', np.mean(dists < 0.01))
+        n_visited = [np.sum(np.equal(p["rewards"], 1)) for p in paths]
+        logger.record_tabular_misc_stat('NVisited', n_visited, placement='front')
+        logger.record_tabular('SuccessRate', self.success_rate(paths, envs))
 
     @classmethod
     def shuffler(cls):
@@ -232,14 +282,13 @@ class SimpleParticleEnv(Env):
 
 
 if __name__ == "__main__":
-    import math
 
-    env = SimpleParticleEnv(n_particles=6)  # , min_margin=(2.56 / 6) ** 0.5 / 2, min_angular_margin=math.pi / 6)
+    env = SimpleParticleEnv(n_particles=4, min_seq_length=3, max_seq_length=3)
     env.reset()
+
     while True:
         import time
 
         time.sleep(1)
         env.reset_trial()
         env.render()
-        # print(env.step(np.random.uniform(low=-0.01, high=0.01, size=(2,))))
