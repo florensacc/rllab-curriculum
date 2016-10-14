@@ -7,6 +7,7 @@ import theano.tensor as TT
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 # latent regressor to log the MI with other variables
 from sandbox.carlos_snn.regressors.latent_regressor import Latent_regressor
+from sandbox.carlos_snn.distributions.categorical import from_index
 
 # imports from batch_polopt I might need as not I use here process_samples and others
 import numpy as np
@@ -15,17 +16,14 @@ from rllab.sampler import parallel_sampler
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
-import rllab.misc.logger as logger
 import joblib
 import os.path as osp
 import os
 import rllab.plotter as plotter
 from rllab.sampler.utils import rollout
 import itertools
-
-# from pympler import tracker
+import collections
 import gc
-import pdb
 
 class NPO_snn(BatchPolopt):
     """
@@ -355,14 +353,15 @@ class NPO_snn(BatchPolopt):
 
             if self.log_individual_latents and not self.policy.resample:  # this is only valid for finite discrete latents!!
                 all_latent_avg_returns = []
-                clustered_by_latents = {}  # this could be done within the distribution to be more general, but ugly
+                clustered_by_latents = collections.OrderedDict()  # this could be done within the distribution to be more general, but ugly
+                for i in range(self.policy.latent_dim):
+                    lat = from_index(i, self.policy.latent_dim)
+                    clustered_by_latents[str(lat)] = []
                 for path in paths:
                     lat = path['agent_infos']['latents'][0]
                     lat_str = str(lat)
-                    if lat_str not in clustered_by_latents:
-                        clustered_by_latents[lat_str] = [path]
-                    else:
-                        clustered_by_latents[lat_str].append(path)
+                    clustered_by_latents[lat_str].append(path)
+
                 for latent_code, paths in clustered_by_latents.items():
                     with logger.tabular_prefix(latent_code), logger.prefix(latent_code):
                         undiscounted_rewards = [sum(path["true_rewards"]) for path in paths]

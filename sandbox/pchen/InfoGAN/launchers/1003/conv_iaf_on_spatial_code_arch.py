@@ -1,6 +1,13 @@
 # compare results with python rllab/viskit/frontend.py --port 18888 data/local/0927-pool-encoder-arch-on-overfit/
 
-# try playing with conv af model
+# try playing with conv iaf model
+
+# data/local/1003-conv-iaf-on-spatial-code/
+# results: still overfit but seems better than MADE
+# it also fits __very__ well on train, 3.1bits in just 500 epochs
+#        w/ 4 flows, w/o context
+
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

@@ -650,6 +650,14 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
     else:
         command_prefix = "docker run"
     docker_log_dir = config.DOCKER_LOG_DIR
+
+    if env is None:
+        env = dict()
+    env = dict(
+        env,
+        AWS_ACCESS_KEY_ID=config.AWS_ACCESS_KEY,
+        AWS_SECRET_ACCESS_KEY=config.AWS_ACCESS_SECRET,
+    )
     if env is not None:
         for k, v in env.items():
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
@@ -692,7 +700,7 @@ def dedent(s):
 def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                python_command="python",
                script='scripts/run_experiment.py',
-               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False,
+               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False, sync_s3_png=False,
                sync_log_on_termination=True,
                periodic_sync=True, periodic_sync_interval=15):
     if len(params_list) == 0:
@@ -766,22 +774,16 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
             mkdir -p {log_dir}
         """.format(log_dir=log_dir))
         if periodic_sync:
-            if sync_s3_pkl:
-                sio.write("""
-                    while /bin/true; do
-                        aws s3 sync --exclude '*' --include '*.csv' --include '*.json' --include '*.pkl' {log_dir} {remote_log_dir} --region {aws_region}
-                        sleep {periodic_sync_interval}
-                    done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                         aws_region=config.AWS_REGION_NAME,
-                                                         periodic_sync_interval=periodic_sync_interval))
-            else:
-                sio.write("""
-                    while /bin/true; do
-                        aws s3 sync --exclude '*' --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
-                        sleep {periodic_sync_interval}
-                    done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                         aws_region=config.AWS_REGION_NAME,
-                                                         periodic_sync_interval=periodic_sync_interval))
+            include_png = " --include '*.png' " if sync_s3_png else " "
+            include_pkl = " --include '*.pkl' " if sync_s3_pkl else " "
+            sio.write("""
+                while /bin/true; do
+                    aws s3 sync --exclude '*' {include_png} {include_pkl} --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
+                    sleep {periodic_sync_interval}
+                done & echo sync initiated""".format(include_png=include_png, include_pkl=include_pkl,
+                                                     log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                     aws_region=config.AWS_REGION_NAME,
+                                                     periodic_sync_interval=periodic_sync_interval))
             if sync_log_on_termination:
                 sio.write("""
                     while /bin/true; do

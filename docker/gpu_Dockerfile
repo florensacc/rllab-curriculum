@@ -57,5 +57,9 @@ RUN echo "source activate rllab3" >> /root/.bashrc
 ENV BASH_ENV /root/.bashrc
 WORKDIR /root/code
 
+# RUN apt-get install libblas-dev liblapack-dev
+# RUN pip install --upgrade git+https://github.com/Theano/Theano.git#egg=Theano
+# RUN pip install --upgrade git+https://github.com/neocxi/Lasagne.git#egg=Lasagne
+
 # gpu theanno
-ENV THEANO_FLAGS mode=FAST_RUN,device=gpu,floatX=float32
+ENV THEANO_FLAGS mode=FAST_RUN,device=cpu,floatX=float32

@@ -8,7 +8,6 @@ import sys
 import uuid
 import importlib.util
 
-
 ACC_PATH = os.environ["ACC_PATH"]
 
 
@@ -19,7 +18,7 @@ class Lump(object):
 
     @staticmethod
     def order_key(lump):
-        if re.match('E\dM\d|MAP\d\d', lump.name):
+        if re.match('E\dM\d|MAP\d+', lump.name):
             return 0
         elif lump.name == "TEXTMAP":
             return 1
@@ -45,7 +44,6 @@ class TextMap(object):
 
 
 class WAD(object):
-
     _cached_behaviors = dict()
 
     def __init__(self):
@@ -87,7 +85,7 @@ class WAD(object):
         cur_level = None
         self.levels = []
         for lump in self.lumps:
-            if re.match('E\dM\d|MAP\d\d', lump.name):
+            if re.match('E\dM\d|MAP\d+', lump.name):
                 level = Level()
                 level.name = lump.name
                 cur_level = level
@@ -99,32 +97,35 @@ class WAD(object):
         for level in self.levels:
             level.reorganize()
 
+    def save_io(self, f):
+        f.write(self.wad_type.encode())
+        f.write(struct.pack("<I", len(self.lumps)))
+        # first construct string buffer for each lump
+        dir_offset = 12
+        for lump in self.lumps:
+            lump_size = len(lump.content)
+            dir_offset += lump_size
+
+        f.write(struct.pack("<I", dir_offset))
+
+        for lump in self.lumps:
+            f.write(lump.content)
+
+        lump_offset = 12
+        # now start writing dir info
+
+        for lump in self.lumps:
+            f.write(struct.pack("<I", lump_offset))
+            f.write(struct.pack("<I", len(lump.content)))
+            f.write(lump.name.encode().ljust(8, b'\0'))
+            lump_offset += len(lump.content)
+
     def save(self, file_name, force=False):
         if os.path.exists(file_name) and not force:
             if not console.query_yes_no("File at %s exists. Overwrite?" % file_name):
                 sys.exit()
         with open(file_name, "wb") as f:
-            f.write(self.wad_type.encode())
-            f.write(struct.pack("<I", len(self.lumps)))
-            # first construct string buffer for each lump
-            dir_offset = 12
-            for lump in self.lumps:
-                lump_size = len(lump.content)
-                dir_offset += lump_size
-
-            f.write(struct.pack("<I", dir_offset))
-
-            for lump in self.lumps:
-                f.write(lump.content)
-
-            lump_offset = 12
-            # now start writing dir info
-
-            for lump in self.lumps:
-                f.write(struct.pack("<I", lump_offset))
-                f.write(struct.pack("<I", len(lump.content)))
-                f.write(lump.name.encode().ljust(8, b'\0'))
-                lump_offset += len(lump.content)
+            self.save_io(f)
 
     def save_decompressed(self, folder_name):
         console.mkdir_p(folder_name)
@@ -182,21 +183,24 @@ class WAD(object):
                         lump_content = f.read()
                 lumps.append(Lump(name=lump_name, content=lump_content))
                 if lump_name == "SCRIPTS":
-                    script_hash = hash(lump_content)
-                    if script_hash not in cls._cached_behaviors:
-                        # also need to add a ACC-compiled node
-                        acs_file_name = "/tmp/%s.acs" % uuid.uuid4()
-                        o_file_name = "/tmp/%s.o" % uuid.uuid4()
-                        with open(acs_file_name, "wb") as acs_file:
-                            acs_file.write(lump_content)
-                        command = [os.path.join(ACC_PATH, "acc"), "-i", ACC_PATH, acs_file_name, o_file_name]
-                        subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
-                        with open(o_file_name, "rb") as o_file:
-                            cls._cached_behaviors[script_hash] = o_file.read()
-                    lump_content = cls._cached_behaviors[script_hash]
-                    lumps.append(Lump(name="BEHAVIOR", content=lump_content))
+                    lumps.append(Lump(name="BEHAVIOR", content=compile_script(lump_content)))
 
             lumps.append(Lump(name="ENDMAP", content=b""))
             wad.lumps.extend(sorted(lumps, key=Lump.order_key))
         wad.reorganize()
         return wad
+
+
+def compile_script(script):
+    script_hash = hash(script)
+    if script_hash not in WAD._cached_behaviors:
+        # also need to add a ACC-compiled node
+        acs_file_name = "/tmp/%s.acs" % uuid.uuid4()
+        o_file_name = "/tmp/%s.o" % uuid.uuid4()
+        with open(acs_file_name, "wb") as acs_file:
+            acs_file.write(script)
+        command = [os.path.join(ACC_PATH, "acc"), "-i", ACC_PATH, acs_file_name, o_file_name]
+        subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
+        with open(o_file_name, "rb") as o_file:
+            WAD._cached_behaviors[script_hash] = o_file.read()
+    return WAD._cached_behaviors[script_hash]

@@ -50,15 +50,17 @@ class NormalizingPolicy(Policy, Serializable):
 
     def action_sym(self, analogy_obs_var, state_info_vars, **kwargs):
         demo_obs_var = state_info_vars["demo_obs"]
-        demo_action_var = state_info_vars["demo_action"]
+        demo_actions_var = state_info_vars["demo_actions"]
+        demo_valids_var = state_info_vars["demo_valids"]
         norm_obs_var = (analogy_obs_var - self.obs_mean_var) / self.obs_std_var
         norm_demo_obs_var = (demo_obs_var - self.obs_mean_var) / self.obs_std_var
-        norm_demo_action_var = (demo_action_var - self.action_mean_var) / self.action_std_var
+        norm_demo_action_var = (demo_actions_var - self.action_mean_var) / self.action_std_var
         norm_action_var = self.wrapped_policy.action_sym(
             norm_obs_var, state_info_vars=dict(
                 state_info_vars,
                 demo_obs=norm_demo_obs_var,
-                demo_action=norm_demo_action_var
+                demo_actions=norm_demo_action_var,
+                demo_valids_var=demo_valids_var,
             ), **kwargs
         )
         return norm_action_var * self.action_std_var + self.action_mean_var

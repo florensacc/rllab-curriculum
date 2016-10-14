@@ -4,6 +4,8 @@ Implement the hash table as a vector instead of a multi-dimensional array, so th
 
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.base import Hash
 import numpy as np
+import multiprocessing as mp
+import copy
 
 class ALEHackyHashV2(Hash):
     def __init__(self,item_dim, game, parallel=False):
@@ -55,23 +57,35 @@ class ALEHackyHashV2(Hash):
         if parallel:
             self.table_lock = mp.Value('i')
             self.table = np.frombuffer(
-                mp.RawArray('i', self.n_values),
+                mp.RawArray('i', int(np.prod(self.n_values))),
                 np.int32,
             )
             self.unpicklable_list = ["table_lock","table"]
+            self.snapshot_list = ["table"]
+            self.rank = None
         else:
             self.table = dict()
             self.unpicklable_list = []
+            self.snapshot_list = []
         self.parallel = parallel
 
     def __getstate__(self):
         """ Do not pickle parallel objects. """
-        return {k: v for k, v in iter(self.__dict__.items()) if k not in self.unpicklable_list}
+        state = dict()
+        for k,v in iter(self.__dict__.items()):
+            if k not in self.unpicklable_list:
+                state[k] = v
+            elif k in self.snapshot_list:
+                state[k] = copy.deepcopy(v)
+        return state
+
+    def init_rank(self,rank):
+        self.rank = rank
 
 
     def compute_keys(self, items):
         # sometimes items have the shape (n_items, 128, 1), like images
-        if len(items.shape) == 3:
+        if len(items.shape) > 2:
             items = np.asarray([item.ravel() for item in items],dtype=int)
         else:
             items = items.astype(int)
@@ -153,7 +167,7 @@ class ALEHackyHashV2(Hash):
                     counts.append(0)
                 else:
                     counts.append(self.table[key])
-            return counts
+        return counts
 
     def reset(self):
         if self.parallel:

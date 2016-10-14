@@ -29,6 +29,18 @@ if __name__ == "__main__":
             trainer = data['trainer']
             env_cls = trainer.env_cls
 
+            print("Checking for uninitialized variables...")
+            uninitialized_vars = []
+            for var in tf.all_variables():
+                try:
+                    sess.run(var)
+                except tf.errors.FailedPreconditionError:
+                    uninitialized_vars.append(var)
+            if len(uninitialized_vars) > 0:
+                print("Initializing uninitialized variables")
+                sess.run(tf.initialize_variables(uninitialized_vars))
+            print("All variables initialized")
+
             confirmed = False
 
             while True:

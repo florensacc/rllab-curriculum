@@ -19,6 +19,7 @@ class ALEHashingBonusEvaluator(object):
             log_prefix="",
             count_target="observations",
             parallel=False,
+            retrieve_sample_size=np.inf,
         ):
         self.state_dim = state_dim
         if state_preprocessor is not None:
@@ -45,6 +46,7 @@ class ALEHashingBonusEvaluator(object):
         self.count_target = count_target
         self.parallel = parallel
         assert self.parallel == self.hash.parallel
+        self.retrieve_sample_size = retrieve_sample_size
 
         # logging stats ---------------------------------
         self.epoch_hash_count_list = []
@@ -73,9 +75,25 @@ class ALEHashingBonusEvaluator(object):
                 mp.RawValue('l'),
                 dtype=int,
             )[0],
+            max_state_count_vec = np.frombuffer(
+                mp.RawArray('l',n),
+                dtype=int,
+            ),
+            min_state_count_vec = np.frombuffer(
+                mp.RawArray('l',n),
+                dtype=int,
+            ),
+            sum_state_count_vec = np.frombuffer(
+                mp.RawArray('l',n),
+                dtype=int,
+            ),
+            n_steps_vec = np.frombuffer(
+                mp.RawArray('l',n),
+                dtype=int,
+            ),
         )
         barriers = SimpleContainer(
-            new_state_count = mp.Barrier(n),
+            summarize_state_count = mp.Barrier(n),
             update_count = mp.Barrier(n),
         )
         self._par_objs = (shareds, barriers)
@@ -89,12 +107,22 @@ class ALEHashingBonusEvaluator(object):
         return processed_states
 
     def retrieve_keys(self,paths):
-        if self.count_target == "observations":
-            states = np.concatenate([p["observations"] for p in paths])
-        else:
-            states = np.concatenate([p["env_infos"][self.count_target] for p in paths])
-        states = self.preprocess(states)
-        keys = self.hash.compute_keys(states)
+        # do it path by path to avoid memory overflow
+        keys = None
+        for path in paths:
+            path_len = len(path["rewards"])
+            k = min(path_len, self.retrieve_sample_size)
+            for i in range(0,path_len,k):
+                if self.count_target == "observations":
+                    states = path["observations"][i:i+k]
+                else:
+                    states = path["env_infos"][self.count_target][i:i+k]
+                states = self.preprocess(states)
+                new_keys = self.hash.compute_keys(states)
+                if keys is None:
+                    keys = new_keys
+                else:
+                    keys = np.concatenate([keys,new_keys])
         return keys
 
     def fit_before_process_samples(self, paths):
@@ -103,12 +131,15 @@ class ALEHashingBonusEvaluator(object):
             keys = self.retrieve_keys(paths)
             prev_counts = self.hash.query_keys(keys)
             new_state_count = list(prev_counts).count(0)
+            #FIXME: if a new state is encountered by more than one process, then it is counted more than once
             shareds.new_state_count_vec[self.rank] = new_state_count
-            barriers.new_state_count.wait() # avoid updating the hash table before we count new states
-            print("%d: before inc_keys"%(self.rank))
-            self.hash.inc_keys(keys)
-            print("%d: after inc_keys"%(self.rank))
-            barriers.update_count.wait()
+
+            shareds.max_state_count_vec[self.rank] = max(prev_counts)
+            shareds.min_state_count_vec[self.rank] = min(prev_counts)
+            shareds.sum_state_count_vec[self.rank] = sum(prev_counts)
+            shareds.n_steps_vec[self.rank] = len(prev_counts)
+
+            barriers.summarize_state_count.wait() # avoid updating the hash table before we count new states
 
             if self.rank == 0:
                 total_new_state_count = sum(shareds.new_state_count_vec)
@@ -122,6 +153,21 @@ class ALEHashingBonusEvaluator(object):
                     shareds.total_state_count,
                 )
 
+                logger.record_tabular(
+                    self.log_prefix + "StateCountMax",
+                    max(shareds.max_state_count_vec),
+                )
+                logger.record_tabular(
+                    self.log_prefix + "StateCountMin",
+                    min(shareds.min_state_count_vec),
+                )
+                logger.record_tabular(
+                    self.log_prefix + "StateCountAverage",
+                    sum(shareds.sum_state_count_vec) / float(sum(shareds.n_steps_vec)),
+                )
+
+            self.hash.inc_keys(keys)
+            barriers.update_count.wait()
         else:
             keys = self.retrieve_keys(paths)
 
@@ -135,11 +181,27 @@ class ALEHashingBonusEvaluator(object):
             logger.record_tabular(self.log_prefix + 'NewSteateCount',new_state_count)
 
             self.total_state_count += new_state_count
-            logger.record_tabular(self.log_prefix + 'TotalStateCount',self.total_state_count)
+            logger.record_tabular(
+                self.log_prefix + 'TotalStateCount',
+                self.total_state_count
+            )
+
+            logger.record_tabular(
+                self.log_prefix + "StateCountMax",
+                max(prev_counts),
+            )
+            logger.record_tabular(
+                self.log_prefix + "StateCountMin",
+                min(prev_counts),
+            )
+            logger.record_tabular(
+                self.log_prefix + "StateCountAverage",
+                np.average(prev_counts),
+            )
 
     def predict(self, path):
         keys = self.retrieve_keys([path])
-        counts = self.hash.query_keys(keys)
+        counts = np.maximum(self.hash.query_keys(keys),1)
 
         if self.bonus_form == "1/n":
             bonuses = 1./counts

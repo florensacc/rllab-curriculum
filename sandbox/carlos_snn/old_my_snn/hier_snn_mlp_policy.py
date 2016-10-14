@@ -13,6 +13,7 @@ from sandbox.carlos_snn.core.lasagne_layers import BilinearIntegrationLayer, Cro
 from rllab.spaces import Box
 
 from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
+from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
 
 from rllab.sampler.utils import rollout  # I need this for logging the diagnostics: run the policy with all diff latents
 
@@ -29,9 +30,11 @@ from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
 
 import joblib
 import json
+import os
+from rllab import config
 
 
-class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  # also inherits form Parametrized
+class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable):  # also inherits form Parametrized
     @autoargs.arg('hidden_sizes', type=int, nargs='*',
                   help='list of sizes for the fully-connected hidden layers')
     @autoargs.arg('std_sizes', type=int, nargs='*',
@@ -97,7 +100,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
 
         if self.json_path:  # there is another one after defining all the NN to warm-start the params of the SNN
             print("there is a json file so I will change the default args")
-            data = json.load(open(self.json_path, 'r'))  # I should do this with the json file
+            data = json.load(open(os.path.join(config.PROJECT_PATH, self.json_path), 'r'))  # I should do this with the json file
             self.old_policy_json = data['json_args']["policy"]
             self.latent_dim = self.old_policy_json['latent_dim']
             self.latent_name = self.old_policy_json['latent_name']
@@ -107,7 +110,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
             self.hidden_sizes_snn = self.old_policy_json['hidden_sizes']
         elif self.pkl_path:
             print("there is a pkl file so I will change the default args")
-            data = joblib.load(self.pkl_path)
+            data = joblib.load(os.path.join(config.PROJECT_PATH, self.pkl_path))
             self.old_policy = data["policy"]
             self.latent_dim = self.old_policy.latent_dim
             self.latent_name = self.old_policy.latent_name
@@ -136,13 +139,20 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
-        # retreive dimensions and check consistency
-        if isinstance(env, NormalizedEnv):
-            self.obs_robot_dim = env.wrapped_env.robot_observation_space.flat_dim
-            self.obs_maze_dim = env.wrapped_env.maze_observation_space.flat_dim
-        else:
+        # retrieve dimensions and check consistency
+        if isinstance(env, MazeEnv):
             self.obs_robot_dim = env.robot_observation_space.flat_dim
             self.obs_maze_dim = env.maze_observation_space.flat_dim
+        elif isinstance(env, NormalizedEnv):
+            if isinstance(env.wrapped_env, MazeEnv):
+                self.obs_robot_dim = env.wrapped_env.robot_observation_space.flat_dim
+                self.obs_maze_dim = env.wrapped_env.maze_observation_space.flat_dim
+            else:
+                self.obs_robot_dim = env.wrapped_env.observation_space.flat_dim
+                self.obs_maze_dim = 0
+        else:
+            self.obs_robot_dim = env.observation_space.flat_dim
+            self.obs_maze_dim = 0
         print("the dims of the env are(rob/maze): ", self.obs_robot_dim, self.obs_maze_dim)
         all_obs_dim = env_spec.observation_space.flat_dim
         assert all_obs_dim == self.obs_robot_dim + self.obs_maze_dim
@@ -178,12 +188,10 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
 
         # Enlarge obs with the selectors (or latents). Here just computing the final input dim
         if self.bilinear_integration:
-            # obs_snn_dim = self.obs_robot_dim + self.latent_dim + \
-            #               self.obs_robot_dim * self.latent_dim
             l_obs_snn = BilinearIntegrationLayer([l_obs_robot, l_selection])
         else:
-            # obs_snn_dim = self.obs_robot_dim + self.latent_dim  # here only if concat.
             l_obs_snn = L.ConcatLayer([l_obs_robot, l_selection])
+
 
         action_dim = env_spec.action_space.flat_dim
 
@@ -229,12 +237,12 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
                     tags.remove("trainable")
 
         if self.json_path and self.npz_path:
-            warm_params_dict = dict(np.load(self.npz_path))
+            warm_params_dict = dict(np.load(os.path.join(config.PROJECT_PATH, self.npz_path)))
             # keys = list(param_dict.keys())
             # print('the npz has the arrays:', keys)
             self.set_params_snn(warm_params_dict)
         elif self.pkl_path:
-            data = joblib.load(self.pkl_path)
+            data = joblib.load(os.path.join(config.PROJECT_PATH, self.pkl_path))
             warm_params = data['policy'].get_params_internal()
             self.set_params_snn(warm_params)
 
@@ -249,7 +257,7 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
         self._dist = DiagonalGaussian(action_dim)
 
         LasagnePowered.__init__(self, [l_mean, l_log_std])
-        super(GaussianMLPPolicy_hier, self).__init__(env_spec)
+        super(GaussianMLPPolicy_snn_hier, self).__init__(env_spec)
 
         self._f_dist = ext.compile_function(
             inputs=[all_obs_var],
@@ -372,15 +380,11 @@ class GaussianMLPPolicy_hier(StochasticPolicy, LasagnePowered, Serializable):  #
 
     @overrides
     def reset(self):  # executed at the start of every rollout. Will fix the latent if needed.
-        # print 'entering reset'
         if not self.resample:
             if self.pre_fix_latent.size > 0:
                 self.latent_fix = self.pre_fix_latent
-                print('I reset to latent {} because the pre_fix_latent is {}'.format(self.latent_fix,
-                                                                                     self.pre_fix_latent))
             else:
                 self.latent_fix = self.latent_dist.sample(self.latent_dist_info)
-                print("I just sampled a random latent: ", self.latent_fix)
         else:
             pass
         # this is needed for the external latent!!

@@ -123,6 +123,9 @@ class ParallelBatchPolopt(RLAlgorithm):
             sum_raw_return=mp.RawArray('d', n),
             max_raw_return=mp.RawArray('d', n),
             min_raw_return=mp.RawArray('d', n),
+            sum_path_len=mp.RawArray('i',n),
+            max_path_len=mp.RawArray('i',n),
+            min_path_len=mp.RawArray('i',n),
             num_steps=mp.RawArray('i', n),
             num_valids=mp.RawArray('d', n),
             sum_ent=mp.RawArray('d', n),
@@ -193,22 +196,20 @@ class ParallelBatchPolopt(RLAlgorithm):
     #
 
     def train(self):
-        print("self.n_parallel:%d"%(self.n_parallel))
-        print("Before init_opt()")
         self.init_opt()
-        print("Before force_compile()")
         if self.serial_compile:
             self.force_compile()
-        print("Before init_par_objs()")
         self.init_par_objs()
-        print("Before definining processes")
-        processes = [mp.Process(target=self._train, args=(rank,))
-            for rank in range(self.n_parallel)]
-        print("len(processes)=%d"%(len(processes)))
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
+
+        if self.n_parallel == 1:
+            self._train(rank=0)
+        else:
+            processes = [mp.Process(target=self._train, args=(rank,))
+                for rank in range(self.n_parallel)]
+            for p in processes:
+                p.start()
+            for p in processes:
+                p.join()
 
     def process_paths(self, paths):
         for path in paths:
@@ -220,28 +221,25 @@ class ParallelBatchPolopt(RLAlgorithm):
                 path["rewards"] = path["rewards"] + path["bonus_rewards"]
 
     def _train(self, rank):
-        print("%d: inside _train()"%(rank))
         self.init_rank(rank)
-        print("%d: starts _train"%(rank))
         if self.rank == 0:
             start_time = time.time()
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
+                if rank == 0:
+                    logger.log("Collecting samples ...")
                 paths = self.sampler.obtain_samples()
-                print("%d: before fitting bonus"%(self.rank))
+                self.process_paths(paths) # temporary change for debugging in exp-018f (could be a permanent change, as this tends to give higher bonuses)
                 if self.bonus_evaluator is not None:
                     if rank == 0:
                         logger.log("fitting bonus evaluator")
                     self.bonus_evaluator.fit_before_process_samples(paths)
-                print("%d: after fitting bonus"%(self.rank))
-                self.process_paths(paths)
                 samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 self.optimize_policy(itr, samples_data)  # (parallel)
-                print("%d: after optimize_policy()"%(self.rank))
                 if rank == 0:
                     logger.log("fitting baseline...")
-                self.baseline.fit(paths)  # (parallel)
+                self.baseline.fit(samples_data["paths"])  # (parallel)
                 if rank == 0:
                     logger.log("fitted")
                     logger.log("saving snapshot...")
@@ -292,13 +290,19 @@ class ParallelBatchPolopt(RLAlgorithm):
                     samples_data["agent_infos"]) * samples_data["valids"])
                 shareds.num_valids[i] = np.sum(samples_data["valids"])
 
-            # TODO: ev needs sharing before computing.
+            # explained variance
             y_pred = np.concatenate(dgnstc_data["baselines"])
             y = np.concatenate(dgnstc_data["returns"])
             shareds.baseline_stats.y_sum_vec[i] = np.sum(y)
             shareds.baseline_stats.y_square_sum_vec[i] = np.sum(y**2)
             shareds.baseline_stats.y_pred_error_sum_vec[i] = np.sum(y-y_pred)
             shareds.baseline_stats.y_pred_error_square_sum_vec[i] = np.sum((y-y_pred)**2)
+
+            # path lengths
+            path_lens = [len(path["rewards"]) for path in samples_data["paths"]]
+            shareds.sum_path_len[i] = np.sum(path_lens)
+            shareds.max_path_len[i] = np.amax(path_lens)
+            shareds.min_path_len[i] = np.amin(path_lens)
 
             barriers.dgnstc.wait()
 
@@ -331,9 +335,15 @@ class ParallelBatchPolopt(RLAlgorithm):
                 else:
                     ev = 1 - y_pred_error_var / (y_var + 1e-8)
 
+                # path lens
+                avg_path_len = sum(shareds.sum_path_len) / float(num_traj)
+                max_path_len = max(shareds.max_path_len)
+                min_path_len = min(shareds.min_path_len)
+
                 logger.record_tabular('Iteration', itr)
                 logger.record_tabular('ExplainedVariance', ev)
                 logger.record_tabular('NumTrajs', num_traj)
+                logger.record_tabular('NumSamples',n_steps)
                 logger.record_tabular('Entropy', ent)
                 logger.record_tabular('Perplexity', np.exp(ent))
                 # logger.record_tabular('StdReturn', np.std(undiscounted_returns))
@@ -344,6 +354,9 @@ class ParallelBatchPolopt(RLAlgorithm):
                 logger.record_tabular('RawReturnAverage', average_raw_return)
                 logger.record_tabular('RawReturnMax', max_raw_return)
                 logger.record_tabular('RawReturnMin', min_raw_return)
+                logger.record_tabular('PathLenAverage',avg_path_len)
+                logger.record_tabular('PathLenMax',max_path_len)
+                logger.record_tabular('PathLenMin',min_path_len)
 
 
         # NOTE: These others might only work if all path data is collected
@@ -355,27 +368,21 @@ class ParallelBatchPolopt(RLAlgorithm):
         # self.env.log_diagnostics(paths)
         # self.policy.log_diagnostics(paths)
         # self.baseline.log_diagnostics(paths)
+        # self.bonus_evaluator.log_diagnostics(paths)
 
     def init_rank(self, rank):
         self.rank = rank
-        print("%d: before set_cpu_affinity"%(rank))
         if self.set_cpu_affinity:
             self._set_affinity(rank)
-        print("%d: before baseline.init_rank"%(rank))
         self.baseline.init_rank(rank)
-        print("%d: before optimizer.init_rank"%(rank))
         self.optimizer.init_rank(rank)
-        print("%d: before bonus_evaluator.init_rank"%(rank))
         if self.bonus_evaluator is not None:
             self.bonus_evaluator.init_rank(rank)
-        print("%d: before get_seed"%(rank))
         seed = ext.get_seed()
         if seed is None:
             # NOTE: Not sure if this is a good source for seed?
             seed = int(1e6 * np.random.rand())
-        print("%d: before set_seed"%(rank))
         ext.set_seed(seed + rank)
-        print("%d: after set_seed"%(rank))
 
     def optimize_policy(self, itr, samples_data):
         raise NotImplementedError

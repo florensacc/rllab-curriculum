@@ -612,10 +612,12 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 s_net = DiscreteEmbeddingLinearLayer(
                     s_net,
                     num_units=layer_disc['n_units'])
-                s_net = BatchNormLayer(s_net)
+                if layer_disc['batch_norm'] is True:
+                    s_net = BatchNormLayer(s_net)
                 s_net = DiscreteEmbeddingNonlinearityLayer(s_net, layer_disc['n_units'], self.batch_size)
                 # Pull out discrete embedding layer.
                 self.discrete_emb_sym = s_net
+                self.discrete_emb_size = layer_disc['n_units']
             elif layer_disc['name'] == 'deterministic':
                 s_net = lasagne.layers.DenseLayer(
                     s_net,

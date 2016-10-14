@@ -28,9 +28,11 @@ class AtariEnv(Env,Serializable):
             record_internal_state=True,
             resetter=None,
             avoid_life_lost=False,
-            n_last_rams=4,
+            n_last_rams=1,
             n_last_screens=4,
             frame_skip=4,
+            terminator=None,
+            legal_actions=[],
         ):
         """
         plot: not compatible with rllab yet
@@ -49,6 +51,9 @@ class AtariEnv(Env,Serializable):
         self.resetter = resetter
         if resetter is not None:
             assert max_start_nullops == 0 # doing nothing when reset to a non-initial state can be dangerous in Montezuma's Revenge
+        self.terminator = terminator
+        if self.terminator is not None:
+            self.terminator.set_env(self)
         self.crop_or_scale = crop_or_scale
         self.img_width = img_width
         self.img_height = img_height
@@ -57,6 +62,7 @@ class AtariEnv(Env,Serializable):
         self.n_last_screens = n_last_screens
         self.n_last_rams = n_last_rams
         self.avoid_life_lost = avoid_life_lost
+        self.legal_actions = legal_actions
 
         self.configure_ale()
         self.reset()
@@ -83,7 +89,9 @@ class AtariEnv(Env,Serializable):
 
         assert self.ale.getFrameNumber() == 0
 
-        self.legal_actions = self.ale.getMinimalActionSet()
+        # limit the action set to make learning easier
+        if len(self.legal_actions) == 0:
+            self.legal_actions = self.ale.getMinimalActionSet()
 
     def prepare_plot(self,display="0.0"):
         os.environ["DISPLAY"] = display
@@ -185,10 +193,21 @@ class AtariEnv(Env,Serializable):
 
     @property
     def is_terminal(self):
-        if self.avoid_life_lost:
-            return self.ale.game_over() or self.lives_lost
+        if self.terminator is not None:
+            return self.terminator.is_terminal()
         else:
-            return self.ale.game_over()
+            if self.avoid_life_lost:
+                if self.ale.game_over() or self.lives_lost:
+                    # print("Terminate due to life loss")
+                    return True
+                else:
+                    return False
+            else:
+                if self.ale.game_over():
+                    # print("Terminate due to gameover")
+                    return True
+                else:
+                    return False
 
     @property
     def reward(self):
@@ -246,6 +265,8 @@ class AtariEnv(Env,Serializable):
                 self.lives_lost = False
 
             if self.is_terminal:
+                if self.terminator is not None:
+                    rewards.append(self.terminator.get_terminal_reward())
                 break
         self._reward = sum(rewards)
         if self._prior_reward > 0:
