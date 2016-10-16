@@ -1576,6 +1576,11 @@ class ConvAR(Distribution):
         G_IDX += 1
 
         self._tgt_dist = tgt_dist
+        if tgt_dist is None:
+            nr_mix = 10
+            out_chn = 10 * nr_mix
+        else:
+            out_chn = tgt_dist.dist_flat_dim
         self._shape = shape
         self._dim = int(np.prod(shape))
         self._sanity = sanity
@@ -1681,7 +1686,7 @@ class ConvAR(Distribution):
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,
-                        tgt_dist.dist_flat_dim,
+                        out_chn,
                         activation_fn=None,
                     )
             else:
@@ -1706,19 +1711,21 @@ class ConvAR(Distribution):
                 self._iaf_template = \
                     row.conv2d_mod(
                         1,
-                        tgt_dist.dist_flat_dim,
+                        out_chn,
                         activation_fn=None,
                     )
 
 
     @overrides
     def init_mode(self):
-        self._tgt_dist.init_mode()
+        if self._tgt_dist:
+            self._tgt_dist.init_mode()
         self._custom_phase = CustomPhase.init
 
     @overrides
     def train_mode(self):
-        self._tgt_dist.train_mode()
+        if self._tgt_dist:
+            self._tgt_dist.train_mode()
         self._custom_phase = CustomPhase.train
 
     @property
@@ -1739,20 +1746,34 @@ class ConvAR(Distribution):
         conv_iaf = self._iaf_template.construct(
             **in_dict
         ).tensor
-        return self._tgt_dist.activate_dist(
-            tf.reshape(conv_iaf, [-1, self._tgt_dist.dist_flat_dim])
-        )
+        # return self._tgt_dist.activate_dist(
+        #     tf.reshape(conv_iaf, [-1, self._tgt_dist.dist_flat_dim])
+        # )
+        return conv_iaf
 
     def logli(self, x_var, info):
-        tgt_dict = self.infer(x_var, info.get("context"))
-        flatten_loglis = self._tgt_dist.logli(
-            tf.reshape(x_var, [-1, self._tgt_dist.dim]),
-            tgt_dict
-        )
+        raw = self.infer(x_var, info.get("context"))
+        if self._tgt_dist:
+            tgt_dict = self._tgt_dist.activate_dist(
+                tf.reshape(raw, [-1, self._tgt_dist.dist_flat_dim])
+            )
+
+            flatten_loglis = self._tgt_dist.logli(
+                tf.reshape(x_var, [-1, self._tgt_dist.dim]),
+                tgt_dict
+            )
+        else:
+            import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+            x_var = tf.reshape(
+                x_var,
+                [-1,] + list(self._shape)
+            )
+            flatten_loglis = nn.discretized_mix_logistic(x_var*2., raw)
         return tf.reduce_sum(
             tf.reshape(flatten_loglis, [-1, self._shape[0] * self._shape[1]]),
             reduction_indices=1
         )
+
 
     def prior_dist_info(self, batch_size):
         return {}
@@ -1844,3 +1865,141 @@ class ConvAR(Distribution):
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
 
+class PixelCNN(Distribution):
+    """Porting tim's pixelcnn"""
+
+    def __init__(
+            self,
+            shape=(32,32,3),
+    ):
+        self.nr_resnet = 5
+        self.nr_filters = 64
+        self.nr_logistic_mix = 10
+        Serializable.quick_init(self, locals())
+
+        self._name = "%sD_PixelCNN_id_%s" % (shape, G_IDX)
+        self._shape = shape
+        self._dim = np.prod(shape)
+        global G_IDX
+        G_IDX += 1
+        self._custom_phase = CustomPhase.train
+        self.infer_temp = tf.make_template(
+            "infer",
+            self.infer,
+        )
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def effective_dim(self):
+        return self.dim
+
+    def infer(self, x, context=None):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+
+
+        counters = {}
+        with scopes.arg_scope(
+                [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
+                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        ):
+
+            # ////////// up pass ////////
+            xs = nn.int_shape(x)
+            x_pad = tf.concat(3,[x,tf.ones(xs[:-1]+[1])]) # add channel of ones to distinguish image from padding later on
+            u_list = [nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[2, 3])] # stream for current row + up
+            ul_list = [nn.down_shift(nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[1,3])) + \
+                       nn.right_shift(nn.down_right_shifted_conv2d(x, num_filters=self.nr_filters, filter_size=[2,1]))] # stream for up and to the left
+
+            for rep in range(self.nr_resnet):
+                u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+
+            u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+            ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+
+            for rep in range(self.nr_resnet):
+                u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+
+            u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+            ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+
+            for rep in range(self.nr_resnet):
+                u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+
+            # /////// down pass ////////
+            u = u_list.pop()
+            ul = ul_list.pop()
+
+            for rep in range(self.nr_resnet):
+                u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+
+            u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
+            ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
+
+            for rep in range(self.nr_resnet+1):
+                u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+
+            u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
+            ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
+
+            for rep in range(self.nr_resnet+1):
+                u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+
+            x_out = nn.nin(nn.concat_elu(ul),10*self.nr_logistic_mix)
+
+        assert len(u_list) == 0
+        assert len(ul_list) == 0
+
+        return x_out
+
+    def logli(self, x_var, info):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+        x_var = tf.reshape(
+            x_var,
+            [-1,] + list(self._shape)
+        ) * 2 # assumed to be [-1, 1]
+
+        tgt_vec = self.infer_temp(x_var, info.get("context"))
+        logli = nn.discretized_mix_logistic(
+            x_var,
+            tgt_vec
+        )
+        return tf.reduce_sum(
+            tf.reshape(logli, [-1, self._shape[0] * self._shape[1]]),
+            reduction_indices=1
+        )
+
+    def prior_dist_info(self, batch_size):
+        return {}
+
+    def sample_logli(self, info):
+        raise NotImplemented
+
+    @property
+    def dist_info_keys(self):
+        return ["context"] if self._context else []
+
+    @property
+    def dist_flat_dim(self):
+        return self._shape[0] * self._shape[1] * self._context_dim
+
+    def activate_dist(self, flat):
+        return dict(context=flat)
