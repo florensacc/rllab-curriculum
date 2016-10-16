@@ -271,7 +271,7 @@ class TRPOPlusLSH(TRPO):
                     # Cast continuous embedding into binary one.
                     # return np.cast['int'](np.round(cont_emb))
                     bin_emb = np.cast['int'](np.round(cont_emb))
-                    bin_emb_downsampled = bin_emb.reshape(-1, 4).mean(axis=1).reshape((bin_emb.shape[0], -1))
+                    bin_emb_downsampled = bin_emb.reshape(-1, 8).mean(axis=1).reshape((bin_emb.shape[0], -1))
                     return np.cast['int'](np.round(bin_emb_downsampled))
             else:
                 return path['observations']
@@ -328,7 +328,7 @@ class TRPOPlusLSH(TRPO):
         """
         assert np.max(obs) <= 1.0
         assert np.min(obs) >= -1.0
-        obs_enc = np.round((obs + 1.0) * 0.5 * self._model.num_classes).astype("uint8")
+        obs_enc = np.floor((obs + 1.0) * 0.5 * self._model.num_classes).astype("uint8")
         return obs_enc
 
     def decode_obs(self, obs):
