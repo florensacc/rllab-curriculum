@@ -53,7 +53,9 @@ class MazeEnv(ProxyEnv, Serializable):
             maze_id=0,
             length=1,
             maze_height=0.5,
-            maze_size_scaling=4,
+            maze_size_scaling=2,
+            coef_inner_rew=0.,  # a coef of 0 gives no reward to the maze from the wrapped env.
+            goal_rew=1.,  # reward obtained when reaching the goal
             *args,
             **kwargs):
 
@@ -63,6 +65,8 @@ class MazeEnv(ProxyEnv, Serializable):
         self._maze_id = maze_id
         self.__class__.MAZE_HEIGHT = maze_height
         self.__class__.MAZE_SIZE_SCALING = maze_size_scaling
+        self.coef_inner_rew = coef_inner_rew
+        self.goal_rew = goal_rew
 
         model_cls = self.__class__.MODEL_CLASS
         if model_cls is None:
@@ -417,24 +421,24 @@ class MazeEnv(ProxyEnv, Serializable):
     def step(self, action):
         if self.MANUAL_COLLISION:
             old_pos = self.wrapped_env.get_xy()
-            _, _, done, info = self.wrapped_env.step(action)
+            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
             new_pos = self.wrapped_env.get_xy()
             if self._is_in_collision(new_pos):
                 self.wrapped_env.set_xy(old_pos)
                 done = False
         else:
-            _, _, done, info = self.wrapped_env.step(action)
+            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
         next_obs = self.get_current_obs()
         x, y = self.wrapped_env.get_body_com("torso")[:2]
         # ref_x = x + self._init_torso_x
         # ref_y = y + self._init_torso_y
-        reward = 0
+        reward = self.coef_inner_rew * inner_rew
         minx, maxx, miny, maxy = self._goal_range
         # print("goal range: x [%s,%s], y [%s,%s], now [%s,%s]" % (str(minx), str(maxx), str(miny), str(maxy),
         #                                                          str(x), str(y)))
         if minx <= x <= maxx and miny <= y <= maxy:
             done = True
-            reward = 1
+            reward += self.goal_rew
         return Step(next_obs, reward, done, **info)
 
     def action_from_key(self, key):
@@ -452,107 +456,5 @@ class MazeEnv(ProxyEnv, Serializable):
                 stripped_path['observations'][:, :self.wrapped_env.observation_space.flat_dim]
             #  this breaks if the obs of the robot are d>1 dimensional (not a vector)
             stripped_paths.append(stripped_path)
-        self.wrapped_env.log_diagnostics(stripped_paths)
-        # self.plot_visitation(stripped_paths, maze=self.__class__.MAZE_STRUCTURE,
-        #                      scaling=self.__class__.MAZE_SIZE_SCALING)
+        self.wrapped_env.log_diagnostics(stripped_paths)  # see swimmer_env.py for a scketch of the maze plotting!
 
-    def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2, fig=None, ax=None):
-        ## this is buggus because of the x, y in the pcolormesh
-        if not fig and not ax:
-            print("creating a new figure")
-            fig, ax = plt.subplots()
-        elif not ax:  # if I have a fig but not specify an ax, I assume I have to plot in the first ax
-            ax = fig.get_axes()[0]
-        elif not fig:
-            print("don't give me just the axis bitch")
-        # now we will grid the space and check how much of it the policy is covering
-        x_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
-        y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -2] for path in paths]))))
-        print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
-        if maze:
-            x_max = max(scaling * len(
-                maze) / 2. - 1, x_max)  # maze enlarge plot to include the walls. ASSUME ROBOT STARTS IN CENTER!
-            y_max = max(scaling * len(maze[0]) / 2. - 1, y_max)  # the max here should be useless...
-            print("THE MAZE LIMITS ARE: x_max={}, y_max={}".format(x_max, y_max))
-        if 'agent_infos' in list(paths[0].keys()) and 'latents' in list(paths[0]['agent_infos'].keys()):
-            dict_visit = collections.OrderedDict()  # keys: latents, values: np.array with number of visitations
-            num_latents = np.size(paths[0]["agent_infos"]["latents"][0])
-            # set all the labels for the latents and initialize the entries of dict_visit
-            for i in range(num_latents):  # use integer to define the latents
-                dict_visit[i] = np.zeros((2 * x_max * mesh_density + 1, 2 * y_max * mesh_density + 1))
-
-            # keep track of the overlap
-            overlap = 0
-            # now plot all the paths
-            for path in paths:
-                lats = [np.nonzero(lat)[1][0] for lat in path['agent_infos']['latents']]  # list of all lats by idx
-                com_x = np.ceil(((np.array(path['observations'][:, -3]) + x_max) * mesh_density)).astype(int)
-                com_y = np.ceil(((np.array(path['observations'][:, -2]) + y_max) * mesh_density)).astype(int)
-                coms = list(zip(com_x, com_y))
-                for i, com in enumerate(coms):
-                    dict_visit[lats[i]][com] += 1
-
-            # fix the colors for each latent
-            num_colors = num_latents + 2  # +2 for the 0 and Repetitions NOT COUNTING THE WALLS
-            cmap = plt.get_cmap('nipy_spectral', num_colors + 1)  # add one color for the walls
-            # create a matrix with entries corresponding to the latent that was there (or other if several/wall/nothing)
-            visitation_by_lat = np.zeros((2 * x_max * mesh_density + 1, 2 * y_max * mesh_density + 1))
-            for i, visit in dict_visit.items():
-                lat_visit = np.where(visit == 0, visit, i + 1)  # transform the map into 0 or i+1
-                visitation_by_lat += lat_visit
-                overlap += np.sum(np.where(visitation_by_lat > lat_visit))  # add the overlaps of this latent
-                visitation_by_lat = np.where(visitation_by_lat <= i + 1, visitation_by_lat,
-                                             num_colors - 1)  # mark overlaps
-            if maze:
-                for row in range(len(maze)):
-                    for col in range(len(maze[0])):
-                        if maze[row][col] == 1:
-                            wall_min_x = max(0, (row - 0.5) * mesh_density * scaling)
-                            wall_max_x = min(2 * x_max * mesh_density * scaling + 1,
-                                             (row + 0.5) * mesh_density * scaling)
-                            wall_min_y = max(0, (col - 0.5) * mesh_density * scaling)
-                            wall_max_y = min(2 * y_max * mesh_density * scaling + 1,
-                                             (col + 0.5) * mesh_density * scaling)
-                            visitation_by_lat[wall_min_x: wall_max_x,
-                            wall_min_y: wall_max_y] = num_colors
-
-            # x = np.arange(2 * x_max * mesh_density + 1.) / mesh_density - x_max  # this gave error!!
-            # y = np.arange(2 * y_max * mesh_density + 1.) / mesh_density - y_max
-            x_len, y_len = visitation_by_lat.shape
-            x = np.arange(x_len) / mesh_density - x_max
-            y = np.arange(y_len) / mesh_density - y_max
-
-            map_plot = ax.pcolormesh(x, y, visitation_by_lat, cmap=cmap, vmin=0.1,
-                                     vmax=num_latents + 2)  # before 1 (will it affect when no walls?)
-            color_len = (num_colors - 1.) / num_colors
-            ticks = np.arange(color_len / 2., num_colors - 1, color_len)
-            cbar = fig.colorbar(map_plot, ticks=ticks)
-            latent_tick_labels = ['latent: ' + str(i) for i in list(dict_visit.keys())]
-            cbar.ax.set_yticklabels(
-                ['No visitation'] + latent_tick_labels + ['Repetitions'])  # horizontal colorbar
-            # still log the total visitation
-            visitation = reduce(np.add, [visit for visit in dict_visit.values()])
-
-        gx_min, gx_max, gy_min, gy_max = self._find_goal_range()
-        ax.add_patch(patches.Rectangle(
-            (gx_min, gy_min),
-            gx_max - gx_min,
-            gy_max - gy_min,
-            edgecolor='g', fill=False, linewidth=2,
-        ))
-        ax.annotate('G', xy=(0.5*(gx_min+gx_max), 0.5*(gy_min+gy_max)), color='g', fontsize=20)
-
-        ax.set_xlim([x[0], x[-1]])
-        ax.set_ylim([y[0], y[-1]])
-
-        log_dir = logger.get_snapshot_dir()
-        exp_name = log_dir.split('/')[-1]
-        ax.set_title('visitation Maze: ' + exp_name)
-
-        plt.savefig(osp.join(log_dir, 'maze_visitation.png'))  # this saves the current figure, here f
-        plt.close()
-
-        total_visitation = np.count_nonzero(visitation)
-        logger.record_tabular('VisitationTotal', total_visitation)
-        logger.record_tabular('VisitationOverlap', overlap)
-        # gc.collect()
