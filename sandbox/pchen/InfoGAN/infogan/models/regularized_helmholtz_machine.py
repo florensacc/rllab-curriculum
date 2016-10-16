@@ -1464,6 +1464,32 @@ class RegularizedHelmholtzMachine(object):
                          # dropout(0.9).
                          flatten().
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "dummy":
+                from prettytensor import UnboundVariable
+                model_avg = network_args.get("model_avg", False)
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        custom_phase=UnboundVariable('custom_phase'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                        model_avg=model_avg,
+                ):
+                    cond_rep = network_args.get("cond_rep", 1)
+                    encoder = \
+                        (pt.template('input', self.book).
+                         apply(tf.reduce_sum, None, True).arfc(1)
+                         )
+                    self.encoder_template = \
+                        (encoder*0. +
+                         tf.ones([1, self.inference_dist.dist_flat_dim])
+                         )
+                    decoder = (pt.template('input', self.book).
+                               apply(tf.reduce_sum, None, True)
+                    )
+                    self.decoder_template = (
+                        decoder*0. +
+                        tf.zeros([1, self.output_dist.dim * cond_rep])
+                    )
             elif self.network_type == "resv1_k3_pixel_bias_filters_ratio_32_global_pool":
                 from prettytensor import UnboundVariable
                 model_avg = network_args.get("model_avg", False)

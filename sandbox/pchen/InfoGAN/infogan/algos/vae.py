@@ -204,11 +204,16 @@ class VAE(object):
                     kl = tf.reduce_mean(kls)
 
                     true_vlb = tf.reduce_mean(
-                        logsumexp(tf.reshape(log_p_x_given_z - kls, [-1, self.k])),
+                        logsumexp(tf.reshape(
+                            log_p_x_given_z - (kls if self.kl_coeff != 0. else 0.),
+                            [-1, self.k])),
                     ) - np.log(self.k)
                     # this is shaky but ok since we are just in eval mode
                     vlb = tf.reduce_mean(log_p_x_given_z) - \
-                          tf.maximum(kl, self.min_kl * ndim) * self.kl_coeff
+                          (
+                              tf.maximum(kl, self.min_kl * ndim) * self.kl_coeff
+                              if self.kl_coeff != 0. else 0.
+                          )
                     dict_log_vars["true_vlb_sum_k0"].append(
                         tf.reduce_mean(log_p_x_given_z - kls)
                     )
@@ -223,7 +228,9 @@ class VAE(object):
                         # Construct the variational lower bound
                         kl = tf.reduce_mean(self.model.latent_dist.kl_prior(z_dist_info))
 
-                    true_vlb = tf.reduce_mean(log_p_x_given_z) - kl
+                    true_vlb = tf.reduce_mean(log_p_x_given_z) - (
+                        kl if self.kl_coeff != 0. else 0.
+                    )
                     if self.min_kl_onesided:
                         avg_log_p_sg_z = tf.reduce_mean(
                             # self.model.latent_dist.logli_prior(
@@ -268,7 +275,10 @@ class VAE(object):
                                 kl,
                                 self.min_kl * ndim
                             )
-                        vlb = tf.reduce_mean(log_p_x_given_z) - surr_kl * self.kl_coeff
+                        vlb = tf.reduce_mean(log_p_x_given_z) - (
+                            surr_kl * self.kl_coeff
+                            if self.kl_coeff != 0 else 0.
+                        )
 
                 # Normalize by the dimensionality of the data distribution
                 dict_log_vars["vlb_sum"].append(vlb)
@@ -574,16 +584,16 @@ class VAE(object):
                         feed
                     )[1:]
                     all_log_vals.append(log_vals)
-                    if any(np.any(np.isnan(val)) for val in log_vals):
-                        print("NaN detected! ")
-                        if self.ema:
-                            print("restoring from ema")
-                            ema_out = sess.run(
-                                [tf.assign(var, avg) for var, avg in self.ema._averages.items()]
-                            )
-                        else:
-                            print("aborting")
-                            exit(1)
+                    # if any(np.any(np.isnan(val)) for val in log_vals):
+                    #     print("NaN detected! ")
+                    #     # if self.ema:
+                    #     #     print("restoring from ema")
+                    #     #     ema_out = sess.run(
+                    #     #         [tf.assign(var, avg) for var, avg in self.ema._averages.items()]
+                    #     #     )
+                    #     # else:
+                    #     print("aborting")
+                    #     exit(1)
 
 
                     if counter != 0 and counter % self.snapshot_interval == 0:
