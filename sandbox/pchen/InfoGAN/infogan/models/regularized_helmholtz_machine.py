@@ -1859,7 +1859,7 @@ class RegularizedHelmholtzMachine(object):
                         add_coeff=ac
                     ) #16
                     for _ in range(rep):
-                        encoder = resconv_v1(encoder, fs, base_filters, stride=1, add_coeff=ac) # 16
+                        encoder = resconv_v1(encoder, fs, base_filters*2, stride=1, add_coeff=ac) # 16
                     encoder = resconv_v1(
                         encoder,
                         fs,
@@ -1937,8 +1937,7 @@ class RegularizedHelmholtzMachine(object):
                         decoder = resconv_v1(decoder, fs, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
                     self.decoder_template = (
                         decoder.
-                            conv2d_mod(fs, cond_rep, activation_fn=None).
-                            flatten()
+                            conv2d_mod(fs, cond_rep, activation_fn=None)
                     )
                     self.reg_encoder_template = \
                         (pt.template('input').

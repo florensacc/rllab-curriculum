@@ -2046,6 +2046,10 @@ class CondPixelCNN(Distribution):
     def infer(self, x, context=None):
         import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+        x = tf.reshape(
+            x,
+            [-1,] + list(self._shape)
+        )
 
         counters = {}
         with scopes.arg_scope(
@@ -2110,6 +2114,11 @@ class CondPixelCNN(Distribution):
         return x_out
 
     def logli(self, x_var, info):
+        x_var = tf.reshape(
+            x_var,
+            [-1,] + list(self._shape)
+        )
+
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 
         causal, cond = info["causal_feats"], info["cond_feats"]

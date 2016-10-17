@@ -178,7 +178,9 @@ class ShareVAE(object):
             x = xs[i]
             with tf.device(assign_to_gpu(i)):
                 # get activations of pixelcnn
-                causal_feats = pixelcnn.infer_temp(x)
+                causal_feats = pixelcnn.infer_temp(
+                    x
+                )
 
                 z_var, log_p_z_given_x, z_dist_info = \
                     self.model.encode(causal_feats, k=self.k if eval else 1)
