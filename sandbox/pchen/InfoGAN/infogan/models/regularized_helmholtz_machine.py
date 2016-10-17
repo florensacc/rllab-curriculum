@@ -1824,6 +1824,131 @@ class RegularizedHelmholtzMachine(object):
                          # dropout(0.9).
                          flatten().
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "pixelcnn_based_shared_spatial_code":
+                cond_rep = network_args.get("cond_rep", 1)
+                from prettytensor import UnboundVariable
+                model_avg = network_args.get("model_avg", False)
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        custom_phase=UnboundVariable('custom_phase'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                        model_avg=model_avg,
+                ):
+                    encoder = \
+                        (pt.template('input', self.book) # will be feature maps input
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+                    gen_base_filters = network_args.get("base_filters", 64)
+                    ac = network_args.get("ac", 0.1)
+                    fs = network_args.get("filter_size", 5)
+
+                    base_filters = network_args.get("enc_base_filters", gen_base_filters)
+                    nn = network_args.get("enc_nn", False)
+                    rep = network_args.get("enc_rep", 1)
+                    rate = network_args.get("enc_rate", 1)
+                    print("encoder nn %s" % nn)
+                    print("encoder fs %s" % fs)
+                    for _ in range(rep):
+                        encoder = resconv_v1(encoder, fs, base_filters, stride=1, add_coeff=ac) # 32
+                    encoder = resconv_v1(
+                        encoder,
+                        fs,
+                        base_filters*2,
+                        stride=2,
+                        add_coeff=ac
+                    ) #16
+                    for _ in range(rep):
+                        encoder = resconv_v1(encoder, fs, base_filters, stride=1, add_coeff=ac) # 16
+                    encoder = resconv_v1(
+                        encoder,
+                        fs,
+                        base_filters*2,
+                        stride=2,
+                        add_coeff=ac
+                    ) #8
+                    for _ in range(rep+1):
+                        encoder = resconv_v1(
+                            encoder,
+                            fs,
+                            base_filters*2,
+                            stride=1,
+                            add_coeff=ac,
+                            conv_args=dict(
+                                rate=rate
+                            ),
+                        ) #8
+
+                    out_chn = self.inference_dist.dist_flat_dim // 8 // 8
+                    self.encoder_template = encoder.conv2d_mod(
+                        1, out_chn,
+                    ).conv2d_mod(
+                        1, out_chn,
+                        activation_fn=None
+                    ).flatten()
+
+                    base_filters = network_args.get("dec_base_filters", gen_base_filters)
+                    res_keep_prob = network_args.get("dec_res_keep_prob", 1.)
+                    nn = network_args.get("dec_nn", False)
+                    rep = network_args.get("dec_rep", 1)
+
+                    in_chn = self.latent_dist.dim // 8 // 8
+                    print("decoder nn %s" % nn)
+                    decoder = (
+                        pt.template('input', self.book).
+                            reshape([-1, 8, 8, in_chn]).
+                            conv2d_mod(
+                                1, base_filters*2,
+                            )
+                    )
+                    for _ in range(rep+1):
+                        decoder = resconv_v1(
+                            decoder,
+                            fs,
+                            base_filters*2,
+                            stride=1,
+                            keep_prob=res_keep_prob,
+                            add_coeff=ac,
+                            conv_args=dict(
+                                rate=rate
+                            ),
+                            )
+                    decoder = resdeconv_v1(
+                        decoder,
+                        fs,
+                        base_filters*2,
+                        out_wh=[16,16],
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac
+                    )
+                    for _ in range(rep):
+                        decoder = resconv_v1(decoder, fs, base_filters*2, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
+                    decoder = resdeconv_v1(
+                        decoder,
+                        fs,
+                        base_filters,
+                        out_wh=[32,32],
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac
+                    )
+                    for _ in range(rep):
+                        decoder = resconv_v1(decoder, fs, base_filters, stride=1, keep_prob=res_keep_prob, add_coeff=ac)
+                    self.decoder_template = (
+                        decoder.
+                            conv2d_mod(fs, cond_rep, activation_fn=None).
+                            flatten()
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "resv1_k3_pixel_bias_filters_ratio_32_big_spatial":
                 from prettytensor import UnboundVariable
                 model_avg = network_args.get("model_avg", False)
@@ -2905,7 +3030,7 @@ class RegularizedHelmholtzMachine(object):
         return self.reg_latent_dist.sample(reg_z_dist_info), reg_z_dist_info
 
     @functools.lru_cache(maxsize=None)
-    def decode(self, z_var, sample=True):
+    def decode(self, z_var, sample=True, raw=False):
         args = dict(
             input=z_var, custom_phase=self.custom_phase
         )
@@ -2917,6 +3042,8 @@ class RegularizedHelmholtzMachine(object):
                 input=z_var,
             )
             x_dist_flat = self.decoder_template.construct(**args).tensor
+        if raw:
+            return x_dist_flat
         # x_dist_flat = self.decoder_template.construct(input=z_var, custom_phase=self.custom_phase).tensor
         x_dist_info = self.output_dist.activate_dist(x_dist_flat)
         return (

@@ -14,16 +14,16 @@
 
 # just test the pixelcnn part
 
-# test different channel ar
+# test tim's better pixelcnn
 
-# tim's channel ar is slightly better and faster but the final difference is not big
-# plstm visibly better than gresnet but 2x slower
+# 80 epochs to get under 3.10 and appraoching 3.0 in 200 epochs
 
-# question: is tim's arch superior due to complete receptive field or other arch details?
+# scaling down to observe performance difference
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
-    IAR, ConvAR, DiscretizedLogistic, DistAR
+    IAR, ConvAR, DiscretizedLogistic, DistAR, PixelCNN
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
@@ -41,7 +41,8 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
-batch_size = 128
+# batch_size = 32 * 3
+batch_size = 48*2
 # updates_per_epoch = 100
 
 stub(globals())
@@ -118,7 +119,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self, num_gpus):
-        return [batch_size // num_gpus, ]
+        return [1, ]
 
     @variant(hide=False)
     def num_gpus(self):
@@ -126,7 +127,8 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [1] #0.001]
+        # return [2] #0.001]
+        return [2] #0.001]
 
     @variant(hide=False)
     def nar(self):
@@ -210,24 +212,31 @@ class VG(VariantGenerator):
     #     return ["plstm", "gated_resnet"]
 
     @variant(hide=False)
-    def ar_depth(self):
-        return [12,]
+    def ar_nr_resnets(self, num_gpus):
+        # smaller net that uses 1 GPU:
+        if num_gpus == 1:
+            return [
+                (5,),
+                (2,),
+                (2,1,),
+                (2,1,1,1,),
 
-    @variant(hide=False)
-    def ar_filter_size(self, ar_depth):
-        return [3,]
+                (3,),
+                (4,),
+                (6,),
+                (2,2,),
+            ]
+        elif num_gpus == 2:
+            # bigger net that needs 2 GPUs
+            return [
+                (5,5,),
+                (5,3,1),
+                (3,3,3),
+                (2,2,2,2,2),
+            ]
+        else:
+            raise NotImplemented
 
-    @variant(hide=False)
-    def ar_channels(self, ):
-        return [48, ]
-
-    @variant(hide=False)
-    def ar_block(self, ):
-        return ["gated_resnet", "plstm"]
-
-    @variant(hide=False)
-    def ar_new_ch(self, ):
-        return [True, False]
 
 
 vg = VG()
@@ -300,36 +309,38 @@ for v in variants[i:i+1]:
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
             )
-        nml = 10
-        tgt_dist = Mixture(
-           [(DiscretizedLogistic(3), 1./nml) for _ in range(nml)]
-        )
-        tgt_ar_dist = DistAR(
-            3,
-            tgt_dist,
-            depth=2,
-            neuron_ratio=16,
-            linear_context=True,
-        )
-        ar_conv_dist = ConvAR(
-            # tgt_dist=Bernoulli(1),
-            # tgt_dist=tgt_dist,
-            # tgt_dist=tgt_ar_dist,
-            tgt_dist=None if v["ar_new_ch"] else tgt_ar_dist,
-            shape=(32, 32, 3),
-            filter_size=v["ar_filter_size"],
-            depth=v["ar_depth"],
-            nr_channels=v["ar_channels"],
-            pixel_bias=True,
-            # context_dim=v["context_dim"],
-            nin=False,
-            # block="gated_resnet",
-            block=v["ar_block"],
-            extra_nins=2
-            # block="plstm",
+        # nml = 7
+        # tgt_dist = Mixture(
+        #    [(DiscretizedLogistic(3), 1./nml) for _ in range(nml)]
+        # )
+        # tgt_ar_dist = DistAR(
+        #     3,
+        #     tgt_dist,
+        #     depth=2,
+        #     neuron_ratio=6,
+        #     linear_context=True,
+        # )
+        # ar_conv_dist = ConvAR(
+        #     # tgt_dist=Bernoulli(1),
+        #     # tgt_dist=tgt_dist,
+        #     tgt_dist=tgt_ar_dist,
+        #     shape=(32, 32, 3),
+        #     filter_size=v["ar_filter_size"],
+        #     depth=v["ar_depth"],
+        #     nr_channels=v["ar_channels"],
+        #     pixel_bias=True,
+        #     # context_dim=v["context_dim"],
+        #     nin=False,
+        #     # block="gated_resnet",
+        #     block=v["ar_block"],
+        #     extra_nins=2
+        #     # block="plstm",
+        # )
+        pixelcnn = PixelCNN(
+            nr_resnets=v["ar_nr_resnets"],
         )
         model = RegularizedHelmholtzMachine(
-            output_dist=ar_conv_dist,
+            output_dist=pixelcnn,
             latent_spec=latent_spec,
             batch_size=batch_size,
             image_shape=dataset.image_shape,
@@ -376,7 +387,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1015_diff_ar_pixelcnn_test",
+            exp_prefix="1015_t_pixelcnn_test",
             seed=v["seed"],
             variant=v,
             mode="local",

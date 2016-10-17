@@ -1871,10 +1871,10 @@ class PixelCNN(Distribution):
     def __init__(
             self,
             shape=(32,32,3),
+            nr_resnets=(5, 5, 5),
+            nr_filters=64,
+            nr_logistic_mix=10
     ):
-        self.nr_resnet = 5
-        self.nr_filters = 64
-        self.nr_logistic_mix = 10
         Serializable.quick_init(self, locals())
 
         self._name = "%sD_PixelCNN_id_%s" % (shape, G_IDX)
@@ -1887,6 +1887,10 @@ class PixelCNN(Distribution):
             "infer",
             self.infer,
         )
+
+        self.nr_resnets = nr_resnets
+        self.nr_filters = nr_filters
+        self.nr_logistic_mix = nr_logistic_mix
 
     @overrides
     def init_mode(self):
@@ -1922,47 +1926,35 @@ class PixelCNN(Distribution):
             ul_list = [nn.down_shift(nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[1,3])) + \
                        nn.right_shift(nn.down_right_shifted_conv2d(x, num_filters=self.nr_filters, filter_size=[2,1]))] # stream for up and to the left
 
-            for rep in range(self.nr_resnet):
+            for rep in range(self.nr_resnets[0]):
                 u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
                 ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
 
-            u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
-            ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+            for nr_resnet in self.nr_resnets[1:]:
+                u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+                ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
 
-            for rep in range(self.nr_resnet):
-                u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
-                ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
-
-            u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
-            ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
-
-            for rep in range(self.nr_resnet):
-                u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
-                ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+                for rep in range(nr_resnet):
+                    u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                    ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
 
             # /////// down pass ////////
             u = u_list.pop()
             ul = ul_list.pop()
 
-            for rep in range(self.nr_resnet):
-                u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
-                ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+            for idx, nr_resnet in enumerate(self.nr_resnets[:0:-1]):
+                for rep in range(nr_resnet+(0 if idx == 0 else 1)):
+                    u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                    ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
 
-            u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
-            ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
+                u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
+                ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
 
-            for rep in range(self.nr_resnet+1):
-                u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
-                ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
-
-            u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
-            ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
-
-            for rep in range(self.nr_resnet+1):
+            for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
                 u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
                 ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
 
-            x_out = nn.nin(nn.concat_elu(ul),10*self.nr_logistic_mix)
+            x_out = nn.nin(nn.concat_elu(ul), 10*self.nr_logistic_mix)
 
         assert len(u_list) == 0
         assert len(ul_list) == 0
@@ -1978,6 +1970,150 @@ class PixelCNN(Distribution):
         ) * 2 # assumed to be [-1, 1]
 
         tgt_vec = self.infer_temp(x_var, info.get("context"))
+        logli = nn.discretized_mix_logistic(
+            x_var,
+            tgt_vec
+        )
+        return tf.reduce_sum(
+            tf.reshape(logli, [-1, self._shape[0] * self._shape[1]]),
+            reduction_indices=1
+        )
+
+    def prior_dist_info(self, batch_size):
+        return {}
+
+    def sample_logli(self, info):
+        raise NotImplemented
+
+    @property
+    def dist_info_keys(self):
+        return ["context"] if self._context else []
+
+    @property
+    def dist_flat_dim(self):
+        return self._shape[0] * self._shape[1] * self._context_dim
+
+    def activate_dist(self, flat):
+        return dict(context=flat)
+
+class CondPixelCNN(Distribution):
+    """conditional version with activations sharing"""
+
+    def __init__(
+            self,
+            shape=(32,32,3),
+            nr_resnets=(5, 5, 5),
+            nr_filters=64,
+            nr_logistic_mix=10
+    ):
+        Serializable.quick_init(self, locals())
+
+        self._name = "%sD_PixelCNN_id_%s" % (shape, G_IDX)
+        self._shape = shape
+        self._dim = np.prod(shape)
+        global G_IDX
+        G_IDX += 1
+        self._custom_phase = CustomPhase.train
+        self.infer_temp = tf.make_template(
+            "infer",
+            self.infer,
+        )
+        self.cond_temp = tf.make_template(
+            "cond",
+            self.cond,
+        )
+
+        self.nr_resnets = nr_resnets
+        self.nr_filters = nr_filters
+        self.nr_logistic_mix = nr_logistic_mix
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def effective_dim(self):
+        return self.dim
+
+    def infer(self, x, context=None):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+
+        counters = {}
+        with scopes.arg_scope(
+                [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
+                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        ):
+
+            # ////////// up pass ////////
+            xs = nn.int_shape(x)
+            x_pad = tf.concat(3,[x,tf.ones(xs[:-1]+[1])]) # add channel of ones to distinguish image from padding later on
+            u_list = [nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[2, 3])] # stream for current row + up
+            ul_list = [nn.down_shift(nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[1,3])) + \
+                       nn.right_shift(nn.down_right_shifted_conv2d(x, num_filters=self.nr_filters, filter_size=[2,1]))] # stream for up and to the left
+
+            for rep in range(self.nr_resnets[0]):
+                u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+
+            for nr_resnet in self.nr_resnets[1:]:
+                u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+                ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+
+                for rep in range(nr_resnet):
+                    u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                    ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+
+            # /////// down pass ////////
+            u = u_list.pop()
+            ul = ul_list.pop()
+
+            for idx, nr_resnet in enumerate(self.nr_resnets[:0:-1]):
+                for rep in range(nr_resnet+(0 if idx == 0 else 1)):
+                    u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                    ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+
+                u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
+                ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
+
+            for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
+                u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+
+            x_out = nn.nin(nn.concat_elu(ul), self.nr_filters)
+
+        assert len(u_list) == 0
+        assert len(ul_list) == 0
+
+        return x_out
+
+    def cond(self, x, c):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+
+        counters = {}
+        with scopes.arg_scope(
+                [nn.nin],
+                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        ):
+            gated = nn.aux_gated_resnet(x, c, conv=nn.nin)
+            x_out = nn.nin(nn.concat_elu(gated), 10*self.nr_logistic_mix)
+
+        return x_out
+
+    def logli(self, x_var, info):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+
+        causal, cond = info["causal_feats"], info["cond_feats"]
+        tgt_vec = self.cond_temp(causal, cond)
         logli = nn.discretized_mix_logistic(
             x_var,
             tgt_vec

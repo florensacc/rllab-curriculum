@@ -16,6 +16,8 @@
 
 # test tim's better pixelcnn
 
+# 80 epochs to get under 3.10 and appraoching 3.0 in 200 epochs
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

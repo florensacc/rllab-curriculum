@@ -14,16 +14,19 @@
 
 # just test the pixelcnn part
 
-# test different channel ar
+# test tim's better pixelcnn
 
-# tim's channel ar is slightly better and faster but the final difference is not big
-# plstm visibly better than gresnet but 2x slower
+# 80 epochs to get under 3.10 and appraoching 3.0 in 200 epochs
 
-# question: is tim's arch superior due to complete receptive field or other arch details?
+# scaling down to observe performance difference
+
+# sharing lvae
+
 from rllab.misc.instrument import run_experiment_lite, stub
+from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
-    IAR, ConvAR, DiscretizedLogistic, DistAR
+    IAR, ConvAR, DiscretizedLogistic, DistAR, PixelCNN, CondPixelCNN
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
@@ -41,7 +44,8 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
-batch_size = 128
+# batch_size = 32 * 3
+batch_size = 48*2
 # updates_per_epoch = 100
 
 stub(globals())
@@ -51,20 +55,11 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        # yield 0.0005#
-        # yield
-        # return np.arange(1, 11) * 1e-4
-        # return [0.0001, 0.0005, 0.001]
         return [0.002, ] #0.001]
 
     @variant
     def seed(self):
         return [42, ]
-        # return [123124234]
-
-    @variant
-    def monte_carlo_kl(self):
-        return [True, ]
 
     @variant
     def zdim(self):
@@ -76,45 +71,19 @@ class VG(VariantGenerator):
     #
     @variant(hide=False)
     def network(self):
-        # yield "large_conv"
-        # yield "small_conv"
-        # yield "deep_mlp"
-        # yield "mlp"
-        # yield "resv1_k3"
-        # yield "conv1_k5
-        # yield "small_res"
-        # yield "small_res_small_kern"
-        # res_hybrid_long_re_real_anneal.pyyield "resv1_k3_pixel_bias"
-        # yield "resv1_k3_pixel_bias"
-        # yield "resv1_k3_pixel_bias_widegen"
-        # yield "resv1_k3_pixel_bias_widegen_conv_ar"
-        # yield "resv1_k3_pixel_bias_filters_ratio"
-        # yield "resv1_k3_pixel_bias_filters_ratio_32"
-        yield "dummy"
-
-    @variant(hide=False)
-    def steps(self, ):
-        return [3]
-    #
-    @variant(hide=False)
-    def base_filters(self, ):
-        return [33, ]
-
-    @variant(hide=False)
-    def dec_init_size(self, ):
-        return [4]
+        yield "pixelcnn_based_shared_spatial_code"
 
     @variant(hide=False)
     def rep(self, ):
         return [1, ]
 
-    @variant(hide=True)
-    def wnorm(self):
-        return [True, ]
+    @variant(hide=False)
+    def base_filters(self, ):
+        return [64, ]
 
-    @variant(hide=True)
-    def ar_wnorm(self):
-        return [True, ]
+    @variant(hide=False)
+    def dec_init_size(self, ):
+        return [4]
 
     @variant(hide=False)
     def k(self, num_gpus):
@@ -122,11 +91,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def num_gpus(self):
-        # yield 0.0005#
-        # yield
-        # return np.arange(1, 11) * 1e-4
-        # return [0.0001, 0.0005, 0.001]
-        return [1] #0.001]
+        return [2]
 
     @variant(hide=False)
     def nar(self):
@@ -134,7 +99,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nr(self):
-        return [4,]
+        return [6,]
 
     @variant(hide=False)
     def i_nar(self):
@@ -145,10 +110,6 @@ class VG(VariantGenerator):
         return [5,]
 
     @variant(hide=False)
-    def i_init_scale(self):
-        return [0.1, ]
-
-    @variant(hide=False)
     def i_context(self):
         # return [True, False]
         return [
@@ -157,25 +118,10 @@ class VG(VariantGenerator):
             # ["gating"],
             # ["linear", "gating"]
         ]
+
     @variant(hide=False)
     def exp_avg(self):
         return [0.999, ]
-
-    @variant(hide=False)
-    def tiear(self):
-        return [False]
-        # return [True, False]
-
-    @variant(hide=False)
-    def dec_context(self):
-        return [True, ]
-
-    # @variant(hide=False)
-    # def ds(self):
-    #     return [
-    #         # "mnist",
-    #         "omni",
-    #     ]
 
     @variant(hide=True)
     def max_epoch(self, ):
@@ -187,47 +133,17 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def context_dim(self, ):
-        return [9]
+        return [64]
 
     @variant(hide=False)
     def cond_rep(self, context_dim):
         return [context_dim]
 
-    # @variant(hide=False)
-    # def ar_depth(self):
-    #     return [12,6,]
-    #
-    # @variant(hide=False)
-    # def ar_filter_size(self, ar_depth):
-    #     return [3, 5]
-    #
-    # @variant(hide=False)
-    # def ar_channels(self, ):
-    #     return [48]
-    #
-    # @variant(hide=False)
-    # def ar_block(self, ):
-    #     return ["plstm", "gated_resnet"]
-
     @variant(hide=False)
-    def ar_depth(self):
-        return [12,]
-
-    @variant(hide=False)
-    def ar_filter_size(self, ar_depth):
-        return [3,]
-
-    @variant(hide=False)
-    def ar_channels(self, ):
-        return [48, ]
-
-    @variant(hide=False)
-    def ar_block(self, ):
-        return ["gated_resnet", "plstm"]
-
-    @variant(hide=False)
-    def ar_new_ch(self, ):
-        return [True, False]
+    def ar_nr_resnets(self, num_gpus):
+        return [
+            (2,)
+        ]
 
 
 vg = VG()
@@ -235,7 +151,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -248,36 +164,15 @@ for v in variants[i:i+1]:
 
         print("Exp name: %s" % exp_name)
 
-
-        # if v["ds"] == "omni":
-        #     dataset = ResamplingBinarizedOmniglotDataset()
-        # else:
-        #     dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
-
         dataset = Cifar10Dataset()
 
-        # init_size = v["dec_init_size"]
-        # ch_size = zdim // init_size // init_size
-        # tgt_dist = Mixture([
-        #     (Gaussian(ch_size), 1./v["nm"])
-        #     for _ in range(v["nm"])
-        # ])
-        # dist = ConvAR(
-        #     tgt_dist,
-        #     shape=(init_size, init_size, ch_size),
-        #     depth=v["ar_depth"],
-        #     block=v["ar_block"],
-        #     nr_channels=ch_size*3,
-        #     pixel_bias=True,
-        # )
         dist = Gaussian(zdim)
         for _ in range(v["nar"]):
             dist = AR(
                 zdim,
                 dist,
                 neuron_ratio=v["nr"],
-                data_init_wnorm=v["ar_wnorm"],
-                var_scope="AR_scope" if v["tiear"] else None,
+                data_init_wnorm=True,
             )
 
         latent_spec = [
@@ -300,53 +195,29 @@ for v in variants[i:i+1]:
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
             )
-        nml = 10
-        tgt_dist = Mixture(
-           [(DiscretizedLogistic(3), 1./nml) for _ in range(nml)]
+
+        pixelcnn = CondPixelCNN(
+            nr_resnets=v["ar_nr_resnets"],
+            nr_filters=v["context_dim"],
         )
-        tgt_ar_dist = DistAR(
-            3,
-            tgt_dist,
-            depth=2,
-            neuron_ratio=16,
-            linear_context=True,
-        )
-        ar_conv_dist = ConvAR(
-            # tgt_dist=Bernoulli(1),
-            # tgt_dist=tgt_dist,
-            # tgt_dist=tgt_ar_dist,
-            tgt_dist=None if v["ar_new_ch"] else tgt_ar_dist,
-            shape=(32, 32, 3),
-            filter_size=v["ar_filter_size"],
-            depth=v["ar_depth"],
-            nr_channels=v["ar_channels"],
-            pixel_bias=True,
-            # context_dim=v["context_dim"],
-            nin=False,
-            # block="gated_resnet",
-            block=v["ar_block"],
-            extra_nins=2
-            # block="plstm",
-        )
+
         model = RegularizedHelmholtzMachine(
-            output_dist=ar_conv_dist,
+            output_dist=pixelcnn,
             latent_spec=latent_spec,
             batch_size=batch_size,
             image_shape=dataset.image_shape,
             network_type=v["network"],
             inference_dist=inf_dist,
-            wnorm=v["wnorm"],
+            wnorm=True,
             network_args=dict(
                 cond_rep=v["cond_rep"],
-                old_dec=False,
                 base_filters=v["base_filters"],
                 enc_rep=v["rep"],
                 dec_rep=v["rep"],
-                filter_size=4,
             ),
         )
 
-        algo = VAE(
+        algo = ShareVAE(
             model=model,
             dataset=dataset,
             batch_size=batch_size,
@@ -357,7 +228,7 @@ for v in variants[i:i+1]:
                 learning_rate=v["lr"],
                 beta2_sparse=True,
             ),
-            monte_carlo_kl=v["monte_carlo_kl"],
+            monte_carlo_kl=True,
             min_kl=v["min_kl"],
             k=v["k"],
             vali_eval_interval=1500*3*4,
@@ -376,7 +247,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1015_diff_ar_pixelcnn_test",
+            exp_prefix="1016_share_lvae",
             seed=v["seed"],
             variant=v,
             mode="local",
