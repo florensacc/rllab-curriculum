@@ -2117,7 +2117,7 @@ class CondPixelCNN(Distribution):
         x_var = tf.reshape(
             x_var,
             [-1,] + list(self._shape)
-        )
+        ) * 2
 
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 
@@ -2131,6 +2131,16 @@ class CondPixelCNN(Distribution):
             tf.reshape(logli, [-1, self._shape[0] * self._shape[1]]),
             reduction_indices=1
         )
+
+    @functools.lru_cache(maxsize=None)
+    def sample_one_step(self, x_var, info):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+
+        assert "causal_feats" not in info
+        cond_feats = info["cond_feats"]
+        causal_feats = self.infer_temp(x_var)
+        tgt_vec = self.cond_temp(causal_feats, cond_feats)
+        return nn.sample_from_discretized_mix_logistic(tgt_vec, self.nr_logistic_mix) / 2 # convert back to 0.5 scale
 
     def prior_dist_info(self, batch_size):
         return {}

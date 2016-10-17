@@ -21,6 +21,7 @@
 # scaling down to observe performance difference
 
 # sharing lvae
+# fix kl accounting
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -80,7 +81,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [32*2, ]
+        return [32, ]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -241,7 +242,6 @@ for v in variants[i:i+1]:
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
-            kl_coeff=0.,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
@@ -250,7 +250,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1016_FIX_share_lvae_play",
+            exp_prefix="1017_FIXKL_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",
