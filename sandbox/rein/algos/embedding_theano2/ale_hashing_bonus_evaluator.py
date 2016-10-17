@@ -1,7 +1,7 @@
 import numpy as np
 import multiprocessing as mp
 from rllab.misc import logger
-from sandbox.rein.algos.embedding_theano.sim_hash import SimHash
+from sandbox.rein.algos.embedding_theano2.sim_hash import SimHash
 from sandbox.adam.parallel.util import SimpleContainer
 
 

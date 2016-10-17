@@ -1,5 +1,5 @@
 # from rllab.sampler.utils import rollout
-from sandbox.rein.algos.embedding_theano.utils_ram_img import rollout
+from sandbox.rein.algos.embedding_theano2.utils_ram_img import rollout
 import argparse
 import joblib
 import uuid

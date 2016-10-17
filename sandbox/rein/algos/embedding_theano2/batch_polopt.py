@@ -1,5 +1,5 @@
 from rllab.algos.base import RLAlgorithm
-from sandbox.rein.algos.embedding_theano import parallel_sampler_ram_img
+from sandbox.rein.algos.embedding_theano2 import parallel_sampler_ram_img
 from rllab.sampler.base import BaseSampler
 import rllab.misc.logger as logger
 import rllab.plotter as plotter

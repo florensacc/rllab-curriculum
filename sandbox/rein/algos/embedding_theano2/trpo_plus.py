@@ -1,8 +1,8 @@
 import time
 from collections import defaultdict
 
-from sandbox.rein.algos.embedding_theano.plotter import Plotter
-from sandbox.rein.algos.embedding_theano.trpo import TRPO
+from sandbox.rein.algos.embedding_theano2.plotter import Plotter
+from sandbox.rein.algos.embedding_theano2.trpo import TRPO
 from rllab.misc import special
 import numpy as np
 from rllab.misc import tensor_utils

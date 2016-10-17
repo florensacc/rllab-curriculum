@@ -3,8 +3,8 @@ import os
 import lasagne
 
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rein.algos.embedding_theano.theano_atari import AtariEnv
-from sandbox.rein.algos.embedding_theano.trpo_plus import TRPOPlus
+from sandbox.rein.algos.embedding_theano2.theano_atari import AtariEnv
+from sandbox.rein.algos.embedding_theano2.trpo_plus import TRPOPlus
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline

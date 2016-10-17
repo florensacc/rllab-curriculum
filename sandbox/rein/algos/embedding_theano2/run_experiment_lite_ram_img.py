@@ -75,10 +75,10 @@ def run_experiment(argv):
         set_seed(args.seed)
 
     if args.n_parallel > 0:
-        from sandbox.rein.algos.embedding_theano import parallel_sampler
-        parallel_sampler.initialize(n_parallel=args.n_parallel)
+        from sandbox.rein.algos.embedding_theano2 import parallel_sampler_ram_img
+        parallel_sampler_ram_img.initialize(n_parallel=args.n_parallel)
         if args.seed is not None:
-            parallel_sampler.set_seed(args.seed)
+            parallel_sampler_ram_img.set_seed(args.seed)
 
     if args.plot:
         from rllab.plotter import plotter

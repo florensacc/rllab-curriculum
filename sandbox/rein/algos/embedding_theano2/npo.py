@@ -1,6 +1,6 @@
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
-from sandbox.rein.algos.embedding_theano.batch_polopt import BatchPolopt
+from sandbox.rein.algos.embedding_theano2.batch_polopt import BatchPolopt
 import rllab.misc.logger as logger
 import theano
 import theano.tensor as TT
@@ -130,4 +130,5 @@ class NPO(BatchPolopt):
             baseline=self.baseline,
             env=self.env,
             model=self._model,
+            evaluator=self._hashing_evaluator,
         )
