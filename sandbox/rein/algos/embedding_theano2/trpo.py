@@ -1,5 +1,5 @@
 from sandbox.rein.algos.embedding_theano2.npo import NPO
-from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
+from sandbox.rein.algos.embedding_theano2.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 
 
 class TRPO(NPO):

@@ -2,9 +2,8 @@ from rllab.misc import ext
 from rllab.misc.overrides import overrides
 from sandbox.rein.algos.embedding_theano2.batch_polopt import BatchPolopt
 import rllab.misc.logger as logger
-import theano
-import theano.tensor as TT
-from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+
+from sandbox.rein.algos.embedding_theano2.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 
 
 class NPO(BatchPolopt):
@@ -31,6 +30,8 @@ class NPO(BatchPolopt):
 
     @overrides
     def init_opt(self):
+        import theano
+        import theano.tensor as TT
         is_recurrent = int(self.policy.recurrent)
         obs_var = self.env.observation_space.new_tensor_variable(
             'obs',

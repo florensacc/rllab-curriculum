@@ -19,7 +19,7 @@ etas = [0.01]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
-    AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=8)]
+    AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=4)]
 # AtariEnv(game='venture', obs_type="ram+image", frame_skip=8)]
 # AtariEnv(game='private_eye', obs_type="ram+image", frame_skip=4)]
 trpo_batch_size = 50000

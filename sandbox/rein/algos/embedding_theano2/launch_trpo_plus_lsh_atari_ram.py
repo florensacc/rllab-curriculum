@@ -13,7 +13,7 @@ stub(globals())
 
 n_seq_frames = 1
 model_batch_size = 32
-exp_prefix = 'trpo-auto-nopar'
+exp_prefix = 'trpo-auto-test-a'
 seeds = [0]
 etas = [0.01]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
@@ -25,7 +25,7 @@ mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
 trpo_batch_size = 50000
 max_path_length = 4500
 dropout = False
-batch_norm = False
+batch_norm = True
 
 param_cart_product = itertools.product(
     mdps, etas, seeds
@@ -95,7 +95,7 @@ for mdp, eta, seed in param_cart_product:
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
-                 n_units=2,
+                 n_units=1024,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
@@ -106,7 +106,7 @@ for mdp, eta, seed in param_cart_product:
                  batch_norm=batch_norm,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=2,
+                 n_units=1024,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
@@ -213,13 +213,13 @@ for mdp, eta, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix=exp_prefix,
-        n_parallel=2,
+        n_parallel=3,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",
         dry=False,
         use_gpu=True,
-        script="sandbox/rein/algos/embedding_theano/run_experiment_lite_ram_img.py",
+        script="sandbox/rein/algos/embedding_theano2/run_experiment_lite_ram_img.py",
         # Sync every 1h.
         periodic_sync_interval=60 * 60,
         sync_all_data_node_to_s3=True

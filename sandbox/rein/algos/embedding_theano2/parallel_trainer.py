@@ -8,10 +8,13 @@ import time
 
 class ParallelTrainer(object):
     def __init__(self):
-        self._parallel_pool = MemmapingPool(
-            1,
-            temp_folder="/tmp",
-            initializer=self._initialize
+        # self._parallel_pool = MemmapingPool(
+        #     1,
+        #     temp_folder="/tmp",
+        #     initializer=self._initialize
+        # )
+        self._parallel_pool = mp.Pool(
+            1, initializer=self._initialize
         )
         self._model = None
         self._model_pool_args = None
@@ -29,7 +32,8 @@ class ParallelTrainer(object):
 
     @staticmethod
     def _initialize():
-        pass
+        import theano.sandbox.cuda
+        theano.sandbox.cuda.use("gpu")
 
     def _loop(self, q_pool_data_in=None, q_pool_data_out=None, q_pool_data_out_flag=None, q_train_flag=None,
               q_train_param_out=None, q_train_acc_out=None, model_args=None, model_pool_args=None):
@@ -47,7 +51,6 @@ class ParallelTrainer(object):
         # Init theano gpu context before any other theano context is initialized.
         import theano.sandbox.cuda
         theano.sandbox.cuda.use("gpu")
-        theano.sandbox.cuda.cuda_ndarray.cuda_ndarray.gpu_init(0)
         # Init all main var + compile.
         from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
         model = ConvBNNVIME(
@@ -68,7 +71,6 @@ class ParallelTrainer(object):
         # Actual main loop.
         while True:
             while not q_pool_data_in.empty():
-                print('a')
                 lst_sample = q_pool_data_in.get()
                 for sample in lst_sample:
                     pool.add_sample(sample)
@@ -156,9 +158,9 @@ class ParallelTrainer(object):
             # Actual training of model.
             done = 0
             old_running_avg = np.inf
-            while done < 1:
+            while done < 7:
                 running_avg = 0.
-                for _ in range(10):
+                for _ in range(100):
                     # Replay pool return uint8 target format, so decode _x.
                     batch = pool.random_batch(model_pool_args['batch_size'])
                     _x = self.decode_obs(batch['observations'], model)
@@ -168,7 +170,7 @@ class ParallelTrainer(object):
                     assert not np.isnan(train_loss)
                     running_avg += train_loss / 100.
                 running_avg_delta = old_running_avg - running_avg
-                if running_avg_delta < 1e4:
+                if running_avg_delta < 1e-4:
                     done += 1
                 else:
                     old_running_avg = running_avg
@@ -195,3 +197,6 @@ class ParallelTrainer(object):
         # Put updated params in the output queue.
         q_train_param_out.put(model.get_param_values())
         q_train_acc_out.put(acc_after)
+
+
+trainer = ParallelTrainer()

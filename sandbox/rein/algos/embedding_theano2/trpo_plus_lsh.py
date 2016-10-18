@@ -1,7 +1,6 @@
 import time
 
 from sandbox.rein.algos.embedding_theano2.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
-from sandbox.rein.algos.embedding_theano2.parallel_trainer import ParallelTrainer
 from sandbox.rein.algos.embedding_theano2.plotter import Plotter
 from sandbox.rein.algos.embedding_theano2.trpo import TRPO
 from rllab.misc import special
@@ -64,9 +63,11 @@ class TRPOPlusLSH(TRPO):
             self._model_pool_args = model_pool_args
 
     def init_gpu(self):
+
+        from sandbox.rein.algos.embedding_theano2 import parallel_trainer
         # start parallel trainer
         logger.log('parallel trainer')
-        self._model_trainer = ParallelTrainer()
+        self._model_trainer = parallel_trainer.trainer
         if self._train_model:
             self._model_trainer.populate_trainer(self._model_args, self._model_pool_args)
             self._model_trainer.q_pool_data_out_flag.get()
@@ -74,6 +75,7 @@ class TRPOPlusLSH(TRPO):
 
         import theano.sandbox.cuda
         theano.sandbox.cuda.use("gpu")
+
         from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 
         self._model = ConvBNNVIME(
@@ -113,7 +115,6 @@ class TRPOPlusLSH(TRPO):
                 logger.log('Using binary embedding.')
         else:
             logger.log('Model embedding disabled, using LSH directly on states.')
-
 
         self._plotter = Plotter()
 

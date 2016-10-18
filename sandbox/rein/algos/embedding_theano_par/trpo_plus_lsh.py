@@ -61,11 +61,11 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         self.truncate_local_is_ratio = truncate_local_is_ratio
         self.mkl_num_threads = mkl_num_threads
 
-        # FIXME: this is a hack!
-        print('FIXME: this is a hack!! Only works for montezuma.')
-        import joblib
-        data = joblib.load('sandbox/rein/algos/embedding_theano_par/model/params.pkl')
-        model = data['model']
+        # # FIXME: this is a hack!
+        # print('FIXME: this is a hack!! Only works for montezuma.')
+        # import joblib
+        # data = joblib.load('sandbox/rein/algos/embedding_theano_par/model/params.pkl')
+        # model = data['model']
 
         assert eta >= 0
         assert train_model_freq >= 1
