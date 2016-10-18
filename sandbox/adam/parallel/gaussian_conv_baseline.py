@@ -31,6 +31,9 @@ class ParallelGaussianConvBaseline(GaussianConvBaseline):
         """ Do not try to serialize parallel objects."""
         return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
 
+    def __setstate__(self,d):
+        self.__dict__.update(d)
+
     @overrides
     @property
     def algorithm_parallelized(self):
