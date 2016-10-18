@@ -13,15 +13,15 @@ stub(globals())
 
 n_seq_frames = 1
 model_batch_size = 32
-exp_prefix = 'trpo-auto-m'
+exp_prefix = 'trpo-auto-n'
 seeds = [0, 1, 2]
 etas = [0.01]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
     AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=8)]
-    # AtariEnv(game='venture', obs_type="ram+image", frame_skip=4)]
-    #AtariEnv(game='private_eye', obs_type="ram+image", frame_skip=4)]
+# AtariEnv(game='venture', obs_type="ram+image", frame_skip=8)]
+# AtariEnv(game='private_eye', obs_type="ram+image", frame_skip=4)]
 trpo_batch_size = 50000
 max_path_length = 4500
 dropout = False
@@ -213,7 +213,7 @@ for mdp, eta, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix=exp_prefix,
-        n_parallel=2,
+        n_parallel=3,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

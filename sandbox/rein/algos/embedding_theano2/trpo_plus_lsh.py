@@ -1,4 +1,5 @@
 import time
+import pickle
 
 from sandbox.rein.algos.embedding_theano2.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.rein.algos.embedding_theano2.parallel_trainer import ParallelTrainer
@@ -110,7 +111,7 @@ class TRPOPlusLSH(TRPO):
             logger.log('Model embedding disabled, using LSH directly on states.')
 
         if self._train_model:
-            self._model_trainer.populate_trainer(self._model, self._model_pool_args)
+            self._model_trainer.populate_trainer(pickle.dumps(self._model), self._model_pool_args)
 
         self._plotter = Plotter()
 
@@ -319,7 +320,7 @@ class TRPOPlusLSH(TRPO):
             for i in range(path_len):
                 self._model_trainer.add_sample(obs_enc[i])
                 # self._pool.add_sample(obs_enc[i])
-        logger.log('{} samples added to replay pool ({}).'.format(tot_path_len, self._model_trainer._pool.size))
+        logger.log('{} samples added to replay pool'.format(tot_path_len))
 
     def encode_obs(self, obs):
         """
@@ -480,16 +481,16 @@ class TRPOPlusLSH(TRPO):
 
                     # First iteration, train sequentially.
                     if itr == 0:
-                        p = self._model_trainer.train_model()
-                        params = p.get()
+                        self._model_trainer.train_model()
+                        params = self._model_trainer.output_q.get()
                         self._model.set_param_values(params)
 
                     if itr != 0 and itr % self._train_model_freq == 0:
                         if itr != self._train_model_freq:
-                            params = p.get()
+                            params = self._model_trainer.output_q.get()
                             self._model.set_param_values(params)
 
-                        p = self._model_trainer.train_model()
+                        self._model_trainer.train_model()
 
                 # --
                 # Compute intrinisc rewards.
