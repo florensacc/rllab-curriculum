@@ -25,10 +25,6 @@
 
 # observe that nr_cond_nins didnt make that much a difference; but 64 featmaps much better than 32
 
-# this experiment explores
-# 1. staged training so that the unconditional pixelcnn approximately finishes training before conditional part starts
-# 2. varying the number of extra_nins to see if a more powerful pixelcnn is needed
-
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -52,7 +48,7 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 # batch_size = 32 * 3
-batch_size = 32*4
+batch_size = 48*4
 # updates_per_epoch = 100
 
 stub(globals())
@@ -87,7 +83,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [64,96]
+        return [32, 64]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -159,13 +155,7 @@ class VG(VariantGenerator):
     def ar_nr_cond_nins(self, num_gpus):
         return [
             1,
-        ]
-
-    @variant(hide=False)
-    def ar_nr_extra_nins(self, num_gpus):
-        return [
-            0,
-            1,
+            3,
         ]
 
 
@@ -223,7 +213,6 @@ for v in variants[i:i+1]:
             nr_resnets=v["ar_nr_resnets"],
             nr_filters=v["context_dim"],
             nr_cond_nins=v["ar_nr_cond_nins"],
-            nr_extra_nins=v["ar_nr_extra_nins"],
         )
 
         model = RegularizedHelmholtzMachine(
@@ -263,7 +252,6 @@ for v in variants[i:i+1]:
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
-            staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
             # summary_interval=200,
@@ -272,7 +260,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1017_FI_staged_FIXKL_share_lvae_play",
+            exp_prefix="1017_FIXKL_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",
@@ -280,4 +268,5 @@ for v in variants[i:i+1]:
             # n_parallel=0,
             # use_gpu=True,
         )
+
 

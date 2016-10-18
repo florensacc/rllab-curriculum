@@ -133,7 +133,8 @@ class ShareVAE(object):
         if self.slow_kl:
             self.ema_kl = tf.Variable(initial_value=0., trainable=False, name="ema_kl")
         if self.staged:
-            self.staged_cond_mask = tf.Variable(initial_value=0., trainable=False, name="cond_mask")
+            # for data-init, this should be set to 1.
+            self.staged_cond_mask = tf.Variable(initial_value=1., trainable=False, name="cond_mask")
         else:
             self.staged_cond_mask = 1.
 
@@ -479,7 +480,7 @@ class ShareVAE(object):
 
         self.init_opt(init=True)
 
-        prev_bits = 10.
+        prev_bits = -10.
 
         with self.sess.as_default():
             sess = self.sess
@@ -532,6 +533,10 @@ class ShareVAE(object):
                                 ("cv_coeff" in v.name)
                         ]))
                         print("vars initd")
+                        if self.staged:
+                            sess.run(
+                                self.staged_cond_mask.assign(0.)
+                            )
 
                         if self.resume_from is not None:
                             # print("not resuming")
@@ -700,19 +705,21 @@ class ShareVAE(object):
                         if lk == "train":
                             if self.staged:
                                 if k == "bits/dim":
+                                    cur_bits = np.mean(v)
                                     if epoch != 0:
-                                        if v <= prev_bits + 0.1:
-                                            print("cond turned on!!")
+                                        if cur_bits <= prev_bits + 0.1:
+                                            print("cond turned on!! cur: %s, prev: %s" % (cur_bits, prev_bits))
                                             self.staged = False
                                             sess.run(
                                                 self.staged_cond_mask.assign(1.)
                                             )
-                                    prev_bits = prev_bits*0.9 + v*0.1
+                                    prev_bits = prev_bits*0.9 + cur_bits*0.1
 
                 # for k,v in zip(eval_log_keys, avg_test_log_vals):
                 #     logger.record_tabular("vali_%s"%k, v)
 
                 logger.dump_tabular(with_prefix=False)
+                print("staged: %s" % self.staged)
 
                 if self.anneal_after is not None and epoch >= self.anneal_after:
                     if (epoch % self.anneal_every) == 0:

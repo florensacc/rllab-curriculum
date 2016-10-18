@@ -174,7 +174,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -272,7 +272,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1017_FI_staged_FIXKL_share_lvae_play",
+            exp_prefix="1017_PLAY_FI_staged_FIXKL_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

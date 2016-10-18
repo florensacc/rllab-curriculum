@@ -1873,7 +1873,8 @@ class PixelCNN(Distribution):
             shape=(32,32,3),
             nr_resnets=(5, 5, 5),
             nr_filters=64,
-            nr_logistic_mix=10
+            nr_logistic_mix=10,
+            nr_extra_nins=10,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1891,6 +1892,7 @@ class PixelCNN(Distribution):
         self.nr_resnets = nr_resnets
         self.nr_filters = nr_filters
         self.nr_logistic_mix = nr_logistic_mix
+        self.nr_extra_nins = nr_extra_nins
 
     @overrides
     def init_mode(self):
@@ -1913,6 +1915,10 @@ class PixelCNN(Distribution):
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 
 
+        def extra_nin(x):
+            for _ in range(self.nr_extra_nins):
+                x = nn.gated_resnet(x, conv=nn.nin)
+            return x
         counters = {}
         with scopes.arg_scope(
                 [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
