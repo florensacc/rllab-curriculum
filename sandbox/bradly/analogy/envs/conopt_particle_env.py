@@ -111,8 +111,8 @@ class ConoptParticleEnv(Env, Serializable):
         action = action.reshape(env.action_space.shape)
         next_obs, rew, done, infos = env.step(action)
         #print(np.abs(rew))
-        if np.abs(rew) < 0.03:
-            self.switch_goal()
+        #if np.abs(rew) < 0.03:
+        #    self.switch_goal()
 
         return Step(next_obs, rew, done)
 

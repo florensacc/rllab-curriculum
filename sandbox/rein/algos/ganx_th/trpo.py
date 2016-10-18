@@ -1,4 +1,4 @@
-from sandbox.rein.algos.embedding_theano.npo import NPO
+from sandbox.rein.algos.embedding_theano2.npo import NPO
 from rllab.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 
 

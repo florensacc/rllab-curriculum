@@ -351,6 +351,7 @@ def run_experiment_lite(
         variant=None,
         use_gpu=False,
         sync_s3_pkl=False,
+        sync_s3_png=False,
         sync_log_on_termination=True,
         confirm_remote=True,
         terminate_machine=True,
@@ -375,6 +376,8 @@ def run_experiment_lite(
     :param use_gpu: Whether the launched task is running on GPU. This triggers a few configuration changes including
     certain environment flags
     :param sync_s3_pkl: Whether to sync pkl files during execution of the experiment (they will always be synced at
+    the end of the experiment)
+    :param sync_s3_png: Whether to sync png files during execution of the experiment (they will always be synced at
     the end of the experiment)
     :param confirm_remote: Whether to confirm before launching experiments remotely
     :param terminate_machine: Whether to terminate machine after experiment finishes. Only used when using
@@ -507,6 +510,7 @@ def run_experiment_lite(
                    use_gpu=use_gpu,
                    code_full_path=s3_code_path,
                    sync_s3_pkl=sync_s3_pkl,
+                   sync_s3_png=sync_s3_png,
                    sync_log_on_termination=sync_log_on_termination,
                    periodic_sync=periodic_sync,
                    periodic_sync_interval=periodic_sync_interval)
