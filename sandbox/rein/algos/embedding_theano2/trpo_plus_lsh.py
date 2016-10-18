@@ -64,13 +64,15 @@ class TRPOPlusLSH(TRPO):
         else:
             self._model_pool_args = model_pool_args
 
+    def init_gpu(self):
         # start parallel trainer
         self._model_trainer = ParallelTrainer()
+        if self._train_model:
+            self._model_trainer.populate_trainer(self._model_args, self._model_pool_args)
 
-    def init_gpu(self):
-        from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
         import theano.sandbox.cuda
         theano.sandbox.cuda.use("gpu")
+        from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 
         self._model = ConvBNNVIME(
             **self._model_args
@@ -110,8 +112,6 @@ class TRPOPlusLSH(TRPO):
         else:
             logger.log('Model embedding disabled, using LSH directly on states.')
 
-        if self._train_model:
-            self._model_trainer.populate_trainer(pickle.dumps(self._model), self._model_pool_args)
 
         self._plotter = Plotter()
 
@@ -312,14 +312,16 @@ class TRPOPlusLSH(TRPO):
         assert self._train_model
         tot_path_len = 0
         for path in paths:
+            lst_obs_enc = []
             # Encode observations into replay pool format. Also make sure we only add final image in case of
             # autoencoder.
             obs_enc = self.encode_obs(path['env_infos']['images'][:, -np.prod(self._model.state_dim):])
             path_len = len(path['rewards'])
             tot_path_len += path_len
             for i in range(path_len):
-                self._model_trainer.add_sample(obs_enc[i])
+                lst_obs_enc.append(obs_enc[i])
                 # self._pool.add_sample(obs_enc[i])
+            self._model_trainer.add_sample(lst_obs_enc)
         logger.log('{} samples added to replay pool'.format(tot_path_len))
 
     def encode_obs(self, obs):
@@ -409,9 +411,10 @@ class TRPOPlusLSH(TRPO):
         #     model=self._model, inputs=inputs, targets=self._test_obs,
         #     itr=0, dir='/generated')
 
-        if self._train_model and itr % 30 == 0:
+        if self._train_model and itr % 100 == 0:
             logger.log('Plotting random samples ...')
-            batch = self._model_trainer._pool.random_batch(32)
+            self._model_trainer.random_batch(32)
+            batch = self._model_trainer.q_pool_data_out.get()
             _x = self.decode_obs(batch['observations'])
             _y = batch['observations']
             self._plotter.plot_pred_imgs(model=self._model, inputs=_x, targets=_y, itr=0,
@@ -441,12 +444,13 @@ class TRPOPlusLSH(TRPO):
         # --
         # Diagnostics
         self.log_diagnostics(paths)
-        logger.log("Saving snapshot ...")
-        params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
-        if self.store_paths:
-            params["paths"] = samples_data["paths"]
-        logger.save_itr_params(itr, params)
-        logger.log("saved")
+        if itr % 10 == 0:
+            logger.log("Saving snapshot ...")
+            params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
+            if self.store_paths:
+                params["paths"] = samples_data["paths"]
+            logger.save_itr_params(itr, params)
+            logger.log("saved")
         logger.record_tabular('Time', time.time() - start_time)
         logger.dump_tabular(with_prefix=False)
         if self.plot:
@@ -464,8 +468,10 @@ class TRPOPlusLSH(TRPO):
         self.init_gpu()
 
         start_time = time.time()
+        acc = 0.
         for itr in range(self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
+
                 # --
                 # Sample trajectories.
                 paths = self.obtain_samples(itr)
@@ -475,6 +481,7 @@ class TRPOPlusLSH(TRPO):
                 self.preprocess(paths)
 
                 if self._train_model:
+
                     # --
                     # Fill replay pool.
                     self.fill_replay_pool(paths)
@@ -482,15 +489,20 @@ class TRPOPlusLSH(TRPO):
                     # First iteration, train sequentially.
                     if itr == 0:
                         self._model_trainer.train_model()
-                        params = self._model_trainer.output_q.get()
+                        params = self._model_trainer.q_train_param_out.get()
                         self._model.set_param_values(params)
+                        acc = self._model_trainer.q_train_acc_out.get()
 
                     if itr != 0 and itr % self._train_model_freq == 0:
                         if itr != self._train_model_freq:
-                            params = self._model_trainer.output_q.get()
+                            logger.log('Getting update model params ...')
+                            params = self._model_trainer.q_train_param_out.get()
                             self._model.set_param_values(params)
+                            acc = self._model_trainer.q_train_acc_out.get()
+                            logger.log('Model accuracy: {}'.format(acc))
 
                         self._model_trainer.train_model()
+                    logger.record_tabular('AE_accuracy', acc)
 
                 # --
                 # Compute intrinisc rewards.

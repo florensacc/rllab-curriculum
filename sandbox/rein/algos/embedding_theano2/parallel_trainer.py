@@ -6,7 +6,6 @@ from sandbox.rein.dynamics_models.utils import iterate_minibatches
 
 import sys
 import time
-import pickle
 
 
 class ParallelTrainer(object):
@@ -20,20 +19,22 @@ class ParallelTrainer(object):
         self._model_pool_args = None
         self._pool = None
         manager = mp.Manager()
-        # Data q for input data
-        self.data_q = manager.Queue()
+        # Data q for input/output data
+        self.q_pool_data_in = manager.Queue()
+        self.q_pool_data_out = manager.Queue()
+        self.q_pool_data_out_flag = manager.Queue()
         # Param q to input param if needed and to get the train_model exec running.
-        self.param_q = manager.Queue()
+        self.q_train_flag = manager.Queue()
         # Output param q to return learned params.
-        self.output_q = manager.Queue()
+        self.q_train_param_out = manager.Queue()
+        self.q_train_acc_out = manager.Queue()
 
     @staticmethod
     def _initialize():
-        # Init theano gpu context before any other theano context is initialized.
-        import theano.sandbox.cuda
-        theano.sandbox.cuda.use("gpu")
+        pass
 
-    def _loop(self, data_q=None, param_q=None, output_q=None, model=None, model_pool_args=None):
+    def _loop(self, q_pool_data_in=None, q_pool_data_out=None, q_pool_data_out_flag=None, q_train_flag=None,
+              q_train_param_out=None, q_train_acc_out=None, model_args=None, model_pool_args=None):
         """
         Main Loop.
         :param data_q:
@@ -43,10 +44,17 @@ class ParallelTrainer(object):
         :param model_pool_args:
         :return: None
         """
-        assert model is not None
+        assert model_args is not None
         assert model_pool_args is not None
+        # Init theano gpu context before any other theano context is initialized.
+        import theano.sandbox.cuda
+        theano.sandbox.cuda.use("gpu")
         # Init all main var + compile.
-        model = pickle.loads(model)
+        from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
+        model = ConvBNNVIME(
+            **self._model_args
+        )
+
         model_pool_args = model_pool_args
         observation_dtype = "uint8"
         pool = SingleStateReplayPool(
@@ -57,11 +65,17 @@ class ParallelTrainer(object):
         )
         # Actual main loop.
         while True:
-            while not data_q.empty():
-                pool.add_sample(data_q.get())
-            if not param_q.empty():
-                param_q.get()
-                self._train_model(output_q, model, pool, model_pool_args)
+            while not q_pool_data_in.empty():
+                lst_sample = q_pool_data_in.get()
+                for sample in lst_sample:
+                    pool.add_sample(sample)
+            if not q_train_flag.empty():
+                q_train_flag.get()
+                self._train_model(q_train_param_out, q_train_acc_out, model, pool, model_pool_args)
+            if not q_pool_data_out_flag.empty():
+                num_samples = q_pool_data_out_flag.get()
+                samples = pool.random_batch(num_samples)
+                q_pool_data_out.put(samples)
             time.sleep(0.1)
 
     def __getstate__(self):
@@ -75,16 +89,21 @@ class ParallelTrainer(object):
     def terminate(self):
         self._parallel_pool.terminate()
 
-    def add_sample(self, sample):
-        self.data_q.put(sample)
+    def add_sample(self, lst_sample):
+        self.q_pool_data_in.put(lst_sample)
+
+    def random_batch(self, num_samples):
+        self.q_pool_data_out_flag.put(num_samples)
 
     def train_model(self):
-        self.param_q.put(0)
+        self.q_train_flag.put(0)
 
-    def populate_trainer(self, model=None, model_pool_args=None):
+    def populate_trainer(self, model_args=None, model_pool_args=None):
         print('Starting async model training loop.')
-        self._parallel_pool.apply_async(self._loop,
-                                        args=(self.data_q, self.param_q, self.output_q, model, model_pool_args))
+        self._parallel_pool.apply_async(
+            self._loop,
+            args=(self.q_pool_data_in, self.q_pool_data_out, self.q_pool_data_out_flag, self.q_train_flag,
+                  self.q_train_param_out, self.q_train_acc_out, model_args, model_pool_args))
 
     @staticmethod
     def decode_obs(obs, model):
@@ -113,12 +132,13 @@ class ParallelTrainer(object):
             acc += np.sum(np.abs(_o_s - _t))
         return acc / _inputs.shape[0]
 
-    def _train_model(self, output_q=None, model=None, pool=None, model_pool_args=None):
+    def _train_model(self, q_train_param_out=None, q_train_acc_out=None, model=None, pool=None,
+                     model_pool_args=None):
         """
         Train autoencoder model.
         :return:
         """
-        assert output_q is not None
+        assert q_train_param_out is not None
         assert model is not None
         assert pool is not None
         assert model_pool_args is not None
@@ -127,12 +147,6 @@ class ParallelTrainer(object):
         print('Updating autoencoder using replay pool ({}) ...'.format(pool.size))
         sys.stdout.flush()
         if pool.size >= model_pool_args['min_size']:
-
-            for _ in range(10):
-                batch = pool.random_batch(32)
-                _x = self.decode_obs(batch['observations'], model)
-                _y = batch['observations']
-                acc_before += self.accuracy(_x, _y, model) / 10.
 
             # --
             # Actual training of model.
@@ -174,8 +188,6 @@ class ParallelTrainer(object):
             ))
             sys.stdout.flush()
 
-        print("Done training.")
-        sys.stdout.flush()
-
         # Put updated params in the output queue.
-        output_q.put(model.get_param_values())
+        q_train_param_out.put(model.get_param_values())
+        q_train_acc_out.put(acc_after)
