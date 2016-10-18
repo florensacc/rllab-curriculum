@@ -13,7 +13,7 @@ stub(globals())
 
 n_seq_frames = 1
 model_batch_size = 32
-exp_prefix = 'trpo-auto-test'
+exp_prefix = 'trpo-auto-nopar'
 seeds = [0]
 etas = [0.01]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),

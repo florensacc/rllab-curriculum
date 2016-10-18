@@ -1,8 +1,6 @@
 from joblib.pool import MemmapingPool
 import multiprocessing as mp
 import numpy as np
-from sandbox.rein.algos.replay_pool import SingleStateReplayPool
-from sandbox.rein.dynamics_models.utils import iterate_minibatches
 
 import sys
 import time
@@ -49,23 +47,28 @@ class ParallelTrainer(object):
         # Init theano gpu context before any other theano context is initialized.
         import theano.sandbox.cuda
         theano.sandbox.cuda.use("gpu")
+        theano.sandbox.cuda.cuda_ndarray.cuda_ndarray.gpu_init(0)
         # Init all main var + compile.
         from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
         model = ConvBNNVIME(
-            **self._model_args
+            **model_args
         )
 
         model_pool_args = model_pool_args
         observation_dtype = "uint8"
+        from sandbox.rein.algos.replay_pool import SingleStateReplayPool
         pool = SingleStateReplayPool(
             max_pool_size=model_pool_args['size'],
             observation_shape=(np.prod(model.state_dim),),
             observation_dtype=observation_dtype,
             **model_pool_args
         )
+        print('compiled')
+        self.q_pool_data_out_flag.put(0)
         # Actual main loop.
         while True:
             while not q_pool_data_in.empty():
+                print('a')
                 lst_sample = q_pool_data_in.get()
                 for sample in lst_sample:
                     pool.add_sample(sample)
@@ -123,6 +126,7 @@ class ParallelTrainer(object):
         :param _targets:
         :return:
         """
+        from sandbox.rein.dynamics_models.utils import iterate_minibatches
         acc = 0.
         for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
             _i, _t, _ = batch

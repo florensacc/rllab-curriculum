@@ -1,5 +1,4 @@
 import time
-import pickle
 
 from sandbox.rein.algos.embedding_theano2.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.rein.algos.embedding_theano2.parallel_trainer import ParallelTrainer
@@ -66,9 +65,12 @@ class TRPOPlusLSH(TRPO):
 
     def init_gpu(self):
         # start parallel trainer
+        logger.log('parallel trainer')
         self._model_trainer = ParallelTrainer()
         if self._train_model:
             self._model_trainer.populate_trainer(self._model_args, self._model_pool_args)
+            self._model_trainer.q_pool_data_out_flag.get()
+        logger.log('done.')
 
         import theano.sandbox.cuda
         theano.sandbox.cuda.use("gpu")

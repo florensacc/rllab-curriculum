@@ -1,4 +1,3 @@
-import theano
 import numpy as np
 
 
@@ -10,8 +9,8 @@ class ReplayPool(object):
             max_pool_size,
             observation_shape,
             action_dim,
-            observation_dtype=theano.config.floatX,
-            action_dtype=theano.config.floatX,
+            observation_dtype=None,#theano.config.floatX,
+            action_dtype=None,#theano.config.floatX,
             num_seq_frames=1,
             **kwargs
     ):
@@ -136,7 +135,7 @@ class SingleStateReplayPool(object):
             self,
             max_pool_size,
             observation_shape,
-            observation_dtype=theano.config.floatX,
+            observation_dtype=None,#theano.config.floatX,
             subsample_factor=1.0,
             fill_before_subsampling=False,
             **kwargs
