@@ -1631,6 +1631,14 @@ def average_grads(tower_grads):
         average_grads.append(grad_and_var)
     return average_grads
 
+var_assignments = {}
+def cached_assign(var):
+    if var not in var_assignments:
+        print(var)
+        holder = tf.placeholder(var.dtype)
+        op = var.assign(holder)
+        var_assignments[var] = (holder, op)
+    return var_assignments[var]
 
 @contextmanager
 def temp_restore(sess, ema):
@@ -1639,11 +1647,27 @@ def temp_restore(sess, ema):
     else:
         ema_keys = list(ema._averages.keys())
         old_vals = sess.run(ema_keys)
-        _ = sess.run(
-            [tf.assign(var, avg) for var, avg in ema._averages.items()]
-        )
+        ops = []
+        feed = {}
+        for var, avg in ema._averages.items():
+            holder, op = cached_assign(var)
+            ops.append(op)
+            feed[holder] = avg
+        sess.run(ops, feed)
         yield
-        _ = sess.run(
-            [tf.assign(var, avg) for var, avg in zip(ema_keys, old_vals)]
-        )
+        ops = []
+        feed = {}
+        for var, avg in zip(ema_keys, old_vals):
+            holder, op = cached_assign(var)
+            ops.append(op)
+            feed[holder] = avg
+        sess.run(ops, feed)
+
+        # _ = sess.run(
+        #     [tf.assign(var, avg) for var, avg in ema._averages.items()]
+        # )
+        # yield
+        # _ = sess.run(
+        #     [tf.assign(var, avg) for var, avg in zip(ema_keys, old_vals)]
+        # )
 

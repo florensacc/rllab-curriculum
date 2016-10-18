@@ -730,6 +730,9 @@ class ShareVAE(object):
                         ])
                         logger.log("Learning rate annealed to %s" % lr_val)
 
+
+
+
     def restore(self):
 
         self.init_opt(optimizer=False)
