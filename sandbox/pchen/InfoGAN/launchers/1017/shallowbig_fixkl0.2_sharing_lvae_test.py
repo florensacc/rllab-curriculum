@@ -23,7 +23,7 @@
 # sharing lvae
 # fix kl accounting & nr_cond_nins sweep
 
-# observe that nr_cond_nins didnt make that much a difference; but 64 featmaps much better than 32
+# min kl 0.03
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -48,7 +48,8 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 # batch_size = 32 * 3
-batch_size = 48*4
+# batch_size = 48*4
+batch_size = 128*2
 # updates_per_epoch = 100
 
 stub(globals())
@@ -66,12 +67,12 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [256, ]#[12, 32]
+        return [256*2, ]#[12, 32]
         # return [256*2, ]#[12, 32]
 
     @variant
     def min_kl(self):
-        return [0.01, ]# 0.1]
+        return [0.02, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -83,7 +84,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [32, 64]
+        return [64]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -154,8 +155,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_cond_nins(self, num_gpus):
         return [
-            1,
-            3,
+            2,
         ]
 
 
@@ -164,7 +164,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -213,6 +213,7 @@ for v in variants[i:i+1]:
             nr_resnets=v["ar_nr_resnets"],
             nr_filters=v["context_dim"],
             nr_cond_nins=v["ar_nr_cond_nins"],
+            nr_extra_nins=1,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -260,7 +261,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1017_FIXKL_share_lvae_play",
+            exp_prefix="1017_shallowBIGFIXKL0.2_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

@@ -266,18 +266,19 @@ def resnet(x, nonlinearity=concat_elu, conv=conv2d, **kwargs):
     c2 = nin(c1, num_filters, nonlinearity=None, init_scale=0.1, **kwargs)
     return x+c2
 
-@scopes.add_arg_scope
-def gated_resnet(x, nonlinearity=concat_elu, conv=conv2d, **kwargs):
-    num_filters = int(x.get_shape()[-1])
-    c1 = conv(nonlinearity(x), num_filters, nonlinearity=nonlinearity, **kwargs)
-    c2 = nin(c1, num_filters*2, nonlinearity=None, init_scale=0.1, **kwargs)
-    c3 = c2[:,:,:,:num_filters] * tf.nn.sigmoid(c2[:,:,:,num_filters:])
-    return x+c3
+# @scopes.add_arg_scope
+# def gated_resnet(x, nonlinearity=concat_elu, conv=conv2d, **kwargs):
+#     num_filters = int(x.get_shape()[-1])
+#     c1 = conv(nonlinearity(x), num_filters, nonlinearity=nonlinearity, **kwargs)
+#     c2 = nin(c1, num_filters*2, nonlinearity=None, init_scale=0.1, **kwargs)
+#     c3 = c2[:,:,:,:num_filters] * tf.nn.sigmoid(c2[:,:,:,num_filters:])
+#     return x+c3
 
 @scopes.add_arg_scope
 def gated_resnet(x, nonlinearity=concat_elu, conv=conv2d, **kwargs):
     num_filters = int(x.get_shape()[-1])
-    c1 = conv(nonlinearity(x), num_filters, nonlinearity=nonlinearity, **kwargs)
+    c1 = conv(nonlinearity(x), num_filters, nonlinearity=None, **kwargs)
+    c1 = nonlinearity(c1)
     c2 = nin(c1, num_filters*2, nonlinearity=None, init_scale=0.1, **kwargs)
     c3 = c2[:,:,:,:num_filters] * tf.nn.sigmoid(c2[:,:,:,num_filters:])
     return x+c3

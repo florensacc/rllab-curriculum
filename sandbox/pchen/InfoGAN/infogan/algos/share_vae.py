@@ -55,6 +55,7 @@ class ShareVAE(object):
             slow_kl=False,
             lwarm_until=None,
             arwarm_until=None,
+            staged=False,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -67,6 +68,7 @@ class ShareVAE(object):
         Parameters
         ----------
         """
+        self.staged = staged
         self.arwarm_until = arwarm_until
         self.lwarm_until = lwarm_until
         self.slow_kl = slow_kl
@@ -130,6 +132,10 @@ class ShareVAE(object):
 
         if self.slow_kl:
             self.ema_kl = tf.Variable(initial_value=0., trainable=False, name="ema_kl")
+        if self.staged:
+            self.staged_cond_mask = tf.Variable(initial_value=0., trainable=False, name="cond_mask")
+        else:
+            self.staged_cond_mask = 1.
 
         assert not self.cond_px_ent
         assert not self.l2_reg
@@ -196,7 +202,7 @@ class ShareVAE(object):
                 cond_feats = self.model.decode(z_var, raw=True)
                 x_dist_info = dict(
                     causal_feats=causal_feats,
-                    cond_feats=cond_feats,
+                    cond_feats=cond_feats * self.staged_cond_mask,
                 )
 
                 log_p_x_given_z = self.model.output_dist.logli(
@@ -294,7 +300,7 @@ class ShareVAE(object):
                                 self.min_kl * ndim
                             )
                         vlb = tf.reduce_mean(log_p_x_given_z) - (
-                            surr_kl * self.kl_coeff
+                            surr_kl * self.kl_coeff * self.staged_cond_mask
                             if self.kl_coeff != 0 else 0.
                         )
 
@@ -472,6 +478,8 @@ class ShareVAE(object):
         self.sess = sess
 
         self.init_opt(init=True)
+
+        prev_bits = 10.
 
         with self.sess.as_default():
             sess = self.sess
@@ -689,6 +697,18 @@ class ShareVAE(object):
                                 self.ema_kl.assign(np.mean(v))
                             )
 
+                        if lk == "train":
+                            if self.staged:
+                                if k == "bits/dim":
+                                    if epoch != 0:
+                                        if v <= prev_bits + 0.1:
+                                            print("cond turned on!!")
+                                            self.staged = False
+                                            sess.run(
+                                                self.staged_cond_mask.assign(1.)
+                                            )
+                                    prev_bits = prev_bits*0.9 + v*0.1
+
                 # for k,v in zip(eval_log_keys, avg_test_log_vals):
                 #     logger.record_tabular("vali_%s"%k, v)
 
@@ -702,7 +722,6 @@ class ShareVAE(object):
                             )
                         ])
                         logger.log("Learning rate annealed to %s" % lr_val)
-
 
     def restore(self):
 

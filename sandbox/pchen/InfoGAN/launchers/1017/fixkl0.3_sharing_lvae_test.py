@@ -23,7 +23,7 @@
 # sharing lvae
 # fix kl accounting & nr_cond_nins sweep
 
-# observe that nr_cond_nins didnt make that much a difference; but 64 featmaps much better than 32
+# min kl 0.03
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -71,7 +71,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.01, ]# 0.1]
+        return [0.03, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -83,7 +83,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [32, 64]
+        return [64]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -154,7 +154,6 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_cond_nins(self, num_gpus):
         return [
-            1,
             3,
         ]
 
@@ -164,7 +163,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -260,7 +259,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1017_FIXKL_share_lvae_play",
+            exp_prefix="1017_FIXKL0.3_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

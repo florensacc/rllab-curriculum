@@ -2004,7 +2004,9 @@ class CondPixelCNN(Distribution):
             shape=(32,32,3),
             nr_resnets=(5, 5, 5),
             nr_filters=64,
-            nr_logistic_mix=10
+            nr_cond_nins=1,
+            nr_logistic_mix=10,
+            nr_extra_nins=0,
     ):
         Serializable.quick_init(self, locals())
 
@@ -2026,6 +2028,8 @@ class CondPixelCNN(Distribution):
         self.nr_resnets = nr_resnets
         self.nr_filters = nr_filters
         self.nr_logistic_mix = nr_logistic_mix
+        self.nr_cond_nins = nr_cond_nins
+        self.nr_extra_nins = nr_extra_nins
 
     @overrides
     def init_mode(self):
@@ -2050,6 +2054,10 @@ class CondPixelCNN(Distribution):
             x,
             [-1,] + list(self._shape)
         )
+        def extra_nin(x):
+            for _ in range(self.nr_extra_nins):
+                x = nn.gated_resnet(x, conv=nn.nin)
+            return x
 
         counters = {}
         with scopes.arg_scope(
@@ -2083,14 +2091,18 @@ class CondPixelCNN(Distribution):
             for idx, nr_resnet in enumerate(self.nr_resnets[:0:-1]):
                 for rep in range(nr_resnet+(0 if idx == 0 else 1)):
                     u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                    u = extra_nin(u)
                     ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+                    ul = extra_nin(ul)
 
                 u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
                 ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
 
             for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
                 u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                u = extra_nin(u)
                 ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+                ul = extra_nin(ul)
 
             x_out = nn.nin(nn.concat_elu(ul), self.nr_filters)
 
@@ -2103,12 +2115,30 @@ class CondPixelCNN(Distribution):
         import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 
+        # old cond arch
+        # counters = {}
+        # with scopes.arg_scope(
+        #         [nn.nin],
+        #         counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        # ):
+        #     gated = nn.aux_gated_resnet(x, c, conv=nn.nin)
+        #     x_out = nn.nin(nn.concat_elu(gated), 10*self.nr_logistic_mix)
+
+        # new cond arch
         counters = {}
         with scopes.arg_scope(
                 [nn.nin],
                 counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
         ):
-            gated = nn.aux_gated_resnet(x, c, conv=nn.nin)
+            gated = tf.concat(
+                3,
+                [
+                    nn.aux_gated_resnet(x, c, conv=nn.nin),
+                    nn.aux_gated_resnet(c, x, conv=nn.nin),
+                ],
+            )
+            for _ in range(self.nr_cond_nins):
+                gated = nn.gated_resnet(gated, conv=nn.nin)
             x_out = nn.nin(nn.concat_elu(gated), 10*self.nr_logistic_mix)
 
         return x_out
