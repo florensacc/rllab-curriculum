@@ -33,7 +33,8 @@
 # some gain from 0 extranin -> 1 extra nin (0.01)
 # staging introduced however instability when cond is turned on
 
-# ^ this hence explores no kl
+# discover the crazy thing that ar is made
+# rerun good setups w/ conv ar w/o staging
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -81,7 +82,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0., 0.01]# 0.1]
+        return [0.01, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -93,7 +94,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [96]
+        return [64,96]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -170,7 +171,8 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            1, 3
+            0,
+            1,
         ]
 
 
@@ -277,7 +279,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1018_nokl_staged_FIXKL_share_lvae_play",
+            exp_prefix="1018_convar_FIXKL_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

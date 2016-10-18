@@ -505,6 +505,25 @@ class ShareVAE(object):
             logger.log("# of parameter vars %s" % len(tf.trainable_variables()))
             logger.log("total parameters %s" % total_parameters)
 
+            keys = ["cond", "infer", ]
+            for key in keys:
+                counter = 0
+                total_parameters = 0
+                for variable in tf.trainable_variables():
+                    if key not in variable.name:
+                        continue
+                    # shape is an array of tf.Dimension
+                    shape = variable.get_shape()
+                    # print(shape) print(len(shape))
+                    variable_parametes = 1
+                    for dim in shape:
+                        # print(dim)
+                        variable_parametes *= dim.value
+                    # print(variable_parametes)
+                    total_parameters += variable_parametes
+                logger.log("# of parameter vars %s" % len(tf.trainable_variables()))
+                logger.log("%s total parameters %s" % (key,total_parameters))
+
             for epoch in range(self.max_epoch):
                 self.pre_epoch(epoch, locals())
 

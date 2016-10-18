@@ -33,8 +33,6 @@
 # some gain from 0 extranin -> 1 extra nin (0.01)
 # staging introduced however instability when cond is turned on
 
-# ^ this hence explores no kl
-
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -81,7 +79,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0., 0.01]# 0.1]
+        return [0.01, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -93,7 +91,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [96]
+        return [64,]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -170,7 +168,8 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            1, 3
+            # 0,
+            1,
         ]
 
 
@@ -179,7 +178,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -273,11 +272,12 @@ for v in variants[i:i+1]:
             # img_on=True,
             # summary_interval=200,
             # resume_from="/home/peter/rllab-private/data/local/play-0917-hybrid-cc-cifar-ml-3l-dc/play_0917_hybrid_cc_cifar_ml_3l_dc_2016_09_18_02_32_09_0001",
+            resume_from="data/local/1017-FI-staged-FIXKL-share-lvae-play/1017_FI_staged_FIXKL_share_lvae_play_2016_10_17_23_48_03_0001",
         )
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1018_nokl_staged_FIXKL_share_lvae_play",
+            exp_prefix="1018_resume_FI_staged_FIXKL_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

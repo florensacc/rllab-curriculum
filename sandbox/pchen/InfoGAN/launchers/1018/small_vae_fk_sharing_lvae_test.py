@@ -35,6 +35,9 @@
 
 # ^ this hence explores no kl
 
+# this is based on the observation that as kl is used more, overfitting is started to be observed.
+# try smaller vae
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -81,11 +84,13 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0., 0.01]# 0.1]
+        return [0.01]# 0.1]
     #
     @variant(hide=False)
     def network(self):
-        yield "pixelcnn_based_shared_spatial_code"
+        # yield "pixelcnn_based_shared_spatial_code"
+        yield "pixelcnn_based_shared_spatial_code_tiny"
+        # yield "dummy"
 
     @variant(hide=False)
     def rep(self, ):
@@ -93,7 +98,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [96]
+        return [64]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -109,11 +114,12 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, ]
+        return [0,]
 
     @variant(hide=False)
-    def nr(self):
-        return [6,]
+    def nr(self, zdim, base_filters):
+        return [4]
+        # return [base_filters // (zdim // 8 // 8 * 2) , ]
 
     @variant(hide=False)
     def i_nar(self):
@@ -170,8 +176,12 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            1, 3
+            1
         ]
+
+    @variant
+    def enc_tie_weights(self):
+        return [True, False]
 
 
 vg = VG()
@@ -179,7 +189,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -201,6 +211,7 @@ for v in variants[i:i+1]:
                 dist,
                 neuron_ratio=v["nr"],
                 data_init_wnorm=True,
+                img_shape=[8,8,zdim//64],
             )
 
         latent_spec = [
@@ -244,6 +255,7 @@ for v in variants[i:i+1]:
                 base_filters=v["base_filters"],
                 enc_rep=v["rep"],
                 dec_rep=v["rep"],
+                enc_tie_weights=v["enc_tie_weights"],
             ),
         )
 
@@ -277,7 +289,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1018_nokl_staged_FIXKL_share_lvae_play",
+            exp_prefix="1018_FAR_small_vae_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

@@ -376,7 +376,7 @@ for v in variants[i:i+1]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1500*3*4,
+            vali_eval_interval=1,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,

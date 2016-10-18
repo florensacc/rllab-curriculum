@@ -1954,11 +1954,15 @@ class PixelCNN(Distribution):
                     ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
 
                 u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
+                u = extra_nin(u)
                 ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
+                ul = extra_nin(ul)
 
             for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
                 u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                u = extra_nin(u)
                 ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+                ul = extra_nin(ul)
 
             x_out = nn.nin(nn.concat_elu(ul), 10*self.nr_logistic_mix)
 
@@ -2120,6 +2124,14 @@ class CondPixelCNN(Distribution):
     def cond(self, x, c):
         import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+        x = tf.reshape(
+            x,
+            [-1,] + list(self._shape[:2]) + [self.nr_filters]
+        )
+        c = tf.reshape(
+            c,
+            [-1,] + list(self._shape[:2]) + [self.nr_filters]
+        )
 
         # old cond arch
         # counters = {}

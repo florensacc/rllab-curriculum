@@ -685,6 +685,9 @@ class VAE(object):
                         ])
                         logger.log("Learning rate annealed to %s" % lr_val)
 
+                # if epoch == 0:
+                #     tf.get_default_graph().finalize()
+
 
     def restore(self):
 

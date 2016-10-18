@@ -1221,12 +1221,12 @@ def resize_nearest_neighbor(x, scale):
     x = tf.image.resize_nearest_neighbor(x, size)
     return x
 
-def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None, conv_args=None):
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None, conv_args=None, nin=False):
     return resconv_v1_customconv(
         "conv2d_mod",
         conv_args,
         l_in=l_in, kernel=kernel, nch=nch, stride=stride, add_coeff=add_coeff,
-        keep_prob=keep_prob, nn=nn, context=context
+        keep_prob=keep_prob, nn=nn, context=context, nin=nin
     )
     # seq = l_in.sequential()
     # with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
@@ -1634,10 +1634,13 @@ def average_grads(tower_grads):
 var_assignments = {}
 def cached_assign(var):
     if var not in var_assignments:
-        print(var)
-        holder = tf.placeholder(var.dtype)
+        # print("first", var.name)
+        holder = tf.placeholder(var.dtype, shape=int_shape(var))
         op = var.assign(holder)
         var_assignments[var] = (holder, op)
+    else:
+        # print("second", var.name)
+        pass
     return var_assignments[var]
 
 @contextmanager
@@ -1646,10 +1649,12 @@ def temp_restore(sess, ema):
         yield
     else:
         ema_keys = list(ema._averages.keys())
+        ema_avgs = [ema._averages[k] for k in ema_keys]
         old_vals = sess.run(ema_keys)
+        avg_vals = sess.run(ema_avgs)
         ops = []
         feed = {}
-        for var, avg in ema._averages.items():
+        for var, avg in zip(ema_keys, avg_vals):
             holder, op = cached_assign(var)
             ops.append(op)
             feed[holder] = avg
