@@ -993,6 +993,7 @@ class AR(Distribution):
             clip=False,
             squash=False,
             ar_channels=False,
+            mean_only=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1015,6 +1016,7 @@ class AR(Distribution):
         self._clip = clip
         self._squash = squash
         self._iaf_template = pt.template("y", books=dist_book)
+        self._mean_only = mean_only
         if linear_context:
             lin_con = pt.template("linear_context", books=dist_book)
             self._linear_context_dim = 2*dim*neuron_ratio
@@ -1183,6 +1185,9 @@ class AR(Distribution):
         if self._squash:
             iaf_mu = tf.tanh(iaf_mu)*2.7
             iaf_logstd = tf.tanh(iaf_logstd)*1.5
+        if self._mean_only:
+            # TODO: fixme! wasteful impl
+            iaf_logstd = tf.zeros_like(iaf_mu)
         return iaf_mu, (iaf_logstd)
 
     def logli(self, x_var, dist_info):

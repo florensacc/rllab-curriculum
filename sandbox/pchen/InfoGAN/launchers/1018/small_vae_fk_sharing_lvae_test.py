@@ -38,6 +38,9 @@
 # this is based on the observation that as kl is used more, overfitting is started to be observed.
 # try smaller vae
 
+
+# !!!! exhibiting very interesting behavior that train: 3.08 -> 3.8 (first epoch) and then decrease again!
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer

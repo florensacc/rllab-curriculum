@@ -36,6 +36,10 @@
 # discover the crazy thing that ar is made
 # rerun good setups w/ conv ar w/o staging
 
+
+# straightup 0.01 lr fails!
+# try mean only ar
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -69,7 +73,10 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.002, ] #0.001]
+        return [
+            0.002,
+            # 0.01
+        ] #0.001]
 
     @variant
     def seed(self):
@@ -181,7 +188,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
