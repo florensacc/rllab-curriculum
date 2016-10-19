@@ -1,6 +1,6 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from sandbox.rocky.tf.algos.trpo import TRPO
+
+
+from sandbox.rocky.tf.algos.ppo import PPO
 from sandbox.rocky.tf.misc import tensor_utils
 from rllab.misc import logger
 from rllab.misc import special
@@ -8,24 +8,14 @@ from rllab.algos import util
 import numpy as np
 
 
-class BonusTRPO(TRPO):
-    def __init__(self, bonus_evaluator, bonus_coeff, clip_reward=True, *args, **kwargs):
+class BonusPPO(PPO):
+    def __init__(self, bonus_evaluator, bonus_coeff, *args, **kwargs):
         self.bonus_evaluator = bonus_evaluator
         self.bonus_coeff = bonus_coeff
-        self.clip_reward = clip_reward
-        super(BonusTRPO, self).__init__(*args, **kwargs)
-
-    def get_itr_snapshot(self, itr, samples_data):
-        return dict(
-            itr=itr,
-            policy=self.policy,
-            baseline=self.baseline,
-            env=self.env,
-            bonus_evaluator=self.bonus_evaluator,
-        )
+        super(BonusPPO, self).__init__(*args, **kwargs)
 
     def log_diagnostics(self, paths):
-        super(BonusTRPO, self).log_diagnostics(paths)
+        super(BonusPPO, self).log_diagnostics(paths)
         self.bonus_evaluator.log_diagnostics(paths)
 
     def process_samples(self, itr, paths):
@@ -39,12 +29,8 @@ class BonusTRPO(TRPO):
         returns = []
         for path in paths:
             bonuses = self.bonus_evaluator.predict(path)
-            path["bonus_rewards"] = self.bonus_coeff * bonuses
             path["raw_rewards"] = path["rewards"]
-            if self.clip_reward:
-                path["rewards"] = np.clip(path["raw_rewards"], -1, 1) + path["bonus_rewards"]
-            else:
-                path["rewards"] = path["raw_rewards"] + path["bonus_rewards"]
+            path["rewards"] = path["raw_rewards"] + self.bonus_coeff * bonuses
             path_baselines = np.append(self.baseline.predict(path), 0)
             deltas = path["rewards"] + \
                      self.discount * path_baselines[1:] - \
@@ -74,12 +60,6 @@ class BonusTRPO(TRPO):
                 np.mean([path["raw_returns"][0] for path in paths])
 
             undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
-            if "prior_reward" in paths[0]["env_infos"]:
-                undiscounted_returns = [
-                    R + sum(path["env_infos"]["prior_reward"])
-                    for R, path in zip(undiscounted_returns, paths)
-                ]
-
             undiscounted_bonus_returns = [sum(path["rewards"]) for path in paths]
 
             ent = np.mean(self.policy.distribution.entropy(agent_infos))
@@ -138,11 +118,6 @@ class BonusTRPO(TRPO):
                 np.mean([path["returns"][0] for path in paths])
 
             undiscounted_returns = [sum(path["raw_rewards"]) for path in paths]
-            if "prior_reward" in paths[0]["env_infos"]:
-                undiscounted_returns = [
-                    R + sum(path["env_infos"]["prior_reward"])
-                    for R, path in zip(undiscounted_returns, paths)
-                ]
             undiscounted_bonus_returns = [sum(path["rewards"]) for path in paths]
 
             ent = np.sum(self.policy.distribution.entropy(agent_infos) * valids) / np.sum(valids)
@@ -174,17 +149,14 @@ class BonusTRPO(TRPO):
         logger.record_tabular('Iteration', itr)
         logger.record_tabular('AverageDiscountedReturn',
                               average_discounted_return)
+        logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
         logger.record_tabular('AverageBonusReturn', np.mean(undiscounted_bonus_returns))
         logger.record_tabular('ExplainedVariance', ev)
         logger.record_tabular('NumTrajs', len(paths))
         logger.record_tabular('Entropy', ent)
         logger.record_tabular('Perplexity', np.exp(ent))
-        logger.record_tabular_misc_stat('Return', undiscounted_returns)
-
-        all_bonus_rewards = np.concatenate([path["bonus_rewards"] for path in paths])
-        logger.record_tabular_misc_stat('BonusReward', all_bonus_rewards)
-
-        path_lens = [len(path["rewards"]) for path in paths]
-        logger.record_tabular_misc_stat("PathLen", path_lens)
+        logger.record_tabular('StdReturn', np.std(undiscounted_returns))
+        logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
+        logger.record_tabular('MinReturn', np.min(undiscounted_returns))
 
         return samples_data

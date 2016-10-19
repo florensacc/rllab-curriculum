@@ -1,15 +1,17 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-info = """Reconciling CartpoleSwingupEnvX experiments with VIME results."""
+info = """Trying ppo with large batch on half cheetah."""
 
 from rllab.misc.instrument import stub, run_experiment_lite
-from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from sandbox.rocky.hashing.algos.bonus_trpo import BonusTRPO
-from sandbox.rocky.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
-from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.envs.normalized_env import normalize
+from sandbox.davis.hashing.algos.bonus_ppo import BonusPPO
+from sandbox.davis.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
+from sandbox.davis.envs.half_cheetah_env_x import HalfCheetahEnvX
 from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
+from rllab import config
 
 import sys
 import argparse
@@ -21,26 +23,17 @@ from rllab.misc.instrument import VariantGenerator
 N_ITR = 1000
 N_ITR_DEBUG = 5
 
-envs = [CartpoleSwingupEnvX()]
+config.AWS_INSTANCE_TYPE = "c4.xlarge"
 
 
 def experiment_variant_generator():
     vg = VariantGenerator()
-    vg.add("env", map(TfEnv, envs), hide=True)
-    vg.add("batch_size", [5000], hide=True)
-    vg.add("step_size", [0.01], hide=True)
-    vg.add("max_path_length", [500], hide=True)
+    vg.add("min_reward_dist", [5.0])
     vg.add("discount", [0.995], hide=True)
-    vg.add("seed", range(5, 15), hide=True)
-    vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1])
-    vg.add("dim_key", [128])
-    vg.add("bonus_evaluator",
-           lambda env, dim_key: [HashingBonusEvaluator(env.spec, dim_key=dim_key)],
-           hide=True)
-    vg.add("baseline",
-           lambda env: [GaussianMLPBaseline(env.spec, regressor_args=dict(hidden_sizes=(32,),
-                                                                          batchsize=1000000))],
-           hide=True)
+    vg.add("seed", range(5), hide=True)
+    vg.add("bonus_coeff", [0, 0.00001, 0.0001, 0.001, 0.01])
+    vg.add("dim_key", [32, 64, 128])
+    vg.add("batch_size", [5000], hide=True)
     return vg
 
 
@@ -81,27 +74,27 @@ if __name__ == '__main__':
         if exp_name == '':
             exp_name = None
 
+        env = TfEnv(normalize(HalfCheetahEnvX(variant["min_reward_dist"])))
+        baseline = LinearFeatureBaseline(env.spec)
+        bonus_evaluator = HashingBonusEvaluator(env.spec, dim_key=variant["dim_key"])
+
         policy = GaussianMLPPolicy(
             name="policy",
-            env_spec=variant["env"].spec,
-            hidden_sizes=(32,),
+            env_spec=env.spec,
         )
 
-        algo = BonusTRPO(
-            bonus_evaluator=variant["bonus_evaluator"],
+        algo = BonusPPO(
+            bonus_evaluator=bonus_evaluator,
             bonus_coeff=variant["bonus_coeff"],
-            env=variant["env"],
+            env=env,
             policy=policy,
-            baseline=variant["baseline"],
+            baseline=baseline,
             batch_size=variant["batch_size"],
             whole_paths=True,
-            max_path_length=variant["max_path_length"],
+            max_path_length=500,
             n_itr=N_ITR,
             discount=variant["discount"],
-            step_size=variant["step_size"],
-            optimizer_args=dict(
-                # num_slices=1,
-                subsample_factor=0.1),
+            step_size=0.01,
             plot=args.visualize and args.local,
         )
 

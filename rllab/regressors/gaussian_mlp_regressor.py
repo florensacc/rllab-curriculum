@@ -66,6 +66,9 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         self._batchsize = batchsize
         self._subsample_factor = subsample_factor
 
+        self.input_shape = input_shape
+        self.output_dim = output_dim
+
         if optimizer is None:
             if use_trust_region:
                 optimizer = PenaltyLbfgsOptimizer()

@@ -1,15 +1,11 @@
-from __future__ import print_function
-from __future__ import absolute_import
-
-info = """Reconciling CartpoleSwingupEnvX experiments with VIME results."""
+info = """{Explanation of experiment}"""
 
 from rllab.misc.instrument import stub, run_experiment_lite
-from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from sandbox.rocky.hashing.algos.bonus_trpo import BonusTRPO
-from sandbox.rocky.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
-from sandbox.rein.envs.cartpole_swingup_env_x import CartpoleSwingupEnvX
-from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from sandbox.rocky.tf.envs.base import TfEnv
+from sandbox.davis.traffic.traffic_env import TrafficEnv
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.envs.normalized_env import normalize
+from rllab.algos.trpo import TRPO
+from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 import sys
 import argparse
@@ -18,29 +14,22 @@ stub(globals())
 
 from rllab.misc.instrument import VariantGenerator
 
-N_ITR = 1000
+N_ITR = 100
 N_ITR_DEBUG = 5
-
-envs = [CartpoleSwingupEnvX()]
 
 
 def experiment_variant_generator():
     vg = VariantGenerator()
-    vg.add("env", map(TfEnv, envs), hide=True)
-    vg.add("batch_size", [5000], hide=True)
+    vg.add("env", list(map(normalize, [TrafficEnv()])), hide=True)
+    vg.add("batch_size", [4000], hide=True)
     vg.add("step_size", [0.01], hide=True)
-    vg.add("max_path_length", [500], hide=True)
-    vg.add("discount", [0.995], hide=True)
-    vg.add("seed", range(5, 15), hide=True)
-    vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1])
-    vg.add("dim_key", [128])
-    vg.add("bonus_evaluator",
-           lambda env, dim_key: [HashingBonusEvaluator(env.spec, dim_key=dim_key)],
-           hide=True)
+    vg.add("max_path_length", [100], hide=True)
+    vg.add("discount", [0.99], hide=True)
+    vg.add("seed", [1, 11, 21, 31, 41], hide=True)
     vg.add("baseline",
-           lambda env: [GaussianMLPBaseline(env.spec, regressor_args=dict(hidden_sizes=(32,),
-                                                                          batchsize=1000000))],
-           hide=True)
+           lambda env: [LinearFeatureBaseline(env.spec)],
+           hide=True
+           )
     return vg
 
 
@@ -82,14 +71,11 @@ if __name__ == '__main__':
             exp_name = None
 
         policy = GaussianMLPPolicy(
-            name="policy",
             env_spec=variant["env"].spec,
-            hidden_sizes=(32,),
+            hidden_sizes=(16,)
         )
 
-        algo = BonusTRPO(
-            bonus_evaluator=variant["bonus_evaluator"],
-            bonus_coeff=variant["bonus_coeff"],
+        algo = TRPO(
             env=variant["env"],
             policy=policy,
             baseline=variant["baseline"],
@@ -99,9 +85,6 @@ if __name__ == '__main__':
             n_itr=N_ITR,
             discount=variant["discount"],
             step_size=variant["step_size"],
-            optimizer_args=dict(
-                # num_slices=1,
-                subsample_factor=0.1),
             plot=args.visualize and args.local,
         )
 
