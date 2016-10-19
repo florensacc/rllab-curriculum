@@ -1,6 +1,4 @@
-"""
-Test whatever you want here
-"""
+# entropy schedule seems to be working! deploying to more games
 
 import logging
 import os,sys
@@ -33,7 +31,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [42, ]
+        return [42, 888, 44]
 
     @variant
     def total_t(self):
@@ -43,7 +41,7 @@ class VG(VariantGenerator):
 
     @variant
     def n_processes(self):
-        return [19, ]
+        return [18, ]
 
     # @variant
     # def entropy_bonus(self):
@@ -60,12 +58,12 @@ class VG(VariantGenerator):
     @variant
     def eval_frequency(self, target_update_frequency):
         # yield target_update_frequency * 1
-        yield 100000
+        yield 500000
 
     @variant
     def game(self, ):
-        # return ["pong", ]
-        return ["space_invaders"]
+        return ["pong", "breakout", "space_invaders"]
+        # return ["space_invaders"]
         # return ["breakout"]
         # return ["seaquest", "enduro", "breakout",]
 
@@ -89,7 +87,7 @@ class VG(VariantGenerator):
     def lr(self, ):
         yield 7e-4
         # yield 1e-4
-        # yield 2e-3
+        yield 2e-3
         # yield 5e-3
 
     @variant
@@ -180,27 +178,27 @@ for v in variants[:]:
     )
     run_experiment_lite(
         algo.train(),
-        exp_prefix="1004_dqn_boltmann_temp",
+        exp_prefix="1019_boltmann_adaptive_ent",
         seed=v["seed"],
         variant=v,
         # mode="local_docker",
-        mode="local",
+        # mode="local",
         #
 
-        # mode="lab_kube",
-        # n_parallel=0,
-        # use_gpu=False,
-        # node_selector={
-        #     "aws/type": "c4.8xlarge",
-        #     "openai/computing": "true",
-        # },
-        # resources=dict(
-        #     requests=dict(
-        #         cpu=17.1,
-        #     ),
-        #     limits=dict(
-        #         cpu=17.1,
-        #     )
-        # )
+        mode="lab_kube",
+        n_parallel=0,
+        use_gpu=False,
+        node_selector={
+            "aws/type": "c4.8xlarge",
+            "openai/computing": "true",
+        },
+        resources=dict(
+            requests=dict(
+                cpu=17.1,
+            ),
+            limits=dict(
+                cpu=17.1,
+            )
+        )
     )
 
