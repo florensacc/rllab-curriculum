@@ -40,6 +40,8 @@
 
 # error: no nar used!
 
+# using nar & experiment with radically smaller min kl
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -86,7 +88,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.01]# 0.1]
+        return [0.01,0.001]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -116,7 +118,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [0,]
+        return [4,]
 
     @variant(hide=False)
     def nr(self, zdim, base_filters):
@@ -183,7 +185,7 @@ class VG(VariantGenerator):
 
     @variant
     def enc_tie_weights(self):
-        return [True, False]
+        return [True, ]
 
 
 vg = VG()
@@ -191,7 +193,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -214,6 +216,7 @@ for v in variants[i:i+1]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=True,
                 img_shape=[8,8,zdim//64],
+                mean_only=True,
             )
 
         latent_spec = [
@@ -291,7 +294,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1018_FAR_small_vae_share_lvae_play",
+            exp_prefix="1019_real_FAR_small_vae_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

@@ -33,6 +33,8 @@
 # some gain from 0 extranin -> 1 extra nin (0.01)
 # staging introduced however instability when cond is turned on
 
+# !!!! exhibiting very interesting behavior that train: 3.08 -> 3.8 (first epoch) and then decrease again!
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer

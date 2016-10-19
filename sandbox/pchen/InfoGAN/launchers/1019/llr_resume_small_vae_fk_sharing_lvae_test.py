@@ -38,7 +38,8 @@
 # this is based on the observation that as kl is used more, overfitting is started to be observed.
 # try smaller vae
 
-# error: no nar used!
+
+# try resuming with large llr
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -73,7 +74,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.002, ] #0.001]
+        return [0.002*5, ] #0.001]
 
     @variant
     def seed(self):
@@ -86,7 +87,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.01]# 0.1]
+        return [0.01,0.]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -183,7 +184,7 @@ class VG(VariantGenerator):
 
     @variant
     def enc_tie_weights(self):
-        return [True, False]
+        return [True, ]
 
 
 vg = VG()
@@ -282,6 +283,7 @@ for v in variants[i:i+1]:
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
+            resume_from="data/local/1018-FAR-small-vae-share-lvae-play/1018_FAR_small_vae_share_lvae_play_2016_10_18_15_35_34_0001",
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
@@ -291,7 +293,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1018_FAR_small_vae_share_lvae_play",
+            exp_prefix="1019_llr_resume_FAR_small_vae_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

@@ -56,6 +56,7 @@ class ShareVAE(object):
             lwarm_until=None,
             arwarm_until=None,
             staged=False,
+            unconditional=False,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -68,6 +69,7 @@ class ShareVAE(object):
         Parameters
         ----------
         """
+        self.unconditional = unconditional
         self.staged = staged
         self.arwarm_until = arwarm_until
         self.lwarm_until = lwarm_until
@@ -205,6 +207,8 @@ class ShareVAE(object):
                     causal_feats=causal_feats,
                     cond_feats=cond_feats * self.staged_cond_mask,
                 )
+                if self.unconditional:
+                    x_dist_info["cond_feats"] = 0. * x_dist_info["cond_feats"]
 
                 log_p_x_given_z = self.model.output_dist.logli(
                     tf.reshape(
