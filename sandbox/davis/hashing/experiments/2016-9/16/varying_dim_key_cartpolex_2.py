@@ -31,9 +31,9 @@ def experiment_variant_generator():
     vg.add("step_size", [0.01], hide=True)
     vg.add("max_path_length", [500], hide=True)
     vg.add("discount", [0.995], hide=True)
-    vg.add("seed", range(5), hide=True)
+    vg.add("seed", range(5, 15), hide=True)
     vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1])
-    vg.add("dim_key", [32, 64, 128])
+    vg.add("dim_key", [128])
     vg.add("bonus_evaluator",
            lambda env, dim_key: [HashingBonusEvaluator(env.spec, dim_key=dim_key)],
            hide=True)

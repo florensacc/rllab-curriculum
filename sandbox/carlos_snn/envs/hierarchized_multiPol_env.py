@@ -40,8 +40,9 @@ class HierarchizedMultiPoliEnv(ProxyEnv, Serializable):
         else:
             raise Exception("No path no file given")
 
-        assert isinstance(env, MazeEnv) or isinstance(env.wrapped_env,
-                                                      MazeEnv), "the obsSpaces mismatch but it's not a maze (by Carlos)"
+        # assert isinstance(env, MazeEnv) or isinstance(env.wrapped_env,
+        #                                               MazeEnv), "the obsSpaces mismatch but it's not a maze (by Carlos)"
+
         # I need to define a new hier-policy that will cope with that!
         self.low_policy = GaussianMLPPolicy_multi_hier(
             env_spec=env.spec,

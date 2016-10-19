@@ -9,4 +9,4 @@ class AnalogyPolicy(Policy):
         :param path: The demonstration path, consisting of observations, actions, etc.
         :return: This method does not need to return anything.
         """
-        raise NotImplementedError
+        pass

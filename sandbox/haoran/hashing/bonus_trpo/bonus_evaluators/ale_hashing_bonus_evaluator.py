@@ -49,9 +49,6 @@ class ALEHashingBonusEvaluator(object):
         self.retrieve_sample_size = retrieve_sample_size
 
         # logging stats ---------------------------------
-        self.epoch_hash_count_list = []
-        self.epoch_bonus_list = []
-        self.new_state_count = 0
         self.total_state_count = 0
         self.rank = None
 
@@ -75,9 +72,25 @@ class ALEHashingBonusEvaluator(object):
                 mp.RawValue('l'),
                 dtype=int,
             )[0],
+            max_state_count_vec = np.frombuffer(
+                mp.RawArray('l',n),
+                dtype=int,
+            ),
+            min_state_count_vec = np.frombuffer(
+                mp.RawArray('l',n),
+                dtype=int,
+            ),
+            sum_state_count_vec = np.frombuffer(
+                mp.RawArray('l',n),
+                dtype=int,
+            ),
+            n_steps_vec = np.frombuffer(
+                mp.RawArray('l',n),
+                dtype=int,
+            ),
         )
         barriers = SimpleContainer(
-            new_state_count = mp.Barrier(n),
+            summarize_state_count = mp.Barrier(n),
             update_count = mp.Barrier(n),
         )
         self._par_objs = (shareds, barriers)
@@ -117,7 +130,14 @@ class ALEHashingBonusEvaluator(object):
             new_state_count = list(prev_counts).count(0)
             #FIXME: if a new state is encountered by more than one process, then it is counted more than once
             shareds.new_state_count_vec[self.rank] = new_state_count
-            barriers.new_state_count.wait() # avoid updating the hash table before we count new states
+
+            shareds.max_state_count_vec[self.rank] = max(prev_counts)
+            shareds.min_state_count_vec[self.rank] = min(prev_counts)
+            shareds.sum_state_count_vec[self.rank] = sum(prev_counts)
+            shareds.n_steps_vec[self.rank] = len(prev_counts)
+
+            barriers.summarize_state_count.wait() # avoid updating the hash table before we count new states
+
             if self.rank == 0:
                 total_new_state_count = sum(shareds.new_state_count_vec)
                 logger.record_tabular(
@@ -128,6 +148,19 @@ class ALEHashingBonusEvaluator(object):
                 logger.record_tabular(
                     self.log_prefix + 'TotalStateCount',
                     shareds.total_state_count,
+                )
+
+                logger.record_tabular(
+                    self.log_prefix + "StateCountMax",
+                    max(shareds.max_state_count_vec),
+                )
+                logger.record_tabular(
+                    self.log_prefix + "StateCountMin",
+                    min(shareds.min_state_count_vec),
+                )
+                logger.record_tabular(
+                    self.log_prefix + "StateCountAverage",
+                    sum(shareds.sum_state_count_vec) / float(sum(shareds.n_steps_vec)),
                 )
 
             self.hash.inc_keys(keys)
@@ -145,11 +178,27 @@ class ALEHashingBonusEvaluator(object):
             logger.record_tabular(self.log_prefix + 'NewSteateCount',new_state_count)
 
             self.total_state_count += new_state_count
-            logger.record_tabular(self.log_prefix + 'TotalStateCount',self.total_state_count)
+            logger.record_tabular(
+                self.log_prefix + 'TotalStateCount',
+                self.total_state_count
+            )
+
+            logger.record_tabular(
+                self.log_prefix + "StateCountMax",
+                max(prev_counts),
+            )
+            logger.record_tabular(
+                self.log_prefix + "StateCountMin",
+                min(prev_counts),
+            )
+            logger.record_tabular(
+                self.log_prefix + "StateCountAverage",
+                np.average(prev_counts),
+            )
 
     def predict(self, path):
         keys = self.retrieve_keys([path])
-        counts = self.hash.query_keys(keys)
+        counts = np.maximum(self.hash.query_keys(keys),1)
 
         if self.bonus_form == "1/n":
             bonuses = 1./counts

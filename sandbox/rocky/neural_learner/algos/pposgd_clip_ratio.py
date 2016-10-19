@@ -1,8 +1,9 @@
 from collections import OrderedDict
 
 from rllab.misc import logger
+from sandbox.rocky.neural_learner.optimizers.sgd_optimizer import SGDOptimizer
 from sandbox.rocky.neural_learner.optimizers.tbptt_optimizer import TBPTTOptimizer
-from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
+from sandbox.rocky.neural_learner.algos.batch_polopt import BatchPolopt
 import tensorflow as tf
 from sandbox.rocky.tf.misc import tensor_utils
 import numpy as np
@@ -47,108 +48,149 @@ class PPOSGD(BatchPolopt):
         self.backtrack_ratio = backtrack_ratio
         self.step_size = step_size
         self.min_n_epochs = min_n_epochs
+        policy = kwargs['policy']
         if optimizer is None:
-            optimizer = TBPTTOptimizer()
+            if policy.recurrent:
+                optimizer = TBPTTOptimizer()
+            else:
+                optimizer = SGDOptimizer()
         self.optimizer = optimizer
-
         super().__init__(**kwargs)
 
     def init_opt(self):
-        assert self.policy.recurrent
+
+        is_recurrent = int(self.policy.recurrent)
 
         obs_var = self.env.observation_space.new_tensor_variable(
             'obs',
-            extra_dims=2,
+            extra_dims=1 + is_recurrent,
         )
         action_var = self.env.action_space.new_tensor_variable(
             'action',
-            extra_dims=2,
+            extra_dims=1 + is_recurrent,
         )
         advantage_var = tensor_utils.new_tensor(
             'advantage',
-            ndim=2,
+            ndim=1 + is_recurrent,
             dtype=tf.float32,
         )
         dist = self.policy.distribution
 
         old_dist_info_vars = {
-            k: tf.placeholder(tf.float32, shape=(None, None) + shape, name='old_%s' % k)
+            k: tf.placeholder(tf.float32, shape=(None,) * (1 + is_recurrent) + shape, name='old_%s' % k)
             for k, shape in dist.dist_info_specs
             }
         old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
 
         state_info_vars = {
-            k: tf.placeholder(tf.float32, shape=(None, None) + shape, name=k)
+            k: tf.placeholder(tf.float32, shape=(None,) * (1 + is_recurrent) + shape, name=k)
             for k, shape in self.policy.state_info_specs
             }
         state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
 
-        valid_var = tf.placeholder(tf.float32, shape=(None, None), name="valid")
-
-        rnn_network = self.policy.prob_network
-
-        state_var = tf.placeholder(tf.float32, (None, rnn_network.state_dim), "state")
-
-        recurrent_layer = rnn_network.recurrent_layer
-        recurrent_state_output = dict()
-
-        minibatch_dist_info_vars = self.policy.dist_info_sym(
-            obs_var, state_info_vars,
-            recurrent_state={recurrent_layer: state_var},
-            recurrent_state_output=recurrent_state_output,
-        )
-
-        state_output = recurrent_state_output[rnn_network.recurrent_layer]
-        final_state = tf.reverse(state_output, [False, True, False])[:, 0, :]
-
-        lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, minibatch_dist_info_vars)
-        kl = dist.kl_sym(old_dist_info_vars, minibatch_dist_info_vars)
-        ent = tf.reduce_sum(dist.entropy_sym(minibatch_dist_info_vars) * valid_var) / tf.reduce_sum(valid_var)
-        mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
         kl_penalty_var = tf.Variable(
             initial_value=self.initial_kl_penalty,
             dtype=tf.float32,
             name="kl_penalty"
         )
 
-        clipped_lr = tf.clip_by_value(lr, 1. - self.clip_lr, 1. + self.clip_lr)
+        if is_recurrent:
+            valid_var = tf.placeholder(tf.float32, shape=(None, None), name="valid")
 
-        surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var)
-        clipped_surr_loss = - tf.reduce_sum(
-            tf.minimum(lr * advantage_var, clipped_lr * advantage_var) * valid_var
-        ) / tf.reduce_sum(valid_var)
+            rnn_network = self.policy.prob_network
 
-        clipped_surr_pen_loss = clipped_surr_loss - self.entropy_bonus_coeff * ent
-        if self.use_kl_penalty:
-            clipped_surr_pen_loss += kl_penalty_var * tf.maximum(0., mean_kl - self.step_size)
+            state_var = tf.placeholder(tf.float32, (None, rnn_network.state_dim), "state")
+
+            recurrent_layer = rnn_network.recurrent_layer
+            recurrent_state_output = dict()
+
+            minibatch_dist_info_vars = self.policy.dist_info_sym(
+                obs_var, state_info_vars,
+                recurrent_state={recurrent_layer: state_var},
+                recurrent_state_output=recurrent_state_output,
+            )
+
+            state_output = recurrent_state_output[rnn_network.recurrent_layer]
+            final_state = tf.reverse(state_output, [False, True, False])[:, 0, :]
+
+            lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, minibatch_dist_info_vars)
+            kl = dist.kl_sym(old_dist_info_vars, minibatch_dist_info_vars)
+            ent = tf.reduce_sum(dist.entropy_sym(minibatch_dist_info_vars) * valid_var) / tf.reduce_sum(valid_var)
+            mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
+
+            clipped_lr = tf.clip_by_value(lr, 1. - self.clip_lr, 1. + self.clip_lr)
+
+            surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var)
+            clipped_surr_loss = - tf.reduce_sum(
+                tf.minimum(lr * advantage_var, clipped_lr * advantage_var) * valid_var
+            ) / tf.reduce_sum(valid_var)
+
+            clipped_surr_pen_loss = clipped_surr_loss - self.entropy_bonus_coeff * ent
+            if self.use_kl_penalty:
+                clipped_surr_pen_loss += kl_penalty_var * tf.maximum(0., mean_kl - self.step_size)
+
+            self.optimizer.update_opt(
+                loss=clipped_surr_pen_loss,
+                target=self.policy,
+                inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list + [
+                    valid_var],
+                rnn_init_state=rnn_network.state_init_param,
+                rnn_state_input=state_var,
+                rnn_final_state=final_state,
+                diagnostic_vars=OrderedDict([
+                    ("UnclippedSurrLoss", surr_loss),
+                    ("MeanKL", mean_kl),
+                ])
+            )
+        else:
+            dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
+
+            lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
+            kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
+            ent = tf.reduce_mean(dist.entropy_sym(dist_info_vars))
+            mean_kl = tf.reduce_mean(kl)
+
+            clipped_lr = tf.clip_by_value(lr, 1. - self.clip_lr, 1. + self.clip_lr)
+
+            surr_loss = - tf.reduce_mean(lr * advantage_var)
+            clipped_surr_loss = - tf.reduce_mean(
+                tf.minimum(lr * advantage_var, clipped_lr * advantage_var)
+            )
+
+            clipped_surr_pen_loss = clipped_surr_loss - self.entropy_bonus_coeff * ent
+            if self.use_kl_penalty:
+                clipped_surr_pen_loss += kl_penalty_var * tf.maximum(0., mean_kl - self.step_size)
+
+            self.optimizer.update_opt(
+                loss=clipped_surr_pen_loss,
+                target=self.policy,
+                inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list,
+                diagnostic_vars=OrderedDict([
+                    ("UnclippedSurrLoss", surr_loss),
+                    ("MeanKL", mean_kl),
+                ])
+            )
 
         self.kl_penalty_var = kl_penalty_var
-
-        self.optimizer.update_opt(
-            loss=clipped_surr_pen_loss,
-            target=self.policy,
-            inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list + [valid_var],
-            rnn_init_state=rnn_network.state_init_param,
-            rnn_state_input=state_var,
-            rnn_final_state=final_state,
-            diagnostic_vars=OrderedDict([
-                ("UnclippedSurrLoss", surr_loss),
-                ("MeanKL", mean_kl),
-            ])
-        )
-
         self.f_increase_penalty = tensor_utils.compile_function(
             inputs=[],
             outputs=tf.assign(
-                self.kl_penalty_var,
-                tf.minimum(self.kl_penalty_var * self.increase_penalty_factor, self.max_penalty)
+                kl_penalty_var,
+                tf.minimum(kl_penalty_var * self.increase_penalty_factor, self.max_penalty)
             )
         )
         self.f_decrease_penalty = tensor_utils.compile_function(
             inputs=[],
             outputs=tf.assign(
-                self.kl_penalty_var,
-                tf.maximum(self.kl_penalty_var * self.decrease_penalty_factor, self.min_penalty)
+                kl_penalty_var,
+                tf.maximum(kl_penalty_var * self.decrease_penalty_factor, self.min_penalty)
+            )
+        )
+        self.f_reset_penalty = tensor_utils.compile_function(
+            inputs=[],
+            outputs=tf.assign(
+                kl_penalty_var,
+                self.initial_kl_penalty
             )
         )
 
@@ -162,14 +204,16 @@ class PPOSGD(BatchPolopt):
         observations = samples_data["observations"]
         actions = samples_data["actions"]
         advantages = samples_data["advantages"]
-        valids = samples_data["valids"]
 
         # Perform truncated backprop
         agent_infos = samples_data["agent_infos"]
         state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
         dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
 
-        all_inputs = [observations, actions, advantages] + state_info_list + dist_info_list + [valids]
+        all_inputs = [observations, actions, advantages] + state_info_list + dist_info_list
+        if self.policy.recurrent:
+            valids = samples_data["valids"]
+            all_inputs.append(valids)
 
         if self.log_loss_kl_before:
             logger.log("Computing loss / KL before training")
@@ -184,6 +228,8 @@ class PPOSGD(BatchPolopt):
         best_loss = None
         best_kl = None
         best_params = None
+
+        self.f_reset_penalty()
 
         def itr_callback(itr, loss, diagnostics, *args, **kwargs):
             nonlocal best_loss

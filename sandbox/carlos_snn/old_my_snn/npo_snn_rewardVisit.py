@@ -23,7 +23,6 @@ import rllab.plotter as plotter
 from rllab.sampler.utils import rollout
 import itertools
 
-# from pympler import tracker
 import gc
 import pdb
 

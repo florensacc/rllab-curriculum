@@ -31,7 +31,6 @@ class TRPOPlusLSH(TRPO):
 
     def __init__(
             self,
-            model=None,
             eta=0.1,
             model_pool_args=None,
             train_model=True,
@@ -39,22 +38,25 @@ class TRPOPlusLSH(TRPO):
             continuous_embedding=True,
             model_embedding=True,
             sim_hash_args=None,
+            clip_rewards=False,
+            model_args=None,
             **kwargs):
         super(TRPOPlusLSH, self).__init__(**kwargs)
 
+        assert model_args is not None
         assert eta >= 0
         assert train_model_freq >= 1
         if train_model:
             assert model_embedding
-            # assert model is not None
 
-        # self._model = model
         self._eta = eta
         self._train_model = train_model
         self._train_model_freq = train_model_freq
         self._continuous_embedding = continuous_embedding
         self._model_embedding = model_embedding
         self._sim_hash_args = sim_hash_args
+        self._clip_rewards = clip_rewards
+        self._model_args = model_args
 
         if model_pool_args is None:
             self._model_pool_args = dict(size=100000, min_size=32, batch_size=32)
@@ -63,133 +65,11 @@ class TRPOPlusLSH(TRPO):
 
     def init_gpu(self):
         from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
-        from rllab.envs.env_spec import EnvSpec
-        from rllab.spaces.box import Box
-        import lasagne
         import theano.sandbox.cuda
         theano.sandbox.cuda.use("gpu")
-        n_seq_frames = 1
-        dropout = False
-        batch_norm = True
-        model_batch_size = 32
-        env_spec = EnvSpec(
-            observation_space=Box(low=-1, high=1, shape=(n_seq_frames, 52, 52)),
-            action_space=self.env.spec.action_space
-        )
+
         self._model = ConvBNNVIME(
-            state_dim=env_spec.observation_space.shape,
-            action_dim=(env_spec.action_space.flat_dim,),
-            reward_dim=(1,),
-            layers_disc=[
-                dict(name='convolution',
-                     n_filters=96,
-                     filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(0, 0),
-                     batch_norm=batch_norm,
-                     nonlinearity=lasagne.nonlinearities.rectify,
-                     dropout=False,
-                     deterministic=True),
-                dict(name='convolution',
-                     n_filters=96,
-                     filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(1, 1),
-                     batch_norm=batch_norm,
-                     nonlinearity=lasagne.nonlinearities.rectify,
-                     dropout=False,
-                     deterministic=True),
-                dict(name='convolution',
-                     n_filters=96,
-                     filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(2, 2),
-                     batch_norm=batch_norm,
-                     nonlinearity=lasagne.nonlinearities.rectify,
-                     dropout=False,
-                     deterministic=True),
-                dict(name='reshape',
-                     shape=([0], -1)),
-                dict(name='gaussian',
-                     n_units=1024,
-                     matrix_variate_gaussian=False,
-                     nonlinearity=lasagne.nonlinearities.linear,
-                     batch_norm=batch_norm,
-                     dropout=dropout,
-                     deterministic=True),
-                dict(name='discrete_embedding',
-                     n_units=1024,
-                     batch_norm=batch_norm,
-                     deterministic=True),
-                dict(name='gaussian',
-                     n_units=2,
-                     matrix_variate_gaussian=False,
-                     nonlinearity=lasagne.nonlinearities.rectify,
-                     batch_norm=batch_norm,
-                     dropout=dropout,
-                     deterministic=True),
-                dict(name='gaussian',
-                     n_units=50,
-                     matrix_variate_gaussian=False,
-                     nonlinearity=lasagne.nonlinearities.rectify,
-                     batch_norm=batch_norm,
-                     dropout=False,
-                     deterministic=True),
-                dict(name='reshape',
-                     shape=([0], 2, 5, 5)),
-                dict(name='deconvolution',
-                     n_filters=2,
-                     filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(2, 2),
-                     nonlinearity=lasagne.nonlinearities.rectify,
-                     batch_norm=batch_norm,
-                     dropout=False,
-                     deterministic=True),
-                dict(name='deconvolution',
-                     n_filters=2,
-                     filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(0, 0),
-                     nonlinearity=lasagne.nonlinearities.rectify,
-                     batch_norm=batch_norm,
-                     dropout=False,
-                     deterministic=True),
-                dict(name='deconvolution',
-                     n_filters=2,
-                     filter_size=(6, 6),
-                     stride=(2, 2),
-                     pad=(0, 0),
-                     nonlinearity=lasagne.nonlinearities.linear,
-                     batch_norm=True,
-                     dropout=False,
-                     deterministic=True),
-            ],
-            n_batches=1,
-            trans_func=lasagne.nonlinearities.rectify,
-            out_func=lasagne.nonlinearities.linear,
-            batch_size=model_batch_size,
-            n_samples=1,
-            num_train_samples=1,
-            prior_sd=0.05,
-            second_order_update=False,
-            learning_rate=0.0003,
-            surprise_type=None,
-            update_prior=False,
-            update_likelihood_sd=False,
-            output_type=ConvBNNVIME.OutputType.CLASSIFICATION,
-            num_classes=64,
-            likelihood_sd_init=0.1,
-            disable_variance=False,
-            ind_softmax=True,
-            num_seq_inputs=1,
-            label_smoothing=0.003,
-            # Disable prediction of rewards and intake of actions, act as actual autoenc
-            disable_act_rew_paths=True,
-            # --
-            # Count settings
-            # Put penalty for being at 0.5 in sigmoid postactivations.
-            binary_penalty=True,
+            **self._model_args
         )
 
         if self._model_embedding:
@@ -200,8 +80,8 @@ class TRPOPlusLSH(TRPO):
                 sim_hash_args=dict(
                     dim_key=256,
                     bucket_sizes=None,
-                    parallel=False,
-                )
+                ),
+                parallel=False,
             )
         else:
             state_dim = 128
@@ -389,7 +269,10 @@ class TRPOPlusLSH(TRPO):
                     return cont_emb
                 else:
                     # Cast continuous embedding into binary one.
-                    return np.cast['int'](np.round(cont_emb))
+                    # return np.cast['int'](np.round(cont_emb))
+                    bin_emb = np.cast['int'](np.round(cont_emb))
+                    bin_emb_downsampled = bin_emb.reshape(-1, 8).mean(axis=1).reshape((bin_emb.shape[0], -1))
+                    return np.cast['int'](np.round(bin_emb_downsampled))
             else:
                 return path['observations']
 
@@ -445,7 +328,7 @@ class TRPOPlusLSH(TRPO):
         """
         assert np.max(obs) <= 1.0
         assert np.min(obs) >= -1.0
-        obs_enc = np.round((obs + 1.0) * 0.5 * self._model.num_classes).astype("uint8")
+        obs_enc = np.floor((obs + 1.0) * 0.5 * self._model.num_classes).astype("uint8")
         return obs_enc
 
     def decode_obs(self, obs):
@@ -493,7 +376,7 @@ class TRPOPlusLSH(TRPO):
                 # Actual training of model.
                 done = 0
                 old_running_avg = np.inf
-                while done < 5:
+                while done < 7:
                     running_avg = 0.
                     for _ in range(100):
                         # Replay pool return uint8 target format, so decode _x.
@@ -521,11 +404,12 @@ class TRPOPlusLSH(TRPO):
 
                 logger.log('Autoencoder updated.')
 
-                logger.log('Plotting random samples ...')
-                self._plotter.plot_pred_imgs(model=self._model, inputs=_x, targets=_y, itr=0,
-                                             dir=RANDOM_SAMPLES_DIR)
-                self._plotter.print_embs(model=self._model, counting_table=None, inputs=_x,
-                                         dir=RANDOM_SAMPLES_DIR, hamming_distance=0)
+                if itr % 30 == 0:
+                    logger.log('Plotting random samples ...')
+                    self._plotter.plot_pred_imgs(model=self._model, inputs=_x, targets=_y, itr=0,
+                                                 dir=RANDOM_SAMPLES_DIR)
+                    self._plotter.print_embs(model=self._model, counting_table=None, inputs=_x,
+                                             dir=RANDOM_SAMPLES_DIR, hamming_distance=0)
 
             else:
                 logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
@@ -543,7 +427,10 @@ class TRPOPlusLSH(TRPO):
         :return: None
         """
         for path in paths:
-            path['rewards'] += self._eta * path['S']
+            if self._clip_rewards:
+                path['rewards'] = np.clip(path["ext_rewards"], -1, 1) + self._eta * path['S']
+            else:
+                path['rewards'] = path["ext_rewards"] + self._eta * path['S']
 
     @staticmethod
     def preprocess(paths):
@@ -586,7 +473,7 @@ class TRPOPlusLSH(TRPO):
         #     model=self._model, inputs=inputs, targets=self._test_obs,
         #     itr=0, dir='/generated')
 
-        if self._model_embedding and self._train_model and itr % 20 == 0:
+        if self._model_embedding and self._train_model and itr % 30 == 0:
             logger.log('Plotting consistency images ...')
             self._plotter.plot_pred_imgs(
                 model=self._model, inputs=self.decode_obs(self._test_obs), targets=self._test_obs,

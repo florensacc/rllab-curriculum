@@ -9,11 +9,10 @@ import numpy as np
 
 
 class BonusTRPO(TRPO):
-    def __init__(self, bonus_evaluator, bonus_coeff, extra_bonus_evaluator, clip_reward=True,*args, **kwargs):
+    def __init__(self, bonus_evaluator, bonus_coeff, clip_reward=True, *args, **kwargs):
         self.bonus_evaluator = bonus_evaluator
-        self.extra_bonus_evaluator = extra_bonus_evaluator
         self.bonus_coeff = bonus_coeff
-        self.clip_reward= clip_reward
+        self.clip_reward = clip_reward
         super(BonusTRPO, self).__init__(*args, **kwargs)
 
     def get_itr_snapshot(self, itr, samples_data):
@@ -25,7 +24,6 @@ class BonusTRPO(TRPO):
             bonus_evaluator=self.bonus_evaluator,
         )
 
-
     def log_diagnostics(self, paths):
         super(BonusTRPO, self).log_diagnostics(paths)
         self.bonus_evaluator.log_diagnostics(paths)
@@ -33,7 +31,6 @@ class BonusTRPO(TRPO):
     def process_samples(self, itr, paths):
         logger.log("fitting bonus evaluator before processing...")
         self.bonus_evaluator.fit_before_process_samples(paths)
-        self.extra_bonus_evaluator.fit_before_process_samples(paths)
         logger.log("fitted")
 
         # recompute the advantages
@@ -45,7 +42,7 @@ class BonusTRPO(TRPO):
             path["bonus_rewards"] = self.bonus_coeff * bonuses
             path["raw_rewards"] = path["rewards"]
             if self.clip_reward:
-                path["rewards"] = np.clip(path["raw_rewards"],-1,1) + path["bonus_rewards"]
+                path["rewards"] = np.clip(path["raw_rewards"], -1, 1) + path["bonus_rewards"]
             else:
                 path["rewards"] = path["raw_rewards"] + path["bonus_rewards"]
             path_baselines = np.append(self.baseline.predict(path), 0)
@@ -58,8 +55,6 @@ class BonusTRPO(TRPO):
             path["raw_returns"] = special.discount_cumsum(path["raw_rewards"], self.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
-        if self.env.wrapped_env.resetter is not None:
-            self.env.wrapped_env.resetter.update(paths)
 
         if not self.policy.recurrent:
             observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
@@ -82,7 +77,7 @@ class BonusTRPO(TRPO):
             if "prior_reward" in paths[0]["env_infos"]:
                 undiscounted_returns = [
                     R + sum(path["env_infos"]["prior_reward"])
-                    for R,path in zip(undiscounted_returns, paths)
+                    for R, path in zip(undiscounted_returns, paths)
                 ]
 
             undiscounted_bonus_returns = [sum(path["rewards"]) for path in paths]
@@ -146,7 +141,7 @@ class BonusTRPO(TRPO):
             if "prior_reward" in paths[0]["env_infos"]:
                 undiscounted_returns = [
                     R + sum(path["env_infos"]["prior_reward"])
-                    for R,path in zip(undiscounted_returns, paths)
+                    for R, path in zip(undiscounted_returns, paths)
                 ]
             undiscounted_bonus_returns = [sum(path["rewards"]) for path in paths]
 
@@ -184,36 +179,12 @@ class BonusTRPO(TRPO):
         logger.record_tabular('NumTrajs', len(paths))
         logger.record_tabular('Entropy', ent)
         logger.record_tabular('Perplexity', np.exp(ent))
-        logger.record_tabular_misc_stat('Return',undiscounted_returns)
+        logger.record_tabular_misc_stat('Return', undiscounted_returns)
 
         all_bonus_rewards = np.concatenate([path["bonus_rewards"] for path in paths])
-        logger.record_tabular_misc_stat('BonusReward',all_bonus_rewards)
+        logger.record_tabular_misc_stat('BonusReward', all_bonus_rewards)
 
         path_lens = [len(path["rewards"]) for path in paths]
-        logger.record_tabular_misc_stat("PathLen",path_lens)
+        logger.record_tabular_misc_stat("PathLen", path_lens)
 
-        # Log info for trajs whose initial states are not modified by the resetter
-        if self.env.wrapped_env.resetter is not None:
-            test_paths = [
-                path for path in paths
-                if path["env_infos"]["use_default_reset"][0] == True
-            ]
-            if len(test_paths) > 0 and type(self.env.wrapped_env.resetter).__name__ != "AtariSaveLoadResetter":
-                test_average_discounted_return = \
-                    np.mean([path["returns"][0] for path in test_paths])
-
-                test_undiscounted_returns = [sum(path["raw_rewards"]) for path in test_paths]
-                test_undiscounted_bonus_returns = [sum(path["rewards"]) for path in test_paths]
-
-                logger.record_tabular('TestAverageDiscountedReturn',
-                          test_average_discounted_return)
-                logger.record_tabular('TestAverageBonusReturn', np.mean(test_undiscounted_bonus_returns))
-                logger.record_tabular('TestNumTrajs', len(test_paths))
-                logger.record_tabular_misc_stat('TestReturn',test_undiscounted_returns)
-
-                test_all_bonus_rewards = np.concatenate([path["bonus_rewards"] for path in test_paths])
-                logger.record_tabular_misc_stat('TestBonusReward',test_all_bonus_rewards)
-
-                test_path_lens = [len(path["rewards"]) for path in test_paths]
-                logger.record_tabular_misc_stat("TestPathLen",test_path_lens)
         return samples_data

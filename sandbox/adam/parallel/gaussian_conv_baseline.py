@@ -17,9 +17,6 @@ class ParallelGaussianConvBaseline(GaussianConvBaseline):
             env_spec,
             regressor_args=None,
         ):
-        Serializable.quick_init(self,locals())
-        # super().__init__(env_spec)
-        self._mdp_spec = env_spec # hack
         if regressor_args is None:
             regressor_args = dict()
 
@@ -33,6 +30,9 @@ class ParallelGaussianConvBaseline(GaussianConvBaseline):
     def __getstate__(self):
         """ Do not try to serialize parallel objects."""
         return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
+
+    def __setstate__(self,d):
+        self.__dict__.update(d)
 
     @overrides
     @property

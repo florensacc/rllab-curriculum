@@ -3,30 +3,34 @@ import os
 import lasagne
 
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rein.algos.embedding_theano.theano_atari import AtariEnv
+from sandbox.rein.algos.embedding_theano2.theano_atari import AtariEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rein.algos.embedding_theano_par.trpo_plus_lsh import ParallelTRPOPlusLSH
 from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 from sandbox.rein.algos.embedding_theano_par.linear_feature_baseline import ParallelLinearFeatureBaseline
+from sandbox.adam.parallel.zero_baseline import ParallelZeroBaseline
 from rllab.envs.env_spec import EnvSpec
 from rllab.spaces.box import Box
+from rllab.core.network import ConvNetwork
+from sandbox.adam.parallel.parallel_nn_feature_linear_baseline import ParallelNNFeatureLinearBaseline
+
 
 os.environ["THEANO_FLAGS"] = "device=gpu"
 
 stub(globals())
 
 n_seq_frames = 1
-n_parallel = 12
+n_parallel = 1
 model_batch_size = 32
-exp_prefix = 'trpo-par-rndconv-d'
+exp_prefix = 'trpo-par-a'
 seeds = [0, 1, 2]
-etas = [0.01, 0.001]
-mdps = [#AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
-        #AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
-        #AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
-        AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=4)]
-trpo_batch_size = 50000
-max_path_length = 4500
+etas = [0.01]
+mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
+    # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
+    # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
+    AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=4)]
+trpo_batch_size = 5000
+max_path_length = 450
 dropout = False
 batch_norm = False
 
@@ -35,16 +39,41 @@ param_cart_product = itertools.product(
 )
 
 for mdp, eta, seed in param_cart_product:
+    # mdp_spec = EnvSpec(
+    #     observation_space=Box(low=-1, high=1, shape=(1, 128)),
+    #     action_space=mdp.spec.action_space
+    # )
+    #
+    # policy = CategoricalMLPPolicy(
+    #     env_spec=mdp_spec,
+    #     hidden_sizes=(32, 32),
+    # )
+    # baseline = ParallelLinearFeatureBaseline(env_spec=mdp_spec)
+
     mdp_spec = EnvSpec(
-        observation_space=Box(low=-1, high=1, shape=(1, 128)),
+        observation_space=Box(low=-1, high=1, shape=(1, 52, 52)),
         action_space=mdp.spec.action_space
     )
 
-    policy = CategoricalMLPPolicy(
-        env_spec=mdp_spec,
-        hidden_sizes=(32, 32),
+    network = ConvNetwork(
+        input_shape=(n_seq_frames,) + (
+            mdp_spec.observation_space.shape[1], mdp_spec.observation_space.shape[2]),
+        output_dim=mdp.spec.action_space.flat_dim,
+        hidden_sizes=(64,),
+        conv_filters=(32, 32, 32),
+        conv_filter_sizes=(6, 6, 6),
+        conv_strides=(2, 2, 2),
+        conv_pads=(0, 1, 2),
     )
-    baseline = ParallelLinearFeatureBaseline(env_spec=mdp_spec)
+    policy = CategoricalMLPPolicy(
+        env_spec=mdp.spec,
+        num_seq_inputs=n_seq_frames,
+        prob_network=network,
+    )
+
+    baseline = ParallelZeroBaseline(
+        env_spec=mdp.spec,
+    )
 
     env_spec = EnvSpec(
         observation_space=Box(low=-1, high=1, shape=(n_seq_frames, 52, 52)),
@@ -193,12 +222,12 @@ for mdp, eta, seed in param_cart_product:
             fill_before_subsampling=False,
         ),
         eta=eta,
-        train_model=True,
+        train_model=False,
         train_model_freq=5,
         continuous_embedding=False,
-        model_embedding=True,
+        model_embedding=False,
         sim_hash_args=dict(
-            dim_key=256,
+            dim_key=64,
             bucket_sizes=None,  # [15485867, 15485917, 15485927, 15485933, 15485941, 15485959],
         )
     )
@@ -209,7 +238,7 @@ for mdp, eta, seed in param_cart_product:
         n_parallel=n_parallel,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=False,
         script="sandbox/rein/algos/embedding_theano/run_experiment_lite_ram_img.py",

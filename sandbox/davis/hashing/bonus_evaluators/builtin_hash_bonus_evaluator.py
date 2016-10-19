@@ -12,7 +12,7 @@ class BuiltinHashBonusEvaluator(HashingBonusEvaluator):
         if self.granularity is not None:
             observations = self.discretize(observations)
         hashes = [hash(tuple(obs)) % self.bucket_sizes[0] for obs in observations]
-        return hashes
+        return np.array(hashes).reshape(-1, 1)
 
     def discretize(self, observations):
         return np.around(observations / self.granularity)

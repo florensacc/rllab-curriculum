@@ -22,7 +22,10 @@ class SimHashV2(BinaryHash):
         self.projection_matrix = np.random.normal(size=(item_dim, dim_key))
         self.item_dim = item_dim
 
-        self.snapshot_list = ["projection_matrix"]
+        self.snapshot_list.append("projection_matrix")
+
+    def __getstate__(self):
+        return super().__getstate__()
 
     def compute_binary_keys(self, items):
         binaries = np.sign(np.asarray(items).dot(self.projection_matrix))

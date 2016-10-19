@@ -31,6 +31,7 @@ class ParallelTRPO(ParallelBatchPolopt):
             step_size=0.01,
             truncate_local_is_ratio=None,
             mkl_num_threads=1,
+            entropy_bonus=0,
             **kwargs):
         if optimizer is None:
             if optimizer_args is None:
@@ -40,6 +41,7 @@ class ParallelTRPO(ParallelBatchPolopt):
         self.step_size = step_size
         self.truncate_local_is_ratio = truncate_local_is_ratio
         self.mkl_num_threads = mkl_num_threads
+        self.entropy_bonus = entropy_bonus
         super(ParallelTRPO, self).__init__(**kwargs)
 
     @overrides
@@ -99,6 +101,10 @@ class ParallelTRPO(ParallelBatchPolopt):
         else:
             mean_kl = TT.mean(kl)
             surr_loss = - TT.mean(lr * advantage_var)
+            if self.entropy_bonus > 0:
+                surr_loss -= self.entropy_bonus * TT.mean(
+                    self.policy.distribution.entropy_sym(dist_info_vars)
+                )
 
         input_list = [obs_var,
                       action_var,

@@ -39,6 +39,7 @@ class DoomConfig(object):
         self.vizdoom_path = None
         self.doom_game_path = None
         self.doom_scenario_path = None
+        self.doom_map = None
         self.screen_resolution = None
         self.screen_format = None
         self.render_hud = None
@@ -59,6 +60,8 @@ class DoomConfig(object):
             par_games.set_doom_game_path(i, self.doom_game_path)
         if self.doom_scenario_path is not None:
             par_games.set_doom_scenario_path(i, self.doom_scenario_path)
+        if self.doom_map is not None:
+            par_games.set_doom_map(i, self.doom_map)
         if self.screen_resolution is not None:
             par_games.set_screen_resolution(i, self.screen_resolution)
         if self.screen_format is not None:
@@ -90,18 +93,19 @@ class DoomConfig(object):
 
 
 class DoomEnv(Env, Serializable):
-    def __init__(self, restart_game=True, vectorized=True, verbose_debug=False, rescale_obs=None):
+    def __init__(self, restart_game=True, reset_map=True, vectorized=True, verbose_debug=False, rescale_obs=(30, 40)):
         Serializable.quick_init(self, locals())
         self._vectorized = vectorized
         self._verbose_debug = verbose_debug
         self.mode = Mode.PLAYER
         self.restart_game = restart_game
+        self.reset_map = reset_map
         self.rescale_obs = rescale_obs
         self.executor = VecDoomEnv(n_envs=1, env=self)
         self.reset_trial()
 
     def reset_trial(self):
-        return self.reset(restart_game=True)
+        return self.reset(restart_game=True, reset_map=True)
 
     @property
     def vectorized(self):
@@ -138,8 +142,8 @@ class DoomEnv(Env, Serializable):
         doom_config.mode = self.mode
         return doom_config
 
-    def reset(self, restart_game=None):
-        return self.executor.reset(dones=None, restart_game=restart_game)[0]
+    def reset(self, restart_game=None, reset_map=None):
+        return self.executor.reset(dones=None, restart_game=restart_game, reset_map=reset_map)[0]
 
     def step(self, action):
         if self._verbose_debug:
@@ -217,20 +221,19 @@ class VecDoomEnv(object):
     def reset_trial(self):
         return self.reset(restart_game=True)
 
-    def reset(self, dones=None, restart_game=None, return_obs=True):
+    def reset(self, dones=None, restart_game=None, reset_map=None, return_obs=True):
         if restart_game is None:
             restart_game = self.env.restart_game
+        if reset_map is None:
+            reset_map = self.env.reset_map
         if dones is None or np.any(dones):
             if restart_game:
                 if self.env._verbose_debug:
                     logger.log("closing games")
-                try:
-                    self.par_games.close_all(dones)
-                except Exception as e:
-                    print(e)
-                    import ipdb;
-                    ipdb.set_trace()
-            self.init_games(dones)
+                self.par_games.close_all(dones)
+                self.init_games(dones)
+            elif reset_map:
+                self.reconfigure_games(dones)
             if self.env._verbose_debug:
                 logger.log("start new episodes")
             self.par_games.new_episode_all(dones)
@@ -295,7 +298,6 @@ class VecDoomEnv(object):
 
     def init_games(self, dones=None):
         self.par_games.create_all(dones)
-
         for i in range(self.n_envs):
             if dones is None or dones[i]:
                 doom_config = self.env.get_doom_config()
@@ -305,3 +307,9 @@ class VecDoomEnv(object):
         self.par_games.init_all(dones)
         if self.env._verbose_debug:
             logger.log("init finished")
+
+    def reconfigure_games(self, dones=None):
+        for i in range(self.n_envs):
+            if dones is None or dones[i]:
+                doom_config = self.env.get_doom_config()
+                doom_config.configure(self.par_games, i)

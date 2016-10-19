@@ -1,6 +1,7 @@
 """
 Parallel-TRPO w/ RAM observations: testing
 The setup is similar to exp-016b
+Also try the same params for image counts
 
 For Davis:
 1. for testing, use mode = "local_test"
@@ -47,7 +48,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
-mode = "local_test"
+mode = "kube"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
