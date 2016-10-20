@@ -85,6 +85,7 @@ class BoltzmannDQNAgent(Agent,Shareable,Picklable):
             phase="Train",
             sync_t_gap_limit=np.inf,
             share_model=False,
+            sample_eps=False,
     ):
         if optimizer_args is None:
             optimizer_args = dict(lr=7e-4, eps=1e-1, alpha=0.99)
@@ -139,7 +140,13 @@ class BoltzmannDQNAgent(Agent,Shareable,Picklable):
         self.clip_reward = clip_reward
         self.keep_loss_scale_same = keep_loss_scale_same
         self.eps_start = eps_start
-        self.eps_end = eps_end
+        if not sample_eps:
+            self.eps_end = eps_end
+        else:
+            self.eps_end = np.random.choice(
+                a=[0.1, 0.01, 0.5],
+                p=[0.4, 0.3, 0.3]
+            )
         self.eps_test = eps_test
         self.target_update_frequency = target_update_frequency
         self.eps_anneal_time = eps_anneal_time
