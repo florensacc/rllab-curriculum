@@ -869,6 +869,16 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
             Name=aws_config["iam_instance_profile_name"],
         ),
     )
+
+    if len(instance_args["NetworkInterfaces"]) > 0:
+        disable_security_group = query_yes_no(
+            "Cannot provide both network interfaces and security groups info. Do you want to disable security group settings?",
+            default="no",
+        )
+        if disable_security_group:
+            instance_args.pop("SecurityGroups")
+            instance_args.pop("SecurityGroupIds")
+
     if aws_config.get("placement", None) is not None:
         instance_args["Placement"] = aws_config["placement"]
     if not aws_config["spot"]:
