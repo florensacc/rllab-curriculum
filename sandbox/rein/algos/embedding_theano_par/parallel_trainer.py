@@ -165,6 +165,7 @@ class ParallelTrainer(object):
             # Actual training of model.
             done = 0
             old_running_avg = np.inf
+            count = 0
             while done < 7:
                 running_avg = 0.
                 for _ in range(10):
@@ -185,7 +186,9 @@ class ParallelTrainer(object):
                 print('Autoencoder loss= {:.5f}, D= {:+.5f}, done={}'.format(
                     running_avg, running_avg_delta, done))
                 sys.stdout.flush()
-                break
+                if count ==4 :
+                    break
+                count +=1
 
             for i in range(10):
                 batch = pool.random_batch(32)

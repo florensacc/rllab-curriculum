@@ -20,14 +20,14 @@ n_parallel = 2
 model_batch_size = 32
 exp_prefix = 'trpo-par-a'
 seeds = [0, 1, 2]
-etas = [0.01]
+etas = [0.001]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
-    # AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
-    AtariEnv(game='venture', obs_type="image", frame_skip=4)]
-trpo_batch_size = 5000
-max_path_length = 450
+    AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
+    # AtariEnv(game='venture', obs_type="image", frame_skip=4)]
+trpo_batch_size = 500
+max_path_length = 45
 dropout = False
 batch_norm = True
 

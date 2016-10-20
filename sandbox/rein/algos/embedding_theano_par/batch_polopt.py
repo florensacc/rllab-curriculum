@@ -136,6 +136,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         )
         barriers = SimpleContainer(
             dgnstc=mp.Barrier(n),
+            training=mp.Barrier(n),
         )
         self._par_objs = (shareds, barriers)
         self.baseline.init_par_objs(n_parallel=n)
@@ -256,7 +257,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                     # First iteration, train sequentially.
                     if itr == 0:
                         # Wait for first replay pool fill.
-                        barriers.dgnstc.wait()
+                        barriers.training.wait()
                         if self.rank == 0:
                             self._model_trainer.train_model()
                         logger.log("start")
@@ -271,12 +272,12 @@ class ParallelBatchPolopt(RLAlgorithm):
                         if itr != self._train_model_freq:
                             logger.log('Getting update model params ...')
                             # params = self._model_trainer.q_train_param_out[self.rank].get()
-                            self._model.set_param_values(params)
                             logger.log("start")
                             self._model_trainer.q_train_param_out[self.rank].get()
                             logger.log("pass")
                             params = np.frombuffer(shared_model_params)[:self._model_n_params]
                             self._model.set_param_values(params)
+                            barriers.training.wait()
                             if self.rank == 0:
                                 acc = self._model_trainer.q_train_acc_out.get()
                                 logger.log('Model accuracy: {}'.format(acc))
