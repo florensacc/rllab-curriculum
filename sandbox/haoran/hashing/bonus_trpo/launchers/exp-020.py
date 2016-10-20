@@ -1,27 +1,12 @@
 """
-Baseline experiments: par-TRPO on RAM obs for many Atari games; also test the effect of exploration bonus
-- setup similar to exp-018, 20160822, 20160823
-    - difference from 2016****:  use clip_reward
-    - difference from exp-018: batch_size = 100k, baseline
-- other environment settings close to standard DQN params (except RAM obs)
-    - max_start_nullops: 30
-- some parameters are not fine-tuned:
-    - max_path_length
-        for some games (montezuma_revenge) the agent may still get bonus for doing nothing
-    - batch_size
-        - 100k should always be better (but slower)
-    - cg arguments
-    - baseline
-        - 006a: MLP baseline on RAM can be better
-        - 017d: conv baseline on image can be better
-    - dim_key
-        - exp-002a: dim_key=64 can be bad (median plot)
-        - exp-016: dim_key=512 combined with 90M bucket can be bad
-        - 0822, 0823: dim_key=256 appears slightly better than 64 (median plot); but most exps did not finish; also we used 6M bucket there, which saturate very soon (the true reason why performance is better is smaller bonus in later iterations?)
-    - bucket_sizes
-        - prev exps suggest 6M bucket will soon saturate at ~2.5M TotalStateCount for dim_key >= 256
-        - 90M bucket will also saturate at ~35M for dim_key >= 256
-- snapshot frequently for later analysis
+Image obs, ram hash
++ need to test openai-alpha
++ need to fix the rom problem in Venture first
+- need to fix TotalStateCount for BinaryHash
++ use dim_key=256, which appears to work reasonably for the 4 games we choose
++ use bucket_sizes=90M, which appears to work better when dim_key=256
++ img obs and network settings copied from exp-017g, but without the specific env settings there
+- beware that batch_size=100k may fill up the memory
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -30,6 +15,8 @@ from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBas
 
 """ policy """
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
+from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
+from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
 
 """ optimizer """
 from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
@@ -64,7 +51,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
-mode = "kube"
+mode = "ec2_test"
 ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -98,7 +85,7 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["freeway", "frostbite", "montezuma_revenge", "gravitar", "pitfall","private_eye","solaris","venture"]
+        return ["freeway", "frostbite", "montezuma_revenge", "venture"]
 
     @variant
     def dim_key(self):
@@ -106,10 +93,7 @@ class VG(VariantGenerator):
 
     @variant
     def bucket_sizes(self):
-        return [
-            # [999931, 999953, 999959, 999961, 999979, 999983], # 6M
-            [15485867, 15485917, 15485927, 15485933, 15485941, 15485959], # 90M
-        ]
+        return ["90M"]
 
     @variant
     def count_target(self):
@@ -144,25 +128,26 @@ for v in variants:
     policy_opt_args = dict(
         name="pi_opt",
         cg_iters=10,
-        reg_coeff=1e-5,
-        subsample_factor=1.,
+        reg_coeff=1e-3,
+        subsample_factor=0.1,
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
         hvp_approach=None,
         num_slices=1, # reduces memory requirement
     )
+    network_args = nips_dqn_args
 
     # env
     game=v["game"]
     env_seed=1 # deterministic env
     frame_skip=4
     max_start_nullops = 30
-    img_width=84
-    img_height=84
-    n_last_screens=1
+    img_width=42
+    img_height=42
+    n_last_screens=4
     clip_reward = True
-    obs_type = "ram"
+    obs_type = "image"
     count_target = v["count_target"]
     record_image=(count_target == "images")
     record_rgb_image=False
@@ -174,7 +159,13 @@ for v in variants:
     bonus_form="1/sqrt(n)"
     count_target=v["count_target"]
     retrieve_sample_size=100000 # compute keys for all paths at once
-    bucket_sizes=None # None means default
+    if v["bucket_sizes"] == "6M":
+        bucket_sizes = [999931, 999953, 999959, 999961, 999979, 999983]
+    elif v["bucket_sizes"] == "90M":
+        bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
+    else:
+        raise NotImplementedError
+
 
     # others
     baseline_prediction_clip = 1000
@@ -221,7 +212,7 @@ for v in variants:
 
         config.KUBE_DEFAULT_RESOURCES = {
             "requests": {
-                "cpu": n_parallel
+                "cpu": int(info["vCPU"]*0.75)
             }
         }
         config.KUBE_DEFAULT_NODE_SELECTOR = {
@@ -245,25 +236,20 @@ for v in variants:
         frame_skip=frame_skip,
         max_start_nullops=max_start_nullops,
     )
-    policy = CategoricalMLPPolicy(
+    policy = CategoricalConvPolicy(
         env_spec=env.spec,
-        hidden_sizes=(32,32),
+        name="policy",
+        **network_args
     )
 
     # baseline
-    # baseline = ParallelLinearFeatureBaseline(env_spec=env.spec)
-    network_args_for_vf = dict(
-        hidden_sizes=(32,32),
-        conv_filters=[],
-        conv_filter_sizes=[],
-        conv_strides=[],
-        conv_pads=[],
-    )
+    network_args_for_vf = copy.deepcopy(network_args)
+    network_args_for_vf.pop("output_nonlinearity")
     baseline = ParallelGaussianConvBaseline(
         env_spec=env.spec,
         regressor_args = dict(
             optimizer=ParallelConjugateGradientOptimizer(
-                subsample_factor=0.5,
+                subsample_factor=0.1,
                 cg_iters=10,
                 name="vf_opt",
             ),

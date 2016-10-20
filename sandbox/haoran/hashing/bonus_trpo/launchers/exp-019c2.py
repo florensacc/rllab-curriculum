@@ -1,27 +1,6 @@
 """
 Baseline experiments: par-TRPO on RAM obs for many Atari games; also test the effect of exploration bonus
-- setup similar to exp-018, 20160822, 20160823
-    - difference from 2016****:  use clip_reward
-    - difference from exp-018: batch_size = 100k, baseline
-- other environment settings close to standard DQN params (except RAM obs)
-    - max_start_nullops: 30
-- some parameters are not fine-tuned:
-    - max_path_length
-        for some games (montezuma_revenge) the agent may still get bonus for doing nothing
-    - batch_size
-        - 100k should always be better (but slower)
-    - cg arguments
-    - baseline
-        - 006a: MLP baseline on RAM can be better
-        - 017d: conv baseline on image can be better
-    - dim_key
-        - exp-002a: dim_key=64 can be bad (median plot)
-        - exp-016: dim_key=512 combined with 90M bucket can be bad
-        - 0822, 0823: dim_key=256 appears slightly better than 64 (median plot); but most exps did not finish; also we used 6M bucket there, which saturate very soon (the true reason why performance is better is smaller bonus in later iterations?)
-    - bucket_sizes
-        - prev exps suggest 6M bucket will soon saturate at ~2.5M TotalStateCount for dim_key >= 256
-        - 90M bucket will also saturate at ~35M for dim_key >= 256
-- snapshot frequently for later analysis
+Repeat exp-019c, with even smaller dim_key for Montezuma's Revenge
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -94,21 +73,21 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [0,0.01]
+        return [0.01]
 
     @variant
     def game(self):
-        return ["freeway", "frostbite", "montezuma_revenge", "gravitar", "pitfall","private_eye","solaris","venture"]
+        return [ "montezuma_revenge"]
 
     @variant
     def dim_key(self):
-        return [256]
+        return [16,32]
 
     @variant
     def bucket_sizes(self):
         return [
-            # [999931, 999953, 999959, 999961, 999979, 999983], # 6M
-            [15485867, 15485917, 15485927, 15485933, 15485941, 15485959], # 90M
+            [999931, 999953, 999959, 999961, 999979, 999983], # 6M
+            # [15485867, 15485917, 15485927, 15485933, 15485941, 15485959], # 90M
         ]
 
     @variant
@@ -174,7 +153,7 @@ for v in variants:
     bonus_form="1/sqrt(n)"
     count_target=v["count_target"]
     retrieve_sample_size=100000 # compute keys for all paths at once
-    bucket_sizes=None # None means default
+    bucket_sizes=v["bucket_sizes"]# None means default
 
     # others
     baseline_prediction_clip = 1000

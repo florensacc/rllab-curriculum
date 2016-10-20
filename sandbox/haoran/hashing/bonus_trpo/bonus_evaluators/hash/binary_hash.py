@@ -104,3 +104,6 @@ class BinaryHash(Hash):
             self.tables = np.zeros(
                 (len(self.bucket_sizes), np.max(self.bucket_sizes))
             )
+
+    def total_state_count(self):
+        return 0 # not implememted yet
