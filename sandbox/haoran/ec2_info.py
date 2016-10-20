@@ -9,6 +9,9 @@ instance_info = {
 }
 
 subnet_info = {
-    "us-west-1c": dict(SubnetID="subnet-0fbfe456",Groups=["sg-83d85ee7"]),
-    "us-west-1a": dict(SubnetID="subnet-5927ee3d",Groups=["sg-b8f2b9dc"]),
+    # in Trevor's account
+    # "us-west-1c": dict(SubnetID="subnet-0fbfe456",Groups=["sg-83d85ee7"]),
+    # "us-west-1a": dict(SubnetID="subnet-5927ee3d",Groups=["sg-b8f2b9dc"]),
+    "us-west-1a": dict(SubnetID="subnet-03eb6e5a", Groups=["sg-960f08f2"]),
+    "us-west-1b": dict(SubnetID="subnet-f7296d92", Groups=["sg-960f08f2"]),
 }
