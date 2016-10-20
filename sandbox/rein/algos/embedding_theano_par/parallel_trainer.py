@@ -165,10 +165,9 @@ class ParallelTrainer(object):
             # Actual training of model.
             done = 0
             old_running_avg = np.inf
-            count = 0
             while done < 7:
                 running_avg = 0.
-                for _ in range(10):
+                for _ in range(100):
                     # Replay pool return uint8 target format, so decode _x.
                     batch = pool.random_batch(model_pool_args['batch_size'])
                     _x = self.decode_obs(batch['observations'], model)
@@ -186,9 +185,6 @@ class ParallelTrainer(object):
                 print('Autoencoder loss= {:.5f}, D= {:+.5f}, done={}'.format(
                     running_avg, running_avg_delta, done))
                 sys.stdout.flush()
-                if count ==4 :
-                    break
-                count +=1
 
             for i in range(10):
                 batch = pool.random_batch(32)

@@ -16,7 +16,7 @@ from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelCo
 stub(globals())
 
 n_seq_frames = 4
-n_parallel = 2
+n_parallel = 15
 model_batch_size = 32
 exp_prefix = 'trpo-par-a'
 seeds = [0, 1, 2]
@@ -24,10 +24,10 @@ etas = [0.001]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
-    AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
-    # AtariEnv(game='venture', obs_type="image", frame_skip=4)]
-trpo_batch_size = 500
-max_path_length = 45
+    # AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
+    AtariEnv(game='venture', obs_type="image", frame_skip=4)]
+trpo_batch_size = 50000
+max_path_length = 4500
 dropout = False
 batch_norm = True
 
@@ -285,7 +285,7 @@ for mdp, eta, seed in param_cart_product:
         n_parallel=n_parallel,
         snapshot_mode="last",
         seed=seed,
-        mode="local",
+        mode="lab_kube",
         dry=False,
         use_gpu=False,
         script="sandbox/rein/algos/embedding_theano_par/run_experiment_lite.py",
