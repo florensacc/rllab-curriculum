@@ -34,7 +34,7 @@ class ParallelTrainer(object):
     @staticmethod
     def _initialize():
         import theano.sandbox.cuda
-        theano.sandbox.cuda.use("gpu")
+        theano.sandbox.cuda.use("gpu"+str(sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
 
     def _loop(self, q_pool_data_in=None, q_pool_data_out=None, q_pool_data_out_flag=None, q_train_flag=None,
               q_train_param_out=None, q_train_acc_out=None, model_args=None, model_pool_args=None):
@@ -52,7 +52,7 @@ class ParallelTrainer(object):
         assert model_pool_args is not None
         # Init theano gpu context before any other theano context is initialized.
         import theano.sandbox.cuda
-        theano.sandbox.cuda.use("gpu")
+        theano.sandbox.cuda.use("gpu"+str(sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
         # Init all main var + compile.
         from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
         model = ConvBNNVIME(

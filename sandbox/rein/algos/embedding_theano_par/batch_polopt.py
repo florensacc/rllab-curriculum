@@ -257,9 +257,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                         barriers.training.wait()
                         if self.rank == 0:
                             self._model_trainer.train_model()
-                        logger.log("start")
                         self._model_trainer.q_train_param_out[self.rank].get()
-                        logger.log("pass")
                         params = np.frombuffer(shared_model_params)[:self._model_n_params]
                         self._model.set_param_values(params)
                         if self.rank == 0:
@@ -269,9 +267,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                         if itr != self._train_model_freq:
                             logger.log('Getting update model params ...')
                             # params = self._model_trainer.q_train_param_out[self.rank].get()
-                            logger.log("start")
                             self._model_trainer.q_train_param_out[self.rank].get()
-                            logger.log("pass")
                             params = np.frombuffer(shared_model_params)[:self._model_n_params]
                             self._model.set_param_values(params)
                             barriers.training.wait()

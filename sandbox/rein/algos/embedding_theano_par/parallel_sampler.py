@@ -6,7 +6,6 @@ Differences from normal parallel_sampler:
 
 
 from sandbox.rein.algos.embedding_theano_hd.utils import rollout
-# from rllab.sampler.stateful_pool import singleton_pool, SharedGlobal
 from rllab.misc import ext
 from rllab.misc import logger
 from rllab.misc import tensor_utils

@@ -16,7 +16,7 @@ from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelCo
 stub(globals())
 
 n_seq_frames = 4
-n_parallel = 15
+n_parallel = 9
 model_batch_size = 32
 exp_prefix = 'trpo-par-a'
 seeds = [0, 1, 2]
@@ -116,7 +116,7 @@ for mdp, eta, seed in param_cart_product:
         reward_dim=(1,),
         layers_disc=[
             dict(name='convolution',
-                 n_filters=96,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 0),
@@ -125,7 +125,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='convolution',
-                 n_filters=96,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(1, 1),
@@ -134,7 +134,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='convolution',
-                 n_filters=96,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -143,7 +143,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='convolution',
-                 n_filters=96,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -154,7 +154,7 @@ for mdp, eta, seed in param_cart_product:
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
-                 n_units=1024,
+                 n_units=512,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
@@ -165,7 +165,7 @@ for mdp, eta, seed in param_cart_product:
                  batch_norm=batch_norm,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=1024,
+                 n_units=512,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
@@ -181,7 +181,7 @@ for mdp, eta, seed in param_cart_product:
             dict(name='reshape',
                  shape=([0], 96, 4, 4)),
             dict(name='deconvolution',
-                 n_filters=96,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -190,7 +190,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='deconvolution',
-                 n_filters=96,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(1, 1),
@@ -199,7 +199,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='deconvolution',
-                 n_filters=96,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 0),
@@ -208,7 +208,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='deconvolution',
-                 n_filters=96,
+                 n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 0),
@@ -279,6 +279,7 @@ for mdp, eta, seed in param_cart_product:
         model_args=model_args,
     )
 
+    print("Remember, GPUs are linked to seeds!")
     run_experiment_lite(
         algo.train(),
         exp_prefix=exp_prefix,

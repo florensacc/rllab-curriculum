@@ -17,6 +17,7 @@ from sandbox.rein.algos.embedding_theano_par.replay_pool import SingleStateRepla
 from sandbox.rein.dynamics_models.utils import iterate_minibatches
 from sandbox.adam.parallel.util import SimpleContainer
 import multiprocessing as mp
+import sandbox.rein.algos.embedding_theano_par.n_parallel
 
 # --
 # Nonscientific printing of numpy arrays.
@@ -98,6 +99,9 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
             self._model_trainer.populate_trainer(self._model_args, self._model_pool_args)
             self._model_trainer.q_pool_data_out_flag.get()
         logger.log('done.')
+
+        import theano.sandbox.cuda
+        theano.sandbox.cuda.use("gpu" + str(sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
 
         from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 
