@@ -25,9 +25,7 @@ from rllab.envs.normalized_env import NormalizedEnv
 N_ITR = 1000
 N_ITR_DEBUG = 5
 
-envs = [CartpoleSwingupEnvX(),
-        HalfCheetahEnvX(),
-        normalize(SwimmerGatherEnv())]
+envs = [HalfCheetahEnvX()]
 
 
 def experiment_variant_generator():
@@ -38,7 +36,7 @@ def experiment_variant_generator():
            hide=True)
     vg.add("step_size", [0.01], hide=True)
     vg.add("max_path_length", [500], hide=True)
-    vg.add("discount", [0.99], hide=True)
+    vg.add("discount", [0.995], hide=True)
     vg.add("seed", range(5), hide=True)
     vg.add("bonus_coeff", [0, 0.001, 0.01, 0.1])
     vg.add("granularity", [0.01, 0.1, 1])

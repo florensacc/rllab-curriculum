@@ -49,9 +49,6 @@ class ALEHashingBonusEvaluator(object):
         self.retrieve_sample_size = retrieve_sample_size
 
         # logging stats ---------------------------------
-        self.epoch_hash_count_list = []
-        self.epoch_bonus_list = []
-        self.new_state_count = 0
         self.total_state_count = 0
         self.rank = None
 

@@ -728,10 +728,11 @@ def get_conv_ar_mask(h, w, n_in, n_out, ar_channels=False, zerodiagonal=False):
     mask = np.zeros([h, w, n_in, n_out], dtype=np.float32)
     mask[:l, :, :, :] = 1.
     mask[l, :m, :, :] = 1.
-    if not zerodiagonal:
-        mask[l, m, :, :] = 1.
     if ar_channels:
         mask[l, m, :, :] = get_linear_ar_mask(n_in, n_out, zerodiagonal)
+    else:
+        if not zerodiagonal:
+            mask[l, m, :, :] = 1.
     return mask
 
 @prettytensor.Register(
@@ -1220,12 +1221,12 @@ def resize_nearest_neighbor(x, scale):
     x = tf.image.resize_nearest_neighbor(x, size)
     return x
 
-def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None, conv_args=None):
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None, conv_args=None, nin=False):
     return resconv_v1_customconv(
         "conv2d_mod",
         conv_args,
         l_in=l_in, kernel=kernel, nch=nch, stride=stride, add_coeff=add_coeff,
-        keep_prob=keep_prob, nn=nn, context=context
+        keep_prob=keep_prob, nn=nn, context=context, nin=nin
     )
     # seq = l_in.sequential()
     # with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
@@ -1254,21 +1255,40 @@ def resconv_v1_customconv(
         keep_prob=1.,
         nn=False,
         gating=False,
+        slow_gating=False,
         nin=False,
         context=None,
 ):
     blk = origin = l_in
     if gating:
-        blk_conv = partial(blk, conv_method, conv_args)(
-            kernel=kernel,
-            depth=nch * 2,
-            stride=stride,
-            prefix="gated_pre",
-            activation_fn=None,
-        )
+        if slow_gating:
+            # it's just for simple impl of AR model
+            gate_conv = partial(blk, conv_method, conv_args)(
+                kernel=kernel,
+                depth=nch,
+                stride=stride,
+                prefix="gated_gate",
+                activation_fn=tf.nn.sigmoid,
+            )
+            pre_conv = partial(blk, conv_method, conv_args)(
+                kernel=kernel,
+                depth=nch,
+                stride=stride,
+                prefix="gated_main",
+                activation_fn=tf.nn.tanh,
+            )
+        else:
+            blk_conv = partial(blk, conv_method, conv_args)(
+                kernel=kernel,
+                depth=nch * 2,
+                stride=stride,
+                prefix="gated_pre",
+                activation_fn=None,
+            )
+            gate_conv = blk_conv[:, :, :, :nch].apply(tf.nn.sigmoid)
+            pre_conv = blk_conv[:, :, :, nch:].apply(tf.nn.tanh)
         blk = (
-            blk_conv[:, :, :, :nch].apply(tf.nn.sigmoid) *
-                blk_conv[:, :, :, nch:].apply(tf.nn.tanh)
+            gate_conv * pre_conv
         ).sequential()
     else:
         blk = blk.sequential()
@@ -1611,6 +1631,17 @@ def average_grads(tower_grads):
         average_grads.append(grad_and_var)
     return average_grads
 
+var_assignments = {}
+def cached_assign(var):
+    if var not in var_assignments:
+        # print("first", var.name)
+        holder = tf.placeholder(var.dtype, shape=int_shape(var))
+        op = var.assign(holder)
+        var_assignments[var] = (holder, op)
+    else:
+        # print("second", var.name)
+        pass
+    return var_assignments[var]
 
 @contextmanager
 def temp_restore(sess, ema):
@@ -1618,12 +1649,30 @@ def temp_restore(sess, ema):
         yield
     else:
         ema_keys = list(ema._averages.keys())
+        ema_avgs = [ema._averages[k] for k in ema_keys]
         old_vals = sess.run(ema_keys)
-        _ = sess.run(
-            [tf.assign(var, avg) for var, avg in ema._averages.items()]
-        )
+        avg_vals = sess.run(ema_avgs)
+        ops = []
+        feed = {}
+        for var, avg in zip(ema_keys, avg_vals):
+            holder, op = cached_assign(var)
+            ops.append(op)
+            feed[holder] = avg
+        sess.run(ops, feed)
         yield
-        _ = sess.run(
-            [tf.assign(var, avg) for var, avg in zip(ema_keys, old_vals)]
-        )
+        ops = []
+        feed = {}
+        for var, avg in zip(ema_keys, old_vals):
+            holder, op = cached_assign(var)
+            ops.append(op)
+            feed[holder] = avg
+        sess.run(ops, feed)
+
+        # _ = sess.run(
+        #     [tf.assign(var, avg) for var, avg in ema._averages.items()]
+        # )
+        # yield
+        # _ = sess.run(
+        #     [tf.assign(var, avg) for var, avg in zip(ema_keys, old_vals)]
+        # )
 

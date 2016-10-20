@@ -294,7 +294,7 @@ for v in variants[i:i+1]:
             )
         nml = 5
         tgt_dist = Mixture(
-           [(DiscretizedLogistic(3), 1./nml) for _ in range(nml)]
+           [(DiscretizedLogistic(3 ), 1./nml) for _ in range(nml)]
         )
         tgt_ar_dist = DistAR(
             3,

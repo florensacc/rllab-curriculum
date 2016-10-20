@@ -31,6 +31,11 @@
 
 # adding bigger zdim exp
 
+# vali sofar, 4nar: 3.186
+# train : 3.13
+# annealing seems to kill the slope!
+# 4nar starts to exhibit slope and then killed off
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

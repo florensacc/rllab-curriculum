@@ -7,6 +7,12 @@ class ZeroBonusEvaluator(object):
     def __init__(self):
         pass
 
+    def init_par_objs(self,n_parallel):
+        pass
+
+    def init_rank(self,rank):
+        self.rank = rank
+
     def fit_before_process_samples(self, paths):
         pass
 

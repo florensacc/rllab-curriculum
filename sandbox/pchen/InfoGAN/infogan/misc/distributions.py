@@ -1,5 +1,3 @@
-
-
 import functools
 import itertools
 import tensorflow as tf
@@ -55,7 +53,10 @@ class Distribution(Serializable):
         raise NotImplementedError
 
     def logli_prior(self, x_var):
-        return self.logli(x_var, self.prior_dist_info(x_var.get_shape()[0]))
+        return self.logli(
+            x_var,
+            self.prior_dist_info(x_var.get_shape()[0])
+        )
 
     def logli_init_prior(self, x_var):
         return self.logli(x_var, self.prior_dist_info(x_var.get_shape()[0]))
@@ -992,6 +993,7 @@ class AR(Distribution):
             clip=False,
             squash=False,
             ar_channels=False,
+            mean_only=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1014,6 +1016,7 @@ class AR(Distribution):
         self._clip = clip
         self._squash = squash
         self._iaf_template = pt.template("y", books=dist_book)
+        self._mean_only = mean_only
         if linear_context:
             lin_con = pt.template("linear_context", books=dist_book)
             self._linear_context_dim = 2*dim*neuron_ratio
@@ -1072,7 +1075,7 @@ class AR(Distribution):
                     wnorm=True,
                     custom_phase=UnboundVariable('custom_phase'),
                     init_scale=0.1,
-                    ar_channels=False,
+                    ar_channels=ar_channels,
                     pixel_bias=True,
                     var_scope=None,
             ):
@@ -1083,7 +1086,6 @@ class AR(Distribution):
                                 filter_size,
                                 nr_channels,
                                 zerodiagonal=True,
-                                ar_channels=ar_channels,
                                 prefix="step0",
                             )
                         context_shp = [-1,] + img_shape[:2] + [nr_channels]
@@ -1097,13 +1099,13 @@ class AR(Distribution):
                                 "ar_conv2d_mod",
                                 dict(
                                     zerodiagonal=False,
-                                    ar_channels=ar_channels,
                                 ),
                                 cur,
                                 filter_size,
                                 nr_channels,
                                 nin=False,
                                 gating=True,
+                                slow_gating=True,
                             )
                     for ninidx in range(extra_nins):
                         if ar_channels:
@@ -1111,7 +1113,6 @@ class AR(Distribution):
                                 1,
                                 nr_channels,
                                 zerodiagonal=False,
-                                ar_channels=ar_channels,
                                 prefix="nin_ex_%s" % ninidx,
                             )
                         else:
@@ -1126,6 +1127,7 @@ class AR(Distribution):
                     cur.ar_conv2d_mod(
                         filter_size,
                         img_chn * 2,
+                        zerodiagonal=False,
                         activation_fn=None,
                     ).reshape(
                         [-1,] + img_shape + [2]
@@ -1183,6 +1185,9 @@ class AR(Distribution):
         if self._squash:
             iaf_mu = tf.tanh(iaf_mu)*2.7
             iaf_logstd = tf.tanh(iaf_logstd)*1.5
+        if self._mean_only:
+            # TODO: fixme! wasteful impl
+            iaf_logstd = tf.zeros_like(iaf_mu)
         return iaf_mu, (iaf_logstd)
 
     def logli(self, x_var, dist_info):
@@ -1316,6 +1321,8 @@ class IAR(AR):
         else:
             return self._base_dist.activate_dist(flat)
 
+# MADE that outputs \theta_i for p_\theta_i(x_i | x<i)
+# where conditional p is specified by tgt_dist
 class DistAR(Distribution):
     def __init__(
             self,
@@ -1328,6 +1335,7 @@ class DistAR(Distribution):
             data_init_scale=0.1,
             linear_context=False,
             gating_context=False,
+            mul_gating=False,
             op_context=False,
             share_context=False,
             var_scope=None,
@@ -1417,9 +1425,14 @@ class DistAR(Distribution):
                     )
                 if di == 0:
                     if gating_context:
-                        self._iaf_template *= (gate_con+1).apply(tf.nn.sigmoid)
+                        if mul_gating:
+                            self._iaf_template *= (gate_con)
+                        else:
+                            self._iaf_template *= (gate_con+1).apply(tf.nn.sigmoid)
                     if linear_context:
                         self._iaf_template += lin_con
+            # shortcut of [-1, dim, nom, 2]
+            # -> [-1, nom, 2, dim]
             self._iaf_template = \
                 self._iaf_template. \
                     arfc(
@@ -1431,7 +1444,6 @@ class DistAR(Distribution):
                     reshape([-1, self._dim, 2*nom]). \
                     apply(tf.transpose, [0, 2, 1]). \
                     reshape([-1, 2*self._dim*nom])
-
     @overrides
     def init_mode(self):
         self._custom_phase = CustomPhase.init
@@ -1569,6 +1581,11 @@ class ConvAR(Distribution):
         G_IDX += 1
 
         self._tgt_dist = tgt_dist
+        if tgt_dist is None:
+            nr_mix = 10
+            out_chn = 10 * nr_mix
+        else:
+            out_chn = tgt_dist.dist_flat_dim
         self._shape = shape
         self._dim = int(np.prod(shape))
         self._sanity = sanity
@@ -1674,7 +1691,7 @@ class ConvAR(Distribution):
                 self._iaf_template = \
                     cur.ar_conv2d_mod(
                         filter_size,
-                        tgt_dist.dist_flat_dim,
+                        out_chn,
                         activation_fn=None,
                     )
             else:
@@ -1699,19 +1716,21 @@ class ConvAR(Distribution):
                 self._iaf_template = \
                     row.conv2d_mod(
                         1,
-                        tgt_dist.dist_flat_dim,
+                        out_chn,
                         activation_fn=None,
                     )
 
 
     @overrides
     def init_mode(self):
-        self._tgt_dist.init_mode()
+        if self._tgt_dist:
+            self._tgt_dist.init_mode()
         self._custom_phase = CustomPhase.init
 
     @overrides
     def train_mode(self):
-        self._tgt_dist.train_mode()
+        if self._tgt_dist:
+            self._tgt_dist.train_mode()
         self._custom_phase = CustomPhase.train
 
     @property
@@ -1732,20 +1751,34 @@ class ConvAR(Distribution):
         conv_iaf = self._iaf_template.construct(
             **in_dict
         ).tensor
-        return self._tgt_dist.activate_dist(
-            tf.reshape(conv_iaf, [-1, self._tgt_dist.dist_flat_dim])
-        )
+        # return self._tgt_dist.activate_dist(
+        #     tf.reshape(conv_iaf, [-1, self._tgt_dist.dist_flat_dim])
+        # )
+        return conv_iaf
 
     def logli(self, x_var, info):
-        tgt_dict = self.infer(x_var, info.get("context"))
-        flatten_loglis = self._tgt_dist.logli(
-            tf.reshape(x_var, [-1, self._tgt_dist.dim]),
-            tgt_dict
-        )
+        raw = self.infer(x_var, info.get("context"))
+        if self._tgt_dist:
+            tgt_dict = self._tgt_dist.activate_dist(
+                tf.reshape(raw, [-1, self._tgt_dist.dist_flat_dim])
+            )
+
+            flatten_loglis = self._tgt_dist.logli(
+                tf.reshape(x_var, [-1, self._tgt_dist.dim]),
+                tgt_dict
+            )
+        else:
+            import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+            x_var = tf.reshape(
+                x_var,
+                [-1,] + list(self._shape)
+            )
+            flatten_loglis = nn.discretized_mix_logistic(x_var*2., raw)
         return tf.reduce_sum(
             tf.reshape(flatten_loglis, [-1, self._shape[0] * self._shape[1]]),
             reduction_indices=1
         )
+
 
     def prior_dist_info(self, batch_size):
         return {}
@@ -1837,3 +1870,344 @@ class ConvAR(Distribution):
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
 
+class PixelCNN(Distribution):
+    """Porting tim's pixelcnn"""
+
+    def __init__(
+            self,
+            shape=(32,32,3),
+            nr_resnets=(5, 5, 5),
+            nr_filters=64,
+            nr_logistic_mix=10,
+            nr_extra_nins=10,
+    ):
+        Serializable.quick_init(self, locals())
+
+        self._name = "%sD_PixelCNN_id_%s" % (shape, G_IDX)
+        self._shape = shape
+        self._dim = np.prod(shape)
+        global G_IDX
+        G_IDX += 1
+        self._custom_phase = CustomPhase.train
+        self.infer_temp = tf.make_template(
+            "infer",
+            self.infer,
+        )
+
+        self.nr_resnets = nr_resnets
+        self.nr_filters = nr_filters
+        self.nr_logistic_mix = nr_logistic_mix
+        self.nr_extra_nins = nr_extra_nins
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def effective_dim(self):
+        return self.dim
+
+    def infer(self, x, context=None):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+
+
+        def extra_nin(x):
+            for _ in range(self.nr_extra_nins):
+                x = nn.gated_resnet(x, conv=nn.nin)
+            return x
+        counters = {}
+        with scopes.arg_scope(
+                [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
+                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        ):
+
+            # ////////// up pass ////////
+            xs = nn.int_shape(x)
+            x_pad = tf.concat(3,[x,tf.ones(xs[:-1]+[1])]) # add channel of ones to distinguish image from padding later on
+            u_list = [nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[2, 3])] # stream for current row + up
+            ul_list = [nn.down_shift(nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[1,3])) + \
+                       nn.right_shift(nn.down_right_shifted_conv2d(x, num_filters=self.nr_filters, filter_size=[2,1]))] # stream for up and to the left
+
+            for rep in range(self.nr_resnets[0]):
+                u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+
+            for nr_resnet in self.nr_resnets[1:]:
+                u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+                ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+
+                for rep in range(nr_resnet):
+                    u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                    ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+
+            # /////// down pass ////////
+            u = u_list.pop()
+            ul = ul_list.pop()
+
+            for idx, nr_resnet in enumerate(self.nr_resnets[:0:-1]):
+                for rep in range(nr_resnet+(0 if idx == 0 else 1)):
+                    u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                    ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+
+                u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
+                u = extra_nin(u)
+                ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
+                ul = extra_nin(ul)
+
+            for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
+                u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                u = extra_nin(u)
+                ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+                ul = extra_nin(ul)
+
+            x_out = nn.nin(nn.concat_elu(ul), 10*self.nr_logistic_mix)
+
+        assert len(u_list) == 0
+        assert len(ul_list) == 0
+
+        return x_out
+
+    def logli(self, x_var, info):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+        x_var = tf.reshape(
+            x_var,
+            [-1,] + list(self._shape)
+        ) * 2 # assumed to be [-1, 1]
+
+        tgt_vec = self.infer_temp(x_var, info.get("context"))
+        logli = nn.discretized_mix_logistic(
+            x_var,
+            tgt_vec
+        )
+        return tf.reduce_sum(
+            tf.reshape(logli, [-1, self._shape[0] * self._shape[1]]),
+            reduction_indices=1
+        )
+
+    def prior_dist_info(self, batch_size):
+        return {}
+
+    def sample_logli(self, info):
+        raise NotImplemented
+
+    @property
+    def dist_info_keys(self):
+        return ["context"] if self._context else []
+
+    @property
+    def dist_flat_dim(self):
+        return self._shape[0] * self._shape[1] * self._context_dim
+
+    def activate_dist(self, flat):
+        return dict(context=flat)
+
+class CondPixelCNN(Distribution):
+    """conditional version with activations sharing"""
+
+    def __init__(
+            self,
+            shape=(32,32,3),
+            nr_resnets=(5, 5, 5),
+            nr_filters=64,
+            nr_cond_nins=1,
+            nr_logistic_mix=10,
+            nr_extra_nins=0,
+    ):
+        Serializable.quick_init(self, locals())
+
+        self._name = "%sD_PixelCNN_id_%s" % (shape, G_IDX)
+        self._shape = shape
+        self._dim = np.prod(shape)
+        global G_IDX
+        G_IDX += 1
+        self._custom_phase = CustomPhase.train
+        self.infer_temp = tf.make_template(
+            "infer",
+            self.infer,
+        )
+        self.cond_temp = tf.make_template(
+            "cond",
+            self.cond,
+        )
+
+        self.nr_resnets = nr_resnets
+        self.nr_filters = nr_filters
+        self.nr_logistic_mix = nr_logistic_mix
+        self.nr_cond_nins = nr_cond_nins
+        self.nr_extra_nins = nr_extra_nins
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def effective_dim(self):
+        return self.dim
+
+    def infer(self, x, context=None):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+        x = tf.reshape(
+            x,
+            [-1,] + list(self._shape)
+        )
+        def extra_nin(x):
+            for _ in range(self.nr_extra_nins):
+                x = nn.gated_resnet(x, conv=nn.nin)
+            return x
+
+        counters = {}
+        with scopes.arg_scope(
+                [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
+                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        ):
+
+            # ////////// up pass ////////
+            xs = nn.int_shape(x)
+            x_pad = tf.concat(3,[x,tf.ones(xs[:-1]+[1])]) # add channel of ones to distinguish image from padding later on
+            u_list = [nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[2, 3])] # stream for current row + up
+            ul_list = [nn.down_shift(nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[1,3])) + \
+                       nn.right_shift(nn.down_right_shifted_conv2d(x, num_filters=self.nr_filters, filter_size=[2,1]))] # stream for up and to the left
+
+            for rep in range(self.nr_resnets[0]):
+                u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+
+            for nr_resnet in self.nr_resnets[1:]:
+                u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+                ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+
+                for rep in range(nr_resnet):
+                    u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                    ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+
+            # /////// down pass ////////
+            u = u_list.pop()
+            ul = ul_list.pop()
+
+            for idx, nr_resnet in enumerate(self.nr_resnets[:0:-1]):
+                for rep in range(nr_resnet+(0 if idx == 0 else 1)):
+                    u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                    u = extra_nin(u)
+                    ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+                    ul = extra_nin(ul)
+
+                u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
+                ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
+
+            for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
+                u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                u = extra_nin(u)
+                ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+                ul = extra_nin(ul)
+
+            x_out = nn.nin(nn.concat_elu(ul), self.nr_filters)
+
+        assert len(u_list) == 0
+        assert len(ul_list) == 0
+
+        return x_out
+
+    def cond(self, x, c):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+        x = tf.reshape(
+            x,
+            [-1,] + list(self._shape[:2]) + [self.nr_filters]
+        )
+        c = tf.reshape(
+            c,
+            [-1,] + list(self._shape[:2]) + [self.nr_filters]
+        )
+
+        # old cond arch
+        # counters = {}
+        # with scopes.arg_scope(
+        #         [nn.nin],
+        #         counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        # ):
+        #     gated = nn.aux_gated_resnet(x, c, conv=nn.nin)
+        #     x_out = nn.nin(nn.concat_elu(gated), 10*self.nr_logistic_mix)
+
+        # new cond arch
+        counters = {}
+        with scopes.arg_scope(
+                [nn.nin],
+                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        ):
+            gated = tf.concat(
+                3,
+                [
+                    nn.aux_gated_resnet(x, c, conv=nn.nin),
+                    nn.aux_gated_resnet(c, x, conv=nn.nin),
+                ],
+            )
+            for _ in range(self.nr_cond_nins):
+                gated = nn.gated_resnet(gated, conv=nn.nin)
+            x_out = nn.nin(nn.concat_elu(gated), 10*self.nr_logistic_mix)
+
+        return x_out
+
+    def logli(self, x_var, info):
+        x_var = tf.reshape(
+            x_var,
+            [-1,] + list(self._shape)
+        ) * 2
+
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+
+        causal, cond = info["causal_feats"], info["cond_feats"]
+        tgt_vec = self.cond_temp(causal, cond)
+        logli = nn.discretized_mix_logistic(
+            x_var,
+            tgt_vec
+        )
+        return tf.reduce_sum(
+            tf.reshape(logli, [-1, self._shape[0] * self._shape[1]]),
+            reduction_indices=1
+        )
+
+    @functools.lru_cache(maxsize=None)
+    def sample_one_step(self, x_var, info):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+
+        assert "causal_feats" not in info
+        cond_feats = info["cond_feats"]
+        causal_feats = self.infer_temp(x_var)
+        tgt_vec = self.cond_temp(causal_feats, cond_feats)
+        return nn.sample_from_discretized_mix_logistic(tgt_vec, self.nr_logistic_mix) / 2 # convert back to 0.5 scale
+
+    def prior_dist_info(self, batch_size):
+        return {}
+
+    def sample_logli(self, info):
+        raise NotImplemented
+
+    @property
+    def dist_info_keys(self):
+        return ["context"] if self._context else []
+
+    @property
+    def dist_flat_dim(self):
+        return self._shape[0] * self._shape[1] * self._context_dim
+
+    def activate_dist(self, flat):
+        return dict(context=flat)

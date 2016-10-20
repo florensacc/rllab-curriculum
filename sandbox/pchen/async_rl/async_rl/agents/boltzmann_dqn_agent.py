@@ -330,9 +330,9 @@ class BoltzmannDQNAgent(Agent,Shareable,Picklable):
             pms = softmax(q_vals / self.temp)
             al = len(pms)
             a = np.random.choice(al, p=pms)
-            entropy = np.sum(-pms*np.log(pms))
-            other_p = (1.-eps)/al
-            eps_p = (eps+other_p)
+            entropy = np.sum(-pms*np.log(pms + 1e-8))
+            other_p = (eps)/al
+            eps_p = (1-eps) + eps/al
             tgt_entropy = -eps_p*np.log(eps_p) - (al-1)*other_p*np.log(other_p)
             if self.adaptive_entropy:
                 if tgt_entropy > entropy + 0.1:

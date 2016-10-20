@@ -11,9 +11,11 @@ from string import Template
 ACCESS_KEY = os.environ["AWS_ACCESS_KEY"]
 ACCESS_SECRET = os.environ["AWS_ACCESS_SECRET"]
 S3_BUCKET_NAME = os.environ["RLLAB_S3_BUCKET"]
-SECURITY_GROUP_NAME = "rllab-sg"
-INSTANCE_PROFILE_NAME = "rllab"
-INSTANCE_ROLE_NAME = "rllab"
+PREFIX = os.environ.get("RLLAB_PREFIX", "")
+
+SECURITY_GROUP_NAME = PREFIX + "rllab-sg"
+INSTANCE_PROFILE_NAME = PREFIX + "rllab"
+INSTANCE_ROLE_NAME = PREFIX + "rllab"
 
 ALL_REGION_AWS_SECURITY_GROUP_IDS = {}
 ALL_REGION_AWS_KEY_NAMES = {}
@@ -270,7 +272,7 @@ def setup_ec2():
                 raise e
         print("Security group created with id %s" % str(security_group.id))
 
-        key_name = 'rllab-%s' % region
+        key_name = PREFIX + ('rllab-%s' % region)
         try:
             print("Trying to create key pair with name %s" % key_name)
             key_pair = ec2_client.create_key_pair(KeyName=key_name)
@@ -318,6 +320,7 @@ def write_config():
 
 
 def setup():
+    print("Using prefix: %s" % PREFIX)
     setup_s3()
     setup_iam()
     setup_ec2()
